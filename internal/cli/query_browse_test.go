@@ -94,3 +94,37 @@ func TestBrowseItemsForTraitResultsUseColumnsAndSearchText(t *testing.T) {
 		}
 	}
 }
+
+func TestBrowseItemsForSectionResultsUseColumnsAndSearchText(t *testing.T) {
+	parentID := "page/raven#query-picker"
+	items := browseItemsForSectionResults([]model.Section{
+		{
+			ID:              "page/raven#section-query-results",
+			FileObjectID:    "page/raven",
+			FilePath:        "page/raven.md",
+			Slug:            "section-query-results",
+			Title:           "Section query results",
+			Level:           2,
+			LineStart:       17,
+			ParentSectionID: &parentID,
+		},
+	})
+
+	if len(items) != 1 {
+		t.Fatalf("expected 1 browse item, got %d", len(items))
+	}
+	item := items[0]
+	wantColumns := []string{
+		"Section query results",
+		"h2 #section-query-results",
+		"page/raven.md:17",
+	}
+	if strings.Join(item.Columns, "|") != strings.Join(wantColumns, "|") {
+		t.Fatalf("columns = %#v, want %#v", item.Columns, wantColumns)
+	}
+	for _, want := range []string{"page/raven#section-query-results", "Section query results", "h2 #section-query-results", "page/raven.md:17", parentID} {
+		if !strings.Contains(item.SearchText, want) {
+			t.Fatalf("search text missing %q: %q", want, item.SearchText)
+		}
+	}
+}

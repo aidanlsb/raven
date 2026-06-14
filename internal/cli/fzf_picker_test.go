@@ -1,9 +1,10 @@
 package cli
 
 import (
-	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/picker"
 )
 
 func fzfDefaultOptsFromEnv(t *testing.T, env []string) (string, int) {
@@ -50,33 +51,33 @@ func TestFZFEnv(t *testing.T) {
 }
 
 func TestInteractivePickerMissingArgSuggestion(t *testing.T) {
-	prevLookPath := fzfLookPath
+	prevStdinTTY := fzfStdinIsTerminal
+	prevStdoutTTY := fzfStdoutIsTerminal
 	t.Cleanup(func() {
-		fzfLookPath = prevLookPath
+		fzfStdinIsTerminal = prevStdinTTY
+		fzfStdoutIsTerminal = prevStdoutTTY
 	})
 
-	t.Run("includes install hint when fzf missing", func(t *testing.T) {
-		fzfLookPath = func(string) (string, error) {
-			return "", exec.ErrNotFound
-		}
+	t.Run("mentions interactive terminal when unavailable", func(t *testing.T) {
+		fzfStdinIsTerminal = func() bool { return false }
+		fzfStdoutIsTerminal = func() bool { return true }
 
 		suggestion := interactivePickerMissingArgSuggestion("read", "rvn read <reference>")
-		if !strings.Contains(suggestion, "Install fzf") {
-			t.Fatalf("expected install hint, got %q", suggestion)
+		if !strings.Contains(suggestion, "interactive terminal") {
+			t.Fatalf("expected interactive terminal hint, got %q", suggestion)
 		}
 		if !strings.Contains(suggestion, "rvn read <reference>") {
 			t.Fatalf("expected fallback usage, got %q", suggestion)
 		}
 	})
 
-	t.Run("uses direct usage hint when fzf installed", func(t *testing.T) {
-		fzfLookPath = func(string) (string, error) {
-			return "/usr/local/bin/fzf", nil
-		}
+	t.Run("uses direct usage hint when interactive", func(t *testing.T) {
+		fzfStdinIsTerminal = func() bool { return true }
+		fzfStdoutIsTerminal = func() bool { return true }
 
 		suggestion := interactivePickerMissingArgSuggestion("open", "rvn open <reference>")
-		if strings.Contains(suggestion, "Install fzf") {
-			t.Fatalf("did not expect install hint when fzf is available, got %q", suggestion)
+		if strings.Contains(suggestion, "interactive terminal") {
+			t.Fatalf("did not expect terminal hint when interactive, got %q", suggestion)
 		}
 		if !strings.Contains(suggestion, "rvn open <reference>") {
 			t.Fatalf("expected fallback usage, got %q", suggestion)
@@ -84,36 +85,33 @@ func TestInteractivePickerMissingArgSuggestion(t *testing.T) {
 	})
 }
 
-func TestPickAmbiguousReferenceWithFZF(t *testing.T) {
-	prevRun := fzfRunPicker
+func TestPickAmbiguousReference(t *testing.T) {
+	prevRun := ravenRunPicker
 	t.Cleanup(func() {
-		fzfRunPicker = prevRun
+		ravenRunPicker = prevRun
 	})
 
-	fzfRunPicker = func(lines []string, opts fzfPickerOptions) (string, bool, error) {
-		if opts.Prompt != "open/ref> " {
-			t.Fatalf("prompt = %q, want open/ref> ", opts.Prompt)
+	ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+		if opts.Prompt != "open/ref" {
+			t.Fatalf("prompt = %q, want open/ref", opts.Prompt)
 		}
-		if opts.Delimiter != "\t" {
-			t.Fatalf("delimiter = %q, want tab", opts.Delimiter)
+		if len(items) != 2 {
+			t.Fatalf("expected 2 items, got %d", len(items))
 		}
-		if len(lines) != 2 {
-			t.Fatalf("expected 2 lines, got %d", len(lines))
+		if !strings.Contains(items[0].SearchText, "short_name") {
+			t.Fatalf("expected match source in first item search text, got %q", items[0].SearchText)
 		}
-		if !strings.Contains(lines[0], "short_name") {
-			t.Fatalf("expected match source in first line, got %q", lines[0])
-		}
-		return lines[1], true, nil
+		return picker.Selection{Item: items[1]}, true, nil
 	}
 
-	selected, ok, err := pickAmbiguousReferenceWithFZF(
+	selected, ok, err := pickAmbiguousReference(
 		"freya",
 		[]string{"person/freya", "animal/freya"},
 		map[string]string{"person/freya": "short_name", "animal/freya": "name_field"},
 		"open/ref> ",
 	)
 	if err != nil {
-		t.Fatalf("pickAmbiguousReferenceWithFZF() error = %v", err)
+		t.Fatalf("pickAmbiguousReference() error = %v", err)
 	}
 	if !ok {
 		t.Fatalf("expected selection")
@@ -123,19 +121,19 @@ func TestPickAmbiguousReferenceWithFZF(t *testing.T) {
 	}
 }
 
-func TestPickAmbiguousReferenceWithFZFCancelled(t *testing.T) {
-	prevRun := fzfRunPicker
+func TestPickAmbiguousReferenceCancelled(t *testing.T) {
+	prevRun := ravenRunPicker
 	t.Cleanup(func() {
-		fzfRunPicker = prevRun
+		ravenRunPicker = prevRun
 	})
 
-	fzfRunPicker = func(_ []string, _ fzfPickerOptions) (string, bool, error) {
-		return "", false, nil
+	ravenRunPicker = func(_ []picker.Item, _ picker.Options) (picker.Selection, bool, error) {
+		return picker.Selection{}, false, nil
 	}
 
-	selected, ok, err := pickAmbiguousReferenceWithFZF("freya", []string{"person/freya"}, nil, "open/ref> ")
+	selected, ok, err := pickAmbiguousReference("freya", []string{"person/freya"}, nil, "open/ref> ")
 	if err != nil {
-		t.Fatalf("pickAmbiguousReferenceWithFZF() error = %v", err)
+		t.Fatalf("pickAmbiguousReference() error = %v", err)
 	}
 	if ok || selected != "" {
 		t.Fatalf("expected cancelled selection, got selected=%q ok=%v", selected, ok)

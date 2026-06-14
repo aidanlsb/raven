@@ -6,22 +6,17 @@ For daily notes and quick capture (`rvn daily`, `rvn add`), see `using-your-vaul
 
 ## Interactive Pickers
 
-If `fzf` is installed and Raven is running in an interactive terminal, a few commands open a picker when you omit the target argument:
+When Raven is running in an interactive terminal, a few commands open a Raven picker when you omit the target argument:
 
 ```bash
 rvn read   # Pick an indexed vault file to read
 rvn open   # Pick an indexed vault file to open
-rvn docs   # Pick a docs topic to view
+rvn search # Pick an indexed vault file
 ```
 
-Interactive pickers are disabled for `--json` output and other non-interactive/scripted contexts. If `fzf` is not installed, pass the target path or docs topic explicitly.
+Interactive pickers are disabled for `--json` output and other non-interactive/scripted contexts. Pass the target path explicitly in scripted use.
 
-The picker respects your `FZF_DEFAULT_OPTS` environment variable, so you can customize its appearance (layout, height, border, colors, keybindings) the same way you configure fzf everywhere else. Raven applies `--layout=reverse --height=80% --border` as defaults, but anything in your `FZF_DEFAULT_OPTS` overrides them:
-
-```bash
-# Override Raven's picker defaults
-export FZF_DEFAULT_OPTS='--height=100% --no-border --color=hl:cyan'
-```
+`rvn docs` still uses an fzf-backed docs navigator when fzf is installed.
 
 ---
 
@@ -35,7 +30,7 @@ Display an object's content. By default, Raven renders wiki-links and appends ba
 rvn read person/freya                     # Enriched output with backlinks
 rvn read person/freya --raw               # Plain markdown, no extras
 rvn read project/website --raw --start-line 10 --end-line 40   # Line range
-rvn read                                  # Interactive picker (requires fzf)
+rvn read                                  # Interactive Raven picker
 ```
 
 Key flags:
@@ -49,7 +44,7 @@ Open a file in your configured editor (`editor` in `config.toml` or `$EDITOR`). 
 
 ```bash
 rvn open project/website
-rvn open                                  # Interactive picker (requires fzf)
+rvn open                                  # Interactive Raven picker
 ```
 
 ---

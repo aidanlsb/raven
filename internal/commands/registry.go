@@ -729,8 +729,8 @@ You can then pass inputs by position (in args order) or as key=value pairs.
 Use --ids to output just IDs (one per line) for piping to other commands.
 Use --limit/--offset for paginated result windows.
 Use --count-only to return only the total match count without items.
-Use --browse to open an interactive Raven picker with filtering, preview, and
-editor handoff for the selected result.
+Use --browse to open an interactive Raven picker with filtering and editor
+handoff for the selected result.
 Use --apply to run a bulk operation directly on query results.
 Section and asset queries return stable IDs but do not support --apply.
 
@@ -845,8 +845,8 @@ For trait queries (trait:...):
 		Description: "Find objects that reference a target object or asset",
 		LongDesc: `Find objects that reference a target object or asset.
 
-In an interactive terminal with fzf installed, bare 'rvn backlinks' launches
-an interactive file picker. Non-interactive use still requires a target.`,
+In an interactive terminal, bare 'rvn backlinks' launches Raven's picker.
+Non-interactive use still requires a target.`,
 		Args: []ArgMeta{
 			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: true},
 		},
@@ -856,7 +856,7 @@ an interactive file picker. Non-interactive use still requires a target.`,
 		},
 		UseCases: []string{
 			"Find all files that reference an object or asset",
-			"Interactively pick a target via fzf (when available)",
+			"Interactively pick a target in Raven's picker",
 			"Audit incoming links before moving or deleting content",
 		},
 	},
@@ -866,8 +866,8 @@ an interactive file picker. Non-interactive use still requires a target.`,
 		Description: "Find object and asset links referenced by an object",
 		LongDesc: `Find object and asset links referenced by an object.
 
-In an interactive terminal with fzf installed, bare 'rvn outlinks' launches
-an interactive file picker. Non-interactive use still requires a source.`,
+In an interactive terminal, bare 'rvn outlinks' launches Raven's picker.
+Non-interactive use still requires a source.`,
 		Args: []ArgMeta{
 			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: true},
 		},
@@ -876,7 +876,7 @@ an interactive file picker. Non-interactive use still requires a source.`,
 		},
 		UseCases: []string{
 			"Inspect the outgoing links from an object",
-			"Interactively pick a source via fzf (when available)",
+			"Interactively pick a source in Raven's picker",
 			"Follow references from a file to related objects and assets",
 		},
 	},
@@ -903,8 +903,7 @@ or full path (people/freya.md).
 By default, this command returns enriched output (rendered wikilinks + backlinks).
 Use --raw to output only the raw file content (recommended for agents preparing precise edits).
 
-In an interactive terminal with fzf installed, bare 'rvn read' launches
-an interactive file picker.
+In an interactive terminal, bare 'rvn read' launches Raven's picker.
 
 For long files, you can request a specific range with --start-line/--end-line, and/or
 ask for structured line output with --lines for copy-paste-safe anchors.`,
@@ -927,7 +926,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 		},
 		UseCases: []string{
 			"Read vault file content (use instead of 'cat', 'head', 'tail')",
-			"Interactively pick a file to read via fzf (when available)",
+			"Interactively pick a file to read in Raven's picker",
 			"Inspect file before editing (prefer --raw for exact string matching)",
 			"Extract copy-paste-safe anchors with --lines or line ranges for long files",
 			"Get full content after finding object via query",
@@ -1709,9 +1708,8 @@ Uses full-text search with relevance ranking. Supports:
 Results are ranked by relevance with snippets showing matched content.
 Use --type to filter results to specific object types.
 
-In an interactive terminal with fzf installed, bare 'rvn search' launches
-an interactive picker over indexed files. Non-interactive use still requires
-a query string.`,
+In an interactive terminal, bare 'rvn search' launches Raven's picker over
+indexed files. Non-interactive use still requires a query string.`,
 		Args: []ArgMeta{
 			{Name: "query", Description: "Search query (words, phrases, or boolean expressions)", Required: true},
 		},
@@ -1727,7 +1725,7 @@ a query string.`,
 		},
 		UseCases: []string{
 			"Find pages mentioning specific topics",
-			"Interactively pick an indexed file via fzf (when available)",
+			"Interactively pick an indexed file in Raven's picker",
 			"Search for content across the entire vault",
 			"Locate pages by partial matches",
 			"Find all mentions of a person or concept",
@@ -2201,12 +2199,11 @@ or a full path (objects/companies/cursor.md).
 
 The editor is determined by the 'editor' setting in config.toml or $EDITOR.
 
-In an interactive terminal with fzf installed, bare 'rvn open' launches
-an interactive file picker.
+In an interactive terminal, bare 'rvn open' launches Raven's picker.
 
-When an interactive open reference is ambiguous and fzf is installed, Raven
-prompts you to choose the target. Non-interactive and JSON output still return
-REF_AMBIGUOUS with the candidate matches.
+When an interactive open reference is ambiguous, Raven prompts you to choose the
+target. Non-interactive and JSON output still return REF_AMBIGUOUS with the
+candidate matches.
 
 Use --stdin to read object IDs from stdin (one per line) and open them all.
 This is useful for piping query results to open multiple files at once.`,
@@ -2223,8 +2220,8 @@ This is useful for piping query results to open multiple files at once.`,
 		},
 		UseCases: []string{
 			"Quickly open a file by its short name",
-			"Interactively pick a file to open via fzf (when available)",
-			"Interactively disambiguate open references via fzf (when available)",
+			"Interactively pick a file to open in Raven's picker",
+			"Interactively disambiguate open references in Raven's picker",
 			"Open files using references without knowing full paths",
 			"Open multiple files from query results",
 		},
@@ -2338,8 +2335,8 @@ information about the target object.
 This is a pure query — it does not modify anything. The result always returns
 "resolved": true/false to indicate whether the reference was successfully resolved.
 
-In an interactive terminal with fzf installed, bare 'rvn resolve' launches
-an interactive file picker. Non-interactive use still requires a reference.
+In an interactive terminal, bare 'rvn resolve' launches Raven's picker.
+Non-interactive use still requires a reference.
 
 Supports all reference formats:
 - Short names: "freya" → people/freya
@@ -2363,7 +2360,7 @@ with their match sources.`,
 		},
 		UseCases: []string{
 			"Check if a reference resolves before using it",
-			"Interactively pick a reference via fzf (when available)",
+			"Interactively pick a reference in Raven's picker",
 			"Discover the full object ID and type for a short name",
 			"Disambiguate references that might match multiple objects",
 			"Validate references without side effects",

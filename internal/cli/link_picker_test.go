@@ -3,26 +3,26 @@ package cli
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
-func TestPrepareLinkArgsUsesFZFWhenBare(t *testing.T) {
+func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 	prevJSON := jsonOutput
 	prevVaultPath := resolvedVaultPath
-	prevLookPath := fzfLookPath
 	prevStdinTTY := fzfStdinIsTerminal
 	prevStdoutTTY := fzfStdoutIsTerminal
-	prevRun := fzfRunPicker
+	prevRun := ravenRunPicker
 	t.Cleanup(func() {
 		jsonOutput = prevJSON
 		resolvedVaultPath = prevVaultPath
-		fzfLookPath = prevLookPath
 		fzfStdinIsTerminal = prevStdinTTY
 		fzfStdoutIsTerminal = prevStdoutTTY
-		fzfRunPicker = prevRun
+		ravenRunPicker = prevRun
 	})
 
 	v := testutil.NewTestVault(t).
@@ -35,7 +35,6 @@ func TestPrepareLinkArgsUsesFZFWhenBare(t *testing.T) {
 
 	jsonOutput = false
 	resolvedVaultPath = v.Path
-	fzfLookPath = func(string) (string, error) { return "/usr/local/bin/fzf", nil }
 	fzfStdinIsTerminal = func() bool { return true }
 	fzfStdoutIsTerminal = func() bool { return true }
 
@@ -87,14 +86,18 @@ func TestPrepareLinkArgsUsesFZFWhenBare(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fzfRunPicker = func(lines []string, opts fzfPickerOptions) (string, bool, error) {
-				if opts.Prompt != tt.prompt {
-					t.Fatalf("prompt = %q, want %q", opts.Prompt, tt.prompt)
+			ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+				if opts.Prompt != strings.TrimSuffix(tt.prompt, "> ") {
+					t.Fatalf("prompt = %q, want %q", opts.Prompt, strings.TrimSuffix(tt.prompt, "> "))
 				}
-				if !slices.Contains(lines, "notes/alpha.md") {
-					t.Fatalf("expected indexed file in fzf lines, got %#v", lines)
+				ids := make([]string, 0, len(items))
+				for _, item := range items {
+					ids = append(ids, item.ID)
 				}
-				return "notes/alpha.md", true, nil
+				if !slices.Contains(ids, "notes/alpha.md") {
+					t.Fatalf("expected indexed file in picker items, got %#v", ids)
+				}
+				return picker.Selection{Item: picker.Item{ID: "notes/alpha.md"}}, true, nil
 			}
 
 			args, handled, err := tt.prepare(nil)

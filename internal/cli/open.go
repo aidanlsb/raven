@@ -44,12 +44,12 @@ func prepareOpenArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 	}
 
 	vaultPath := getVaultPath()
-	if canUseFZFInteractive() {
+	if canUseRavenInteractive() {
 		vaultCfg, err := loadVaultConfigSafe(vaultPath)
 		if err != nil {
 			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		relPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "open> ", "Select a file to open (Esc to cancel)")
+		relPath, selected, err := pickVaultFile(vaultPath, vaultCfg, "open> ", "Select a file to open")
 		if err != nil {
 			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
 		}
@@ -97,7 +97,7 @@ func handleCanonicalOpenFailure(result commandexec.Result) error {
 	if result.Error == nil {
 		return nil
 	}
-	if result.Error.Code != ErrRefAmbiguous || !canUseFZFInteractive() {
+	if result.Error.Code != ErrRefAmbiguous || !canUseRavenInteractive() {
 		return handleCanonicalFailure(result)
 	}
 
@@ -106,7 +106,7 @@ func handleCanonicalOpenFailure(result commandexec.Result) error {
 		return handleCanonicalFailure(result)
 	}
 
-	selected, ok, err := pickAmbiguousReferenceWithFZF(reference, matches, matchSources, "open/ref> ")
+	selected, ok, err := pickAmbiguousReference(reference, matches, matchSources, "open/ref> ")
 	if err != nil {
 		return handleCanonicalFailure(result)
 	}
@@ -126,14 +126,28 @@ func handleCanonicalOpenFailure(result commandexec.Result) error {
 // openFileInEditor opens a file in the configured editor and prints appropriate output.
 // If skipOpenMessage is true, it won't print "Opening..." (useful when a "Created" message was already shown).
 func openFileInEditor(filePath, relPath string, skipOpenMessage bool) {
+	openFileInEditorAtLine(filePath, relPath, 0, skipOpenMessage)
+}
+
+// openFileInEditorAtLine opens a file at a specific line when the configured
+// editor supports line targets.
+func openFileInEditorAtLine(filePath, relPath string, line int, skipOpenMessage bool) {
 	cfg := getConfig()
-	if vault.OpenInEditor(cfg, filePath) {
+	if vault.OpenInEditorAtLine(cfg, filePath, line) {
 		if !skipOpenMessage {
-			fmt.Println(ui.Checkf("Opening %s", ui.FilePath(relPath)))
+			if line > 0 {
+				fmt.Println(ui.Checkf("Opening %s:%d", ui.FilePath(relPath), line))
+			} else {
+				fmt.Println(ui.Checkf("Opening %s", ui.FilePath(relPath)))
+			}
 		}
 	} else {
 		fmt.Println(ui.SectionHeader("File"))
-		fmt.Println(ui.Bullet(ui.FilePath(relPath)))
+		if line > 0 {
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s:%d", ui.FilePath(relPath), line)))
+		} else {
+			fmt.Println(ui.Bullet(ui.FilePath(relPath)))
+		}
 		fmt.Println(ui.Hint("Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically."))
 	}
 }

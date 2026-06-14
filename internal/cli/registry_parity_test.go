@@ -72,6 +72,9 @@ func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 		if _, ok := lookupRegistryMeta(path); ok {
 			continue
 		}
+		if cmd.Annotations[localLeafAnnotationKey] == "true" {
+			continue
+		}
 		t.Errorf("CLI command %q is missing registry metadata", path)
 	}
 }

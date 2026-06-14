@@ -308,13 +308,17 @@ rvn query 'trait:due .value<today' --ids
 rvn query 'asset .extension==pdf' --json
 rvn query 'type:project refs([[company/acme]])' --refresh --json
 rvn query 'type:project .status==active' --browse
+rvn query 'trait:todo .value==todo' --pipe | rvn pick --multi | rvn update --stdin done --confirm
 ```
 
 Key flags:
 - `--json` — structured JSON output (recommended for agents and scripts)
 - `--ids` — output one ID per line for piping to other commands
+- `--pipe` — output tab-separated rows for pipe workflows, including `rvn pick`
 - `--refresh` — reindex changed files before running the query (useful after editing files outside Raven)
-- `--browse` — open an interactive `fzf` picker and open the selected result in your configured editor
+- `--browse` — open an interactive Raven picker and open the selected result in your configured editor
+
+Use `rvn pick` when you want Raven-native interactive selection in a pipeline. It reads `--pipe` output, opens a picker on the terminal, and writes selected IDs to stdout.
 
 Section query IDs are stable `file#slug` IDs and asset query IDs are stable asset paths. Section and asset queries do not support `--apply`; use `--ids` to pass IDs to commands that explicitly support them.
 

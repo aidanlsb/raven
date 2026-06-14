@@ -56,6 +56,33 @@ func TestIsTerminalEditor(t *testing.T) {
 	}
 }
 
+func TestEditorOpenArgsAtLine(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		editor string
+		path   string
+		line   int
+		want   []string
+	}{
+		{name: "no line", editor: "code", path: "/tmp/note.md", line: 0, want: []string{"/tmp/note.md"}},
+		{name: "cursor", editor: "cursor", path: "/tmp/note.md", line: 42, want: []string{"-g", "/tmp/note.md:42"}},
+		{name: "code with args", editor: "code --reuse-window", path: "/tmp/note.md", line: 42, want: []string{"-g", "/tmp/note.md:42"}},
+		{name: "vim", editor: "vim", path: "/tmp/note.md", line: 42, want: []string{"+42", "/tmp/note.md"}},
+		{name: "helix", editor: "hx", path: "/tmp/note.md", line: 42, want: []string{"/tmp/note.md:42"}},
+		{name: "unknown", editor: "unknown", path: "/tmp/note.md", line: 42, want: []string{"/tmp/note.md"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := editorOpenArgs(tt.editor, tt.path, tt.line)
+			if strings.Join(got, "|") != strings.Join(tt.want, "|") {
+				t.Fatalf("editorOpenArgs() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseEditorMode(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

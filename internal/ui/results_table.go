@@ -229,16 +229,16 @@ func (t *ResultsTable) GetColumnWidth(index int) int {
 	return 60 // fallback
 }
 
-// calculateWidths computes column widths based on terminal size and column definitions.
-func (t *ResultsTable) calculateWidths() []int {
-	widths := make([]int, len(t.columns))
+// CalculateColumnWidths computes column widths from shared table definitions.
+func CalculateColumnWidths(columns []ColumnDef, termWidth int) []int {
+	widths := make([]int, len(columns))
 
 	// First pass: calculate fixed widths and total ratio
 	var totalRatio float64
 	var fixedWidth int
 	const columnPadding = 2 // padding between columns
 
-	for i, col := range t.columns {
+	for i, col := range columns {
 		if col.WidthRatio == 0 {
 			// Fixed-width column: use MinWidth or calculate from content
 			widths[i] = col.MinWidth
@@ -252,16 +252,16 @@ func (t *ResultsTable) calculateWidths() []int {
 	}
 
 	// Calculate available space for flexible columns
-	totalPadding := (len(t.columns) - 1) * columnPadding
+	totalPadding := (len(columns) - 1) * columnPadding
 	leftMargin := 2 // indent for aesthetic
-	available := t.display.TermWidth - fixedWidth - totalPadding - leftMargin
+	available := termWidth - fixedWidth - totalPadding - leftMargin
 
 	if available < 0 {
 		available = 0
 	}
 
 	// Second pass: distribute available space by ratio
-	for i, col := range t.columns {
+	for i, col := range columns {
 		if col.WidthRatio > 0 {
 			// Calculate proportional width
 			ratio := col.WidthRatio / totalRatio
@@ -280,6 +280,11 @@ func (t *ResultsTable) calculateWidths() []int {
 	}
 
 	return widths
+}
+
+// calculateWidths computes column widths based on terminal size and column definitions.
+func (t *ResultsTable) calculateWidths() []int {
+	return CalculateColumnWidths(t.columns, t.display.TermWidth)
 }
 
 // Render generates the table output as a string.

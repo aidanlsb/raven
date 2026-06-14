@@ -14,7 +14,7 @@ import (
 )
 
 // PipeableItem represents an item that can be output in pipe-friendly format.
-// Commands that return lists should use this for consistent pipe/fzf integration.
+// Commands that return lists should use this for consistent pipe/picker integration.
 type PipeableItem struct {
 	Num      int    // 1-indexed result number for reference
 	ID       string // The unique identifier (used by downstream commands)
@@ -57,7 +57,7 @@ func ShouldUsePipeFormat() bool {
 
 // WritePipeableList writes items in pipe-friendly tab-separated format.
 // Format: Num<tab>ID<tab>Content<tab>Location
-// This format works well with fzf and cut for downstream processing.
+// This format works well with rvn pick and cut for downstream processing.
 // The number prefix allows users to reference results by number.
 func WritePipeableList(w io.Writer, items []PipeableItem) {
 	for _, item := range items {

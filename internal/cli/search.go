@@ -29,13 +29,13 @@ func prepareSearchArgs(_ *cobra.Command, args []string) ([]string, bool, error) 
 		return args, false, nil
 	}
 
-	if canUseFZFInteractive() {
+	if canUseRavenInteractive() {
 		vaultPath := getVaultPath()
 		vaultCfg, err := loadVaultConfigSafe(vaultPath)
 		if err != nil {
 			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		selectedPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "search> ", "Search indexed files (Esc to cancel)")
+		selectedPath, selected, err := pickVaultFile(vaultPath, vaultCfg, "search> ", "Search indexed files")
 		if err != nil {
 			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
 		}

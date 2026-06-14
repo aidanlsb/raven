@@ -20,6 +20,12 @@ import (
 // "Mobile Documents"), some editors may have issues. Use a symlink
 // to a path without spaces as a workaround.
 func OpenInEditor(cfg *config.Config, filePath string) bool {
+	return OpenInEditorAtLine(cfg, filePath, 0)
+}
+
+// OpenInEditorAtLine opens a file in the user's configured editor, optionally
+// positioning the cursor at a 1-indexed line when the editor supports it.
+func OpenInEditorAtLine(cfg *config.Config, filePath string, line int) bool {
 	if cfg == nil {
 		return false
 	}
@@ -30,13 +36,14 @@ func OpenInEditor(cfg *config.Config, filePath string) bool {
 	}
 
 	var cmd *exec.Cmd
+	args := editorOpenArgs(editor, filePath, line)
 
 	// If editor contains spaces, it's a compound command like "open -a Cursor"
 	// Execute via shell to handle this correctly
 	if strings.Contains(editor, " ") {
-		cmd = exec.Command("sh", "-c", editor+" "+shellquote.Quote(filePath))
+		cmd = exec.Command("sh", "-c", editor+" "+quoteShellArgs(args))
 	} else {
-		cmd = exec.Command(editor, filePath)
+		cmd = exec.Command(editor, args...)
 	}
 
 	if shouldRunEditorInTerminal(cfg, editor) {
@@ -55,6 +62,32 @@ func OpenInEditor(cfg *config.Config, filePath string) bool {
 		return false
 	}
 	return true
+}
+
+func editorOpenArgs(editor, filePath string, line int) []string {
+	if line <= 0 {
+		return []string{filePath}
+	}
+
+	lineTarget := fmt.Sprintf("%s:%d", filePath, line)
+	switch editorCommandName(editor) {
+	case "code", "code-insiders", "codium", "cursor":
+		return []string{"-g", lineTarget}
+	case "vi", "vim", "vimdiff", "nvim", "nvimdiff", "nano", "micro":
+		return []string{fmt.Sprintf("+%d", line), filePath}
+	case "hx", "helix", "kak", "kakoune":
+		return []string{lineTarget}
+	default:
+		return []string{filePath}
+	}
+}
+
+func quoteShellArgs(args []string) string {
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		quoted[i] = shellquote.Quote(arg)
+	}
+	return strings.Join(quoted, " ")
 }
 
 // OpenFilesInEditor opens multiple files in the user's configured editor.

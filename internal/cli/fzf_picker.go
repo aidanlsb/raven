@@ -13,13 +13,15 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/picker"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var (
 	fzfLookPath         = exec.LookPath
 	fzfStdinIsTerminal  = func() bool { return term.IsTerminal(os.Stdin.Fd()) }
 	fzfStdoutIsTerminal = func() bool { return term.IsTerminal(os.Stdout.Fd()) }
-	fzfRunPicker        = runFZFPicker
+	ravenRunPicker      = picker.Run
 )
 
 type fzfPickerOptions struct {
@@ -68,6 +70,13 @@ func canUseFZFInteractive() bool {
 		return false
 	}
 	return hasFZFInstalled()
+}
+
+func canUseRavenInteractive() bool {
+	if isJSONOutput() {
+		return false
+	}
+	return canUseInteractiveTerminal()
 }
 
 func canUseInteractiveTerminal() bool {
@@ -125,7 +134,7 @@ func runFZFPicker(lines []string, opts fzfPickerOptions) (string, bool, error) {
 	return selection, true, nil
 }
 
-func pickVaultFileWithFZF(vaultPath string, vaultCfg *config.VaultConfig, prompt, header string) (string, bool, error) {
+func pickVaultFile(vaultPath string, vaultCfg *config.VaultConfig, prompt, title string) (string, bool, error) {
 	paths, err := indexedVaultFilePaths(vaultPath, vaultCfg)
 	if err != nil {
 		return "", false, err
@@ -134,14 +143,25 @@ func pickVaultFileWithFZF(vaultPath string, vaultCfg *config.VaultConfig, prompt
 		return "", false, fmt.Errorf("no indexed files available (run 'rvn reindex')")
 	}
 
-	selectedLine, selected, err := fzfRunPicker(paths, fzfPickerOptions{
-		Prompt: prompt,
-		Header: header,
-	})
-	if err != nil || !selected {
-		return "", selected, err
+	items := make([]picker.Item, 0, len(paths))
+	for _, relPath := range paths {
+		items = append(items, picker.Item{
+			ID:         relPath,
+			Label:      relPath,
+			Location:   relPath,
+			SearchText: relPath,
+			FilePath:   relPath,
+		})
 	}
-	return strings.TrimSpace(selectedLine), true, nil
+
+	selected, ok, err := ravenRunPicker(items, picker.Options{
+		Title:  title,
+		Prompt: strings.TrimSuffix(prompt, "> "),
+	})
+	if err != nil || !ok {
+		return "", ok, err
+	}
+	return strings.TrimSpace(selected.Item.ID), true, nil
 }
 
 func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt, header string) ([]string, bool, error) {
@@ -150,12 +170,12 @@ func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt
 	}
 
 	vaultPath := getVaultPath()
-	if canUseFZFInteractive() {
+	if canUseRavenInteractive() {
 		vaultCfg, err := loadVaultConfigSafe(vaultPath)
 		if err != nil {
 			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		selectedPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, prompt, header)
+		selectedPath, selected, err := pickVaultFile(vaultPath, vaultCfg, prompt, header)
 		if err != nil {
 			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
 		}
@@ -174,37 +194,41 @@ func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt
 	return nil, err == nil, err
 }
 
-func pickAmbiguousReferenceWithFZF(reference string, matches []string, matchSources map[string]string, prompt string) (string, bool, error) {
-	lines := make([]string, 0, len(matches))
+func pickAmbiguousReference(reference string, matches []string, matchSources map[string]string, prompt string) (string, bool, error) {
+	items := make([]picker.Item, 0, len(matches))
 	for _, match := range matches {
 		match = strings.TrimSpace(match)
 		if match == "" {
 			continue
 		}
 		source := strings.TrimSpace(matchSources[match])
-		if source == "" {
-			lines = append(lines, match)
-			continue
+		detail := ""
+		if source != "" {
+			detail = "matched via " + source
 		}
-		lines = append(lines, fmt.Sprintf("%s\t%s", match, source))
+		items = append(items, picker.Item{
+			ID:         match,
+			Label:      match,
+			Detail:     detail,
+			Columns:    []string{match, source},
+			SearchText: browseSearchText(match, source),
+		})
 	}
-	if len(lines) == 0 {
+	if len(items) == 0 {
 		return "", false, nil
 	}
 
-	header := fmt.Sprintf("Reference %q is ambiguous; select a target (Esc to cancel)", reference)
-	selectedLine, selected, err := fzfRunPicker(lines, fzfPickerOptions{
-		Prompt:    prompt,
-		Header:    header,
-		Delimiter: "\t",
-		WithNth:   "1,2",
+	selected, ok, err := ravenRunPicker(items, picker.Options{
+		Title:   fmt.Sprintf("Reference %q is ambiguous", reference),
+		Prompt:  strings.TrimSuffix(prompt, "> "),
+		Headers: []string{"#", "target", "matched via"},
+		Columns: ui.BacklinksLayout(),
 	})
-	if err != nil || !selected {
-		return "", selected, err
+	if err != nil || !ok {
+		return "", ok, err
 	}
 
-	target, _, _ := strings.Cut(strings.TrimSpace(selectedLine), "\t")
-	target = strings.TrimSpace(target)
+	target := strings.TrimSpace(selected.Item.ID)
 	if target == "" {
 		return "", false, nil
 	}
@@ -234,8 +258,8 @@ func indexedVaultFilePaths(vaultPath string, vaultCfg *config.VaultConfig) ([]st
 }
 
 func interactivePickerMissingArgSuggestion(commandName, usage string) string {
-	if hasFZFInstalled() {
+	if canUseInteractiveTerminal() {
 		return fmt.Sprintf("Run '%s'", usage)
 	}
-	return fmt.Sprintf("Install fzf to enable interactive selection for bare 'rvn %s', or run '%s'", commandName, usage)
+	return fmt.Sprintf("Run '%s' or use bare 'rvn %s' from an interactive terminal", usage, commandName)
 }

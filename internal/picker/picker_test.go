@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 func TestRankItemsUsesSearchText(t *testing.T) {
@@ -161,6 +163,75 @@ func TestNormalModeVimTopBottomNavigation(t *testing.T) {
 	}
 }
 
+func TestMultiSelectTogglesCurrentItem(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "one", Label: "One"},
+		{ID: "two", Label: "Two"},
+	}, Options{MultiSelect: true})
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(model)
+	if !m.isSelected(0) {
+		t.Fatalf("first item should be selected")
+	}
+	if got := m.selectedCount(); got != 1 {
+		t.Fatalf("selected count = %d, want 1", got)
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(model)
+	selections := m.selections()
+	if len(selections) != 2 {
+		t.Fatalf("selection count = %d, want 2", len(selections))
+	}
+	if selections[0].Item.ID != "one" || selections[1].Item.ID != "two" {
+		t.Fatalf("selections = %#v, want original item order", selections)
+	}
+}
+
+func TestMultiSelectEnterFallsBackToCurrentItem(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "one", Label: "One"},
+		{ID: "two", Label: "Two"},
+	}, Options{MultiSelect: true})
+	m.moveCursor(1)
+
+	selections := m.selections()
+	if len(selections) != 1 {
+		t.Fatalf("selection count = %d, want 1", len(selections))
+	}
+	if selections[0].Item.ID != "two" {
+		t.Fatalf("selected item = %q, want two", selections[0].Item.ID)
+	}
+}
+
+func TestMultiSelectPreservesSelectionAcrossFiltering(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "alpha", Label: "Alpha"},
+		{ID: "beta", Label: "Beta"},
+	}, Options{MultiSelect: true})
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("beta")})
+	m = updated.(model)
+
+	if len(m.filtered) != 1 {
+		t.Fatalf("filtered count = %d, want 1", len(m.filtered))
+	}
+	if !m.isSelected(0) {
+		t.Fatalf("alpha should remain selected while filtered out")
+	}
+	selections := m.selections()
+	if len(selections) != 1 || selections[0].Item.ID != "alpha" {
+		t.Fatalf("selections = %#v, want alpha", selections)
+	}
+}
+
 func TestInsertModeEscReturnsToNormal(t *testing.T) {
 	m := newModel([]Item{{ID: "one", Label: "One"}}, Options{})
 
@@ -233,10 +304,11 @@ func TestRenderTableListIncludesHeadersColumnsAndDividers(t *testing.T) {
 		},
 	}, Options{
 		Headers: []string{"#", "title", "category", "project", "status", "location"},
+		Columns: ui.ObjectLayout([]string{"category", "project", "status"}),
 	})
 
 	out := m.renderList(80)
-	for _, want := range []string{"title", "category", "project", "status", "Issue One", "sugges...", "type/issue/one.md:1", "─"} {
+	for _, want := range []string{"title", "category", "project", "status", "» 1", "Issue One", "sugge...", "type/issue/one.md:1", "─"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("rendered table missing %q:\n%s", want, out)
 		}
@@ -267,7 +339,7 @@ func TestRenderTableListFitsBodyHeight(t *testing.T) {
 
 func TestTableWidthsFitAvailableWidth(t *testing.T) {
 	headers := []string{"#", "title", "category", "project", "status", "location"}
-	widths := tableWidths(headers, 80)
+	widths := ui.CalculateColumnWidths(fallbackTableColumns(len(headers)), 80)
 	total := 0
 	for _, width := range widths {
 		total += width

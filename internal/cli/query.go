@@ -399,7 +399,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				return nil
 			}
 			sch, _ := schema.Load(getVaultPath())
-			return browseQueryResults(browseItemsForObjectResults(objects, sch), objectBrowseHeaders(objects, sch))
+			return browseQueryResults(browseItemsForObjectResults(objects, sch), objectBrowseHeaders(objects, sch), objectBrowseLayout(objects, sch))
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects))
@@ -415,7 +415,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQueryTraitResults(queryStr, queryLabelFromData(data, queryStr), traits)
 				return nil
 			}
-			return browseQueryResults(browseItemsForTraitResults(traits), traitBrowseHeaders())
+			return browseQueryResults(browseItemsForTraitResults(traits), traitBrowseHeaders(), ui.TraitLayout())
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForTraitResults(traits))
@@ -430,7 +430,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQueryAssetResults(queryStr, assets)
 				return nil
 			}
-			return browseQueryResults(browseItemsForAssetResults(assets), nil)
+			return browseQueryResults(browseItemsForAssetResults(assets), assetBrowseHeaders(), ui.AssetLayout())
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForAssetResults(assets))
@@ -445,7 +445,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQuerySectionResults(queryStr, sections)
 				return nil
 			}
-			return browseQueryResults(browseItemsForSectionResults(sections), nil)
+			return browseQueryResults(browseItemsForSectionResults(sections), sectionBrowseHeaders(), ui.SearchLayout())
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForSectionResults(sections))
@@ -491,6 +491,11 @@ func browseItemsForObjectResults(results []model.Object, sch *schema.Schema) []p
 func objectBrowseHeaders(results []model.Object, sch *schema.Schema) []string {
 	nameField, fieldColumns := objectTableColumns(results, sch)
 	return objectTableHeaders(nameField, fieldColumns)
+}
+
+func objectBrowseLayout(results []model.Object, sch *schema.Schema) []ui.ColumnDef {
+	_, fieldColumns := objectTableColumns(results, sch)
+	return ui.ObjectLayout(fieldColumns)
 }
 
 func objectBrowseColumns(obj model.Object, nameField string, fieldColumns []string, location string) []string {
@@ -558,6 +563,7 @@ func browseItemsForAssetResults(results []model.Asset) []picker.Item {
 			Label:    result.FilePath,
 			Detail:   detail,
 			Location: formatAssetSize(result.SizeBytes),
+			Columns:  []string{result.FilePath, detail, formatAssetSize(result.SizeBytes)},
 			SearchText: browseSearchText(
 				result.ID,
 				result.FilePath,
@@ -570,6 +576,10 @@ func browseItemsForAssetResults(results []model.Asset) []picker.Item {
 		})
 	}
 	return items
+}
+
+func assetBrowseHeaders() []string {
+	return []string{"#", "path", "media type", "size"}
 }
 
 func browseItemsForSectionResults(results []model.Section) []picker.Item {
@@ -586,6 +596,7 @@ func browseItemsForSectionResults(results []model.Section) []picker.Item {
 			Label:    result.Title,
 			Detail:   detail,
 			Location: location,
+			Columns:  []string{result.Title, detail, location},
 			SearchText: browseSearchText(
 				result.ID,
 				result.Title,
@@ -601,6 +612,10 @@ func browseItemsForSectionResults(results []model.Section) []picker.Item {
 		})
 	}
 	return items
+}
+
+func sectionBrowseHeaders() []string {
+	return []string{"#", "title", "heading", "location"}
 }
 
 func objectBrowseDetail(obj model.Object, fieldColumns []string) string {
@@ -626,11 +641,12 @@ func browseSearchText(parts ...string) string {
 	return strings.Join(out, " ")
 }
 
-func browseQueryResults(items []picker.Item, headers []string) error {
+func browseQueryResults(items []picker.Item, headers []string, columns []ui.ColumnDef) error {
 	selected, ok, err := picker.Run(items, picker.Options{
 		Title:   "Query results",
 		Prompt:  "filter",
 		Headers: headers,
+		Columns: columns,
 	})
 	if err != nil {
 		return handleError(ErrInternal, err, "")
@@ -641,7 +657,7 @@ func browseQueryResults(items []picker.Item, headers []string) error {
 	if strings.TrimSpace(selected.Item.FilePath) == "" {
 		return handleErrorMsg(ErrInternal, "selected query result has no file path", "")
 	}
-	openFileInEditor(filepath.Join(getVaultPath(), selected.Item.FilePath), selected.Item.FilePath, false)
+	openFileInEditorAtLine(filepath.Join(getVaultPath(), selected.Item.FilePath), selected.Item.FilePath, selected.Item.Line, false)
 	return nil
 }
 

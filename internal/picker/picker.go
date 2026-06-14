@@ -2,6 +2,7 @@ package picker
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"unicode"
@@ -9,6 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sahilm/fuzzy"
+
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 // Item is a selectable entry in a Raven-owned interactive picker.
@@ -25,9 +28,13 @@ type Item struct {
 
 // Options controls picker copy and layout.
 type Options struct {
-	Title   string
-	Prompt  string
-	Headers []string
+	Title       string
+	Prompt      string
+	Headers     []string
+	Columns     []ui.ColumnDef
+	MultiSelect bool
+	Input       io.Reader
+	Output      io.Writer
 }
 
 // Selection is the item selected by the user.
@@ -44,21 +51,42 @@ const (
 
 // Run starts an interactive picker and returns the selected item.
 func Run(items []Item, opts Options) (Selection, bool, error) {
+	selections, ok, err := run(items, opts)
+	if err != nil || !ok || len(selections) == 0 {
+		return Selection{}, ok, err
+	}
+	return selections[0], true, nil
+}
+
+// RunMulti starts an interactive picker and returns one or more selected items.
+func RunMulti(items []Item, opts Options) ([]Selection, bool, error) {
+	opts.MultiSelect = true
+	return run(items, opts)
+}
+
+func run(items []Item, opts Options) ([]Selection, bool, error) {
 	if len(items) == 0 {
-		return Selection{}, false, nil
+		return nil, false, nil
 	}
 
 	initial := newModel(items, opts)
-	finalModel, err := tea.NewProgram(initial, tea.WithAltScreen()).Run()
+	programOptions := []tea.ProgramOption{tea.WithAltScreen()}
+	if opts.Input != nil {
+		programOptions = append(programOptions, tea.WithInput(opts.Input))
+	}
+	if opts.Output != nil {
+		programOptions = append(programOptions, tea.WithOutput(opts.Output))
+	}
+	finalModel, err := tea.NewProgram(initial, programOptions...).Run()
 	if err != nil {
-		return Selection{}, false, err
+		return nil, false, err
 	}
 
 	m, ok := finalModel.(model)
 	if !ok || !m.selected {
-		return Selection{}, false, nil
+		return nil, false, nil
 	}
-	return Selection{Item: m.items[m.filtered[m.cursor]]}, true, nil
+	return m.selections(), true, nil
 }
 
 type model struct {
@@ -66,22 +94,24 @@ type model struct {
 	filtered []int
 	opts     Options
 
-	query    string
-	cursor   int
-	offset   int
-	width    int
-	height   int
-	selected bool
-	mode     inputMode
-	pendingG bool
+	query        string
+	cursor       int
+	offset       int
+	width        int
+	height       int
+	selected     bool
+	mode         inputMode
+	pendingG     bool
+	selectedKeys map[string]bool
 }
 
 func newModel(items []Item, opts Options) model {
 	m := model{
-		items:  items,
-		opts:   opts,
-		width:  100,
-		height: 30,
+		items:        items,
+		opts:         opts,
+		width:        100,
+		height:       30,
+		selectedKeys: make(map[string]bool),
 	}
 	m.applyFilter()
 	return m
@@ -138,8 +168,14 @@ func (m model) updateNormalKey(msg tea.KeyMsg) (model, tea.Cmd) {
 	case tea.KeyPgDown:
 		m.pendingG = false
 		m.moveCursor(m.listHeight())
+	case tea.KeySpace:
+		m.pendingG = false
+		m.toggleCurrent()
 	case tea.KeyRunes:
 		switch msg.String() {
+		case " ":
+			m.pendingG = false
+			m.toggleCurrent()
 		case "i", "/":
 			m.pendingG = false
 			m.mode = insertMode
@@ -229,6 +265,9 @@ func (m model) helpText() string {
 	if m.mode == insertMode {
 		return "insert: type filter  esc: normal  ctrl-w: delete word  ctrl-u: clear"
 	}
+	if m.opts.MultiSelect {
+		return fmt.Sprintf("normal: j/k move  space: toggle  enter: select  selected: %d  q: cancel", m.selectedCount())
+	}
 	return "normal: j/k move  gg/G top/bottom  / or i: filter  enter: open  q: cancel"
 }
 
@@ -236,7 +275,7 @@ func (m model) renderList(width int) string {
 	if len(m.filtered) == 0 {
 		return mutedStyle.Render("No matches")
 	}
-	if len(m.opts.Headers) > 0 {
+	if len(m.tableColumns()) > 0 {
 		return m.renderTableList(width)
 	}
 
@@ -257,7 +296,13 @@ func (m model) renderList(width int) string {
 			line += "  " + mutedStyle.Render(item.Location)
 		}
 		if m.offset+visibleIndex == m.cursor {
-			line = selectedStyle.Render("> " + line)
+			prefix := ui.SymbolAttention + " "
+			if m.isSelected(filteredIndex) {
+				prefix += ui.SymbolCheck + " "
+			}
+			line = selectedStyle.Render(prefix + line)
+		} else if m.isSelected(filteredIndex) {
+			line = ui.SymbolCheck + " " + line
 		} else {
 			line = "  " + line
 		}
@@ -276,27 +321,30 @@ func (m model) renderTableList(width int) string {
 		end = len(m.filtered)
 	}
 
-	headers := m.opts.Headers
-	widths := tableWidths(headers, width)
-	lines := []string{mutedStyle.Render(formatTableRow(headers, widths)), rowDivider(width)}
+	columns := m.tableColumns()
+	headers := m.tableHeaders(columns)
+	widths := ui.CalculateColumnWidths(columns, width)
+	lines := []string{formatTableRow(headers, widths, columns, true), rowDivider(width)}
 
 	for visibleIndex, filteredIndex := range m.filtered[m.offset:end] {
 		item := m.items[filteredIndex]
-		row := make([]string, 0, len(headers))
-		num := fmt.Sprintf("%d", m.offset+visibleIndex+1)
+		row := make([]string, 0, len(columns))
+		num := ui.FormatRowNum(m.offset+visibleIndex+1, len(m.filtered))
 		if m.offset+visibleIndex == m.cursor {
-			num = ">" + num
+			num = ui.SymbolAttention + " " + strings.TrimSpace(num)
+		} else if m.isSelected(filteredIndex) {
+			num = ui.SymbolCheck + " " + strings.TrimSpace(num)
 		}
 		row = append(row, num)
 		row = append(row, item.Columns...)
-		for len(row) < len(headers) {
+		for len(row) < len(columns) {
 			row = append(row, "")
 		}
-		if len(row) > len(headers) {
-			row = row[:len(headers)]
+		if len(row) > len(columns) {
+			row = row[:len(columns)]
 		}
 
-		rendered := formatTableRow(row, widths)
+		rendered := formatTableRow(row, widths, columns, false)
 		if m.offset+visibleIndex == m.cursor {
 			rendered = selectedStyle.Render(rendered)
 		}
@@ -308,12 +356,35 @@ func (m model) renderTableList(width int) string {
 	return strings.Join(lines, "\n")
 }
 
+func (m model) tableColumns() []ui.ColumnDef {
+	if len(m.opts.Columns) > 0 {
+		return m.opts.Columns
+	}
+	if len(m.opts.Headers) == 0 {
+		return nil
+	}
+	return fallbackTableColumns(len(m.opts.Headers))
+}
+
+func (m model) tableHeaders(columns []ui.ColumnDef) []string {
+	headers := make([]string, len(columns))
+	for i, col := range columns {
+		headers[i] = col.Name
+	}
+	for i, header := range m.opts.Headers {
+		if i < len(headers) {
+			headers[i] = header
+		}
+	}
+	return headers
+}
+
 func (m model) listHeight() int {
 	bodyHeight := m.height - 4
 	if bodyHeight < 1 {
 		bodyHeight = 1
 	}
-	if len(m.opts.Headers) > 0 {
+	if len(m.tableColumns()) > 0 {
 		// Header + header divider take two lines; rows are separated by
 		// dividers, so N rows render as 2N+1 lines.
 		height := (bodyHeight - 1) / 2
@@ -357,6 +428,53 @@ func (m *model) moveToBottom() {
 	}
 	m.cursor = len(m.filtered) - 1
 	m.clamp()
+}
+
+func (m *model) toggleCurrent() {
+	if !m.opts.MultiSelect || len(m.filtered) == 0 {
+		return
+	}
+	index := m.filtered[m.cursor]
+	key := m.selectionKey(index)
+	if m.selectedKeys[key] {
+		delete(m.selectedKeys, key)
+		return
+	}
+	m.selectedKeys[key] = true
+}
+
+func (m model) isSelected(index int) bool {
+	return m.opts.MultiSelect && m.selectedKeys[m.selectionKey(index)]
+}
+
+func (m model) selectedCount() int {
+	if !m.opts.MultiSelect {
+		return 0
+	}
+	return len(m.selectedKeys)
+}
+
+func (m model) selectionKey(index int) string {
+	if index >= 0 && index < len(m.items) && strings.TrimSpace(m.items[index].ID) != "" {
+		return "id:" + m.items[index].ID
+	}
+	return fmt.Sprintf("index:%d", index)
+}
+
+func (m model) selections() []Selection {
+	if len(m.filtered) == 0 {
+		return nil
+	}
+	if !m.opts.MultiSelect || len(m.selectedKeys) == 0 {
+		return []Selection{{Item: m.items[m.filtered[m.cursor]]}}
+	}
+	selections := make([]Selection, 0, len(m.selectedKeys))
+	for index, item := range m.items {
+		if m.selectedKeys[m.selectionKey(index)] {
+			selections = append(selections, Selection{Item: item})
+		}
+	}
+	return selections
 }
 
 func (m *model) clamp() {
@@ -422,66 +540,31 @@ func (item Item) searchText() string {
 	}, " ")
 }
 
-func tableWidths(headers []string, totalWidth int) []int {
-	if len(headers) == 0 {
+func fallbackTableColumns(count int) []ui.ColumnDef {
+	if count <= 0 {
 		return nil
 	}
-	if totalWidth < 20 {
-		totalWidth = 20
+	columns := make([]ui.ColumnDef, count)
+	columns[0] = ui.ColumnDef{
+		Name:     "num",
+		MinWidth: 4,
+		MaxWidth: 6,
+		Align:    ui.AlignRight,
+		HasStyle: true,
+		Style:    ui.Muted,
 	}
-	const padding = 2
-	widths := make([]int, len(headers))
-	widths[0] = 4
-
-	remaining := totalWidth - widths[0] - padding*(len(headers)-1)
-	if remaining < len(headers)-1 {
-		remaining = len(headers) - 1
-	}
-	if len(headers) == 1 {
-		return widths
-	}
-
-	weights := make([]int, len(headers)-1)
-	totalWeight := 0
-	for i := 1; i < len(headers); i++ {
-		weight := 1
-		if i == 1 || i == len(headers)-1 {
-			weight = 2
+	for i := 1; i < count; i++ {
+		columns[i] = ui.ColumnDef{
+			Name:       fmt.Sprintf("column:%d", i),
+			WidthRatio: 1,
+			MinWidth:   6,
+			Align:      ui.AlignLeft,
 		}
-		weights[i-1] = weight
-		totalWeight += weight
 	}
-
-	used := 0
-	for i := 1; i < len(headers); i++ {
-		width := remaining * weights[i-1] / totalWeight
-		if width < 6 {
-			width = 6
-		}
-		widths[i] = width
-		used += width
-	}
-	for used > remaining {
-		largest := 1
-		for i := 2; i < len(widths); i++ {
-			if widths[i] > widths[largest] {
-				largest = i
-			}
-		}
-		if widths[largest] <= 4 {
-			break
-		}
-		widths[largest]--
-		used--
-	}
-	for used < remaining {
-		widths[len(widths)-1]++
-		used++
-	}
-	return widths
+	return columns
 }
 
-func formatTableRow(cells []string, widths []int) string {
+func formatTableRow(cells []string, widths []int, columns []ui.ColumnDef, header bool) string {
 	parts := make([]string, 0, len(widths))
 	for i, width := range widths {
 		cell := ""
@@ -489,11 +572,23 @@ func formatTableRow(cells []string, widths []int) string {
 			cell = cells[i]
 		}
 		cell = truncate(cell, width)
-		if i == 0 {
-			parts = append(parts, fmt.Sprintf("%*s", width, cell))
-		} else {
-			parts = append(parts, fmt.Sprintf("%-*s", width, cell))
+		style := lipgloss.NewStyle().Width(width)
+		if i < len(columns) {
+			switch columns[i].Align {
+			case ui.AlignRight:
+				style = style.Align(lipgloss.Right)
+			case ui.AlignCenter:
+				style = style.Align(lipgloss.Center)
+			default:
+				style = style.Align(lipgloss.Left)
+			}
+			if header {
+				style = mutedStyle.Bold(true).Width(width)
+			} else if columns[i].HasStyle {
+				style = columns[i].Style.Width(width)
+			}
 		}
+		parts = append(parts, style.Render(cell))
 	}
 	return strings.Join(parts, "  ")
 }

@@ -33,8 +33,8 @@ func prepareReadArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 		return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
-	if canUseFZFInteractive() {
-		selectedPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "read> ", "Select a file to read (Esc to cancel)")
+	if canUseRavenInteractive() {
+		selectedPath, selected, err := pickVaultFile(vaultPath, vaultCfg, "read> ", "Select a file to read")
 		if err != nil {
 			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
 		}
