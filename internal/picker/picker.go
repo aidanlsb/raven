@@ -123,15 +123,22 @@ type model struct {
 	mode         inputMode
 	pendingG     bool
 	selectedKeys map[string]bool
+	renderer     *lipgloss.Renderer
 }
 
 func newModel(items []Item, opts Options) model {
+	renderer := lipgloss.DefaultRenderer()
+	if opts.Output != nil {
+		renderer = lipgloss.NewRenderer(opts.Output)
+	}
+
 	m := model{
 		items:        items,
 		opts:         opts,
 		width:        100,
 		height:       30,
 		selectedKeys: make(map[string]bool),
+		renderer:     renderer,
 	}
 	m.applyFilter()
 	return m
@@ -276,9 +283,9 @@ func (m model) View() string {
 		prompt = "filter"
 	}
 
-	header := titleStyle.Render(title)
-	filter := mutedStyle.Render(fmt.Sprintf("%s [%s]: ", prompt, m.modeLabel())) + m.query
-	help := mutedStyle.Render(m.helpText())
+	header := m.titleStyle().Render(title)
+	filter := m.mutedStyle().Render(fmt.Sprintf("%s [%s]: ", prompt, m.modeLabel())) + m.query
+	help := m.mutedStyle().Render(m.helpText())
 
 	bodyHeight := m.height - 4
 	if bodyHeight < 8 {
@@ -304,7 +311,7 @@ func (m model) renderBody(bodyHeight int) string {
 
 	listWidth := m.width - gutterWidth - separatorWidth
 	list := lipgloss.NewStyle().Width(listWidth).Height(bodyHeight).Render(m.renderList(listWidth))
-	separator := mutedStyle.Render(" │ ")
+	separator := m.mutedStyle().Render(" │ ")
 	sidebar := lipgloss.NewStyle().Width(gutterWidth).Height(bodyHeight).Render(gutter)
 	return lipgloss.JoinHorizontal(lipgloss.Top, list, separator, sidebar)
 }
@@ -314,7 +321,7 @@ func (m model) renderShortcutGutter() string {
 		return ""
 	}
 
-	lines := []string{mutedStyle.Bold(true).Render("shortcuts")}
+	lines := []string{m.mutedStyle().Bold(true).Render("shortcuts")}
 	for _, shortcut := range m.opts.Shortcuts {
 		key := strings.TrimSpace(shortcut.Key)
 		description := strings.TrimSpace(shortcut.Description)
@@ -326,7 +333,7 @@ func (m model) renderShortcutGutter() string {
 	if len(lines) == 1 {
 		return ""
 	}
-	return mutedStyle.Render(strings.Join(lines, "\n"))
+	return m.mutedStyle().Render(strings.Join(lines, "\n"))
 }
 
 func (m model) shortcutGutterWidth() int {
@@ -378,7 +385,7 @@ func (m model) helpText() string {
 
 func (m model) renderList(width int) string {
 	if len(m.filtered) == 0 {
-		return mutedStyle.Render("No matches")
+		return m.mutedStyle().Render("No matches")
 	}
 	if len(m.tableColumns()) > 0 {
 		return m.renderTableList(width)
@@ -395,17 +402,17 @@ func (m model) renderList(width int) string {
 		item := m.items[filteredIndex]
 		line := item.Label
 		if item.Detail != "" {
-			line += "  " + mutedStyle.Render(item.Detail)
+			line += "  " + m.mutedStyle().Render(item.Detail)
 		}
 		if item.Location != "" {
-			line += "  " + mutedStyle.Render(item.Location)
+			line += "  " + m.mutedStyle().Render(item.Location)
 		}
 		if m.offset+visibleIndex == m.cursor {
 			prefix := ui.SymbolAttention + " "
 			if m.isSelected(filteredIndex) {
 				prefix += ui.SymbolCheck + " "
 			}
-			line = selectedStyle.Render(prefix + line)
+			line = m.selectedStyle().Render(prefix + line)
 		} else if m.isSelected(filteredIndex) {
 			line = ui.SymbolCheck + " " + line
 		} else {
@@ -413,7 +420,7 @@ func (m model) renderList(width int) string {
 		}
 		lines = append(lines, line)
 		if visibleIndex < end-m.offset-1 {
-			lines = append(lines, rowDivider(width))
+			lines = append(lines, m.rowDivider(width))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -429,7 +436,7 @@ func (m model) renderTableList(width int) string {
 	columns := m.tableColumns()
 	headers := m.tableHeaders(columns)
 	widths := ui.CalculateColumnWidthsForRows(columns, headers, m.tableRowsForWidths(columns), width)
-	lines := []string{formatTableRow(headers, widths, columns, true, false), rowDivider(width)}
+	lines := []string{m.formatTableRow(headers, widths, columns, true, false), m.rowDivider(width)}
 
 	for visibleIndex, filteredIndex := range m.filtered[m.offset:end] {
 		item := m.items[filteredIndex]
@@ -449,10 +456,10 @@ func (m model) renderTableList(width int) string {
 			row = row[:len(columns)]
 		}
 
-		rendered := formatTableRow(row, widths, columns, false, m.offset+visibleIndex == m.cursor)
+		rendered := m.formatTableRow(row, widths, columns, false, m.offset+visibleIndex == m.cursor)
 		lines = append(lines, rendered)
 		if visibleIndex < end-m.offset-1 {
-			lines = append(lines, rowDivider(width))
+			lines = append(lines, m.rowDivider(width))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -687,7 +694,15 @@ func fallbackTableColumns(count int) []ui.ColumnDef {
 	return columns
 }
 
+func (m model) formatTableRow(cells []string, widths []int, columns []ui.ColumnDef, header bool, selected bool) string {
+	return formatTableRowWithRenderer(m.rendererOrDefault(), cells, widths, columns, header, selected)
+}
+
 func formatTableRow(cells []string, widths []int, columns []ui.ColumnDef, header bool, selected bool) string {
+	return formatTableRowWithRenderer(lipgloss.DefaultRenderer(), cells, widths, columns, header, selected)
+}
+
+func formatTableRowWithRenderer(renderer *lipgloss.Renderer, cells []string, widths []int, columns []ui.ColumnDef, header bool, selected bool) string {
 	parts := make([]string, 0, len(widths))
 	for i, width := range widths {
 		cell := ""
@@ -695,14 +710,21 @@ func formatTableRow(cells []string, widths []int, columns []ui.ColumnDef, header
 			cell = cells[i]
 		}
 		cell = truncate(cell, width)
-		style := tableCellStyle(width, columns, i, header, selected)
+		style := tableCellStyleWithRenderer(renderer, width, columns, i, header, selected)
 		parts = append(parts, style.Render(cell))
 	}
 	return strings.Join(parts, "  ")
 }
 
 func tableCellStyle(width int, columns []ui.ColumnDef, index int, header bool, selected bool) lipgloss.Style {
-	style := lipgloss.NewStyle().Width(width)
+	return tableCellStyleWithRenderer(lipgloss.DefaultRenderer(), width, columns, index, header, selected)
+}
+
+func tableCellStyleWithRenderer(renderer *lipgloss.Renderer, width int, columns []ui.ColumnDef, index int, header bool, selected bool) lipgloss.Style {
+	if renderer == nil {
+		renderer = lipgloss.DefaultRenderer()
+	}
+	style := renderer.NewStyle().Width(width)
 	if index < len(columns) {
 		switch columns[index].Align {
 		case ui.AlignRight:
@@ -713,9 +735,9 @@ func tableCellStyle(width int, columns []ui.ColumnDef, index int, header bool, s
 			style = style.Align(lipgloss.Left)
 		}
 		if header {
-			style = mutedStyle.Bold(true).Width(width)
+			style = mutedStyleForRenderer(renderer).Bold(true).Width(width)
 		} else if columns[index].HasStyle {
-			style = columns[index].Style.Width(width)
+			style = columns[index].Style.Renderer(renderer).Width(width)
 		}
 	}
 	if selected && !header {
@@ -735,11 +757,37 @@ func truncate(s string, width int) string {
 	return string(runes[:width-3]) + "..."
 }
 
-func rowDivider(width int) string {
+func (m model) rowDivider(width int) string {
 	if width < 1 {
 		width = 1
 	}
-	return mutedStyle.Render(strings.Repeat("─", width))
+	return m.mutedStyle().Render(strings.Repeat("─", width))
+}
+
+func (m model) rendererOrDefault() *lipgloss.Renderer {
+	if m.renderer != nil {
+		return m.renderer
+	}
+	return lipgloss.DefaultRenderer()
+}
+
+func (m model) titleStyle() lipgloss.Style {
+	return m.rendererOrDefault().NewStyle().Bold(true)
+}
+
+func (m model) selectedStyle() lipgloss.Style {
+	return m.rendererOrDefault().NewStyle().Bold(true)
+}
+
+func (m model) mutedStyle() lipgloss.Style {
+	return mutedStyleForRenderer(m.rendererOrDefault())
+}
+
+func mutedStyleForRenderer(renderer *lipgloss.Renderer) lipgloss.Style {
+	if renderer == nil {
+		renderer = lipgloss.DefaultRenderer()
+	}
+	return renderer.NewStyle().Foreground(lipgloss.Color("8"))
 }
 
 func dropLastRune(s string) string {
@@ -761,9 +809,3 @@ func dropLastWord(s string) string {
 	}
 	return string(runes[:i])
 }
-
-var (
-	titleStyle    = lipgloss.NewStyle().Bold(true)
-	selectedStyle = lipgloss.NewStyle().Bold(true)
-	mutedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-)
