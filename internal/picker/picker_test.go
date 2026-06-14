@@ -213,6 +213,42 @@ func TestViewRendersShortcutGutterWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestPreviewToggleRendersModal(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "one", Label: "One"},
+	}, Options{
+		Preview: func(item Item) (Preview, error) {
+			return Preview{Title: item.Label, Content: "preview body"}, nil
+		},
+	})
+	m.width = 80
+	m.height = 20
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	m = updated.(model)
+	if cmd != nil {
+		t.Fatalf("p should not quit")
+	}
+	if !m.previewOpen {
+		t.Fatalf("previewOpen = false, want true")
+	}
+	view := m.View()
+	for _, want := range []string{"One", "preview body", "preview: p/esc/q close"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("preview view missing %q:\n%s", want, view)
+		}
+	}
+
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	m = updated.(model)
+	if cmd != nil {
+		t.Fatalf("q should close preview without quitting")
+	}
+	if m.previewOpen {
+		t.Fatalf("previewOpen = true, want false")
+	}
+}
+
 func TestMultiSelectTogglesCurrentItem(t *testing.T) {
 	m := newModel([]Item{
 		{ID: "one", Label: "One"},

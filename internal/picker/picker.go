@@ -36,8 +36,18 @@ type Options struct {
 	AllowForward bool
 	AllowBack    bool
 	Shortcuts    []ShortcutTip
+	Preview      PreviewFunc
 	Input        io.Reader
 	Output       io.Writer
+}
+
+// PreviewFunc returns preview content for a picker item.
+type PreviewFunc func(Item) (Preview, error)
+
+// Preview is displayed in the picker's preview modal.
+type Preview struct {
+	Title   string
+	Content string
 }
 
 // ShortcutTip describes an optional picker gutter shortcut.
@@ -124,6 +134,9 @@ type model struct {
 	pendingG     bool
 	selectedKeys map[string]bool
 	renderer     *lipgloss.Renderer
+	previewOpen  bool
+	preview      Preview
+	previewErr   string
 }
 
 func newModel(items []Item, opts Options) model {
@@ -166,6 +179,9 @@ func (m model) updateKey(msg tea.KeyMsg) (model, tea.Cmd) {
 	if msg.Type == tea.KeyCtrlC {
 		return m, tea.Quit
 	}
+	if m.previewOpen {
+		return m.updatePreviewKey(msg)
+	}
 	if msg.Type == tea.KeyEnter {
 		if len(m.filtered) > 0 {
 			m.selected = true
@@ -177,6 +193,19 @@ func (m model) updateKey(msg tea.KeyMsg) (model, tea.Cmd) {
 		return m.updateInsertKey(msg)
 	}
 	return m.updateNormalKey(msg)
+}
+
+func (m model) updatePreviewKey(msg tea.KeyMsg) (model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.closePreview()
+	case tea.KeyRunes:
+		switch msg.String() {
+		case "p", "q":
+			m.closePreview()
+		}
+	}
+	return m, nil
 }
 
 func (m model) updateNormalKey(msg tea.KeyMsg) (model, tea.Cmd) {
@@ -237,6 +266,9 @@ func (m model) updateNormalKey(msg tea.KeyMsg) (model, tea.Cmd) {
 				m.action = ActionForward
 				return m, tea.Quit
 			}
+		case "p":
+			m.pendingG = false
+			m.openPreview()
 		case "q":
 			return m, tea.Quit
 		default:
@@ -292,6 +324,9 @@ func (m model) View() string {
 		bodyHeight = 8
 	}
 	body := m.renderBody(bodyHeight)
+	if m.previewOpen {
+		body = m.renderPreviewOverlay(bodyHeight)
+	}
 
 	return strings.Join([]string{header, filter, body, help}, "\n")
 }
@@ -366,6 +401,9 @@ func (m model) modeLabel() string {
 }
 
 func (m model) helpText() string {
+	if m.previewOpen {
+		return "preview: p/esc/q close"
+	}
 	if m.mode == insertMode {
 		return "insert: type filter  esc: normal  ctrl-w: delete word  ctrl-u: clear"
 	}
@@ -377,10 +415,14 @@ func (m model) helpText() string {
 	} else if m.opts.AllowForward {
 		nav = "  l: forward"
 	}
-	if m.opts.MultiSelect {
-		return fmt.Sprintf("normal: j/k move%s  space: toggle  enter: select  selected: %d  q: cancel", nav, m.selectedCount())
+	preview := ""
+	if m.opts.Preview != nil {
+		preview = "  p: preview"
 	}
-	return fmt.Sprintf("normal: j/k move  gg/G top/bottom%s  / or i: filter  enter: open  q: cancel", nav)
+	if m.opts.MultiSelect {
+		return fmt.Sprintf("normal: j/k move%s%s  space: toggle  enter: select  selected: %d  q: cancel", nav, preview, m.selectedCount())
+	}
+	return fmt.Sprintf("normal: j/k move  gg/G top/bottom%s%s  / or i: filter  enter: open  q: cancel", nav, preview)
 }
 
 func (m model) renderList(width int) string {
@@ -463,6 +505,54 @@ func (m model) renderTableList(width int) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m model) renderPreviewOverlay(bodyHeight int) string {
+	width := m.width - 8
+	if width < 40 {
+		width = m.width - 2
+	}
+	if width < 20 {
+		width = 20
+	}
+	height := bodyHeight - 4
+	if height < 8 {
+		height = bodyHeight
+	}
+	if height < 4 {
+		height = 4
+	}
+
+	innerWidth := width - 4
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	innerHeight := height - 4
+	if innerHeight < 1 {
+		innerHeight = 1
+	}
+
+	title := strings.TrimSpace(m.preview.Title)
+	if title == "" {
+		title = "Preview"
+	}
+	content := m.preview.Content
+	if m.previewErr != "" {
+		content = "Unable to load preview: " + m.previewErr
+	}
+	if strings.TrimSpace(content) == "" {
+		content = "(no preview)"
+	}
+
+	lines := splitPreviewLines(content, innerWidth, innerHeight)
+	modalBody := strings.Join(append([]string{m.titleStyle().Render(truncate(title, innerWidth)), ""}, lines...), "\n")
+	modal := m.rendererOrDefault().NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Padding(1, 2).
+		Width(innerWidth).
+		Height(innerHeight + 2).
+		Render(modalBody)
+	return m.rendererOrDefault().Place(m.width, bodyHeight, lipgloss.Center, lipgloss.Center, modal)
 }
 
 func (m model) tableRowsForWidths(columns []ui.ColumnDef) [][]string {
@@ -568,6 +658,29 @@ func (m *model) toggleCurrent() {
 		return
 	}
 	m.selectedKeys[key] = true
+}
+
+func (m *model) openPreview() {
+	if m.opts.Preview == nil || len(m.filtered) == 0 {
+		return
+	}
+	item := m.items[m.filtered[m.cursor]]
+	preview, err := m.opts.Preview(item)
+	m.preview = preview
+	m.previewErr = ""
+	if err != nil {
+		m.previewErr = err.Error()
+	}
+	if strings.TrimSpace(m.preview.Title) == "" {
+		m.preview.Title = previewTitle(item)
+	}
+	m.previewOpen = true
+}
+
+func (m *model) closePreview() {
+	m.previewOpen = false
+	m.preview = Preview{}
+	m.previewErr = ""
 }
 
 func (m model) isSelected(index int) bool {
@@ -698,10 +811,6 @@ func (m model) formatTableRow(cells []string, widths []int, columns []ui.ColumnD
 	return formatTableRowWithRenderer(m.rendererOrDefault(), cells, widths, columns, header, selected)
 }
 
-func formatTableRow(cells []string, widths []int, columns []ui.ColumnDef, header bool, selected bool) string {
-	return formatTableRowWithRenderer(lipgloss.DefaultRenderer(), cells, widths, columns, header, selected)
-}
-
 func formatTableRowWithRenderer(renderer *lipgloss.Renderer, cells []string, widths []int, columns []ui.ColumnDef, header bool, selected bool) string {
 	parts := make([]string, 0, len(widths))
 	for i, width := range widths {
@@ -755,6 +864,34 @@ func truncate(s string, width int) string {
 		return string(runes[:width])
 	}
 	return string(runes[:width-3]) + "..."
+}
+
+func splitPreviewLines(content string, width, height int) []string {
+	if height < 1 {
+		return nil
+	}
+	rawLines := strings.Split(strings.ReplaceAll(content, "\t", "    "), "\n")
+	lines := make([]string, 0, height)
+	for _, line := range rawLines {
+		if len(lines) >= height {
+			break
+		}
+		lines = append(lines, truncate(line, width))
+	}
+	if len(rawLines) > height && len(lines) > 0 {
+		lines[len(lines)-1] = truncate("...", width)
+	}
+	return lines
+}
+
+func previewTitle(item Item) string {
+	for _, value := range []string{item.Label, item.ID, item.FilePath} {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return "Preview"
 }
 
 func (m model) rowDivider(width int) string {

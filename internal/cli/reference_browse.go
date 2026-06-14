@@ -60,6 +60,7 @@ func browseReferences(title string, items []picker.Item) (picker.Item, bool, err
 		Prompt:  "filter",
 		Headers: []string{"#", "content", "location"},
 		Columns: ui.BacklinksLayout(),
+		Preview: vaultFilePreview(getVaultPath()),
 	})
 	if err != nil {
 		return picker.Item{}, false, handleError(ErrInternal, err, "")

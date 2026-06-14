@@ -647,6 +647,7 @@ func browseQueryResults(items []picker.Item, headers []string, columns []ui.Colu
 		Prompt:  "filter",
 		Headers: headers,
 		Columns: columns,
+		Preview: vaultFilePreview(getVaultPath()),
 	})
 	if err != nil {
 		return handleError(ErrInternal, err, "")

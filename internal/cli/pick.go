@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/x/term"
@@ -60,6 +59,7 @@ stdout for downstream commands.`,
 			Prompt:  "filter",
 			Headers: []string{"#", "content", "id", "location"},
 			Columns: ui.SearchLayout(),
+			Preview: vaultFilePreview(getVaultPath()),
 			Input:   tty,
 			Output:  tty,
 		}
@@ -133,10 +133,7 @@ func pickItemFromLine(line string) (picker.Item, bool) {
 	if label == "" {
 		label = id
 	}
-	num := 0
-	if fields := strings.Split(line, "\t"); len(fields) > 0 {
-		num, _ = strconv.Atoi(strings.TrimSpace(fields[0]))
-	}
+	filePath, lineNumber := parsePreviewLocation(location)
 	searchText := browseSearchText(id, content, location)
 	return picker.Item{
 		ID:         id,
@@ -145,7 +142,8 @@ func pickItemFromLine(line string) (picker.Item, bool) {
 		Location:   location,
 		Columns:    []string{label, id, location},
 		SearchText: searchText,
-		Line:       num,
+		FilePath:   filePath,
+		Line:       lineNumber,
 	}, true
 }
 
