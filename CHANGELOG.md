@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.25] - 2026-06-14
+
+### Added
+- Interactive picker rows now support preview overlays, including `rvn pick --preview`.
+
+### Fixed
+- Picker styling now degrades cleanly when stdout is redirected.
+
 ## [v0.0.24] - 2026-06-14
 
 ### Added
