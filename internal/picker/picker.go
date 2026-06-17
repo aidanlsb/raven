@@ -298,6 +298,9 @@ func (m model) updateInsertKey(msg tea.KeyMsg) (model, tea.Cmd) {
 			m.query = next
 			m.applyFilter()
 		}
+	case tea.KeySpace:
+		m.query += " "
+		m.applyFilter()
 	case tea.KeyRunes:
 		m.query += msg.String()
 		m.applyFilter()
@@ -319,10 +322,7 @@ func (m model) View() string {
 	filter := m.mutedStyle().Render(fmt.Sprintf("%s [%s]: ", prompt, m.modeLabel())) + m.query
 	help := m.mutedStyle().Render(m.helpText())
 
-	bodyHeight := m.height - 4
-	if bodyHeight < 8 {
-		bodyHeight = 8
-	}
+	bodyHeight := m.bodyHeight()
 	body := m.renderBody(bodyHeight)
 	if m.previewOpen {
 		body = m.renderPreviewOverlay(bodyHeight)
@@ -334,21 +334,23 @@ func (m model) View() string {
 func (m model) renderBody(bodyHeight int) string {
 	gutter := m.renderShortcutGutter()
 	if gutter == "" {
-		return lipgloss.NewStyle().Width(m.width).Height(bodyHeight).Render(m.renderList(m.width))
+		body := m.rendererOrDefault().NewStyle().Width(m.width).Height(bodyHeight).Render(m.renderList(m.width))
+		return fitLines(body, bodyHeight)
 	}
 
 	gutterWidth := m.shortcutGutterWidth()
 	separatorWidth := 3
 	minListWidth := 40
 	if m.width < minListWidth+gutterWidth+separatorWidth {
-		return lipgloss.NewStyle().Width(m.width).Height(bodyHeight).Render(m.renderList(m.width))
+		body := m.rendererOrDefault().NewStyle().Width(m.width).Height(bodyHeight).Render(m.renderList(m.width))
+		return fitLines(body, bodyHeight)
 	}
 
 	listWidth := m.width - gutterWidth - separatorWidth
-	list := lipgloss.NewStyle().Width(listWidth).Height(bodyHeight).Render(m.renderList(listWidth))
+	list := m.rendererOrDefault().NewStyle().Width(listWidth).Height(bodyHeight).Render(m.renderList(listWidth))
 	separator := m.mutedStyle().Render(" │ ")
-	sidebar := lipgloss.NewStyle().Width(gutterWidth).Height(bodyHeight).Render(gutter)
-	return lipgloss.JoinHorizontal(lipgloss.Top, list, separator, sidebar)
+	sidebar := m.rendererOrDefault().NewStyle().Width(gutterWidth).Height(bodyHeight).Render(gutter)
+	return fitLines(lipgloss.JoinHorizontal(lipgloss.Top, list, separator, sidebar), bodyHeight)
 }
 
 func (m model) renderShortcutGutter() string {
@@ -597,10 +599,7 @@ func (m model) tableHeaders(columns []ui.ColumnDef) []string {
 }
 
 func (m model) listHeight() int {
-	bodyHeight := m.height - 4
-	if bodyHeight < 1 {
-		bodyHeight = 1
-	}
+	bodyHeight := m.bodyHeight()
 	if len(m.tableColumns()) > 0 {
 		// Header + header divider take two lines; rows are separated by
 		// dividers, so N rows render as 2N+1 lines.
@@ -617,6 +616,14 @@ func (m model) listHeight() int {
 		return 1
 	}
 	return height
+}
+
+func (m model) bodyHeight() int {
+	bodyHeight := m.height - 4
+	if bodyHeight < 1 {
+		return 1
+	}
+	return bodyHeight
 }
 
 func (m *model) applyFilter() {
@@ -882,6 +889,20 @@ func splitPreviewLines(content string, width, height int) []string {
 		lines[len(lines)-1] = truncate("...", width)
 	}
 	return lines
+}
+
+func fitLines(s string, height int) string {
+	if height < 1 {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) > height {
+		return strings.Join(lines[:height], "\n")
+	}
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func previewTitle(item Item) string {

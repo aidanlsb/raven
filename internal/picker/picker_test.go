@@ -102,6 +102,32 @@ func TestInsertModeFiltersPrintableNavigationLetters(t *testing.T) {
 	}
 }
 
+func TestInsertModeAcceptsSpaceKey(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "issue/alpha-beta", Label: "alpha beta issue"},
+		{ID: "issue/other", Label: "alphabet soup"},
+	}, Options{Title: "Issues"})
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("alpha")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("beta")})
+	m = updated.(model)
+
+	if m.query != "alpha beta" {
+		t.Fatalf("query = %q, want %q", m.query, "alpha beta")
+	}
+	if len(m.filtered) != 1 {
+		t.Fatalf("filtered count = %d, want 1", len(m.filtered))
+	}
+	if got := m.items[m.filtered[0]].ID; got != "issue/alpha-beta" {
+		t.Fatalf("filtered item = %q, want issue/alpha-beta", got)
+	}
+}
+
 func TestNormalModeVimKeysNavigateAndQuit(t *testing.T) {
 	m := newModel([]Item{
 		{ID: "one", Label: "One"},
@@ -433,6 +459,30 @@ func TestRenderTableListFitsBodyHeight(t *testing.T) {
 	bodyHeight := m.height - 4
 	if got := len(strings.Split(out, "\n")); got > bodyHeight {
 		t.Fatalf("rendered lines = %d, want <= body height %d:\n%s", got, bodyHeight, out)
+	}
+}
+
+func TestViewFitsSmallTerminalHeight(t *testing.T) {
+	items := make([]Item, 0, 20)
+	for i := 0; i < 20; i++ {
+		items = append(items, Item{
+			ID:       "todo",
+			Label:    "Todo item",
+			Columns:  []string{"Todo item with context", "@todo", "type/project/raven.md:1"},
+			Location: "type/project/raven.md:1",
+		})
+	}
+	m := newModel(items, Options{
+		Headers: []string{"#", "content", "trait", "location"},
+	})
+	m.height = 6
+
+	out := m.View()
+	if got := len(strings.Split(out, "\n")); got > m.height {
+		t.Fatalf("view lines = %d, want <= terminal height %d:\n%s", got, m.height, out)
+	}
+	if !strings.Contains(out, "filter [NORMAL]:") {
+		t.Fatalf("view should keep filter line visible:\n%s", out)
 	}
 }
 
