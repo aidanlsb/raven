@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/bulkops"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
@@ -57,6 +58,13 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 	}
 	defer db.Close()
 	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	compatible, err := db.SchemaCompatible()
+	if err != nil {
+		return commandexec.Failure(codes.ErrDatabase, "failed to read index schema version", nil, "Run 'rvn reindex --full' to rebuild the index")
+	}
+	if !compatible {
+		return commandexec.Failure(codes.ErrDatabaseVersion, "index schema is stale or incompatible", nil, "Run 'rvn reindex --full' to rebuild the index")
+	}
 
 	rt := &readsvc.Runtime{
 		VaultPath: vaultPath,

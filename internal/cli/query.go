@@ -1374,6 +1374,8 @@ func mapQueryCode(code codes.ErrorCode) codes.ErrorCode {
 		return ErrQueryInvalid
 	case codes.ErrQueryNotFound:
 		return ErrQueryNotFound
+	case codes.ErrDatabaseVersion:
+		return ErrDatabaseVersion
 	case codes.ErrConfigInvalid:
 		return ErrConfigInvalid
 	case codes.ErrDatabase:

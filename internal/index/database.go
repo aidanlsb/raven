@@ -159,6 +159,15 @@ func isSchemaCompatible(db *sql.DB) bool {
 	return version == CurrentDBVersion
 }
 
+// SchemaCompatible reports whether this database has the current index schema.
+func (d *Database) SchemaCompatible() (bool, error) {
+	version, ok, err := storedDatabaseVersion(d.db)
+	if err != nil {
+		return false, err
+	}
+	return ok && version == CurrentDBVersion, nil
+}
+
 // OpenInMemory opens an in-memory database (for testing).
 func OpenInMemory() (*Database, error) {
 	db, err := sql.Open("sqlite", ":memory:")

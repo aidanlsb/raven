@@ -3,14 +3,17 @@
 package cli_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -708,6 +711,32 @@ func TestIntegration_QueryFailsOnSchemaLoadError(t *testing.T) {
 	result := v.RunCLI("query", "type:project")
 	result.MustFail(t, "SCHEMA_INVALID")
 	result.MustFailWithMessage(t, "Fix schema.yaml and try again")
+}
+
+func TestIntegration_QueryFailsOnStaleIndexSchema(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "project", "Stale Index").MustSucceed(t)
+	v.RunCLI("reindex").MustSucceed(t)
+
+	db, err := sql.Open("sqlite", filepath.Join(v.Path, ".raven", "index.db"))
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE meta SET value = ? WHERE key = 'version'`, strconv.Itoa(index.CurrentDBVersion-1)); err != nil {
+		db.Close()
+		t.Fatalf("downgrade index version: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close index: %v", err)
+	}
+
+	result := v.RunCLI("query", "type:project")
+	result.MustFail(t, "DATABASE_VERSION_MISMATCH")
+	result.MustFailWithMessage(t, "rvn reindex --full")
 }
 
 func TestIntegration_QueryAmbiguousReferenceReturnsQueryInvalid(t *testing.T) {
