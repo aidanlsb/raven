@@ -3,13 +3,12 @@ package picker
 import (
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sahilm/fuzzy"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -64,6 +63,8 @@ const (
 	ActionForward Action = "forward"
 	ActionBack    Action = "back"
 )
+
+const visibleSpace = "·"
 
 // Selection is the item selected by the user.
 type Selection struct {
@@ -318,9 +319,9 @@ func (m model) View() string {
 		prompt = "filter"
 	}
 
-	header := m.titleStyle().Render(title)
-	filter := m.mutedStyle().Render(fmt.Sprintf("%s [%s]: ", prompt, m.modeLabel())) + m.query
-	help := m.mutedStyle().Render(m.helpText())
+	header := singleLine(m.titleStyle().Render(title), m.width)
+	filter := m.renderFilterLine(prompt)
+	help := singleLine(m.mutedStyle().Render(m.helpText()), m.width)
 
 	bodyHeight := m.bodyHeight()
 	body := m.renderBody(bodyHeight)
@@ -328,14 +329,14 @@ func (m model) View() string {
 		body = m.renderPreviewOverlay(bodyHeight)
 	}
 
-	return strings.Join([]string{header, filter, body, help}, "\n")
+	return fitLines(strings.Join([]string{header, filter, body, help}, "\n"), m.height, m.width)
 }
 
 func (m model) renderBody(bodyHeight int) string {
 	gutter := m.renderShortcutGutter()
 	if gutter == "" {
 		body := m.rendererOrDefault().NewStyle().Width(m.width).Height(bodyHeight).Render(m.renderList(m.width))
-		return fitLines(body, bodyHeight)
+		return fitLines(body, bodyHeight, m.width)
 	}
 
 	gutterWidth := m.shortcutGutterWidth()
@@ -343,14 +344,14 @@ func (m model) renderBody(bodyHeight int) string {
 	minListWidth := 40
 	if m.width < minListWidth+gutterWidth+separatorWidth {
 		body := m.rendererOrDefault().NewStyle().Width(m.width).Height(bodyHeight).Render(m.renderList(m.width))
-		return fitLines(body, bodyHeight)
+		return fitLines(body, bodyHeight, m.width)
 	}
 
 	listWidth := m.width - gutterWidth - separatorWidth
 	list := m.rendererOrDefault().NewStyle().Width(listWidth).Height(bodyHeight).Render(m.renderList(listWidth))
 	separator := m.mutedStyle().Render(" │ ")
 	sidebar := m.rendererOrDefault().NewStyle().Width(gutterWidth).Height(bodyHeight).Render(gutter)
-	return fitLines(lipgloss.JoinHorizontal(lipgloss.Top, list, separator, sidebar), bodyHeight)
+	return fitLines(lipgloss.JoinHorizontal(lipgloss.Top, list, separator, sidebar), bodyHeight, m.width)
 }
 
 func (m model) renderShortcutGutter() string {
@@ -400,6 +401,18 @@ func (m model) modeLabel() string {
 		return "INSERT"
 	}
 	return "NORMAL"
+}
+
+func (m model) renderFilterLine(prompt string) string {
+	prefix := m.mutedStyle().Render(fmt.Sprintf("%s [%s]: ", prompt, m.modeLabel()))
+	if m.width < 1 {
+		return ""
+	}
+	available := m.width - ansi.StringWidth(prefix)
+	if available <= 0 {
+		return singleLine(prefix, m.width)
+	}
+	return prefix + singleLine(renderQuery(m.query), available)
 }
 
 func (m model) helpText() string {
@@ -619,7 +632,8 @@ func (m model) listHeight() int {
 }
 
 func (m model) bodyHeight() int {
-	bodyHeight := m.height - 4
+	const chromeLines = 3 // title, filter, and help
+	bodyHeight := m.height - chromeLines
 	if bodyHeight < 1 {
 		return 1
 	}
@@ -752,30 +766,6 @@ func (m *model) clamp() {
 	}
 }
 
-func rankItems(items []Item, query string) []int {
-	query = strings.ToLower(strings.TrimSpace(query))
-	if query == "" {
-		indexes := make([]int, len(items))
-		for i := range items {
-			indexes[i] = i
-		}
-		return indexes
-	}
-
-	targets := make([]string, len(items))
-	for i, item := range items {
-		targets[i] = item.searchText()
-	}
-	matches := fuzzy.Find(query, targets)
-	sort.Stable(matches)
-
-	indexes := make([]int, 0, len(matches))
-	for _, match := range matches {
-		indexes = append(indexes, match.Index)
-	}
-	return indexes
-}
-
 func (item Item) searchText() string {
 	if strings.TrimSpace(item.SearchText) != "" {
 		return item.SearchText
@@ -788,6 +778,17 @@ func (item Item) searchText() string {
 		item.FilePath,
 		strings.Join(item.Columns, " "),
 	}, " ")
+}
+
+func normalizeFuzzyText(s string) string {
+	s = strings.ToLower(s)
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) {
+			return r
+		}
+		return ' '
+	}, s)
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func fallbackTableColumns(count int) []ui.ColumnDef {
@@ -891,11 +892,28 @@ func splitPreviewLines(content string, width, height int) []string {
 	return lines
 }
 
-func fitLines(s string, height int) string {
+func singleLine(s string, width int) string {
+	if width < 1 {
+		return ""
+	}
+	s = strings.ReplaceAll(s, "\n", " ")
+	return ansi.Truncate(s, width, "")
+}
+
+func renderQuery(query string) string {
+	return strings.ReplaceAll(query, " ", visibleSpace)
+}
+
+func fitLines(s string, height, width int) string {
 	if height < 1 {
 		return ""
 	}
 	lines := strings.Split(s, "\n")
+	if width > 0 {
+		for i, line := range lines {
+			lines[i] = singleLine(line, width)
+		}
+	}
 	if len(lines) > height {
 		return strings.Join(lines[:height], "\n")
 	}

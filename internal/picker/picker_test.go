@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -48,6 +49,52 @@ func TestRankItemsSortsByMatchQuality(t *testing.T) {
 	}
 	if got := items[filtered[0]].ID; got != "strong" {
 		t.Fatalf("top ranked item = %q, want strong", got)
+	}
+}
+
+func TestRankItemsMatchesSeparatorsAsSpaces(t *testing.T) {
+	items := []Item{
+		{ID: "unrelated", SearchText: "type/project/other-file.md"},
+		{ID: "picker", SearchText: "type/issue/improve-picker-typing-and-display.md"},
+	}
+
+	filtered := rankItems(items, "improve picker typing")
+	if len(filtered) != 1 {
+		t.Fatalf("filtered count = %d, want 1", len(filtered))
+	}
+	if got := items[filtered[0]].ID; got != "picker" {
+		t.Fatalf("filtered item = %q, want picker", got)
+	}
+}
+
+func TestRankItemsMatchesTokensOutOfOrder(t *testing.T) {
+	items := []Item{
+		{ID: "unrelated", SearchText: "type/issue/improve-stale-index-schema-error-handling-for-query.md"},
+		{ID: "picker", SearchText: "type/issue/improve-picker-typing-and-display.md"},
+	}
+
+	filtered := rankItems(items, "typing improve picker")
+	if len(filtered) != 1 {
+		t.Fatalf("filtered count = %d, want 1", len(filtered))
+	}
+	if got := items[filtered[0]].ID; got != "picker" {
+		t.Fatalf("filtered item = %q, want picker", got)
+	}
+}
+
+func TestRankItemsNormalizesQuerySeparators(t *testing.T) {
+	items := []Item{
+		{ID: "picker", SearchText: "type/issue/improve picker typing and display.md"},
+	}
+
+	for _, query := range []string{"improve-picker", "improve_picker", "improve/picker"} {
+		filtered := rankItems(items, query)
+		if len(filtered) != 1 {
+			t.Fatalf("query %q filtered count = %d, want 1", query, len(filtered))
+		}
+		if got := items[filtered[0]].ID; got != "picker" {
+			t.Fatalf("query %q filtered item = %q, want picker", query, got)
+		}
 	}
 }
 
@@ -125,6 +172,29 @@ func TestInsertModeAcceptsSpaceKey(t *testing.T) {
 	}
 	if got := m.items[m.filtered[0]].ID; got != "issue/alpha-beta" {
 		t.Fatalf("filtered item = %q, want issue/alpha-beta", got)
+	}
+}
+
+func TestFilterLineRendersSpacesVisibly(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "issue/alpha-beta", Label: "alpha beta issue"},
+	}, Options{Title: "Issues"})
+	m.width = 80
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("alpha")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("beta")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(model)
+
+	line := m.renderFilterLine("filter")
+	if !strings.Contains(line, "alpha"+visibleSpace+"beta"+visibleSpace) {
+		t.Fatalf("filter line should render spaces visibly, got %q", line)
 	}
 }
 
@@ -456,7 +526,7 @@ func TestRenderTableListFitsBodyHeight(t *testing.T) {
 	m.height = 12
 
 	out := m.renderList(100)
-	bodyHeight := m.height - 4
+	bodyHeight := m.bodyHeight()
 	if got := len(strings.Split(out, "\n")); got > bodyHeight {
 		t.Fatalf("rendered lines = %d, want <= body height %d:\n%s", got, bodyHeight, out)
 	}
@@ -483,6 +553,39 @@ func TestViewFitsSmallTerminalHeight(t *testing.T) {
 	}
 	if !strings.Contains(out, "filter [NORMAL]:") {
 		t.Fatalf("view should keep filter line visible:\n%s", out)
+	}
+}
+
+func TestViewLinesFitTerminalWidthWithLongQuery(t *testing.T) {
+	items := make([]Item, 0, 20)
+	for i := 0; i < 20; i++ {
+		items = append(items, Item{
+			ID:       "todo",
+			Label:    strings.Repeat("very long todo item ", 8),
+			Columns:  []string{strings.Repeat("Todo item with context ", 8), "@todo", "type/project/raven.md:1"},
+			Location: "type/project/raven.md:1",
+		})
+	}
+	m := newModel(items, Options{
+		Headers: []string{"#", "content", "trait", "location"},
+	})
+	m.width = 34
+	m.height = 8
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat("long query ", 8))})
+	m = updated.(model)
+
+	out := m.View()
+	lines := strings.Split(out, "\n")
+	if len(lines) > m.height {
+		t.Fatalf("view lines = %d, want <= terminal height %d:\n%s", len(lines), m.height, out)
+	}
+	for _, line := range lines {
+		if width := ansi.StringWidth(line); width > m.width {
+			t.Fatalf("line width = %d, want <= terminal width %d for %q\nfull view:\n%s", width, m.width, line, out)
+		}
 	}
 }
 
