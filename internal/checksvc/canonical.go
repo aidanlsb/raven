@@ -13,7 +13,8 @@ import (
 )
 
 // detectNonCanonicalIssues scans parsed documents for files that live outside
-// the configured directory roots (non_canonical_path) and references that
+// the configured directory roots (non_canonical_path), files whose directory
+// implies a different type (directory_type_mismatch), and references that
 // include the configured root prefix unnecessarily (non_canonical_ref).
 //
 // Returns issues only when directory roots are configured. Files inside trash,
@@ -38,6 +39,7 @@ func detectNonCanonicalIssues(
 			continue
 		}
 		issues = append(issues, detectNonCanonicalPath(doc, sch, objectsRoot, pagesRoot, exempt)...)
+		issues = append(issues, detectDirectoryTypeMismatch(doc, sch, vaultCfg)...)
 		issues = append(issues, detectNonCanonicalRefs(doc, objectsRoot, pagesRoot)...)
 	}
 	return issues
@@ -122,6 +124,102 @@ func detectNonCanonicalPath(
 		FixCommand: fixCommand,
 		FixHint:    fixHint,
 	}}
+}
+
+func detectDirectoryTypeMismatch(
+	doc *parser.ParsedDocument,
+	sch *schema.Schema,
+	vaultCfg *config.VaultConfig,
+) []check.Issue {
+	if doc == nil || vaultCfg == nil || doc.FilePath == "" {
+		return nil
+	}
+	relPath := paths.NormalizeVaultRelPath(doc.FilePath)
+	if relPath == "" {
+		return nil
+	}
+	if isTypeInferenceExempt(relPath, vaultCfg) {
+		return nil
+	}
+	fileObj := primaryFileObject(doc)
+	if fileObj == nil {
+		return nil
+	}
+
+	expectedType, ok := expectedTypeForDirectory(relPath, sch, vaultCfg)
+	if !ok || expectedType == "" || fileObj.ObjectType == expectedType {
+		return nil
+	}
+
+	actualType := displayType(fileObj.ObjectType)
+	return []check.Issue{{
+		Level:      check.LevelError,
+		Type:       check.IssueDirectoryTypeMismatch,
+		FilePath:   relPath,
+		Line:       fileObj.LineStart,
+		Message:    fmt.Sprintf("File %q is under a directory for type %q but declares type %q", relPath, expectedType, actualType),
+		Value:      actualType + " -> " + expectedType,
+		FixCommand: fmt.Sprintf("rvn reclassify %s %s --confirm", fileObj.ID, expectedType),
+		FixHint:    fmt.Sprintf("Reclassify %q from %q to %q", fileObj.ID, actualType, expectedType),
+	}}
+}
+
+func isTypeInferenceExempt(relPath string, vaultCfg *config.VaultConfig) bool {
+	prefixes := []string{".raven/", ".trash/", ".git/"}
+	if dir := paths.NormalizeDirRoot(vaultCfg.GetTemplateDirectory()); dir != "" {
+		prefixes = append(prefixes, dir)
+	}
+	for _, raw := range vaultCfg.ProtectedPrefixes {
+		if dir := paths.NormalizeDirRoot(raw); dir != "" {
+			prefixes = append(prefixes, dir)
+		}
+	}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(relPath, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func expectedTypeForDirectory(relPath string, sch *schema.Schema, vaultCfg *config.VaultConfig) (string, bool) {
+	if dailyDir := paths.NormalizeDirRoot(vaultCfg.GetDailyDirectory()); dailyDir != "" && strings.HasPrefix(relPath, dailyDir) {
+		return "date", true
+	}
+
+	objectsRoot := paths.NormalizeDirRoot(vaultCfg.GetObjectsRoot())
+	if objectsRoot == "" || !strings.HasPrefix(relPath, objectsRoot) || sch == nil {
+		return "", false
+	}
+	tail := strings.TrimPrefix(relPath, objectsRoot)
+	return expectedTypeForObjectRootTail(tail, sch)
+}
+
+func expectedTypeForObjectRootTail(tail string, sch *schema.Schema) (string, bool) {
+	bestPrefix := ""
+	bestType := ""
+	ambiguous := false
+	for typeName, typeDef := range sch.Types {
+		if typeDef == nil {
+			continue
+		}
+		defaultPath := paths.NormalizeDirRoot(typeDef.DefaultPath)
+		if defaultPath == "" || !strings.HasPrefix(tail, defaultPath) {
+			continue
+		}
+		switch {
+		case len(defaultPath) > len(bestPrefix):
+			bestPrefix = defaultPath
+			bestType = typeName
+			ambiguous = false
+		case len(defaultPath) == len(bestPrefix):
+			ambiguous = true
+		}
+	}
+	if bestType == "" || ambiguous {
+		return "", false
+	}
+	return bestType, true
 }
 
 // primaryFileObject returns the file-backed object for a parsed document, if any.

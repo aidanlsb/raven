@@ -31,6 +31,7 @@ check failures.
 | `duplicate_alias` | Multiple objects define the same alias | Rename one of the conflicting aliases |
 | `alias_collision` | Alias conflicts with an object ID or short name | Rename the alias or use full paths in references |
 | `non_canonical_path` | File lives outside the configured directory root for its type | Run `check fix --confirm` to move file to canonical location |
+| `directory_type_mismatch` | File lives in a directory that implies a different type | Reclassify the object to the expected type, usually with the issue's `fix_command` |
 
 ## Mixed-level issues
 

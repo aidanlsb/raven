@@ -145,6 +145,60 @@ func TestDetectNonCanonicalIssues_RefIncludesRootPrefix(t *testing.T) {
 	}
 }
 
+func TestDetectNonCanonicalIssues_DailyDirectoryTypeMismatch(t *testing.T) {
+	t.Parallel()
+
+	cfg := configWithDirs("type/", "page/")
+	cfg.Directories.Daily = "daily/"
+	docs := []*parser.ParsedDocument{
+		{
+			FilePath: "daily/2026-04-19.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "daily/2026-04-19", ObjectType: "page", LineStart: 1},
+			},
+		},
+	}
+
+	issues := detectNonCanonicalIssues(docs, schemaWithPerson(), cfg)
+	typeIssues := filterByType(issues, check.IssueDirectoryTypeMismatch)
+	if len(typeIssues) != 1 {
+		t.Fatalf("expected 1 directory_type_mismatch issue, got %#v", issues)
+	}
+	got := typeIssues[0]
+	if got.Level != check.LevelError {
+		t.Fatalf("level = %v, want error", got.Level)
+	}
+	if got.Value != "page -> date" {
+		t.Fatalf("value = %q, want page -> date", got.Value)
+	}
+	if !strings.Contains(got.FixCommand, "rvn reclassify daily/2026-04-19 date --confirm") {
+		t.Fatalf("fix command = %q", got.FixCommand)
+	}
+}
+
+func TestDetectNonCanonicalIssues_DefaultPathTypeMismatch(t *testing.T) {
+	t.Parallel()
+
+	cfg := configWithDirs("type/", "page/")
+	docs := []*parser.ParsedDocument{
+		{
+			FilePath: "type/person/freya.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "person/freya", ObjectType: "project", LineStart: 1},
+			},
+		},
+	}
+
+	issues := detectNonCanonicalIssues(docs, schemaWithPersonProject(), cfg)
+	typeIssues := filterByType(issues, check.IssueDirectoryTypeMismatch)
+	if len(typeIssues) != 1 {
+		t.Fatalf("expected 1 directory_type_mismatch issue, got %#v", issues)
+	}
+	if got := typeIssues[0].Value; got != "project -> person" {
+		t.Fatalf("value = %q, want project -> person", got)
+	}
+}
+
 func TestCanonicalDestinationPath_PageStripsNestedDirs(t *testing.T) {
 	t.Parallel()
 
@@ -243,6 +297,15 @@ func schemaWithPerson() *schema.Schema {
 	return &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"person": {DefaultPath: "person/"},
+		},
+	}
+}
+
+func schemaWithPersonProject() *schema.Schema {
+	return &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"person":  {DefaultPath: "person/"},
+			"project": {DefaultPath: "project/"},
 		},
 	}
 }

@@ -645,6 +645,7 @@ Validates managed vault files against the schema. Paths matched by `raven.yaml` 
 | `duplicate_alias` | Multiple objects use the same alias | Make aliases unique |
 | `alias_collision` | Alias conflicts with object ID or short name | Rename alias or use full path |
 | `non_canonical_path` | File lives outside the configured directory root for its type | Run `rvn check fix --confirm` to move the file |
+| `directory_type_mismatch` | File lives in a directory that implies a different type | Reclassify the object to the expected type |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix | Run `rvn check fix --confirm` to strip the prefix |
 | `orphaned_asset` | Indexed asset has no incoming references | Link it from a note or remove it if unused |
 

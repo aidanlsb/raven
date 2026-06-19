@@ -1016,7 +1016,7 @@ Use --full to force a complete rebuild of the entire index.`,
 		LongDesc: `Validates managed files in the vault against the schema.
 
 Returns structured issues with:
-- issue_type: unknown_type, missing_reference, missing_asset, orphaned_asset, undefined_trait, unknown_frontmatter_key, etc.
+- issue_type: unknown_type, missing_reference, missing_asset, orphaned_asset, directory_type_mismatch, undefined_trait, unknown_frontmatter_key, etc.
 - fix_command: Suggested CLI command to fix the issue
 - fix_hint: Human-readable explanation of how to fix
 

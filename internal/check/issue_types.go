@@ -32,6 +32,7 @@ const (
 	IssueLocalFragmentRef        IssueType = "local_fragment_ref"
 	IssueNonCanonicalPath        IssueType = "non_canonical_path"
 	IssueNonCanonicalRef         IssueType = "non_canonical_ref"
+	IssueDirectoryTypeMismatch   IssueType = "directory_type_mismatch"
 	IssueMissingAsset            IssueType = "missing_asset"
 	IssueOrphanedAsset           IssueType = "orphaned_asset"
 )
@@ -67,6 +68,7 @@ func AllIssueTypes() []IssueType {
 		IssueLocalFragmentRef,
 		IssueNonCanonicalPath,
 		IssueNonCanonicalRef,
+		IssueDirectoryTypeMismatch,
 		IssueMissingAsset,
 		IssueOrphanedAsset,
 	}
