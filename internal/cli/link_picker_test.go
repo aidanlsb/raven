@@ -27,7 +27,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
-		WithFile("notes/alpha.md", "# Alpha\n").
+		WithFile("notes/alpha.md", "# Alpha\n\n## Details\n").
+		WithFile("assets/paper.pdf", "%PDF-1.4\n").
 		Build()
 	if _, err := reindexsvc.Run(reindexsvc.RunRequest{VaultPath: v.Path, Full: true, Context: context.Background()}); err != nil {
 		t.Fatalf("reindexsvc.Run() error = %v", err)
@@ -39,12 +40,13 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 	interactiveStdoutIsTerminal = func() bool { return true }
 
 	tests := []struct {
-		name     string
-		prepare  func([]string) ([]string, bool, error)
-		build    func([]string) (map[string]interface{}, error)
-		prompt   string
-		argKey   string
-		wantArgs []string
+		name      string
+		prepare   func([]string) ([]string, bool, error)
+		build     func([]string) (map[string]interface{}, error)
+		prompt    string
+		argKey    string
+		wantArgs  []string
+		wantAsset bool
 	}{
 		{
 			name: "backlinks",
@@ -54,9 +56,10 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 			build: func(args []string) (map[string]interface{}, error) {
 				return buildBacklinksArgs(backlinksCmd, args)
 			},
-			prompt:   "backlinks> ",
-			argKey:   "target",
-			wantArgs: []string{"notes/alpha.md"},
+			prompt:    "backlinks> ",
+			argKey:    "target",
+			wantArgs:  []string{"notes/alpha#details"},
+			wantAsset: true,
 		},
 		{
 			name: "outlinks",
@@ -66,9 +69,10 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 			build: func(args []string) (map[string]interface{}, error) {
 				return buildOutlinksArgs(outlinksCmd, args)
 			},
-			prompt:   "outlinks> ",
-			argKey:   "source",
-			wantArgs: []string{"notes/alpha.md"},
+			prompt:    "outlinks> ",
+			argKey:    "source",
+			wantArgs:  []string{"notes/alpha#details"},
+			wantAsset: false,
 		},
 		{
 			name: "resolve",
@@ -78,9 +82,10 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 			build: func(args []string) (map[string]interface{}, error) {
 				return buildResolveArgs(resolveCmd, args)
 			},
-			prompt:   "resolve> ",
-			argKey:   "reference",
-			wantArgs: []string{"notes/alpha.md"},
+			prompt:    "resolve> ",
+			argKey:    "reference",
+			wantArgs:  []string{"notes/alpha#details"},
+			wantAsset: true,
 		},
 	}
 
@@ -94,10 +99,19 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				for _, item := range items {
 					ids = append(ids, item.ID)
 				}
-				if !slices.Contains(ids, "notes/alpha.md") {
-					t.Fatalf("expected indexed file in picker items, got %#v", ids)
+				if !slices.Contains(ids, "notes/alpha") {
+					t.Fatalf("expected object reference in picker items, got %#v", ids)
 				}
-				return picker.Selection{Item: picker.Item{ID: "notes/alpha.md"}}, true, nil
+				if !slices.Contains(ids, "notes/alpha#details") {
+					t.Fatalf("expected section reference in picker items, got %#v", ids)
+				}
+				if gotAsset := slices.Contains(ids, "assets/paper.pdf"); gotAsset != tt.wantAsset {
+					t.Fatalf("asset presence = %v, want %v; ids=%#v", gotAsset, tt.wantAsset, ids)
+				}
+				if opts.Headers[1] != "reference" {
+					t.Fatalf("expected reference picker headers, got %#v", opts.Headers)
+				}
+				return picker.Selection{Item: picker.Item{ID: "notes/alpha#details"}}, true, nil
 			}
 
 			args, handled, err := tt.prepare(nil)
@@ -115,8 +129,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 			if err != nil {
 				t.Fatalf("build() error = %v", err)
 			}
-			if got := argsMap[tt.argKey]; got != "notes/alpha.md" {
-				t.Fatalf("%s arg = %#v, want notes/alpha.md", tt.argKey, got)
+			if got := argsMap[tt.argKey]; got != "notes/alpha#details" {
+				t.Fatalf("%s arg = %#v, want notes/alpha#details", tt.argKey, got)
 			}
 		})
 	}

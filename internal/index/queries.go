@@ -216,6 +216,67 @@ func (d *Database) QueryObjects(objectType string) ([]model.Object, error) {
 	return results, rows.Err()
 }
 
+// AllObjects returns all indexed file-backed objects.
+func (d *Database) AllObjects() ([]model.Object, error) {
+	rows, err := d.db.Query(`
+		SELECT id, type, fields, file_path, line_start
+		FROM objects
+		ORDER BY file_path, line_start, id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.Object
+	for rows.Next() {
+		var result model.Object
+		var fieldsJSON string
+		if err := rows.Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(fieldsJSON), &result.Fields); err != nil || result.Fields == nil {
+			result.Fields = make(map[string]interface{})
+		}
+		results = append(results, result)
+	}
+	return results, rows.Err()
+}
+
+// AllSections returns all indexed heading-derived sections.
+func (d *Database) AllSections() ([]model.Section, error) {
+	rows, err := d.db.Query(`
+		SELECT id, file_object_id, file_path, slug, title, level, line_start, line_end, subtree_line_end, parent_section_id
+		FROM sections
+		ORDER BY file_path, line_start, id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.Section
+	for rows.Next() {
+		var section model.Section
+		if err := rows.Scan(
+			&section.ID,
+			&section.FileObjectID,
+			&section.FilePath,
+			&section.Slug,
+			&section.Title,
+			&section.Level,
+			&section.LineStart,
+			&section.LineEnd,
+			&section.SubtreeLineEnd,
+			&section.ParentSectionID,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, section)
+	}
+	return results, rows.Err()
+}
+
 // QueryAssets returns indexed asset resources.
 func (d *Database) QueryAssets() ([]model.Asset, error) {
 	query := `

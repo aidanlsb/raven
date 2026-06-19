@@ -673,4 +673,53 @@ func TestQueryObjects(t *testing.T) {
 			t.Errorf("expected 0 results, got %d", len(results))
 		}
 	})
+
+	t.Run("all objects", func(t *testing.T) {
+		results, err := db.AllObjects()
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(results) != 3 {
+			t.Fatalf("expected 3 objects, got %d", len(results))
+		}
+		if results[0].ID != "people/freya" {
+			t.Fatalf("first object ID = %q, want people/freya", results[0].ID)
+		}
+		if got := results[0].Fields["name"]; got != "Freya" {
+			t.Fatalf("first object name = %#v, want Freya", got)
+		}
+	})
+}
+
+func TestAllSections(t *testing.T) {
+	t.Parallel()
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.db.Exec(`
+		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, line_end, subtree_line_end, parent_section_id)
+		VALUES
+			('notes/alpha#overview', 'notes/alpha', 'notes/alpha.md', 'overview', 'Overview', 1, 1, 4, 8, NULL),
+			('notes/alpha#details', 'notes/alpha', 'notes/alpha.md', 'details', 'Details', 2, 5, NULL, NULL, 'notes/alpha#overview')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test sections: %v", err)
+	}
+
+	results, err := db.AllSections()
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 sections, got %d", len(results))
+	}
+	if results[0].ID != "notes/alpha#overview" {
+		t.Fatalf("first section ID = %q, want notes/alpha#overview", results[0].ID)
+	}
+	if results[1].ParentSectionID == nil || *results[1].ParentSectionID != "notes/alpha#overview" {
+		t.Fatalf("parent section ID = %#v, want notes/alpha#overview", results[1].ParentSectionID)
+	}
 }

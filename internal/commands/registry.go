@@ -846,7 +846,8 @@ For trait queries (trait:...):
 		Description: "Find objects that reference a target object or asset",
 		LongDesc: `Find objects that reference a target object or asset.
 
-In an interactive terminal, bare 'rvn backlinks' launches Raven's picker.
+In an interactive terminal, bare 'rvn backlinks' launches Raven's picker
+over indexed object, section, and asset references.
 When an interactive backlinks target is ambiguous, Raven prompts you to choose the target.
 Use --browse to browse incoming references interactively and open the selected reference location.
 Non-interactive use still requires a target.`,
@@ -875,7 +876,8 @@ Non-interactive use still requires a target.`,
 		Description: "Find object and asset links referenced by an object",
 		LongDesc: `Find object and asset links referenced by an object.
 
-In an interactive terminal, bare 'rvn outlinks' launches Raven's picker.
+In an interactive terminal, bare 'rvn outlinks' launches Raven's picker
+over indexed object and section references.
 When an interactive outlinks source is ambiguous, Raven prompts you to choose the source.
 Use --browse to browse outgoing references interactively and open the selected reference location.
 Non-interactive use still requires a source.`,
@@ -2356,7 +2358,8 @@ information about the target object.
 This is a pure query — it does not modify anything. The result always returns
 "resolved": true/false to indicate whether the reference was successfully resolved.
 
-In an interactive terminal, bare 'rvn resolve' launches Raven's picker.
+In an interactive terminal, bare 'rvn resolve' launches Raven's picker
+over indexed object, section, and asset references.
 Non-interactive use still requires a reference.
 
 Supports all reference formats:

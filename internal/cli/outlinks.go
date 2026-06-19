@@ -23,7 +23,7 @@ func prepareOutlinksArgs(cmd *cobra.Command, args []string) ([]string, bool, err
 	if handled, err := validateReferenceBrowseFlag(cmd); handled || err != nil {
 		return nil, handled, err
 	}
-	return prepareInteractiveReferenceArgs(args, "outlinks", "source", "outlinks> ", "Select a source for outlinks (Esc to cancel)")
+	return prepareInteractiveReferenceArgs(args, "outlinks", "source", "outlinks> ", "Select a source for outlinks (Esc to cancel)", interactiveReferencePickerOptions{})
 }
 
 func buildOutlinksArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {

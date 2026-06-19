@@ -23,7 +23,7 @@ func prepareBacklinksArgs(cmd *cobra.Command, args []string) ([]string, bool, er
 	if handled, err := validateReferenceBrowseFlag(cmd); handled || err != nil {
 		return nil, handled, err
 	}
-	return prepareInteractiveReferenceArgs(args, "backlinks", "target", "backlinks> ", "Select a target for backlinks (Esc to cancel)")
+	return prepareInteractiveReferenceArgs(args, "backlinks", "target", "backlinks> ", "Select a target for backlinks (Esc to cancel)", interactiveReferencePickerOptions{IncludeAssets: true})
 }
 
 func buildBacklinksArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {

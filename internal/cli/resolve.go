@@ -24,7 +24,7 @@ var resolveCmd = newCanonicalLeafCommand("resolve", canonicalLeafOptions{
 })
 
 func prepareResolveArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
-	return prepareInteractiveReferenceArgs(args, "resolve", "reference", "resolve> ", "Select a reference to resolve (Esc to cancel)")
+	return prepareInteractiveReferenceArgs(args, "resolve", "reference", "resolve> ", "Select a reference to resolve (Esc to cancel)", interactiveReferencePickerOptions{IncludeAssets: true})
 }
 
 func buildResolveArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
