@@ -137,6 +137,21 @@ func TestReadReturnsExistingContentOrEmptyNewTemplate(t *testing.T) {
 	}
 }
 
+func TestWriteRejectsFrontmatter(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	_, err := Write(WriteRequest{
+		VaultPath:   vaultPath,
+		TemplateDir: "templates/",
+		Path:        "daily.md",
+		Content:     "---\ntype: date\n---\n# {{date}}\n",
+	})
+	svcErr := assertTemplateCode(t, err, CodeValidationFailed)
+	if !strings.Contains(svcErr.Message, "frontmatter") {
+		t.Fatalf("expected frontmatter validation message, got %q", svcErr.Message)
+	}
+}
+
 func TestDeleteRespectsSchemaReferences(t *testing.T) {
 	vaultPath := t.TempDir()
 

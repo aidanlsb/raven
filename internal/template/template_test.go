@@ -207,6 +207,26 @@ func TestLoad_FileTemplate(t *testing.T) {
 	}
 }
 
+func TestLoad_RejectsTemplateFrontmatter(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("Failed to create template dir: %v", err)
+	}
+
+	templatePath := filepath.Join(templateDir, "daily.md")
+	templateContent := "---\ntype: date\n---\n# {{date}}\n"
+	if err := os.WriteFile(templatePath, []byte(templateContent), 0644); err != nil {
+		t.Fatalf("Failed to write template: %v", err)
+	}
+
+	_, err := Load(tmpDir, "templates/daily.md", "templates/")
+	if err == nil {
+		t.Fatal("Load() expected error for template frontmatter, got nil")
+	}
+}
+
 func TestLoad_MissingFile(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()

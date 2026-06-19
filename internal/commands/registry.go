@@ -459,6 +459,10 @@ Use this to see exactly which 'rvn docs <section>' commands are available.`,
 		Description: "Manage template files under directories.template",
 		LongDesc: `Manage template files under directories.template.
 
+Template files contain Markdown body content only. Raven writes object
+frontmatter separately when applying templates, so template files must not
+include YAML frontmatter blocks.
+
 Use this command group for template file lifecycle operations:
 - create/update template files
 - interactively author template files in your editor
@@ -492,6 +496,10 @@ This command replaces the full file body with --content.
 For human authoring, use --edit to open the current template body in the
 configured editor and save the edited result back through the same template
 path validation and write flow.
+
+Template files contain Markdown body content only. Do not include YAML
+frontmatter; Raven writes object frontmatter separately when applying the
+template.
 
 Use --content for scripts and agents. Use --edit for interactive terminal
 editing. The two flags are mutually exclusive.`,
@@ -1480,6 +1488,11 @@ With --type or --core, lists the bound template IDs and default template for tha
 	"schema_template_set": {
 		Name:        "schema template set",
 		Description: "Create or update a schema template definition",
+		LongDesc: `Create or update a schema template definition.
+
+The referenced template file must live under directories.template and contain
+Markdown body content only. Template files cannot include YAML frontmatter;
+Raven writes object frontmatter separately when applying templates.`,
 		Args: []ArgMeta{
 			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
@@ -2222,7 +2235,8 @@ or a full path (objects/companies/cursor.md).
 
 The editor is determined by the 'editor' setting in config.toml or $EDITOR.
 
-In an interactive terminal, bare 'rvn open' launches Raven's picker.
+In an interactive terminal, bare 'rvn open' launches Raven's picker
+over indexed object, section, and asset references.
 
 When an interactive open reference is ambiguous, Raven prompts you to choose the
 target. Non-interactive and JSON output still return REF_AMBIGUOUS with the

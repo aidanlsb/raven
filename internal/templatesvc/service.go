@@ -228,6 +228,10 @@ func Write(req WriteRequest) (*WriteResult, error) {
 		return nil, err
 	}
 
+	if err := template.ValidateContent(req.Content); err != nil {
+		return nil, newError(CodeValidationFailed, err.Error(), "Template files should contain only body Markdown; Raven writes object frontmatter separately", err)
+	}
+
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return nil, newError(CodeFileWriteError, "unable to create template directory", "", err)
 	}

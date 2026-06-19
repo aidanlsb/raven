@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -49,15 +48,14 @@ func prepareOpenArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 		if err != nil {
 			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		relPath, selected, err := pickVaultFile(vaultPath, vaultCfg, "open> ", "Select a file to open")
+		selectedRef, selected, err := pickReferenceTarget(vaultPath, vaultCfg, "open> ", "Select a reference to open", interactiveReferencePickerOptions{IncludeAssets: true})
 		if err != nil {
-			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
+			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed references")
 		}
 		if !selected {
 			return nil, true, nil
 		}
-		openFileInEditor(filepath.Join(vaultPath, relPath), relPath, false)
-		return nil, true, nil
+		return []string{selectedRef}, false, nil
 	}
 
 	err := handleErrorMsg(
@@ -182,8 +180,13 @@ func handleOpenResult(cmd *cobra.Command, result commandexec.Result) error {
 	}
 
 	file := stringValue(data["file"])
+	line := intFromAny(data["line_start"])
 	if boolValue(data["opened"]) {
-		fmt.Println(ui.Checkf("Opening %s", ui.FilePath(file)))
+		if line > 0 {
+			fmt.Println(ui.Checkf("Opening %s:%d", ui.FilePath(file), line))
+		} else {
+			fmt.Println(ui.Checkf("Opening %s", ui.FilePath(file)))
+		}
 		return nil
 	}
 	return renderSingleOpenResult(data)
@@ -203,12 +206,21 @@ func ambiguousReferenceDetails(raw interface{}) (string, []string, map[string]st
 
 func renderSingleOpenResult(data map[string]interface{}) error {
 	file := stringValue(data["file"])
+	line := intFromAny(data["line_start"])
 	if boolValue(data["opened"]) {
-		fmt.Println(ui.Checkf("Opening %s", ui.FilePath(file)))
+		if line > 0 {
+			fmt.Println(ui.Checkf("Opening %s:%d", ui.FilePath(file), line))
+		} else {
+			fmt.Println(ui.Checkf("Opening %s", ui.FilePath(file)))
+		}
 		return nil
 	}
 	fmt.Println(ui.SectionHeader("File"))
-	fmt.Println(ui.Bullet(ui.FilePath(file)))
+	if line > 0 {
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s:%d", ui.FilePath(file), line)))
+	} else {
+		fmt.Println(ui.Bullet(ui.FilePath(file)))
+	}
 	fmt.Println(ui.Hint("Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically."))
 	return nil
 }

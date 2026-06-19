@@ -121,6 +121,15 @@ func SetTemplate(req SetTemplateRequest) (*TemplateDefinition, error) {
 			nil,
 			err,
 		)
+	} else if err != nil {
+		return nil, newError(ErrorFileRead, "failed to read template file metadata", "", nil, err)
+	}
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, newError(ErrorFileRead, "failed to read template file", "", nil, err)
+	}
+	if err := template.ValidateContent(string(content)); err != nil {
+		return nil, newError(ErrorValidation, err.Error(), "Template files should contain only body Markdown; Raven writes object frontmatter separately", nil, err)
 	}
 
 	schemaDoc, err := readSchemaDoc(req.VaultPath)

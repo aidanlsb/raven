@@ -75,6 +75,19 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 			wantAsset: false,
 		},
 		{
+			name: "open",
+			prepare: func(args []string) ([]string, bool, error) {
+				return prepareOpenArgs(openCmd, args)
+			},
+			build: func(args []string) (map[string]interface{}, error) {
+				return buildOpenArgs(openCmd, args)
+			},
+			prompt:    "open> ",
+			argKey:    "reference",
+			wantArgs:  []string{"notes/alpha#details"},
+			wantAsset: true,
+		},
+		{
 			name: "resolve",
 			prepare: func(args []string) ([]string, bool, error) {
 				return prepareResolveArgs(resolveCmd, args)

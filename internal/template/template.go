@@ -89,6 +89,24 @@ func Load(vaultPath, templateSpec, templateDir string) (string, error) {
 	return loadFromFile(vaultPath, fileRef)
 }
 
+// ValidateContent enforces that templates contain body content only.
+func ValidateContent(content string) error {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return nil
+	}
+	firstLine := strings.TrimPrefix(lines[0], "\ufeff")
+	if strings.TrimSpace(firstLine) != "---" {
+		return nil
+	}
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			return fmt.Errorf("template files cannot contain YAML frontmatter; remove the frontmatter block and keep only body content")
+		}
+	}
+	return fmt.Errorf("template file starts with an unclosed YAML frontmatter delimiter; remove frontmatter from templates")
+}
+
 func normalizeFileRef(filePath string) (string, error) {
 	trimmed := strings.TrimSpace(filePath)
 	normalized := paths.NormalizeVaultRelPath(trimmed)
@@ -141,7 +159,11 @@ func loadFromFile(vaultPath, templatePath string) (string, error) {
 		return "", err
 	}
 
-	return string(content), nil
+	templateContent := string(content)
+	if err := ValidateContent(templateContent); err != nil {
+		return "", err
+	}
+	return templateContent, nil
 }
 
 // Apply substitutes template variables in the content.

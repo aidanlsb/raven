@@ -28,6 +28,10 @@ Templates are file-backed only.
 - A type can set `default_template`; if unset, creation proceeds without a template.
 - Built-in core types (for example `date`) are configured with `rvn schema template ... --core ...`.
 
+Template files are Markdown body content only. Do not include YAML frontmatter in
+template files; Raven writes the destination object's frontmatter separately
+before appending template body content.
+
 Example schema:
 
 ```yaml
@@ -175,6 +179,8 @@ rvn daily tomorrow
 - If a type has no `default_template`, `rvn new` creates the object without template content.
 - `--template <template_id>` on `rvn new` can override the default for that create call.
 - Template content is static file content at creation time.
+- Template files cannot contain YAML frontmatter. Put metadata in schema fields
+  and provide values with creation flags; keep templates focused on body content.
 - Template file lifecycle and schema binding lifecycle are intentionally separate.
 
 ## Troubleshooting
@@ -183,6 +189,9 @@ rvn daily tomorrow
   Move the file under your configured template directory or update `directories.template`.
 - `template file not found ...`
   Create the file with `rvn template write ...`, then run `rvn schema template set ... --file ...`.
+- `template files cannot contain YAML frontmatter ...`
+  Remove the leading `---` frontmatter block from the template file. Raven writes
+  object frontmatter separately when applying templates.
 - `no editor configured`
   Set `editor` in config.toml or `$EDITOR`. GUI editors should use a blocking command such as `code --wait`.
 - `template '<id>' is still referenced by ...`

@@ -325,7 +325,7 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 	data := map[string]interface{}{
 		"object_id": target.ObjectID,
 		"file":      target.RelativePath,
-		"opened":    vault.OpenInEditor(cfg, target.FilePath),
+		"opened":    vault.OpenInEditorAtLine(cfg, target.FilePath, target.LineStart),
 		"editor":    editor,
 	}
 	if target.IsSection {
