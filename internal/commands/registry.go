@@ -26,7 +26,8 @@ type Meta struct {
 type ArgMeta struct {
 	Name        string   // Argument name
 	Description string   // Description
-	Required    bool     // Is this argument required?
+	Required    bool     // Is this argument required for canonical/MCP invocation?
+	CLIOptional bool     `json:"-"` // Can interactive CLI omit this and prompt/pick instead?
 	Completions []string // Static completions (if any)
 	DynamicComp string   // Dynamic completion type: "types", "traits", "files"
 }
@@ -860,7 +861,7 @@ When an interactive backlinks target is ambiguous, Raven prompts you to choose t
 Use --browse to browse incoming references interactively and open the selected reference location.
 Non-interactive use still requires a target.`,
 		Args: []ArgMeta{
-			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: true},
+			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: true, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "browse", Description: "Interactively browse backlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
@@ -890,7 +891,7 @@ When an interactive outlinks source is ambiguous, Raven prompts you to choose th
 Use --browse to browse outgoing references interactively and open the selected reference location.
 Non-interactive use still requires a source.`,
 		Args: []ArgMeta{
-			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: true},
+			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: true, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "browse", Description: "Interactively browse outlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
@@ -936,7 +937,7 @@ When an interactive read reference is ambiguous, Raven prompts you to choose the
 For long files, you can request a specific range with --start-line/--end-line, and/or
 ask for structured line output with --lines for copy-paste-safe anchors.`,
 		Args: []ArgMeta{
-			{Name: "path", Description: "Reference to read (short ref, partial path, or full path)", Required: true},
+			{Name: "path", Description: "Reference to read (short ref, partial path, or full path)", Required: true, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "raw", Description: "Output only raw file content (no backlinks, no rendered links)", Type: FlagTypeBool},
@@ -1745,7 +1746,7 @@ Use --type to filter results to specific object types.
 In an interactive terminal, bare 'rvn search' launches Raven's picker over
 indexed files. Non-interactive use still requires a query string.`,
 		Args: []ArgMeta{
-			{Name: "query", Description: "Search query (words, phrases, or boolean expressions)", Required: true},
+			{Name: "query", Description: "Search query (words, phrases, or boolean expressions)", Required: true, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "limit", Short: "n", Description: "Maximum number of results (default: 20)", Type: FlagTypeInt, Default: "20"},
@@ -2388,7 +2389,7 @@ Supports all reference formats:
 If the reference is ambiguous (matches multiple objects), returns all matches
 with their match sources.`,
 		Args: []ArgMeta{
-			{Name: "reference", Description: "Reference to resolve (short name, path, alias, date, etc.)", Required: true},
+			{Name: "reference", Description: "Reference to resolve (short name, path, alias, date, etc.)", Required: true, CLIOptional: true},
 		},
 		Examples: []string{
 			"rvn resolve freya --json",

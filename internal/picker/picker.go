@@ -15,6 +15,8 @@ import (
 
 // Item is a selectable entry in a Raven-owned interactive picker.
 type Item struct {
+	// ID is an opaque selection key. CLI adapters decide whether it is printed,
+	// retried as a reference, or used only to keep selections stable.
 	ID         string
 	Label      string
 	Detail     string

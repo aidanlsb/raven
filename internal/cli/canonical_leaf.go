@@ -155,7 +155,7 @@ func localUsageForMeta(meta commands.Meta) string {
 	}
 
 	for _, arg := range meta.Args {
-		if arg.Required {
+		if arg.Required && !arg.CLIOptional {
 			base += fmt.Sprintf(" <%s>", arg.Name)
 		} else {
 			base += fmt.Sprintf(" [%s]", arg.Name)
@@ -168,7 +168,7 @@ func cobraArgsForMeta(meta commands.Meta) cobra.PositionalArgs {
 	minArgs := 0
 	maxArgs := len(meta.Args)
 	for _, arg := range meta.Args {
-		if arg.Required {
+		if arg.Required && !arg.CLIOptional {
 			minArgs++
 		}
 	}

@@ -286,17 +286,14 @@ Examples:
 		pipeOverride := queryPipeOverride(cmd, savedOptions)
 		SetPipeFormat(pipeOverride)
 		if browse {
-			if isJSONOutput() {
-				return handleErrorMsg(ErrInvalidInput, "--browse cannot be used with --json", "Remove --browse or --json")
+			if handled, err := validateInteractiveBrowse(true); handled || err != nil {
+				return err
 			}
 			if idsOnly || countOnly || len(applyArgs) > 0 {
 				return handleErrorMsg(ErrInvalidInput, "--browse cannot be used with --ids, --count-only, or --apply", "Run the query without browse for machine-readable or bulk modes")
 			}
 			if pipeOverride != nil && *pipeOverride {
 				return handleErrorMsg(ErrInvalidInput, "--browse cannot be used with --pipe", "Use --no-pipe or remove --browse")
-			}
-			if !canUseInteractiveTerminal() {
-				return handleErrorMsg(ErrInvalidInput, "interactive browse requires an interactive terminal", "Run without --browse in non-interactive contexts")
 			}
 		}
 
@@ -642,24 +639,13 @@ func browseSearchText(parts ...string) string {
 }
 
 func browseQueryResults(items []picker.Item, headers []string, columns []ui.ColumnDef) error {
-	selected, ok, err := picker.Run(items, picker.Options{
-		Title:   "Query results",
-		Prompt:  "filter",
-		Headers: headers,
-		Columns: columns,
-		Preview: vaultFilePreview(getVaultPath()),
+	return browseAndOpenPickerSelection(browsePickerOptions{
+		Title:                  "Query results",
+		Items:                  items,
+		Headers:                headers,
+		Columns:                columns,
+		MissingFilePathMessage: "selected query result has no file path",
 	})
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-	if !ok {
-		return nil
-	}
-	if strings.TrimSpace(selected.Item.FilePath) == "" {
-		return handleErrorMsg(ErrInternal, "selected query result has no file path", "")
-	}
-	openFileInEditorAtLine(filepath.Join(getVaultPath(), selected.Item.FilePath), selected.Item.FilePath, selected.Item.Line, false)
-	return nil
 }
 
 func queryBoolFlagValue(cmd *cobra.Command, name string, saved *bool) bool {

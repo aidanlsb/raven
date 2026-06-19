@@ -46,7 +46,7 @@ func FullCLIUsage(commandID string) string {
 func deriveUsageFromArgs(commandID string, meta Meta) string {
 	base := strings.ReplaceAll(commandID, "_", " ")
 	for _, arg := range meta.Args {
-		if arg.Required {
+		if arg.Required && !arg.CLIOptional {
 			base += fmt.Sprintf(" <%s>", arg.Name)
 		} else {
 			base += fmt.Sprintf(" [%s]", arg.Name)

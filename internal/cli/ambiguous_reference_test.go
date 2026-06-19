@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,12 +18,16 @@ import (
 func TestAmbiguousReferenceRetryForReadBacklinksAndOutlinks(t *testing.T) {
 	prevJSON := jsonOutput
 	prevVaultPath := resolvedVaultPath
+	prevConfigPath := configPath
+	prevStatePath := statePathFlag
 	prevStdinTTY := interactiveStdinIsTerminal
 	prevStdoutTTY := interactiveStdoutIsTerminal
 	prevRun := ravenRunPicker
 	t.Cleanup(func() {
 		jsonOutput = prevJSON
 		resolvedVaultPath = prevVaultPath
+		configPath = prevConfigPath
+		statePathFlag = prevStatePath
 		interactiveStdinIsTerminal = prevStdinTTY
 		interactiveStdoutIsTerminal = prevStdoutTTY
 		ravenRunPicker = prevRun
@@ -48,6 +54,12 @@ See [[people/freya]].
 
 	jsonOutput = false
 	resolvedVaultPath = v.Path
+	t.Setenv("EDITOR", "")
+	configPath = filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("# test config\n"), 0o644); err != nil {
+		t.Fatalf("write test config: %v", err)
+	}
+	statePathFlag = ""
 	interactiveStdinIsTerminal = func() bool { return true }
 	interactiveStdoutIsTerminal = func() bool { return true }
 
@@ -59,6 +71,14 @@ See [[people/freya]].
 		cmd        *cobra.Command
 		wantOutput string
 	}{
+		{
+			name:       "open",
+			prompt:     "open/ref",
+			selected:   "people/freya",
+			handle:     handleCanonicalOpenFailure,
+			cmd:        newOpenRetryTestCmd(),
+			wantOutput: "people/freya.md",
+		},
 		{
 			name:       "read",
 			prompt:     "read/ref",
@@ -125,6 +145,10 @@ func newReadRetryTestCmd(t *testing.T) *cobra.Command {
 	cmd.Flags().Int("start-line", 0, "")
 	cmd.Flags().Int("end-line", 0, "")
 	return cmd
+}
+
+func newOpenRetryTestCmd() *cobra.Command {
+	return &cobra.Command{}
 }
 
 func newBrowseFlagTestCmd(t *testing.T) *cobra.Command {

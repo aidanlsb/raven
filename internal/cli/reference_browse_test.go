@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/picker"
 )
@@ -105,6 +108,51 @@ func TestBrowseReferencesUsesRavenPickerLayout(t *testing.T) {
 	}
 	if item.FilePath != "note/one.md" || item.Line != 3 {
 		t.Fatalf("selected item = %#v", item)
+	}
+}
+
+func TestBrowseAndOpenReferencesUsesSharedEditorHandoff(t *testing.T) {
+	t.Setenv("EDITOR", "")
+
+	prevRun := ravenRunPicker
+	prevVaultPath := resolvedVaultPath
+	prevCfg := cfg
+	t.Cleanup(func() {
+		ravenRunPicker = prevRun
+		resolvedVaultPath = prevVaultPath
+		cfg = prevCfg
+	})
+
+	vaultPath := t.TempDir()
+	relPath := filepath.Join("note", "one.md")
+	absPath := filepath.Join(vaultPath, relPath)
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(absPath, []byte("one\ntwo\nthree\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+
+	resolvedVaultPath = vaultPath
+	cfg = &config.Config{}
+	items := []picker.Item{{ID: "ref:1", FilePath: relPath, Line: 2}}
+	ravenRunPicker = func(gotItems []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+		if !reflect.DeepEqual(gotItems, items) {
+			t.Fatalf("items = %#v, want %#v", gotItems, items)
+		}
+		if opts.Title != "Backlinks to project/raven" {
+			t.Fatalf("title = %q, want Backlinks to project/raven", opts.Title)
+		}
+		return picker.Selection{Item: gotItems[0]}, true, nil
+	}
+
+	out := captureStdout(t, func() {
+		if err := browseAndOpenReferences("Backlinks to project/raven", items); err != nil {
+			t.Fatalf("browseAndOpenReferences() error = %v", err)
+		}
+	})
+	if !strings.Contains(out, relPath+":2") {
+		t.Fatalf("expected editor handoff output to include selected line, got:\n%s", out)
 	}
 }
 

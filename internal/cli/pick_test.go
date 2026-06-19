@@ -40,6 +40,60 @@ func TestReadPickItemsParsesPipeableRows(t *testing.T) {
 	}
 }
 
+func TestPickCommandRunESelectsItemFromPipeInput(t *testing.T) {
+	prevRun := pickRun
+	prevOpenTTY := pickOpenTTY
+	prevStdin := os.Stdin
+	t.Cleanup(func() {
+		pickRun = prevRun
+		pickOpenTTY = prevOpenTTY
+		os.Stdin = prevStdin
+		_ = pickCmd.Flags().Set("multi", "false")
+	})
+
+	stdinReader, stdinWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe stdin: %v", err)
+	}
+	if _, err := stdinWriter.WriteString("1\tproject/raven\tRaven\tproject/raven.md:1\n"); err != nil {
+		t.Fatalf("write stdin: %v", err)
+	}
+	if err := stdinWriter.Close(); err != nil {
+		t.Fatalf("close stdin writer: %v", err)
+	}
+	os.Stdin = stdinReader
+	defer stdinReader.Close()
+
+	ttyPath := filepath.Join(t.TempDir(), "tty")
+	if err := os.WriteFile(ttyPath, []byte{}, 0o644); err != nil {
+		t.Fatalf("write tty fixture: %v", err)
+	}
+	pickOpenTTY = func() (*os.File, error) {
+		return os.OpenFile(ttyPath, os.O_RDWR, 0)
+	}
+	pickRun = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+		if len(items) != 1 {
+			t.Fatalf("items = %#v", items)
+		}
+		if items[0].ID != "project/raven" || items[0].Label != "Raven" {
+			t.Fatalf("item = %#v", items[0])
+		}
+		if opts.Input == nil || opts.Output == nil {
+			t.Fatalf("expected picker to use controlling terminal")
+		}
+		return picker.Selection{Item: items[0]}, true, nil
+	}
+
+	out := captureStdout(t, func() {
+		if err := pickCmd.RunE(pickCmd, nil); err != nil {
+			t.Fatalf("pickCmd.RunE() error = %v", err)
+		}
+	})
+	if strings.TrimSpace(out) != "project/raven" {
+		t.Fatalf("stdout = %q, want project/raven", out)
+	}
+}
+
 func TestPickItemFromLineAcceptsRawID(t *testing.T) {
 	item, ok := pickItemFromLine("project/raven")
 	if !ok {

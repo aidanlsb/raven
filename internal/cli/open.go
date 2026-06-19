@@ -11,12 +11,12 @@ import (
 )
 
 var openCmd = newCanonicalLeafCommand("open", canonicalLeafOptions{
-	VaultPath:    getVaultPath,
-	Args:         validateOpenArgs,
-	Prepare:      prepareOpenArgs,
-	BuildArgs:    buildOpenArgs,
-	HandleError:  handleCanonicalOpenFailure,
-	HandleResult: handleOpenResult,
+	VaultPath:      getVaultPath,
+	Args:           validateOpenArgs,
+	Prepare:        prepareOpenArgs,
+	BuildArgs:      buildOpenArgs,
+	HandleErrorCmd: handleCanonicalOpenFailure,
+	HandleResult:   handleOpenResult,
 })
 
 func validateOpenArgs(cmd *cobra.Command, args []string) error {
@@ -91,34 +91,15 @@ func buildOpenArgs(cmd *cobra.Command, args []string) (map[string]interface{}, e
 	}, nil
 }
 
-func handleCanonicalOpenFailure(result commandexec.Result) error {
-	if result.Error == nil {
-		return nil
-	}
-	if result.Error.Code != ErrRefAmbiguous || !canUseRavenInteractive() {
-		return handleCanonicalFailure(result)
-	}
-
-	reference, matches, matchSources := ambiguousReferenceDetails(result.Error.Details)
-	if len(matches) == 0 {
-		return handleCanonicalFailure(result)
-	}
-
-	selected, ok, err := pickAmbiguousReference(reference, matches, matchSources, "open/ref> ")
-	if err != nil {
-		return handleCanonicalFailure(result)
-	}
-	if !ok {
-		return nil
-	}
-
-	openResult := executeCanonicalCommand("open", getVaultPath(), map[string]interface{}{
-		"reference": selected,
+func handleCanonicalOpenFailure(cmd *cobra.Command, result commandexec.Result) error {
+	return handleAmbiguousReferenceRetry(cmd, result, ambiguousReferenceRetryOptions{
+		CommandID: "open",
+		ArgKey:    "reference",
+		Prompt:    "open/ref> ",
+		Render: func(_ *cobra.Command, retryResult commandexec.Result) error {
+			return renderSingleOpenResult(canonicalDataMap(retryResult))
+		},
 	})
-	if !openResult.OK {
-		return handleCanonicalFailure(openResult)
-	}
-	return renderSingleOpenResult(canonicalDataMap(openResult))
 }
 
 // openFileInEditor opens a file in the configured editor and prints appropriate output.

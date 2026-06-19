@@ -2,6 +2,7 @@ package commands
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -92,6 +93,34 @@ func TestBuildCommandContractBulkPreviewModes(t *testing.T) {
 			}
 			if got := PreviewModeForCommandID(commandID); got != PreviewModeBulkPreviewDefault {
 				t.Fatalf("%s policy preview mode=%q, want %q", commandID, got, PreviewModeBulkPreviewDefault)
+			}
+		})
+	}
+}
+
+func TestCLIOptionalArgsRemainRequiredInCommandContracts(t *testing.T) {
+	t.Parallel()
+
+	for _, commandID := range []string{"backlinks", "outlinks", "read", "resolve", "search"} {
+		t.Run(commandID, func(t *testing.T) {
+			t.Parallel()
+
+			contract, ok := BuildCommandContract(commandID)
+			if !ok {
+				t.Fatalf("expected %s contract", commandID)
+			}
+			if len(contract.Required) != 1 {
+				t.Fatalf("%s required args = %#v, want one canonical required arg", commandID, contract.Required)
+			}
+			requiredName := contract.Required[0]
+			if !contract.Parameters[requiredName].Required {
+				t.Fatalf("%s parameter %q should remain required in MCP/canonical contract", commandID, requiredName)
+			}
+			if !Registry[commandID].Args[0].CLIOptional {
+				t.Fatalf("%s arg should document interactive CLI optionality", commandID)
+			}
+			if got := FullCLIUsage(commandID); !strings.Contains(got, "[") {
+				t.Fatalf("%s CLI usage = %q, want optional bracket form", commandID, got)
 			}
 		})
 	}

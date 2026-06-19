@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -126,5 +130,60 @@ func TestBrowseItemsForSectionResultsUseColumnsAndSearchText(t *testing.T) {
 		if !strings.Contains(item.SearchText, want) {
 			t.Fatalf("search text missing %q: %q", want, item.SearchText)
 		}
+	}
+}
+
+func TestBrowseQueryResultsUsesSharedPickerAndEditorHandoff(t *testing.T) {
+	t.Setenv("EDITOR", "")
+
+	prevRun := ravenRunPicker
+	prevVaultPath := resolvedVaultPath
+	prevCfg := cfg
+	t.Cleanup(func() {
+		ravenRunPicker = prevRun
+		resolvedVaultPath = prevVaultPath
+		cfg = prevCfg
+	})
+
+	vaultPath := t.TempDir()
+	relPath := filepath.Join("note", "one.md")
+	absPath := filepath.Join(vaultPath, relPath)
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(absPath, []byte("one\ntwo\nthree\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+
+	resolvedVaultPath = vaultPath
+	cfg = &config.Config{}
+	called := false
+	ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+		called = true
+		if opts.Title != "Query results" {
+			t.Fatalf("title = %q, want Query results", opts.Title)
+		}
+		if opts.Prompt != "filter" {
+			t.Fatalf("prompt = %q, want filter", opts.Prompt)
+		}
+		if len(items) != 1 || items[0].FilePath != relPath {
+			t.Fatalf("items = %#v", items)
+		}
+		if opts.Preview == nil {
+			t.Fatalf("expected preview function")
+		}
+		return picker.Selection{Item: items[0]}, true, nil
+	}
+
+	out := captureStdout(t, func() {
+		if err := browseQueryResults([]picker.Item{{ID: "note/one", FilePath: relPath, Line: 2}}, []string{"#", "title", "location"}, nil); err != nil {
+			t.Fatalf("browseQueryResults() error = %v", err)
+		}
+	})
+	if !called {
+		t.Fatalf("expected picker to run")
+	}
+	if !strings.Contains(out, relPath+":2") {
+		t.Fatalf("expected editor handoff output to include selected line, got:\n%s", out)
 	}
 }

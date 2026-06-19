@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"path/filepath"
-
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -51,12 +49,7 @@ func renderOutlinks(cmd *cobra.Command, result commandexec.Result) error {
 			printOutlinksResults(source, links)
 			return nil
 		}
-		item, ok, err := browseReferences("Outlinks from "+source, browseItemsForOutlinkResults(links))
-		if err != nil || !ok {
-			return err
-		}
-		openFileInEditorAtLine(filepath.Join(getVaultPath(), item.FilePath), item.FilePath, item.Line, false)
-		return nil
+		return browseAndOpenReferences("Outlinks from "+source, browseItemsForOutlinkResults(links))
 	}
 	printOutlinksResults(source, links)
 	return nil
