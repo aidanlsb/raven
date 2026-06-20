@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.26] - 2026-06-19
+
+### Added
+- Writes stay permissive but now surface missing reference targets: `rvn new`, `upsert`, `set`, `add`, and `edit` succeed when a `ref` field or body `[[ref]]` points at a target that does not exist yet, returning a `REF_NOT_FOUND` warning plus `missing_refs`/`missing_ref_items`. The interactive CLI offers to create the missing pages, and `rvn check create-missing` remains the batch remediation path.
+- `rvn backlinks` and `rvn outlinks` accept `--stdin` to traverse multiple targets/sources and return grouped results.
+
+### Changed
+- `rvn check` reports directory type mismatches for objects stored outside their configured directory.
+- Type templates are enforced as body-only content.
+- Interactive picker command adapters are consolidated and reference picker matching is improved.
+
+### Fixed
+- Resolved stale query index errors.
+- Fixed interactive picker typing responsiveness and height handling.
+
 ## [v0.0.25] - 2026-06-14
 
 ### Added
