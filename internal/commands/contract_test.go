@@ -101,7 +101,7 @@ func TestBuildCommandContractBulkPreviewModes(t *testing.T) {
 func TestCLIOptionalArgsRemainRequiredInCommandContracts(t *testing.T) {
 	t.Parallel()
 
-	for _, commandID := range []string{"backlinks", "outlinks", "read", "resolve", "search"} {
+	for _, commandID := range []string{"read", "resolve", "search"} {
 		t.Run(commandID, func(t *testing.T) {
 			t.Parallel()
 
@@ -121,6 +121,42 @@ func TestCLIOptionalArgsRemainRequiredInCommandContracts(t *testing.T) {
 			}
 			if got := FullCLIUsage(commandID); !strings.Contains(got, "[") {
 				t.Fatalf("%s CLI usage = %q, want optional bracket form", commandID, got)
+			}
+		})
+	}
+}
+
+func TestBacklinksOutlinksExposeStdinReplacementContracts(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		commandID   string
+		positional  string
+		replacement string
+	}{
+		{commandID: "backlinks", positional: "target", replacement: "targets"},
+		{commandID: "outlinks", positional: "source", replacement: "sources"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.commandID, func(t *testing.T) {
+			t.Parallel()
+
+			contract, ok := BuildCommandContract(tt.commandID)
+			if !ok {
+				t.Fatalf("expected %s contract", tt.commandID)
+			}
+			if containsString(contract.Required, tt.positional) {
+				t.Fatalf("%s should not unconditionally require %s when --stdin is available", tt.commandID, tt.positional)
+			}
+			if _, ok := contract.Parameters[tt.replacement]; !ok {
+				t.Fatalf("%s contract missing stdin replacement parameter %q", tt.commandID, tt.replacement)
+			}
+			if got := contract.Parameters[tt.replacement].Type; got != ParameterTypeStringArray {
+				t.Fatalf("%s replacement type = %q, want string array", tt.commandID, got)
+			}
+			if !Registry[tt.commandID].Args[0].CLIOptional {
+				t.Fatalf("%s arg should document interactive CLI optionality", tt.commandID)
 			}
 		})
 	}

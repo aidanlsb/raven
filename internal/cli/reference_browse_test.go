@@ -156,6 +156,50 @@ func TestBrowseAndOpenReferencesUsesSharedEditorHandoff(t *testing.T) {
 	}
 }
 
+func TestBrowseBacklinkGroupsPrefixesRowsWithGroup(t *testing.T) {
+	prevRun := ravenRunPicker
+	prevVaultPath := resolvedVaultPath
+	prevCfg := cfg
+	t.Cleanup(func() {
+		ravenRunPicker = prevRun
+		resolvedVaultPath = prevVaultPath
+		cfg = prevCfg
+	})
+
+	t.Setenv("EDITOR", "")
+	resolvedVaultPath = t.TempDir()
+	cfg = &config.Config{}
+	line := 2
+	ravenRunPicker = func(items []picker.Item, _ picker.Options) (picker.Selection, bool, error) {
+		if len(items) != 1 {
+			t.Fatalf("items = %#v, want 1", items)
+		}
+		if !strings.Contains(items[0].Label, "project/raven: note/planning") {
+			t.Fatalf("label missing group prefix: %#v", items[0])
+		}
+		if !strings.Contains(items[0].SearchText, "project/raven") {
+			t.Fatalf("search text missing group: %#v", items[0])
+		}
+		return picker.Selection{}, false, nil
+	}
+
+	if err := browseBacklinkGroups([]model.BacklinksGroup{
+		{
+			Target: "project/raven",
+			Items: []model.Reference{
+				{
+					SourceID:  "note/planning",
+					TargetRaw: "project/raven",
+					FilePath:  "note/planning.md",
+					Line:      &line,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("browseBacklinkGroups() error = %v", err)
+	}
+}
+
 func TestValidateReferenceBrowseFlag(t *testing.T) {
 	prevJSON := jsonOutput
 	prevStdinTTY := interactiveStdinIsTerminal

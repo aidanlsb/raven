@@ -71,12 +71,17 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	warnings := autoReindexWarnings(vaultPath, vaultCfg, result.FilePath)
 
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
+	data := map[string]interface{}{
 		"file":  result.RelativePath,
 		"id":    vaultCfg.FilePathToObjectID(result.RelativePath),
 		"title": title,
 		"type":  typeName,
-	}, warnings, nil)
+	}
+	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, result.RelativePath)
+	data = mergeDataFields(data, missingData)
+	warnings = appendCommandWarnings(warnings, missingWarnings)
+
+	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
 func mapContentMutationError(err error) commandexec.Result {
@@ -164,18 +169,22 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 	}
 
 	warnings := warningMessagesToCommandWarnings(result.WarningMessages, codes.WarnUnknownField)
+	data := map[string]interface{}{
+		"status": result.Status,
+		"id":     vaultCfg.FilePathToObjectID(result.RelativePath),
+		"file":   result.RelativePath,
+		"type":   typeName,
+		"title":  title,
+	}
 	if result.Status == "created" || result.Status == "updated" {
 		warnings = appendCommandWarnings(warnings, autoReindexWarnings(vaultPath, vaultCfg, result.FilePath))
+		missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, result.RelativePath)
+		data = mergeDataFields(data, missingData)
+		warnings = appendCommandWarnings(warnings, missingWarnings)
 	}
 
 	return commandexec.SuccessWithWarnings(
-		map[string]interface{}{
-			"status": result.Status,
-			"id":     vaultCfg.FilePathToObjectID(result.RelativePath),
-			"file":   result.RelativePath,
-			"type":   typeName,
-			"title":  title,
-		},
+		data,
 		warnings,
 		nil,
 	)

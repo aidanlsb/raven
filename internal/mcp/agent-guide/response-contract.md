@@ -86,6 +86,10 @@ Commands that do not require vault resolution (e.g. `version`, `config show`) om
 - Warnings are action items, not noise.
 - Surface warnings that affect correctness or safety.
 - If warnings indicate stale state, run corrective steps such as `reindex` before continuing.
+- `REF_NOT_FOUND` on a successful write means the object was created/modified but a reference
+  points at a target that does not exist yet. The response also includes `data.missing_refs`
+  and `data.missing_ref_items` (with an inferred `type` when known). Create the missing
+  targets with `check create-missing` or the suggested `create_command` when appropriate.
 
 ## Related topics
 

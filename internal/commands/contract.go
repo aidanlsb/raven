@@ -535,6 +535,10 @@ func stdinReplacementParameter(meta Meta) (string, ParameterSpec) {
 
 func stdinReplacementDescription(name string) string {
 	switch strings.TrimSpace(name) {
+	case "targets":
+		return "Target references used as MCP stdin replacement for grouped backlinks"
+	case "sources":
+		return "Source references used as MCP stdin replacement for grouped outlinks"
 	case "trait_ids":
 		return "Trait IDs used as MCP stdin replacement for bulk mode"
 	default:

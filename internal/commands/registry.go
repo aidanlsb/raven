@@ -119,7 +119,12 @@ and the name field will be set to "Freya" automatically.
 For agents/MCP: Raven runs non-interactively with --json, so title must be provided.
 For agents: If required fields are missing, returns error with details including
 a retry_with template. Check if the type has name_field set (via raven_schema type <name>)
-to understand which fields are auto-populated.`,
+to understand which fields are auto-populated.
+
+Permissive writes: if a ref field points at a target that does not exist yet, the
+object is still created. The successful response adds data.missing_refs,
+data.missing_ref_items, and a REF_NOT_FOUND warning per missing target. Interactive
+CLI offers to create the missing pages; agents can run 'rvn check create-missing'.`,
 		Args: []ArgMeta{
 			{Name: "type", Description: "Object type (e.g., person, project)", Required: true, DynamicComp: "types"},
 			// NOTE: Title is optional in interactive CLI mode, but required in --json (MCP) mode.
@@ -169,7 +174,11 @@ Use --heading to target an existing heading explicitly.
 Accepted values:
 - Heading slug (e.g., bugs-fixes)
 - Full object ID (e.g., project/raven#bugs-fixes)
-- Markdown heading text (e.g., "### Bugs / Fixes")`,
+- Markdown heading text (e.g., "### Bugs / Fixes")
+
+Permissive writes: if appended text contains a [[ref]] whose target does not exist
+yet, the write still succeeds. The response adds data.missing_refs,
+data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 		Args: []ArgMeta{
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
@@ -218,7 +227,11 @@ converge to one current state rather than append history.
 
 Use --field for shell-friendly literal values. Use --field-json when exact type
 control matters, such as preserving the string "true" instead of a boolean or
-providing arrays/nulls explicitly.`,
+providing arrays/nulls explicitly.
+
+Permissive writes: if a ref field or body [[ref]] points at a target that does not
+exist yet, the write still succeeds. The response adds data.missing_refs,
+data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 		Args: []ArgMeta{
 			{Name: "type", Description: "Object type (e.g., brief, report)", Required: true, DynamicComp: "types"},
 			{Name: "title", Description: "Title/name for the object (stable identity key)", Required: true},
@@ -859,23 +872,28 @@ In an interactive terminal, bare 'rvn backlinks' launches Raven's picker
 over indexed object, section, and asset references.
 When an interactive backlinks target is ambiguous, Raven prompts you to choose the target.
 Use --browse to browse incoming references interactively and open the selected reference location.
-Non-interactive use still requires a target.`,
+Use --stdin to read targets from stdin and return grouped results for each target.
+Non-interactive use requires either a target or --stdin input.`,
 		Args: []ArgMeta{
-			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: true, CLIOptional: true},
+			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: false, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "browse", Description: "Interactively browse backlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read targets from stdin and return grouped backlinks", Type: FlagTypeBool},
 		},
+		BulkStdinArgName: "targets",
 		Examples: []string{
 			"rvn backlinks people/freya --json",
 			"rvn backlinks people/freya --browse",
 			"rvn backlinks assets/pdfs/paper.pdf --json",
+			"rvn query 'type:project .status==active' --ids | rvn backlinks --stdin --json",
 		},
 		UseCases: []string{
 			"Find all files that reference an object or asset",
 			"Interactively pick a target in Raven's picker",
 			"Interactively disambiguate backlinks targets in Raven's picker",
 			"Browse incoming references and open one at the reference line",
+			"Traverse backlinks for multiple targets with grouped output",
 			"Audit incoming links before moving or deleting content",
 		},
 	},
@@ -889,22 +907,27 @@ In an interactive terminal, bare 'rvn outlinks' launches Raven's picker
 over indexed object and section references.
 When an interactive outlinks source is ambiguous, Raven prompts you to choose the source.
 Use --browse to browse outgoing references interactively and open the selected reference location.
-Non-interactive use still requires a source.`,
+Use --stdin to read sources from stdin and return grouped results for each source.
+Non-interactive use requires either a source or --stdin input.`,
 		Args: []ArgMeta{
-			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: true, CLIOptional: true},
+			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: false, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "browse", Description: "Interactively browse outlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read sources from stdin and return grouped outlinks", Type: FlagTypeBool},
 		},
+		BulkStdinArgName: "sources",
 		Examples: []string{
 			"rvn outlinks projects/bifrost --json",
 			"rvn outlinks projects/bifrost --browse",
+			"rvn query 'type:project .status==active' --ids | rvn outlinks --stdin --json",
 		},
 		UseCases: []string{
 			"Inspect the outgoing links from an object",
 			"Interactively pick a source in Raven's picker",
 			"Interactively disambiguate outlinks sources in Raven's picker",
 			"Browse outgoing references and open one at the reference line",
+			"Traverse outlinks for multiple sources with grouped output",
 			"Follow references from a file to related objects and assets",
 		},
 	},
@@ -1585,7 +1608,11 @@ string "true" instead of coercing it to a boolean).
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line). Bulk updates accept
 both field=value literals and --fields-json typed values.
-IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
+IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.
+
+Permissive writes: if a ref field is set to a target that does not exist yet, the
+update still succeeds. The response adds data.missing_refs, data.missing_ref_items,
+and a REF_NOT_FOUND warning per missing target.`,
 		Args: []ArgMeta{
 			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: false},
 		},
@@ -1702,7 +1729,11 @@ For multi-line replacements, include newlines in both old_str and new_str.
 
 Supports two input modes:
   - Single edit (backward compatible): <path> <old_str> <new_str>
-  - Batch edits via JSON: <path> --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`,
+  - Batch edits via JSON: <path> --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'
+
+Permissive writes: if an applied edit introduces a [[ref]] whose target does not
+exist yet, the edit still succeeds. The response adds data.missing_refs,
+data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "File path, object reference, or section reference relative to vault root", Required: true},
 			{Name: "old_str", Description: "String to replace (must be unique in target scope, single-edit mode)", Required: false},

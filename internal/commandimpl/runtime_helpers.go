@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
@@ -95,6 +98,61 @@ func indexUpdateWarning(vaultPath, filePath, prefix string, err error) commandex
 		Message: fmt.Sprintf("auto-reindex failed for %s: %s: %v", displayPath, prefix, err),
 		Ref:     indexUpdateFailedWarningRef,
 	}
+}
+
+// missingRefEnvelope detects references in the given files whose targets do not
+// exist yet and returns success-envelope data fields plus REF_NOT_FOUND
+// warnings. Writes remain permissive: this only annotates a successful response
+// so callers can surface the missing target (interactively in the CLI, or via
+// the warning/data for agents). Detection failures are non-fatal and produce no
+// annotations.
+func missingRefEnvelope(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, relPaths ...string) (map[string]interface{}, []commandexec.Warning) {
+	refs, err := checksvc.DetectMissingRefs(vaultPath, vaultCfg, sch, relPaths...)
+	if err != nil || len(refs) == 0 {
+		return nil, nil
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		return refs[i].TargetPath < refs[j].TargetPath
+	})
+
+	warnings := make([]commandexec.Warning, 0, len(refs))
+	for _, ref := range refs {
+		warnings = append(warnings, missingRefWarning(ref))
+	}
+	data := map[string]interface{}{
+		"missing_refs":      len(refs),
+		"missing_ref_items": refs,
+	}
+	return data, warnings
+}
+
+func missingRefWarning(ref *check.MissingRef) commandexec.Warning {
+	warning := commandexec.Warning{
+		Code:    codes.WarnRefNotFound,
+		Message: fmt.Sprintf("Reference [[%s]] does not exist yet", ref.TargetPath),
+		Ref:     "Run 'rvn check create-missing' to create missing referenced pages",
+	}
+	if ref.InferredType != "" {
+		warning.SuggestedType = ref.InferredType
+		warning.CreateCommand = fmt.Sprintf("rvn new %s %q", ref.InferredType, ref.TargetPath)
+	} else {
+		warning.CreateCommand = "rvn check create-missing"
+	}
+	return warning
+}
+
+// mergeDataFields copies src entries into dst, allocating dst when needed.
+func mergeDataFields(dst map[string]interface{}, src map[string]interface{}) map[string]interface{} {
+	if len(src) == 0 {
+		return dst
+	}
+	if dst == nil {
+		dst = make(map[string]interface{}, len(src))
+	}
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
 }
 
 func appendCommandWarnings(groups ...[]commandexec.Warning) []commandexec.Warning {

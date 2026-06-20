@@ -97,6 +97,7 @@ func renderAddResult(_ *cobra.Command, result commandexec.Result) error {
 			fmt.Printf("    %s\n", ui.Hint("→ "+warning.CreateCommand))
 		}
 	}
+	promptCreateMissingRefsFromResult(getVaultPath(), result)
 	return nil
 }
 

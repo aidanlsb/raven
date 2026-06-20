@@ -502,6 +502,16 @@ func printBacklinksResults(target string, links []model.Reference) {
 	)
 }
 
+func printBacklinksGroups(groups []model.BacklinksGroup, errors []model.ReferenceInputError) {
+	for i, group := range groups {
+		if i > 0 {
+			fmt.Println()
+		}
+		printBacklinksResults(group.Target, group.Items)
+	}
+	printReferenceInputErrors(errors)
+}
+
 func printOutlinksResults(source string, links []model.Reference) {
 	printReferenceResults(
 		"Outlinks from "+source,
@@ -515,6 +525,16 @@ func printOutlinksResults(source string, links []model.Reference) {
 			return target
 		},
 	)
+}
+
+func printOutlinksGroups(groups []model.OutlinksGroup, errors []model.ReferenceInputError) {
+	for i, group := range groups {
+		if i > 0 {
+			fmt.Println()
+		}
+		printOutlinksResults(group.Source, group.Items)
+	}
+	printReferenceInputErrors(errors)
 }
 
 func printReferenceResults(title, emptyMessage string, links []model.Reference, displayText func(model.Reference) string) {
@@ -540,6 +560,46 @@ func printReferenceResults(title, emptyMessage string, links []model.Reference, 
 	}
 
 	fmt.Println(table.Render())
+}
+
+func printReferenceInputErrors(errors []model.ReferenceInputError) {
+	if len(errors) == 0 {
+		return
+	}
+	fmt.Println()
+	fmt.Printf("%s %s\n", ui.SectionHeader("Errors"), ui.Badge(fmt.Sprintf("%d", len(errors))))
+	for _, err := range errors {
+		message := strings.TrimSpace(err.Message)
+		if message == "" {
+			message = "failed"
+		}
+		fmt.Println(ui.Warningf("%s: %s", err.Input, message))
+	}
+}
+
+func referenceInputErrorsFromAny(raw interface{}) []model.ReferenceInputError {
+	switch values := raw.(type) {
+	case []model.ReferenceInputError:
+		return values
+	case []interface{}:
+		out := make([]model.ReferenceInputError, 0, len(values))
+		for _, value := range values {
+			entry, ok := value.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			out = append(out, model.ReferenceInputError{
+				Input:      stringValue(entry["input"]),
+				Code:       stringValue(entry["code"]),
+				Message:    stringValue(entry["message"]),
+				Suggestion: stringValue(entry["suggestion"]),
+				Details:    entry["details"],
+			})
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func referenceLine(link model.Reference) int {

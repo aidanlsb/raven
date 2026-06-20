@@ -2202,6 +2202,17 @@ Owner [[people/eve]]
 		cliResult := vCLI.RunCLI("backlinks", "people/eve")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"target", "items"})
+
+		grouped := server.callTool("backlinks", map[string]interface{}{
+			"targets": []interface{}{"people/eve"},
+		})
+		groupedEnv := parseMCPEnvelope(t, grouped.Text)
+		if !groupedEnv.OK {
+			t.Fatalf("grouped backlinks failed: %s", grouped.Text)
+		}
+		if groups, ok := groupedEnv.Data["items_by_target"].([]interface{}); !ok || len(groups) != 1 {
+			t.Fatalf("grouped backlinks items_by_target = %#v, want 1 group", groupedEnv.Data["items_by_target"])
+		}
 	})
 
 	t.Run("outlinks", func(t *testing.T) {
@@ -2252,6 +2263,17 @@ Owner [[people/eve]]
 		cliResult := vCLI.RunCLI("outlinks", "projects/security")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"source", "items"})
+
+		grouped := server.callTool("outlinks", map[string]interface{}{
+			"sources": []interface{}{"projects/security"},
+		})
+		groupedEnv := parseMCPEnvelope(t, grouped.Text)
+		if !groupedEnv.OK {
+			t.Fatalf("grouped outlinks failed: %s", grouped.Text)
+		}
+		if groups, ok := groupedEnv.Data["items_by_source"].([]interface{}); !ok || len(groups) != 1 {
+			t.Fatalf("grouped outlinks items_by_source = %#v, want 1 group", groupedEnv.Data["items_by_source"])
+		}
 	})
 
 	t.Run("resolve", func(t *testing.T) {

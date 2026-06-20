@@ -225,8 +225,10 @@ rvn query "type:person" --ids | grep "team-" | rvn set --stdin department=engine
 | `rvn add` | Append text to each file (file-level only) |
 | `rvn delete` | Delete each object (file-level only) |
 | `rvn move` | Move each object (file-level only) |
+| `rvn backlinks` | Read-only grouped incoming references for each target |
+| `rvn outlinks` | Read-only grouped outgoing references for each source |
 
-All stdin commands require `--confirm` to apply (preview by default).
+Write commands require `--confirm` to apply changes (preview by default). Read-only commands such as `backlinks` and `outlinks` return grouped results immediately.
 
 ---
 

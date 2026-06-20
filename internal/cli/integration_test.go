@@ -775,6 +775,70 @@ func TestIntegration_ReferencesAndBacklinks(t *testing.T) {
 	result.AssertResultCount(t, "items", 1)
 }
 
+func TestIntegration_BacklinksOutlinksStdinGroupedOutput(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+# Alice
+`).
+		WithFile("people/bob.md", `---
+type: person
+name: Bob
+---
+# Bob
+`).
+		WithFile("projects/site.md", `---
+type: project
+title: Site
+status: active
+owner: people/alice
+---
+# Site
+
+Owner [[people/alice]] and reviewer [[people/bob]].
+`).
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	backlinks := v.RunCLIWithStdin("people/alice\nmissing-person\n", "backlinks", "--stdin")
+	backlinks.MustSucceed(t)
+	backlinkGroups := backlinks.DataList("items_by_target")
+	if len(backlinkGroups) != 1 {
+		t.Fatalf("backlink groups = %#v, want 1 group\nRaw: %s", backlinkGroups, backlinks.RawJSON)
+	}
+	aliceGroup := backlinkGroups[0].(map[string]interface{})
+	if aliceGroup["input"] != "people/alice" || aliceGroup["target"] != "people/alice" {
+		t.Fatalf("unexpected backlink group: %#v", aliceGroup)
+	}
+	if items, ok := aliceGroup["items"].([]interface{}); !ok || len(items) != 2 {
+		t.Fatalf("backlink items = %#v, want 2", aliceGroup["items"])
+	}
+	if errors := backlinks.DataList("errors"); len(errors) != 1 {
+		t.Fatalf("backlink errors = %#v, want 1", errors)
+	}
+
+	outlinks := v.RunCLIWithStdin("projects/site\nmissing-project\n", "outlinks", "--stdin")
+	outlinks.MustSucceed(t)
+	outlinkGroups := outlinks.DataList("items_by_source")
+	if len(outlinkGroups) != 1 {
+		t.Fatalf("outlink groups = %#v, want 1 group\nRaw: %s", outlinkGroups, outlinks.RawJSON)
+	}
+	siteGroup := outlinkGroups[0].(map[string]interface{})
+	if siteGroup["input"] != "projects/site" || siteGroup["source"] != "projects/site" {
+		t.Fatalf("unexpected outlink group: %#v", siteGroup)
+	}
+	if items, ok := siteGroup["items"].([]interface{}); !ok || len(items) != 3 {
+		t.Fatalf("outlink items = %#v, want 3", siteGroup["items"])
+	}
+	if errors := outlinks.DataList("errors"); len(errors) != 1 {
+		t.Fatalf("outlink errors = %#v, want 1", errors)
+	}
+}
+
 // TestIntegration_TraitQueries tests trait queries with various predicates.
 func TestIntegration_TraitQueries(t *testing.T) {
 	t.Parallel()

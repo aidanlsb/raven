@@ -14,6 +14,7 @@ import (
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // HandleEdit executes the canonical `edit` command.
@@ -115,6 +116,13 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	warnings := autoReindexWarnings(vaultPath, vaultCfg, resolved.FilePath)
 
+	var missingData map[string]interface{}
+	if sch, schErr := schema.Load(vaultPath); schErr == nil {
+		var missingWarnings []commandexec.Warning
+		missingData, missingWarnings = missingRefEnvelope(vaultPath, vaultCfg, sch, relPath)
+		warnings = appendCommandWarnings(warnings, missingWarnings)
+	}
+
 	if batchMode {
 		applied := make([]map[string]interface{}, 0, len(results))
 		for _, result := range results {
@@ -126,23 +134,27 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 				"context": result.Context,
 			})
 		}
-		return commandexec.SuccessWithWarnings(map[string]interface{}{
+		data := map[string]interface{}{
 			"status": "applied",
 			"path":   relPath,
 			"count":  len(applied),
 			"edits":  applied,
-		}, warnings, nil)
+		}
+		data = mergeDataFields(data, missingData)
+		return commandexec.SuccessWithWarnings(data, warnings, nil)
 	}
 
 	result := results[0]
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
+	data := map[string]interface{}{
 		"status":  "applied",
 		"path":    relPath,
 		"line":    result.Line,
 		"old_str": result.OldStr,
 		"new_str": result.NewStr,
 		"context": result.Context,
-	}, warnings, nil)
+	}
+	data = mergeDataFields(data, missingData)
+	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
 func parseCanonicalEditInput(args map[string]any) ([]editsvc.EditSpec, bool, error) {

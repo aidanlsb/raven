@@ -106,6 +106,13 @@ company/acme (body)
 
 Backlinks are a powerful way to see how an object is used across the vault without maintaining manual indexes.
 
+For bulk graph traversal, pipe references to `--stdin`. Backlinks group JSON results under `items_by_target`; outlinks group JSON results under `items_by_source`.
+
+```bash
+rvn query 'type:project .status==active' --ids | rvn backlinks --stdin --json
+rvn query 'type:project .status==active' --ids | rvn outlinks --stdin --json
+```
+
 ## References in queries
 
 RQL has predicates for querying the reference graph:
@@ -152,6 +159,26 @@ Disable with `--update-refs=false` if needed.
 rvn check --issues missing_reference
 rvn check --issues missing_asset
 rvn check --issues ambiguous_reference,id_collision,alias_collision
+```
+
+### Referencing something that does not exist yet
+
+Writes are permissive. If you create or edit an object with a reference (a `ref`
+field value or a body `[[wikilink]]`) whose target does not exist yet, the write
+still succeeds — link integrity is a vault-health concern, not a write-time error.
+
+When this happens, Raven surfaces the missing target instead of silently leaving it:
+
+- In the interactive CLI (`rvn new`, `rvn upsert`, `rvn set`, `rvn add`, `rvn edit`),
+  it prompts to create the missing page(s) right after the write.
+- With `--json` (and over MCP), the successful response adds `missing_refs`,
+  `missing_ref_items`, and a `REF_NOT_FOUND` warning per missing target.
+
+Create the missing pages later with:
+
+```bash
+rvn check create-missing            # interactive
+rvn check create-missing --confirm --json   # non-interactive / agents
 ```
 
 ### Debugging resolution

@@ -97,6 +97,9 @@ func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
 	for _, warning := range result.Warnings {
 		fmt.Println(ui.Warning(warning.Message))
 	}
+	if status == "created" || status == "updated" {
+		promptCreateMissingRefsFromResult(getVaultPath(), result)
+	}
 	return nil
 }
 

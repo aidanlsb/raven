@@ -91,6 +91,48 @@ func TestPrintBacklinksAndOutlinksUseQueryStyleLocations(t *testing.T) {
 	}
 }
 
+func TestPrintReferenceGroupsIncludeGroupHeadersAndErrors(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = false
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	line := 12
+	label := "planning note"
+	out := captureStdout(t, func() {
+		printBacklinksGroups([]model.BacklinksGroup{
+			{
+				Input:  "project/raven",
+				Target: "project/raven",
+				Items: []model.Reference{
+					{
+						SourceID:    "note/planning",
+						TargetRaw:   "project/raven",
+						FilePath:    "note/planning.md",
+						Line:        &line,
+						DisplayText: &label,
+					},
+				},
+				Count: 1,
+			},
+		}, []model.ReferenceInputError{
+			{Input: "missing", Code: "REF_NOT_FOUND", Message: "reference not found"},
+		})
+	})
+
+	for _, want := range []string{"Backlinks to project/raven", "planning note", "note/planning.md:12", "Errors", "missing: reference not found"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected grouped backlinks output to include %q, got: %q", want, out)
+		}
+	}
+}
+
 func TestPrintObjectTableIncludesHeadersNameFieldDynamicFieldsAndLocation(t *testing.T) {
 	prevJSON := jsonOutput
 	prevHyperlinksDisabled := hyperlinksDisabled

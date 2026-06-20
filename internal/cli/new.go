@@ -185,6 +185,7 @@ func renderNewResult(_ *cobra.Command, result commandexec.Result) error {
 	data, _ := result.Data.(map[string]interface{})
 	relativePath, _ := data["file"].(string)
 	fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
+	promptCreateMissingRefsFromResult(getVaultPath(), result)
 	vault.OpenInEditorOrPrintPath(getConfig(), filepath.Join(getVaultPath(), filepath.FromSlash(relativePath)))
 	return nil
 }

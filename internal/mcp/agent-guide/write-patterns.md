@@ -78,6 +78,28 @@ MCP single-object `delete` applies immediately. Only call it after clear user
 approval or an unambiguous user request. Bulk delete remains preview-first unless
 `confirm=true`.
 
+## Missing reference targets
+
+Writes are permissive: `new`, `upsert`, `set`, `add`, and `edit` succeed even when a
+reference (a typed `ref`/`ref-array` field value or a body `[[wikilink]]`) points at a
+target that does not exist yet. The write is not blocked.
+
+When a write introduces such a reference, the successful response still carries `ok=true`
+and adds:
+- `data.missing_refs` — count of missing reference targets.
+- `data.missing_ref_items` — the missing references, including an inferred `type` when known
+  (same shape as `check create-missing`).
+- one `REF_NOT_FOUND` warning per missing target, with `suggested_type` and a `create_command`.
+
+Remediate by creating the targets when appropriate:
+
+```text
+raven_invoke(command="check", subcommand="create-missing", args={"confirm":true})
+```
+
+or create a specific page directly with the suggested `new` command. Link integrity is a
+vault-health concern surfaced by `check`, not a write-time error.
+
 ## Practical rules
 
 - If data should be queryable/filterable, prefer frontmatter (`set`, `new`, `upsert`).

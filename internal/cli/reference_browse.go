@@ -77,6 +77,47 @@ func browseReferences(title string, items []picker.Item) (picker.Item, bool, err
 	})
 }
 
+func browseBacklinkGroups(groups []model.BacklinksGroup) error {
+	items := make([]picker.Item, 0)
+	for _, group := range groups {
+		groupItems := browseItemsForBacklinkResults(group.Items)
+		addReferenceBrowseGroupContext(group.Target, groupItems)
+		items = append(items, groupItems...)
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	return browseAndOpenReferences("Backlinks", items)
+}
+
+func browseOutlinkGroups(groups []model.OutlinksGroup) error {
+	items := make([]picker.Item, 0)
+	for _, group := range groups {
+		groupItems := browseItemsForOutlinkResults(group.Items)
+		addReferenceBrowseGroupContext(group.Source, groupItems)
+		items = append(items, groupItems...)
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	return browseAndOpenReferences("Outlinks", items)
+}
+
+func addReferenceBrowseGroupContext(group string, items []picker.Item) {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return
+	}
+	for i := range items {
+		label := group + ": " + items[i].Label
+		items[i].Label = label
+		if len(items[i].Columns) > 0 {
+			items[i].Columns[0] = label
+		}
+		items[i].SearchText = browseSearchText(group, items[i].SearchText)
+	}
+}
+
 func browseAndOpenReferences(title string, items []picker.Item) error {
 	return browseAndOpenPickerSelection(browsePickerOptions{
 		Title:                  title,

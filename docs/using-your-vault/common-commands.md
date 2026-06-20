@@ -90,7 +90,10 @@ rvn backlinks person/freya
 rvn backlinks project/website
 rvn backlinks assets/pdfs/paper.pdf
 rvn backlinks person/freya --browse     # Pick and open one incoming reference
+rvn query 'type:project .status==active' --ids | rvn backlinks --stdin --json
 ```
+
+Use `--stdin` to traverse multiple targets at once. JSON output is grouped under `items_by_target`, with per-input failures in `errors`.
 
 ### `rvn outlinks`
 
@@ -100,7 +103,10 @@ Find all outgoing references from an object — everything it links *to*, includ
 rvn outlinks project/website
 rvn outlinks meeting/kickoff
 rvn outlinks project/website --browse   # Pick and open one outgoing reference
+rvn query 'type:project .status==active' --ids | rvn outlinks --stdin --json
 ```
+
+Use `--stdin` to traverse multiple sources at once. JSON output is grouped under `items_by_source`, with per-input failures in `errors`.
 
 ---
 

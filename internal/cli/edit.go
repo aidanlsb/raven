@@ -95,6 +95,7 @@ func renderCanonicalEditResult(result commandexec.Result) error {
 			fmt.Println(indent(contextText, "  "))
 			fmt.Println()
 		}
+		promptCreateMissingRefsFromResult(getVaultPath(), result)
 		return nil
 	}
 
@@ -105,6 +106,7 @@ func renderCanonicalEditResult(result commandexec.Result) error {
 	fmt.Println()
 	fmt.Println(ui.Muted.Render("Context:"))
 	fmt.Println(indent(contextText, "  "))
+	promptCreateMissingRefsFromResult(getVaultPath(), result)
 	return nil
 }
 

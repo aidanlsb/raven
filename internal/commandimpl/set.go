@@ -2,6 +2,7 @@ package commandimpl
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -123,6 +124,10 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		data["previous_fields"] = serviceResult.PreviousFields
 	}
 
+	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, serviceResult.RelativePath)
+	data = mergeDataFields(data, missingData)
+	warnings = appendCommandWarnings(warnings, missingWarnings)
+
 	return commandexec.SuccessWithWarnings(
 		data,
 		warnings,
@@ -213,14 +218,18 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 	}
 
 	var reindexWarnings []commandexec.Warning
+	var affectedFiles []string
 	summary, err := objectsvc.ApplySetBulk(request, func(filePath string) {
 		reindexWarnings = appendCommandWarnings(reindexWarnings, autoReindexWarnings(vaultPath, vaultCfg, filePath))
+		if rel, relErr := filepath.Rel(vaultPath, filePath); relErr == nil {
+			affectedFiles = append(affectedFiles, rel)
+		}
 	})
 	if err != nil {
 		return mapContentMutationError(err)
 	}
 
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
+	data := map[string]interface{}{
 		"ok":       summary.Errors == 0,
 		"action":   summary.Action,
 		"results":  canonicalSetResults(summary.Results),
@@ -229,5 +238,10 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		"errors":   summary.Errors,
 		"modified": summary.Modified,
 		"fields":   serializedUpdates,
-	}, reindexWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
+	}
+	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, affectedFiles...)
+	data = mergeDataFields(data, missingData)
+	warnings := appendCommandWarnings(reindexWarnings, missingWarnings)
+
+	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }

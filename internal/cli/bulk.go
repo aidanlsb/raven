@@ -90,6 +90,29 @@ func ReadIDsFromStdin() (ids []string, sectionIDs []string, err error) {
 	return ids, sectionIDs, nil
 }
 
+// ReadReferencesFromStdin reads references from stdin, one per line.
+// Pipe-friendly rows use the second tab-separated field, matching ReadIDsFromStdin,
+// but section IDs and asset paths are preserved because reference commands can
+// resolve them directly.
+func ReadReferencesFromStdin() ([]string, error) {
+	scanner := bufio.NewScanner(os.Stdin)
+	refs := make([]string, 0)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		ref := extractIDFromPipeLine(line)
+		if ref != "" {
+			refs = append(refs, ref)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading from stdin: %w", err)
+	}
+	return refs, nil
+}
+
 // extractIDFromPipeLine extracts an ID from pipe-friendly list output.
 // Expected format: num<TAB>id<TAB>content<TAB>location
 // Falls back to the full line if no tabs are present.

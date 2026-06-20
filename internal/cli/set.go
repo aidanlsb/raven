@@ -161,6 +161,7 @@ func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	for _, warning := range result.Warnings {
 		fmt.Printf("  %s\n", ui.Warning(warning.Message))
 	}
+	promptCreateMissingRefsFromResult(getVaultPath(), result)
 	return nil
 }
 

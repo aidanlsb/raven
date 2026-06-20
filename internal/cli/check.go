@@ -445,6 +445,37 @@ func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Resu
 	return nil
 }
 
+// promptCreateMissingRefsFromResult inspects a successful write result for
+// missing reference targets and, in interactive (non-JSON) mode, offers to
+// create the missing pages. Writes remain permissive: the object was already
+// created/modified; this is purely additive UX layered on top of the completed
+// write, reusing the same interactive flow as `rvn check create-missing`.
+func promptCreateMissingRefsFromResult(vaultPath string, result commandexec.Result) {
+	if jsonOutput || !canUseInteractiveTerminal() {
+		return
+	}
+	data := canonicalDataMap(result)
+	missingRefs := decodeMissingRefs(data["missing_ref_items"])
+	if len(missingRefs) == 0 {
+		return
+	}
+
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return
+	}
+	s, err := schema.Load(vaultPath)
+	if err != nil {
+		return
+	}
+
+	interaction := newCheckInteraction(os.Stdin, os.Stdout)
+	created := handleMissingRefsInteractive(vaultPath, s, missingRefs, interaction, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory(), vaultCfg.ProtectedPrefixes)
+	if created > 0 {
+		fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
+	}
+}
+
 func decodeMissingRefs(raw interface{}) []*check.MissingRef {
 	var refs []*check.MissingRef
 	decodeCanonicalValue(raw, &refs)

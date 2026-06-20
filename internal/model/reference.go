@@ -22,3 +22,29 @@ type Reference struct {
 	// DisplayText is the display text of the wikilink, if different from target.
 	DisplayText *string `json:"display_text,omitempty"`
 }
+
+// ReferenceInputError describes a non-fatal error for one input in a bulk
+// reference traversal.
+type ReferenceInputError struct {
+	Input      string      `json:"input"`
+	Code       string      `json:"code"`
+	Message    string      `json:"message"`
+	Suggestion string      `json:"suggestion,omitempty"`
+	Details    interface{} `json:"details,omitempty"`
+}
+
+// BacklinksGroup contains backlinks for one requested target.
+type BacklinksGroup struct {
+	Input  string      `json:"input"`
+	Target string      `json:"target"`
+	Items  []Reference `json:"items"`
+	Count  int         `json:"count"`
+}
+
+// OutlinksGroup contains outlinks for one requested source.
+type OutlinksGroup struct {
+	Input  string      `json:"input"`
+	Source string      `json:"source"`
+	Items  []Reference `json:"items"`
+	Count  int         `json:"count"`
+}
