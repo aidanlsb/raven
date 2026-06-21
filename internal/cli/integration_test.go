@@ -47,15 +47,17 @@ func TestIntegration_ObjectLifecycle(t *testing.T) {
 	v.AssertFileNotExists("people/alice.md")
 }
 
-func TestIntegration_DeleteJSONSinglePreviewRequiresConfirm(t *testing.T) {
+func TestIntegration_DeleteJSONSingleAppliesByDefaultWithDryRun(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
 	v.RunCLI("new", "person", "Delete Preview").MustSucceed(t)
+	v.RunCLI("new", "person", "Delete Apply").MustSucceed(t)
 
-	preview := v.RunCLI("delete", "people/delete-preview")
+	// --dry-run previews without mutating.
+	preview := v.RunCLI("delete", "people/delete-preview", "--dry-run")
 	preview.MustSucceed(t)
 	if preview.Data["preview"] != true {
 		t.Fatalf("expected preview response, got: %s", preview.RawJSON)
@@ -65,12 +67,13 @@ func TestIntegration_DeleteJSONSinglePreviewRequiresConfirm(t *testing.T) {
 	}
 	v.AssertFileExists("people/delete-preview.md")
 
-	confirm := v.RunCLI("delete", "people/delete-preview", "--confirm")
-	confirm.MustSucceed(t)
-	if confirm.DataString("deleted") != "people/delete-preview" {
-		t.Fatalf("expected deleted object people/delete-preview, got %q", confirm.DataString("deleted"))
+	// Default JSON delete applies immediately (no --confirm needed).
+	applied := v.RunCLI("delete", "people/delete-apply")
+	applied.MustSucceed(t)
+	if applied.DataString("deleted") != "people/delete-apply" {
+		t.Fatalf("expected deleted object people/delete-apply, got %q", applied.DataString("deleted"))
 	}
-	v.AssertFileNotExists("people/delete-preview.md")
+	v.AssertFileNotExists("people/delete-apply.md")
 }
 
 func TestIntegration_EditWithEditsJSON(t *testing.T) {
@@ -89,7 +92,7 @@ Status: draft
 
 	editsJSON := `{"edits":[{"old_str":"- old task","new_str":"- done task"},{"old_str":"Status: draft","new_str":"Status: active"}]}`
 
-	preview := v.RunCLI("edit", "daily/2026-02-15.md", "--edits-json", editsJSON)
+	preview := v.RunCLI("edit", "daily/2026-02-15.md", "--edits-json", editsJSON, "--dry-run")
 	preview.MustSucceed(t)
 	if got := preview.DataString("status"); got != "preview" {
 		t.Fatalf("expected preview status, got %q", got)
@@ -100,7 +103,7 @@ Status: draft
 	v.AssertFileContains("daily/2026-02-15.md", "- old task")
 	v.AssertFileContains("daily/2026-02-15.md", "Status: draft")
 
-	applied := v.RunCLI("edit", "daily/2026-02-15.md", "--edits-json", editsJSON, "--confirm")
+	applied := v.RunCLI("edit", "daily/2026-02-15.md", "--edits-json", editsJSON)
 	applied.MustSucceed(t)
 	if got := applied.DataString("status"); got != "applied" {
 		t.Fatalf("expected applied status, got %q", got)
@@ -129,7 +132,7 @@ Status: draft
 		Build()
 
 	editsJSON := `{"edits":[{"old_str":"- old task","new_str":"- done task"},{"old_str":"Status: missing","new_str":"Status: active"}]}`
-	result := v.RunCLI("edit", "daily/2026-02-16.md", "--edits-json", editsJSON, "--confirm")
+	result := v.RunCLI("edit", "daily/2026-02-16.md", "--edits-json", editsJSON)
 	result.MustFail(t, "STRING_NOT_FOUND")
 
 	v.AssertFileContains("daily/2026-02-16.md", "- old task")
@@ -150,7 +153,7 @@ old task
 `).
 		Build()
 
-	result := v.RunCLI("edit", "daily/2026-02-17.md", "old task", "done task", "--confirm")
+	result := v.RunCLI("edit", "daily/2026-02-17.md", "old task", "done task")
 	result.MustSucceed(t)
 	v.AssertFileContains("daily/2026-02-17.md", "done task")
 	v.AssertFileNotContains("daily/2026-02-17.md", "old task")
@@ -163,12 +166,12 @@ func TestIntegration_EditRejectsSchemaAndTemplateFiles(t *testing.T) {
 		WithFile("templates/meeting.md", "# {{title}}\n").
 		Build()
 
-	schemaResult := v.RunCLI("edit", "schema.yaml", "version: 1", "version: 2", "--confirm")
+	schemaResult := v.RunCLI("edit", "schema.yaml", "version: 1", "version: 2")
 	schemaResult.MustFail(t, "VALIDATION_FAILED")
 	schemaResult.MustFailWithMessage(t, "rvn schema")
 	v.AssertFileContains("schema.yaml", "version: 1")
 
-	templateResult := v.RunCLI("edit", "templates/meeting.md", "{{title}}", "{{name}}", "--confirm")
+	templateResult := v.RunCLI("edit", "templates/meeting.md", "{{title}}", "{{name}}")
 	templateResult.MustFail(t, "VALIDATION_FAILED")
 	templateResult.MustFailWithMessage(t, "rvn template write")
 	v.AssertFileContains("templates/meeting.md", "{{title}}")
@@ -242,12 +245,12 @@ func TestIntegration_EditRejectsProtectedPrefixAndNonMarkdownFiles(t *testing.T)
 		WithFile("scratch.txt", "old task\n").
 		Build()
 
-	protectedResult := v.RunCLI("edit", "private/notes.md", "old task", "done task", "--confirm")
+	protectedResult := v.RunCLI("edit", "private/notes.md", "old task", "done task")
 	protectedResult.MustFail(t, "VALIDATION_FAILED")
 	protectedResult.MustFailWithMessage(t, "protected")
 	v.AssertFileContains("private/notes.md", "old task")
 
-	nonMarkdownResult := v.RunCLI("edit", "scratch.txt", "old task", "done task", "--confirm")
+	nonMarkdownResult := v.RunCLI("edit", "scratch.txt", "old task", "done task")
 	nonMarkdownResult.MustFail(t, "VALIDATION_FAILED")
 	nonMarkdownResult.MustFailWithMessage(t, "markdown content files")
 	v.AssertFileContains("scratch.txt", "old task")
@@ -325,7 +328,7 @@ func TestIntegration_ExcludeRejectsMutationCommands(t *testing.T) {
 		WithFile("private/notes.md", "# Notes\nold task\n").
 		Build()
 
-	editResult := v.RunCLI("edit", "private/notes.md", "old task", "done task", "--confirm")
+	editResult := v.RunCLI("edit", "private/notes.md", "old task", "done task")
 	editResult.MustFail(t, "VALIDATION_FAILED")
 	editResult.MustFailWithMessage(t, "excluded")
 	v.AssertFileContains("private/notes.md", "old task")
@@ -899,7 +902,7 @@ func TestIntegration_MoveWithReferenceUpdate(t *testing.T) {
 	v.AssertFileContains("projects/website.md", "[[people/alice-archived]]")
 }
 
-func TestIntegration_MovePreviewDoesNotMutateWithoutConfirm(t *testing.T) {
+func TestIntegration_MoveDryRunDoesNotMutate(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -908,7 +911,7 @@ func TestIntegration_MovePreviewDoesNotMutateWithoutConfirm(t *testing.T) {
 	v.RunCLI("new", "person", "Preview Me").MustSucceed(t)
 	v.RunCLI("new", "project", "Preview Ref", "--field", "owner=[[people/preview-me]]").MustSucceed(t)
 
-	result := v.RunCLI("move", "people/preview-me", "people/preview-me-archived")
+	result := v.RunCLI("move", "people/preview-me", "people/preview-me-archived", "--dry-run")
 	result.MustSucceed(t)
 	if got := result.DataString("status"); got != "preview" {
 		t.Fatalf("expected preview status, got %q; raw: %s", got, result.RawJSON)
@@ -2105,7 +2108,7 @@ func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *tes
 		{
 			name: "edit",
 			run: func(v *testutil.TestVault) *testutil.CLIResult {
-				return v.RunCLI("edit", "people/alice", "Body", "Updated body", "--confirm")
+				return v.RunCLI("edit", "people/alice", "Body", "Updated body")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
 				v.AssertFileContains("people/alice.md", "Updated body")
@@ -2166,7 +2169,7 @@ Body
 `).
 		Build()
 
-	result := v.RunCLI("edit", "people/alice", "name: Alice", "name: [", "--confirm")
+	result := v.RunCLI("edit", "people/alice", "name: Alice", "name: [")
 	result.MustSucceed(t)
 	result.AssertHasWarning(t, "INDEX_UPDATE_FAILED")
 

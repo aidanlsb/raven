@@ -405,7 +405,9 @@ Then append content:
 
 ### Preview/apply flow
 
-Preview:
+Single-object writes (`set`, `add`, `update`, `edit`, and single-object
+`delete`/`move`) apply immediately. The call below writes on the first
+invocation:
 
 ```json
 {
@@ -418,7 +420,7 @@ Preview:
 }
 ```
 
-Apply:
+Pass `dry-run` to preview a single-object write without applying it:
 
 ```json
 {
@@ -427,14 +429,27 @@ Apply:
     "path": "project/website.md",
     "old_str": "Status: draft",
     "new_str": "Status: published",
+    "dry-run": true
+  }
+}
+```
+
+High-blast-radius operations stay preview-first and require `confirm` to apply:
+bulk writes (`stdin`), `query` with `apply`, `schema rename`, and `check` fixes.
+
+```json
+{
+  "command": "delete",
+  "args": {
+    "stdin": true,
     "confirm": true
   }
 }
 ```
 
-Single-object `delete` is different: when invoked through MCP it applies
-immediately. Check backlinks or read the object first if the user's intent or
-impact is not clear. Bulk and query-driven delete flows remain preview-first.
+Because single-object writes apply on the first call, only invoke them when the
+user's intent is clear. For `delete`/`move`, check backlinks or read the object
+first—or pass `dry-run`—when the impact is not already obvious.
 
 ## Best Practices
 
@@ -442,7 +457,7 @@ impact is not clear. Bulk and query-driven delete flows remain preview-first.
 2. Prefer `query` over `search` when the structure is known.
 3. Use raw `read` ranges before building string replacements for `edit`.
 4. Use `edit` only for content markdown files; use dedicated commands for `raven.yaml`, `schema.yaml`, and templates.
-5. Use preview/apply for preview-capable or bulk mutations; single-object MCP `delete` applies immediately.
+5. Single-object writes apply immediately (`dry-run` to preview); bulk and query-driven mutations stay preview-first and need `confirm`.
 6. Use `move` for asset relocation so references and the asset index stay correct.
 7. Reindex after schema-level structural changes or out-of-band asset file changes when required.
 8. Treat `raven_describe` as the authority for argument shape.

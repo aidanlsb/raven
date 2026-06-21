@@ -16,6 +16,7 @@ var (
 	moveSkipTypeCheck bool
 	moveStdin         bool
 	moveConfirm       bool
+	moveDryRun        bool
 )
 
 var moveCmd = newCanonicalLeafCommand("move", canonicalLeafOptions{
@@ -65,6 +66,7 @@ func buildMoveArgs(_ *cobra.Command, args []string) (map[string]interface{}, err
 }
 
 func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Bulk move stays preview-first: changes apply only with --confirm.
 	if boolValue(args["stdin"]) {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
@@ -74,13 +76,13 @@ func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]i
 		})
 	}
 
-	if isJSONOutput() {
+	// Single-object move applies immediately; --dry-run previews instead.
+	if moveDryRun {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
 			VaultPath: vaultPath,
 			Args:      args,
-			Preview:   !moveConfirm,
-			Confirm:   moveConfirm,
+			Preview:   true,
 		})
 	}
 
@@ -94,6 +96,12 @@ func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]i
 	}
 	data := canonicalDataMap(result)
 	if !boolValue(data["needs_confirm"]) {
+		return result
+	}
+
+	// Type-directory mismatch. Non-interactive callers get the warning and must
+	// re-run with --skip-type-check; interactive terminals prompt.
+	if isJSONOutput() {
 		return result
 	}
 	if !moveForce {
@@ -122,7 +130,8 @@ func init() {
 	moveCmd.Flags().BoolVar(&moveUpdateRefs, "update-refs", true, "Update references to moved file")
 	moveCmd.Flags().BoolVar(&moveSkipTypeCheck, "skip-type-check", false, "Skip type-directory mismatch warning")
 	moveCmd.Flags().BoolVar(&moveStdin, "stdin", false, "Read object IDs from stdin (one per line)")
-	moveCmd.Flags().BoolVar(&moveConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
+	moveCmd.Flags().BoolVar(&moveConfirm, "confirm", false, "Apply bulk move (without this flag, bulk shows preview only)")
+	moveCmd.Flags().BoolVar(&moveDryRun, "dry-run", false, "Preview a single-object move without applying it")
 	moveCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
 		IncludeDynamicDates: false,
 		DisableWhenStdin:    true,
@@ -145,6 +154,14 @@ func renderMoveResult(_ *cobra.Command, result commandexec.Result) error {
 	}
 	source, _ := data["source"].(string)
 	destination, _ := data["destination"].(string)
+	if boolValue(data["preview"]) && !boolValue(data["needs_confirm"]) {
+		fmt.Println(ui.Star(fmt.Sprintf("Would move %s → %s", ui.FilePath(source), ui.FilePath(destination))))
+		if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
+			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Would update %d references", len(updatedRefs))))
+		}
+		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
+		return nil
+	}
 	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(source), ui.FilePath(destination)))
 	if updatedRefs, ok := data["updated_refs"].([]string); ok && len(updatedRefs) > 0 {
 		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))

@@ -15,6 +15,7 @@ var (
 	deleteForce   bool
 	deleteStdin   bool
 	deleteConfirm bool
+	deleteDryRun  bool
 )
 
 var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
@@ -50,6 +51,7 @@ func buildDeleteArgs(_ *cobra.Command, args []string) (map[string]interface{}, e
 }
 
 func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Bulk delete stays preview-first: changes apply only with --confirm.
 	if boolValue(args["stdin"]) {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
@@ -59,45 +61,38 @@ func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string
 		})
 	}
 
-	if isJSONOutput() {
-		if !deleteConfirm {
-			return executeCanonicalRequest(commandexec.Request{
-				CommandID: commandID,
-				VaultPath: vaultPath,
-				Args:      args,
-				Preview:   true,
-			})
-		}
+	// Single-object delete applies immediately; --dry-run previews instead.
+	if deleteDryRun {
 		return executeCanonicalRequest(commandexec.Request{
-			CommandID: commandID,
-			VaultPath: vaultPath,
-			Args:      args,
-			Confirm:   true,
-		})
-	}
-
-	if deleteForce || deleteConfirm {
-		return executeCanonicalRequest(commandexec.Request{
-			CommandID: commandID,
-			VaultPath: vaultPath,
-			Args:      args,
-			Confirm:   true,
-		})
-	}
-
-	if !deleteForce {
-		preview := executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
 			VaultPath: vaultPath,
 			Args:      args,
 			Preview:   true,
 		})
-		if !preview.OK {
-			return preview
-		}
-		if !renderDeletePreviewPrompt(preview) {
-			return commandexec.Success(map[string]interface{}{"cancelled": true}, nil)
-		}
+	}
+
+	// Non-interactive (JSON) or forced runs apply without prompting.
+	if isJSONOutput() || deleteForce {
+		return executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			VaultPath: vaultPath,
+			Args:      args,
+			Confirm:   true,
+		})
+	}
+
+	// Interactive terminals still preview and prompt before deleting.
+	preview := executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+		Preview:   true,
+	})
+	if !preview.OK {
+		return preview
+	}
+	if !renderDeletePreviewPrompt(preview) {
+		return commandexec.Success(map[string]interface{}{"cancelled": true}, nil)
 	}
 
 	return executeCanonicalRequest(commandexec.Request{
@@ -120,6 +115,11 @@ func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
 	if boolValue(data["bulk"]) || boolValue(data["stdin"]) {
 		return renderCanonicalBulkResult(result)
 	}
+	if boolValue(data["preview"]) {
+		printDeletePreview(data)
+		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to delete"))
+		return nil
+	}
 	behavior, _ := data["behavior"].(string)
 	if behavior == "trash" {
 		if trashPath, ok := data["trash_path"].(string); ok && strings.TrimSpace(trashPath) != "" {
@@ -139,6 +139,11 @@ func renderDeletePreviewPrompt(result commandexec.Result) bool {
 	if !ok {
 		return false
 	}
+	printDeletePreview(data)
+	return promptForConfirm("Confirm?")
+}
+
+func printDeletePreview(data map[string]interface{}) {
 	objectID, _ := data["object_id"].(string)
 	fmt.Printf("%s %s?\n", ui.SectionHeader("Delete"), ui.Bold.Render(objectID))
 
@@ -165,8 +170,6 @@ func renderDeletePreviewPrompt(result commandexec.Result) bool {
 	} else {
 		fmt.Println()
 	}
-
-	return promptForConfirm("Confirm?")
 }
 
 func deletePreviewBacklinks(raw interface{}) []model.Reference {
@@ -178,7 +181,8 @@ func deletePreviewBacklinks(raw interface{}) []model.Reference {
 func init() {
 	deleteCmd.Flags().BoolVar(&deleteForce, "force", false, "Skip confirmation prompt")
 	deleteCmd.Flags().BoolVar(&deleteStdin, "stdin", false, "Read object IDs from stdin (one per line)")
-	deleteCmd.Flags().BoolVar(&deleteConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
+	deleteCmd.Flags().BoolVar(&deleteConfirm, "confirm", false, "Apply bulk delete (without this flag, bulk shows preview only)")
+	deleteCmd.Flags().BoolVar(&deleteDryRun, "dry-run", false, "Preview a single-object delete without applying it")
 	deleteCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
 		IncludeDynamicDates: false,
 		DisableWhenStdin:    true,

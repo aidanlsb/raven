@@ -13,8 +13,9 @@
 - See `raven://guide/critical-rules` and `raven://guide/write-patterns`.
 
 4. Use the command's documented mutation flow.
-- For preview-capable commands, show preview, ask for approval, then apply with `confirm=true`.
-- Single-object `delete` applies immediately in MCP, so only call it when deletion intent is clear.
+- Single-object writes (`set`, `add`, `update`, `edit`, single `delete`/`move`) apply immediately; use `dry-run=true` to preview when you want to verify first.
+- High-blast-radius operations (bulk writes, `query` apply, `schema rename`, `check` fixes) preview first; show the preview, ask for approval, then apply with `confirm=true`.
+- Because single-object writes apply on the first call, only invoke them when intent is clear.
 
 5. Surface ambiguity instead of guessing.
 - For ambiguous refs, short asset names, or unclear destructive intent, ask a focused clarifying question.

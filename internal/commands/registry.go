@@ -565,15 +565,11 @@ potentially creating broken links throughout the vault. The raven_delete command
 By default, files are moved to a trash directory (.trash/).
 Warns about backlinks (objects that reference the deleted item).
 
-MCP behavior:
-Single-object MCP deletes apply immediately when invoked. Agents should only call
-delete after the user intent is clear; when unsure, inspect the object and run
-backlinks first.
-
-CLI behavior:
-In CLI JSON mode, single-object deletes return preview by default; use --confirm
-to apply. Interactive single-object deletes show a confirmation prompt unless
---force is set.
+Single-object delete:
+Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
+deletion (and its backlink impact) without applying. Interactive CLI terminals still
+show a confirmation prompt unless --force is set. Only call delete after user intent
+is clear; when unsure, inspect the object and run backlinks first.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
@@ -585,11 +581,12 @@ IMPORTANT:
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip interactive CLI confirmation prompt", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply previewed CLI JSON or bulk delete; optional for single-object MCP delete", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk delete (without this flag, bulk shows preview only)", Type: FlagTypeBool},
+			{Name: "dry-run", Description: "Preview a single-object delete without applying it", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn delete people/freya --json",
-			"rvn delete projects/old --confirm --json",
+			"rvn delete people/freya --dry-run --json",
 			"rvn delete projects/old --force",
 		},
 		UseCases: []string{
@@ -619,11 +616,12 @@ This command:
 - Creates destination directories if needed
 
 If moving a file to a type's default directory (e.g., people/) but the file
-has a different type, returns a warning with needs_confirm=true. The agent
-should ask the user how to proceed.
+has a different type, returns a warning with needs_confirm=true (without moving).
+The agent should ask the user how to proceed and re-run with --skip-type-check.
 
-CLI JSON behavior:
-Single-object moves return preview by default; use --confirm to apply.
+Single-object move:
+Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
+move and the references it would update without applying.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
@@ -638,14 +636,15 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			{Name: "update-refs", Description: "Update references to moved file (default: true)", Type: FlagTypeBool, Default: "true"},
 			{Name: "skip-type-check", Description: "Skip type-directory mismatch warning", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply CLI JSON or bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk move (without this flag, bulk shows preview only)", Type: FlagTypeBool},
+			{Name: "dry-run", Description: "Preview a single-object move without applying it", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn move people/loki people/loki-archived --json",
-			"rvn move people/loki people/loki-archived --confirm --json",
-			"rvn move inbox/task.md projects/website/task.md --confirm --json",
-			"rvn move drafts/person.md people/freya.md --update-refs --confirm --json",
-			"rvn move assets/pdfs/paper.pdf assets/pdfs/archive/paper.pdf --confirm --json",
+			"rvn move people/loki people/loki-archived --dry-run --json",
+			"rvn move inbox/task.md projects/website/task.md --json",
+			"rvn move drafts/person.md people/freya.md --update-refs --json",
+			"rvn move assets/pdfs/paper.pdf assets/pdfs/archive/paper.pdf --json",
 		},
 		UseCases: []string{
 			"Rename a file in place (NEVER use 'mv' shell command)",
@@ -1605,6 +1604,9 @@ Use positional field=value arguments for shell-friendly literal updates.
 Use --fields-json when you need exact type control (for example, preserving the
 string "true" instead of coercing it to a boolean).
 
+Single-object set applies immediately. Pass --dry-run to preview the resulting
+field changes (including previous values) without writing.
+
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line). Bulk updates accept
 both field=value literals and --fields-json typed values.
@@ -1620,13 +1622,14 @@ and a REF_NOT_FOUND warning per missing target.`,
 			{Name: "fields", Description: "Fields to update using Raven field literals (key=value semantics)", Type: FlagTypePosKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
 			{Name: "fields-json", Description: "Fields to update as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk changes (without this flag, bulk shows preview only)", Type: FlagTypeBool},
+			{Name: "dry-run", Description: "Preview a single-object set without applying it", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn set people/freya email=freya@asgard.realm --json",
 			`rvn set people/freya --fields-json '{"email":"true"}' --json`,
 			"rvn set people/freya name=\"Freya\" status=active --json",
-			"rvn set projects/website priority=high --json",
+			"rvn set projects/website priority=high --dry-run --json",
 		},
 		UseCases: []string{
 			"Update a person's email or status",
@@ -1676,6 +1679,9 @@ The reserved type field cannot be unset; use reclassify to change object type.`,
 Trait IDs look like "path/file.md:trait:N" and can be obtained via:
   - rvn query "trait:todo" --ids
 
+Single-object update applies immediately. Pass --dry-run to preview the value
+change without writing.
+
 Bulk operations:
 Use --stdin to read trait IDs from stdin (one per line).
 Use repeated --trait-id flags to provide an explicit trait ID list without stdin.
@@ -1687,13 +1693,14 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		Flags: []FlagMeta{
 			{Name: "stdin", Description: "Read trait IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "trait-id", Description: "Trait ID for explicit-list bulk update (repeatable)", Type: FlagTypeStringSlice, Examples: []string{"daily/2026-01-25.md:trait:0"}},
-			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk changes (without this flag, bulk shows preview only)", Type: FlagTypeBool},
+			{Name: "dry-run", Description: "Preview a single-object update without applying it", Type: FlagTypeBool},
 		},
 		BulkStdinArgName:    "trait_ids",
 		BulkStdinArgAliases: []string{"object_ids", "ids"},
 		Examples: []string{
 			"rvn update daily/2026-01-25.md:trait:0 done --json",
-			"rvn update --trait-id daily/2026-01-25.md:trait:0 --trait-id daily/2026-01-25.md:trait:1 done --confirm --json",
+			"rvn update daily/2026-01-25.md:trait:0 done --dry-run --json",
 			"rvn query 'trait:todo' --ids | rvn update --stdin done --confirm --json",
 		},
 		UseCases: []string{
@@ -1708,8 +1715,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		LongDesc: `Replace a unique string in a vault content file with another string.
 
 ⚠️ IMPORTANT FOR AGENTS: Use this command instead of shell tools like 'sed' or 'awk'
-to edit vault content files. This ensures proper preview/confirm flow and maintains
-file integrity within the vault.
+to edit vault content files. This maintains file integrity within the vault.
 
 Scope:
 - Supported: markdown content files such as objects, pages, and daily notes
@@ -1722,7 +1728,8 @@ ambiguous edits. File targets use the whole file. Section targets such as
 object#section use the section subtree, so repeated text outside that section
 does not make the edit ambiguous.
 
-IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
+IMPORTANT: Applies immediately. Pass --dry-run to preview the before/after diff
+without writing.
 
 Whitespace matters—old_str must match exactly including indentation.
 For multi-line replacements, include newlines in both old_str and new_str.
@@ -1740,15 +1747,15 @@ data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 			{Name: "new_str", Description: "Replacement string (can be empty to delete, single-edit mode)", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "confirm", Description: "Apply the edit (default: preview only)", Type: FlagTypeBool},
+			{Name: "dry-run", Description: "Preview the edit without applying it", Type: FlagTypeBool},
 			{Name: "edits-json", Description: "JSON object with ordered edits, e.g. '{\"edits\":[{\"old_str\":\"from\",\"new_str\":\"to\"}]}'", Type: FlagTypeJSON},
 		},
 		Examples: []string{
 			`rvn edit "daily/2025-12-27.md" "- Churn analysis" "- [[churn-analysis|Churn analysis]]" --json`,
-			`rvn edit "pages/notes.md" "reccommendation" "recommendation" --confirm --json`,
-			`rvn edit "project/raven#working-docs" "old link" "new link" --confirm --json`,
-			`rvn edit "daily/2026-01-02.md" "- old task" "" --confirm --json`,
-			`rvn edit "pages/notes.md" --edits-json '{"edits":[{"old_str":"reccommendation","new_str":"recommendation"},{"old_str":"Status: draft","new_str":"Status: active"}]}' --confirm --json`,
+			`rvn edit "pages/notes.md" "reccommendation" "recommendation" --dry-run --json`,
+			`rvn edit "project/raven#working-docs" "old link" "new link" --json`,
+			`rvn edit "daily/2026-01-02.md" "- old task" "" --json`,
+			`rvn edit "pages/notes.md" --edits-json '{"edits":[{"old_str":"reccommendation","new_str":"recommendation"},{"old_str":"Status: draft","new_str":"Status: active"}]}' --json`,
 		},
 		UseCases: []string{
 			"Edit markdown vault content files (use instead of 'sed', 'awk', or direct file writes)",
@@ -1756,7 +1763,7 @@ data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 			"Fix typos in notes",
 			"Apply multiple ordered replacements in one command",
 			"Add traits to existing lines",
-			"Delete specific content with preview",
+			"Delete specific content (use --dry-run to preview first)",
 		},
 	},
 	"search": {

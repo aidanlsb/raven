@@ -16,6 +16,9 @@ type SetByReferenceRequest struct {
 	Reference    string
 	TypedUpdates map[string]schema.FieldValue
 	ParseOptions *parser.ParseOptions
+	// Preview validates and computes the resulting fields without writing the
+	// file, for dry-run callers.
+	Preview bool
 }
 
 type SetByReferenceResult struct {
@@ -60,6 +63,7 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 		Schema:        req.Schema,
 		AllowedFields: map[string]bool{"alias": true},
 		ParseOptions:  req.ParseOptions,
+		Preview:       req.Preview,
 	})
 	if err != nil {
 		return nil, err

@@ -10,7 +10,7 @@ Use this guide to choose the right mutation primitive.
 | Append a note/log entry | `add` | Intentional append-only capture |
 | Deterministic create-or-update | `upsert` | Idempotent convergence for generated artifacts |
 | Update frontmatter fields | `set` | Schema-validated metadata updates |
-| Replace body text safely | `edit` | Unique-string replacement in content markdown with preview/confirm |
+| Replace body text safely | `edit` | Unique-string replacement in content markdown (applies immediately; `dry-run` to preview) |
 | Move or rename an asset | `move` | Updates Markdown links/images and refreshes the asset index |
 | Update trait value | `update` | Targeted trait mutation by trait ID |
 | Delete one object | `delete` | Safe deletion behavior with backlink warnings and trash support |
@@ -50,20 +50,22 @@ raven_invoke(command="set", args={
 
 Use `fields` for ordinary literal-style updates. Use `fields-json` when exact JSON typing matters, such as preserving the string `"true"` instead of a boolean or sending arrays/nulls explicitly.
 
-Preview then apply edit:
+Edit applies immediately; preview only when you need to verify the diff first:
 
 ```text
+# Applies on the first call:
 raven_invoke(command="edit", args={
   "path":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active"
 })
 
+# Optional dry run to inspect the before/after without writing:
 raven_invoke(command="edit", args={
   "path":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active",
-  "confirm":true
+  "dry-run":true
 })
 ```
 
@@ -74,9 +76,10 @@ raven_invoke(command="backlinks", args={"target":"project/old-project"})
 raven_invoke(command="delete", args={"object_id":"project/old-project"})
 ```
 
-MCP single-object `delete` applies immediately. Only call it after clear user
-approval or an unambiguous user request. Bulk delete remains preview-first unless
-`confirm=true`.
+Single-object `set`, `add`, `update`, `edit`, `delete`, and `move` all apply
+immediately. Only call them after clear user approval or an unambiguous request,
+and use `dry-run=true` when you want to confirm the effect first. Bulk operations
+(`stdin=true`) stay preview-first and require `confirm=true`.
 
 ## Missing reference targets
 

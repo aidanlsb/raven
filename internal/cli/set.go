@@ -120,6 +120,9 @@ func parseSetFieldArgs(args []string) (map[string]string, error) {
 
 func invokeSet(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	confirm, _ := cmd.Flags().GetBool("confirm")
+	if dryRun, _ := cmd.Flags().GetBool("dry-run"); dryRun {
+		args["dry-run"] = true
+	}
 	return executeCanonicalRequest(commandexec.Request{
 		CommandID: commandID,
 		VaultPath: vaultPath,
@@ -135,7 +138,12 @@ func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	}
 
 	relativePath, _ := data["file"].(string)
-	fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
+	isPreview := boolValue(data["preview"])
+	if isPreview {
+		fmt.Println(ui.Star(fmt.Sprintf("Would update %s", ui.FilePath(relativePath))))
+	} else {
+		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
+	}
 
 	updatedFields := stringMapFromAny(data["updated_fields"])
 	previousFields := interfaceMapFromAny(data["previous_fields"])
@@ -160,6 +168,10 @@ func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	}
 	for _, warning := range result.Warnings {
 		fmt.Printf("  %s\n", ui.Warning(warning.Message))
+	}
+	if isPreview {
+		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
+		return nil
 	}
 	promptCreateMissingRefsFromResult(getVaultPath(), result)
 	return nil

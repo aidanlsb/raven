@@ -114,23 +114,23 @@ Use `--stdin` to traverse multiple sources at once. JSON output is grouped under
 
 ### `rvn edit`
 
-Surgical string replacement in vault content files. The target string must appear exactly once in the file. Changes preview by default.
+Surgical string replacement in vault content files. The target string must appear exactly once in the file. Changes apply immediately; pass `--dry-run` to preview without writing.
 
 Use `rvn edit` for markdown content such as objects, pages, and daily notes. Do not use it for `raven.yaml`, `schema.yaml`, or template files; those have dedicated command surfaces.
 
 ```bash
-# Preview a replacement
+# Apply a replacement
 rvn edit project/website.md "Status: draft" "Status: published"
 
-# Apply it
-rvn edit project/website.md "Status: draft" "Status: published" --confirm
+# Preview without writing
+rvn edit project/website.md "Status: draft" "Status: published" --dry-run
 
 # Batch edits via JSON
-rvn edit project/website.md --edits-json '{"edits":[{"old_str":"draft","new_str":"published"}]}' --confirm
+rvn edit project/website.md --edits-json '{"edits":[{"old_str":"draft","new_str":"published"}]}'
 ```
 
 Key flags:
-- `--confirm` — apply the edit (default is preview only)
+- `--dry-run` — preview the edit without writing (default is to apply)
 - `--edits-json` — multiple ordered replacements in one call
 
 ### `rvn set`
@@ -141,9 +141,10 @@ Set frontmatter fields on an existing object. Values are validated against the s
 rvn set project/website status=published
 rvn set person/freya email=freya@example.com role=lead
 rvn set person/freya --fields-json '{"email":"true"}'
+rvn set project/website status=published --dry-run   # Preview without writing
 ```
 
-Use positional `field=value` arguments for shell-friendly literal updates. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
+Single-object updates apply immediately; pass `--dry-run` to preview the result without writing. Use positional `field=value` arguments for shell-friendly literal updates. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
 
 For bulk field updates, pipe IDs from a query:
 
@@ -160,7 +161,7 @@ Update a trait's value. Trait IDs come from `rvn query ... --ids`.
 # Get trait IDs first
 rvn query 'trait:todo .value==todo' --ids
 
-# Update a specific trait
+# Update a specific trait (applies immediately; add --dry-run to preview)
 rvn update daily/2026-03-15.md:trait:0 done
 
 # Bulk update
@@ -204,10 +205,14 @@ rvn move assets/pdfs/draft.pdf assets/pdfs/final.pdf
 
 Asset destinations must include a file extension. Raven treats non-Markdown moves as asset moves and keeps the asset index in sync.
 
+Single-object moves apply immediately; pass `--dry-run` to preview without writing. Bulk moves (`--stdin`) preview by default and require `--confirm`.
+
 Key flags:
 - `--update-refs` — update all references to the moved file (default: true)
+- `--dry-run` — preview a single-object move without applying it
 - `--force` — skip confirmation
 - `--stdin` — bulk move from piped IDs
+- `--confirm` — apply a bulk move
 
 ### `rvn reclassify`
 
@@ -231,10 +236,10 @@ Key flags:
 Remove an object. Files are moved to `.trash/` by default.
 
 ```bash
-rvn delete project/old-project
-rvn delete project/old-project --force         # Skip confirmation
-rvn delete project/old-project --json          # Preview in CLI JSON mode
-rvn delete project/old-project --confirm --json
+rvn delete project/old-project                 # Interactive: preview, then confirm prompt
+rvn delete project/old-project --force         # Skip the confirmation prompt
+rvn delete project/old-project --dry-run       # Preview without deleting
+rvn delete project/old-project --json          # Applies immediately (non-interactive)
 ```
 
 Check backlinks before deleting to avoid broken references:

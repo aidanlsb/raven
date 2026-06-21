@@ -19,6 +19,9 @@ type SetObjectFileRequest struct {
 	Schema        *schema.Schema
 	AllowedFields map[string]bool
 	ParseOptions  *parser.ParseOptions
+	// Preview validates and computes the resulting fields without writing the
+	// file, for dry-run callers.
+	Preview bool
 }
 
 type SetObjectFileResult struct {
@@ -85,8 +88,10 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 		resolvedUpdates[key] = fieldmutation.SerializeFieldValueLiteral(updatedFM.Fields[key])
 	}
 
-	if err := atomicfile.WriteFile(req.FilePath, []byte(newContent), 0o644); err != nil {
-		return nil, newError(ErrorFileWrite, "failed to write file", "", nil, err)
+	if !req.Preview {
+		if err := atomicfile.WriteFile(req.FilePath, []byte(newContent), 0o644); err != nil {
+			return nil, newError(ErrorFileWrite, "failed to write file", "", nil, err)
+		}
 	}
 
 	previousFields := make(map[string]schema.FieldValue, len(fm.Fields))

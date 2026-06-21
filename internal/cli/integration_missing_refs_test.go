@@ -133,7 +133,7 @@ func TestIntegration_EditSurfacesMissingRefTarget(t *testing.T) {
 
 	v.RunCLI("upsert", "project", "Edit Target", "--content", "Status line").MustSucceed(t)
 
-	result := v.RunCLI("edit", "projects/edit-target", "Status line", "Status [[projects/ghost-project]]", "--confirm")
+	result := v.RunCLI("edit", "projects/edit-target", "Status line", "Status [[projects/ghost-project]]")
 	result.MustSucceed(t)
 
 	if !hasWarningCode(result, "REF_NOT_FOUND") {

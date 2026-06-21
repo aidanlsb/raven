@@ -11,12 +11,11 @@ func TestValidateRequestNormalizesConfirmArg(t *testing.T) {
 	t.Parallel()
 
 	req, result, ok := validateRequest(context.Background(), commandexec.Request{
-		CommandID: "edit",
+		CommandID: "delete",
 		Args: map[string]any{
-			"path":    "note/example",
-			"old_str": "old",
-			"new_str": "new",
-			"confirm": true,
+			"stdin":      true,
+			"object_ids": []interface{}{"note/one"},
+			"confirm":    true,
 		},
 	})
 	if !ok {
@@ -34,6 +33,24 @@ func TestValidateRequestDefaultsPreviewForPreviewCommands(t *testing.T) {
 	t.Parallel()
 
 	req, result, ok := validateRequest(context.Background(), commandexec.Request{
+		CommandID: "check",
+		Args:      map[string]any{},
+	})
+	if !ok {
+		t.Fatalf("validateRequest failed: %#v", result)
+	}
+	if req.Confirm {
+		t.Fatal("Confirm = true, want false")
+	}
+	if !req.Preview {
+		t.Fatal("Preview = false, want true for preview-default command")
+	}
+}
+
+func TestValidateRequestEditAppliesByDefault(t *testing.T) {
+	t.Parallel()
+
+	req, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "edit",
 		Args: map[string]any{
 			"path":    "note/example",
@@ -47,8 +64,45 @@ func TestValidateRequestDefaultsPreviewForPreviewCommands(t *testing.T) {
 	if req.Confirm {
 		t.Fatal("Confirm = true, want false")
 	}
+	if req.Preview {
+		t.Fatal("Preview = true, want false: single-object edit applies by default")
+	}
+}
+
+func TestValidateRequestDryRunForcesPreviewAndOverridesConfirm(t *testing.T) {
+	t.Parallel()
+
+	req, result, ok := validateRequest(context.Background(), commandexec.Request{
+		CommandID: "edit",
+		Args: map[string]any{
+			"path":    "note/example",
+			"old_str": "old",
+			"new_str": "new",
+			"dry-run": true,
+		},
+	})
+	if !ok {
+		t.Fatalf("validateRequest failed: %#v", result)
+	}
 	if !req.Preview {
-		t.Fatal("Preview = false, want true for preview-default command")
+		t.Fatal("Preview = false, want true when dry-run is set")
+	}
+
+	// dry-run wins even if confirm is also present.
+	req, result, ok = validateRequest(context.Background(), commandexec.Request{
+		CommandID: "delete",
+		Args: map[string]any{
+			"stdin":      true,
+			"object_ids": []interface{}{"note/one"},
+			"confirm":    true,
+			"dry-run":    true,
+		},
+	})
+	if !ok {
+		t.Fatalf("validateRequest failed: %#v", result)
+	}
+	if !req.Preview || req.Confirm {
+		t.Fatalf("dry-run should force Preview and clear Confirm; got Preview=%v Confirm=%v", req.Preview, req.Confirm)
 	}
 }
 

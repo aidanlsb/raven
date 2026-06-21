@@ -35,19 +35,19 @@ raven_invoke(command="set", args={"object_id":"project/website-redesign", "field
 ```text
 raven_invoke(command="read", args={"path":"project/website-redesign.md", "raw":true})
 
-# Preview
+# Applies immediately
 raven_invoke(command="edit", args={
   "path":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active"
 })
 
-# Apply after approval
+# Optional dry run to inspect the diff first
 raven_invoke(command="edit", args={
   "path":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active",
-  "confirm":true
+  "dry-run":true
 })
 ```
 
@@ -67,8 +67,9 @@ raven_invoke(command="backlinks", args={"target":"project/old-project"})
 raven_invoke(command="delete", args={"object_id":"project/old-project"})
 ```
 
-Single-object `delete` applies immediately in MCP. Run the backlinks check first
-when impact is not already clear. Bulk delete remains preview-first.
+Single-object `delete` and `move` apply immediately. Run the backlinks check
+first when impact is not already clear, or call with `dry-run=true` to preview.
+Bulk delete/move remain preview-first and require `confirm=true`.
 
 ## 5. Bulk mutation flow
 

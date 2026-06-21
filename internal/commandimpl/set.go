@@ -104,15 +104,11 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		Reference:    reference,
 		TypedUpdates: allUpdates,
 		ParseOptions: buildParseOptions(vaultCfg),
+		Preview:      req.Preview,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
 	}
-
-	warnings := appendCommandWarnings(
-		warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
-		autoReindexWarnings(vaultPath, vaultCfg, serviceResult.FilePath),
-	)
 
 	data := map[string]interface{}{
 		"file":           serviceResult.RelativePath,
@@ -123,6 +119,20 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	if len(serviceResult.PreviousFields) > 0 {
 		data["previous_fields"] = serviceResult.PreviousFields
 	}
+
+	if req.Preview {
+		data["preview"] = true
+		return commandexec.SuccessWithWarnings(
+			data,
+			warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
+			nil,
+		)
+	}
+
+	warnings := appendCommandWarnings(
+		warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
+		autoReindexWarnings(vaultPath, vaultCfg, serviceResult.FilePath),
+	)
 
 	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, serviceResult.RelativePath)
 	data = mergeDataFields(data, missingData)

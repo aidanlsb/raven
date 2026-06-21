@@ -76,7 +76,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("INVALID_INPUT", "no edits provided", nil, "Provide at least one edit")
 	}
 
-	if !req.Confirm {
+	if req.Preview {
 		if batchMode {
 			editsPreview := make([]map[string]interface{}, 0, len(results))
 			for _, result := range results {

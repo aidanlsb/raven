@@ -45,7 +45,9 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 			return commandexec.Failure("INVALID_INPUT", "invalid trait ID format", nil, "Trait IDs look like: path/file.md:trait:N")
 		}
 		traitIDs = []string{singleID}
-		confirm = true
+		// Single-object updates apply immediately unless the caller requested a
+		// dry run, which normalizes to req.Preview.
+		confirm = !req.Preview
 	}
 	if len(traitIDs) == 0 {
 		message, suggestion := updateMissingBulkTraitIDs(req.Caller)

@@ -694,7 +694,6 @@ type: page
 		"path":    "daily/2026-01-02.md",
 		"old_str": "- old task",
 		"new_str": "",
-		"confirm": true,
 	})
 
 	if result.IsError {
@@ -1580,7 +1579,40 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file", "line", "content"})
 	})
 
-	t.Run("edit_preview", func(t *testing.T) {
+	t.Run("edit_dry_run", func(t *testing.T) {
+		note := `---
+type: page
+---
+# Daily
+
+old task
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile("daily/2026-02-15.md", note).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile("daily/2026-02-15.md", note).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("edit", map[string]interface{}{
+			"path":    "daily/2026-02-15.md",
+			"old_str": "old task",
+			"new_str": "done task",
+			"dry-run": true,
+		})
+		cliResult := vCLI.RunCLI("edit", "daily/2026-02-15.md", "old task", "done task", "--dry-run")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "path", "line", "preview"})
+		vMCP.AssertFileContains("daily/2026-02-15.md", "old task")
+		vMCP.AssertFileNotContains("daily/2026-02-15.md", "done task")
+		vCLI.AssertFileContains("daily/2026-02-15.md", "old task")
+		vCLI.AssertFileNotContains("daily/2026-02-15.md", "done task")
+	})
+
+	t.Run("edit_applies_by_default", func(t *testing.T) {
 		note := `---
 type: page
 ---
@@ -1605,11 +1637,9 @@ old task
 		})
 		cliResult := vCLI.RunCLI("edit", "daily/2026-02-15.md", "old task", "done task")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "path", "line", "preview"})
-		vMCP.AssertFileContains("daily/2026-02-15.md", "old task")
-		vMCP.AssertFileNotContains("daily/2026-02-15.md", "done task")
-		vCLI.AssertFileContains("daily/2026-02-15.md", "old task")
-		vCLI.AssertFileNotContains("daily/2026-02-15.md", "done task")
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "path", "line"})
+		vMCP.AssertFileContains("daily/2026-02-15.md", "done task")
+		vCLI.AssertFileContains("daily/2026-02-15.md", "done task")
 	})
 
 	t.Run("add_bulk_preview", func(t *testing.T) {
@@ -1856,31 +1886,53 @@ type: page
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"deleted", "behavior", "trash_path"})
 	})
 
-	t.Run("delete_single_immediate_differs_from_cli_json_preview", func(t *testing.T) {
+	t.Run("delete_single_applies_immediately_parity", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
 		server.callTool("new", map[string]interface{}{
 			"type":  "person",
-			"title": "Delete Divergence",
+			"title": "Delete Now",
 		})
-		vCLI.RunCLI("new", "person", "Delete Divergence").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Delete Now").MustSucceed(t)
 
 		mcpResult := server.callTool("delete", map[string]interface{}{
-			"object_id": "people/delete-divergence",
+			"object_id": "people/delete-now",
 		})
-		cliResult := vCLI.RunCLI("delete", "people/delete-divergence")
+		cliResult := vCLI.RunCLI("delete", "people/delete-now")
 
 		mcpEnv := parseMCPEnvelope(t, mcpResult.Text)
-		if !mcpEnv.OK || mcpEnv.Data["deleted"] != "people/delete-divergence" {
+		if !mcpEnv.OK || mcpEnv.Data["deleted"] != "people/delete-now" {
 			t.Fatalf("expected MCP delete to apply immediately, got: %s", mcpResult.Text)
 		}
-		if !cliResult.OK || cliResult.Data["preview"] != true {
-			t.Fatalf("expected CLI JSON delete to preview, got: %s", cliResult.RawJSON)
+		if !cliResult.OK || cliResult.DataString("deleted") != "people/delete-now" {
+			t.Fatalf("expected CLI JSON delete to apply immediately, got: %s", cliResult.RawJSON)
 		}
-		vMCP.AssertFileNotExists("people/delete-divergence.md")
-		vCLI.AssertFileExists("people/delete-divergence.md")
+		vMCP.AssertFileNotExists("people/delete-now.md")
+		vCLI.AssertFileNotExists("people/delete-now.md")
+	})
+
+	t.Run("delete_single_dry_run_parity", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("new", map[string]interface{}{
+			"type":  "person",
+			"title": "Delete Dry",
+		})
+		vCLI.RunCLI("new", "person", "Delete Dry").MustSucceed(t)
+
+		mcpResult := server.callTool("delete", map[string]interface{}{
+			"object_id": "people/delete-dry",
+			"dry-run":   true,
+		})
+		cliResult := vCLI.RunCLI("delete", "people/delete-dry", "--dry-run")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "object_id", "behavior", "backlinks"})
+		vMCP.AssertFileExists("people/delete-dry.md")
+		vCLI.AssertFileExists("people/delete-dry.md")
 	})
 
 	t.Run("delete_bulk_preview", func(t *testing.T) {

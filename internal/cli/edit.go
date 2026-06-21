@@ -27,14 +27,11 @@ func handleCanonicalEditFailure(result commandexec.Result) error {
 	return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
 }
 
-func invokeEdit(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	confirm, _ := cmd.Flags().GetBool("confirm")
-	args["confirm"] = confirm
+func invokeEdit(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	return executeCanonicalRequest(commandexec.Request{
 		CommandID: commandID,
 		VaultPath: vaultPath,
 		Args:      args,
-		Confirm:   confirm,
 	})
 }
 
@@ -63,7 +60,7 @@ func renderCanonicalEditResult(result commandexec.Result) error {
 				fmt.Println(indent(after, "  "))
 				fmt.Println()
 			}
-			fmt.Println(ui.Hint("Run with --confirm to apply this edit"))
+			fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply this edit"))
 			return nil
 		}
 
@@ -79,7 +76,7 @@ func renderCanonicalEditResult(result commandexec.Result) error {
 		fmt.Println(ui.Bold.Render("AFTER:"))
 		fmt.Println(indent(after, "  "))
 		fmt.Println()
-		fmt.Println(ui.Hint("Run with --confirm to apply this edit"))
+		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply this edit"))
 		return nil
 	}
 

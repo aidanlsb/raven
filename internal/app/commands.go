@@ -54,9 +54,15 @@ func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Re
 
 	req.Args = normalized
 	req.Confirm = req.Confirm || normalizedBoolArg(normalized, "confirm")
-	if req.Confirm {
+	switch {
+	case normalizedBoolArg(normalized, "dry-run"):
+		// An explicit dry run always previews and never applies, even if the
+		// caller also passed confirm.
+		req.Preview = true
+		req.Confirm = false
+	case req.Confirm:
 		req.Preview = false
-	} else if commands.ShouldPreviewByDefault(req.CommandID, normalized) {
+	case commands.ShouldPreviewByDefault(req.CommandID, normalized):
 		req.Preview = true
 	}
 	return req, commandexec.Result{}, true

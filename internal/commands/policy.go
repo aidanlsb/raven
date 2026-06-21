@@ -85,6 +85,15 @@ var nonInvokableCommandIDs = map[string]struct{}{
 	"template": {},
 }
 
+// previewModeByCommandID controls default preview behavior.
+//
+// Single-object reversible writes (edit, single set/add/update/delete/move)
+// apply immediately and only preview when the caller passes `dry-run`; these
+// are either absent (PreviewModeNone) or use PreviewModeBulkPreviewDefault,
+// which previews only when a bulk input (stdin/object_ids/trait_ids) is
+// present. High-blast-radius operations (bulk writes, query --apply, schema
+// rename, check fixes, skill sync/remove) preview by default and require
+// `confirm` to apply.
 var previewModeByCommandID = map[string]PreviewMode{
 	"add":    PreviewModeBulkPreviewDefault,
 	"delete": PreviewModeBulkPreviewDefault,
@@ -95,7 +104,6 @@ var previewModeByCommandID = map[string]PreviewMode{
 	"check":                PreviewModePreviewDefault,
 	"check create-missing": PreviewModePreviewDefault,
 	"check_fix":            PreviewModePreviewDefault,
-	"edit":                 PreviewModePreviewDefault,
 	"query":                PreviewModePreviewDefault,
 	"schema_rename_field":  PreviewModePreviewDefault,
 	"schema_rename_type":   PreviewModePreviewDefault,

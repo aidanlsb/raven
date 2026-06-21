@@ -41,22 +41,34 @@ For `resources/read`, the vault-scoped Raven URIs `raven://schema/current`, `rav
 
 ## Preview and apply semantics
 
-Some mutation commands are preview-first, especially bulk and query-driven flows.
+There are two mutation classes with different defaults:
+
+1. Single-object writes apply immediately: `set`, `add`, `update`, `edit`, and
+   single-object `delete`/`move`. Pass `dry-run=true` to get a preview (the
+   response carries `preview=true` or `status="preview"`) without writing.
+2. High-blast-radius operations are preview-first and require `confirm=true` to
+   apply: any bulk write (`stdin=true`), `query` with `apply`, `schema rename`,
+   and `check` fixes (`fix`, `create-missing`).
 
 Examples:
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "apply":["update done"]})
+# Applies immediately (single-object):
 raven_invoke(command="edit", args={"path":"project/website.md", "old_str":"A", "new_str":"B"})
-raven_invoke(command="delete", args={"stdin":true})
-raven_invoke(command="move", args={"stdin":true})
+raven_invoke(command="delete", args={"object_id":"project/old"})
+
+# Preview a single-object write first (optional):
+raven_invoke(command="edit", args={"path":"project/website.md", "old_str":"A", "new_str":"B", "dry-run":true})
+
+# Preview-first; apply only after explicit approval with confirm=true:
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "apply":["update done"]})
+raven_invoke(command="delete", args={"stdin":true, "confirm":true})
+raven_invoke(command="move", args={"stdin":true, "destination":"archive/", "confirm":true})
 ```
 
-Apply only after explicit approval with `confirm=true`.
-
-Important exception: single-object MCP `delete` applies immediately when called.
-Only invoke it when the user intent is clear; if unsure, inspect the object and
-check backlinks first.
+Because single-object writes apply on the first call, only invoke them when the
+user intent is clear. When unsure about a `delete`/`move`, inspect the object
+(and run `backlinks` for deletes) or call with `dry-run=true` first.
 
 ## Vault context
 

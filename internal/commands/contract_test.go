@@ -169,7 +169,6 @@ func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
 		"check",
 		"check create-missing",
 		"check_fix",
-		"edit",
 		"query",
 		"schema_rename_field",
 		"schema_rename_type",
@@ -224,8 +223,8 @@ func TestShouldPreviewByDefaultOnlyEnablesBulkPolicyForBulkInputs(t *testing.T) 
 	}) {
 		t.Fatal("bulk set should request preview by default")
 	}
-	if !ShouldPreviewByDefault("edit", map[string]interface{}{"path": "note/example"}) {
-		t.Fatal("edit should request preview by default")
+	if ShouldPreviewByDefault("edit", map[string]interface{}{"path": "note/example"}) {
+		t.Fatal("edit applies by default and should not request preview")
 	}
 	if ShouldPreviewByDefault("query_saved_set", map[string]interface{}{"confirm": true}) {
 		t.Fatal("query saved set confirm option should not imply command preview")

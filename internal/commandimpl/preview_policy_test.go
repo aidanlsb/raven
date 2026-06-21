@@ -9,7 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
-func TestHandleEditUsesNormalizedConfirmField(t *testing.T) {
+func TestHandleEditAppliesByDefault(t *testing.T) {
 	t.Parallel()
 
 	v := newSectionEditVault(t, `---
@@ -27,7 +27,38 @@ old body
 			"path":    "note/example",
 			"old_str": "old body",
 			"new_str": "new body",
-			"confirm": true,
+		},
+	})
+	if !result.OK {
+		t.Fatalf("HandleEdit() failed: %#v", result.Error)
+	}
+	if got := dataString(result, "status"); got != "applied" {
+		t.Fatalf("status = %q, want applied", got)
+	}
+	if !strings.Contains(v.ReadFile("note/example.md"), "new body") {
+		t.Fatal("edit did not apply by default")
+	}
+}
+
+func TestHandleEditDryRunPreviewsWithoutWriting(t *testing.T) {
+	t.Parallel()
+
+	v := newSectionEditVault(t, `---
+type: note
+title: Example
+---
+
+old body
+`)
+	reindexForEditTest(t, v.Path)
+
+	result := HandleEdit(context.Background(), commandexec.Request{
+		VaultPath: v.Path,
+		Preview:   true,
+		Args: map[string]any{
+			"path":    "note/example",
+			"old_str": "old body",
+			"new_str": "new body",
 		},
 	})
 	if !result.OK {
@@ -37,7 +68,7 @@ old body
 		t.Fatalf("status = %q, want preview", got)
 	}
 	if strings.Contains(v.ReadFile("note/example.md"), "new body") {
-		t.Fatal("edit applied even though req.Confirm was false")
+		t.Fatal("edit applied even though req.Preview was true")
 	}
 }
 
