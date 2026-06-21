@@ -334,17 +334,25 @@ func runDocsPickerNavigator(docsFS fs.FS, sections []docsSectionView) error {
 	}
 }
 
+// docsNavigationItem builds a picker item for navigating the docs tree. The id
+// is the navigation key returned on selection (a section or topic ID); title,
+// location, and columns are display-only. Matching covers every column.
+func docsNavigationItem(id, title, location string, columns []string) picker.Item {
+	return picker.Item{
+		ID:         id,
+		Label:      title,
+		Detail:     id,
+		Location:   location,
+		Columns:    columns,
+		SearchText: browseSearchText(columns...),
+	}
+}
+
 func pickDocsSection(sections []docsSectionView) (docsSectionView, bool, error) {
 	items := make([]picker.Item, 0, len(sections))
 	for _, section := range sections {
 		topicCount := docsTopicCountSummary(section.TopicCount)
-		items = append(items, picker.Item{
-			ID:         section.ID,
-			Label:      section.Title,
-			Detail:     section.ID,
-			Columns:    []string{section.ID, section.Title, topicCount},
-			SearchText: browseSearchText(section.ID, section.Title, topicCount),
-		})
+		items = append(items, docsNavigationItem(section.ID, section.Title, "", []string{section.ID, section.Title, topicCount}))
 	}
 
 	selected, ok, err := docsRunPicker(items, picker.Options{
@@ -379,14 +387,7 @@ func pickDocsSection(sections []docsSectionView) (docsSectionView, bool, error) 
 func pickDocsTopic(section docsSectionView, topics []docsTopicRecord) (docsTopicRecord, picker.Action, bool, error) {
 	items := make([]picker.Item, 0, len(topics))
 	for _, topic := range topics {
-		items = append(items, picker.Item{
-			ID:         topic.ID,
-			Label:      topic.Title,
-			Detail:     topic.ID,
-			Location:   topic.Path,
-			Columns:    []string{topic.ID, topic.Title, topic.Path},
-			SearchText: browseSearchText(topic.ID, topic.Title, topic.Path),
-		})
+		items = append(items, docsNavigationItem(topic.ID, topic.Title, topic.Path, []string{topic.ID, topic.Title, topic.Path}))
 	}
 
 	prompt := fmt.Sprintf("docs/%s> ", section.ID)

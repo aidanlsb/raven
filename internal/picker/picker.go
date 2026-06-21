@@ -14,17 +14,40 @@ import (
 )
 
 // Item is a selectable entry in a Raven-owned interactive picker.
+//
+// The picker treats every field generically; it never interprets what a value
+// means. CLI adapters own that meaning, so the fields are grouped here by the
+// role the picker plays for each. Construct items through the CLI-boundary
+// helpers (file, query-result, reference-candidate, and navigation adapters)
+// rather than assembling literals at call sites, so these roles stay
+// consistent.
 type Item struct {
-	// ID is an opaque selection key. CLI adapters decide whether it is printed,
-	// retried as a reference, or used only to keep selections stable.
-	ID         string
-	Label      string
-	Detail     string
-	Location   string
-	Columns    []string
+	// ID is the selection key (the command/reference target). It is the value
+	// returned to the caller on selection; CLI adapters decide whether it is
+	// printed, re-resolved as a reference, or used only to keep multi-select
+	// state stable. The picker treats it as opaque.
+	ID string
+
+	// Label, Detail, Location, and Columns are display-only and never affect
+	// selection. Label is the primary text; Detail and Location are muted
+	// secondary text appended in list mode; Columns supplies the cells used in
+	// table mode (aligned with Options.Headers/Columns). They are not used to
+	// resolve or act on a selection.
+	Label    string
+	Detail   string
+	Location string
+	Columns  []string
+
+	// SearchText is the corpus matched against the filter query. When empty the
+	// picker falls back to a join of the display fields, ID, and FilePath. Set
+	// it to broaden or narrow matching without changing what is displayed.
 	SearchText string
-	FilePath   string
-	Line       int
+
+	// FilePath and Line are the preview target: PreviewFunc receives the whole
+	// Item, but the built-in vault preview reads these to locate file content.
+	// They do not affect selection or display.
+	FilePath string
+	Line     int
 }
 
 // Options controls picker copy and layout.

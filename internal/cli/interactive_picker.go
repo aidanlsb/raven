@@ -47,13 +47,7 @@ func pickVaultFile(vaultPath string, vaultCfg *config.VaultConfig, prompt, title
 
 	items := make([]picker.Item, 0, len(paths))
 	for _, relPath := range paths {
-		items = append(items, picker.Item{
-			ID:         relPath,
-			Label:      relPath,
-			Location:   relPath,
-			SearchText: relPath,
-			FilePath:   relPath,
-		})
+		items = append(items, fileSelectionItem(relPath))
 	}
 
 	selected, ok, err := ravenRunPicker(items, picker.Options{
@@ -250,6 +244,20 @@ func pickerItemForAssetReference(asset model.Asset) picker.Item {
 	}
 }
 
+// fileSelectionItem builds a picker item that selects a vault-relative file
+// path. The path is the selection key, the displayed label, and the preview
+// target, so choosing the item hands the same path to the caller and the
+// preview.
+func fileSelectionItem(relPath string) picker.Item {
+	return picker.Item{
+		ID:         relPath,
+		Label:      relPath,
+		Location:   relPath,
+		SearchText: relPath,
+		FilePath:   relPath,
+	}
+}
+
 func indexedReferenceFileExists(vaultPath, relPath string) bool {
 	if relPath == "" {
 		return false
@@ -286,18 +294,7 @@ func pickAmbiguousReference(reference string, matches []string, matchSources map
 		if match == "" {
 			continue
 		}
-		source := strings.TrimSpace(matchSources[match])
-		detail := ""
-		if source != "" {
-			detail = "matched via " + source
-		}
-		items = append(items, picker.Item{
-			ID:         match,
-			Label:      match,
-			Detail:     detail,
-			Columns:    []string{match, source},
-			SearchText: browseSearchText(match, source),
-		})
+		items = append(items, ambiguousReferenceItem(match, strings.TrimSpace(matchSources[match])))
 	}
 	if len(items) == 0 {
 		return "", false, nil
@@ -318,6 +315,23 @@ func pickAmbiguousReference(reference string, matches []string, matchSources map
 		return "", false, nil
 	}
 	return target, true, nil
+}
+
+// ambiguousReferenceItem builds a picker item for one candidate of an
+// ambiguous reference. The candidate string is the selection key; source is
+// the match origin shown as display-only detail and table column.
+func ambiguousReferenceItem(match, source string) picker.Item {
+	detail := ""
+	if source != "" {
+		detail = "matched via " + source
+	}
+	return picker.Item{
+		ID:         match,
+		Label:      match,
+		Detail:     detail,
+		Columns:    []string{match, source},
+		SearchText: browseSearchText(match, source),
+	}
 }
 
 func indexedVaultFilePaths(vaultPath string, vaultCfg *config.VaultConfig) ([]string, error) {
