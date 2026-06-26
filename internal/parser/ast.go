@@ -13,8 +13,6 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
-
-	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 // ASTContent holds all Raven syntax extracted from a markdown AST.
@@ -140,21 +138,7 @@ func extractHeadingFromNode(heading *ast.Heading, content []byte, lineStarts []i
 
 // extractRefsFromText extracts wikilink references from a text segment.
 func extractRefsFromText(textStr string, line int) []Reference {
-	var refs []Reference
-
-	sanitized := RemoveInlineCode(textStr)
-	matches := wikilink.FindAllInLine(sanitized, false)
-	for _, match := range matches {
-		refs = append(refs, Reference{
-			TargetRaw:   match.Target,
-			DisplayText: match.DisplayText,
-			Line:        line,
-			Start:       match.Start,
-			End:         match.End,
-		})
-	}
-
-	return refs
+	return extractRefsFromLine(textStr, line)
 }
 
 func extractMarkdownAssetRefs(node ast.Node, content []byte, lineStarts []int, startLine int) []Reference {

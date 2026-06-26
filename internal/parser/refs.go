@@ -24,22 +24,38 @@ func ExtractRefs(content string, startLine int) []Reference {
 	lines := strings.Split(content, "\n")
 	for lineOffset, line := range lines {
 		lineNum := startLine + lineOffset
-
-		// Remove inline code spans to avoid matching refs inside them
-		sanitizedLine := RemoveInlineCode(line)
-		matches := wikilink.FindAllInLine(sanitizedLine, false)
-		for _, match := range matches {
-			refs = append(refs, Reference{
-				TargetRaw:   match.Target,
-				DisplayText: match.DisplayText,
-				Line:        lineNum,
-				Start:       match.Start,
-				End:         match.End,
-			})
-		}
+		refs = append(refs, extractRefsFromLine(line, lineNum)...)
 	}
 
 	return refs
+}
+
+func extractRefsFromLine(line string, lineNum int) []Reference {
+	var refs []Reference
+	matches := wikilink.FindAllInLine(line, false)
+	codeSpans := inlineCodeSpans(line)
+	for _, match := range matches {
+		if matchInsideInlineCode(match.Start, match.End, codeSpans) {
+			continue
+		}
+		refs = append(refs, Reference{
+			TargetRaw:   match.Target,
+			DisplayText: match.DisplayText,
+			Line:        lineNum,
+			Start:       match.Start,
+			End:         match.End,
+		})
+	}
+	return refs
+}
+
+func matchInsideInlineCode(start, end int, codeSpans []inlineCodeSpan) bool {
+	for _, span := range codeSpans {
+		if start >= span.start && end <= span.end {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractValueRefs parses refs in field and trait values like [[[path/to/file]], [[other]]].

@@ -50,6 +50,12 @@ func TestExtractRefs(t *testing.T) {
 			want:    []string{"ok"},
 			wantLn:  []int{1},
 		},
+		{
+			name:    "ref target can contain backticks",
+			content: "See [[Use `strict` mode]] but not `[[ignored]]`",
+			want:    []string{"Use `strict` mode"},
+			wantLn:  []int{1},
+		},
 	}
 
 	for _, tt := range tests {

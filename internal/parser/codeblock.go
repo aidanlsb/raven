@@ -84,51 +84,65 @@ func (fs *FenceState) UpdateFenceState(line string) bool {
 // Handles both single backticks (`code`) and double backticks (“code with `backtick` inside“).
 func RemoveInlineCode(line string) string {
 	result := []byte(line)
-	i := 0
-
-	for i < len(result) {
-		if result[i] != '`' {
-			i++
-			continue
-		}
-
-		// Count opening backticks
-		start := i
-		openLen := 0
-		for i < len(result) && result[i] == '`' {
-			openLen++
-			i++
-		}
-
-		// Find matching closing backticks
-		found := false
-		for j := i; j < len(result); j++ {
-			if result[j] == '`' {
-				// Count closing backticks
-				closeLen := 0
-				for j < len(result) && result[j] == '`' {
-					closeLen++
-					j++
-				}
-
-				if closeLen == openLen {
-					// Found matching close - replace with spaces
-					for k := start; k < j; k++ {
-						result[k] = ' '
-					}
-					i = j
-					found = true
-					break
-				}
-			}
-		}
-
-		if !found {
-			// No matching close found, continue from after opening backticks
-			// (leave them as-is)
-			continue
+	for _, span := range inlineCodeSpans(line) {
+		for k := span.start; k < span.end; k++ {
+			result[k] = ' '
 		}
 	}
 
 	return string(result)
+}
+
+type inlineCodeSpan struct {
+	start int
+	end   int
+}
+
+func inlineCodeSpans(line string) []inlineCodeSpan {
+	var spans []inlineCodeSpan
+	i := 0
+
+	for i < len(line) {
+		if line[i] != '`' {
+			i++
+			continue
+		}
+
+		// Count opening backticks.
+		start := i
+		openLen := 0
+		for i < len(line) && line[i] == '`' {
+			openLen++
+			i++
+		}
+
+		// Find matching closing backticks.
+		found := false
+		for j := i; j < len(line); j++ {
+			if line[j] != '`' {
+				continue
+			}
+
+			closeLen := 0
+			for j < len(line) && line[j] == '`' {
+				closeLen++
+				j++
+			}
+
+			if closeLen == openLen {
+				spans = append(spans, inlineCodeSpan{start: start, end: j})
+				i = j
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// No matching close found, continue from after opening backticks.
+			// Leave the unmatched backticks as normal text.
+			continue
+		}
+	}
+
+	return spans
 }
