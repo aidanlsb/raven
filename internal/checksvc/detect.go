@@ -52,6 +52,7 @@ func DetectMissingRefs(vaultPath string, vaultCfg *config.VaultConfig, sch *sche
 	}
 
 	validator := check.NewValidatorWithTypesAliasesAndResolver(sch, nil, aliases, canonicalResolver)
+	validator.SetDailyDirectoryForInference(vaultCfg.GetDailyDirectory())
 	if vaultCfg.HasDirectoriesConfig() {
 		validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 	}

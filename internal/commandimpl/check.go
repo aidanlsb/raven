@@ -152,6 +152,7 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		result.MissingRefs,
 		vaultCfg.GetObjectsRoot(),
 		vaultCfg.GetPagesRoot(),
+		vaultCfg.GetDailyDirectory(),
 		vaultCfg.GetTemplateDirectory(),
 		vaultCfg.ProtectedPrefixes,
 	)

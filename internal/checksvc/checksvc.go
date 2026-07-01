@@ -207,6 +207,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 
 	validator := check.NewValidatorWithTypesAliasesAndResolver(sch, allObjectInfos, aliases, canonicalResolver)
 	validator.SetDuplicateAliases(duplicateAliases)
+	validator.SetDailyDirectoryForInference(vaultCfg.GetDailyDirectory())
 	if vaultCfg.HasDirectoriesConfig() {
 		validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 	}
@@ -497,6 +498,7 @@ func CreateMissingRefsNonInteractive(
 	refs []*check.MissingRef,
 	objectsRoot string,
 	pagesRoot string,
+	dailyDir string,
 	templateDir string,
 	protectedPrefixes []string,
 ) CreateMissingResult {
@@ -512,7 +514,7 @@ func CreateMissingRefsNonInteractive(
 			continue
 		}
 
-		resolvedPath := pages.ResolveTargetPathWithRoots(ref.TargetPath, typeName, sch, objectsRoot, pagesRoot)
+		resolvedPath := ResolveTargetPath(ref.TargetPath, typeName, sch, objectsRoot, pagesRoot, dailyDir)
 		slugPath := pages.SlugifyPath(resolvedPath)
 		if _, alreadyHandled := seen[slugPath]; alreadyHandled {
 			continue
@@ -523,17 +525,7 @@ func CreateMissingRefsNonInteractive(
 			continue
 		}
 
-		_, err := pages.Create(pages.CreateOptions{
-			VaultPath:                   vaultPath,
-			TypeName:                    typeName,
-			TargetPath:                  ref.TargetPath,
-			Schema:                      sch,
-			IncludeRequiredPlaceholders: true,
-			TemplateDir:                 templateDir,
-			ProtectedPrefixes:           protectedPrefixes,
-			ObjectsRoot:                 objectsRoot,
-			PagesRoot:                   pagesRoot,
-		})
+		err := CreateMissingPage(vaultPath, sch, ref.TargetPath, typeName, objectsRoot, pagesRoot, dailyDir, templateDir, protectedPrefixes)
 		if err != nil {
 			result.Failures = append(result.Failures, CreateMissingFailure{
 				TargetPath: ref.TargetPath,

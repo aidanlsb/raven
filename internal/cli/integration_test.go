@@ -1966,6 +1966,29 @@ meeting: "[[meeting/all-hands]]"
 	v.AssertFileNotExists("meeting/all-hands.md")
 }
 
+func TestIntegration_CheckCreateMissingInfersDateFromDailyDirectory(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML(`directories:
+  type: objects/
+  daily: journal/
+`).
+		WithFile("notes/mention.md", `See [[journal/2026-06-30]] for details.
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	binary := testutil.BuildCLI(t)
+	cmd := exec.Command(binary, "--vault-path", v.Path, "--json", "check", "--create-missing", "--confirm")
+	_, _ = cmd.CombinedOutput() // check may exit non-zero due validation issues; side effects are what we validate.
+
+	v.AssertFileExists("journal/2026-06-30.md")
+	v.AssertFileNotExists("objects/journal/2026-06-30.md")
+	v.AssertFileContains("journal/2026-06-30.md", "type: date")
+}
+
 // TestIntegration_ImportRespectsDirectoryRootsOnCreate verifies that imports
 // create new objects through the canonical path resolution logic, including
 // configured directory roots.

@@ -26,6 +26,7 @@ type Validator struct {
 	usedShortNames   map[string]struct{}        // Short names actually used in references
 	objectsRoot      string                     // Directory prefix for typed objects (e.g., "objects/")
 	pagesRoot        string                     // Directory prefix for untyped pages (e.g., "pages/")
+	dailyDir         string                     // Directory prefix for daily notes (e.g., "daily")
 }
 
 // ObjectInfo contains basic info about an object for validation.
@@ -127,10 +128,17 @@ func (v *Validator) SetDirectoryRoots(objectsRoot, pagesRoot string) {
 
 // SetDailyDirectory updates the resolver's daily directory.
 func (v *Validator) SetDailyDirectory(dailyDir string) {
+	v.SetDailyDirectoryForInference(dailyDir)
 	v.resolver = resolver.New(v.allIDList(), resolver.Options{
 		DailyDirectory: dailyDir,
 		Aliases:        v.aliases,
 	})
+}
+
+// SetDailyDirectoryForInference sets the daily directory used for missing-ref
+// type inference without rebuilding the resolver.
+func (v *Validator) SetDailyDirectoryForInference(dailyDir string) {
+	v.dailyDir = strings.TrimSuffix(paths.NormalizeDirRoot(dailyDir), "/")
 }
 
 func (v *Validator) allIDList() []string {

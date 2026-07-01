@@ -115,6 +115,7 @@ func TestCreateMissingRefsNonInteractive_ReportsFailures(t *testing.T) {
 		},
 		"",
 		"",
+		"daily",
 		"",
 		[]string{"meeting/"},
 	)

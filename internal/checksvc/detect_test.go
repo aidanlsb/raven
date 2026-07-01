@@ -111,6 +111,36 @@ func TestDetectMissingRefs_InferredFromPath(t *testing.T) {
 	}
 }
 
+func TestDetectMissingRefs_InferredDateFromDailyDirectory(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML("directories:\n  daily: journal/\n").
+		WithFile("notes/mention.md", "See [[journal/2026-06-30]] for details.\n").
+		Build()
+	reindexForTest(t, vault.Path)
+
+	cfg, sch := loadForDetect(t, vault.Path)
+	refs, err := DetectMissingRefs(vault.Path, cfg, sch, "notes/mention.md")
+	if err != nil {
+		t.Fatalf("DetectMissingRefs: %v", err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("refs = %#v, want exactly one missing ref", refs)
+	}
+	got := refs[0]
+	if got.TargetPath != "journal/2026-06-30" {
+		t.Fatalf("target_path = %q, want journal/2026-06-30", got.TargetPath)
+	}
+	if got.InferredType != "date" {
+		t.Fatalf("inferred_type = %q, want date", got.InferredType)
+	}
+	if got.Confidence != check.ConfidenceInferred {
+		t.Fatalf("confidence = %v, want inferred", got.Confidence)
+	}
+}
+
 func TestDetectMissingRefs_AmbiguousNotReported(t *testing.T) {
 	t.Parallel()
 

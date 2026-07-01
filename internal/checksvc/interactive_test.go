@@ -40,7 +40,7 @@ func TestResolveAndSlugifyTargetPathUsesDirectoryRoots(t *testing.T) {
 		},
 	}
 
-	got := ResolveAndSlugifyTargetPath("all hands", "meeting", sch, "objects/", "")
+	got := ResolveAndSlugifyTargetPath("all hands", "meeting", sch, "objects/", "", "daily")
 	want := "objects/meeting/all-hands"
 	if got != want {
 		t.Fatalf("resolved path = %q, want %q", got, want)

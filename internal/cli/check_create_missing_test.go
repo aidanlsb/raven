@@ -50,7 +50,7 @@ types:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := checksvc.CreateMissingPage(vaultPath, s, tc.targetPath, "meeting", "objects/", "", "templates/", nil); err != nil {
+			if err := checksvc.CreateMissingPage(vaultPath, s, tc.targetPath, "meeting", "objects/", "", "daily", "templates/", nil); err != nil {
 				t.Fatalf("createMissingPage failed: %v", err)
 			}
 
@@ -62,5 +62,33 @@ types:
 				t.Fatalf("did not expect file at %s", tc.unwantedRelPath)
 			}
 		})
+	}
+}
+
+func TestCreateMissingPageDateUsesDailyDirectory(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types: {}
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	s, err := schema.Load(vaultPath)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+
+	if err := checksvc.CreateMissingPage(vaultPath, s, "journal/2026-06-30", "date", "objects/", "", "journal", "templates/", nil); err != nil {
+		t.Fatalf("createMissingPage failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(vaultPath, "journal/2026-06-30.md")); err != nil {
+		t.Fatalf("expected created daily note: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(vaultPath, "objects/journal/2026-06-30.md")); err == nil {
+		t.Fatal("did not expect daily note under objects root")
 	}
 }

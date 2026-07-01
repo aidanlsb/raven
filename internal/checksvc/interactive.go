@@ -2,11 +2,14 @@ package checksvc
 
 import (
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 )
@@ -43,22 +46,54 @@ func GroupMissingRefsForInteractive(refs []*check.MissingRef) MissingRefGroups {
 	return groups
 }
 
-func ResolveAndSlugifyTargetPath(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot string) string {
-	resolvedPath := pages.ResolveTargetPathWithRoots(targetPath, typeName, sch, objectsRoot, pagesRoot)
+func ResolveAndSlugifyTargetPath(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot, dailyDir string) string {
+	resolvedPath := ResolveTargetPath(targetPath, typeName, sch, objectsRoot, pagesRoot, dailyDir)
 	return pages.SlugifyPath(resolvedPath)
 }
 
-func CreateMissingPage(vaultPath string, sch *schema.Schema, targetPath, typeName, objectsRoot, pagesRoot, templateDir string, protectedPrefixes []string) error {
+func ResolveTargetPath(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot, dailyDir string) string {
+	if typeName == "date" {
+		return resolveDateTargetPath(targetPath, dailyDir)
+	}
+	return pages.ResolveTargetPathWithRoots(targetPath, typeName, sch, objectsRoot, pagesRoot)
+}
+
+func resolveDateTargetPath(targetPath, dailyDir string) string {
+	normalized := paths.NormalizeVaultRelPath(targetPath)
+	baseID, fragment, isSection := paths.ParseSectionID(normalized)
+	baseID = paths.TrimMDExtension(baseID)
+
+	dailyRoot := paths.NormalizeDirRoot(dailyDir)
+	if dailyRoot != "" && !strings.HasPrefix(baseID, dailyRoot) && dates.IsValidDate(baseID) {
+		baseID = path.Join(strings.TrimSuffix(dailyRoot, "/"), baseID)
+	}
+
+	if isSection {
+		return baseID + "#" + fragment
+	}
+	return baseID
+}
+
+func CreateMissingPage(vaultPath string, sch *schema.Schema, targetPath, typeName, objectsRoot, pagesRoot, dailyDir, templateDir string, protectedPrefixes []string) error {
+	createTargetPath := targetPath
+	createObjectsRoot := objectsRoot
+	createPagesRoot := pagesRoot
+	if typeName == "date" {
+		createTargetPath = resolveDateTargetPath(targetPath, dailyDir)
+		createObjectsRoot = ""
+		createPagesRoot = ""
+	}
+
 	_, err := pages.Create(pages.CreateOptions{
 		VaultPath:                   vaultPath,
 		TypeName:                    typeName,
-		TargetPath:                  targetPath,
+		TargetPath:                  createTargetPath,
 		Schema:                      sch,
 		IncludeRequiredPlaceholders: true,
 		TemplateDir:                 templateDir,
 		ProtectedPrefixes:           protectedPrefixes,
-		ObjectsRoot:                 objectsRoot,
-		PagesRoot:                   pagesRoot,
+		ObjectsRoot:                 createObjectsRoot,
+		PagesRoot:                   createPagesRoot,
 	})
 	return err
 }

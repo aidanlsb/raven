@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
@@ -43,6 +44,10 @@ func (c InferConfidence) String() string {
 
 // inferTypeFromPath tries to match a path to a type's default_path.
 func (v *Validator) inferTypeFromPath(targetPath string) (typeName string, confidence InferConfidence) {
+	if v.isDailyNotePath(targetPath) {
+		return "date", ConfidenceInferred
+	}
+
 	for name, typeDef := range v.schema.Types {
 		if typeDef.DefaultPath != "" {
 			// Check if path starts with default_path
@@ -53,6 +58,22 @@ func (v *Validator) inferTypeFromPath(targetPath string) (typeName string, confi
 		}
 	}
 	return "", ConfidenceUnknown
+}
+
+func (v *Validator) isDailyNotePath(targetPath string) bool {
+	dailyRoot := paths.NormalizeDirRoot(v.dailyDir)
+	if dailyRoot == "" {
+		return false
+	}
+
+	baseID, _, _ := paths.ParseSectionID(paths.NormalizeVaultRelPath(targetPath))
+	baseID = paths.TrimMDExtension(baseID)
+	if !strings.HasPrefix(baseID, dailyRoot) {
+		return false
+	}
+
+	datePart := strings.TrimPrefix(baseID, dailyRoot)
+	return !strings.Contains(datePart, "/") && dates.IsValidDate(datePart)
 }
 
 func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue {
