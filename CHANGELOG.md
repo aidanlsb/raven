@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.27] - 2026-07-02
+
+### Changed
+- Single-object write commands now apply immediately by default while retaining explicit dry-run support.
+- Picker item semantics and Cursor Cloud agent guidance are clearer.
+
+### Fixed
+- `rvn check create-missing` now infers date targets correctly.
+- Wikilink targets preserve backticks.
+- `rvn schema type` includes allowed enum values in human-readable output.
+- `rvn add --heading` accepts visible single-word heading text.
+- Query parse failures provide actionable syntax suggestions and complete query-root guidance.
+
 ## [v0.0.26] - 2026-06-19
 
 ### Added
