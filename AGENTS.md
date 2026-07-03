@@ -199,3 +199,13 @@ When reporting completed work, include:
 4. If parsing/index/query/CLI behavior changed, run checks from **High-Risk Areas**.
 5. If command behavior/flags changed, verify `internal/commands/registry.go` and related docs in **Documentation** are updated.
 6. If you added a new package, ensure no circular imports.
+
+## Cursor Cloud specific instructions
+
+Build/lint/test commands are documented above (see **Building and Testing**). Notes specific to running in this cloud environment:
+
+- **Go toolchain:** `go.mod` requires `go 1.25.0` (this supersedes the "Go 1.24+" wording elsewhere). `GOTOOLCHAIN` auto-downloads the pinned toolchain on first `go` invocation, so no manual Go install is needed.
+- **Dev tools for lint/fmt:** `make lint` and `make fmt` need `golangci-lint` (pinned `v2.9.0`) and `goimports`, installed via `make tools` into `$(go env GOPATH)/bin` (`/home/ubuntu/go/bin`), which is already on `PATH`. The startup/update script runs `make tools`, so these are available without re-running it.
+- **No long-running services:** `rvn` is a single self-contained binary with an embedded pure-Go SQLite index (no external DB/server/port). There is nothing to keep running to test the product — build with `make build`, then invoke `./rvn <command>`.
+- **Commands need a vault:** any command that reads/writes vault data requires either `--vault-path /abs/path`, `--vault <name>`, or an active vault (`rvn vault use`). Without one, commands fail with error code `VAULT_NOT_SPECIFIED`. Create a throwaway vault for manual testing with `rvn init /tmp/some-vault`.
+- **MCP server:** `rvn serve --vault-path <path>` speaks JSON-RPC 2.0 over stdin/stdout (stdio transport, not a network port). It is optional and only needed to exercise the agent-facing path.
