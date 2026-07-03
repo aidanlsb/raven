@@ -192,6 +192,29 @@ Second section
 	}
 }
 
+func TestResolveAddHeadingTargetAcceptsSingleWordVisibleHeading(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	destPath := filepath.Join(vaultPath, "project.md")
+	content := `# Project
+
+## Description
+Existing text
+`
+	if err := os.WriteFile(destPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	got, err := ResolveAddHeadingTarget(vaultPath, destPath, "project", "Description", nil)
+	if err != nil {
+		t.Fatalf("ResolveAddHeadingTarget failed: %v", err)
+	}
+	if got != "project#description" {
+		t.Fatalf("ResolveAddHeadingTarget() = %q, want %q", got, "project#description")
+	}
+}
+
 func TestParseHeadingTextFromSpec(t *testing.T) {
 	t.Parallel()
 

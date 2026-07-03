@@ -2444,6 +2444,25 @@ type: page
 	v.AssertFileContains("project.md", "Another bug item")
 }
 
+func TestIntegration_AddToSectionBySingleWordHeadingText(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("project.md", `---
+type: page
+---
+# Project
+
+## Description
+Existing text
+`).
+		Build()
+
+	result := v.RunCLI("add", "More detail", "--to", "project.md", "--heading", "Description")
+	result.MustSucceed(t)
+	v.AssertFileContains("project.md", "More detail")
+}
+
 func TestIntegration_AddToSectionReportsInsertedLine(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

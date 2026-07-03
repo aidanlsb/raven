@@ -1,6 +1,7 @@
 package objectsvc
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -79,6 +80,16 @@ func ResolveAddHeadingTarget(
 	for _, section := range candidates {
 		if strings.TrimPrefix(section.ID, prefix) == fragment {
 			return section.ID, nil
+		}
+	}
+	if !strings.HasPrefix(spec, "#") {
+		sectionID, headingErr := resolveSectionByHeadingText(candidates, spec)
+		if headingErr == nil {
+			return sectionID, nil
+		}
+		var svcErr *Error
+		if errors.As(headingErr, &svcErr) && svcErr.Code == ErrorRefAmbiguous {
+			return "", headingErr
 		}
 	}
 	return "", newError(ErrorRefNotFound, fmt.Sprintf("section fragment not found: %s", fragment), "Use an existing section slug/id or heading text", nil, nil)
