@@ -475,10 +475,28 @@ func mapExecuteQueryFailure(queryString string, err error) commandexec.Result {
 	}
 
 	if _, parseErr := query.Parse(queryString); parseErr != nil {
-		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("parse error: %v", parseErr), nil, "")
+		return commandexec.Failure(
+			"QUERY_INVALID",
+			fmt.Sprintf("parse error: %v", parseErr),
+			nil,
+			queryParseSuggestion(queryString),
+		)
 	}
 
 	return commandexec.Failure("DATABASE_ERROR", err.Error(), nil, "Run 'rvn reindex' to rebuild the database")
+}
+
+func queryParseSuggestion(queryString string) string {
+	trimmed := strings.TrimSpace(queryString)
+	lower := strings.ToLower(trimmed)
+
+	if strings.Contains(trimmed, "'") {
+		return `RQL strings use double quotes, not single quotes. For example: .status=="open"`
+	}
+	if strings.Contains(" "+lower+" ", " where ") {
+		return "RQL does not use 'where'. Put predicates directly after the query root, for example: type:issue .status==open"
+	}
+	return "Run 'rvn docs querying query-language' for RQL syntax and examples"
 }
 
 func mapQuerySvcFailure(err error) commandexec.Result {

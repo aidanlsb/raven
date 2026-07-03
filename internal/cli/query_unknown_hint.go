@@ -14,11 +14,16 @@ func isSingleToken(s string) bool {
 }
 
 func buildUnknownQuerySuggestion(db *index.Database, queryStr string, dailyDir string, sch *schema.Schema) string {
-	base := "Queries must start with 'type:', 'trait:', or 'asset', or be a saved query name. Run 'rvn query saved list' to see saved queries."
+	base := "Queries must start with 'type:', 'trait:', 'section', or 'asset', or be a saved query name. Run 'rvn query saved list' to see saved queries."
 
 	q := strings.TrimSpace(queryStr)
 	if !isSingleToken(q) {
 		return base
+	}
+	if sch != nil {
+		if _, ok := sch.Types[q]; ok {
+			return base + fmt.Sprintf(" Did you mean to query type %q? Try: %s", q, "rvn query type:"+q)
+		}
 	}
 
 	// Try to resolve the token as a reference to give a better hint. This does NOT

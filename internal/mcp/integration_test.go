@@ -1466,7 +1466,7 @@ func TestMCPIntegration_QueryParseErrorsIncludeSuggestion(t *testing.T) {
 	if env.Error == nil || env.Error.Code != "QUERY_INVALID" {
 		t.Fatalf("expected QUERY_INVALID, got: %s", result.Text)
 	}
-	if env.Error.Suggestion != "Check the query syntax, quote string literals, and retry." {
+	if env.Error.Suggestion != "RQL does not use 'where'. Put predicates directly after the query root, for example: type:issue .status==open" {
 		t.Fatalf("unexpected query suggestion: %q", env.Error.Suggestion)
 	}
 }

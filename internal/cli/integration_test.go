@@ -509,6 +509,32 @@ func TestIntegration_QueryByField(t *testing.T) {
 	result.AssertResultCount(t, "items", 1)
 }
 
+func TestIntegration_QueryErrorsSuggestCorrectSyntax(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	t.Run("single quoted strings", func(t *testing.T) {
+		result := v.RunCLI("query", `type:project .status=='active'`)
+		result.MustFail(t, "QUERY_INVALID")
+		if result.Error == nil || !strings.Contains(result.Error.Suggestion, "double quotes") {
+			t.Fatalf("expected double-quote suggestion, got %#v", result.Error)
+		}
+	})
+
+	t.Run("bare schema type", func(t *testing.T) {
+		result := v.RunCLI("query", "project")
+		result.MustFail(t, "QUERY_INVALID")
+		if result.Error == nil || !strings.Contains(result.Error.Suggestion, "rvn query type:project") {
+			t.Fatalf("expected type query suggestion, got %#v", result.Error)
+		}
+		if !strings.Contains(result.Error.Suggestion, "section") {
+			t.Fatalf("expected all query roots in suggestion, got %#v", result.Error)
+		}
+	})
+}
+
 func TestIntegration_AssetQuery(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

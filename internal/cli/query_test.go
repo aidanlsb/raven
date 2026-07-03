@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestJoinQueryArgs(t *testing.T) {
@@ -131,6 +132,25 @@ func TestBuildUnknownQuerySuggestion_IncludesReadOpenForResolvableRefs(t *testin
 	}
 	if !strings.Contains(s, "rvn read") || !strings.Contains(s, "rvn open") {
 		t.Fatalf("expected read/open hint, got: %q", s)
+	}
+}
+
+func TestBuildUnknownQuerySuggestionListsEveryQueryRoot(t *testing.T) {
+	suggestion := buildUnknownQuerySuggestion(nil, "issue .status==open", "daily", nil)
+	for _, root := range []string{"type:", "trait:", "section", "asset"} {
+		if !strings.Contains(suggestion, root) {
+			t.Fatalf("suggestion %q does not mention query root %q", suggestion, root)
+		}
+	}
+}
+
+func TestBuildUnknownQuerySuggestionRecognizesSchemaType(t *testing.T) {
+	sch := schema.New()
+	sch.Types["issue"] = &schema.TypeDefinition{}
+
+	suggestion := buildUnknownQuerySuggestion(nil, "issue", "daily", sch)
+	if !strings.Contains(suggestion, "rvn query type:issue") {
+		t.Fatalf("expected type query hint, got: %q", suggestion)
 	}
 }
 
