@@ -1,6 +1,8 @@
 package cli_test
 
 import (
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -47,6 +49,33 @@ func TestSchemaAddTypeAndFieldDescriptions(t *testing.T) {
 	}
 	if got := website["description"]; got != "Primary website URL" {
 		t.Fatalf("expected field description %q, got %#v", "Primary website URL", got)
+	}
+}
+
+func TestSchemaTypeHumanOutputIncludesEnumValues(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  project:
+    default_path: project/
+    fields:
+      status:
+        type: enum
+        required: true
+        values: [active, paused, done]
+traits: {}
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	cmd := exec.Command(binary, "--vault-path", v.Path, "schema", "type", "project")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("schema type command failed: %v\n%s", err, output)
+	}
+
+	if !strings.Contains(string(output), "status: enum (required) values=[active, paused, done]") {
+		t.Fatalf("expected enum values in human-readable schema output, got:\n%s", output)
 	}
 }
 

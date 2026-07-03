@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -355,7 +356,11 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 			if field.Description != "" {
 				fieldDescription = " - " + field.Description
 			}
-			fmt.Printf("    %s: %s%s%s%s\n", name, fieldType, required, isNameField, fieldDescription)
+			enumValues := ""
+			if len(field.Values) > 0 {
+				enumValues = " values=[" + strings.Join(field.Values, ", ") + "]"
+			}
+			fmt.Printf("    %s: %s%s%s%s%s\n", name, fieldType, required, isNameField, enumValues, fieldDescription)
 		}
 	}
 
