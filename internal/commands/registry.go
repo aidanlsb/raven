@@ -178,6 +178,10 @@ Accepted values:
 - Full object ID (e.g., project/raven#bugs-fixes)
 - Markdown heading text (e.g., "### Bugs / Fixes")
 
+Section-targeted adds (--to file#section, --heading, or section IDs via stdin)
+insert at the end of the section's DIRECT content, before any child headings.
+This differs from read/edit, which operate on the section's full subtree.
+
 Use --create-heading with --heading to create the heading at the end of the
 file when it does not exist yet. Creation requires heading text (plain text
 defaults to a level-2 heading; markdown text like "### Log" keeps its level);
@@ -774,6 +778,7 @@ Use --browse to open an interactive Raven picker with filtering and editor
 handoff for the selected result.
 Use --apply to run a bulk operation directly on query results.
 Section and asset queries return stable IDs but do not support --apply.
+For sections, pipe IDs to add instead: query "section ..." --ids | rvn add <text> --stdin.
 
 For type queries (type:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.

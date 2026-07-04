@@ -54,6 +54,8 @@ After `rvn init`, your schema already includes:
 - starter types (`person`, `project`)
 - starter traits (`due`, `todo`, `priority`)
 
+Note: sections are queried with the `section` query keyword (`rvn query "section .title==Tasks"`), not `type:section`.
+
 It does not include an `asset` type. Assets are graph resources configured in `raven.yaml`.
 
 Read your current schema first:

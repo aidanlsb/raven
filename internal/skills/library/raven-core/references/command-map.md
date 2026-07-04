@@ -21,6 +21,7 @@
 
 - Change an object's type safely: `rvn reclassify <object> <new-type> --json`
 - Safe move or rename with ref updates: `rvn move <source> <dest> --json` (applies immediately; add `--dry-run` to preview). Bulk `--stdin` moves require `--confirm`.
+- Rename a section heading with ref updates: `rvn move <file#section> "<new heading text>" --json`.
 - Safe delete with backlink warnings: `rvn delete <object_id> --json` (applies immediately; add `--dry-run` to preview). Bulk `--stdin` deletes require `--confirm`.
 
 ## Daily notes

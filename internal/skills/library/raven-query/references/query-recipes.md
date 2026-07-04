@@ -45,7 +45,7 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --json
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json
 ```
 
-In each pair, the first command previews the bulk change and the second applies it after approval. Section and asset queries do not support `--apply`.
+In each pair, the first command previews the bulk change and the second applies it after approval. Section and asset queries do not support `--apply`; for sections, pipe IDs into bulk add instead: `rvn query 'section .title==Tasks' --ids | rvn add "text" --stdin --confirm`.
 
 ## Saved query lifecycle
 
