@@ -341,8 +341,15 @@ func appendUnderHeading(destPath, line, heading string) (int, error) {
 		insertedLine int
 	)
 	if headingIdx == -1 {
-		newLines = append(lines, "", heading, line)
+		trimmed := len(lines)
+		for trimmed > 0 && strings.TrimSpace(lines[trimmed-1]) == "" {
+			trimmed--
+		}
+		newLines = append([]string{}, lines[:trimmed]...)
+		newLines = append(newLines, "", heading, line)
 		insertedLine = len(newLines)
+		// Keep the file newline-terminated.
+		newLines = append(newLines, "")
 	} else if nextHeadingIdx == -1 {
 		insertIdx := len(lines)
 		for insertIdx > headingIdx+1 && strings.TrimSpace(lines[insertIdx-1]) == "" {
