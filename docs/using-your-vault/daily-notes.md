@@ -99,6 +99,19 @@ rvn query 'trait:todo within(type:date .date>=2026-03-01 .date<=2026-03-31)'
 rvn query 'trait:due .value<today within(type:date)'
 ```
 
+### The date hub: `rvn date`
+
+`rvn date` collects everything connected to a date in one view: the daily note itself, objects and traits with date fields pointing at that day, and backlinks to the daily note.
+
+```bash
+rvn date                     # Today
+rvn date yesterday
+rvn date 2026-03-15
+rvn date today --json
+```
+
+Unlike `rvn daily`, it never creates the note — it is a read-only view for reviewing a day's activity.
+
 ### Date references
 
 Reference daily notes with date-style wiki-links:

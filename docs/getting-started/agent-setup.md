@@ -43,6 +43,12 @@ If you run the server manually, use:
 rvn serve --vault-path /path/to/vault
 ```
 
+To remove Raven from a client config again:
+
+```bash
+rvn mcp remove --client codex
+```
+
 ## Install Raven skills
 
 List available skills for your target runtime:
@@ -67,6 +73,22 @@ rvn skill sync --target codex --confirm --json
 ```
 
 The no-name sync updates/removes installed Raven-managed skills and reports shipped skills that are not installed. It does not install newly shipped skills unless you name one explicitly. Available targets are `codex`, `claude`, and `cursor`.
+
+## Inspect and remove skills
+
+`rvn skill doctor` shows resolved install roots and which Raven skills are installed for one or all targets — useful when a skill does not seem to be picked up:
+
+```bash
+rvn skill doctor --json
+rvn skill doctor --target claude --scope project --json
+```
+
+To uninstall a skill, use `rvn skill remove`. It previews by default and applies with `--confirm`:
+
+```bash
+rvn skill remove raven-core --target codex --json          # Preview
+rvn skill remove raven-core --target codex --confirm --json
+```
 
 ## Recommended first prompt
 
