@@ -201,11 +201,13 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 }
 
 func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, ids []string, updates map[string]schema.FieldValue, confirm bool) commandexec.Result {
+	fileIDs, sectionIDs := splitSectionIDs(ids)
+	warnings := sectionSkipWarnings(sectionIDs)
 	request := objectsvc.SetBulkRequest{
 		VaultPath:    vaultPath,
 		VaultConfig:  vaultCfg,
 		Schema:       sch,
-		ObjectIDs:    ids,
+		ObjectIDs:    fileIDs,
 		TypedUpdates: updates,
 		ParseOptions: buildParseOptions(vaultCfg),
 	}
@@ -222,7 +224,7 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 			"items":    canonicalSetPreviewItems(preview.Items),
 			"skipped":  canonicalSetResults(preview.Skipped),
 			"total":    preview.Total,
-			"warnings": nil,
+			"warnings": warnings,
 			"fields":   serializedUpdates,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
@@ -251,7 +253,7 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 	}
 	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, affectedFiles...)
 	data = mergeDataFields(data, missingData)
-	warnings := appendCommandWarnings(reindexWarnings, missingWarnings)
+	warnings = appendCommandWarnings(warnings, reindexWarnings, missingWarnings)
 
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }

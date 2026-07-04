@@ -54,12 +54,13 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 }
 
 func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, ids []string, text string, headingSpec string, confirm bool) commandexec.Result {
-	fileIDs, sectionIDs := splitSectionIDs(ids)
-	warnings := sectionSkipWarnings(sectionIDs)
+	// Section IDs (file#slug) are passed through: bulk add appends within the
+	// targeted section instead of at the end of the file.
+	var warnings []commandexec.Warning
 	request := objectsvc.AddBulkRequest{
 		VaultPath:    vaultPath,
 		VaultConfig:  vaultCfg,
-		ObjectIDs:    fileIDs,
+		ObjectIDs:    ids,
 		Line:         text,
 		HeadingSpec:  headingSpec,
 		ParseOptions: buildParseOptions(vaultCfg),

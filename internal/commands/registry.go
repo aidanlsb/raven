@@ -163,6 +163,8 @@ For creating NEW typed objects, use 'rvn new' instead.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin and append text to each.
+Section IDs (e.g., project/website#tasks) are supported: text is appended
+inside the targeted section instead of at the end of the file.
 Bulk operations preview changes by default; use --confirm to apply.
 
 Configuration (raven.yaml):
@@ -195,6 +197,7 @@ data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 			"rvn add \"Plan\" --to tomorrow --json",
 			"rvn add \"Bug report\" --to project/raven --heading bugs-fixes --json",
 			"rvn add \"Bug report\" --to project/raven --heading \"### Bugs / Fixes\" --json",
+			"rvn query \"section .title==Tasks\" --ids | rvn add \"Review backlog\" --stdin --confirm --json",
 		},
 		UseCases: []string{
 			"Quick capture to daily note",

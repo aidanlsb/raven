@@ -222,7 +222,7 @@ rvn query "type:person" --ids | grep "team-" | rvn set --stdin department=engine
 |---------|----------|
 | `rvn set` | Set fields on each object (file-level only) |
 | `rvn update` | Update each trait value (trait IDs only; also supports repeated `--trait-id`) |
-| `rvn add` | Append text to each file (file-level only) |
+| `rvn add` | Append text to each file or section (section IDs append inside the section) |
 | `rvn delete` | Delete each object (file-level only) |
 | `rvn move` | Move each object (file-level only) |
 | `rvn backlinks` | Read-only grouped incoming references for each target |
@@ -245,13 +245,17 @@ Full path like `person/freya`:
 
 Path with fragment like `project/website#tasks`:
 
-- Object mutation commands skip these IDs because sections are derived from Markdown headings, not editable schema objects
-- Use `rvn add --to project/website#tasks ...` when you want to append content inside a section
+- `rvn add` accepts section IDs, both as `--to project/website#tasks` and via `--stdin`. Text is appended inside the targeted section instead of at the end of the file:
 
-When running bulk operations, section IDs are skipped with a note in the preview:
+```bash
+# Append a line inside every matching section
+rvn query "section .title==Tasks" --ids | rvn add "Review backlog" --stdin --confirm
+```
+
+- Object mutation commands (`set`, `delete`, `move`) skip section IDs because sections are derived from Markdown headings, not editable schema objects. Skipped IDs are reported with a `SECTION_SKIPPED` warning:
 
 ```
-Skipping section ID: project/website#tasks (bulk object mutations only support file-level objects)
+Skipped 1 section ID(s) - bulk operations only support file-level objects
 ```
 
 ---
