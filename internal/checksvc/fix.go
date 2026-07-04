@@ -81,6 +81,18 @@ func CollectFixableIssues(issues []check.Issue, shortRefMap map[string]string, s
 			if fix := tryFixQuotedEnumValue(issue, sch); fix != nil {
 				fixable = append(fixable, *fix)
 			}
+		case check.IssueLocalFragmentRef:
+			if issue.FixValue != "" {
+				fixable = append(fixable, FixableIssue{
+					FilePath:    issue.FilePath,
+					Line:        issue.Line,
+					IssueType:   issue.Type,
+					FixType:     FixTypeWikilink,
+					OldValue:    issue.Value,
+					NewValue:    issue.FixValue,
+					Description: fmt.Sprintf("[[%s]] -> [[%s]]", issue.Value, issue.FixValue),
+				})
+			}
 		case check.IssueNonCanonicalRef:
 			if fix := tryFixNonCanonicalRef(issue, vaultCfg); fix != nil {
 				fixable = append(fixable, *fix)
@@ -190,23 +202,26 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 		})
 
 		for _, fix := range fileFixes {
-			var oldPattern, newPattern string
 			switch fix.FixType {
 			case FixTypeWikilink:
-				oldPattern = "[[" + fix.OldValue + "]]"
-				newPattern = "[[" + fix.NewValue + "]]"
+				updated := replaceWikilinkTarget(newContent, fix.OldValue, fix.NewValue)
+				if updated == newContent {
+					result.Skipped = append(result.Skipped, skippedFix(fix, "expected content no longer present in file"))
+					continue
+				}
+				newContent = updated
 			case FixTypeTrait:
-				oldPattern = "@" + fix.TraitName + "(" + fix.OldValue + ")"
-				newPattern = "@" + fix.TraitName + "(" + fix.NewValue + ")"
+				oldPattern := "@" + fix.TraitName + "(" + fix.OldValue + ")"
+				newPattern := "@" + fix.TraitName + "(" + fix.NewValue + ")"
+				if !strings.Contains(newContent, oldPattern) {
+					result.Skipped = append(result.Skipped, skippedFix(fix, "expected content no longer present in file"))
+					continue
+				}
+				newContent = strings.ReplaceAll(newContent, oldPattern, newPattern)
 			default:
 				result.Skipped = append(result.Skipped, skippedFix(fix, "unsupported fix type"))
 				continue
 			}
-			if !strings.Contains(newContent, oldPattern) {
-				result.Skipped = append(result.Skipped, skippedFix(fix, "expected content no longer present in file"))
-				continue
-			}
-			newContent = strings.ReplaceAll(newContent, oldPattern, newPattern)
 			fixedCount++
 		}
 
@@ -343,6 +358,19 @@ func tryFixNonCanonicalPath(issue check.Issue, vaultCfg *config.VaultConfig) *Fi
 		DestObjectID:   destID,
 		Description:    fmt.Sprintf("%s -> %s", source, dest),
 	}
+}
+
+// replaceWikilinkTarget rewrites wikilink targets in both plain ([[old]]) and
+// display-text ([[old|label]]) forms.
+func replaceWikilinkTarget(content, oldTarget, newTarget string) string {
+	if oldTarget == "" || oldTarget == newTarget {
+		return content
+	}
+	replacer := strings.NewReplacer(
+		"[["+oldTarget+"]]", "[["+newTarget+"]]",
+		"[["+oldTarget+"|", "[["+newTarget+"|",
+	)
+	return replacer.Replace(content)
 }
 
 func splitMoveValue(value string) (source, dest string, ok bool) {

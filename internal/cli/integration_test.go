@@ -1799,6 +1799,56 @@ owner: "[[freya]]"
 	v.AssertFileContains("projects/roadmap.md", "owner: \"[[people/freya]]\"")
 }
 
+// TestIntegration_CheckFixRewritesLocalFragmentRefs verifies that check fix
+// rewrites [[#fragment]] refs to global [[file#fragment]] form when the
+// section exists in the same file.
+func TestIntegration_CheckFixRewritesLocalFragmentRefs(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/roadmap.md", `---
+type: project
+title: Roadmap
+status: active
+---
+
+See [[#tasks]] and [[#tasks|the list]] and [[#nonexistent]].
+
+## Tasks
+
+- do things
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	check := v.RunCLI("check")
+	check.MustSucceed(t)
+	if !strings.Contains(check.RawJSON, "local_fragment_ref") {
+		t.Fatalf("expected local_fragment_ref issues, got: %s", check.RawJSON)
+	}
+
+	apply := v.RunCLI("check", "fix", "--confirm")
+	apply.MustSucceed(t)
+	if got, ok := apply.Data["fixed_issues"].(float64); !ok || int(got) < 1 {
+		t.Fatalf("expected at least 1 fixed issue, got %#v", apply.Data["fixed_issues"])
+	}
+
+	v.AssertFileContains("projects/roadmap.md", "[[projects/roadmap#tasks]]")
+	v.AssertFileContains("projects/roadmap.md", "[[projects/roadmap#tasks|the list]]")
+	// The unresolvable fragment stays as-is and keeps surfacing as an issue.
+	v.AssertFileContains("projects/roadmap.md", "[[#nonexistent]]")
+
+	recheck := v.RunCLI("check")
+	recheck.MustSucceed(t)
+	if got := strings.Count(recheck.RawJSON, `"#nonexistent"`); got == 0 {
+		t.Fatalf("expected remaining issue for #nonexistent, got: %s", recheck.RawJSON)
+	}
+	if strings.Contains(recheck.RawJSON, `"#tasks"`) {
+		t.Fatalf("expected #tasks issues to be fixed, got: %s", recheck.RawJSON)
+	}
+}
+
 // TestIntegration_CheckFixCanonicalPathMovesFiles verifies that check fix
 // detects files outside the configured directory roots and migrates them via
 // real file moves, with reference updates following the move.

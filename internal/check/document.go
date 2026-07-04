@@ -11,6 +11,15 @@ import (
 func (v *Validator) ValidateDocument(doc *parser.ParsedDocument) []Issue {
 	var issues []Issue
 
+	// Track the document's own sections so local fragment refs ([[#slug]])
+	// can be auto-fixed to global form when the target section exists.
+	v.docSections = make(map[string]string, len(doc.Sections))
+	for _, section := range doc.Sections {
+		if section != nil {
+			v.docSections[section.Slug] = section.ID
+		}
+	}
+
 	// Check for duplicate object IDs
 	seenIDs := make(map[string]struct{})
 	for _, obj := range doc.Objects {

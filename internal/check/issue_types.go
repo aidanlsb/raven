@@ -82,6 +82,7 @@ type Issue struct {
 	Line       int
 	Message    string
 	Value      string // The problematic value (type name, trait name, ref, etc.)
+	FixValue   string // Unambiguous replacement for Value when a text auto-fix is possible
 	FixCommand string // Suggested command to fix the issue
 	FixHint    string // Human-readable fix hint
 }

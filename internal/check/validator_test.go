@@ -1106,4 +1106,65 @@ func TestValidatorStaleFragment(t *testing.T) {
 		}
 		t.Fatalf("expected local fragment issue, got %v", issues)
 	})
+
+	t.Run("local fragment ref with existing section is auto-fixable", func(t *testing.T) {
+		objectIDs := []string{"notes/roadmap", "notes/roadmap#tasks"}
+		v := NewValidator(s, objectIDs)
+
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/roadmap.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/roadmap", ObjectType: "page"},
+			},
+			Sections: []*parser.ParsedSection{
+				{ID: "notes/roadmap#tasks", FileObjectID: "notes/roadmap", Slug: "tasks", Title: "Tasks", Level: 2, LineStart: 3},
+			},
+			Refs: []*parser.ParsedRef{
+				{SourceID: "notes/roadmap", TargetRaw: "#tasks", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueLocalFragmentRef {
+				if issue.FixValue != "notes/roadmap#tasks" {
+					t.Fatalf("FixValue = %q, want notes/roadmap#tasks", issue.FixValue)
+				}
+				if !strings.Contains(issue.FixHint, "[[notes/roadmap#tasks]]") {
+					t.Fatalf("fix hint = %q, want rewrite suggestion", issue.FixHint)
+				}
+				return
+			}
+		}
+		t.Fatalf("expected local fragment issue, got %v", issues)
+	})
+
+	t.Run("local fragment ref without matching section has no fix value", func(t *testing.T) {
+		objectIDs := []string{"notes/roadmap"}
+		v := NewValidator(s, objectIDs)
+
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/roadmap.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/roadmap", ObjectType: "page"},
+			},
+			Sections: []*parser.ParsedSection{
+				{ID: "notes/roadmap#other", FileObjectID: "notes/roadmap", Slug: "other", Title: "Other", Level: 2, LineStart: 3},
+			},
+			Refs: []*parser.ParsedRef{
+				{SourceID: "notes/roadmap", TargetRaw: "#missing", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueLocalFragmentRef {
+				if issue.FixValue != "" {
+					t.Fatalf("FixValue = %q, want empty for missing section", issue.FixValue)
+				}
+				return
+			}
+		}
+		t.Fatalf("expected local fragment issue, got %v", issues)
+	})
 }

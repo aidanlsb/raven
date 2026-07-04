@@ -89,7 +89,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 		return issues
 	}
 	if strings.HasPrefix(ref.TargetRaw, "#") {
-		issues = append(issues, Issue{
+		issue := Issue{
 			Level:    LevelError,
 			Type:     IssueLocalFragmentRef,
 			FilePath: filePath,
@@ -97,7 +97,14 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 			Message:  fmt.Sprintf("Local fragment reference [[%s]] is not supported", ref.TargetRaw),
 			Value:    ref.TargetRaw,
 			FixHint:  "Use a global section reference like [[object#fragment]]",
-		})
+		}
+		fragment := strings.TrimPrefix(ref.TargetRaw, "#")
+		if sectionID, ok := v.docSections[fragment]; ok && sectionID != "" {
+			suggested := v.displayID(sectionID)
+			issue.FixValue = suggested
+			issue.FixHint = fmt.Sprintf("Rewrite as [[%s]]; 'rvn check fix' can apply this automatically", suggested)
+		}
+		issues = append(issues, issue)
 		return issues
 	}
 

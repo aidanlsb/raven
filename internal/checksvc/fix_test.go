@@ -47,6 +47,47 @@ owner: "[[people/freya]]"
 	}
 }
 
+func TestCollectFixableIssues_LocalFragmentRef(t *testing.T) {
+	t.Parallel()
+
+	issues := []check.Issue{
+		{
+			Type:     check.IssueLocalFragmentRef,
+			FilePath: "notes/roadmap.md",
+			Line:     5,
+			Value:    "#tasks",
+			FixValue: "notes/roadmap#tasks",
+		},
+		{
+			// No FixValue: section does not exist, not auto-fixable.
+			Type:     check.IssueLocalFragmentRef,
+			FilePath: "notes/roadmap.md",
+			Line:     9,
+			Value:    "#missing",
+		},
+	}
+
+	fixes := CollectFixableIssues(issues, nil, schema.New(), nil)
+	if len(fixes) != 1 {
+		t.Fatalf("expected 1 fix, got %#v", fixes)
+	}
+	fix := fixes[0]
+	if fix.FixType != FixTypeWikilink || fix.OldValue != "#tasks" || fix.NewValue != "notes/roadmap#tasks" {
+		t.Fatalf("fix = %#v, want wikilink #tasks -> notes/roadmap#tasks", fix)
+	}
+}
+
+func TestReplaceWikilinkTarget_HandlesDisplayText(t *testing.T) {
+	t.Parallel()
+
+	content := "See [[#tasks]] and [[#tasks|the tasks]].\n"
+	updated := replaceWikilinkTarget(content, "#tasks", "notes/roadmap#tasks")
+	want := "See [[notes/roadmap#tasks]] and [[notes/roadmap#tasks|the tasks]].\n"
+	if updated != want {
+		t.Fatalf("updated = %q, want %q", updated, want)
+	}
+}
+
 func TestCollectFixableIssues_IgnoresNilTraitDefinition(t *testing.T) {
 	t.Parallel()
 

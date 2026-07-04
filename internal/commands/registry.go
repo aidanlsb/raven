@@ -1144,7 +1144,9 @@ Auto-fixable issue types include:
 - invalid_enum_value: remove unnecessary quotes around enum trait values
 - non_canonical_ref: strip configured root prefix from wikilink targets
 - non_canonical_path: move file under the configured directory root for its type
-  and rewrite all references that point at it`,
+  and rewrite all references that point at it
+- local_fragment_ref: rewrite [[#section]] to global [[file#section]] form when
+  the section exists in the same file`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "File, directory, or reference to check before fixing (optional, defaults to entire vault)", Required: false},
 		},

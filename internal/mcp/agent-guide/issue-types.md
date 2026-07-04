@@ -15,7 +15,7 @@ check failures.
 | `unknown_type` | File uses a type not in schema | Add/rename type in schema, or change file type |
 | `missing_reference` | Link points to missing object/section | Preview `check create-missing`, then confirm or update/remove the reference |
 | `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset under the configured asset root or update/remove the reference |
-| `local_fragment_ref` | Wikilink uses unsupported source-relative fragment syntax like `[[#tasks]]` | Rewrite it as a global section ref like `[[object#tasks]]` |
+| `local_fragment_ref` | Wikilink uses unsupported source-relative fragment syntax like `[[#tasks]]` | `check fix` rewrites it to the global form (`[[object#tasks]]`) when the section exists in the same file; otherwise rewrite it manually |
 | `stale_fragment` | Link points to an existing object but a missing section fragment | Update the fragment to match an existing heading, or remove the fragment. Prevent this by renaming headings with `raven_move` (source `file#section`, destination new heading text), which rewrites inbound refs |
 | `ambiguous_reference` | Link matches multiple objects, aliases, or short names | Rewrite the link with a more specific object path or rename the conflicting alias/short name |
 | `unknown_frontmatter_key` | Field is not defined for object type | Add schema field or remove invalid key |

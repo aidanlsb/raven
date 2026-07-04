@@ -27,6 +27,7 @@ type Validator struct {
 	objectsRoot      string                     // Directory prefix for typed objects (e.g., "objects/")
 	pagesRoot        string                     // Directory prefix for untyped pages (e.g., "pages/")
 	dailyDir         string                     // Directory prefix for daily notes (e.g., "daily")
+	docSections      map[string]string          // Current document's section slugs -> section IDs
 }
 
 // ObjectInfo contains basic info about an object for validation.
