@@ -2,12 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var readCmd = newCanonicalLeafCommand("read", canonicalLeafOptions{
@@ -57,6 +59,7 @@ func buildReadArgs(cmd *cobra.Command, args []string) (map[string]interface{}, e
 	lines, _ := cmd.Flags().GetBool("lines")
 	startLine, _ := cmd.Flags().GetInt("start-line")
 	endLine, _ := cmd.Flags().GetInt("end-line")
+	sections, _ := cmd.Flags().GetBool("sections")
 	if lines || startLine > 0 || endLine > 0 {
 		raw = true
 	}
@@ -66,6 +69,7 @@ func buildReadArgs(cmd *cobra.Command, args []string) (map[string]interface{}, e
 		"lines":      lines,
 		"start-line": startLine,
 		"end-line":   endLine,
+		"sections":   sections,
 	}, nil
 }
 
@@ -93,9 +97,14 @@ func renderRead(cmd *cobra.Command, result commandexec.Result) error {
 	lines, _ := cmd.Flags().GetBool("lines")
 	startLine, _ := cmd.Flags().GetInt("start-line")
 	endLine, _ := cmd.Flags().GetInt("end-line")
+	sections, _ := cmd.Flags().GetBool("sections")
 	rawMode := raw || lines || startLine > 0 || endLine > 0
 
 	data := canonicalDataMap(result)
+	if sections {
+		renderReadSections(data)
+		return nil
+	}
 	if rawMode {
 		content, _ := data["content"].(string)
 		fmt.Print(content)
@@ -111,6 +120,37 @@ func renderRead(cmd *cobra.Command, result commandexec.Result) error {
 		backlinks:      readBacklinksFromMap(data["backlinks"]),
 		backlinksCount: metaCount(result.Meta),
 	})
+}
+
+func renderReadSections(data map[string]interface{}) {
+	path := stringFromMap(data, "path")
+	if path != "" {
+		fmt.Println(ui.FilePath(path))
+	}
+	rows, _ := data["sections"].([]map[string]interface{})
+	if rows == nil {
+		if generic, ok := data["sections"].([]interface{}); ok {
+			for _, item := range generic {
+				if entry, ok := item.(map[string]interface{}); ok {
+					rows = append(rows, entry)
+				}
+			}
+		}
+	}
+	if len(rows) == 0 {
+		fmt.Println(ui.Hint("No sections found."))
+		return
+	}
+	for _, entry := range rows {
+		level := intFromMap(entry, "level")
+		if level < 1 {
+			level = 1
+		}
+		title, _ := entry["title"].(string)
+		id, _ := entry["id"].(string)
+		indent := strings.Repeat("  ", level-1)
+		fmt.Printf("%s%s %s\n", indent, title, ui.Hint(fmt.Sprintf("(%s, line %d)", id, intFromMap(entry, "line_start"))))
+	}
 }
 
 func init() {

@@ -972,6 +972,14 @@ or full path (people/freya.md).
 By default, this command returns enriched output (rendered wikilinks + backlinks).
 Use --raw to output only the raw file content (recommended for agents preparing precise edits).
 
+Section references such as project/website#tasks are supported: without an
+explicit line range, output is limited to that section's subtree (the section
+plus its child sections).
+
+Use --sections to return the file's section outline (id, title, level, line
+ranges, parent) instead of content. With a section reference, the outline is
+scoped to that section's subtree.
+
 In an interactive terminal, bare 'rvn read' launches Raven's picker.
 When an interactive read reference is ambiguous, Raven prompts you to choose the target.
 
@@ -986,6 +994,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 			{Name: "lines", Description: "Include structured lines with line numbers (recommended for agents)", Type: FlagTypeBool},
 			{Name: "start-line", Description: "Start line (1-indexed, inclusive) for raw output", Type: FlagTypeInt},
 			{Name: "end-line", Description: "End line (1-indexed, inclusive) for raw output", Type: FlagTypeInt},
+			{Name: "sections", Description: "Return the section outline (headings with ids, levels, line ranges) instead of content", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn read daily/2025-02-01.md --json",
@@ -993,6 +1002,8 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 			"rvn read people/freya --raw --json",
 			"rvn read people/freya --raw --start-line 10 --end-line 40 --json",
 			"rvn read people/freya --raw --lines --json",
+			"rvn read projects/website#tasks --json",
+			"rvn read projects/website --sections --json",
 		},
 		UseCases: []string{
 			"Read vault file content (use instead of 'cat', 'head', 'tail')",
@@ -1000,6 +1011,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 			"Interactively disambiguate read references in Raven's picker",
 			"Inspect file before editing (prefer --raw for exact string matching)",
 			"Extract copy-paste-safe anchors with --lines or line ranges for long files",
+			"Discover a file's sections and their IDs with --sections before targeted writes",
 			"Get full content after finding object via query",
 		},
 	},

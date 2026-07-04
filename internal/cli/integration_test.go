@@ -2733,6 +2733,61 @@ Bob is a software engineer.
 	}
 }
 
+// TestIntegration_ReadSections tests the --sections outline view.
+func TestIntegration_ReadSections(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", `---
+type: project
+title: Site
+status: active
+---
+
+## Tasks
+
+- a task
+
+### Backlog
+
+- later
+
+## Notes
+
+text
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("read", "projects/site", "--sections")
+	result.MustSucceed(t)
+
+	sections, ok := result.Data["sections"].([]interface{})
+	if !ok {
+		t.Fatalf("sections = %#v, want array; raw: %s", result.Data["sections"], result.RawJSON)
+	}
+	if len(sections) != 3 {
+		t.Fatalf("expected 3 sections, got %d; raw: %s", len(sections), result.RawJSON)
+	}
+	first, _ := sections[0].(map[string]interface{})
+	if first["id"] != "projects/site#tasks" || first["title"] != "Tasks" {
+		t.Fatalf("first section = %#v, want tasks", first)
+	}
+	second, _ := sections[1].(map[string]interface{})
+	if second["parent_section_id"] != "projects/site#tasks" {
+		t.Fatalf("second section = %#v, want backlog under tasks", second)
+	}
+
+	// Scoped outline for a section reference.
+	scoped := v.RunCLI("read", "projects/site#tasks", "--sections")
+	scoped.MustSucceed(t)
+	scopedSections, _ := scoped.Data["sections"].([]interface{})
+	if len(scopedSections) != 2 {
+		t.Fatalf("expected 2 scoped sections (tasks, backlog), got %d; raw: %s", len(scopedSections), scoped.RawJSON)
+	}
+}
+
 func TestIntegration_ReadSupportsDynamicDateReferences(t *testing.T) {
 	t.Parallel()
 

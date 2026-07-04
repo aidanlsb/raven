@@ -34,6 +34,8 @@ Display an object's content. By default, Raven renders wiki-links and appends ba
 rvn read person/freya                     # Enriched output with backlinks
 rvn read person/freya --raw               # Plain markdown, no extras
 rvn read project/website --raw --start-line 10 --end-line 40   # Line range
+rvn read project/website#tasks            # Just the Tasks section (subtree)
+rvn read project/website --sections       # Section outline (no content)
 rvn read                                  # Interactive Raven picker
 ```
 
@@ -41,6 +43,9 @@ Key flags:
 - `--raw` — raw file content only (no backlinks, no rendered links)
 - `--start-line`, `--end-line` — read a specific line range (with `--raw`)
 - `--lines` — include line numbers (useful for agents preparing edits)
+- `--sections` — list the file's headings with section IDs, levels, and line ranges instead of content
+
+Section references (`file#slug`) limit output to that section's subtree — the section itself plus any nested child sections. Use `--sections` first to discover a file's section IDs.
 
 ### `rvn open`
 
