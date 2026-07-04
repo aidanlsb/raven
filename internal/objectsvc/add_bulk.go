@@ -12,12 +12,13 @@ import (
 )
 
 type AddBulkRequest struct {
-	VaultPath    string
-	VaultConfig  *config.VaultConfig
-	ObjectIDs    []string
-	Line         string
-	HeadingSpec  string
-	ParseOptions *parser.ParseOptions
+	VaultPath     string
+	VaultConfig   *config.VaultConfig
+	ObjectIDs     []string
+	Line          string
+	HeadingSpec   string
+	CreateHeading bool
+	ParseOptions  *parser.ParseOptions
 }
 
 type AddBulkPreviewItem struct {
@@ -102,6 +103,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 			}
 		}
 
+		createHeading := false
 		if req.HeadingSpec != "" {
 			if targetObjectID != "" {
 				skipped = append(skipped, AddBulkResult{
@@ -113,15 +115,26 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 			}
 			resolvedTarget, err := ResolveAddHeadingTarget(req.VaultPath, filePath, fileID, req.HeadingSpec, req.ParseOptions)
 			if err != nil {
-				skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
-				continue
+				if !req.CreateHeading || !IsRefNotFound(err) {
+					skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+					continue
+				}
+				if _, _, headingErr := HeadingForCreation(req.HeadingSpec); headingErr != nil {
+					skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: headingErr.Error()})
+					continue
+				}
+				createHeading = true
+			} else {
+				targetObjectID = resolvedTarget
 			}
-			targetObjectID = resolvedTarget
 		}
 
 		details := fmt.Sprintf("append: %s", req.Line)
 		if targetObjectID != "" {
 			details = fmt.Sprintf("append within %s: %s", targetObjectID, req.Line)
+		}
+		if createHeading {
+			details = fmt.Sprintf("create heading %q and append: %s", req.HeadingSpec, req.Line)
 		}
 		items = append(items, AddBulkPreviewItem{
 			ID:      id,
@@ -174,6 +187,7 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 			continue
 		}
 
+		createHeading := false
 		if req.HeadingSpec != "" {
 			if targetObjectID != "" {
 				result.Status = "error"
@@ -184,18 +198,28 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 			}
 			resolvedTarget, err := ResolveAddHeadingTarget(req.VaultPath, filePath, fileID, req.HeadingSpec, req.ParseOptions)
 			if err != nil {
-				result.Status = "error"
-				result.Reason = err.Error()
-				errorCount++
-				results = append(results, result)
-				continue
+				if !req.CreateHeading || !IsRefNotFound(err) {
+					result.Status = "error"
+					result.Reason = err.Error()
+					errorCount++
+					results = append(results, result)
+					continue
+				}
+				createHeading = true
+			} else {
+				targetObjectID = resolvedTarget
 			}
-			targetObjectID = resolvedTarget
 		}
 
-		if _, err := AppendToFile(req.VaultPath, filePath, req.Line, captureCfg, req.VaultConfig, false, targetObjectID, req.ParseOptions); err != nil {
+		var appendErr error
+		if createHeading {
+			_, _, appendErr = AppendUnderNewHeading(req.VaultPath, filePath, fileID, req.Line, req.HeadingSpec, req.ParseOptions)
+		} else {
+			_, appendErr = AppendToFile(req.VaultPath, filePath, req.Line, captureCfg, req.VaultConfig, false, targetObjectID, req.ParseOptions)
+		}
+		if appendErr != nil {
 			result.Status = "error"
-			result.Reason = fmt.Sprintf("append failed: %v", err)
+			result.Reason = fmt.Sprintf("append failed: %v", appendErr)
 			errorCount++
 			results = append(results, result)
 			continue

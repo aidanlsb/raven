@@ -12,10 +12,11 @@ import (
 )
 
 var (
-	addToFlag      string
-	addHeadingFlag string
-	addStdin       bool
-	addConfirm     bool
+	addToFlag            string
+	addHeadingFlag       string
+	addCreateHeadingFlag bool
+	addStdin             bool
+	addConfirm           bool
 )
 
 var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
@@ -51,6 +52,9 @@ func buildAddArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 		if headingSpec := effectiveAddHeadingSpec(); headingSpec != "" {
 			argsMap["heading"] = headingSpec
 		}
+		if addCreateHeadingFlag {
+			argsMap["create-heading"] = true
+		}
 		return argsMap, nil
 	}
 
@@ -67,6 +71,9 @@ func buildAddArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 	}
 	if headingSpec := effectiveAddHeadingSpec(); headingSpec != "" {
 		argsMap["heading"] = headingSpec
+	}
+	if addCreateHeadingFlag {
+		argsMap["create-heading"] = true
 	}
 	return argsMap, nil
 }
@@ -120,6 +127,7 @@ func buildCreateObjectCommand(typeName, targetRaw string) string {
 func init() {
 	addCmd.Flags().StringVar(&addToFlag, "to", "", "Target file (path or reference like 'cursor')")
 	addCmd.Flags().StringVar(&addHeadingFlag, "heading", "", "Target heading within destination (heading slug, object#heading ID, or markdown heading text)")
+	addCmd.Flags().BoolVar(&addCreateHeadingFlag, "create-heading", false, "Create the --heading target at the end of the file if it does not exist")
 	addCmd.Flags().BoolVar(&addStdin, "stdin", false, "Read object IDs from stdin (one per line)")
 	addCmd.Flags().BoolVar(&addConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
 	if err := addCmd.RegisterFlagCompletionFunc("to", completeReferenceFlag(true)); err != nil {

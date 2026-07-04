@@ -12,6 +12,7 @@ Use this guide to choose the right mutation primitive.
 | Update frontmatter fields | `set` | Schema-validated metadata updates |
 | Replace body text safely | `edit` | Unique-string replacement in content markdown (applies immediately; `dry-run` to preview) |
 | Move or rename an asset | `move` | Updates Markdown links/images and refreshes the asset index |
+| Rename a section heading | `move` | Source `file#section`, destination new heading text; rewrites inbound `[[...#slug]]` refs |
 | Update trait value | `update` | Targeted trait mutation by trait ID |
 | Delete one object | `delete` | Safe deletion behavior with backlink warnings and trash support |
 
@@ -19,6 +20,14 @@ Rules:
 - Use `upsert` when reruns should produce one current canonical output.
 - Use `add` when history should accumulate.
 - Use `new` only when you intend to create a new object identity.
+
+## Section-targeted writes
+
+- Append inside a section: `add` with `to="file#section"`, or `heading="..."` (slug, section ID, or heading text). Insertion happens at the end of the section's direct content, before any child headings.
+- Create the heading when missing: `add` with `heading="### Log"` and `create-heading=true` — appends the heading at the end of the file, then the text.
+- Bulk-append into sections: pipe section IDs from a `section` query into `add` with `stdin=true` (`query "section .title==Tasks" --ids`).
+- Rename a heading safely: `move` with source `file#section` and destination set to the new heading text. Never rename headings with `edit` when other files link to the section — that leaves `stale_fragment` refs.
+- Edit inside a section: `edit` with `path="file#section"` scopes replacements to the section's subtree (section plus child sections).
 
 ## Recommended sequences
 

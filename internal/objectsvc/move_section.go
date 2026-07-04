@@ -1,0 +1,326 @@
+package objectsvc
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/vault"
+)
+
+// renameSectionByReference renames a section heading in place and rewrites all
+// inbound references from [[...#old-slug]] to [[...#new-slug]].
+//
+// The destination is interpreted as the new heading text; the heading level is
+// preserved and the new slug is derived from the text using the same rules the
+// parser applies to headings.
+func renameSectionByReference(req MoveByReferenceRequest, resolved *readsvc.ResolveResult) (*MoveByReferenceResult, error) {
+	oldSectionID := resolved.ObjectID
+	fileID, oldSlug, ok := paths.ParseSectionID(oldSectionID)
+	if !ok || oldSlug == "" {
+		return nil, newError(ErrorInvalidInput, fmt.Sprintf("invalid section ID: %s", oldSectionID), "Use a section ID like project/website#tasks", nil, nil)
+	}
+
+	newTitle := strings.TrimSpace(req.Destination)
+	if newTitle == "" {
+		return nil, newError(ErrorInvalidInput, "new heading text is required", `Usage: rvn move <file#section> "<new heading text>"`, nil, nil)
+	}
+	if strings.HasPrefix(newTitle, "#") {
+		return nil, newError(
+			ErrorInvalidInput,
+			"section destination must be the new heading text, not a markdown heading or fragment",
+			`Pass plain heading text, e.g. rvn move project/website#tasks "Completed Tasks"; the heading level is preserved`,
+			nil, nil,
+		)
+	}
+	if base, _, isSection := paths.ParseSectionID(newTitle); isSection && base == fileID {
+		return nil, newError(
+			ErrorInvalidInput,
+			"section destination must be the new heading text, not a section ID",
+			`Pass plain heading text, e.g. rvn move project/website#tasks "Completed Tasks"`,
+			nil, nil,
+		)
+	}
+	sourceFile := resolved.FilePath
+	sourceRelPath, err := filepath.Rel(req.VaultPath, sourceFile)
+	if err != nil {
+		return nil, newError(ErrorUnexpected, "failed to resolve source path", "", nil, err)
+	}
+	sourceRelPath = paths.NormalizeVaultRelPath(sourceRelPath)
+
+	contentBytes, err := os.ReadFile(sourceFile)
+	if err != nil {
+		return nil, newError(ErrorFileRead, "failed to read source file", "", nil, err)
+	}
+	content := string(contentBytes)
+
+	doc, err := parser.ParseDocumentWithOptions(content, sourceFile, req.VaultPath, req.ParseOptions)
+	if err != nil {
+		return nil, newError(ErrorValidationFailed, "failed to parse source file", "Fix the file content and try again", nil, err)
+	}
+	var target *parser.ParsedSection
+	for _, section := range doc.Sections {
+		if section != nil && section.ID == oldSectionID {
+			target = section
+			break
+		}
+	}
+	if target == nil {
+		return nil, newError(ErrorRefNotFound, fmt.Sprintf("section not found: %s", oldSectionID), "Run 'rvn reindex' if the index is stale", nil, nil)
+	}
+
+	lines := strings.Split(content, "\n")
+	if target.LineStart < 1 || target.LineStart > len(lines) {
+		return nil, newError(ErrorUnexpected, fmt.Sprintf("section heading line %d is out of range", target.LineStart), "Run 'rvn reindex' and try again", nil, nil)
+	}
+	lines[target.LineStart-1] = strings.Repeat("#", target.Level) + " " + newTitle
+	updatedContent := strings.Join(lines, "\n")
+
+	// Re-parse the updated content so the new slug is derived exactly as the
+	// indexer would derive it (including duplicate suffixes).
+	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, sourceFile, req.VaultPath, req.ParseOptions)
+	if err != nil {
+		return nil, newError(ErrorValidationFailed, "failed to parse renamed content", "Check the new heading text and try again", nil, err)
+	}
+	var renamed *parser.ParsedSection
+	for _, section := range updatedDoc.Sections {
+		if section != nil && section.LineStart == target.LineStart {
+			renamed = section
+			break
+		}
+	}
+	if renamed == nil {
+		return nil, newError(ErrorValidationFailed, "renamed heading no longer parses as a section", "Check the new heading text and try again", nil, nil)
+	}
+
+	expectedSlug := parser.Slugify(newTitle)
+	if expectedSlug == "" {
+		expectedSlug = "section"
+	}
+	if renamed.Slug != expectedSlug {
+		return nil, newError(
+			ErrorValidationFailed,
+			fmt.Sprintf("renaming would create a duplicate section slug: '%s' already exists in %s", expectedSlug, fileID),
+			"Choose a heading that is unique within the file",
+			nil, nil,
+		)
+	}
+	// Renaming must not shift any other section's slug (e.g. by introducing a
+	// duplicate heading that pushes an existing section to a -2 suffix).
+	originalSlugs := make(map[int]string, len(doc.Sections))
+	for _, section := range doc.Sections {
+		if section != nil {
+			originalSlugs[section.LineStart] = section.Slug
+		}
+	}
+	for _, section := range updatedDoc.Sections {
+		if section == nil || section.LineStart == target.LineStart {
+			continue
+		}
+		if before, seen := originalSlugs[section.LineStart]; seen && before != section.Slug {
+			return nil, newError(
+				ErrorValidationFailed,
+				fmt.Sprintf("renaming would create a duplicate section slug: '%s' would change section '%s#%s' to '%s#%s'", expectedSlug, fileID, before, fileID, section.Slug),
+				"Choose a heading that is unique within the file",
+				nil, nil,
+			)
+		}
+	}
+	newSectionID := renamed.ID
+
+	result := &MoveByReferenceResult{
+		SourceID:       oldSectionID,
+		SourceRelative: sourceRelPath,
+		DestinationID:  newSectionID,
+		DestinationRel: sourceRelPath,
+	}
+
+	var db *index.Database
+	db, err = index.Open(req.VaultPath)
+	if err != nil {
+		if req.FailOnIndexErr {
+			return nil, newError(ErrorValidationFailed, "failed to open index database for section rename", "Run 'rvn reindex' to rebuild the database", nil, err)
+		}
+		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for section rename: %v", err))
+	} else {
+		defer db.Close()
+		if req.VaultConfig != nil {
+			db.SetDailyDirectory(req.VaultConfig.GetDailyDirectory())
+		}
+	}
+
+	// Plan inbound reference rewrites (only when the slug actually changes).
+	rewritesByPath := make(map[string]*fileRewrite)
+	var rewriteOrder []*fileRewrite
+	updatedRefSeen := make(map[string]struct{})
+	addUpdatedRef := func(ref string) {
+		if strings.TrimSpace(ref) == "" {
+			return
+		}
+		if _, seen := updatedRefSeen[ref]; seen {
+			return
+		}
+		updatedRefSeen[ref] = struct{}{}
+		result.UpdatedRefs = append(result.UpdatedRefs, ref)
+	}
+
+	if req.UpdateRefs && db != nil && renamed.Slug != oldSlug {
+		objectRoot := ""
+		pageRoot := ""
+		if req.VaultConfig != nil {
+			objectRoot = req.VaultConfig.GetObjectsRoot()
+			pageRoot = req.VaultConfig.GetPagesRoot()
+		}
+		backlinks, err := db.BacklinksWithRoots(oldSectionID, objectRoot, pageRoot)
+		if err != nil {
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to read backlinks for section rename: %v", err))
+		}
+		for _, bl := range backlinks {
+			oldRaw := strings.TrimPrefix(strings.TrimSuffix(strings.TrimSpace(bl.TargetRaw), "]]"), "[[")
+			base, _, isSection := paths.ParseSectionID(oldRaw)
+			if !isSection || base == "" {
+				continue
+			}
+			newRaw := base + "#" + renamed.Slug
+
+			line := 0
+			if bl.Line != nil {
+				line = *bl.Line
+			}
+
+			sourceFileID := bl.SourceID
+			if idx := strings.Index(sourceFileID, "#"); idx >= 0 {
+				sourceFileID = sourceFileID[:idx]
+			}
+			if idx := strings.Index(sourceFileID, ":trait:"); idx >= 0 {
+				sourceFileID = sourceFileID[:idx]
+			}
+
+			if sourceFileID == fileID {
+				updatedContent = replaceSectionRefAtLine(updatedContent, line, oldRaw, newRaw)
+				addUpdatedRef(fileID)
+				continue
+			}
+
+			refFilePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, sourceFileID, req.VaultConfig)
+			if err != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to update refs in %s: %v", sourceFileID, err))
+				continue
+			}
+			if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, refFilePath); err != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Skipped ref update in %s: %v", sourceFileID, err))
+				continue
+			}
+
+			rewrite, exists := rewritesByPath[refFilePath]
+			if !exists {
+				snapshot, err := readFileSnapshot(refFilePath)
+				if err != nil {
+					result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to read %s for ref update: %v", sourceFileID, err))
+					continue
+				}
+				rewrite = &fileRewrite{
+					fileSnapshot:   *snapshot,
+					reportSourceID: sourceFileID,
+					updatedContent: append([]byte(nil), snapshot.content...),
+				}
+				rewritesByPath[refFilePath] = rewrite
+				rewriteOrder = append(rewriteOrder, rewrite)
+			}
+			updated := replaceSectionRefAtLine(string(rewrite.updatedContent), line, oldRaw, newRaw)
+			if updated != string(rewrite.updatedContent) {
+				rewrite.updatedContent = []byte(updated)
+				addUpdatedRef(sourceFileID)
+			}
+		}
+	}
+
+	if req.Preview {
+		return result, nil
+	}
+
+	perm := os.FileMode(0o644)
+	if st, err := os.Stat(sourceFile); err == nil {
+		perm = st.Mode()
+	}
+	if err := atomicfile.WriteFile(sourceFile, []byte(updatedContent), perm); err != nil {
+		return nil, newError(ErrorFileWrite, "failed to write renamed section", "", nil, err)
+	}
+	writtenFiles := []string{sourceFile}
+	for _, rewrite := range rewriteOrder {
+		if string(rewrite.updatedContent) == string(rewrite.content) {
+			continue
+		}
+		if err := atomicfile.WriteFile(rewrite.path, rewrite.updatedContent, rewrite.perm); err != nil {
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to update refs in %s: %v", rewrite.reportSourceID, err))
+			continue
+		}
+		writtenFiles = append(writtenFiles, rewrite.path)
+	}
+
+	if db != nil && req.Schema != nil {
+		for _, path := range writtenFiles {
+			if warning := reindexRenamedFile(db, req, path); warning != "" {
+				result.WarningMessages = append(result.WarningMessages, warning)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// replaceSectionRefAtLine replaces wikilink and markdown-link occurrences of
+// oldRaw with newRaw, preferring the given 1-based line and falling back to the
+// whole content when the line does not contain the reference.
+func replaceSectionRefAtLine(content string, line int, oldRaw, newRaw string) string {
+	if oldRaw == "" || oldRaw == newRaw {
+		return content
+	}
+	if line > 0 {
+		lines := strings.Split(content, "\n")
+		idx := line - 1
+		if idx >= 0 && idx < len(lines) {
+			updated := replaceSectionRefVariants(lines[idx], oldRaw, newRaw)
+			if updated != lines[idx] {
+				lines[idx] = updated
+				return strings.Join(lines, "\n")
+			}
+		}
+	}
+	return replaceSectionRefVariants(content, oldRaw, newRaw)
+}
+
+func replaceSectionRefVariants(content, oldRaw, newRaw string) string {
+	replacer := strings.NewReplacer(
+		"[["+oldRaw+"]]", "[["+newRaw+"]]",
+		"[["+oldRaw+"|", "[["+newRaw+"|",
+		"]("+oldRaw+")", "]("+newRaw+")",
+		"](<"+oldRaw+">)", "](<"+newRaw+">)",
+	)
+	return replacer.Replace(content)
+}
+
+func reindexRenamedFile(db *index.Database, req MoveByReferenceRequest, filePath string) string {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Sprintf("Failed to reindex %s: %v", filePath, err)
+	}
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, req.VaultPath, req.ParseOptions)
+	if err != nil || doc == nil {
+		return fmt.Sprintf("Failed to reindex %s: %v", filePath, err)
+	}
+	var mtime int64
+	if st, err := os.Stat(filePath); err == nil {
+		mtime = st.ModTime().Unix()
+	}
+	if err := db.IndexDocumentWithMtime(doc, req.Schema, mtime); err != nil {
+		return fmt.Sprintf("Failed to reindex %s: %v", filePath, err)
+	}
+	return ""
+}

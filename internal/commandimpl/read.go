@@ -335,6 +335,18 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	defer rt.Close()
 
+	if boolArg(req.Args, "sections") {
+		outline, err := readsvc.ReadSections(rt, reference)
+		if err != nil {
+			return mapReadFailure(err)
+		}
+		return commandexec.Success(map[string]interface{}{
+			"object_id": outline.ObjectID,
+			"path":      outline.Path,
+			"sections":  formatSectionOutline(outline.Sections),
+		}, &commandexec.Meta{Count: len(outline.Sections), QueryTimeMs: time.Since(start).Milliseconds()})
+	}
+
 	result, err := readsvc.Read(rt, readsvc.ReadRequest{
 		Reference: reference,
 		Raw:       raw,
@@ -370,6 +382,30 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	data["backlinks"] = result.Backlinks
 	meta.Count = result.BacklinksCount
 	return commandexec.Success(data, meta)
+}
+
+func formatSectionOutline(sections []model.Section) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(sections))
+	for _, section := range sections {
+		entry := map[string]interface{}{
+			"id":         section.ID,
+			"slug":       section.Slug,
+			"title":      section.Title,
+			"level":      section.Level,
+			"line_start": section.LineStart,
+		}
+		if section.LineEnd != nil {
+			entry["line_end"] = *section.LineEnd
+		}
+		if section.SubtreeLineEnd != nil {
+			entry["subtree_line_end"] = *section.SubtreeLineEnd
+		}
+		if section.ParentSectionID != nil {
+			entry["parent_section_id"] = *section.ParentSectionID
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 // HandleOpen executes the canonical `open` command.

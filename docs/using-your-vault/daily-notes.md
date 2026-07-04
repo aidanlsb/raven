@@ -50,7 +50,11 @@ Use `--heading` to append under a particular section:
 rvn add "@todo Review PR" --heading "## Tasks"
 ```
 
-This creates the heading in today's note if it is missing, then appends the text beneath it.
+`--heading` targets an existing heading (by slug, section ID, or heading text) and fails with `REF_NOT_FOUND` if it is missing. Add `--create-heading` to create the heading at the end of the note when it does not exist yet:
+
+```bash
+rvn add "@todo Review PR" --heading "## Tasks" --create-heading
+```
 
 ## Daily note templates
 

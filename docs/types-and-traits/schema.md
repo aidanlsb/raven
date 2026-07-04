@@ -110,10 +110,14 @@ This heading creates a section with ID "file-id#tasks"
 | `title` | string | The heading text |
 | `level` | number (1-6) | The heading level (`#` = 1, `##` = 2, etc.) |
 
+Queries expose additional structural fields on section rows: `.slug`, `.file_object_id`, `.file_path`, `.line_start`, `.line_end`, `.subtree_line_end`, and `.parent_section_id`.
+
 **Behavior:**
 - Created automatically when parsing documents
 - Object ID is `<file-id>#<slugified-heading>`
 - Can be referenced like `[[project/website#tasks]]`
+- Queried with the `section` keyword (e.g., `rvn query "section .title==Tasks"`), not `type:section`
+- Renamed safely with `rvn move project/website#tasks "New Heading"`, which rewrites inbound refs
 
 ### `date`
 

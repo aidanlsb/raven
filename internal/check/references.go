@@ -133,7 +133,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 					Line:     ref.Line,
 					Message:  fmt.Sprintf("Fragment reference [[%s]] not found — '%s' exists but has no section '#%s'", ref.TargetRaw, v.displayID(baseResult.TargetID), fragment),
 					Value:    ref.TargetRaw,
-					FixHint:  "The heading may have been renamed. Update the fragment to match an existing section slug.",
+					FixHint:  "The heading may have been renamed. Update the fragment to match an existing section slug. To rename a heading safely next time, use 'rvn move <file#section> \"<new heading text>\"' which rewrites inbound references.",
 				})
 				return issues
 			}

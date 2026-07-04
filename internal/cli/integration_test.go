@@ -951,6 +951,84 @@ func TestIntegration_MoveDryRunDoesNotMutate(t *testing.T) {
 	v.AssertFileContains("projects/preview-ref.md", "[[people/preview-me]]")
 }
 
+// TestIntegration_MoveRenamesSectionHeading verifies that moving a section ID
+// renames the heading and rewrites inbound fragment references.
+func TestIntegration_MoveRenamesSectionHeading(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/website.md", `---
+type: project
+title: Website
+status: active
+---
+
+## Tasks
+
+- ship the thing
+
+## Notes
+`).
+		WithFile("notes/planning.md", `Check [[projects/website#tasks]] and [[projects/website#tasks|the list]].
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("move", "projects/website#tasks", "Completed Tasks")
+	result.MustSucceed(t)
+	if got := result.DataString("destination"); got != "projects/website#completed-tasks" {
+		t.Fatalf("destination = %q, want projects/website#completed-tasks; raw: %s", got, result.RawJSON)
+	}
+
+	v.AssertFileContains("projects/website.md", "## Completed Tasks")
+	v.AssertFileContains("notes/planning.md", "[[projects/website#completed-tasks]]")
+	v.AssertFileContains("notes/planning.md", "[[projects/website#completed-tasks|the list]]")
+
+	// The index should be updated: the new section ID resolves and has backlinks.
+	backlinks := v.RunCLI("backlinks", "projects/website#completed-tasks")
+	backlinks.MustSucceed(t)
+	if !strings.Contains(backlinks.RawJSON, "notes/planning") {
+		t.Fatalf("expected backlinks from notes/planning, got: %s", backlinks.RawJSON)
+	}
+
+	// check should not report stale fragments after the rename.
+	check := v.RunCLI("check")
+	check.MustSucceed(t)
+	if strings.Contains(check.RawJSON, "stale_fragment") {
+		t.Fatalf("unexpected stale_fragment issues after rename: %s", check.RawJSON)
+	}
+}
+
+// TestIntegration_MoveSectionDryRunDoesNotMutate verifies section rename previews.
+func TestIntegration_MoveSectionDryRunDoesNotMutate(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/website.md", `---
+type: project
+title: Website
+status: active
+---
+
+## Tasks
+`).
+		WithFile("notes/planning.md", `Check [[projects/website#tasks]].
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("move", "projects/website#tasks", "Completed Tasks", "--dry-run")
+	result.MustSucceed(t)
+	if got := result.DataString("destination"); got != "projects/website#completed-tasks" {
+		t.Fatalf("destination = %q, want projects/website#completed-tasks; raw: %s", got, result.RawJSON)
+	}
+
+	v.AssertFileContains("projects/website.md", "## Tasks")
+	v.AssertFileContains("notes/planning.md", "[[projects/website#tasks]]")
+}
+
 // TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef verifies that
 // schema-typed ref fields written as bare YAML strings are also updated.
 func TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef(t *testing.T) {
@@ -2652,6 +2730,61 @@ Bob is a software engineer.
 	content := result.DataString("content")
 	if content == "" {
 		t.Errorf("expected content in read result, got empty string")
+	}
+}
+
+// TestIntegration_ReadSections tests the --sections outline view.
+func TestIntegration_ReadSections(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", `---
+type: project
+title: Site
+status: active
+---
+
+## Tasks
+
+- a task
+
+### Backlog
+
+- later
+
+## Notes
+
+text
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("read", "projects/site", "--sections")
+	result.MustSucceed(t)
+
+	sections, ok := result.Data["sections"].([]interface{})
+	if !ok {
+		t.Fatalf("sections = %#v, want array; raw: %s", result.Data["sections"], result.RawJSON)
+	}
+	if len(sections) != 3 {
+		t.Fatalf("expected 3 sections, got %d; raw: %s", len(sections), result.RawJSON)
+	}
+	first, _ := sections[0].(map[string]interface{})
+	if first["id"] != "projects/site#tasks" || first["title"] != "Tasks" {
+		t.Fatalf("first section = %#v, want tasks", first)
+	}
+	second, _ := sections[1].(map[string]interface{})
+	if second["parent_section_id"] != "projects/site#tasks" {
+		t.Fatalf("second section = %#v, want backlog under tasks", second)
+	}
+
+	// Scoped outline for a section reference.
+	scoped := v.RunCLI("read", "projects/site#tasks", "--sections")
+	scoped.MustSucceed(t)
+	scopedSections, _ := scoped.Data["sections"].([]interface{})
+	if len(scopedSections) != 2 {
+		t.Fatalf("expected 2 scoped sections (tasks, backlog), got %d; raw: %s", len(scopedSections), scoped.RawJSON)
 	}
 }
 

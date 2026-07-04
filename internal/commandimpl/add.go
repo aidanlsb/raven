@@ -43,26 +43,34 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
 	}
 
+	headingSpec := strings.TrimSpace(stringArg(req.Args, "heading"))
+	createHeading := boolArg(req.Args, "create-heading")
+	if createHeading && headingSpec == "" {
+		return commandexec.Failure("INVALID_INPUT", "--create-heading requires --heading", nil, `Pass --heading with heading text, e.g. --heading "Team Notes"`)
+	}
+
 	if !stdinMode {
-		return runAddSingle(vaultPath, vaultCfg, sch, text, strings.TrimSpace(stringArg(req.Args, "to")), strings.TrimSpace(stringArg(req.Args, "heading")))
+		return runAddSingle(vaultPath, vaultCfg, sch, text, strings.TrimSpace(stringArg(req.Args, "to")), headingSpec, createHeading)
 	}
 	if len(objectIDs) == 0 {
 		return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
 	}
 
-	return runAddBulk(vaultPath, vaultCfg, sch, objectIDs, text, strings.TrimSpace(stringArg(req.Args, "heading")), req.Confirm)
+	return runAddBulk(vaultPath, vaultCfg, sch, objectIDs, text, headingSpec, createHeading, req.Confirm)
 }
 
-func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, ids []string, text string, headingSpec string, confirm bool) commandexec.Result {
-	fileIDs, sectionIDs := splitSectionIDs(ids)
-	warnings := sectionSkipWarnings(sectionIDs)
+func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, ids []string, text string, headingSpec string, createHeading bool, confirm bool) commandexec.Result {
+	// Section IDs (file#slug) are passed through: bulk add appends within the
+	// targeted section instead of at the end of the file.
+	var warnings []commandexec.Warning
 	request := objectsvc.AddBulkRequest{
-		VaultPath:    vaultPath,
-		VaultConfig:  vaultCfg,
-		ObjectIDs:    fileIDs,
-		Line:         text,
-		HeadingSpec:  headingSpec,
-		ParseOptions: buildParseOptions(vaultCfg),
+		VaultPath:     vaultPath,
+		VaultConfig:   vaultCfg,
+		ObjectIDs:     ids,
+		Line:          text,
+		HeadingSpec:   headingSpec,
+		CreateHeading: createHeading,
+		ParseOptions:  buildParseOptions(vaultCfg),
 	}
 
 	if !confirm {
@@ -109,7 +117,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 
-func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, text, toRef, headingSpec string) commandexec.Result {
+func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, text, toRef, headingSpec string, createHeading bool) commandexec.Result {
 	captureCfg := vaultCfg.GetCaptureConfig()
 	parseOpts := buildParseOptions(vaultCfg)
 
@@ -156,21 +164,33 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 		return mapContentMutationError(err)
 	}
 
+	createdHeading := false
+	createdSectionID := ""
 	if headingSpec != "" {
 		if targetObjectID != "" && strings.Contains(targetObjectID, "#") {
 			return commandexec.Failure("INVALID_INPUT", "cannot combine --heading with a section reference in --to", nil, "Use either --to <file#section> or --heading")
 		}
 		resolvedTarget, err := objectsvc.ResolveAddHeadingTarget(vaultPath, destPath, fileObjectID, headingSpec, parseOpts)
 		if err != nil {
-			return mapContentMutationError(err)
+			if !createHeading || !objectsvc.IsRefNotFound(err) {
+				return mapContentMutationError(err)
+			}
+			createdHeading = true
+		} else {
+			targetObjectID = resolvedTarget
 		}
-		targetObjectID = resolvedTarget
 	}
 
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
 	}
-	line, err := objectsvc.AppendToFile(vaultPath, destPath, text, captureCfg, vaultCfg, isDailyNote, targetObjectID, parseOpts)
+	var line int
+	var err error
+	if createdHeading {
+		line, createdSectionID, err = objectsvc.AppendUnderNewHeading(vaultPath, destPath, fileObjectID, text, headingSpec, parseOpts)
+	} else {
+		line, err = objectsvc.AppendToFile(vaultPath, destPath, text, captureCfg, vaultCfg, isDailyNote, targetObjectID, parseOpts)
+	}
 	if err != nil {
 		return mapContentMutationError(err)
 	}
@@ -181,6 +201,12 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 		"file":    filepath.ToSlash(relPath),
 		"line":    line,
 		"content": text,
+	}
+	if createdHeading {
+		data["created_heading"] = true
+		if createdSectionID != "" {
+			data["section"] = createdSectionID
+		}
 	}
 	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, relPath)
 	data = mergeDataFields(data, missingData)

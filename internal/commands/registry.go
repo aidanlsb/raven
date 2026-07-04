@@ -163,6 +163,8 @@ For creating NEW typed objects, use 'rvn new' instead.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin and append text to each.
+Section IDs (e.g., project/website#tasks) are supported: text is appended
+inside the targeted section instead of at the end of the file.
 Bulk operations preview changes by default; use --confirm to apply.
 
 Configuration (raven.yaml):
@@ -176,6 +178,15 @@ Accepted values:
 - Full object ID (e.g., project/raven#bugs-fixes)
 - Markdown heading text (e.g., "### Bugs / Fixes")
 
+Section-targeted adds (--to file#section, --heading, or section IDs via stdin)
+insert at the end of the section's DIRECT content, before any child headings.
+This differs from read/edit, which operate on the section's full subtree.
+
+Use --create-heading with --heading to create the heading at the end of the
+file when it does not exist yet. Creation requires heading text (plain text
+defaults to a level-2 heading; markdown text like "### Log" keeps its level);
+slugs and section IDs cannot be used to create headings.
+
 Permissive writes: if appended text contains a [[ref]] whose target does not exist
 yet, the write still succeeds. The response adds data.missing_refs,
 data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
@@ -185,6 +196,7 @@ data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 		Flags: []FlagMeta{
 			{Name: "to", Description: "Target file path or daily note date (today/tomorrow/yesterday/YYYY-MM-DD)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md", "tomorrow"}},
 			{Name: "heading", Description: "Target existing heading within destination (slug, object#heading ID, or markdown heading text)", Type: FlagTypeString, Examples: []string{"bugs-fixes", "project/raven#bugs-fixes", "### Bugs / Fixes"}},
+			{Name: "create-heading", Description: "Create the --heading target at the end of the file if it does not exist (requires heading text, not a slug or section ID)", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
@@ -195,6 +207,8 @@ data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 			"rvn add \"Plan\" --to tomorrow --json",
 			"rvn add \"Bug report\" --to project/raven --heading bugs-fixes --json",
 			"rvn add \"Bug report\" --to project/raven --heading \"### Bugs / Fixes\" --json",
+			"rvn add \"First entry\" --to project/raven --heading \"### Log\" --create-heading --json",
+			"rvn query \"section .title==Tasks\" --ids | rvn add \"Review backlog\" --stdin --confirm --json",
 		},
 		UseCases: []string{
 			"Quick capture to daily note",
@@ -597,7 +611,7 @@ IMPORTANT:
 	},
 	"move": {
 		Name:        "move",
-		Description: "Move or rename an object or asset within the vault",
+		Description: "Move or rename an object, section heading, or asset within the vault",
 		LongDesc: `Move or rename a file/object or asset within the vault.
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
@@ -623,13 +637,20 @@ Single-object move:
 Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
 move and the references it would update without applying.
 
+Section rename:
+When the source is a section ID (e.g., project/website#tasks), the destination
+is the NEW HEADING TEXT (plain text, no leading #). The heading level is kept,
+the new slug is derived from the text, and all inbound [[...#old-slug]] references
+are rewritten to the new slug. Renaming fails if it would create a duplicate
+section slug within the file.
+
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
 Destination must be a directory (ending with /).
 IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
-			{Name: "source", Description: "Source object reference or asset path (e.g., inbox/note.md, people/loki, assets/pdfs/file.pdf)", Required: false},
-			{Name: "destination", Description: "Destination path (e.g., people/loki-archived, archive/projects/, assets/pdfs/archive/file.pdf)", Required: false},
+			{Name: "source", Description: "Source object reference, section ID, or asset path (e.g., inbox/note.md, people/loki, project/website#tasks, assets/pdfs/file.pdf)", Required: false},
+			{Name: "destination", Description: "Destination path, or the new heading text when source is a section (e.g., people/loki-archived, archive/projects/, \"Completed Tasks\")", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
@@ -645,10 +666,12 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"rvn move inbox/task.md projects/website/task.md --json",
 			"rvn move drafts/person.md people/freya.md --update-refs --json",
 			"rvn move assets/pdfs/paper.pdf assets/pdfs/archive/paper.pdf --json",
+			"rvn move project/website#tasks \"Completed Tasks\" --json",
 		},
 		UseCases: []string{
 			"Rename a file in place (NEVER use 'mv' shell command)",
 			"Move file to different directory with reference updates",
+			"Rename a section heading and update all references to its fragment",
 			"Reorganize vault structure while keeping links intact",
 			"Archive old content without breaking references",
 		},
@@ -755,6 +778,7 @@ Use --browse to open an interactive Raven picker with filtering and editor
 handoff for the selected result.
 Use --apply to run a bulk operation directly on query results.
 Section and asset queries return stable IDs but do not support --apply.
+For sections, pipe IDs to add instead: query "section ..." --ids | rvn add <text> --stdin.
 
 For type queries (type:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.
@@ -953,6 +977,14 @@ or full path (people/freya.md).
 By default, this command returns enriched output (rendered wikilinks + backlinks).
 Use --raw to output only the raw file content (recommended for agents preparing precise edits).
 
+Section references such as project/website#tasks are supported: without an
+explicit line range, output is limited to that section's subtree (the section
+plus its child sections).
+
+Use --sections to return the file's section outline (id, title, level, line
+ranges, parent) instead of content. With a section reference, the outline is
+scoped to that section's subtree.
+
 In an interactive terminal, bare 'rvn read' launches Raven's picker.
 When an interactive read reference is ambiguous, Raven prompts you to choose the target.
 
@@ -967,6 +999,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 			{Name: "lines", Description: "Include structured lines with line numbers (recommended for agents)", Type: FlagTypeBool},
 			{Name: "start-line", Description: "Start line (1-indexed, inclusive) for raw output", Type: FlagTypeInt},
 			{Name: "end-line", Description: "End line (1-indexed, inclusive) for raw output", Type: FlagTypeInt},
+			{Name: "sections", Description: "Return the section outline (headings with ids, levels, line ranges) instead of content", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn read daily/2025-02-01.md --json",
@@ -974,6 +1007,8 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 			"rvn read people/freya --raw --json",
 			"rvn read people/freya --raw --start-line 10 --end-line 40 --json",
 			"rvn read people/freya --raw --lines --json",
+			"rvn read projects/website#tasks --json",
+			"rvn read projects/website --sections --json",
 		},
 		UseCases: []string{
 			"Read vault file content (use instead of 'cat', 'head', 'tail')",
@@ -981,6 +1016,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 			"Interactively disambiguate read references in Raven's picker",
 			"Inspect file before editing (prefer --raw for exact string matching)",
 			"Extract copy-paste-safe anchors with --lines or line ranges for long files",
+			"Discover a file's sections and their IDs with --sections before targeted writes",
 			"Get full content after finding object via query",
 		},
 	},

@@ -217,6 +217,8 @@ See also [[2026-03-14]] for context.
 See the tasks list: [[project/website#tasks]]
 ```
 
+Section fragments are derived from heading text. To rename a heading without breaking inbound references, use `rvn move project/website#tasks "New Heading"` — it updates the heading and rewrites every `[[...#tasks]]` reference to the new slug.
+
 ## Related docs
 
 - `types-and-traits/file-format.md` — full resolution model, slug generation, and ambiguity handling
