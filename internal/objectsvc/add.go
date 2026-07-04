@@ -95,6 +95,83 @@ func ResolveAddHeadingTarget(
 	return "", newError(ErrorRefNotFound, fmt.Sprintf("section fragment not found: %s", fragment), "Use an existing section slug/id or heading text", nil, nil)
 }
 
+// HeadingForCreation derives heading text and level from an add --heading spec
+// for creating a missing heading. Markdown heading specs ("### Bugs / Fixes")
+// keep their level; plain text specs default to level 2. Section-ID and
+// fragment specs cannot be used for creation because they carry a slug, not
+// heading text.
+func HeadingForCreation(headingSpec string) (string, int, error) {
+	spec := strings.TrimSpace(headingSpec)
+	if spec == "" {
+		return "", 0, newError(ErrorInvalidInput, "heading text cannot be empty", "Pass a non-empty heading", nil, nil)
+	}
+	if text, ok := parseHeadingTextFromSpec(spec); ok {
+		level := 0
+		for level < len(spec) && spec[level] == '#' {
+			level++
+		}
+		if level > 6 {
+			level = 6
+		}
+		return text, level, nil
+	}
+	if strings.HasPrefix(spec, "#") || (strings.Contains(spec, "/") && strings.Contains(spec, "#")) {
+		return "", 0, newError(
+			ErrorInvalidInput,
+			fmt.Sprintf("cannot create a heading from a section ID or fragment: %s", spec),
+			`Pass heading text (e.g. --heading "Team Notes" or --heading "### Team Notes") to create a missing heading`,
+			nil, nil,
+		)
+	}
+	return spec, 2, nil
+}
+
+// AppendUnderNewHeading appends a new heading at the end of the file and
+// inserts the capture line under it. Returns the inserted line number and the
+// new section's ID.
+func AppendUnderNewHeading(
+	vaultPath string,
+	destPath string,
+	fileObjectID string,
+	line string,
+	headingSpec string,
+	parseOpts *parser.ParseOptions,
+) (int, string, error) {
+	text, level, err := HeadingForCreation(headingSpec)
+	if err != nil {
+		return 0, "", err
+	}
+	heading := strings.Repeat("#", level) + " " + text
+
+	insertedLine, err := appendUnderHeading(destPath, line, heading)
+	if err != nil {
+		return 0, "", err
+	}
+
+	// The new heading sits on the line directly above the inserted text.
+	sectionID := ""
+	if contentBytes, readErr := os.ReadFile(destPath); readErr == nil {
+		if doc, parseErr := parser.ParseDocumentWithOptions(string(contentBytes), destPath, vaultPath, parseOpts); parseErr == nil {
+			for _, section := range doc.Sections {
+				if section != nil && section.LineStart == insertedLine-1 {
+					sectionID = section.ID
+					break
+				}
+			}
+		}
+	}
+	if sectionID == "" {
+		sectionID = fileObjectID + "#" + parser.Slugify(text)
+	}
+	return insertedLine, sectionID, nil
+}
+
+// IsRefNotFound reports whether err is a service error with the REF_NOT_FOUND code.
+func IsRefNotFound(err error) bool {
+	var svcErr *Error
+	return errors.As(err, &svcErr) && svcErr.Code == ErrorRefNotFound
+}
+
 // AppendToFile appends a capture line to the target file, creating daily notes when needed.
 func AppendToFile(
 	vaultPath string,

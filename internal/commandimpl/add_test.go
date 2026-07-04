@@ -109,6 +109,118 @@ title: Example
 	}
 }
 
+func TestHandleAddCreateHeading(t *testing.T) {
+	t.Parallel()
+
+	v := newSectionEditVault(t, `---
+type: note
+title: Example
+---
+
+## Tasks
+
+- existing task
+`)
+	reindexForEditTest(t, v.Path)
+
+	// Without --create-heading, a missing heading is an error.
+	missing := HandleAdd(context.Background(), commandexec.Request{
+		VaultPath: v.Path,
+		Args: map[string]any{
+			"text":    "- log entry",
+			"to":      "note/example",
+			"heading": "### Log",
+		},
+	})
+	if missing.OK {
+		t.Fatalf("expected REF_NOT_FOUND without --create-heading, got success: %#v", missing.Data)
+	}
+
+	result := HandleAdd(context.Background(), commandexec.Request{
+		VaultPath: v.Path,
+		Args: map[string]any{
+			"text":           "- log entry",
+			"to":             "note/example",
+			"heading":        "### Log",
+			"create-heading": true,
+		},
+	})
+	if !result.OK {
+		t.Fatalf("HandleAdd with create-heading failed: %#v", result.Error)
+	}
+	data, _ := result.Data.(map[string]interface{})
+	if created, _ := data["created_heading"].(bool); !created {
+		t.Fatalf("created_heading = %#v, want true (data = %#v)", data["created_heading"], data)
+	}
+	if section, _ := data["section"].(string); section != "note/example#log" {
+		t.Fatalf("section = %#v, want note/example#log", data["section"])
+	}
+
+	content := v.ReadFile("note/example.md")
+	if !strings.Contains(content, "### Log\n- log entry") {
+		t.Fatalf("heading and entry not created:\n%s", content)
+	}
+
+	// A second add now targets the existing heading without creating another.
+	again := HandleAdd(context.Background(), commandexec.Request{
+		VaultPath: v.Path,
+		Args: map[string]any{
+			"text":           "- second entry",
+			"to":             "note/example",
+			"heading":        "### Log",
+			"create-heading": true,
+		},
+	})
+	if !again.OK {
+		t.Fatalf("second HandleAdd failed: %#v", again.Error)
+	}
+	content = v.ReadFile("note/example.md")
+	if got := strings.Count(content, "### Log"); got != 1 {
+		t.Fatalf("expected exactly one Log heading, got %d:\n%s", got, content)
+	}
+	if !strings.Contains(content, "- second entry") {
+		t.Fatalf("second entry missing:\n%s", content)
+	}
+}
+
+func TestHandleAddCreateHeadingRejectsSlugSpecs(t *testing.T) {
+	t.Parallel()
+
+	v := newSectionEditVault(t, `---
+type: note
+title: Example
+---
+
+## Tasks
+`)
+	reindexForEditTest(t, v.Path)
+
+	result := HandleAdd(context.Background(), commandexec.Request{
+		VaultPath: v.Path,
+		Args: map[string]any{
+			"text":           "- entry",
+			"to":             "note/example",
+			"heading":        "note/example#missing",
+			"create-heading": true,
+		},
+	})
+	if result.OK {
+		t.Fatalf("expected error for section-ID heading spec, got success: %#v", result.Data)
+	}
+
+	noHeading := HandleAdd(context.Background(), commandexec.Request{
+		VaultPath: v.Path,
+		Args: map[string]any{
+			"text":           "- entry",
+			"to":             "note/example",
+			"create-heading": true,
+		},
+	})
+	if noHeading.OK || noHeading.Error == nil || noHeading.Error.Code != "INVALID_INPUT" {
+		t.Fatalf("expected INVALID_INPUT for create-heading without heading, got: %#v", noHeading.Error)
+	}
+}
+
 func TestHandleSetBulkWarnsOnSectionIDs(t *testing.T) {
 	t.Parallel()
 

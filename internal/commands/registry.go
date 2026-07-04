@@ -178,6 +178,11 @@ Accepted values:
 - Full object ID (e.g., project/raven#bugs-fixes)
 - Markdown heading text (e.g., "### Bugs / Fixes")
 
+Use --create-heading with --heading to create the heading at the end of the
+file when it does not exist yet. Creation requires heading text (plain text
+defaults to a level-2 heading; markdown text like "### Log" keeps its level);
+slugs and section IDs cannot be used to create headings.
+
 Permissive writes: if appended text contains a [[ref]] whose target does not exist
 yet, the write still succeeds. The response adds data.missing_refs,
 data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
@@ -187,6 +192,7 @@ data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 		Flags: []FlagMeta{
 			{Name: "to", Description: "Target file path or daily note date (today/tomorrow/yesterday/YYYY-MM-DD)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md", "tomorrow"}},
 			{Name: "heading", Description: "Target existing heading within destination (slug, object#heading ID, or markdown heading text)", Type: FlagTypeString, Examples: []string{"bugs-fixes", "project/raven#bugs-fixes", "### Bugs / Fixes"}},
+			{Name: "create-heading", Description: "Create the --heading target at the end of the file if it does not exist (requires heading text, not a slug or section ID)", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
@@ -197,6 +203,7 @@ data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 			"rvn add \"Plan\" --to tomorrow --json",
 			"rvn add \"Bug report\" --to project/raven --heading bugs-fixes --json",
 			"rvn add \"Bug report\" --to project/raven --heading \"### Bugs / Fixes\" --json",
+			"rvn add \"First entry\" --to project/raven --heading \"### Log\" --create-heading --json",
 			"rvn query \"section .title==Tasks\" --ids | rvn add \"Review backlog\" --stdin --confirm --json",
 		},
 		UseCases: []string{
