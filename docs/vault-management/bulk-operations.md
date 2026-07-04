@@ -29,6 +29,7 @@ rvn query "<query>" --apply "<command> [args...]" [--confirm]
 |------------|--------------------|
 | `type:...` | `set field=value...`, `add <text...>`, `delete`, `move <destination/>` |
 | `trait:...` | `update <new_value>` |
+| `section ...` | `add <text...>` (appends inside each matching section) |
 
 ### Preview vs Apply
 

@@ -777,12 +777,17 @@ Use --count-only to return only the total match count without items.
 Use --browse to open an interactive Raven picker with filtering and editor
 handoff for the selected result.
 Use --apply to run a bulk operation directly on query results.
-Section and asset queries return stable IDs but do not support --apply.
-For sections, pipe IDs to add instead: query "section ..." --ids | rvn add <text> --stdin.
+Asset queries return stable IDs but do not support --apply.
 
 For type queries (type:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.
 - Supported commands: set, delete, add, move
+
+For section queries (section ...):
+- Returns preview by default. Changes are NOT applied unless confirm=true.
+- Supported command: add <text> (appends inside each matching section)
+- Example: section .title==Tasks --apply "add - review backlog"
+- For other operations, use --ids and pipe to a compatible command.
 
 For trait queries (trait:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.

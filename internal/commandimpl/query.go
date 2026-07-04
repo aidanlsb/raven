@@ -214,10 +214,10 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 }
 
 func handleQueryApply(ctx context.Context, req commandexec.Request, result *readsvc.ExecuteQueryResult, applyArgs []string, queryTimeMs int64) commandexec.Result {
-	if result.QueryKind == "asset" || result.QueryKind == "section" {
+	if result.QueryKind == "asset" {
 		return commandexec.Failure(
 			"INVALID_INPUT",
-			fmt.Sprintf("--apply is not supported for %s queries", result.QueryKind),
+			"--apply is not supported for asset queries",
 			nil,
 			"Use --ids and pass results to a compatible command",
 		)
@@ -226,6 +226,39 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, result *read
 	rawApply, err := bulkops.ParseRawApply(applyArgs)
 	if err != nil {
 		return mapBulkopsFailure(err)
+	}
+
+	if result.QueryKind == "section" {
+		if bulkops.ObjectApplyCommand(rawApply.Command) != bulkops.ObjectApplyAdd {
+			return commandexec.Failure(
+				"INVALID_INPUT",
+				fmt.Sprintf("--apply %s is not supported for section queries", rawApply.Command),
+				nil,
+				"Section queries support '--apply add <text>'; use --ids for other pipelines",
+			)
+		}
+		ids := make([]string, 0, len(result.Sections))
+		for _, row := range result.Sections {
+			ids = append(ids, row.ID)
+		}
+		ids = dedupeQueryApplyIDs(ids)
+		if len(ids) == 0 {
+			return commandexec.Success(map[string]interface{}{
+				"preview": !req.Confirm,
+				"action":  rawApply.Command,
+				"items":   []interface{}{},
+				"total":   0,
+			}, &commandexec.Meta{Count: 0, QueryTimeMs: queryTimeMs})
+		}
+		plan, err := bulkops.PlanObjectApply(rawApply, ids)
+		if err != nil {
+			return mapBulkopsFailure(err)
+		}
+		return invokeNestedCommand(ctx, req, "add", map[string]interface{}{
+			"stdin":      true,
+			"text":       plan.AddText,
+			"object_ids": stringsToInterfaces(plan.IDs),
+		}, queryTimeMs)
 	}
 
 	if result.QueryKind == "trait" {

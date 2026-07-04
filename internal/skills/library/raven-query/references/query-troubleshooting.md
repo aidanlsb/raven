@@ -26,7 +26,7 @@
 - Confirm query type:
   - type query: `set`, `add`, `delete`, `move`
   - trait query: `update <value>`
-  - section or asset query: no `--apply` support
+  - section query: only `--apply "add <text>"`; asset query: no `--apply` support
 - Re-run without `--confirm` first to inspect preview.
 
 ## Asset query errors

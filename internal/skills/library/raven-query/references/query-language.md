@@ -153,5 +153,5 @@ type:date .date>=2026-05-01 .date<=today
 
 - Object queries support `--apply "set ..."`, `add`, `delete`, and `move`.
 - Trait queries support only `--apply "update <new_value>"`.
-- Section and asset queries do not support `--apply`.
+- Section queries support only `--apply "add <text>"`; asset queries do not support `--apply`.
 - All apply flows preview first; add `--confirm` to execute.

@@ -320,7 +320,7 @@ Key flags:
 
 Use `rvn pick` when you want Raven-native interactive selection in a pipeline. It reads `--pipe` output, opens a picker on the terminal, and writes selected IDs to stdout.
 
-Section query IDs are stable `file#slug` IDs and asset query IDs are stable asset paths. Section and asset queries do not support `--apply`; use `--ids` to pass IDs to commands that explicitly support them.
+Section query IDs are stable `file#slug` IDs and asset query IDs are stable asset paths. Section queries support `--apply "add <text>"` (appends inside each matching section); asset queries do not support `--apply`. Use `--ids` to pass IDs to other commands that explicitly support them.
 
 ### Pagination
 
@@ -378,7 +378,8 @@ This stores the RQL separately from the default options in `raven.yaml`; explici
 
 - Object query `--apply` supports: `set`, `add`, `delete`, `move`.
 - Trait query `--apply` supports only: `update <new_value>`.
-- Section and asset queries do not support `--apply`.
+- Section query `--apply` supports only: `add <text>` (appends inside each matching section).
+- Asset queries do not support `--apply`.
 - All `--apply` operations preview by default; use `--confirm` to apply.
 
 Examples:
@@ -389,6 +390,9 @@ rvn query 'type:project has(trait:due .value<today)' --apply 'set status=overdue
 
 # Trait query bulk update
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
+
+# Section query bulk append
+rvn query 'section .title==Tasks' --apply 'add - review backlog' --confirm
 ```
 
 ## Related Docs

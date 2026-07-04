@@ -637,6 +637,69 @@ Reference the paper [[assets/pdfs/paper.pdf]] and diagram [[assets/images/diagra
 	}
 }
 
+// TestIntegration_SectionQueryApplyAdd verifies that section queries support
+// --apply add (and only add), appending inside each matching section.
+func TestIntegration_SectionQueryApplyAdd(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/alpha.md", `---
+type: project
+title: Alpha
+status: active
+---
+
+## Tasks
+
+- alpha task
+
+## Notes
+`).
+		WithFile("projects/beta.md", `---
+type: project
+title: Beta
+status: active
+---
+
+## Tasks
+
+- beta task
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	// Preview by default.
+	preview := v.RunCLI("query", "section .title==Tasks", "--apply", "add - review backlog")
+	preview.MustSucceed(t)
+	if got, ok := preview.Data["preview"].(bool); !ok || !got {
+		t.Fatalf("expected preview=true, got %#v; raw: %s", preview.Data["preview"], preview.RawJSON)
+	}
+	if strings.Contains(v.ReadFile("projects/alpha.md"), "review backlog") {
+		t.Fatal("preview modified files")
+	}
+
+	apply := v.RunCLI("query", "section .title==Tasks", "--apply", "add - review backlog", "--confirm")
+	apply.MustSucceed(t)
+	if got, ok := apply.Data["added"].(float64); !ok || int(got) != 2 {
+		t.Fatalf("added = %#v, want 2; raw: %s", apply.Data["added"], apply.RawJSON)
+	}
+
+	alpha := v.ReadFile("projects/alpha.md")
+	tasksIdx := strings.Index(alpha, "## Tasks")
+	notesIdx := strings.Index(alpha, "## Notes")
+	addedIdx := strings.Index(alpha, "- review backlog")
+	if addedIdx == -1 || !(tasksIdx < addedIdx && addedIdx < notesIdx) {
+		t.Fatalf("text not appended inside Tasks section:\n%s", alpha)
+	}
+	v.AssertFileContains("projects/beta.md", "- review backlog")
+
+	// Only add is supported for section queries.
+	rejected := v.RunCLI("query", "section .title==Tasks", "--apply", "set status=done")
+	rejected.MustFail(t, "INVALID_INPUT")
+	rejected.MustFailWithMessage(t, "--apply set is not supported for section queries")
+}
+
 func TestIntegration_QueryRefreshRespectsDirectoryRoots(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
