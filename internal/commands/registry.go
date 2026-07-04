@@ -600,7 +600,7 @@ IMPORTANT:
 	},
 	"move": {
 		Name:        "move",
-		Description: "Move or rename an object or asset within the vault",
+		Description: "Move or rename an object, section heading, or asset within the vault",
 		LongDesc: `Move or rename a file/object or asset within the vault.
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
@@ -626,13 +626,20 @@ Single-object move:
 Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
 move and the references it would update without applying.
 
+Section rename:
+When the source is a section ID (e.g., project/website#tasks), the destination
+is the NEW HEADING TEXT (plain text, no leading #). The heading level is kept,
+the new slug is derived from the text, and all inbound [[...#old-slug]] references
+are rewritten to the new slug. Renaming fails if it would create a duplicate
+section slug within the file.
+
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
 Destination must be a directory (ending with /).
 IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
-			{Name: "source", Description: "Source object reference or asset path (e.g., inbox/note.md, people/loki, assets/pdfs/file.pdf)", Required: false},
-			{Name: "destination", Description: "Destination path (e.g., people/loki-archived, archive/projects/, assets/pdfs/archive/file.pdf)", Required: false},
+			{Name: "source", Description: "Source object reference, section ID, or asset path (e.g., inbox/note.md, people/loki, project/website#tasks, assets/pdfs/file.pdf)", Required: false},
+			{Name: "destination", Description: "Destination path, or the new heading text when source is a section (e.g., people/loki-archived, archive/projects/, \"Completed Tasks\")", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
@@ -648,10 +655,12 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"rvn move inbox/task.md projects/website/task.md --json",
 			"rvn move drafts/person.md people/freya.md --update-refs --json",
 			"rvn move assets/pdfs/paper.pdf assets/pdfs/archive/paper.pdf --json",
+			"rvn move project/website#tasks \"Completed Tasks\" --json",
 		},
 		UseCases: []string{
 			"Rename a file in place (NEVER use 'mv' shell command)",
 			"Move file to different directory with reference updates",
+			"Rename a section heading and update all references to its fragment",
 			"Reorganize vault structure while keeping links intact",
 			"Archive old content without breaking references",
 		},

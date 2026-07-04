@@ -951,6 +951,84 @@ func TestIntegration_MoveDryRunDoesNotMutate(t *testing.T) {
 	v.AssertFileContains("projects/preview-ref.md", "[[people/preview-me]]")
 }
 
+// TestIntegration_MoveRenamesSectionHeading verifies that moving a section ID
+// renames the heading and rewrites inbound fragment references.
+func TestIntegration_MoveRenamesSectionHeading(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/website.md", `---
+type: project
+title: Website
+status: active
+---
+
+## Tasks
+
+- ship the thing
+
+## Notes
+`).
+		WithFile("notes/planning.md", `Check [[projects/website#tasks]] and [[projects/website#tasks|the list]].
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("move", "projects/website#tasks", "Completed Tasks")
+	result.MustSucceed(t)
+	if got := result.DataString("destination"); got != "projects/website#completed-tasks" {
+		t.Fatalf("destination = %q, want projects/website#completed-tasks; raw: %s", got, result.RawJSON)
+	}
+
+	v.AssertFileContains("projects/website.md", "## Completed Tasks")
+	v.AssertFileContains("notes/planning.md", "[[projects/website#completed-tasks]]")
+	v.AssertFileContains("notes/planning.md", "[[projects/website#completed-tasks|the list]]")
+
+	// The index should be updated: the new section ID resolves and has backlinks.
+	backlinks := v.RunCLI("backlinks", "projects/website#completed-tasks")
+	backlinks.MustSucceed(t)
+	if !strings.Contains(backlinks.RawJSON, "notes/planning") {
+		t.Fatalf("expected backlinks from notes/planning, got: %s", backlinks.RawJSON)
+	}
+
+	// check should not report stale fragments after the rename.
+	check := v.RunCLI("check")
+	check.MustSucceed(t)
+	if strings.Contains(check.RawJSON, "stale_fragment") {
+		t.Fatalf("unexpected stale_fragment issues after rename: %s", check.RawJSON)
+	}
+}
+
+// TestIntegration_MoveSectionDryRunDoesNotMutate verifies section rename previews.
+func TestIntegration_MoveSectionDryRunDoesNotMutate(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/website.md", `---
+type: project
+title: Website
+status: active
+---
+
+## Tasks
+`).
+		WithFile("notes/planning.md", `Check [[projects/website#tasks]].
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("move", "projects/website#tasks", "Completed Tasks", "--dry-run")
+	result.MustSucceed(t)
+	if got := result.DataString("destination"); got != "projects/website#completed-tasks" {
+		t.Fatalf("destination = %q, want projects/website#completed-tasks; raw: %s", got, result.RawJSON)
+	}
+
+	v.AssertFileContains("projects/website.md", "## Tasks")
+	v.AssertFileContains("notes/planning.md", "[[projects/website#tasks]]")
+}
+
 // TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef verifies that
 // schema-typed ref fields written as bare YAML strings are also updated.
 func TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef(t *testing.T) {
