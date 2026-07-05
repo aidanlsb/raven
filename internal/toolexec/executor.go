@@ -9,6 +9,8 @@ import (
 	"github.com/aidanlsb/raven/internal/toolargs"
 )
 
+var runTool = rvnexec.Run
+
 // Execute runs a Raven tool by name and returns the parsed Raven JSON envelope.
 // The executable should point to an rvn binary.
 func Execute(vaultPath, executable, toolName string, args map[string]interface{}) (map[string]interface{}, error) {
@@ -33,7 +35,7 @@ func Execute(vaultPath, executable, toolName string, args map[string]interface{}
 		cmdArgs = append([]string{"--vault-path", vaultPath}, cmdArgs...)
 	}
 
-	result, err := rvnexec.Run(executable, cmdArgs)
+	result, err := runTool(executable, cmdArgs)
 	if err != nil {
 		if result.HasEnvelope && result.OK != nil {
 			return nil, &Error{
