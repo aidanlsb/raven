@@ -1240,6 +1240,43 @@ func TestIntegration_SetValidatesTypedValuesAtWriteTime(t *testing.T) {
 	v.AssertFileNotContains("people/dana.md", "email: true")
 }
 
+func TestIntegration_SetNormalizesDateAndDateTargetRefFields(t *testing.T) {
+	t.Parallel()
+	today := time.Now().Format("2006-01-02")
+
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  brief:
+    default_path: brief/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      due:
+        type: date
+      date:
+        type: ref
+        target: date
+`).
+		WithFile("daily/"+today+".md", `---
+type: date
+---
+# Today
+`).
+		Build()
+
+	v.RunCLI("new", "brief", "Daily Brief", "--field", "due=today", "--field", "date=today").MustSucceed(t)
+	v.AssertFileContains("brief/daily-brief.md", `due: "`+today+`"`)
+	v.AssertFileContains("brief/daily-brief.md", `date: "`+today+`"`)
+
+	v.RunCLI("reindex").MustSucceed(t)
+	result := v.RunCLI("query", "type:brief .date==today")
+	result.MustSucceed(t)
+	result.AssertResultCount(t, "items", 1)
+}
+
 func TestIntegration_UpsertValidatesTypedValuesAtWriteTime(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

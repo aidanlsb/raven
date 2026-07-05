@@ -401,13 +401,15 @@ func resolveDynamicDateReference(reference string, rt *Runtime, allowMissing boo
 		return nil, false, nil
 	}
 
-	keyword := strings.ToLower(strings.TrimSpace(baseRef))
-	relative, ok := dates.ResolveRelativeDateKeyword(keyword, time.Now(), time.Monday)
-	if !ok || relative.Kind != dates.RelativeDateInstant {
+	dateInput, ok, err := dates.ParseInput(baseRef, time.Now())
+	if err != nil {
+		return nil, true, err
+	}
+	if !ok || dateInput.Kind != dates.InputRelativeDate {
 		return nil, false, nil
 	}
 
-	dateStr := relative.Date.Format(dates.DateLayout)
+	dateStr := dateInput.CalendarDate
 	fileObjectID := rt.VaultCfg.DailyNoteID(dateStr)
 	objectID := fileObjectID
 	if fragment != "" {

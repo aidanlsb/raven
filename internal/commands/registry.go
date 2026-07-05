@@ -767,6 +767,7 @@ Common agent patterns:
 
 Special date values for trait, type:date .date, and date-target ref field comparisons:
 - today, tomorrow, yesterday
+Datetime literals compare as datetimes, for example .value>="2026-03-01T09:30".
 
 Saved query inputs must be declared in the saved query definition when using {{args.<name>}}.
 You can then pass inputs by position (in args order) or as key=value pairs.

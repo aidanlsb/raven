@@ -367,14 +367,6 @@ func fieldDefsForObjectType(sch *schema.Schema, objectType string) map[string]*s
 	return typeDef.Fields
 }
 
-func resolveRelativeDateKeyword(value string) (string, bool) {
-	resolved, ok := dates.ResolveRelativeDateKeyword(value, time.Now(), time.Monday)
-	if !ok || resolved.Kind != dates.RelativeDateInstant {
-		return "", false
-	}
-	return resolved.Date.Format(dates.DateLayout), true
-}
-
 func parseFieldValueToSchema(value string) schema.FieldValue {
 	if strings.EqualFold(strings.TrimSpace(value), "null") {
 		return schema.Null()
@@ -431,6 +423,10 @@ func coerceFieldMutationValues(updates map[string]schema.FieldValue, fieldDefs m
 }
 
 func coerceFieldValueForDefinition(value schema.FieldValue, fieldDef *schema.FieldDefinition) schema.FieldValue {
+	return coerceFieldValueForDefinitionAt(value, fieldDef, time.Now())
+}
+
+func coerceFieldValueForDefinitionAt(value schema.FieldValue, fieldDef *schema.FieldDefinition, now time.Time) schema.FieldValue {
 	if fieldDef == nil {
 		return value
 	}
@@ -438,36 +434,57 @@ func coerceFieldValueForDefinition(value schema.FieldValue, fieldDef *schema.Fie
 	switch fieldDef.Type {
 	case schema.FieldTypeDate:
 		if raw, ok := value.AsString(); ok {
-			if resolved, resolvedOK := resolveRelativeDateKeyword(raw); resolvedOK {
+			if resolved, resolvedOK, _ := dates.CalendarDateForInput(raw, now); resolvedOK {
 				return schema.Date(resolved)
 			}
 		}
 	case schema.FieldTypeDateArray:
-		arr, ok := value.AsArray()
-		if !ok {
-			return value
+		if coerced, changed := coerceDateArray(value, now, schema.Date); changed {
+			return coerced
 		}
-		changed := false
-		coercedItems := make([]schema.FieldValue, len(arr))
-		for i, item := range arr {
-			coercedItems[i] = item
-			raw, isString := item.AsString()
-			if !isString {
-				continue
+	case schema.FieldTypeRef:
+		if fieldDef.Target == "date" {
+			if raw, ok := value.AsString(); ok {
+				if resolved, resolvedOK, _ := dates.CalendarDateForInput(raw, now); resolvedOK {
+					return schema.String(resolved)
+				}
 			}
-			resolved, resolvedOK := resolveRelativeDateKeyword(raw)
-			if !resolvedOK {
-				continue
-			}
-			coercedItems[i] = schema.Date(resolved)
-			changed = true
 		}
-		if changed {
-			return schema.Array(coercedItems)
+	case schema.FieldTypeRefArray:
+		if fieldDef.Target == "date" {
+			if coerced, changed := coerceDateArray(value, now, schema.String); changed {
+				return coerced
+			}
 		}
 	}
 
 	return value
+}
+
+func coerceDateArray(value schema.FieldValue, now time.Time, wrap func(string) schema.FieldValue) (schema.FieldValue, bool) {
+	arr, ok := value.AsArray()
+	if !ok {
+		return value, false
+	}
+	changed := false
+	coercedItems := make([]schema.FieldValue, len(arr))
+	for i, item := range arr {
+		coercedItems[i] = item
+		raw, isString := item.AsString()
+		if !isString {
+			continue
+		}
+		resolved, resolvedOK, _ := dates.CalendarDateForInput(raw, now)
+		if !resolvedOK {
+			continue
+		}
+		coercedItems[i] = wrap(resolved)
+		changed = true
+	}
+	if changed {
+		return schema.Array(coercedItems), true
+	}
+	return value, false
 }
 
 func fieldNamesFromValueUpdates(updates map[string]schema.FieldValue) []string {

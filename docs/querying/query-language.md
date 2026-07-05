@@ -241,12 +241,18 @@ Assets do not have outbound references, traits, authored fields, or scope, so `a
 | `.value>=val`, `.value<=val` | Inclusive comparison |
 | `oneof(.value, [a,b,c])` | Value is one of listed values |
 
-Date/date-time comparisons also support relative keywords:
+Date and datetime comparisons also support relative date keywords:
 - `today`
 - `tomorrow`
 - `yesterday`
 
-The same date comparison values work for `type:date .date...` predicates.
+Relative keywords compare by calendar date. Datetime literals compare by datetime
+when written as full datetime values such as `2026-03-01T09:30`.
+
+The same date comparison values work for `type:date .date...` predicates and
+for object fields declared as `ref` with `target: date`. Date-target ref fields
+store calendar dates such as `2026-03-01`, while queries resolve them to the
+corresponding daily note object.
 
 Examples:
 
@@ -254,6 +260,8 @@ Examples:
 trait:due .value<today
 trait:due oneof(.value, [today,tomorrow])
 trait:due .value<=2026-03-01
+trait:remind .value>="2026-03-01T09:30"
+type:brief .date==today
 ```
 
 ### Trait Structural Predicates

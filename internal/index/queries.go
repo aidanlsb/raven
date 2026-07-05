@@ -186,7 +186,7 @@ func isDateFilter(filter string) bool {
 	if dates.IsRelativeDateKeyword(trimmed) {
 		return true
 	}
-	return looksLikeDateLiteral(trimmed)
+	return dates.LooksLikeDateLiteral(trimmed)
 }
 
 // QueryObjects queries objects by type.

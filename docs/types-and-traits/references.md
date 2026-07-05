@@ -67,6 +67,12 @@ When a short name uniquely identifies one object or asset, you can use it withou
 [[paper]]       → assets/pdfs/paper.pdf
 ```
 
+Fields declared as `ref` with `target: date` can store the calendar date
+literal (`2026-03-15`) while Raven resolves that value to the configured daily
+note object (`daily/2026-03-15`) in indexes and queries. Relative inputs such as
+`today`, `tomorrow`, and `yesterday` are normalized to `YYYY-MM-DD` when written
+through Raven commands.
+
 When short names collide (e.g., `project/notes` and `meeting/notes`, or `paper.pdf` and `paper.png`), use the full path to disambiguate:
 
 ```markdown

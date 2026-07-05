@@ -48,6 +48,31 @@ func TryParseDateComparisonWithOptions(filter string, op string, fieldExpr strin
 	}
 }
 
+// TryParseTemporalComparisonWithOptions parses date, relative-date, and datetime
+// filter values and returns a SQLite temporal comparison. Date and relative-date
+// inputs compare by calendar date; datetime inputs compare by datetime.
+func TryParseTemporalComparisonWithOptions(filter string, op string, fieldExpr string, opts DateFilterOptions) (condition string, args []interface{}, ok bool, err error) {
+	opts = normalizeDateFilterOptions(opts)
+	input, isTemporal, err := dates.ParseInput(filter, opts.Now)
+	if err != nil {
+		return "", nil, false, fmt.Errorf("invalid date filter: %q", strings.TrimSpace(filter))
+	}
+	if !isTemporal {
+		return "", nil, false, nil
+	}
+
+	switch op {
+	case "=", "!=", "<", "<=", ">", ">=":
+	default:
+		return "", nil, false, fmt.Errorf("unsupported date comparison operator: %s", op)
+	}
+
+	if input.Kind == dates.InputDatetimeLiteral {
+		return fmt.Sprintf("datetime(%s) %s datetime(?)", fieldExpr, op), []interface{}{input.Raw}, true, nil
+	}
+	return fmt.Sprintf("date(%s) %s date(?)", fieldExpr, op), []interface{}{input.CalendarDate}, true, nil
+}
+
 func normalizeDateFilterOptions(opts DateFilterOptions) DateFilterOptions {
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
@@ -63,26 +88,16 @@ func resolveDateFilterValue(filter string, opts DateFilterOptions) (string, bool
 
 	opts = normalizeDateFilterOptions(opts)
 
-	if dates.IsValidDate(normalized) {
-		return normalized, true, nil
-	}
-
-	relative, ok := dates.ResolveRelativeDateKeyword(normalized, opts.Now, time.Monday)
-	if ok && relative.Kind == dates.RelativeDateInstant {
-		return relative.Date.Format(dates.DateLayout), true, nil
+	if dateStr, ok, err := dates.CalendarDateForInput(normalized, opts.Now); err != nil {
+		return "", false, fmt.Errorf("invalid date filter: %q", normalized)
+	} else if ok {
+		return dateStr, true, nil
 	}
 
 	// If value looks like a date literal but isn't valid, surface an explicit error.
-	if looksLikeDateLiteral(normalized) {
+	if dates.LooksLikeDateLiteral(normalized) {
 		return "", false, fmt.Errorf("invalid date filter: %q", normalized)
 	}
 
 	return "", false, nil
-}
-
-func looksLikeDateLiteral(value string) bool {
-	if len(value) != 10 {
-		return false
-	}
-	return value[4] == '-' && value[7] == '-'
 }
