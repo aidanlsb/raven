@@ -765,7 +765,7 @@ Common agent patterns:
 - Open todos in a daily-note range: trait:todo .value==todo within(type:date .date>=2026-05-01 .date<=2026-05-31)
 - Path + structure together: type:page matches(.path, "^pages/work/") has(trait:todo .value==todo)
 
-Special date values for trait and type:date .date comparisons:
+Special date values for trait, type:date .date, and date-target ref field comparisons:
 - today, tomorrow, yesterday
 
 Saved query inputs must be declared in the saved query definition when using {{args.<name>}}.
@@ -807,6 +807,7 @@ For trait queries (trait:...):
 		Examples: []string{
 			"rvn query 'type:project .status==active' --json",
 			"rvn query 'type:meeting has(trait:due)' --json",
+			"rvn query 'type:brief .date==today' --json",
 			"rvn query 'trait:due .value<today' --json",
 			"rvn query 'asset .extension==pdf' --json",
 			"rvn query 'asset startswith(.media_type, \"image/\")' --json",

@@ -2,10 +2,12 @@ package query
 
 import (
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -198,6 +200,30 @@ func (e *Executor) resolveRefValue(value string) (resolved string, fallback stri
 	return resolved, "", nil
 }
 
+func (e *Executor) resolveRefFieldValue(typeName, fieldName, value string) (resolved string, fallback string, err error) {
+	if e.isDateTargetRefField(typeName, fieldName) {
+		if resolved, ok := e.resolveRelativeDateRefValue(value); ok {
+			if resolved != value {
+				return resolved, value, nil
+			}
+			return resolved, "", nil
+		}
+	}
+	return e.resolveRefValue(value)
+}
+
+func (e *Executor) resolveRelativeDateRefValue(value string) (string, bool) {
+	relative, ok := dates.ResolveRelativeDateKeyword(value, e.queryNow(), time.Monday)
+	if !ok || relative.Kind != dates.RelativeDateInstant {
+		return "", false
+	}
+	dailyDir := e.dailyDirectory
+	if dailyDir == "" {
+		dailyDir = "daily"
+	}
+	return path.Join(dailyDir, relative.Date.Format(dates.DateLayout)), true
+}
+
 func (e *Executor) isRefField(typeName, fieldName string) bool {
 	if e.schema == nil || typeName == "" {
 		return false
@@ -211,6 +237,21 @@ func (e *Executor) isRefField(typeName, fieldName string) bool {
 		return false
 	}
 	return fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray
+}
+
+func (e *Executor) isDateTargetRefField(typeName, fieldName string) bool {
+	if e.schema == nil || typeName == "" {
+		return false
+	}
+	typeDef := e.schema.Types[typeName]
+	if typeDef == nil {
+		return false
+	}
+	fieldDef := typeDef.Fields[fieldName]
+	if fieldDef == nil {
+		return false
+	}
+	return (fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray) && fieldDef.Target == "date"
 }
 
 func (e *Executor) isRefArrayField(typeName, fieldName string) bool {
@@ -331,7 +372,7 @@ func (e *Executor) collectRefFieldAmbiguityPredicate(queryType QueryType, typeNa
 		if p.CompareOp != CompareEq && p.CompareOp != CompareNeq {
 			return nil
 		}
-		resolved, _, err := e.resolveRefValue(p.Value)
+		resolved, _, err := e.resolveRefFieldValue(typeName, p.Field, p.Value)
 		if err != nil {
 			return err
 		}
@@ -353,7 +394,7 @@ func (e *Executor) collectRefFieldAmbiguityPredicate(queryType QueryType, typeNa
 		if elem.CompareOp != CompareEq && elem.CompareOp != CompareNeq {
 			return nil
 		}
-		resolved, _, err := e.resolveRefValue(elem.Value)
+		resolved, _, err := e.resolveRefFieldValue(typeName, p.Field, elem.Value)
 		if err != nil {
 			return err
 		}
@@ -525,7 +566,7 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 		return "", nil, fmt.Errorf("unsupported comparison for ref field '.%s' (use == or !=)", p.Field)
 	}
 
-	resolved, _, err := e.resolveRefValue(p.Value)
+	resolved, _, err := e.resolveRefFieldValue(typeName, p.Field, p.Value)
 	if err != nil {
 		return "", nil, err
 	}
@@ -566,7 +607,7 @@ func (e *Executor) buildRefArrayQuantifierPredicateSQL(p *ArrayQuantifierPredica
 		return "", nil, fmt.Errorf("unsupported comparison for ref array field '.%s' (use == or !=)", p.Field)
 	}
 
-	resolved, _, err := e.resolveRefValue(elem.Value)
+	resolved, _, err := e.resolveRefFieldValue(typeName, p.Field, elem.Value)
 	if err != nil {
 		return "", nil, err
 	}
