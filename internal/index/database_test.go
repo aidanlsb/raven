@@ -893,6 +893,130 @@ func TestExtractDateString(t *testing.T) {
 	}
 }
 
+func TestIndexDatesUsesSchemaFieldTypes(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	sch := schema.New()
+	sch.Types["task"] = &schema.TypeDefinition{
+		Fields: map[string]*schema.FieldDefinition{
+			"due":   {Type: schema.FieldTypeDate},
+			"title": {Type: schema.FieldTypeString},
+		},
+	}
+
+	doc := &parser.ParsedDocument{
+		FilePath: "task/a.md",
+		Objects: []*parser.ParsedObject{
+			{
+				ID:         "task/a",
+				ObjectType: "task",
+				Fields: map[string]schema.FieldValue{
+					"due":   schema.Date("2026-04-05"),
+					"title": schema.String("2026-04-05"),
+				},
+				LineStart: 1,
+			},
+		},
+	}
+
+	if err := db.IndexDocument(doc, sch); err != nil {
+		t.Fatalf("failed to index document: %v", err)
+	}
+
+	rows, err := db.db.Query(`SELECT field_name, date FROM date_index WHERE source_id = 'task/a' ORDER BY field_name`)
+	if err != nil {
+		t.Fatalf("query date_index: %v", err)
+	}
+	defer rows.Close()
+
+	got := map[string]string{}
+	for rows.Next() {
+		var fieldName, dateStr string
+		if err := rows.Scan(&fieldName, &dateStr); err != nil {
+			t.Fatalf("scan date_index: %v", err)
+		}
+		got[fieldName] = dateStr
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate date_index: %v", err)
+	}
+
+	if len(got) != 1 || got["due"] != "2026-04-05" {
+		t.Fatalf("date_index rows = %#v, want only due=2026-04-05", got)
+	}
+}
+
+func TestIndexDatesIndexesDateTargetRefs(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	sch := schema.New()
+	sch.Types["brief"] = &schema.TypeDefinition{
+		Fields: map[string]*schema.FieldDefinition{
+			"date":      {Type: schema.FieldTypeRef, Target: "date"},
+			"next_date": {Type: schema.FieldTypeRef, Target: "date"},
+		},
+	}
+
+	doc := &parser.ParsedDocument{
+		FilePath: "brief/a.md",
+		Objects: []*parser.ParsedObject{
+			{
+				ID:         "brief/a",
+				ObjectType: "brief",
+				Fields: map[string]schema.FieldValue{
+					"date":      schema.String("2026-04-05"),
+					"next_date": schema.String("daily/2026-04-06"),
+				},
+				LineStart: 1,
+			},
+		},
+	}
+
+	if err := db.IndexDocument(doc, sch); err != nil {
+		t.Fatalf("failed to index document: %v", err)
+	}
+
+	rows, err := db.db.Query(`SELECT field_name, date FROM date_index WHERE source_id = 'brief/a' ORDER BY field_name`)
+	if err != nil {
+		t.Fatalf("query date_index: %v", err)
+	}
+	defer rows.Close()
+
+	got := map[string]string{}
+	for rows.Next() {
+		var fieldName, dateStr string
+		if err := rows.Scan(&fieldName, &dateStr); err != nil {
+			t.Fatalf("scan date_index: %v", err)
+		}
+		got[fieldName] = dateStr
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate date_index: %v", err)
+	}
+
+	want := map[string]string{"date": "2026-04-05", "next_date": "2026-04-06"}
+	if len(got) != len(want) {
+		t.Fatalf("date_index rows = %#v, want %#v", got, want)
+	}
+	for fieldName, wantDate := range want {
+		if got[fieldName] != wantDate {
+			t.Fatalf("date_index[%s] = %q, want %q (all rows %#v)", fieldName, got[fieldName], wantDate, got)
+		}
+	}
+}
+
 // TestTraitIDConsistency is a regression test for the bug where indexDates used
 // the raw loop index (idx) while indexInlineTraits used a counter that only
 // incremented for defined traits. When undefined traits preceded defined ones,

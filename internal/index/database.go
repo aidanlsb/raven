@@ -794,11 +794,17 @@ func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) erro
 			}
 		}
 
+		var fieldDefs map[string]*schema.FieldDefinition
+		if sch != nil {
+			if typeDef := sch.Types[obj.ObjectType]; typeDef != nil {
+				fieldDefs = typeDef.Fields
+			}
+		}
 		for fieldName, fieldValue := range obj.Fields {
 			if obj.ObjectType == "date" && fieldName == "date" {
 				continue
 			}
-			if dateStr := extractDateString(fieldValue); dateStr != "" {
+			for _, dateStr := range extractDateStringsForField(fieldValue, fieldDefs[fieldName], sch == nil) {
 				_, err = dateStmt.Exec(dateStr, "object", obj.ID, fieldName, doc.FilePath)
 				if err != nil {
 					return err
@@ -809,9 +815,12 @@ func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) erro
 
 	for _, indexedTrait := range indexedTraits(doc, sch) {
 		trait := indexedTrait.Trait
-		// For single-value traits, check if the value is a date
+		var traitDef *schema.TraitDefinition
+		if sch != nil {
+			traitDef = sch.Traits[trait.TraitType]
+		}
 		if trait.Value != nil {
-			if dateStr := extractDateString(*trait.Value); dateStr != "" {
+			for _, dateStr := range extractDateStringsForTrait(*trait.Value, traitDef, sch == nil) {
 				_, err = dateStmt.Exec(dateStr, "trait", indexedTrait.ID, trait.TraitType, doc.FilePath)
 				if err != nil {
 					return err
@@ -821,6 +830,86 @@ func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) erro
 	}
 
 	return nil
+}
+
+func extractDateStringsForField(fv schema.FieldValue, def *schema.FieldDefinition, allowHeuristic bool) []string {
+	if def == nil {
+		if allowHeuristic {
+			return oneDateString(extractDateString(fv))
+		}
+		return nil
+	}
+
+	switch def.Type {
+	case schema.FieldTypeDate, schema.FieldTypeDatetime:
+		return oneDateString(extractDateString(fv))
+	case schema.FieldTypeDateArray, schema.FieldTypeDatetimeArray:
+		return extractDateStringsFromArray(fv, extractDateString)
+	case schema.FieldTypeRef:
+		if def.Target == "date" {
+			return oneDateString(extractDateRefString(fv))
+		}
+	case schema.FieldTypeRefArray:
+		if def.Target == "date" {
+			return extractDateStringsFromArray(fv, extractDateRefString)
+		}
+	}
+	return nil
+}
+
+func extractDateStringsForTrait(fv schema.FieldValue, def *schema.TraitDefinition, allowHeuristic bool) []string {
+	if def == nil {
+		if allowHeuristic {
+			return oneDateString(extractDateString(fv))
+		}
+		return nil
+	}
+	switch def.Type {
+	case schema.FieldTypeDate, schema.FieldTypeDatetime:
+		return oneDateString(extractDateString(fv))
+	case schema.FieldTypeDateArray, schema.FieldTypeDatetimeArray:
+		return extractDateStringsFromArray(fv, extractDateString)
+	}
+	return nil
+}
+
+func extractDateStringsFromArray(fv schema.FieldValue, extract func(schema.FieldValue) string) []string {
+	arr, ok := fv.AsArray()
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(arr))
+	for _, item := range arr {
+		if dateStr := extract(item); dateStr != "" {
+			out = append(out, dateStr)
+		}
+	}
+	return out
+}
+
+func oneDateString(dateStr string) []string {
+	if dateStr == "" {
+		return nil
+	}
+	return []string{dateStr}
+}
+
+func extractDateRefString(fv schema.FieldValue) string {
+	raw, ok := fv.AsString()
+	if !ok {
+		return ""
+	}
+	raw = strings.TrimSpace(strings.TrimPrefix(strings.TrimSuffix(raw, "]]"), "[["))
+	if dates.IsValidDate(raw) {
+		return raw
+	}
+	if idx := strings.LastIndex(raw, "/"); idx >= 0 {
+		candidate := raw[idx+1:]
+		if dates.IsValidDate(candidate) {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {

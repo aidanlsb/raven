@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -106,13 +107,13 @@ func TestBuildValueCondition_DateFilterToday(t *testing.T) {
 		CompareOp: CompareEq,
 	}
 	cond, args := e.buildValueCondition(p, "t.value")
-	if cond != "t.value = ?" {
+	if cond != "date(t.value) = date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 {
 		t.Fatalf("expected 1 arg, got %d", len(args))
 	}
-	today := now.Format("2006-01-02")
+	today := now.Format(dates.DateLayout)
 	if args[0] != today {
 		t.Fatalf("arg = %#v, want %q", args[0], today)
 	}
@@ -127,13 +128,13 @@ func TestBuildValueCondition_DateFilterTomorrowNotEqual(t *testing.T) {
 		CompareOp: CompareNeq,
 	}
 	cond, args := e.buildValueCondition(p, "t.value")
-	if cond != "t.value != ?" {
+	if cond != "date(t.value) != date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 {
 		t.Fatalf("expected 1 arg, got %d", len(args))
 	}
-	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
+	tomorrow := now.AddDate(0, 0, 1).Format(dates.DateLayout)
 	if args[0] != tomorrow {
 		t.Fatalf("arg = %#v, want %q", args[0], tomorrow)
 	}
@@ -144,15 +145,27 @@ func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
 	now := time.Date(2026, 4, 5, 10, 30, 0, 0, time.UTC)
 	e := &Executor{nowFn: func() time.Time { return now }}
 	cond, args := e.buildCompareCondition("today", CompareLt, false, "t.value")
-	if cond != "t.value < ?" {
+	if cond != "date(t.value) < date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 {
 		t.Fatalf("expected 1 arg, got %d", len(args))
 	}
-	today := now.Format("2006-01-02")
+	today := now.Format(dates.DateLayout)
 	if args[0] != today {
 		t.Fatalf("arg = %#v, want %q", args[0], today)
+	}
+}
+
+func TestBuildCompareCondition_DatetimeLiteralOrdering(t *testing.T) {
+	t.Parallel()
+	e := &Executor{}
+	cond, args := e.buildCompareCondition("2026-04-05T10:30", CompareGte, false, "t.value")
+	if cond != "datetime(t.value) >= datetime(?)" {
+		t.Fatalf("cond = %q", cond)
+	}
+	if len(args) != 1 || args[0] != "2026-04-05T10:30" {
+		t.Fatalf("args = %#v", args)
 	}
 }
 

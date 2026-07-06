@@ -314,7 +314,7 @@ func resolvedAndValidatedTraitValue(rawValue, traitType string, sch *schema.Sche
 
 	resolved := rawValue
 	if traitDef.Type == schema.FieldTypeDate {
-		if dateValue, ok := resolveRelativeDateKeyword(rawValue); ok {
+		if dateValue, ok, _ := dates.CalendarDateForInput(rawValue, time.Now()); ok {
 			resolved = dateValue
 		}
 	}
@@ -324,14 +324,6 @@ func resolvedAndValidatedTraitValue(rawValue, traitType string, sch *schema.Sche
 		return "", &ValueValidationError{TraitType: traitType, Cause: err}
 	}
 	return resolved, nil
-}
-
-func resolveRelativeDateKeyword(value string) (string, bool) {
-	resolved, ok := dates.ResolveRelativeDateKeyword(value, time.Now(), time.Monday)
-	if !ok || resolved.Kind != dates.RelativeDateInstant {
-		return "", false
-	}
-	return resolved.Date.Format(dates.DateLayout), true
 }
 
 func rewriteTraitValue(line, traitType, newValue string) (string, bool) {

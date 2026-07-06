@@ -169,6 +169,37 @@ func TestObjectFieldComparison_RelativeDateKeywordOrdering(t *testing.T) {
 	}
 }
 
+func TestObjectFieldComparison_DatetimeLiteralOrdering(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start) VALUES
+			('meeting/early', 'meeting/early.md', 'meeting', '{"starts_at":"2026-04-05T09:00"}', 1),
+			('meeting/late', 'meeting/late.md', 'meeting', '{"starts_at":"2026-04-05T13:00"}', 1);
+	`)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	e := NewExecutor(db)
+
+	q, err := Parse(`type:meeting .starts_at>="2026-04-05T12:00"`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	results, err := e.ExecuteObjectQuery(q)
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+
+	if len(results) != 1 || results[0].ID != "meeting/late" {
+		t.Fatalf("unexpected results: %#v", results)
+	}
+}
+
 func TestObjectFieldComparison_InvalidDateReturnsError(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
@@ -186,6 +217,27 @@ func TestObjectFieldComparison_InvalidDateReturnsError(t *testing.T) {
 		t.Fatal("expected invalid date comparison to fail")
 	}
 	if got := err.Error(); got != `invalid date filter: "2026-13-45"` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestObjectFieldComparison_InvalidDatetimeReturnsError(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	e := NewExecutor(db)
+
+	q, err := Parse(`type:project .starts_at>"2026-04-05T99:00"`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	_, err = e.ExecuteObjectQuery(q)
+	if err == nil {
+		t.Fatal("expected invalid datetime comparison to fail")
+	}
+	if got := err.Error(); got != `invalid date filter: "2026-04-05T99:00"` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

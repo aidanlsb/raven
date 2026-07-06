@@ -459,6 +459,25 @@ Usage: `@due(2026-01-15)` or `@due(tomorrow)`
 - `tomorrow` — Tomorrow
 - `yesterday` — Yesterday
 
+Date fields and date traits normalize relative inputs to the stable
+`YYYY-MM-DD` calendar date when written through Raven commands.
+
+Fields declared as `ref` with `target: date` use the same calendar-date
+semantics for input, but resolve to the matching daily note when queried or
+used as references:
+
+```yaml
+types:
+  brief:
+    fields:
+      date:
+        type: ref
+        target: date
+```
+
+For example, `rvn set brief/today date=today` stores `date: 2026-01-15`
+and `rvn query 'type:brief .date==today'` matches that daily-note reference.
+
 #### `datetime`
 
 Date and time value.
@@ -470,6 +489,9 @@ traits:
 ```
 
 Usage: `@remind(2026-01-15T09:00)`
+
+Datetime comparisons use datetime semantics when the query value is a datetime
+literal, for example `trait:remind .value>="2026-01-15T09:00"`.
 
 #### `enum`
 

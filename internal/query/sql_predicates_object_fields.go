@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -158,7 +157,7 @@ func (e *Executor) buildDateVirtualFieldPredicateSQL(p *FieldPredicate, alias st
 }
 
 func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr string, jsonPath string, now time.Time) (string, []interface{}, bool, error) {
-	cond, dateArgs, ok, err := index.TryParseDateComparisonWithOptions(
+	cond, dateArgs, ok, err := index.TryParseTemporalComparisonWithOptions(
 		value,
 		compareOpToSQL(compareOp),
 		fieldExpr,
@@ -202,7 +201,11 @@ func (e *Executor) resolveRefValue(value string) (resolved string, fallback stri
 
 func (e *Executor) resolveRefFieldValue(typeName, fieldName, value string) (resolved string, fallback string, err error) {
 	if e.isDateTargetRefField(typeName, fieldName) {
-		if resolved, ok := e.resolveRelativeDateRefValue(value); ok {
+		resolved, ok, err := dates.DailyObjectIDForInput(value, e.dailyDirectory, e.queryNow())
+		if err != nil {
+			return "", "", err
+		}
+		if ok {
 			if resolved != value {
 				return resolved, value, nil
 			}
@@ -210,18 +213,6 @@ func (e *Executor) resolveRefFieldValue(typeName, fieldName, value string) (reso
 		}
 	}
 	return e.resolveRefValue(value)
-}
-
-func (e *Executor) resolveRelativeDateRefValue(value string) (string, bool) {
-	relative, ok := dates.ResolveRelativeDateKeyword(value, e.queryNow(), time.Monday)
-	if !ok || relative.Kind != dates.RelativeDateInstant {
-		return "", false
-	}
-	dailyDir := e.dailyDirectory
-	if dailyDir == "" {
-		dailyDir = "daily"
-	}
-	return path.Join(dailyDir, relative.Date.Format(dates.DateLayout)), true
 }
 
 func (e *Executor) isRefField(typeName, fieldName string) bool {

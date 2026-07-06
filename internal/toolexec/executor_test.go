@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/rvnexec"
 )
 
 func writeFakeTool(t *testing.T, dir string, unixName, unixBody, windowsName, windowsBody string) string {
@@ -58,18 +60,15 @@ func TestExecute_UnknownTool(t *testing.T) {
 }
 
 func TestExecute_InvalidJSONOutput(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	executable := writeFakeTool(
-		t,
-		dir,
-		"fake-rvn.sh",
-		"#!/bin/sh\necho not-json\n",
-		"fake-rvn.cmd",
-		"@echo off\r\necho not-json\r\n",
-	)
+	originalRunTool := runTool
+	t.Cleanup(func() {
+		runTool = originalRunTool
+	})
+	runTool = func(_ string, _ []string) (rvnexec.Result, error) {
+		return rvnexec.Result{Output: []byte("not-json\n")}, nil
+	}
 
-	_, err := Execute("", executable, "raven_vault_stats", nil)
+	_, err := Execute("", "fake-rvn", "raven_vault_stats", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
