@@ -280,12 +280,32 @@ func CalculateColumnWidthsForRows(columns []ColumnDef, headers []string, rows []
 	if len(headers) == 0 && len(rows) == 0 {
 		return CalculateColumnWidths(columns, termWidth)
 	}
+	return FitColumnWidths(DesiredColumnWidths(columns, headers, rows), columns, termWidth)
+}
 
+// DesiredColumnWidths measures content-driven column widths from headers and
+// rows, independent of terminal width. Callers that render the same rows at
+// varying widths can measure once and refit with FitColumnWidths instead of
+// rescanning every row per render.
+func DesiredColumnWidths(columns []ColumnDef, headers []string, rows [][]string) []int {
+	if len(columns) == 0 {
+		return nil
+	}
 	widths := make([]int, len(columns))
 	for i, col := range columns {
 		widths[i] = desiredColumnWidth(col, columnValues(i, headers, rows))
 	}
+	return widths
+}
 
+// FitColumnWidths shrinks desired content widths to fit the terminal width,
+// honoring per-column minimums and shrink priorities. The input slice is not
+// modified.
+func FitColumnWidths(desired []int, columns []ColumnDef, termWidth int) []int {
+	if len(columns) == 0 {
+		return nil
+	}
+	widths := append([]int(nil), desired...)
 	const columnPadding = 2
 	totalPadding := (len(columns) - 1) * columnPadding
 	leftMargin := 2

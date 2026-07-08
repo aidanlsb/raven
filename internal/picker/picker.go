@@ -66,6 +66,10 @@ type Options struct {
 }
 
 // PreviewFunc returns preview content for a picker item.
+//
+// The preview is deliberately an on-demand modal (toggled with "p") rather
+// than a persistent side pane: result rows keep the full terminal width, and
+// preview content is only computed for the row the user asks about.
 type PreviewFunc func(Item) (Preview, error)
 
 // Preview is displayed in the picker's preview modal.
@@ -149,6 +153,19 @@ type model struct {
 	filtered []int
 	opts     Options
 
+	// targets holds the normalized search corpus for each item, computed once
+	// so per-keystroke ranking does not re-normalize every item.
+	targets []string
+	// rankedQuery is the query that produced the current filtered set. When
+	// the next query extends it, ranking narrows from filtered instead of
+	// rescanning all items.
+	rankedQuery string
+	hasRanked   bool
+	// desiredWidths caches content-measured table column widths across all
+	// items, so table rendering only refits them to the current width and
+	// columns stay stable while filtering.
+	desiredWidths []int
+
 	query        string
 	cursor       int
 	offset       int
@@ -174,10 +191,14 @@ func newModel(items []Item, opts Options) model {
 	m := model{
 		items:        items,
 		opts:         opts,
+		targets:      normalizedSearchTargets(items),
 		width:        100,
 		height:       30,
 		selectedKeys: make(map[string]bool),
 		renderer:     renderer,
+	}
+	if columns := m.tableColumns(); len(columns) > 0 {
+		m.desiredWidths = ui.DesiredColumnWidths(columns, m.tableHeaders(columns), m.tableRowsForWidths(columns))
 	}
 	m.applyFilter()
 	return m
@@ -308,6 +329,14 @@ func (m model) updateInsertKey(msg tea.KeyMsg) (model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEsc:
 		m.mode = normalMode
+	case tea.KeyUp, tea.KeyCtrlP:
+		m.moveCursor(-1)
+	case tea.KeyDown, tea.KeyCtrlN:
+		m.moveCursor(1)
+	case tea.KeyPgUp:
+		m.moveCursor(-m.listHeight())
+	case tea.KeyPgDown:
+		m.moveCursor(m.listHeight())
 	case tea.KeyBackspace, tea.KeyDelete:
 		if m.query != "" {
 			m.query = dropLastRune(m.query)
@@ -445,7 +474,7 @@ func (m model) helpText() string {
 		return "preview: p/esc/q close"
 	}
 	if m.mode == insertMode {
-		return "insert: type filter  esc: normal  ctrl-w: delete word  ctrl-u: clear"
+		return "insert: type filter  up/down move  enter: select  esc: normal  ctrl-w: delete word  ctrl-u: clear"
 	}
 	nav := ""
 	if m.opts.AllowBack && m.opts.AllowForward {
@@ -501,9 +530,6 @@ func (m model) renderList(width int) string {
 			line = "  " + line
 		}
 		lines = append(lines, line)
-		if visibleIndex < end-m.offset-1 {
-			lines = append(lines, m.rowDivider(width))
-		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -517,7 +543,7 @@ func (m model) renderTableList(width int) string {
 
 	columns := m.tableColumns()
 	headers := m.tableHeaders(columns)
-	widths := ui.CalculateColumnWidthsForRows(columns, headers, m.tableRowsForWidths(columns), width)
+	widths := ui.FitColumnWidths(m.desiredWidths, columns, width)
 	lines := []string{m.formatTableRow(headers, widths, columns, true, false), m.rowDivider(width)}
 
 	for visibleIndex, filteredIndex := range m.filtered[m.offset:end] {
@@ -540,9 +566,6 @@ func (m model) renderTableList(width int) string {
 
 		rendered := m.formatTableRow(row, widths, columns, false, m.offset+visibleIndex == m.cursor)
 		lines = append(lines, rendered)
-		if visibleIndex < end-m.offset-1 {
-			lines = append(lines, m.rowDivider(width))
-		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -595,12 +618,13 @@ func (m model) renderPreviewOverlay(bodyHeight int) string {
 	return m.rendererOrDefault().Place(m.width, bodyHeight, lipgloss.Center, lipgloss.Center, modal)
 }
 
+// tableRowsForWidths builds measurement rows from all items (not the filtered
+// set) so column widths stay stable while the filter narrows.
 func (m model) tableRowsForWidths(columns []ui.ColumnDef) [][]string {
-	rows := make([][]string, 0, len(m.filtered))
-	for visibleIndex, filteredIndex := range m.filtered {
-		item := m.items[filteredIndex]
+	rows := make([][]string, 0, len(m.items))
+	for index, item := range m.items {
 		row := make([]string, 0, len(columns))
-		row = append(row, ui.FormatRowNum(visibleIndex+1, len(m.filtered)))
+		row = append(row, ui.FormatRowNum(index+1, len(m.items)))
 		row = append(row, item.Columns...)
 		for len(row) < len(columns) {
 			row = append(row, "")
@@ -639,21 +663,15 @@ func (m model) tableHeaders(columns []ui.ColumnDef) []string {
 func (m model) listHeight() int {
 	bodyHeight := m.bodyHeight()
 	if len(m.tableColumns()) > 0 {
-		// Header + header divider take two lines; rows are separated by
-		// dividers, so N rows render as 2N+1 lines.
-		height := (bodyHeight - 1) / 2
+		// The header row and its divider take two lines; every remaining
+		// line is a result row.
+		height := bodyHeight - 2
 		if height < 1 {
 			return 1
 		}
 		return height
 	}
-
-	// Rows are separated by dividers, so N rows render as 2N-1 lines.
-	height := (bodyHeight + 1) / 2
-	if height < 1 {
-		return 1
-	}
-	return height
+	return bodyHeight
 }
 
 func (m model) bodyHeight() int {
@@ -666,7 +684,16 @@ func (m model) bodyHeight() int {
 }
 
 func (m *model) applyFilter() {
-	m.filtered = rankItems(m.items, m.query)
+	// Extending the query can only shrink the match set (every token of the
+	// old query still has to match), so narrow from the current filtered set
+	// instead of rescanning all items.
+	candidates := allIndexes(len(m.items))
+	if m.hasRanked && strings.HasPrefix(m.query, m.rankedQuery) {
+		candidates = m.filtered
+	}
+	m.filtered = rankTargets(m.targets, candidates, m.query)
+	m.rankedQuery = m.query
+	m.hasRanked = true
 	m.cursor = 0
 	m.offset = 0
 	m.clamp()
@@ -888,15 +915,19 @@ func tableCellStyleWithRenderer(renderer *lipgloss.Renderer, width int, columns 
 	return style
 }
 
+// truncate shortens a string to the given display width in terminal cells,
+// accounting for wide characters (CJK, emoji) so table columns stay aligned.
 func truncate(s string, width int) string {
-	runes := []rune(s)
-	if len(runes) <= width {
+	if width < 1 {
+		return ""
+	}
+	if ansi.StringWidth(s) <= width {
 		return s
 	}
 	if width <= 3 {
-		return string(runes[:width])
+		return ansi.Truncate(s, width, "")
 	}
-	return string(runes[:width-3]) + "..."
+	return ansi.Truncate(s, width, "...")
 }
 
 func splitPreviewLines(content string, width, height int) []string {

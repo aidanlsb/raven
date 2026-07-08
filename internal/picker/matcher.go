@@ -29,18 +29,39 @@ type matchState struct {
 }
 
 func rankItems(items []Item, query string) []int {
+	return rankTargets(normalizedSearchTargets(items), allIndexes(len(items)), query)
+}
+
+// normalizedSearchTargets precomputes the normalized match corpus for each
+// item so ranking does not re-normalize every item on each query change.
+func normalizedSearchTargets(items []Item) []string {
+	targets := make([]string, len(items))
+	for i, item := range items {
+		targets[i] = normalizeFuzzyText(item.searchText())
+	}
+	return targets
+}
+
+func allIndexes(n int) []int {
+	indexes := make([]int, n)
+	for i := range indexes {
+		indexes[i] = i
+	}
+	return indexes
+}
+
+// rankTargets scores the candidate indexes against the query and returns the
+// matching indexes ordered by descending match quality. An empty query keeps
+// the candidates in their current order.
+func rankTargets(targets []string, candidates []int, query string) []int {
 	tokens := strings.Fields(normalizeFuzzyText(query))
 	if len(tokens) == 0 {
-		indexes := make([]int, len(items))
-		for i := range items {
-			indexes[i] = i
-		}
-		return indexes
+		return append([]int(nil), candidates...)
 	}
 
-	matches := make([]rankedItem, 0, len(items))
-	for index, item := range items {
-		target := normalizeFuzzyText(item.searchText())
+	matches := make([]rankedItem, 0, len(candidates))
+	for _, index := range candidates {
+		target := targets[index]
 		score, ok := scoreTarget(target, tokens)
 		if !ok {
 			continue
