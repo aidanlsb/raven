@@ -1,6 +1,9 @@
 package lsp
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestCharacterByteConversions(t *testing.T) {
 	t.Parallel()
@@ -56,8 +59,9 @@ func TestURIPathConversions(t *testing.T) {
 		if got := pathToURI(tt.path); got != tt.uri {
 			t.Errorf("pathToURI(%q) = %q, want %q", tt.path, got, tt.uri)
 		}
-		if got := uriToPath(tt.uri); got != tt.path {
-			t.Errorf("uriToPath(%q) = %q, want %q", tt.uri, got, tt.path)
+		// uriToPath returns OS-native separators (backslashes on Windows).
+		if got := uriToPath(tt.uri); got != filepath.FromSlash(tt.path) {
+			t.Errorf("uriToPath(%q) = %q, want %q", tt.uri, got, filepath.FromSlash(tt.path))
 		}
 	}
 
