@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The interactive picker now supports cursor movement while filtering (arrow keys, ctrl-n/ctrl-p, page up/down in insert mode).
+- Picker rows are no longer separated by divider lines, roughly doubling the number of visible results.
+- Picker table columns are sized from the full result set once, so they stay stable while filtering, and filtering large result sets is faster (search text is normalized once and extending a query narrows from the current matches).
+- Picker table cells truncate by display width, keeping columns aligned with CJK and emoji content.
+- A saved query with a `browse` default now degrades to normal output when run without an interactive terminal (piped output, scripts) instead of erroring; explicit `--browse` still requires a terminal.
+- `rvn pick` exits with code 130 when the picker is cancelled, so pipelines can distinguish cancellation from an empty selection.
+
 ## [v0.0.27] - 2026-07-02
 
 ### Changed
