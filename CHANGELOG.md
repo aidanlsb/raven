@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.28] - 2026-07-08
+
 ### Added
 - `rvn lsp` runs Raven as a Language Server Protocol server over stdio for editor integration: diagnostics (matching `rvn check` issue types), completion for `[[refs]]`, `@traits`, and frontmatter keys, go-to-definition, find-references, and hover. See the new "Editor Integration (LSP)" docs page for Neovim setup.
 - `rvn backlinks` results include `position_start`/`position_end` column offsets when available.
