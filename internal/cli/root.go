@@ -152,6 +152,17 @@ func Execute() error {
 	return err
 }
 
+// ExitCode maps an error returned by Execute to the process exit code.
+func ExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if errors.Is(err, ErrPickCancelled) {
+		return 130
+	}
+	return 1
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&vaultName, "vault", "v", "", "Named vault from config")
 	rootCmd.PersistentFlags().StringVar(&vaultPathFlag, "vault-path", "", "Explicit path to vault directory")

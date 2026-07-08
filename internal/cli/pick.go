@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,12 @@ import (
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/ui"
 )
+
+// ErrPickCancelled reports that the user cancelled an interactive pick
+// without selecting anything. The CLI entry point maps it to exit code 130
+// (fzf's abort convention) so pipelines can distinguish "cancelled" from
+// "selected nothing".
+var ErrPickCancelled = errors.New("pick cancelled")
 
 var (
 	pickRun      = picker.Run
@@ -69,7 +76,7 @@ stdout for downstream commands.`,
 				return handleError(ErrInternal, err, "")
 			}
 			if !ok {
-				return nil
+				return pickCancelled(cmd)
 			}
 			for _, selection := range selections {
 				fmt.Println(selection.Item.ID)
@@ -82,11 +89,19 @@ stdout for downstream commands.`,
 			return handleError(ErrInternal, err, "")
 		}
 		if !ok {
-			return nil
+			return pickCancelled(cmd)
 		}
 		fmt.Println(selection.Item.ID)
 		return nil
 	},
+}
+
+// pickCancelled silences Cobra's error/usage output and returns the
+// cancellation sentinel; main translates it into exit code 130.
+func pickCancelled(cmd *cobra.Command) error {
+	cmd.SilenceErrors = true
+	cmd.SilenceUsage = true
+	return ErrPickCancelled
 }
 
 func readPickItems(r io.Reader) ([]picker.Item, error) {
