@@ -326,7 +326,7 @@ Key flags:
 - `--refresh` — reindex changed files before running the query (useful after editing files outside Raven)
 - `--browse` — open an interactive Raven picker and open the selected result in your configured editor
 
-Use `rvn pick` when you want Raven-native interactive selection in a pipeline. It reads `--pipe` output, opens a picker on the terminal, and writes selected IDs to stdout.
+Use `rvn pick` when you want Raven-native interactive selection in a pipeline. It reads `--pipe` output, opens a picker on the terminal, and writes selected IDs to stdout. Cancelling the picker exits with code 130 (and prints nothing), so scripts can distinguish cancellation from a selection.
 
 Section query IDs are stable `file#slug` IDs and asset query IDs are stable asset paths. Section and asset queries do not support `--apply`; use `--ids` to pass IDs to commands that explicitly support them.
 
@@ -381,6 +381,8 @@ rvn query saved set open-projects 'type:project .status==active' --browse --limi
 ```
 
 This stores the RQL separately from the default options in `raven.yaml`; explicit flags passed when running the saved query override those defaults.
+
+A saved `browse` default only applies when the query runs on an interactive terminal. With `--json` or piped output, the query degrades to normal non-interactive output, so saved queries stay safe for scripts and agents.
 
 ### Bulk Operations by Query Type
 

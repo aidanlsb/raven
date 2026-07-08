@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,6 +92,65 @@ func TestPickCommandRunESelectsItemFromPipeInput(t *testing.T) {
 	})
 	if strings.TrimSpace(out) != "project/raven" {
 		t.Fatalf("stdout = %q, want project/raven", out)
+	}
+}
+
+func TestPickCommandRunEReturnsCancelSentinel(t *testing.T) {
+	prevRun := pickRun
+	prevOpenTTY := pickOpenTTY
+	prevStdin := os.Stdin
+	prevSilenceErrors := pickCmd.SilenceErrors
+	prevSilenceUsage := pickCmd.SilenceUsage
+	t.Cleanup(func() {
+		pickRun = prevRun
+		pickOpenTTY = prevOpenTTY
+		os.Stdin = prevStdin
+		pickCmd.SilenceErrors = prevSilenceErrors
+		pickCmd.SilenceUsage = prevSilenceUsage
+	})
+
+	stdinReader, stdinWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe stdin: %v", err)
+	}
+	if _, err := stdinWriter.WriteString("1\tproject/raven\tRaven\tproject/raven.md:1\n"); err != nil {
+		t.Fatalf("write stdin: %v", err)
+	}
+	if err := stdinWriter.Close(); err != nil {
+		t.Fatalf("close stdin writer: %v", err)
+	}
+	os.Stdin = stdinReader
+	defer stdinReader.Close()
+
+	ttyPath := filepath.Join(t.TempDir(), "tty")
+	if err := os.WriteFile(ttyPath, []byte{}, 0o644); err != nil {
+		t.Fatalf("write tty fixture: %v", err)
+	}
+	pickOpenTTY = func() (*os.File, error) {
+		return os.OpenFile(ttyPath, os.O_RDWR, 0)
+	}
+	pickRun = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+		return picker.Selection{}, false, nil
+	}
+
+	err = pickCmd.RunE(pickCmd, nil)
+	if !errors.Is(err, ErrPickCancelled) {
+		t.Fatalf("RunE error = %v, want ErrPickCancelled", err)
+	}
+	if !pickCmd.SilenceErrors || !pickCmd.SilenceUsage {
+		t.Fatalf("cancel should silence Cobra error/usage output")
+	}
+}
+
+func TestExitCodeMapsCancellation(t *testing.T) {
+	if got := ExitCode(nil); got != 0 {
+		t.Fatalf("ExitCode(nil) = %d, want 0", got)
+	}
+	if got := ExitCode(ErrPickCancelled); got != 130 {
+		t.Fatalf("ExitCode(ErrPickCancelled) = %d, want 130", got)
+	}
+	if got := ExitCode(errors.New("boom")); got != 1 {
+		t.Fatalf("ExitCode(error) = %d, want 1", got)
 	}
 }
 

@@ -414,6 +414,151 @@ func TestMultiSelectPreservesSelectionAcrossFiltering(t *testing.T) {
 	}
 }
 
+func TestInsertModeNavigationKeysMoveCursor(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "one", Label: "issue one"},
+		{ID: "two", Label: "issue two"},
+		{ID: "three", Label: "issue three"},
+	}, Options{})
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("issue")})
+	m = updated.(model)
+	if m.mode != insertMode {
+		t.Fatalf("mode = %v, want insert", m.mode)
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(model)
+	if m.cursor != 1 {
+		t.Fatalf("cursor after down = %d, want 1", m.cursor)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	m = updated.(model)
+	if m.cursor != 2 {
+		t.Fatalf("cursor after ctrl-n = %d, want 2", m.cursor)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = updated.(model)
+	if m.cursor != 1 {
+		t.Fatalf("cursor after up = %d, want 1", m.cursor)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = updated.(model)
+	if m.cursor != 0 {
+		t.Fatalf("cursor after ctrl-p = %d, want 0", m.cursor)
+	}
+	if m.mode != insertMode {
+		t.Fatalf("navigation should keep insert mode, got %v", m.mode)
+	}
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(model)
+	if cmd == nil || !m.selected {
+		t.Fatalf("enter after insert-mode navigation should select")
+	}
+}
+
+func TestApplyFilterNarrowsIncrementallyAndRecoversOnBackspace(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "alpha", Label: "alpha"},
+		{ID: "alphabet", Label: "alphabet"},
+		{ID: "beta", Label: "beta"},
+	}, Options{})
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("alphab")})
+	m = updated.(model)
+	if len(m.filtered) != 1 || m.items[m.filtered[0]].ID != "alphabet" {
+		t.Fatalf("filtered = %#v, want alphabet only", m.filtered)
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	m = updated.(model)
+	if len(m.filtered) != 2 {
+		t.Fatalf("filtered count after backspace = %d, want 2", len(m.filtered))
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	m = updated.(model)
+	if len(m.filtered) != 3 {
+		t.Fatalf("filtered count after clear = %d, want all 3", len(m.filtered))
+	}
+	if m.filtered[0] != 0 || m.filtered[1] != 1 || m.filtered[2] != 2 {
+		t.Fatalf("cleared filter order = %#v, want original order", m.filtered)
+	}
+}
+
+func TestTruncateUsesDisplayWidth(t *testing.T) {
+	wide := "日本語のテキスト"
+	got := truncate(wide, 8)
+	if width := ansi.StringWidth(got); width > 8 {
+		t.Fatalf("truncated width = %d, want <= 8 (%q)", width, got)
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Fatalf("truncated value should end with ellipsis, got %q", got)
+	}
+	if got := truncate("short", 10); got != "short" {
+		t.Fatalf("short value should be unchanged, got %q", got)
+	}
+	if got := truncate("anything", 0); got != "" {
+		t.Fatalf("zero width should return empty, got %q", got)
+	}
+}
+
+func TestRenderListShowsOneRowPerLine(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "one", Label: "One"},
+		{ID: "two", Label: "Two"},
+		{ID: "three", Label: "Three"},
+	}, Options{})
+	m.height = 30
+
+	out := m.renderList(80)
+	lines := strings.Split(out, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("rendered lines = %d, want 3 (one per row, no dividers):\n%s", len(lines), out)
+	}
+	if strings.Contains(out, "─") {
+		t.Fatalf("list mode should not render row dividers:\n%s", out)
+	}
+}
+
+func TestRenderTableListKeepsWidthsStableWhileFiltering(t *testing.T) {
+	m := newModel([]Item{
+		{
+			ID:      "short",
+			Label:   "Fix",
+			Columns: []string{"Fix", "a.md:1"},
+		},
+		{
+			ID:      "long",
+			Label:   "A much longer issue title that stretches the column",
+			Columns: []string{"A much longer issue title that stretches the column", "type/issue/very-long-path.md:120"},
+		},
+	}, Options{
+		Headers: []string{"#", "title", "location"},
+	})
+	m.height = 30
+
+	headerBefore := strings.Split(m.renderList(100), "\n")[0]
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("fix")})
+	m = updated.(model)
+	if len(m.filtered) != 1 {
+		t.Fatalf("filtered count = %d, want 1", len(m.filtered))
+	}
+
+	headerAfter := strings.Split(m.renderList(100), "\n")[0]
+	if headerBefore != headerAfter {
+		t.Fatalf("table header changed while filtering:\nbefore: %q\nafter:  %q", headerBefore, headerAfter)
+	}
+}
+
 func TestInsertModeEscReturnsToNormal(t *testing.T) {
 	m := newModel([]Item{{ID: "one", Label: "One"}}, Options{})
 

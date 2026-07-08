@@ -867,7 +867,7 @@ For trait queries (trait:...):
 			{Name: "confirm", Description: "Save --confirm as a default option for this query", Type: FlagTypeBool},
 			{Name: "pipe", Description: "Save pipe-friendly output as a default option for this query", Type: FlagTypeBool},
 			{Name: "no-pipe", Description: "Save human-readable output as a default option for this query", Type: FlagTypeBool},
-			{Name: "browse", Description: "Save interactive browse/open as a default option for this query", Type: FlagTypeBool},
+			{Name: "browse", Description: "Save interactive browse/open as a default option for this query (applies only on an interactive terminal; JSON and piped output degrade to normal results)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn query saved set tasks 'trait:due' --json",

@@ -276,12 +276,10 @@ Examples:
 
 		applyArgs := queryStringArrayFlagValue(cmd, "apply", savedApplyOption(savedOptions))
 		confirmApply := queryBoolFlagValue(cmd, "confirm", savedBoolOption(savedOptions, "confirm"))
-		browse := queryBoolFlagValue(cmd, "browse", savedBoolOption(savedOptions, "browse"))
-		if isJSONOutput() && browse && !cmd.Flags().Changed("browse") {
-			// JSON is an explicit machine-readable mode; let it suppress saved
-			// interactive defaults so saved queries remain agent/script-friendly.
-			browse = false
-		}
+		browse := effectiveQueryBrowse(
+			queryBoolFlagValue(cmd, "browse", savedBoolOption(savedOptions, "browse")),
+			cmd.Flags().Changed("browse"),
+		)
 
 		pipeOverride := queryPipeOverride(cmd, savedOptions)
 		SetPipeFormat(pipeOverride)
@@ -636,6 +634,20 @@ func browseSearchText(parts ...string) string {
 		}
 	}
 	return strings.Join(out, " ")
+}
+
+// effectiveQueryBrowse decides whether browse mode applies. An explicit
+// --browse flag always wins (and is validated later, erroring in contexts
+// that cannot run a picker). When browse comes from a saved-query default,
+// machine-readable contexts suppress it so saved queries stay agent- and
+// script-friendly: JSON is an explicit machine mode, and a non-interactive
+// terminal (piped output, cron) degrades to the normal non-browse output
+// instead of erroring.
+func effectiveQueryBrowse(browse, explicit bool) bool {
+	if !browse || explicit {
+		return browse
+	}
+	return !isJSONOutput() && canUseInteractiveTerminal()
 }
 
 func browseQueryResults(items []picker.Item, headers []string, columns []ui.ColumnDef) error {
