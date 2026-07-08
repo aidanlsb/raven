@@ -202,6 +202,43 @@ func TestSavedQueryOptionsFromFlagsNoPipe(t *testing.T) {
 	}
 }
 
+func TestEffectiveQueryBrowseSavedDefaultDegradesOffTerminal(t *testing.T) {
+	prevJSON := jsonOutput
+	prevStdinTTY := interactiveStdinIsTerminal
+	prevStdoutTTY := interactiveStdoutIsTerminal
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		interactiveStdinIsTerminal = prevStdinTTY
+		interactiveStdoutIsTerminal = prevStdoutTTY
+	})
+
+	jsonOutput = false
+	interactiveStdinIsTerminal = func() bool { return true }
+	interactiveStdoutIsTerminal = func() bool { return true }
+	if !effectiveQueryBrowse(true, false) {
+		t.Fatalf("saved browse default should apply on an interactive terminal")
+	}
+
+	interactiveStdoutIsTerminal = func() bool { return false }
+	if effectiveQueryBrowse(true, false) {
+		t.Fatalf("saved browse default should degrade when stdout is not a terminal")
+	}
+	if !effectiveQueryBrowse(true, true) {
+		t.Fatalf("explicit --browse must be preserved (validated later) even off-terminal")
+	}
+
+	interactiveStdoutIsTerminal = func() bool { return true }
+	jsonOutput = true
+	if effectiveQueryBrowse(true, false) {
+		t.Fatalf("saved browse default should degrade in JSON mode")
+	}
+
+	jsonOutput = false
+	if effectiveQueryBrowse(false, false) || effectiveQueryBrowse(false, true) {
+		t.Fatalf("browse=false should never be enabled")
+	}
+}
+
 func TestQueryFlagValuesPreferExplicitFlags(t *testing.T) {
 	cmd := newQueryOptionsTestCommand()
 	if err := cmd.Flags().Set("browse", "false"); err != nil {
