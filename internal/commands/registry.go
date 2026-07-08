@@ -315,6 +315,19 @@ post-init setup suggestions instead of mutating global config implicitly.`,
 			"Launch Raven MCP server for local clients",
 		},
 	},
+	"lsp": {
+		Name:        "lsp",
+		Description: "Run Raven as an LSP server",
+		VaultScope:  VaultScopeNone,
+		LongDesc:    "Run Raven as a Language Server Protocol server over stdio for editor integration (diagnostics, completion, go-to-definition, find-references, hover).",
+		Examples: []string{
+			"rvn lsp",
+			"rvn lsp --vault personal",
+		},
+		UseCases: []string{
+			"Launch the Raven language server from an editor LSP client",
+		},
+	},
 	"mcp_install": {
 		Name:        "mcp install",
 		Description: "Add raven to an MCP client config",

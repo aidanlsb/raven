@@ -25,7 +25,7 @@ test:
 
 # Run integration tests (slower, builds CLI binary)
 test-integration:
-	go test -race -tags=integration -v ./internal/cli ./internal/mcp
+	go test -race -tags=integration -v ./internal/cli ./internal/mcp ./internal/lsp
 
 # Run all tests (unit + integration)
 test-all: test test-integration
@@ -34,7 +34,7 @@ test-all: test test-integration
 test-coverage:
 	mkdir -p $(COVERAGE_DIR)
 	go test -race -coverprofile=$(COVERAGE_PROFILE) ./...
-	go test -race -coverpkg=./... -coverprofile=$(COVERAGE_INTEGRATION_PROFILE) -tags=integration -v ./internal/cli ./internal/mcp
+	go test -race -coverpkg=./... -coverprofile=$(COVERAGE_INTEGRATION_PROFILE) -tags=integration -v ./internal/cli ./internal/mcp ./internal/lsp
 	go run ./scripts/merge_coverprofiles.go $(COVERAGE_MERGED_PROFILE) $(COVERAGE_PROFILE) $(COVERAGE_INTEGRATION_PROFILE)
 	go tool cover -html=$(COVERAGE_MERGED_PROFILE) -o $(COVERAGE_HTML)
 

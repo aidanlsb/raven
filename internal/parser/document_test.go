@@ -713,3 +713,76 @@ func sameIntPtr(a, b *int) bool {
 	}
 	return *a == *b
 }
+
+func TestParseDocument_TraitOffsets(t *testing.T) {
+	t.Parallel()
+
+	// Offsets are relative to the goldmark-collected segment text for the
+	// trait's line (block markup such as list markers is excluded), and the
+	// start includes the leading delimiter matched by the trait regex.
+	tests := []struct {
+		name      string
+		content   string
+		wantTrait string
+		wantLine  int
+		wantStart int
+		wantEnd   int
+	}{
+		{
+			name:      "bare trait at line start",
+			content:   "@todo Finish the report\n",
+			wantTrait: "todo",
+			wantLine:  1,
+			wantStart: 0,
+			wantEnd:   len("@todo"),
+		},
+		{
+			name:      "trait with value in list item",
+			content:   "- Call Freya @due(2026-01-15)\n",
+			wantTrait: "due",
+			wantLine:  1,
+			// Segment text is "Call Freya @due(2026-01-15)"; start includes the space delimiter.
+			wantStart: len("Call Freya"),
+			wantEnd:   len("Call Freya @due(2026-01-15)"),
+		},
+		{
+			name:      "trait after text",
+			content:   "Some text @priority(high) more text\n",
+			wantTrait: "priority",
+			wantLine:  1,
+			wantStart: len("Some text"),
+			wantEnd:   len("Some text @priority(high)"),
+		},
+		{
+			name:      "trait on later line",
+			content:   "# Head\n\n- item one\n- nested @todo thing\n",
+			wantTrait: "todo",
+			wantLine:  4,
+			wantStart: len("nested"),
+			wantEnd:   len("nested @todo"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			doc, err := ParseDocument(tt.content, "/vault/note.md", "/vault")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(doc.Traits) != 1 {
+				t.Fatalf("got %d traits, want 1", len(doc.Traits))
+			}
+			trait := doc.Traits[0]
+			if trait.TraitType != tt.wantTrait {
+				t.Errorf("TraitType = %q, want %q", trait.TraitType, tt.wantTrait)
+			}
+			if trait.Line != tt.wantLine {
+				t.Errorf("Line = %d, want %d", trait.Line, tt.wantLine)
+			}
+			if trait.StartOffset != tt.wantStart || trait.EndOffset != tt.wantEnd {
+				t.Errorf("offsets = [%d, %d), want [%d, %d)", trait.StartOffset, trait.EndOffset, tt.wantStart, tt.wantEnd)
+			}
+		})
+	}
+}

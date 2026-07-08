@@ -49,6 +49,8 @@ type ParsedTrait struct {
 	Content        string             // The content the trait annotates
 	ParentObjectID string             // Parent object ID
 	Line           int                // Line number
+	StartOffset    int                // Byte offset of the annotation start within the line (includes leading delimiter)
+	EndOffset      int                // Byte offset just past the annotation end within the line
 }
 
 // HasValue returns true if this trait has a value.
@@ -185,6 +187,8 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 			Content:        astTrait.Content,
 			ParentObjectID: parentID,
 			Line:           astTrait.Line,
+			StartOffset:    astTrait.StartOffset,
+			EndOffset:      astTrait.EndOffset,
 		})
 	}
 

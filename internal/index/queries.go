@@ -381,7 +381,7 @@ func (d *Database) BacklinksWithRoots(targetID, objectRoot, pageRoot string) ([]
 	}
 
 	query := `
-		SELECT r.source_id, o.type, r.target_raw, r.file_path, r.line_number, r.display_text
+		SELECT r.source_id, o.type, r.target_raw, r.file_path, r.line_number, r.position_start, r.position_end, r.display_text
 		FROM refs r
 		LEFT JOIN objects o ON r.source_id = o.id
 		WHERE ` + strings.Join(conditions, " OR ")
@@ -396,7 +396,7 @@ func (d *Database) BacklinksWithRoots(targetID, objectRoot, pageRoot string) ([]
 	for rows.Next() {
 		var result model.Reference
 		var sourceType sql.NullString
-		if err := rows.Scan(&result.SourceID, &sourceType, &result.TargetRaw, &result.FilePath, &result.Line, &result.DisplayText); err != nil {
+		if err := rows.Scan(&result.SourceID, &sourceType, &result.TargetRaw, &result.FilePath, &result.Line, &result.PositionStart, &result.PositionEnd, &result.DisplayText); err != nil {
 			return nil, err
 		}
 		if sourceType.Valid {

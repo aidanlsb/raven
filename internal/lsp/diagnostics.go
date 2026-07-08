@@ -1,0 +1,170 @@
+package lsp
+
+import (
+	"regexp"
+
+	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/parser"
+)
+
+// refIssueTypes are issue types whose Value field holds the raw ref target,
+// letting the diagnostic range narrow to the wikilink span.
+var refIssueTypes = map[check.IssueType]struct{}{
+	check.IssueMissingReference:        {},
+	check.IssueAmbiguousReference:      {},
+	check.IssueStaleFragment:           {},
+	check.IssueLocalFragmentRef:        {},
+	check.IssueShortRefCouldBeFullPath: {},
+	check.IssueWrongTargetType:         {},
+	check.IssueMissingAsset:            {},
+	check.IssueNonCanonicalRef:         {},
+}
+
+// traitIssueTypes are issue types attached to a trait annotation.
+var traitIssueTypes = map[check.IssueType]struct{}{
+	check.IssueUndefinedTrait:    {},
+	check.IssueInvalidTraitValue: {},
+	check.IssueInvalidDateFormat: {},
+	check.IssueInvalidEnumValue:  {},
+}
+
+// publishDiagnostics computes and publishes diagnostics for one open document.
+// The computation runs under the state lock because debounce timers invoke it
+// off the main dispatch loop.
+func (s *Server) publishDiagnostics(uri string) {
+	s.mu.Lock()
+	ws := s.ws
+	doc, open := s.docs[uri]
+	if ws == nil || !open {
+		s.mu.Unlock()
+		return
+	}
+	absPath := uriToPath(uri)
+	if absPath == "" || ws.relativePath(absPath) == "" {
+		s.mu.Unlock()
+		return
+	}
+	validator := ws.newValidator()
+	diagnostics := computeDiagnostics(ws, validator, doc.content, absPath, s.encoding)
+	s.mu.Unlock()
+
+	s.notify("textDocument/publishDiagnostics", PublishDiagnosticsParams{
+		URI:         uri,
+		Diagnostics: diagnostics,
+	})
+}
+
+// computeDiagnostics parses buffer content and validates it against the schema
+// and the cached index state. Never returns nil (an empty list clears
+// previously published diagnostics).
+func computeDiagnostics(ws *workspace, validator *check.Validator, content, absPath, encoding string) []Diagnostic {
+	diagnostics := []Diagnostic{}
+	lines := documentLines(content)
+
+	doc, err := ws.parseBuffer(content, absPath)
+	if err != nil {
+		diagnostics = append(diagnostics, Diagnostic{
+			Range:    wholeLineRange(lineAt(lines, 0), 0, encoding),
+			Severity: severityError,
+			Code:     string(check.IssueParseError),
+			Source:   "raven",
+			Message:  err.Error(),
+		})
+		return diagnostics
+	}
+
+	for _, issue := range validator.ValidateDocument(doc) {
+		severity := severityError
+		if issue.Level == check.LevelWarning {
+			severity = severityWarning
+		}
+		diagnostics = append(diagnostics, Diagnostic{
+			Range:    issueRange(issue, doc, lines, encoding),
+			Severity: severity,
+			Code:     string(issue.Type),
+			Source:   "raven",
+			Message:  issue.Message,
+		})
+	}
+
+	return diagnostics
+}
+
+// issueRange finds the most precise range for an issue: the wikilink span for
+// reference issues, the annotation span for trait issues, and the whole line
+// otherwise.
+func issueRange(issue check.Issue, doc *parser.ParsedDocument, lines []string, encoding string) Range {
+	lineIdx := issue.Line - 1
+	if lineIdx < 0 {
+		lineIdx = 0
+	}
+	if lineIdx >= len(lines) {
+		lineIdx = len(lines) - 1
+		if lineIdx < 0 {
+			lineIdx = 0
+		}
+	}
+	line := lineAt(lines, lineIdx)
+
+	if _, ok := refIssueTypes[issue.Type]; ok && issue.Value != "" {
+		if start, end, found := refSpanOnLine(line, issue.Value); found {
+			return byteRangeToRange(line, lineIdx, start, end, encoding)
+		}
+	}
+
+	if _, ok := traitIssueTypes[issue.Type]; ok {
+		if start, end, found := traitSpanOnLine(line, doc, issue); found {
+			return byteRangeToRange(line, lineIdx, start, end, encoding)
+		}
+	}
+
+	return wholeLineRange(line, lineIdx, encoding)
+}
+
+// refSpanOnLine finds the byte span of the wikilink whose target matches value.
+func refSpanOnLine(line, value string) (start, end int, found bool) {
+	for _, ref := range parser.ExtractRefs(line, 1) {
+		if ref.TargetRaw == value {
+			return ref.Start, ref.End, true
+		}
+	}
+	return 0, 0, false
+}
+
+// traitNamePattern extracts trait names from raw line text for range mapping.
+// Parser trait offsets are relative to goldmark-collected segment text (which
+// excludes block markup like list markers), so raw buffer lines are re-scanned.
+var traitNamePattern = regexp.MustCompile(`@([\w-]+)(?:\(([^)]*)\))?`)
+
+// traitSpanOnLine finds the byte span of the trait annotation an issue refers to.
+func traitSpanOnLine(line string, doc *parser.ParsedDocument, issue check.Issue) (start, end int, found bool) {
+	// Collect trait names parsed on this line so annotations inside inline
+	// code (which the parser skips) are not matched.
+	namesOnLine := map[string]struct{}{}
+	for _, trait := range doc.Traits {
+		if trait.Line == issue.Line {
+			namesOnLine[trait.TraitType] = struct{}{}
+		}
+	}
+
+	var fallback []int
+	for _, m := range traitNamePattern.FindAllStringSubmatchIndex(line, -1) {
+		name := line[m[2]:m[3]]
+		if _, parsed := namesOnLine[name]; !parsed {
+			continue
+		}
+		// For undefined_trait issues, Value holds the trait name; prefer the
+		// matching annotation when there are several on the line.
+		if issue.Type == check.IssueUndefinedTrait && issue.Value != "" && name != issue.Value {
+			if fallback == nil {
+				fallback = []int{m[0], m[1]}
+			}
+			continue
+		}
+		return m[0], m[1], true
+	}
+	if fallback != nil {
+		return fallback[0], fallback[1], true
+	}
+	return 0, 0, false
+}

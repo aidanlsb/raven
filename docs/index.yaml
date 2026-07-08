@@ -31,6 +31,9 @@ sections:
       configuration:
         title: Configuration
         path: configuration.md
+      editor-integration:
+        title: Editor Integration (LSP)
+        path: editor-integration.md
   types-and-traits:
     title: Types & Traits
     topics:

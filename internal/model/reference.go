@@ -19,6 +19,14 @@ type Reference struct {
 	// May be nil if the reference is in frontmatter.
 	Line *int `json:"line,omitempty"`
 
+	// PositionStart is the 0-indexed byte offset of the wikilink start within its line.
+	// May be nil when position data is unavailable.
+	PositionStart *int `json:"position_start,omitempty"`
+
+	// PositionEnd is the 0-indexed byte offset just past the wikilink end within its line.
+	// May be nil when position data is unavailable.
+	PositionEnd *int `json:"position_end,omitempty"`
+
 	// DisplayText is the display text of the wikilink, if different from target.
 	DisplayText *string `json:"display_text,omitempty"`
 }

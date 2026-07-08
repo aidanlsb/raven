@@ -1,9 +1,19 @@
 package index
 
 import (
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/aidanlsb/raven/internal/model"
 )
+
+func derefInt(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
 
 func TestParseFilterExpression(t *testing.T) {
 	t.Parallel()
@@ -477,11 +487,11 @@ func TestBacklinks(t *testing.T) {
 
 	// Insert test refs
 	_, err = db.db.Exec(`
-		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number)
+		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number, position_start, position_end)
 		VALUES 
-			('daily/2025-02-01', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 5),
-			('projects/bifrost', 'people/freya', 'freya', 'projects/bifrost.md', 10),
-			('projects/bifrost', 'people/freya#notes', 'freya#notes', 'projects/bifrost.md', 11)
+			('daily/2025-02-01', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 5, 4, 20),
+			('projects/bifrost', 'people/freya', 'freya', 'projects/bifrost.md', 10, NULL, NULL),
+			('projects/bifrost', 'people/freya#notes', 'freya#notes', 'projects/bifrost.md', 11, 0, 15)
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test refs: %v", err)
@@ -495,6 +505,36 @@ func TestBacklinks(t *testing.T) {
 		// Includes a section backlink via target_id LIKE 'people/freya#%'.
 		if len(results) != 3 {
 			t.Errorf("expected 3 backlinks, got %d", len(results))
+		}
+	})
+
+	t.Run("backlinks include column positions when stored", func(t *testing.T) {
+		results, err := db.Backlinks("people/freya")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		byPath := map[string]model.Reference{}
+		for _, ref := range results {
+			byPath[fmt.Sprintf("%s:%d", ref.FilePath, derefInt(ref.Line))] = ref
+		}
+
+		withPos, ok := byPath["daily/2025-02-01.md:5"]
+		if !ok {
+			t.Fatal("missing expected backlink daily/2025-02-01.md:5")
+		}
+		if withPos.PositionStart == nil || withPos.PositionEnd == nil {
+			t.Fatalf("expected position data, got start=%v end=%v", withPos.PositionStart, withPos.PositionEnd)
+		}
+		if *withPos.PositionStart != 4 || *withPos.PositionEnd != 20 {
+			t.Errorf("positions = [%d, %d), want [4, 20)", *withPos.PositionStart, *withPos.PositionEnd)
+		}
+
+		withoutPos, ok := byPath["projects/bifrost.md:10"]
+		if !ok {
+			t.Fatal("missing expected backlink projects/bifrost.md:10")
+		}
+		if withoutPos.PositionStart != nil || withoutPos.PositionEnd != nil {
+			t.Errorf("expected nil positions, got start=%v end=%v", withoutPos.PositionStart, withoutPos.PositionEnd)
 		}
 	})
 
