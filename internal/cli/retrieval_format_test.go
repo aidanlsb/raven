@@ -177,3 +177,96 @@ func TestPrintObjectTableIncludesHeadersNameFieldDynamicFieldsAndLocation(t *tes
 		}
 	}
 }
+
+func TestPrintQuerySectionResultsIncludesColumnHeaders(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = false
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	out := captureStdout(t, func() {
+		printQuerySectionResults("section level:2", []model.Section{
+			{
+				ID:        "page/raven#section-query-results",
+				FilePath:  "page/raven.md",
+				Slug:      "section-query-results",
+				Title:     "Section query results",
+				Level:     2,
+				LineStart: 17,
+			},
+		})
+	})
+
+	for _, want := range []string{"title", "heading", "location", "Section query results", "h2 #section-query-results", "page/raven.md:17"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected section query output to include %q, got: %q", want, out)
+		}
+	}
+}
+
+func TestPrintQueryTraitResultsIncludesColumnHeaders(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = false
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	value := "open"
+	out := captureStdout(t, func() {
+		printQueryTraitResults("trait:status", "status", []model.Trait{
+			{
+				TraitType: "status",
+				Value:     &value,
+				Content:   "Review section query output",
+				FilePath:  "page/raven.md",
+				Line:      23,
+			},
+		})
+	})
+
+	for _, want := range []string{"content", "trait", "location", "Review section query output", "@status(open)", "page/raven.md:23"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected trait query output to include %q, got: %q", want, out)
+		}
+	}
+}
+
+func TestPrintQueryAssetResultsIncludesColumnHeaders(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = false
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	out := captureStdout(t, func() {
+		printQueryAssetResults("asset", []model.Asset{
+			{
+				FilePath:  "assets/diagram.png",
+				MediaType: "image/png",
+				SizeBytes: 2048,
+			},
+		})
+	})
+
+	for _, want := range []string{"path", "media type", "size", "assets/diagram.png", "image/png", "2.0 KB"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected asset query output to include %q, got: %q", want, out)
+		}
+	}
+}
