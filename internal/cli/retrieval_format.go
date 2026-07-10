@@ -122,6 +122,7 @@ func printQuerySectionResults(queryStr string, results []model.Section) {
 
 	display := ui.NewDisplayContext()
 	table := ui.NewResultsTable(display, ui.SearchLayout())
+	table.SetHeaders(sectionBrowseHeaders())
 
 	for i, r := range results {
 		meta := fmt.Sprintf("h%d #%s", r.Level, r.Slug)
