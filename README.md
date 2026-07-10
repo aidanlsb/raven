@@ -38,6 +38,11 @@ notes/
 └── schema.yaml   # types, fields, and traits
 ```
 
+Raven also includes a built-in language server for diagnostics, completion,
+navigation, and hover while you edit. See the
+[editor integration guide](docs/using-your-vault/editor-integration.md) to
+configure `rvn lsp` in your editor.
+
 ## Agent Setup
 
 Once you have a vault, connect Raven to your agent of choice.
