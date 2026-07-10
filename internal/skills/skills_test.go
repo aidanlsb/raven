@@ -31,13 +31,39 @@ func TestLoadCatalog(t *testing.T) {
 func TestResolveInstallRootOverride(t *testing.T) {
 	t.Parallel()
 	cwd := t.TempDir()
-	got, err := ResolveInstallRoot(TargetCodex, ScopeUser, "custom/skills", cwd)
+	got, err := ResolveInstallRoot(ScopeUser, "custom/skills", cwd)
 	if err != nil {
 		t.Fatalf("ResolveInstallRoot() error = %v", err)
 	}
 	want := filepath.Join(cwd, "custom", "skills")
 	if got != want {
 		t.Fatalf("ResolveInstallRoot() = %q, want %q", got, want)
+	}
+}
+
+func TestResolveInstallRootDefaults(t *testing.T) {
+	cwd := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	tests := []struct {
+		name  string
+		scope Scope
+		want  string
+	}{
+		{name: "user", scope: ScopeUser, want: filepath.Join(home, ".agents", "skills")},
+		{name: "project", scope: ScopeProject, want: filepath.Join(cwd, ".agents", "skills")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveInstallRoot(tt.scope, "", cwd)
+			if err != nil {
+				t.Fatalf("ResolveInstallRoot() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("ResolveInstallRoot() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -50,7 +76,7 @@ func TestInstallLifecycle(t *testing.T) {
 	skill := catalog["raven-core"]
 	root := t.TempDir()
 
-	plan, err := PlanInstall(skill, TargetCodex, ScopeProject, root, false)
+	plan, err := PlanInstall(skill, ScopeProject, root, false)
 	if err != nil {
 		t.Fatalf("PlanInstall() error = %v", err)
 	}
@@ -77,7 +103,7 @@ func TestInstallLifecycle(t *testing.T) {
 		t.Fatalf("expected SKILL.md after install: %v", err)
 	}
 
-	secondPlan, err := PlanInstall(skill, TargetCodex, ScopeProject, root, false)
+	secondPlan, err := PlanInstall(skill, ScopeProject, root, false)
 	if err != nil {
 		t.Fatalf("second PlanInstall() error = %v", err)
 	}
@@ -85,7 +111,7 @@ func TestInstallLifecycle(t *testing.T) {
 		t.Fatalf("second PlanInstall() actions = %v, want none", secondPlan.Actions)
 	}
 
-	removePlan, err := PlanRemove("raven-core", TargetCodex, ScopeProject, root)
+	removePlan, err := PlanRemove("raven-core", ScopeProject, root)
 	if err != nil {
 		t.Fatalf("PlanRemove() error = %v", err)
 	}
@@ -116,7 +142,7 @@ func TestPlanInstallConflictAndForce(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	plan, err := PlanInstall(skill, TargetCodex, ScopeProject, root, false)
+	plan, err := PlanInstall(skill, ScopeProject, root, false)
 	if err != nil {
 		t.Fatalf("PlanInstall() error = %v", err)
 	}
@@ -124,7 +150,7 @@ func TestPlanInstallConflictAndForce(t *testing.T) {
 		t.Fatalf("PlanInstall() expected conflicts, got none")
 	}
 
-	forcePlan, err := PlanInstall(skill, TargetCodex, ScopeProject, root, true)
+	forcePlan, err := PlanInstall(skill, ScopeProject, root, true)
 	if err != nil {
 		t.Fatalf("PlanInstall(force) error = %v", err)
 	}
@@ -141,7 +167,7 @@ func TestPlanSyncNamedInstallsMissingSkill(t *testing.T) {
 	}
 	root := t.TempDir()
 
-	plan, err := PlanSync(catalog, "raven-core", TargetCodex, ScopeProject, root)
+	plan, err := PlanSync(catalog, "raven-core", ScopeProject, root)
 	if err != nil {
 		t.Fatalf("PlanSync() error = %v", err)
 	}
@@ -165,7 +191,7 @@ func TestPlanSyncNamedUpdatesManagedSkill(t *testing.T) {
 	skill := catalog["raven-core"]
 	root := t.TempDir()
 
-	installPlan, err := PlanInstall(skill, TargetCodex, ScopeProject, root, false)
+	installPlan, err := PlanInstall(skill, ScopeProject, root, false)
 	if err != nil {
 		t.Fatalf("PlanInstall() error = %v", err)
 	}
@@ -177,7 +203,7 @@ func TestPlanSyncNamedUpdatesManagedSkill(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	syncPlan, err := PlanSync(catalog, "raven-core", TargetCodex, ScopeProject, root)
+	syncPlan, err := PlanSync(catalog, "raven-core", ScopeProject, root)
 	if err != nil {
 		t.Fatalf("PlanSync() error = %v", err)
 	}
@@ -188,7 +214,7 @@ func TestPlanSyncNamedUpdatesManagedSkill(t *testing.T) {
 		t.Fatalf("ApplySync() error = %v", err)
 	}
 
-	rendered, err := RenderFiles(skill, TargetCodex)
+	rendered, err := RenderFiles(skill)
 	if err != nil {
 		t.Fatalf("RenderFiles() error = %v", err)
 	}
@@ -209,7 +235,7 @@ func TestPlanSyncWithoutNameSurfacesMissingSkillsOnly(t *testing.T) {
 	}
 	root := t.TempDir()
 
-	plan, err := PlanSync(catalog, "", TargetCodex, ScopeProject, root)
+	plan, err := PlanSync(catalog, "", ScopeProject, root)
 	if err != nil {
 		t.Fatalf("PlanSync() error = %v", err)
 	}
@@ -233,7 +259,7 @@ func TestPlanSyncRemovesOnlyReceiptListedFilesForUnshippedSkill(t *testing.T) {
 	skill := catalog["raven-core"]
 	root := t.TempDir()
 
-	installPlan, err := PlanInstall(skill, TargetCodex, ScopeProject, root, false)
+	installPlan, err := PlanInstall(skill, ScopeProject, root, false)
 	if err != nil {
 		t.Fatalf("PlanInstall() error = %v", err)
 	}
@@ -252,7 +278,7 @@ func TestPlanSyncRemovesOnlyReceiptListedFilesForUnshippedSkill(t *testing.T) {
 			withoutCore[id] = item
 		}
 	}
-	syncPlan, err := PlanSync(withoutCore, "", TargetCodex, ScopeProject, root)
+	syncPlan, err := PlanSync(withoutCore, "", ScopeProject, root)
 	if err != nil {
 		t.Fatalf("PlanSync() error = %v", err)
 	}
@@ -289,7 +315,7 @@ func TestPlanSyncSkipsUnreceiptedSkillDirectory(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	plan, err := PlanSync(catalog, "raven-core", TargetCodex, ScopeProject, root)
+	plan, err := PlanSync(catalog, "raven-core", ScopeProject, root)
 	if err != nil {
 		t.Fatalf("PlanSync() error = %v", err)
 	}

@@ -2772,7 +2772,7 @@ type: page
 		mcpResult := server.callTool("skill_list", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("skill", "list")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"skills"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"scope", "root", "skills"})
 	})
 
 	t.Run("skill_sync_preview", func(t *testing.T) {
@@ -2782,12 +2782,11 @@ type: page
 		dest := filepath.Join(t.TempDir(), "skills")
 
 		mcpResult := server.callTool("skill_sync", map[string]interface{}{
-			"name":   "raven-core",
-			"target": "codex",
-			"scope":  "user",
-			"dest":   dest,
+			"name":  "raven-core",
+			"scope": "user",
+			"dest":  dest,
 		})
-		cliResult := vCLI.RunCLI("skill", "sync", "raven-core", "--target", "codex", "--scope", "user", "--dest", dest)
+		cliResult := vCLI.RunCLI("skill", "sync", "raven-core", "--scope", "user", "--dest", dest)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"mode", "plan"})
 	})
@@ -2799,12 +2798,11 @@ type: page
 		dest := filepath.Join(t.TempDir(), "skills")
 
 		mcpResult := server.callTool("skill_remove", map[string]interface{}{
-			"name":   "raven-core",
-			"target": "codex",
-			"scope":  "user",
-			"dest":   dest,
+			"name":  "raven-core",
+			"scope": "user",
+			"dest":  dest,
 		})
-		cliResult := vCLI.RunCLI("skill", "remove", "raven-core", "--target", "codex", "--scope", "user", "--dest", dest)
+		cliResult := vCLI.RunCLI("skill", "remove", "raven-core", "--scope", "user", "--dest", dest)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})
@@ -2816,11 +2814,10 @@ type: page
 		dest := filepath.Join(t.TempDir(), "skills")
 
 		mcpResult := server.callTool("skill_doctor", map[string]interface{}{
-			"target": "codex",
-			"scope":  "user",
-			"dest":   dest,
+			"scope": "user",
+			"dest":  dest,
 		})
-		cliResult := vCLI.RunCLI("skill", "doctor", "--target", "codex", "--scope", "user", "--dest", dest)
+		cliResult := vCLI.RunCLI("skill", "doctor", "--scope", "user", "--dest", dest)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"reports"})
 	})

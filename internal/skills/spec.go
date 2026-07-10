@@ -14,17 +14,6 @@ const (
 	ScopeProject Scope = "project"
 )
 
-// Target identifies an agent runtime skill layout.
-type Target string
-
-const (
-	TargetCodex  Target = "codex"
-	TargetClaude Target = "claude"
-	TargetCursor Target = "cursor"
-)
-
-var allTargets = []Target{TargetCodex, TargetClaude, TargetCursor}
-
 // Spec is the canonical Raven skill definition.
 type Spec struct {
 	ID         string   `yaml:"id"`
@@ -110,17 +99,6 @@ func normalizeRelativePath(p string) (string, error) {
 	return cleaned, nil
 }
 
-// ParseTarget parses a user-provided target value.
-func ParseTarget(raw string) (Target, error) {
-	t := Target(strings.ToLower(strings.TrimSpace(raw)))
-	switch t {
-	case TargetCodex, TargetClaude, TargetCursor:
-		return t, nil
-	default:
-		return "", fmt.Errorf("unsupported target %q (expected: codex, claude, cursor)", raw)
-	}
-}
-
 // ParseScope parses a user-provided install scope.
 func ParseScope(raw string) (Scope, error) {
 	s := Scope(strings.ToLower(strings.TrimSpace(raw)))
@@ -132,11 +110,4 @@ func ParseScope(raw string) (Scope, error) {
 	default:
 		return "", fmt.Errorf("unsupported scope %q (expected: user or project)", raw)
 	}
-}
-
-// AllTargets returns all supported skill targets.
-func AllTargets() []Target {
-	out := make([]Target, len(allTargets))
-	copy(out, allTargets)
-	return out
 }

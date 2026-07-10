@@ -11,7 +11,6 @@ import (
 // HandleSkillList executes the canonical `skill list` command.
 func HandleSkillList(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := skillsvc.List(skillsvc.ListRequest{
-		Target:        strings.TrimSpace(stringArg(req.Args, "target")),
 		Scope:         strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:          strings.TrimSpace(stringArg(req.Args, "dest")),
 		InstalledOnly: boolArg(req.Args, "installed"),
@@ -22,11 +21,8 @@ func HandleSkillList(_ context.Context, req commandexec.Request) commandexec.Res
 
 	data := map[string]interface{}{
 		"skills": result.Skills,
-	}
-	if strings.TrimSpace(result.Target) != "" {
-		data["target"] = result.Target
-		data["scope"] = result.Scope
-		data["root"] = result.Root
+		"scope":  result.Scope,
+		"root":   result.Root,
 	}
 	return commandexec.Success(data, &commandexec.Meta{Count: len(result.Skills)})
 }
@@ -35,7 +31,6 @@ func HandleSkillList(_ context.Context, req commandexec.Request) commandexec.Res
 func HandleSkillSync(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := skillsvc.Sync(skillsvc.SyncRequest{
 		Name:    strings.TrimSpace(stringArg(req.Args, "name")),
-		Target:  strings.TrimSpace(stringArg(req.Args, "target")),
 		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
 		Confirm: req.Confirm,
@@ -47,7 +42,6 @@ func HandleSkillSync(_ context.Context, req commandexec.Request) commandexec.Res
 	data := map[string]interface{}{
 		"mode":       result.Mode,
 		"skill_name": result.SkillName,
-		"target":     result.Target,
 		"plan":       result.Plan,
 	}
 	if result.ActionsApplied > 0 {
@@ -65,7 +59,6 @@ func HandleSkillRemove(_ context.Context, req commandexec.Request) commandexec.R
 
 	result, err := skillsvc.Remove(skillsvc.RemoveRequest{
 		Name:    name,
-		Target:  strings.TrimSpace(stringArg(req.Args, "target")),
 		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
 		Confirm: req.Confirm,
@@ -88,9 +81,8 @@ func HandleSkillRemove(_ context.Context, req commandexec.Request) commandexec.R
 // HandleSkillDoctor executes the canonical `skill doctor` command.
 func HandleSkillDoctor(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := skillsvc.Doctor(skillsvc.DoctorRequest{
-		Target: strings.TrimSpace(stringArg(req.Args, "target")),
-		Scope:  strings.TrimSpace(stringArg(req.Args, "scope")),
-		Dest:   strings.TrimSpace(stringArg(req.Args, "dest")),
+		Scope: strings.TrimSpace(stringArg(req.Args, "scope")),
+		Dest:  strings.TrimSpace(stringArg(req.Args, "dest")),
 	})
 	if err != nil {
 		return mapSkillSvcFailure(err)

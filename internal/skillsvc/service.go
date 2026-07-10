@@ -3,7 +3,6 @@ package skillsvc
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -13,13 +12,12 @@ import (
 type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput           Code = codes.ErrInvalidInput
-	CodeSkillNotFound          Code = codes.ErrSkillNotFound
-	CodeSkillNotInstalled      Code = codes.ErrSkillNotInstalled
-	CodeSkillTargetUnsupported Code = codes.ErrSkillTargetUnsupported
-	CodeSkillPathUnresolved    Code = codes.ErrSkillPathUnresolved
-	CodeFileWriteError         Code = codes.ErrFileWrite
-	CodeInternal               Code = codes.ErrInternal
+	CodeInvalidInput        Code = codes.ErrInvalidInput
+	CodeSkillNotFound       Code = codes.ErrSkillNotFound
+	CodeSkillNotInstalled   Code = codes.ErrSkillNotInstalled
+	CodeSkillPathUnresolved Code = codes.ErrSkillPathUnresolved
+	CodeFileWriteError      Code = codes.ErrFileWrite
+	CodeInternal            Code = codes.ErrInternal
 )
 
 type Error struct {
@@ -63,22 +61,19 @@ func AsError(err error) (*Error, bool) {
 }
 
 type ListRequest struct {
-	Target        string
 	Scope         string
 	Dest          string
 	InstalledOnly bool
 }
 
 type ListResult struct {
-	Target string           `json:"target,omitempty"`
-	Scope  string           `json:"scope,omitempty"`
-	Root   string           `json:"root,omitempty"`
+	Scope  string           `json:"scope"`
+	Root   string           `json:"root"`
 	Skills []skills.Summary `json:"skills"`
 }
 
 type SyncRequest struct {
 	Name    string
-	Target  string
 	Scope   string
 	Dest    string
 	Confirm bool
@@ -87,14 +82,12 @@ type SyncRequest struct {
 type SyncResult struct {
 	Mode           string           `json:"mode"`
 	SkillName      string           `json:"skill_name,omitempty"`
-	Target         string           `json:"target,omitempty"`
 	Plan           *skills.SyncPlan `json:"plan,omitempty"`
 	ActionsApplied int              `json:"actions_applied,omitempty"`
 }
 
 type RemoveRequest struct {
 	Name    string
-	Target  string
 	Scope   string
 	Dest    string
 	Confirm bool
@@ -108,9 +101,8 @@ type RemoveResult struct {
 }
 
 type DoctorRequest struct {
-	Target string
-	Scope  string
-	Dest   string
+	Scope string
+	Dest  string
 }
 
 type DoctorResult struct {
@@ -123,23 +115,11 @@ func List(req ListRequest) (*ListResult, error) {
 		return nil, newError(CodeInternal, "failed to load skill catalog", "", nil, err)
 	}
 
-	targetRaw := strings.TrimSpace(req.Target)
-	if targetRaw == "" {
-		if req.InstalledOnly {
-			return nil, newError(CodeInvalidInput, "--installed requires --target", "Specify --target codex|claude|cursor", nil, nil)
-		}
-		return &ListResult{Skills: skills.SortedSummaries(catalog)}, nil
-	}
-
-	target, err := skills.ParseTarget(targetRaw)
-	if err != nil {
-		return nil, newError(CodeSkillTargetUnsupported, err.Error(), "Use --target codex|claude|cursor", nil, err)
-	}
 	scope, err := skills.ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
 		return nil, newError(CodeInvalidInput, err.Error(), "Use --scope user|project", nil, err)
 	}
-	root, err := skills.ResolveInstallRoot(target, scope, strings.TrimSpace(req.Dest), "")
+	root, err := skills.ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
 		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
@@ -156,7 +136,6 @@ func List(req ListRequest) (*ListResult, error) {
 	}
 
 	return &ListResult{
-		Target: string(target),
 		Scope:  string(scope),
 		Root:   root,
 		Skills: items,
@@ -187,20 +166,16 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 		}
 	}
 
-	target, err := skills.ParseTarget(strings.TrimSpace(req.Target))
-	if err != nil {
-		return nil, newError(CodeSkillTargetUnsupported, err.Error(), "Use --target codex|claude|cursor", nil, err)
-	}
 	scope, err := skills.ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
 		return nil, newError(CodeInvalidInput, err.Error(), "Use --scope user|project", nil, err)
 	}
-	root, err := skills.ResolveInstallRoot(target, scope, strings.TrimSpace(req.Dest), "")
+	root, err := skills.ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
 		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
 
-	plan, err := skills.PlanSync(catalog, skillName, target, scope, root)
+	plan, err := skills.PlanSync(catalog, skillName, scope, root)
 	if err != nil {
 		return nil, newError(CodeInternal, "failed to build sync plan", "", nil, err)
 	}
@@ -209,7 +184,6 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 		return &SyncResult{
 			Mode:      "preview",
 			SkillName: skillName,
-			Target:    string(target),
 			Plan:      plan,
 		}, nil
 	}
@@ -221,7 +195,6 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 	return &SyncResult{
 		Mode:           "applied",
 		SkillName:      skillName,
-		Target:         string(target),
 		Plan:           plan,
 		ActionsApplied: applied,
 	}, nil
@@ -237,28 +210,24 @@ func Remove(req RemoveRequest) (*RemoveResult, error) {
 		return nil, newError(CodeSkillNotFound, fmt.Sprintf("skill '%s' not found", skillName), "Run 'rvn skill list' to see available skills", nil, nil)
 	}
 
-	target, err := skills.ParseTarget(strings.TrimSpace(req.Target))
-	if err != nil {
-		return nil, newError(CodeSkillTargetUnsupported, err.Error(), "Use --target codex|claude|cursor", nil, err)
-	}
 	scope, err := skills.ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
 		return nil, newError(CodeInvalidInput, err.Error(), "Use --scope user|project", nil, err)
 	}
-	root, err := skills.ResolveInstallRoot(target, scope, strings.TrimSpace(req.Dest), "")
+	root, err := skills.ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
 		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
 
-	plan, err := skills.PlanRemove(skillName, target, scope, root)
+	plan, err := skills.PlanRemove(skillName, scope, root)
 	if err != nil {
 		return nil, newError(CodeInvalidInput, err.Error(), "", nil, err)
 	}
 	if !plan.Exists {
 		return nil, newError(
 			CodeSkillNotInstalled,
-			fmt.Sprintf("skill '%s' is not installed for target '%s'", skillName, target),
-			"Run 'rvn skill list --target ... --installed' to see installed skills",
+			fmt.Sprintf("skill '%s' is not installed", skillName),
+			"Run 'rvn skill list --installed' to see installed skills",
 			nil,
 			nil,
 		)
@@ -285,38 +254,10 @@ func Doctor(req DoctorRequest) (*DoctorResult, error) {
 		return nil, newError(CodeInvalidInput, err.Error(), "Use --scope user|project", nil, err)
 	}
 
-	reports := make([]skills.DoctorReport, 0)
-	targetRaw := strings.TrimSpace(req.Target)
-	if targetRaw == "" {
-		if strings.TrimSpace(req.Dest) != "" {
-			return nil, newError(CodeInvalidInput, "--dest requires --target", "Specify --target codex|claude|cursor when using --dest", nil, nil)
-		}
-		for _, target := range skills.AllTargets() {
-			root, err := skills.ResolveInstallRoot(target, scope, "", "")
-			if err != nil {
-				reports = append(reports, skills.DoctorReport{
-					Target: string(target),
-					Scope:  string(scope),
-					Issues: []string{fmt.Sprintf("failed to resolve root: %v", err)},
-				})
-				continue
-			}
-			reports = append(reports, skills.Doctor(catalog, target, scope, root))
-		}
-	} else {
-		target, err := skills.ParseTarget(targetRaw)
-		if err != nil {
-			return nil, newError(CodeSkillTargetUnsupported, err.Error(), "Use --target codex|claude|cursor", nil, err)
-		}
-		root, err := skills.ResolveInstallRoot(target, scope, strings.TrimSpace(req.Dest), "")
-		if err != nil {
-			return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
-		}
-		reports = append(reports, skills.Doctor(catalog, target, scope, root))
+	root, err := skills.ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
+	if err != nil {
+		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
 
-	sort.Slice(reports, func(i, j int) bool {
-		return reports[i].Target < reports[j].Target
-	})
-	return &DoctorResult{Reports: reports}, nil
+	return &DoctorResult{Reports: []skills.DoctorReport{skills.Doctor(catalog, scope, root)}}, nil
 }

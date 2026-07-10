@@ -40,11 +40,37 @@ notes/
 
 ## Agent Setup
 
-Once you have a vault, connect Raven to your agent of choice.
+Raven ships reusable [Agent Skills](https://agentskills.io/) that teach coding
+agents how to work with your vault. Start with onboarding and core:
+
+```bash
+rvn skill list
+rvn skill sync raven-onboarding --confirm
+rvn skill sync raven-core --confirm
+```
+
+Skills install to `~/.agents/skills` by default. Use `--scope project` for
+`.agents/skills` in the current project, or `--dest` to choose another
+location.
+
+| Skill | Use it for |
+|---|---|
+| `raven-onboarding` | Guided first-session setup and Raven concepts |
+| `raven-core` | Creating, reading, editing, and organizing content |
+| `raven-query` | RQL, saved queries, search, and link traversal |
+| `raven-schema` | Schema design and migration |
+| `raven-maintenance` | Vault checks, reindexing, and import |
+| `raven-templates` | Template files and schema-template bindings |
+| `raven-vault-admin` | Vault setup, selection, and configuration |
+
+The packaged skills teach CLI workflows and do not require MCP. Running
+`rvn skill sync` without a skill name updates existing Raven-managed skills;
+it reports but does not install missing skills.
 
 ### MCP Setup
 
-Install Raven into a supported MCP client:
+MCP gives compatible agents direct access to Raven commands. Install Raven
+into a supported MCP client:
 
 ```bash
 rvn mcp install --client claude-code
@@ -54,28 +80,17 @@ rvn mcp install --client codex
 rvn mcp status
 ```
 
-Or print a manual config snippet with:
+Or print a manual config snippet:
 
 ```bash
 rvn mcp show
 rvn mcp show --client cursor
 ```
 
-### Skill Sync
-
-Raven also ships with a few skills for supported agent runtimes:
-
-```bash
-rvn skill list --target cursor
-rvn skill sync raven-onboarding --target cursor --confirm
-rvn skill sync raven-core --target cursor --confirm
-```
-
-Available skill targets are `codex`, `claude`, and `cursor`.
-
 ### Agent Onboarding
 
-After MCP and skills are in place, you can ask your agent to use the `raven-onboarding` skill to onboard you to Raven.
+After installing the onboarding skill, ask your agent to use it to introduce
+Raven in the context of your vault.
 
 See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 
