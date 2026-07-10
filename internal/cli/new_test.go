@@ -113,6 +113,77 @@ types:
 	}
 }
 
+func TestPromptNewSchemaFieldsAppliesDefaultOnBlankInput(t *testing.T) {
+	vaultPath := t.TempDir()
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  task:
+    default_path: task/
+    fields:
+      status:
+        type: string
+        default: draft
+      priority:
+        type: enum
+        values: [low, medium, high]
+        default: medium
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	fieldValues := map[string]string{}
+	var prompts bytes.Buffer
+	reader := bufio.NewReader(strings.NewReader("\n\n"))
+	err := promptNewSchemaFields(reader, &prompts, vaultPath, "task", "Draft task", fieldValues, nil)
+	if err != nil {
+		t.Fatalf("promptNewSchemaFields returned error: %v", err)
+	}
+
+	if got := fieldValues["status"]; got != "draft" {
+		t.Fatalf("status = %q, want default draft", got)
+	}
+	if got := fieldValues["priority"]; got != "medium" {
+		t.Fatalf("priority = %q, want default medium", got)
+	}
+
+	promptText := prompts.String()
+	if !strings.Contains(promptText, "status (optional, enter for draft): ") {
+		t.Fatalf("missing default status prompt: %q", promptText)
+	}
+	if !strings.Contains(promptText, "priority (optional, enter for medium): ") {
+		t.Fatalf("missing default priority prompt: %q", promptText)
+	}
+}
+
+func TestPromptNewSchemaFieldsAppliesRequiredDefaultOnBlankInput(t *testing.T) {
+	vaultPath := t.TempDir()
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  task:
+    default_path: task/
+    fields:
+      status:
+        type: string
+        required: true
+        default: draft
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	fieldValues := map[string]string{}
+	err := promptNewSchemaFields(bufio.NewReader(strings.NewReader("\n")), io.Discard, vaultPath, "task", "Draft task", fieldValues, nil)
+	if err != nil {
+		t.Fatalf("promptNewSchemaFields returned error: %v", err)
+	}
+	if got := fieldValues["status"]; got != "draft" {
+		t.Fatalf("status = %q, want default draft", got)
+	}
+}
+
 func TestPromptNewSchemaFieldsRejectsBlankRequiredField(t *testing.T) {
 	vaultPath := t.TempDir()
 	schemaYAML := strings.TrimSpace(`
