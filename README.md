@@ -22,6 +22,8 @@ go install github.com/aidanlsb/raven/cmd/rvn@latest
 rvn version
 ```
 
+Prebuilt binaries for Linux, macOS, and Windows are also available on the [releases page](https://github.com/aidanlsb/raven/releases/latest) — see [Installation](docs/getting-started/installation.md) for details.
+
 Then initialize a vault:
 
 ```bash
