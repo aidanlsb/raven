@@ -98,6 +98,26 @@ func TestRankItemsNormalizesQuerySeparators(t *testing.T) {
 	}
 }
 
+func TestModelInitialInputMode(t *testing.T) {
+	items := []Item{{ID: "issue/one", Label: "First issue"}}
+
+	normal := newModel(items, Options{})
+	if normal.mode != normalMode {
+		t.Fatalf("default mode = %v, want normal", normal.mode)
+	}
+
+	insert := newModel(items, Options{StartInInsertMode: true})
+	if insert.mode != insertMode {
+		t.Fatalf("configured mode = %v, want insert", insert.mode)
+	}
+
+	updated, _ := insert.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("first")})
+	insert = updated.(model)
+	if insert.query != "first" {
+		t.Fatalf("query = %q, want first", insert.query)
+	}
+}
+
 func TestModelFiltersAndSelects(t *testing.T) {
 	m := newModel([]Item{
 		{ID: "issue/one", Label: "First issue"},

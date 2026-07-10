@@ -108,6 +108,9 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				if opts.Prompt != strings.TrimSuffix(tt.prompt, "> ") {
 					t.Fatalf("prompt = %q, want %q", opts.Prompt, strings.TrimSuffix(tt.prompt, "> "))
 				}
+				if !opts.StartInInsertMode {
+					t.Fatal("bare command reference picker should start in insert mode")
+				}
 				ids := make([]string, 0, len(items))
 				for _, item := range items {
 					ids = append(ids, item.ID)
@@ -147,4 +150,27 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("file picker starts in insert mode", func(t *testing.T) {
+		ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+			if !opts.StartInInsertMode {
+				t.Fatal("bare command file picker should start in insert mode")
+			}
+			if len(items) == 0 {
+				t.Fatal("expected indexed file picker items")
+			}
+			return picker.Selection{Item: picker.Item{ID: "notes/alpha"}}, true, nil
+		}
+
+		args, handled, err := prepareReadArgs(readCmd, nil)
+		if err != nil {
+			t.Fatalf("prepareReadArgs() error = %v", err)
+		}
+		if handled {
+			t.Fatal("prepareReadArgs() handled command, want canonical execution")
+		}
+		if !slices.Equal(args, []string{"notes/alpha"}) {
+			t.Fatalf("args = %#v, want notes/alpha", args)
+		}
+	})
 }

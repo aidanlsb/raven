@@ -16,6 +16,8 @@ rvn search # Pick an indexed vault file
 
 Interactive pickers are disabled for `--json` output and other non-interactive/scripted contexts. Pass the target path explicitly in scripted use.
 
+Target-omission pickers start in insert mode, so you can type immediately to filter. Press `Esc` to switch to normal mode for Vim-style shortcuts.
+
 In file-backed picker rows, press `p` to open a preview overlay, then press `p`, `Esc`, or `q` to close it.
 
 If an explicit reference is ambiguous, interactive `rvn read`, `rvn open`, `rvn backlinks`, and `rvn outlinks` prompt you to choose the intended target in the Raven picker.

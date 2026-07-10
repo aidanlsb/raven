@@ -51,8 +51,9 @@ func pickVaultFile(vaultPath string, vaultCfg *config.VaultConfig, prompt, title
 	}
 
 	selected, ok, err := ravenRunPicker(items, picker.Options{
-		Title:  title,
-		Prompt: strings.TrimSuffix(prompt, "> "),
+		Title:             title,
+		Prompt:            strings.TrimSuffix(prompt, "> "),
+		StartInInsertMode: true,
 	})
 	if err != nil || !ok {
 		return "", ok, err
@@ -70,11 +71,12 @@ func pickReferenceTarget(vaultPath string, vaultCfg *config.VaultConfig, prompt,
 	}
 
 	selected, ok, err := ravenRunPicker(items, picker.Options{
-		Title:   title,
-		Prompt:  strings.TrimSuffix(prompt, "> "),
-		Headers: []string{"#", "reference", "kind", "location"},
-		Columns: ui.SearchLayout(),
-		Preview: vaultFilePreview(vaultPath),
+		Title:             title,
+		Prompt:            strings.TrimSuffix(prompt, "> "),
+		Headers:           []string{"#", "reference", "kind", "location"},
+		Columns:           ui.SearchLayout(),
+		StartInInsertMode: true,
+		Preview:           vaultFilePreview(vaultPath),
 	})
 	if err != nil || !ok {
 		return "", ok, err

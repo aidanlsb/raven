@@ -50,19 +50,20 @@ type Item struct {
 	Line     int
 }
 
-// Options controls picker copy and layout.
+// Options controls picker behavior, copy, and layout.
 type Options struct {
-	Title        string
-	Prompt       string
-	Headers      []string
-	Columns      []ui.ColumnDef
-	MultiSelect  bool
-	AllowForward bool
-	AllowBack    bool
-	Shortcuts    []ShortcutTip
-	Preview      PreviewFunc
-	Input        io.Reader
-	Output       io.Writer
+	Title             string
+	Prompt            string
+	Headers           []string
+	Columns           []ui.ColumnDef
+	MultiSelect       bool
+	StartInInsertMode bool
+	AllowForward      bool
+	AllowBack         bool
+	Shortcuts         []ShortcutTip
+	Preview           PreviewFunc
+	Input             io.Reader
+	Output            io.Writer
 }
 
 // PreviewFunc returns preview content for a picker item.
@@ -196,6 +197,9 @@ func newModel(items []Item, opts Options) model {
 		height:       30,
 		selectedKeys: make(map[string]bool),
 		renderer:     renderer,
+	}
+	if opts.StartInInsertMode {
+		m.mode = insertMode
 	}
 	if columns := m.tableColumns(); len(columns) > 0 {
 		m.desiredWidths = ui.DesiredColumnWidths(columns, m.tableHeaders(columns), m.tableRowsForWidths(columns))

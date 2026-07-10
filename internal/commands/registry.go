@@ -88,6 +88,8 @@ const (
 	FlagTypeJSON        FlagType = "json"          // JSON object payloads
 )
 
+const barePickerInsertModeHelp = "\n\nThe bare-command picker starts in insert mode: type immediately to filter, or press Esc for normal-mode shortcuts."
+
 // Registry holds all registered commands.
 var Registry = map[string]Meta{
 	"new": {
@@ -911,7 +913,7 @@ over indexed object, section, and asset references.
 When an interactive backlinks target is ambiguous, Raven prompts you to choose the target.
 Use --browse to browse incoming references interactively and open the selected reference location.
 Use --stdin to read targets from stdin and return grouped results for each target.
-Non-interactive use requires either a target or --stdin input.`,
+Non-interactive use requires either a target or --stdin input.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
 			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: false, CLIOptional: true},
 		},
@@ -946,7 +948,7 @@ over indexed object and section references.
 When an interactive outlinks source is ambiguous, Raven prompts you to choose the source.
 Use --browse to browse outgoing references interactively and open the selected reference location.
 Use --stdin to read sources from stdin and return grouped results for each source.
-Non-interactive use requires either a source or --stdin input.`,
+Non-interactive use requires either a source or --stdin input.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
 			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: false, CLIOptional: true},
 		},
@@ -1004,7 +1006,7 @@ In an interactive terminal, bare 'rvn read' launches Raven's picker.
 When an interactive read reference is ambiguous, Raven prompts you to choose the target.
 
 For long files, you can request a specific range with --start-line/--end-line, and/or
-ask for structured line output with --lines for copy-paste-safe anchors.`,
+ask for structured line output with --lines for copy-paste-safe anchors.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
 			{Name: "path", Description: "Reference to read (short ref, partial path, or full path)", Required: true, CLIOptional: true},
 		},
@@ -1833,7 +1835,7 @@ Results are ranked by relevance with snippets showing matched content.
 Use --type to filter results to specific object types.
 
 In an interactive terminal, bare 'rvn search' launches Raven's picker over
-indexed files. Non-interactive use still requires a query string.`,
+indexed files. Non-interactive use still requires a query string.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
 			{Name: "query", Description: "Search query (words, phrases, or boolean expressions)", Required: true, CLIOptional: true},
 		},
@@ -2333,7 +2335,7 @@ target. Non-interactive and JSON output still return REF_AMBIGUOUS with the
 candidate matches.
 
 Use --stdin to read object IDs from stdin (one per line) and open them all.
-This is useful for piping query results to open multiple files at once.`,
+This is useful for piping query results to open multiple files at once.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
 			{Name: "reference", Description: "Reference to the file (short name, partial path, or full path)", Required: false},
 		},
@@ -2477,7 +2479,7 @@ Supports all reference formats:
 - Section references: "projects/website#tasks"
 
 If the reference is ambiguous (matches multiple objects), returns all matches
-with their match sources.`,
+with their match sources.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
 			{Name: "reference", Description: "Reference to resolve (short name, path, alias, date, etc.)", Required: true, CLIOptional: true},
 		},
