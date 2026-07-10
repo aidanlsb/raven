@@ -297,3 +297,7 @@ You can also browse the docs from the CLI:
 ```bash
 rvn docs
 ```
+
+## License
+
+Raven is released under the [MIT License](LICENSE).
