@@ -38,11 +38,6 @@ notes/
 └── schema.yaml   # types, fields, and traits
 ```
 
-Raven also includes a built-in language server for diagnostics, completion,
-navigation, and hover while you edit. See the
-[editor integration guide](docs/using-your-vault/editor-integration.md) to
-configure `rvn lsp` in your editor.
-
 ## Agent Setup
 
 Once you have a vault, connect Raven to your agent of choice.
@@ -205,6 +200,11 @@ Because the agent can query Raven directly, it can answer from the project, the 
 
 > The review is waiting on scope confirmation before work begins. Two follow-ups are open from `meeting/kickoff.md`: send the draft scope to Freya, and have Freya confirm which systems are in scope for `project/midgard-security-review`. The current decision on record is to keep the first pass focused on authentication and infrastructure.
 
+
+Raven also includes a built-in language server for diagnostics, completion,
+navigation, and hover while you edit. See the
+[editor integration guide](docs/using-your-vault/editor-integration.md) to
+configure `rvn lsp` in your editor.
 
 ## Documentation
 
