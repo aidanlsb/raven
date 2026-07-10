@@ -209,3 +209,64 @@ func TestPrintQuerySectionResultsIncludesColumnHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestPrintQueryTraitResultsIncludesColumnHeaders(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = false
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	value := "open"
+	out := captureStdout(t, func() {
+		printQueryTraitResults("trait:status", "status", []model.Trait{
+			{
+				TraitType: "status",
+				Value:     &value,
+				Content:   "Review section query output",
+				FilePath:  "page/raven.md",
+				Line:      23,
+			},
+		})
+	})
+
+	for _, want := range []string{"content", "trait", "location", "Review section query output", "@status(open)", "page/raven.md:23"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected trait query output to include %q, got: %q", want, out)
+		}
+	}
+}
+
+func TestPrintQueryAssetResultsIncludesColumnHeaders(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = false
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	out := captureStdout(t, func() {
+		printQueryAssetResults("asset", []model.Asset{
+			{
+				FilePath:  "assets/diagram.png",
+				MediaType: "image/png",
+				SizeBytes: 2048,
+			},
+		})
+	})
+
+	for _, want := range []string{"path", "media type", "size", "assets/diagram.png", "image/png", "2.0 KB"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected asset query output to include %q, got: %q", want, out)
+		}
+	}
+}
