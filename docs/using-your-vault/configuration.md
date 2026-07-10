@@ -378,6 +378,14 @@ exclude:
 
 `exclude` is separate from `protected_prefixes`: protected paths can still be managed/read/indexed by Raven but cannot be changed by mutation commands; excluded paths are outside Raven's managed content model.
 
+You can manage the exclude list from the CLI instead of editing `raven.yaml` directly:
+
+```bash
+rvn vault config exclude list
+rvn vault config exclude add '*.plan.md'
+rvn vault config exclude remove '*.plan.md'
+```
+
 ### `daily_template` (legacy)
 
 `daily_template` remains in the config model for backward compatibility, but daily templating is schema-driven in current Raven. Use `schema.yaml` (`types.date.templates` and `types.date.default_template`) instead.

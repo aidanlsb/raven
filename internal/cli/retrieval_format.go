@@ -30,6 +30,7 @@ func printQueryTraitResults(queryStr, traitName string, results []model.Trait) {
 
 	display := ui.NewDisplayContext()
 	table := ui.NewResultsTable(display, ui.TraitLayout())
+	table.SetHeaders(traitBrowseHeaders())
 
 	// Get the calculated content width for dynamic content sizing
 	// Use 2x width to allow for two-line content
@@ -90,6 +91,7 @@ func printQueryAssetResults(queryStr string, results []model.Asset) {
 
 	display := ui.NewDisplayContext()
 	table := ui.NewResultsTable(display, ui.AssetLayout())
+	table.SetHeaders(assetBrowseHeaders())
 
 	for i, r := range results {
 		mediaType := r.MediaType
@@ -122,6 +124,7 @@ func printQuerySectionResults(queryStr string, results []model.Section) {
 
 	display := ui.NewDisplayContext()
 	table := ui.NewResultsTable(display, ui.SearchLayout())
+	table.SetHeaders(sectionBrowseHeaders())
 
 	for i, r := range results {
 		meta := fmt.Sprintf("h%d #%s", r.Level, r.Slug)

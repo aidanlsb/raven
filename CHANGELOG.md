@@ -310,7 +310,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP server for AI agent integration
 - Daily notes with templates
 - Bulk operations with `--apply` flag
-- File watching with auto-reindex
+- Automatic post-command reindexing
 - Reference resolution and backlinks
 - Comprehensive documentation
 
@@ -322,7 +322,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.14...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.27...HEAD
+[v0.0.27]: https://github.com/aidanlsb/raven/compare/v0.0.26...v0.0.27
+[v0.0.26]: https://github.com/aidanlsb/raven/compare/v0.0.25...v0.0.26
+[v0.0.25]: https://github.com/aidanlsb/raven/compare/v0.0.24...v0.0.25
+[v0.0.24]: https://github.com/aidanlsb/raven/compare/v0.0.23...v0.0.24
+[v0.0.23]: https://github.com/aidanlsb/raven/compare/v0.0.22...v0.0.23
+[v0.0.22]: https://github.com/aidanlsb/raven/compare/v0.0.21...v0.0.22
+[v0.0.21]: https://github.com/aidanlsb/raven/compare/v0.0.20...v0.0.21
+[v0.0.20]: https://github.com/aidanlsb/raven/compare/v0.0.19...v0.0.20
+[v0.0.19]: https://github.com/aidanlsb/raven/compare/v0.0.18...v0.0.19
+[v0.0.18]: https://github.com/aidanlsb/raven/compare/v0.0.17...v0.0.18
+[v0.0.17]: https://github.com/aidanlsb/raven/compare/v0.0.16...v0.0.17
+[v0.0.16]: https://github.com/aidanlsb/raven/compare/v0.0.15...v0.0.16
+[v0.0.15]: https://github.com/aidanlsb/raven/compare/v0.0.14...v0.0.15
 [v0.0.14]: https://github.com/aidanlsb/raven/compare/v0.0.13...v0.0.14
 [v0.0.13]: https://github.com/aidanlsb/raven/compare/v0.0.12...v0.0.13
 [v0.0.12]: https://github.com/aidanlsb/raven/compare/v0.0.11...v0.0.12

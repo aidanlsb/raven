@@ -158,23 +158,19 @@ func promptNewSchemaFields(reader *bufio.Reader, writer io.Writer, vaultPath, ty
 			continue
 		}
 
-		prompt := fmt.Sprintf("%s (optional, blank to skip): ", fieldName)
-		if fieldDef.Required {
-			prompt = fmt.Sprintf("%s (required): ", fieldName)
-		}
-		fmt.Fprint(writer, prompt)
+		fmt.Fprint(writer, schemaFieldPromptText(fieldName, fieldDef))
 		value, readErr := reader.ReadString('\n')
 		if readErr != nil {
 			return fmt.Errorf("failed to read input: %w", readErr)
 		}
-		value = strings.TrimSpace(value)
-		if value == "" {
-			if fieldDef.Required {
-				return handleErrorMsg(ErrRequiredFieldMissing, fmt.Sprintf("required field '%s' cannot be empty", fieldName), "Provide a non-empty value")
-			}
+		resolved, set, resolveErr := resolveInteractiveSchemaFieldInput(fieldName, fieldDef, value)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		if !set {
 			continue
 		}
-		fieldValues[fieldName] = value
+		fieldValues[fieldName] = resolved
 		provided[fieldName] = true
 	}
 

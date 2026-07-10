@@ -57,6 +57,24 @@ The no-name sync updates or removes existing Raven-managed skills and reports
 shipped skills that are not installed. It does not install missing skills
 unless you name one explicitly.
 
+## Inspect and remove skills
+
+`rvn skill doctor` shows the resolved install root and which Raven skills are
+installed, which is useful when a skill does not seem to be picked up:
+
+```bash
+rvn skill doctor --json
+rvn skill doctor --scope project --json
+```
+
+To uninstall a skill, use `rvn skill remove`. It previews by default and
+applies with `--confirm`:
+
+```bash
+rvn skill remove raven-core --json          # Preview
+rvn skill remove raven-core --confirm --json
+```
+
 ## Install MCP into a supported client
 
 Examples:
@@ -85,6 +103,12 @@ If you run the server manually, use:
 
 ```bash
 rvn serve --vault-path /path/to/vault
+```
+
+To remove Raven from a client config again:
+
+```bash
+rvn mcp remove --client codex
 ```
 
 ## Recommended first prompt

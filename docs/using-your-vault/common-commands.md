@@ -158,6 +158,17 @@ rvn query 'type:project .status==active' --ids | rvn set --stdin reviewed=true -
 rvn query 'type:person' --ids | rvn set --stdin --confirm --fields-json '{"email":"true"}'
 ```
 
+### `rvn unset`
+
+Remove frontmatter fields from an object entirely (they are not set to null). Useful after schema migrations when removed fields still exist on older objects and show up as `unknown_frontmatter_key` issues in `rvn check`.
+
+```bash
+rvn unset docs/cleanup date link
+rvn unset docs/cleanup --fields date --fields link --json
+```
+
+`unset` can remove optional schema fields and unknown frontmatter keys. The reserved `type` field cannot be unset; use `rvn reclassify` to change an object's type.
+
 ### `rvn update`
 
 Update a trait's value. Trait IDs come from `rvn query ... --ids`.
@@ -332,6 +343,31 @@ rvn reindex                                      # Incremental (changed files on
 rvn reindex --full                               # Complete rebuild
 rvn reindex --dry-run                            # Show what would be reindexed
 ```
+
+---
+
+## Browsing documentation
+
+### `rvn docs`
+
+Browse Raven's documentation from the CLI. Bare `rvn docs` opens the interactive picker; subcommands provide scripted access.
+
+```bash
+rvn docs                                         # Interactive section/topic picker
+rvn docs list                                    # List sections and their commands
+rvn docs getting-started                         # List topics in a section
+rvn docs search "saved query"                    # Full-text search across docs
+rvn docs search "exclude" --section using-your-vault --limit 10
+rvn docs fetch                                   # Refresh the global docs cache
+rvn docs fetch --ref v0.0.27                     # Pin docs to a specific ref
+```
+
+Docs are cached in a global directory (fetched during `rvn init`). Run `rvn docs fetch` after upgrading Raven to keep the cache in sync with your installed version.
+
+Key flags (`docs search`):
+- `--limit` / `-n` — maximum matches (default 20)
+- `--offset` — skip matches for pagination
+- `--section` / `-s` — restrict search to one section
 
 ---
 
