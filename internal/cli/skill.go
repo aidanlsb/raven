@@ -14,7 +14,7 @@ import (
 var skillCmd = &cobra.Command{
 	Use:   "skill",
 	Short: "Manage Raven agent skills",
-	Long:  "Sync and manage Raven-provided skills for supported agent runtimes.",
+	Long:  "Sync and manage Raven-provided skills using the Agent Skills standard.",
 }
 
 var skillListCmd = newCanonicalLeafCommand("skill_list", canonicalLeafOptions{
@@ -44,23 +44,12 @@ func init() {
 func renderSkillList(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	items := skillSummariesFromAny(data["skills"])
-	target := strings.TrimSpace(stringValue(data["target"]))
-	if target == "" {
-		if len(items) == 0 {
-			fmt.Println(ui.Star("No skills available."))
-			return nil
-		}
-		for _, item := range items {
-			fmt.Println(ui.Bullet(fmt.Sprintf("%s %s %s", ui.Bold.Render(item.Name), ui.Hint(fmt.Sprintf("v%d", item.Version)), item.Summary)))
-		}
-		return nil
-	}
 
-	fmt.Printf("%s %s\n", ui.SectionHeader("Target"), ui.Bold.Render(target))
+	fmt.Println(ui.SectionHeader("Agent Skills"))
 	fmt.Printf("%s %s\n", ui.Hint("Scope:"), stringValue(data["scope"]))
 	fmt.Printf("%s %s\n", ui.Hint("Root:"), ui.FilePath(stringValue(data["root"])))
 	if len(items) == 0 {
-		fmt.Println(ui.Star("No skills found for this target."))
+		fmt.Println(ui.Star("No skills found."))
 		return nil
 	}
 	for _, item := range items {
@@ -108,7 +97,7 @@ func renderSkillSync(_ *cobra.Command, result commandexec.Result) error {
 		return nil
 	}
 
-	fmt.Println(ui.Checkf("Synced skills for %s at %s", stringValue(data["target"]), ui.FilePath(plan.Root)))
+	fmt.Println(ui.Checkf("Synced skills at %s", ui.FilePath(plan.Root)))
 	fmt.Println(ui.Hint(fmt.Sprintf("Applied %d file changes", intValue(data["actions_applied"]))))
 	if len(plan.MissingAvailable) > 0 {
 		fmt.Println(ui.Hint(fmt.Sprintf("%d shipped skills are available but not installed", len(plan.MissingAvailable))))
@@ -135,7 +124,7 @@ func renderSkillRemove(_ *cobra.Command, result commandexec.Result) error {
 
 func renderSkillDoctor(_ *cobra.Command, result commandexec.Result) error {
 	for _, report := range skillDoctorReportsFromAny(canonicalDataMap(result)["reports"]) {
-		fmt.Println(ui.SectionHeader(report.Target))
+		fmt.Println(ui.SectionHeader("Agent Skills"))
 		fmt.Printf("%s %s\n", ui.Hint("scope:"), report.Scope)
 		fmt.Printf("%s %s\n", ui.Hint("root:"), ui.FilePath(report.Root))
 		if len(report.Installed) == 0 {

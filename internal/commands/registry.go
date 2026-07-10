@@ -2357,30 +2357,31 @@ This is useful for piping query results to open multiple files at once.`,
 		Name:        "skill list",
 		Description: "List Raven-provided skills",
 		VaultScope:  VaultScopeNone,
-		LongDesc: `List bundled Raven skills.
+		LongDesc: `List bundled Raven skills and their installation status.
 
-Use --target to include target-specific installed status and paths.`,
+Skills use the Agent Skills standard and default to ~/.agents/skills for user
+scope or .agents/skills in the current project. Use --dest to inspect a
+different install root.`,
 		Flags: []FlagMeta{
-			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Examples: []string{"codex", "claude", "cursor"}},
 			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
 			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
-			{Name: "installed", Description: "Show installed skills only (requires --target)", Type: FlagTypeBool},
+			{Name: "installed", Description: "Show installed skills only", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn skill list --json",
-			"rvn skill list --target codex --json",
-			"rvn skill list --target cursor --scope project --installed --json",
+			"rvn skill list --scope project --installed --json",
+			"rvn skill list --dest /path/to/skills --json",
 		},
 		UseCases: []string{
 			"Discover which Raven skills are available",
-			"Check installed skills for a specific runtime target",
+			"Check which Raven skills are installed",
 		},
 	},
 	"skill_sync": {
 		Name:        "skill sync",
-		Description: "Sync Raven-provided skills for a target runtime",
+		Description: "Sync Raven-provided Agent Skills",
 		VaultScope:  VaultScopeNone,
-		LongDesc: `Sync bundled Raven skills for a target runtime.
+		LongDesc: `Sync bundled Raven skills using the Agent Skills standard.
 
 With a skill name, installs that shipped skill if missing or aligns it with the
 current shipped version if already Raven-managed.
@@ -2388,22 +2389,24 @@ current shipped version if already Raven-managed.
 Without a skill name, updates/removes existing Raven-managed skills identified
 by their receipts. Missing shipped skills are reported but not installed.
 
+The default install root is ~/.agents/skills for user scope or .agents/skills
+in the current project. Use --dest to install elsewhere.
+
 Preview is returned by default. Use --confirm to apply writes.`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Optional shipped skill name to sync", Required: false, Completions: []string{"raven-core", "raven-maintenance", "raven-onboarding", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
 		},
 		Flags: []FlagMeta{
-			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
 			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
 			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
 			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn skill sync raven-core --target codex --confirm --json",
-			"rvn skill sync --target cursor --scope project --json",
+			"rvn skill sync raven-core --confirm --json",
+			"rvn skill sync --scope project --json",
 		},
 		UseCases: []string{
-			"Install or refresh one Raven skill for an agent runtime",
+			"Install or refresh one Raven skill",
 			"Update installed Raven-managed skills to shipped versions",
 			"Preview packaged skill sync before writing files",
 		},
@@ -2412,44 +2415,42 @@ Preview is returned by default. Use --confirm to apply writes.`,
 		Name:        "skill remove",
 		Description: "Remove an installed Raven skill",
 		VaultScope:  VaultScopeNone,
-		LongDesc: `Remove one installed Raven skill from a target runtime.
+		LongDesc: `Remove one installed Raven skill from the resolved install root.
 
 Preview is returned by default. Use --confirm to apply removal.`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-maintenance", "raven-onboarding", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
 		},
 		Flags: []FlagMeta{
-			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
 			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
 			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
 			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn skill remove raven-core --target codex --confirm --json",
-			"rvn skill remove raven-schema --target cursor --scope project --json",
+			"rvn skill remove raven-core --confirm --json",
+			"rvn skill remove raven-schema --scope project --json",
 		},
 		UseCases: []string{
 			"Preview skill removal before deleting files",
-			"Uninstall a Raven skill from a runtime target",
+			"Uninstall a Raven skill",
 		},
 	},
 	"skill_doctor": {
 		Name:        "skill doctor",
-		Description: "Inspect skill installation health for target runtimes",
+		Description: "Inspect Agent Skills installation health",
 		VaultScope:  VaultScopeNone,
-		LongDesc:    `Inspect resolved install roots and installed Raven skills for one or all targets.`,
+		LongDesc:    `Inspect the resolved install root and installed Raven skills.`,
 		Flags: []FlagMeta{
-			{Name: "target", Description: "Target runtime: codex, claude, or cursor (omit to check all)", Type: FlagTypeString, Examples: []string{"codex", "claude", "cursor"}},
 			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
 			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn skill doctor --json",
-			"rvn skill doctor --target claude --scope project --json",
+			"rvn skill doctor --scope project --json",
 		},
 		UseCases: []string{
 			"Verify skill install roots and installed skill presence",
-			"Debug target-specific skill path resolution",
+			"Debug skill installation path resolution",
 		},
 	},
 	"resolve": {

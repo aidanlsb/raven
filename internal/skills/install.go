@@ -26,7 +26,6 @@ type Action struct {
 
 type InstallPlan struct {
 	Skill        string   `json:"skill"`
-	Target       string   `json:"target"`
 	Scope        string   `json:"scope"`
 	Root         string   `json:"root"`
 	SkillPath    string   `json:"skill_path"`
@@ -41,7 +40,6 @@ type InstallPlan struct {
 
 type RemovePlan struct {
 	Skill        string   `json:"skill"`
-	Target       string   `json:"target"`
 	Scope        string   `json:"scope"`
 	Root         string   `json:"root"`
 	SkillPath    string   `json:"skill_path"`
@@ -52,7 +50,6 @@ type RemovePlan struct {
 
 type SyncPlan struct {
 	Skill            string    `json:"skill,omitempty"`
-	Target           string    `json:"target"`
 	Scope            string    `json:"scope"`
 	Root             string    `json:"root"`
 	NeedsConfirm     bool      `json:"needs_confirm"`
@@ -70,7 +67,6 @@ type SyncPlan struct {
 type Receipt struct {
 	Skill       string   `json:"skill"`
 	Version     int      `json:"version"`
-	Target      string   `json:"target"`
 	Scope       string   `json:"scope"`
 	Checksum    string   `json:"checksum"`
 	Files       []string `json:"files"`
@@ -78,7 +74,6 @@ type Receipt struct {
 }
 
 type DoctorReport struct {
-	Target    string    `json:"target"`
 	Scope     string    `json:"scope"`
 	Root      string    `json:"root"`
 	Exists    bool      `json:"exists"`
@@ -104,7 +99,7 @@ type syncItem struct {
 	receipt  *Receipt
 }
 
-func RenderFiles(skill *Skill, target Target) (map[string][]byte, error) {
+func RenderFiles(skill *Skill) (map[string][]byte, error) {
 	if skill == nil {
 		return nil, fmt.Errorf("skill is nil")
 	}
@@ -122,19 +117,19 @@ func RenderFiles(skill *Skill, target Target) (map[string][]byte, error) {
 		files[p] = []byte(skill.References[p])
 	}
 
-	if target == TargetCodex && strings.TrimSpace(skill.OpenAIMetadata) != "" {
+	if strings.TrimSpace(skill.OpenAIMetadata) != "" {
 		files["agents/openai.yaml"] = []byte(skill.OpenAIMetadata)
 	}
 
 	return files, nil
 }
 
-func PlanInstall(skill *Skill, target Target, scope Scope, root string, force bool) (*InstallPlan, error) {
+func PlanInstall(skill *Skill, scope Scope, root string, force bool) (*InstallPlan, error) {
 	if strings.TrimSpace(root) == "" {
 		return nil, fmt.Errorf("install root is empty")
 	}
 
-	rendered, err := RenderFiles(skill, target)
+	rendered, err := RenderFiles(skill)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +137,6 @@ func PlanInstall(skill *Skill, target Target, scope Scope, root string, force bo
 	skillPath := filepath.Join(root, skill.Spec.ID)
 	plan := &InstallPlan{
 		Skill:     skill.Spec.ID,
-		Target:    string(target),
 		Scope:     string(scope),
 		Root:      root,
 		SkillPath: skillPath,
@@ -180,7 +174,7 @@ func PlanInstall(skill *Skill, target Target, scope Scope, root string, force bo
 	receiptPath := filepath.Join(skillPath, receiptFileName)
 	receiptChecksum := checksumForRendered(rendered)
 	receipt, _ := readReceipt(receiptPath)
-	if receipt == nil || receipt.Checksum != receiptChecksum || receipt.Skill != skill.Spec.ID || receipt.Version != skill.Spec.Version || receipt.Target != string(target) || receipt.Scope != string(scope) {
+	if receipt == nil || receipt.Checksum != receiptChecksum || receipt.Skill != skill.Spec.ID || receipt.Version != skill.Spec.Version || receipt.Scope != string(scope) {
 		if _, err := os.Stat(receiptPath); err == nil {
 			plan.Actions = append(plan.Actions, Action{Op: "update", Path: receiptPath, RelPath: receiptFileName})
 		} else {
@@ -196,26 +190,25 @@ func PlanInstall(skill *Skill, target Target, scope Scope, root string, force bo
 	return plan, nil
 }
 
-func PlanSync(catalog map[string]*Skill, skillName string, target Target, scope Scope, root string) (*SyncPlan, error) {
+func PlanSync(catalog map[string]*Skill, skillName string, scope Scope, root string) (*SyncPlan, error) {
 	if strings.TrimSpace(root) == "" {
 		return nil, fmt.Errorf("install root is empty")
 	}
 
 	skillName = strings.TrimSpace(skillName)
 	plan := &SyncPlan{
-		Skill:  skillName,
-		Target: string(target),
-		Scope:  string(scope),
-		Root:   root,
+		Skill: skillName,
+		Scope: string(scope),
+		Root:  root,
 	}
 
 	if skillName != "" {
-		return planNamedSync(plan, catalog, skillName, target, root)
+		return planNamedSync(plan, catalog, skillName, root)
 	}
-	return planRootSync(plan, catalog, target, root)
+	return planRootSync(plan, catalog, root)
 }
 
-func planNamedSync(plan *SyncPlan, catalog map[string]*Skill, skillName string, target Target, root string) (*SyncPlan, error) {
+func planNamedSync(plan *SyncPlan, catalog map[string]*Skill, skillName, root string) (*SyncPlan, error) {
 	skill, ok := catalog[skillName]
 	if !ok {
 		return nil, fmt.Errorf("skill %q not found", skillName)
@@ -237,7 +230,7 @@ func planNamedSync(plan *SyncPlan, catalog map[string]*Skill, skillName string, 
 		} else if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("inspect %s: %w", skillPath, err)
 		}
-		rendered, err := RenderFiles(skill, target)
+		rendered, err := RenderFiles(skill)
 		if err != nil {
 			return nil, err
 		}
@@ -249,11 +242,11 @@ func planNamedSync(plan *SyncPlan, catalog map[string]*Skill, skillName string, 
 		return plan, nil
 	}
 
-	rendered, err := RenderFiles(skill, target)
+	rendered, err := RenderFiles(skill)
 	if err != nil {
 		return nil, err
 	}
-	needsUpdate, err := syncManagedNeedsUpdate(skillPath, receipt, skill, plan.Target, plan.Scope, rendered)
+	needsUpdate, err := syncManagedNeedsUpdate(skillPath, receipt, skill, plan.Scope, rendered)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +256,7 @@ func planNamedSync(plan *SyncPlan, catalog map[string]*Skill, skillName string, 
 	return plan, nil
 }
 
-func planRootSync(plan *SyncPlan, catalog map[string]*Skill, target Target, root string) (*SyncPlan, error) {
+func planRootSync(plan *SyncPlan, catalog map[string]*Skill, root string) (*SyncPlan, error) {
 	managed := make(map[string]struct{})
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -299,11 +292,11 @@ func planRootSync(plan *SyncPlan, catalog map[string]*Skill, target Target, root
 			}
 			continue
 		}
-		rendered, err := RenderFiles(skill, target)
+		rendered, err := RenderFiles(skill)
 		if err != nil {
 			return nil, err
 		}
-		needsUpdate, err := syncManagedNeedsUpdate(skillPath, receipt, skill, plan.Target, plan.Scope, rendered)
+		needsUpdate, err := syncManagedNeedsUpdate(skillPath, receipt, skill, plan.Scope, rendered)
 		if err != nil {
 			return nil, err
 		}
@@ -362,7 +355,6 @@ func ApplyInstall(plan *InstallPlan) (*Receipt, int, error) {
 	receipt := &Receipt{
 		Skill:       plan.spec.ID,
 		Version:     plan.spec.Version,
-		Target:      plan.Target,
 		Scope:       plan.Scope,
 		Checksum:    checksumForRendered(plan.rendered),
 		Files:       relPaths,
@@ -391,7 +383,7 @@ func ApplySync(plan *SyncPlan) (int, error) {
 	for _, item := range plan.items {
 		switch item.op {
 		case syncOpInstall, syncOpUpdate:
-			written, err := writeSkill(item.skill, plan.Target, plan.Scope, item.path, item.rendered)
+			written, err := writeSkill(item.skill, plan.Scope, item.path, item.rendered)
 			if err != nil {
 				return applied, err
 			}
@@ -416,7 +408,7 @@ func ApplySync(plan *SyncPlan) (int, error) {
 	return applied, nil
 }
 
-func PlanRemove(skillID string, target Target, scope Scope, root string) (*RemovePlan, error) {
+func PlanRemove(skillID string, scope Scope, root string) (*RemovePlan, error) {
 	if strings.TrimSpace(skillID) == "" {
 		return nil, fmt.Errorf("skill id is empty")
 	}
@@ -427,7 +419,6 @@ func PlanRemove(skillID string, target Target, scope Scope, root string) (*Remov
 	skillPath := filepath.Join(root, skillID)
 	plan := &RemovePlan{
 		Skill:     skillID,
-		Target:    string(target),
 		Scope:     string(scope),
 		Root:      root,
 		SkillPath: skillPath,
@@ -477,11 +468,10 @@ func ApplyRemove(plan *RemovePlan) error {
 	return nil
 }
 
-func Doctor(catalog map[string]*Skill, target Target, scope Scope, root string) DoctorReport {
+func Doctor(catalog map[string]*Skill, scope Scope, root string) DoctorReport {
 	report := DoctorReport{
-		Target: string(target),
-		Scope:  string(scope),
-		Root:   root,
+		Scope: string(scope),
+		Root:  root,
 	}
 
 	stat, err := os.Stat(root)
@@ -613,19 +603,18 @@ func checksumForRendered(rendered map[string][]byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func receiptMatchesRendered(receipt *Receipt, skill *Skill, target, scope string, rendered map[string][]byte) bool {
+func receiptMatchesRendered(receipt *Receipt, skill *Skill, scope string, rendered map[string][]byte) bool {
 	if receipt == nil || skill == nil {
 		return false
 	}
 	return receipt.Checksum == checksumForRendered(rendered) &&
 		receipt.Skill == skill.Spec.ID &&
 		receipt.Version == skill.Spec.Version &&
-		receipt.Target == target &&
 		receipt.Scope == scope
 }
 
-func syncManagedNeedsUpdate(skillPath string, receipt *Receipt, skill *Skill, target, scope string, rendered map[string][]byte) (bool, error) {
-	if !receiptMatchesRendered(receipt, skill, target, scope, rendered) {
+func syncManagedNeedsUpdate(skillPath string, receipt *Receipt, skill *Skill, scope string, rendered map[string][]byte) (bool, error) {
+	if !receiptMatchesRendered(receipt, skill, scope, rendered) {
 		return true, nil
 	}
 	for relPath, content := range rendered {
@@ -666,7 +655,7 @@ func syncManagedNeedsUpdate(skillPath string, receipt *Receipt, skill *Skill, ta
 	return false, nil
 }
 
-func writeSkill(skill *Skill, target, scope, skillPath string, rendered map[string][]byte) (int, error) {
+func writeSkill(skill *Skill, scope, skillPath string, rendered map[string][]byte) (int, error) {
 	if err := os.MkdirAll(skillPath, 0o755); err != nil {
 		return 0, fmt.Errorf("create skill directory: %w", err)
 	}
@@ -687,7 +676,6 @@ func writeSkill(skill *Skill, target, scope, skillPath string, rendered map[stri
 	receipt := &Receipt{
 		Skill:       skill.Spec.ID,
 		Version:     skill.Spec.Version,
-		Target:      target,
 		Scope:       scope,
 		Checksum:    checksumForRendered(rendered),
 		Files:       relPaths,

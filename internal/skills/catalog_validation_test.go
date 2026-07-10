@@ -38,36 +38,34 @@ func TestSkillCoverageCommandsExistInRegistry(t *testing.T) {
 	}
 }
 
-func TestRenderFilesIncludesDeclaredReferencesForAllTargets(t *testing.T) {
+func TestRenderFilesIncludesDeclaredReferences(t *testing.T) {
 	t.Parallel()
 	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)
 	}
 
-	for _, target := range AllTargets() {
-		for _, skillID := range sortedSkillIDs(catalog) {
-			skill := catalog[skillID]
-			rendered, err := RenderFiles(skill, target)
-			if err != nil {
-				t.Fatalf("RenderFiles(%s, %s) error = %v", skillID, target, err)
-			}
+	for _, skillID := range sortedSkillIDs(catalog) {
+		skill := catalog[skillID]
+		rendered, err := RenderFiles(skill)
+		if err != nil {
+			t.Fatalf("RenderFiles(%s) error = %v", skillID, err)
+		}
 
-			if _, ok := rendered["SKILL.md"]; !ok {
-				t.Errorf("RenderFiles(%s, %s) missing SKILL.md", skillID, target)
-			}
+		if _, ok := rendered["SKILL.md"]; !ok {
+			t.Errorf("RenderFiles(%s) missing SKILL.md", skillID)
+		}
 
-			for _, ref := range skill.Spec.References {
-				if _, ok := rendered[ref]; !ok {
-					t.Errorf("RenderFiles(%s, %s) missing declared reference %q", skillID, target, ref)
-				}
+		for _, ref := range skill.Spec.References {
+			if _, ok := rendered[ref]; !ok {
+				t.Errorf("RenderFiles(%s) missing declared reference %q", skillID, ref)
 			}
+		}
 
-			_, hasOpenAIMetadata := rendered["agents/openai.yaml"]
-			wantOpenAIMetadata := target == TargetCodex && strings.TrimSpace(skill.OpenAIMetadata) != ""
-			if hasOpenAIMetadata != wantOpenAIMetadata {
-				t.Errorf("RenderFiles(%s, %s) agents/openai.yaml present = %v, want %v", skillID, target, hasOpenAIMetadata, wantOpenAIMetadata)
-			}
+		_, hasOpenAIMetadata := rendered["agents/openai.yaml"]
+		wantOpenAIMetadata := strings.TrimSpace(skill.OpenAIMetadata) != ""
+		if hasOpenAIMetadata != wantOpenAIMetadata {
+			t.Errorf("RenderFiles(%s) agents/openai.yaml present = %v, want %v", skillID, hasOpenAIMetadata, wantOpenAIMetadata)
 		}
 	}
 }

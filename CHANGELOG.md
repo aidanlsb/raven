@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Agent skill commands now use the portable Agent Skills directories (`~/.agents/skills` for user scope and `.agents/skills` for project scope). The runtime-specific `--target` flag has been removed; use `--dest` for a custom install root.
+- Agent setup documentation now leads with skill installation and describes all seven packaged Raven skills.
+
 ## [v0.0.28] - 2026-07-08
 
 ### Added
