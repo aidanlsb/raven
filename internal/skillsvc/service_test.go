@@ -31,6 +31,7 @@ func TestSyncDefaultsToAgentSkillsRoot(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Chdir(cwd)
 
 	result, err := Sync(SyncRequest{Name: "raven-core"})

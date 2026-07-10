@@ -45,6 +45,7 @@ func TestResolveInstallRootDefaults(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	tests := []struct {
 		name  string
