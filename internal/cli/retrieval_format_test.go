@@ -193,12 +193,12 @@ func TestPrintQuerySectionResultsIncludesColumnHeaders(t *testing.T) {
 	out := captureStdout(t, func() {
 		printQuerySectionResults("section level:2", []model.Section{
 			{
-				ID:         "page/raven#section-query-results",
-				FilePath:   "page/raven.md",
-				Slug:       "section-query-results",
-				Title:      "Section query results",
-				Level:      2,
-				LineStart:  17,
+				ID:        "page/raven#section-query-results",
+				FilePath:  "page/raven.md",
+				Slug:      "section-query-results",
+				Title:     "Section query results",
+				Level:     2,
+				LineStart: 17,
 			},
 		})
 	})
