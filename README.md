@@ -8,7 +8,7 @@ Raven turns a folder of Markdown files into a structured, queryable knowledge ba
 
 If you already keep notes in Markdown, you've probably hit the ceiling of plain files: you can grep for text, but you can't ask "which follow-ups from my meetings are still open?" or "what's blocking this project?" without reading everything yourself.
 
-Tools like Notion and Obsidian add structure, but your data lives in their format and their app. Raven takes a different approach:
+Note-taking apps add structure, but your data often ends up locked inside their format and their app. Raven takes a different approach:
 
 - **Plain text is the source of truth.** Everything is Markdown with YAML frontmatter. No proprietary database, no lock-in. The index under `.raven/` is a derived cache you can rebuild any time with `rvn reindex`.
 - **Structure you define.** A lightweight schema describes the things you track (projects, meetings, people…) so notes become queryable data, not just prose.
