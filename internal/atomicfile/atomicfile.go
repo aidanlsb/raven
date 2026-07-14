@@ -1,9 +1,11 @@
 package atomicfile
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // WriteFile writes data to path atomically (best-effort cross-platform).
@@ -55,14 +57,47 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("close temp file: %w", err)
 	}
 
-	// On Windows, renaming over an existing file fails. Remove first (not atomic).
+	// On Windows, renaming over an existing file fails. Preserve the destination
+	// while using a non-atomic backup/replace fallback.
 	if err := os.Rename(tmpPath, path); err != nil {
-		_ = os.Remove(path)
-		if err2 := os.Rename(tmpPath, path); err2 != nil {
+		if runtime.GOOS != "windows" || !fileExists(path) {
 			return fmt.Errorf("rename temp file: %w", err)
+		}
+		if replaceErr := replaceExistingFile(tmpPath, path, os.Rename, os.Remove); replaceErr != nil {
+			return fmt.Errorf("rename temp file: %w", errors.Join(err, replaceErr))
 		}
 	}
 
 	committed = true
+	return nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func replaceExistingFile(
+	tmpPath string,
+	path string,
+	rename func(string, string) error,
+	remove func(string) error,
+) error {
+	backupPath := tmpPath + ".backup"
+	if err := rename(path, backupPath); err != nil {
+		return fmt.Errorf("back up destination: %w", err)
+	}
+
+	if err := rename(tmpPath, path); err != nil {
+		if restoreErr := rename(backupPath, path); restoreErr != nil {
+			return errors.Join(
+				fmt.Errorf("replace destination: %w", err),
+				fmt.Errorf("restore destination: %w", restoreErr),
+			)
+		}
+		return fmt.Errorf("replace destination: %w", err)
+	}
+
+	_ = remove(backupPath)
 	return nil
 }
