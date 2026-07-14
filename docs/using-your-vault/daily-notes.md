@@ -30,6 +30,13 @@ rvn add "Prep for standup" --to tomorrow
 
 By default, `rvn add` appends to today's daily note. Use `--to` to target a different date or any other file.
 
+If the text starts with a dash, put it after the `--` flag terminator so Cobra
+does not parse it as a command flag:
+
+```bash
+rvn add --to today -- "- Reviewed the rollout"
+```
+
 ### Capture configuration
 
 Configure default capture behavior in `raven.yaml`:

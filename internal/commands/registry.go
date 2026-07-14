@@ -192,7 +192,10 @@ slugs and section IDs cannot be used to create headings.
 
 Permissive writes: if appended text contains a [[ref]] whose target does not exist
 yet, the write still succeeds. The response adds data.missing_refs,
-data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
+data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.
+
+If text starts with a dash, put it after -- so it is not parsed as a flag:
+  rvn add --to today -- "- Review the rollout"`,
 		Args: []ArgMeta{
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
@@ -208,6 +211,7 @@ data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 			"rvn add \"@priority(high) Urgent task\" --json",
 			"rvn add \"Note\" --to projects/website.md --json",
 			"rvn add \"Plan\" --to tomorrow --json",
+			"rvn add --to today -- \"- Review the rollout\"",
 			"rvn add \"Bug report\" --to project/raven --heading bugs-fixes --json",
 			"rvn add \"Bug report\" --to project/raven --heading \"### Bugs / Fixes\" --json",
 			"rvn add \"First entry\" --to project/raven --heading \"### Log\" --create-heading --json",
