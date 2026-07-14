@@ -162,6 +162,7 @@ By default, appends to today's daily note. Configure destination in raven.yaml.
 Only works on files that already exist (daily notes are auto-created).
 Auto-reindex is ON by default; configure via auto_reindex in raven.yaml.
 For creating NEW typed objects, use 'rvn new' instead.
+Single-target adds apply immediately; --confirm only controls bulk --stdin adds.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin and append text to each.

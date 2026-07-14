@@ -129,7 +129,7 @@ func init() {
 	addCmd.Flags().StringVar(&addHeadingFlag, "heading", "", "Target heading within destination (heading slug, object#heading ID, or markdown heading text)")
 	addCmd.Flags().BoolVar(&addCreateHeadingFlag, "create-heading", false, "Create the --heading target at the end of the file if it does not exist")
 	addCmd.Flags().BoolVar(&addStdin, "stdin", false, "Read object IDs from stdin (one per line)")
-	addCmd.Flags().BoolVar(&addConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
+	addCmd.Flags().BoolVar(&addConfirm, "confirm", false, "Apply bulk changes (without this flag, bulk shows preview only)")
 	if err := addCmd.RegisterFlagCompletionFunc("to", completeReferenceFlag(true)); err != nil {
 		panic(err)
 	}
