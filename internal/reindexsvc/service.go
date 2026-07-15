@@ -291,6 +291,8 @@ func Run(req RunRequest) (*RunResult, error) {
 			return nil
 		}
 
+		result.WarningMessages = append(result.WarningMessages, index.UnknownFrontmatterWarnings(walkResult.Document, sch)...)
+
 		result.FilesIndexed++
 		return nil
 	})

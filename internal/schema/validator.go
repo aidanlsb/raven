@@ -2,10 +2,14 @@ package schema
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
 )
+
+// MsgUnknownFrontmatterKey is the stable ValidationError.Message for undeclared keys.
+const MsgUnknownFrontmatterKey = "unknown frontmatter key"
 
 // ValidationError represents a field validation error.
 type ValidationError struct {
@@ -17,7 +21,69 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("Field '%s': %s", e.Field, e.Message)
 }
 
+// IsReservedFrontmatterKey reports whether name is a built-in frontmatter key
+// that is never treated as a schema field.
+func IsReservedFrontmatterKey(name string) bool {
+	switch name {
+	case "id", "type", "alias":
+		return true
+	default:
+		return false
+	}
+}
+
+// UnknownFrontmatterKeys returns sorted field names that are neither reserved
+// nor declared on the type. allowedExtra skips additional keys (e.g. mutation
+// allowlists). This is the single strictness gate for object frontmatter keys.
+func UnknownFrontmatterKeys(
+	fields map[string]FieldValue,
+	fieldDefs map[string]*FieldDefinition,
+	allowedExtra map[string]bool,
+) []string {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	unknown := make([]string, 0)
+	for name := range fields {
+		if IsReservedFrontmatterKey(name) {
+			continue
+		}
+		if allowedExtra != nil && allowedExtra[name] {
+			continue
+		}
+		if _, ok := fieldDefs[name]; ok {
+			continue
+		}
+		unknown = append(unknown, name)
+	}
+	sort.Strings(unknown)
+	return unknown
+}
+
+// IndexableFields returns the subset of fields that should be stored in the
+// index for a known type: reserved keys plus schema-defined fields. When
+// fieldDefs is nil (unknown type), all fields are returned unchanged.
+func IndexableFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDefinition) map[string]FieldValue {
+	if fields == nil || fieldDefs == nil {
+		return fields
+	}
+
+	out := make(map[string]FieldValue, len(fields))
+	for name, value := range fields {
+		if IsReservedFrontmatterKey(name) {
+			out[name] = value
+			continue
+		}
+		if _, ok := fieldDefs[name]; ok {
+			out[name] = value
+		}
+	}
+	return out
+}
+
 // ValidateFields validates a set of fields against a type's field definitions.
+// Unknown (non-reserved) frontmatter keys are validation errors.
 func ValidateFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDefinition, schema *Schema) []ValidationError {
 	var errors []ValidationError
 	invalidDefs := make(map[string]struct{})
@@ -47,8 +113,7 @@ func ValidateFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDef
 
 	// Validate each provided field
 	for name, value := range fields {
-		// Skip reserved fields
-		if name == "id" || name == "type" || name == "alias" {
+		if IsReservedFrontmatterKey(name) {
 			continue
 		}
 
@@ -68,8 +133,13 @@ func ValidateFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDef
 					Message: err.Error(),
 				})
 			}
+			continue
 		}
-		// Note: Unknown fields are allowed (schema is not strict)
+
+		errors = append(errors, ValidationError{
+			Field:   name,
+			Message: MsgUnknownFrontmatterKey,
+		})
 	}
 
 	return errors

@@ -112,6 +112,62 @@ func TestDatabase(t *testing.T) {
 		}
 	})
 
+	t.Run("index document drops unknown frontmatter keys", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		typedSchema := schema.New()
+		typedSchema.Types["person"] = &schema.TypeDefinition{
+			Fields: map[string]*schema.FieldDefinition{
+				"name": {Type: schema.FieldTypeString},
+			},
+		}
+
+		doc := &parser.ParsedDocument{
+			FilePath: "people/freya.md",
+			Objects: []*model.Object{
+				{
+					ID:   "people/freya",
+					Type: "person",
+					Fields: map[string]schema.FieldValue{
+						"name":    schema.String("Freya"),
+						"alias":   schema.String("queen"),
+						"unknown": schema.String("should-not-index"),
+					},
+					LineStart: 1,
+				},
+			},
+		}
+
+		if err := db.IndexDocument(doc, typedSchema); err != nil {
+			t.Fatalf("failed to index document: %v", err)
+		}
+
+		warnings := UnknownFrontmatterWarnings(doc, typedSchema)
+		if len(warnings) != 1 {
+			t.Fatalf("expected 1 warning, got %v", warnings)
+		}
+
+		obj, err := db.GetObject("people/freya")
+		if err != nil {
+			t.Fatalf("GetObject: %v", err)
+		}
+		if _, ok := obj.Fields["unknown"]; ok {
+			t.Fatalf("expected unknown field omitted from index, got %#v", obj.Fields)
+		}
+		if got, ok := obj.Fields["name"]; !ok {
+			t.Fatalf("expected name Freya, got %#v", obj.Fields)
+		} else if s, ok := got.AsString(); !ok || s != "Freya" {
+			t.Fatalf("expected name Freya, got %#v", got)
+		}
+		if _, ok := obj.Fields["alias"]; !ok {
+			t.Fatalf("expected reserved alias retained, got %#v", obj.Fields)
+		}
+	})
+
 	t.Run("index array trait value", func(t *testing.T) {
 		db, err := OpenInMemory()
 		if err != nil {

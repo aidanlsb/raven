@@ -108,7 +108,7 @@ func PrepareValidatedFieldMutationValues(
 		merged[key] = value
 	}
 
-	if err := validateMergedFields(normalizedType, merged, sch, refCtx); err != nil {
+	if err := validateMergedFields(normalizedType, merged, sch, allowedUnknown, refCtx); err != nil {
 		return nil, nil, err
 	}
 
@@ -148,7 +148,7 @@ func PrepareValidatedFrontmatterMutationValues(
 	if updatedFM == nil {
 		return "", warnings, fmt.Errorf("file has no frontmatter after update")
 	}
-	if err := validateMergedFields(normalizeMutationType(objectType), updatedFM.Fields, sch, refCtx); err != nil {
+	if err := validateMergedFields(normalizeMutationType(objectType), updatedFM.Fields, sch, allowedUnknown, refCtx); err != nil {
 		return "", warnings, err
 	}
 
@@ -232,18 +232,11 @@ func DetectUnknownFieldMutationByNames(
 		return nil
 	}
 
-	sort.Strings(fieldNames)
-
-	unknown := make([]string, 0)
+	fields := make(map[string]schema.FieldValue, len(fieldNames))
 	for _, fieldName := range fieldNames {
-		if allowedUnknown != nil && allowedUnknown[fieldName] {
-			continue
-		}
-		if _, exists := typeDef.Fields[fieldName]; exists {
-			continue
-		}
-		unknown = append(unknown, fieldName)
+		fields[fieldName] = schema.Null()
 	}
+	unknown := schema.UnknownFrontmatterKeys(fields, typeDef.Fields, allowedUnknown)
 	if len(unknown) == 0 {
 		return nil
 	}
@@ -495,7 +488,7 @@ func fieldNamesFromValueUpdates(updates map[string]schema.FieldValue) []string {
 	return names
 }
 
-func validateMergedFields(objectType string, fields map[string]schema.FieldValue, sch *schema.Schema, refCtx *RefValidationContext) error {
+func validateMergedFields(objectType string, fields map[string]schema.FieldValue, sch *schema.Schema, allowedUnknown map[string]bool, refCtx *RefValidationContext) error {
 	if sch == nil {
 		return nil
 	}
@@ -505,7 +498,19 @@ func validateMergedFields(objectType string, fields map[string]schema.FieldValue
 		return nil
 	}
 
+	if unknownErr := DetectUnknownFieldMutationByNames(objectType, sch, fieldNamesFromValueUpdates(fields), allowedUnknown); unknownErr != nil {
+		return unknownErr
+	}
+
 	issues := schema.ValidateFields(fields, typeDef.Fields, sch)
+	filtered := make([]schema.ValidationError, 0, len(issues))
+	for _, issue := range issues {
+		if issue.Message == schema.MsgUnknownFrontmatterKey {
+			continue // already reported via DetectUnknownFieldMutationByNames
+		}
+		filtered = append(filtered, issue)
+	}
+	issues = filtered
 	if len(issues) == 0 {
 		issues = validateRefTargets(fields, typeDef.Fields, sch, refCtx)
 	}

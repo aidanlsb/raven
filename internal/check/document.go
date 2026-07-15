@@ -71,10 +71,23 @@ func (v *Validator) validateObject(filePath string, obj *model.Object) []Issue {
 
 	// Section IDs are derived from heading text, so there is no separate object ID check here.
 
-	// Validate fields against schema
+	// Validate fields against schema (including unknown frontmatter keys).
 	if typeDef != nil {
 		fieldErrors := schema.ValidateFields(obj.Fields, typeDef.Fields, v.schema)
 		for _, err := range fieldErrors {
+			if err.Message == schema.MsgUnknownFrontmatterKey {
+				issues = append(issues, Issue{
+					Level:      LevelError,
+					Type:       IssueUnknownFrontmatter,
+					FilePath:   filePath,
+					Line:       obj.LineStart,
+					Message:    fmt.Sprintf("Unknown frontmatter key '%s' for type '%s'", err.Field, obj.Type),
+					Value:      err.Field,
+					FixCommand: fmt.Sprintf("rvn schema add field %s %s", obj.Type, err.Field),
+					FixHint:    fmt.Sprintf("Add field '%s' to type '%s', or remove it from the file", err.Field, obj.Type),
+				})
+				continue
+			}
 			issueType := IssueInvalidFieldValue
 			fixHint := "Fix or remove the invalid field value"
 			if err.Message == "Required field is missing" {
@@ -100,36 +113,6 @@ func (v *Validator) validateObject(filePath string, obj *model.Object) []Issue {
 			syntheticRef := model.NewInlineReference(obj.ID, schemaRef.TargetRaw, nil, schemaRef.Line, 0, 0)
 			refIssues := v.validateRefWithContext(filePath, obj.ID, syntheticRef, fieldDef.Target, schemaRef.FieldName)
 			issues = append(issues, refIssues...)
-		}
-
-		// Check for unknown frontmatter keys (not a defined field)
-		// Reserved keys that are always allowed
-		reservedKeys := map[string]bool{
-			"type":  true, // Object type declaration
-			"id":    true, // Optional file object ID override
-			"alias": true, // Alias for reference resolution
-		}
-
-		for fieldName := range obj.Fields {
-			// Skip reserved keys
-			if reservedKeys[fieldName] {
-				continue
-			}
-			// Skip if it's a defined field
-			if _, isField := typeDef.Fields[fieldName]; isField {
-				continue
-			}
-			// Unknown key - error
-			issues = append(issues, Issue{
-				Level:      LevelError,
-				Type:       IssueUnknownFrontmatter,
-				FilePath:   filePath,
-				Line:       obj.LineStart,
-				Message:    fmt.Sprintf("Unknown frontmatter key '%s' for type '%s'", fieldName, obj.Type),
-				Value:      fieldName,
-				FixCommand: fmt.Sprintf("rvn schema add field %s %s", obj.Type, fieldName),
-				FixHint:    fmt.Sprintf("Add field '%s' to type '%s', or remove it from the file", fieldName, obj.Type),
-			})
 		}
 	}
 

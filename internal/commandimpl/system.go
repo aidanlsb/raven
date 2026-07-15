@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/configsvc"
@@ -82,8 +83,12 @@ func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Res
 
 	warnings := make([]commandexec.Warning, 0, len(result.WarningMessages))
 	for _, warning := range result.WarningMessages {
+		code := indexUpdateFailedWarningCode
+		if strings.Contains(warning, "unknown frontmatter key") {
+			code = codes.WarnUnknownField
+		}
 		warnings = append(warnings, commandexec.Warning{
-			Code:    indexUpdateFailedWarningCode,
+			Code:    code,
 			Message: warning,
 		})
 	}

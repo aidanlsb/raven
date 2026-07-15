@@ -5,6 +5,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -33,10 +34,17 @@ type SmartReindexFailure struct {
 	ErrMsg string
 }
 
+// SmartReindexWarning records a non-fatal issue observed while refreshing.
+type SmartReindexWarning struct {
+	Path    string
+	Message string
+}
+
 // SmartReindexReport summarizes an incremental refresh.
 type SmartReindexReport struct {
 	Indexed  int
 	Failures []SmartReindexFailure
+	Warnings []SmartReindexWarning
 }
 
 func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
@@ -99,6 +107,13 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 				ErrMsg: err.Error(),
 			})
 			return nil //nolint:nilerr // record and continue; caller surfaces Failures
+		}
+
+		for _, warning := range index.UnknownFrontmatterWarnings(result.Document, sch) {
+			report.Warnings = append(report.Warnings, SmartReindexWarning{
+				Path:    result.RelativePath,
+				Message: warning,
+			})
 		}
 
 		report.Indexed++

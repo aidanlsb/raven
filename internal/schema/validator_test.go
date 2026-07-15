@@ -85,15 +85,64 @@ func TestValidateFields(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown fields allowed", func(t *testing.T) {
+	t.Run("unknown fields are validation errors", func(t *testing.T) {
 		fields := map[string]FieldValue{
 			"unknown": String("value"),
 		}
 		defs := map[string]*FieldDefinition{}
 
 		errors := ValidateFields(fields, defs, nil)
-		if len(errors) != 0 {
-			t.Fatalf("expected 0 errors for unknown fields, got %d", len(errors))
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error for unknown fields, got %d: %v", len(errors), errors)
+		}
+		if errors[0].Field != "unknown" {
+			t.Fatalf("expected error on unknown field, got %q", errors[0].Field)
+		}
+		if errors[0].Message != MsgUnknownFrontmatterKey {
+			t.Fatalf("unexpected error message: %q", errors[0].Message)
+		}
+	})
+
+	t.Run("UnknownFrontmatterKeys sorts and skips reserved", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"zebra": String("z"),
+			"alias": String("a"),
+			"alpha": String("a"),
+			"name":  String("n"),
+		}
+		defs := map[string]*FieldDefinition{
+			"name": {Type: FieldTypeString},
+		}
+		got := UnknownFrontmatterKeys(fields, defs, nil)
+		want := []string{"alpha", "zebra"}
+		if len(got) != len(want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("got %v, want %v", got, want)
+			}
+		}
+	})
+
+	t.Run("IndexableFields drops unknown keys", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"name":    String("Freya"),
+			"alias":   String("queen"),
+			"unknown": String("x"),
+		}
+		defs := map[string]*FieldDefinition{
+			"name": {Type: FieldTypeString},
+		}
+		got := IndexableFields(fields, defs)
+		if _, ok := got["unknown"]; ok {
+			t.Fatal("expected unknown key to be dropped from indexable fields")
+		}
+		if _, ok := got["name"]; !ok {
+			t.Fatal("expected name to be retained")
+		}
+		if _, ok := got["alias"]; !ok {
+			t.Fatal("expected reserved alias to be retained")
 		}
 	})
 

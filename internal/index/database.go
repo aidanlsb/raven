@@ -454,7 +454,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	// Use provided mtime or fall back to current time
 	mtime := indexedMtime(now, fileMtime)
 
-	if err := indexObjects(tx, doc, mtime, now); err != nil {
+	if err := indexObjects(tx, doc, sch, mtime, now); err != nil {
 		return err
 	}
 	if err := indexSections(tx, doc, now); err != nil {
@@ -540,7 +540,7 @@ func nullableString(value string) interface{} {
 	return value
 }
 
-func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64) error {
+func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema, mtime, indexedAt int64) error {
 	objStmt, err := tx.Prepare(`
 		INSERT INTO objects (id, file_path, type, fields, line_start, alias, file_mtime, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -551,7 +551,13 @@ func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64
 	defer objStmt.Close()
 
 	for _, obj := range doc.Objects {
-		fieldsJSON, err := json.Marshal(obj.Fields)
+		fields := obj.Fields
+		if sch != nil {
+			if typeDef := sch.Types[obj.Type]; typeDef != nil {
+				fields = schema.IndexableFields(obj.Fields, typeDef.Fields)
+			}
+		}
+		fieldsJSON, err := json.Marshal(fields)
 		if err != nil {
 			return err
 		}
@@ -580,6 +586,33 @@ func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64
 	}
 
 	return nil
+}
+
+// UnknownFrontmatterWarnings returns non-fatal messages for unknown frontmatter
+// keys found while indexing. Callers surface these; indexing still proceeds and
+// stores only schema-known fields for typed objects.
+func UnknownFrontmatterWarnings(doc *parser.ParsedDocument, sch *schema.Schema) []string {
+	if doc == nil || sch == nil {
+		return nil
+	}
+
+	var warnings []string
+	for _, obj := range doc.Objects {
+		if obj == nil {
+			continue
+		}
+		typeDef := sch.Types[obj.Type]
+		if typeDef == nil {
+			continue
+		}
+		for _, key := range schema.UnknownFrontmatterKeys(obj.Fields, typeDef.Fields, nil) {
+			warnings = append(warnings, fmt.Sprintf(
+				"%s: unknown frontmatter key %q on type %q (not indexed; run rvn check)",
+				doc.FilePath, key, obj.Type,
+			))
+		}
+	}
+	return warnings
 }
 
 func indexSections(tx *sql.Tx, doc *parser.ParsedDocument, indexedAt int64) error {

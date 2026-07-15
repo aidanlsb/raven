@@ -85,7 +85,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 		if err != nil {
 			return commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to refresh index: %v", err), nil, "Run 'rvn reindex' to rebuild the database")
 		}
-		refreshWarnings = refreshFailureWarnings(report)
+		refreshWarnings = append(refreshFailureWarnings(report), refreshUnknownFieldWarnings(report)...)
 	} else {
 		_, _, _ = readsvc.CheckStaleness(rt)
 	}
@@ -817,5 +817,36 @@ func refreshFailureWarnings(report readsvc.SmartReindexReport) []commandexec.War
 		Code:    codes.WarnIndexUpdateFailed,
 		Message: message,
 		Ref:     "Run 'rvn reindex' or 'rvn check' to inspect failed files",
+	}}
+}
+
+func refreshUnknownFieldWarnings(report readsvc.SmartReindexReport) []commandexec.Warning {
+	if len(report.Warnings) == 0 {
+		return nil
+	}
+
+	const maxListed = 5
+	listed := make([]string, 0, maxListed)
+	for i, warning := range report.Warnings {
+		if i >= maxListed {
+			break
+		}
+		listed = append(listed, warning.Message)
+	}
+	message := fmt.Sprintf(
+		"refresh found %d unknown frontmatter key(s)",
+		len(report.Warnings),
+	)
+	if len(listed) > 0 {
+		message = fmt.Sprintf("%s: %s", message, strings.Join(listed, "; "))
+	}
+	if len(report.Warnings) > maxListed {
+		message = fmt.Sprintf("%s; and %d more", message, len(report.Warnings)-maxListed)
+	}
+
+	return []commandexec.Warning{{
+		Code:    codes.WarnUnknownField,
+		Message: message,
+		Ref:     "Add the field to schema.yaml or remove it; run 'rvn check' for details",
 	}}
 }
