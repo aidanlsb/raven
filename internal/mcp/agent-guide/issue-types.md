@@ -47,6 +47,7 @@ check failures.
 | `unused_type` | Type defined but unused | Remove type or create instances |
 | `unused_trait` | Trait defined but unused | Remove trait or start using it |
 | `stale_index` | Index may be stale | Run `raven_invoke(command="reindex")` (or `rvn reindex` in the CLI) |
+| `check_incomplete` | An index-backed check subsystem failed, so reported health may be incomplete | Fix the named subsystem (often `rvn reindex`) and re-run check |
 | `unknown_field_type` | Schema field has an unrecognized field type | Change the schema field to a supported type |
 | `self_referential_required` | Required ref field points to the same type, making the first object hard to create | Make the field optional or add a default value |
 | `id_collision` | Short name matches multiple objects and that short name is used in a reference | Use full paths in references to avoid ambiguity |

@@ -79,16 +79,17 @@ const (
 
 // Warning codes for non-fatal issues.
 const (
-	WarnRefNotFound       = codes.WarnRefNotFound
-	WarnDeprecated        = codes.WarnDeprecated
-	WarnSchemaOutdated    = codes.WarnSchemaOutdated
-	WarnDatabaseOutdated  = codes.WarnDatabaseOutdated
-	WarnIndexUpdateFailed = codes.WarnIndexUpdateFailed
-	WarnDocsFetchFailed   = codes.WarnDocsFetchFailed
-	WarnWrongCommand      = codes.WarnWrongCommand
-	WarnMissingField      = codes.WarnMissingField
-	WarnBacklinks         = codes.WarnBacklinks
-	WarnSectionSkipped    = codes.WarnSectionSkipped
-	WarnUnknownField      = codes.WarnUnknownField
-	WarnTypeMismatch      = codes.WarnTypeMismatch
+	WarnRefNotFound        = codes.WarnRefNotFound
+	WarnDeprecated         = codes.WarnDeprecated
+	WarnSchemaOutdated     = codes.WarnSchemaOutdated
+	WarnDatabaseOutdated   = codes.WarnDatabaseOutdated
+	WarnIndexUpdateFailed  = codes.WarnIndexUpdateFailed
+	WarnDocsFetchFailed    = codes.WarnDocsFetchFailed
+	WarnWrongCommand       = codes.WarnWrongCommand
+	WarnMissingField       = codes.WarnMissingField
+	WarnBacklinks          = codes.WarnBacklinks
+	WarnSectionSkipped     = codes.WarnSectionSkipped
+	WarnUnknownField       = codes.WarnUnknownField
+	WarnTypeMismatch       = codes.WarnTypeMismatch
+	WarnCheckRunIncomplete = codes.WarnCheckRunIncomplete
 )

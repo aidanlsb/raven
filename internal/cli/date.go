@@ -48,8 +48,8 @@ func renderDate(_ *cobra.Command, result commandexec.Result) error {
 			if item.SourceType == "trait" {
 				if item.Trait != nil {
 					valueStr := ""
-					if item.Trait.Value != nil && *item.Trait.Value != "" {
-						valueStr = *item.Trait.Value
+					if idx := item.Trait.IndexValueString(); idx != nil {
+						valueStr = *idx
 					}
 					line := fmt.Sprintf("%s %s", ui.Trait(item.Trait.TraitType, valueStr), item.Trait.Content)
 					fmt.Println(ui.Bullet(line))

@@ -401,8 +401,10 @@ func TestQueryTraitsWithFilterExpressions(t *testing.T) {
 		if len(results) != 1 {
 			t.Errorf("expected 1 result, got %d", len(results))
 		}
-		if len(results) > 0 && *results[0].Value != "done" {
-			t.Errorf("expected value 'done', got '%s'", *results[0].Value)
+		if len(results) > 0 {
+			if got := results[0].IndexValueString(); got == nil || *got != "done" {
+				t.Errorf("expected value 'done', got %#v", got)
+			}
 		}
 	})
 
@@ -417,7 +419,7 @@ func TestQueryTraitsWithFilterExpressions(t *testing.T) {
 		}
 		// Verify none are "done"
 		for _, r := range results {
-			if r.Value != nil && *r.Value == "done" {
+			if r.Value != nil && r.IndexValueString() != nil && *r.IndexValueString() == "done" {
 				t.Errorf("found 'done' in NOT done results")
 			}
 		}
@@ -725,8 +727,8 @@ func TestQueryObjects(t *testing.T) {
 		if results[0].ID != "people/freya" {
 			t.Fatalf("first object ID = %q, want people/freya", results[0].ID)
 		}
-		if got := results[0].Fields["name"]; got != "Freya" {
-			t.Fatalf("first object name = %#v, want Freya", got)
+		if got, ok := results[0].Fields["name"].AsString(); !ok || got != "Freya" {
+			t.Fatalf("first object name = %#v, want Freya", results[0].Fields["name"])
 		}
 	})
 }

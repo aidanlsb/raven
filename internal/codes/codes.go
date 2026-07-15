@@ -88,21 +88,22 @@ const (
 )
 
 const (
-	WarnRefNotFound       WarningCode = "REF_NOT_FOUND"
-	WarnDeprecated        WarningCode = "DEPRECATED"
-	WarnSchemaOutdated    WarningCode = "SCHEMA_OUTDATED"
-	WarnDatabaseOutdated  WarningCode = "DATABASE_OUTDATED"
-	WarnIndexUpdateFailed WarningCode = "INDEX_UPDATE_FAILED"
-	WarnDocsFetchFailed   WarningCode = "DOCS_FETCH_FAILED"
-	WarnWrongCommand      WarningCode = "WRONG_COMMAND"
-	WarnMissingField      WarningCode = "MISSING_REQUIRED_FIELD"
-	WarnBacklinks         WarningCode = "HAS_BACKLINKS"
-	WarnSectionSkipped    WarningCode = "SECTION_SKIPPED"
-	WarnUnknownField      WarningCode = "UNKNOWN_FIELD"
-	WarnTypeMismatch      WarningCode = "TYPE_DIRECTORY_MISMATCH"
-	WarnOrphanedFiles     WarningCode = "ORPHANED_FILES"
-	WarnOrphanedTraits    WarningCode = "ORPHANED_TRAITS"
-	WarnCheckIncomplete   WarningCode = "CHECK_APPLY_INCOMPLETE"
+	WarnRefNotFound        WarningCode = "REF_NOT_FOUND"
+	WarnDeprecated         WarningCode = "DEPRECATED"
+	WarnSchemaOutdated     WarningCode = "SCHEMA_OUTDATED"
+	WarnDatabaseOutdated   WarningCode = "DATABASE_OUTDATED"
+	WarnIndexUpdateFailed  WarningCode = "INDEX_UPDATE_FAILED"
+	WarnDocsFetchFailed    WarningCode = "DOCS_FETCH_FAILED"
+	WarnWrongCommand       WarningCode = "WRONG_COMMAND"
+	WarnMissingField       WarningCode = "MISSING_REQUIRED_FIELD"
+	WarnBacklinks          WarningCode = "HAS_BACKLINKS"
+	WarnSectionSkipped     WarningCode = "SECTION_SKIPPED"
+	WarnUnknownField       WarningCode = "UNKNOWN_FIELD"
+	WarnTypeMismatch       WarningCode = "TYPE_DIRECTORY_MISMATCH"
+	WarnOrphanedFiles      WarningCode = "ORPHANED_FILES"
+	WarnOrphanedTraits     WarningCode = "ORPHANED_TRAITS"
+	WarnCheckIncomplete    WarningCode = "CHECK_APPLY_INCOMPLETE"
+	WarnCheckRunIncomplete WarningCode = "CHECK_INCOMPLETE"
 )
 
 var knownErrorCodes = map[ErrorCode]struct{}{
@@ -120,7 +121,7 @@ var knownErrorCodes = map[ErrorCode]struct{}{
 var knownWarningCodes = map[WarningCode]struct{}{
 	WarnRefNotFound: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnDocsFetchFailed: {},
 	WarnWrongCommand: {}, WarnMissingField: {}, WarnBacklinks: {}, WarnSectionSkipped: {}, WarnUnknownField: {}, WarnTypeMismatch: {},
-	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {},
+	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {}, WarnCheckRunIncomplete: {},
 }
 
 // IsErrorCode reports whether code is part of Raven's stable error contract.

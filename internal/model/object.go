@@ -1,5 +1,7 @@
 package model
 
+import "github.com/aidanlsb/raven/internal/schema"
+
 // Object represents an instance of a typed object in the vault.
 // Objects are markdown files with frontmatter that defines their type and fields.
 type Object struct {
@@ -10,8 +12,8 @@ type Object struct {
 	// Type is the type of this object (e.g., "person", "project").
 	Type string `json:"type"`
 
-	// Fields contains the frontmatter field values, parsed from YAML.
-	Fields map[string]interface{} `json:"fields,omitempty"`
+	// Fields contains the frontmatter field values.
+	Fields map[string]schema.FieldValue `json:"fields,omitempty"`
 
 	// FilePath is the path to the file containing this object,
 	// relative to the vault root.

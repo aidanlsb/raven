@@ -3,6 +3,7 @@ package check
 import (
 	"fmt"
 
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -46,24 +47,24 @@ func (v *Validator) ValidateDocument(doc *parser.ParsedDocument) []Issue {
 	return issues
 }
 
-func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []Issue {
+func (v *Validator) validateObject(filePath string, obj *model.Object) []Issue {
 	var issues []Issue
 
 	// Track type usage
-	v.usedTypes[obj.ObjectType] = struct{}{}
+	v.usedTypes[obj.Type] = struct{}{}
 
 	// Check if type is defined
-	typeDef, typeExists := v.schema.Types[obj.ObjectType]
-	if !typeExists && !schema.IsBuiltinType(obj.ObjectType) {
+	typeDef, typeExists := v.schema.Types[obj.Type]
+	if !typeExists && !schema.IsBuiltinType(obj.Type) {
 		issues = append(issues, Issue{
 			Level:      LevelError,
 			Type:       IssueUnknownType,
 			FilePath:   filePath,
 			Line:       obj.LineStart,
-			Message:    fmt.Sprintf("Unknown type '%s'", obj.ObjectType),
-			Value:      obj.ObjectType,
-			FixCommand: fmt.Sprintf("rvn schema add type %s", obj.ObjectType),
-			FixHint:    fmt.Sprintf("Add type '%s' to schema", obj.ObjectType),
+			Message:    fmt.Sprintf("Unknown type '%s'", obj.Type),
+			Value:      obj.Type,
+			FixCommand: fmt.Sprintf("rvn schema add type %s", obj.Type),
+			FixHint:    fmt.Sprintf("Add type '%s' to schema", obj.Type),
 		})
 		return issues
 	}
@@ -90,45 +91,15 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 			})
 		}
 
-		// Validate ref fields with type context for missing ref tracking
-		for fieldName, fieldDef := range typeDef.Fields {
+		schemaRefs := parser.ExtractSchemaFieldRefs([]*model.Object{obj}, v.schema)
+		for _, schemaRef := range schemaRefs {
+			fieldDef := typeDef.Fields[schemaRef.FieldName]
 			if fieldDef == nil {
 				continue
 			}
-
-			fieldValue, hasField := obj.Fields[fieldName]
-			if !hasField {
-				continue
-			}
-
-			// Handle ref fields
-			if fieldDef.Type == schema.FieldTypeRef {
-				if refStr, ok := fieldValue.AsString(); ok {
-					// Create a synthetic ParsedRef to validate
-					syntheticRef := &parser.ParsedRef{
-						TargetRaw: refStr,
-						Line:      obj.LineStart,
-					}
-					refIssues := v.validateRefWithContext(filePath, obj.ID, syntheticRef, fieldDef.Target, fieldName)
-					issues = append(issues, refIssues...)
-				}
-			}
-
-			// Handle ref[] (array) fields
-			if fieldDef.Type == schema.FieldTypeRefArray {
-				if arr, ok := fieldValue.AsArray(); ok {
-					for _, item := range arr {
-						if refStr, ok := item.AsString(); ok {
-							syntheticRef := &parser.ParsedRef{
-								TargetRaw: refStr,
-								Line:      obj.LineStart,
-							}
-							refIssues := v.validateRefWithContext(filePath, obj.ID, syntheticRef, fieldDef.Target, fieldName)
-							issues = append(issues, refIssues...)
-						}
-					}
-				}
-			}
+			syntheticRef := model.NewInlineReference(obj.ID, schemaRef.TargetRaw, nil, schemaRef.Line, 0, 0)
+			refIssues := v.validateRefWithContext(filePath, obj.ID, syntheticRef, fieldDef.Target, schemaRef.FieldName)
+			issues = append(issues, refIssues...)
 		}
 
 		// Check for unknown frontmatter keys (not a defined field)
@@ -154,10 +125,10 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 				Type:       IssueUnknownFrontmatter,
 				FilePath:   filePath,
 				Line:       obj.LineStart,
-				Message:    fmt.Sprintf("Unknown frontmatter key '%s' for type '%s'", fieldName, obj.ObjectType),
+				Message:    fmt.Sprintf("Unknown frontmatter key '%s' for type '%s'", fieldName, obj.Type),
 				Value:      fieldName,
-				FixCommand: fmt.Sprintf("rvn schema add field %s %s", obj.ObjectType, fieldName),
-				FixHint:    fmt.Sprintf("Add field '%s' to type '%s', or remove it from the file", fieldName, obj.ObjectType),
+				FixCommand: fmt.Sprintf("rvn schema add field %s %s", obj.Type, fieldName),
+				FixHint:    fmt.Sprintf("Add field '%s' to type '%s', or remove it from the file", fieldName, obj.Type),
 			})
 		}
 	}
@@ -165,7 +136,7 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 	return issues
 }
 
-func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []Issue {
+func (v *Validator) validateTrait(filePath string, trait *model.Trait) []Issue {
 	var issues []Issue
 
 	// Track trait usage

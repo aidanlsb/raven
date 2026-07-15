@@ -251,7 +251,9 @@ func loadGlobalConfigWithPath() (*config.Config, string, error) {
 
 func handleStartupError(code codes.ErrorCode, message, suggestion string) error {
 	if jsonOutput {
-		outputError(code, message, nil, suggestion)
+		if err := outputError(code, message, nil, suggestion); err != nil {
+			return err
+		}
 		return errJSONStartupHandled
 	}
 	if suggestion != "" {

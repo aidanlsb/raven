@@ -71,8 +71,7 @@ Examples:
 func dumpFullSchema(vaultPath string, start time.Time) error {
 	result := executeCanonicalCommand("schema", vaultPath, nil)
 	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+		return outputCanonicalResultJSON(result)
 	}
 	if err := handleCanonicalFailure(result); err != nil {
 		return err
@@ -153,8 +152,7 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 func listSchemaTypes(vaultPath string, start time.Time) error {
 	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "types"})
 	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+		return outputCanonicalResultJSON(result)
 	}
 	if err := handleCanonicalFailure(result); err != nil {
 		return err
@@ -187,8 +185,7 @@ func listSchemaTypes(vaultPath string, start time.Time) error {
 func listSchemaTraits(vaultPath string, start time.Time) error {
 	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "traits"})
 	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+		return outputCanonicalResultJSON(result)
 	}
 	if err := handleCanonicalFailure(result); err != nil {
 		return err
@@ -221,8 +218,7 @@ func listSchemaTraits(vaultPath string, start time.Time) error {
 func listSchemaCore(vaultPath string, start time.Time) error {
 	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "core"})
 	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+		return outputCanonicalResultJSON(result)
 	}
 	if err := handleCanonicalFailure(result); err != nil {
 		return err
@@ -260,8 +256,7 @@ func listSchemaCore(vaultPath string, start time.Time) error {
 func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
 	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "core", "name": coreTypeName})
 	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+		return outputCanonicalResultJSON(result)
 	}
 	if err := handleCanonicalFailure(result); err != nil {
 		return err
@@ -290,8 +285,7 @@ func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
 func getSchemaType(vaultPath, typeName string, start time.Time) error {
 	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "type", "name": typeName})
 	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+		return outputCanonicalResultJSON(result)
 	}
 	if err := handleCanonicalFailure(result); err != nil {
 		return err
@@ -370,8 +364,7 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
 	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "trait", "name": traitName})
 	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+		return outputCanonicalResultJSON(result)
 	}
 	if err := handleCanonicalFailure(result); err != nil {
 		return err

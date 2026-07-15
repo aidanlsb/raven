@@ -2,6 +2,8 @@ package parser
 
 import (
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/model"
 )
 
 func TestParseDocument(t *testing.T) {
@@ -34,8 +36,8 @@ Some content about Freya.
 			t.Errorf("first object ID = %q, want %q", doc.Objects[0].ID, "people/freya")
 		}
 
-		if doc.Objects[0].ObjectType != "person" {
-			t.Errorf("first object type = %q, want %q", doc.Objects[0].ObjectType, "person")
+		if doc.Objects[0].Type != "person" {
+			t.Errorf("first object type = %q, want %q", doc.Objects[0].Type, "person")
 		}
 
 		if len(doc.Sections) != 1 {
@@ -69,8 +71,8 @@ Even more text.
 			t.Errorf("got %d objects, want 1", len(doc.Objects))
 		}
 
-		if doc.Objects[0].ObjectType != "page" {
-			t.Errorf("file object type = %q, want page", doc.Objects[0].ObjectType)
+		if doc.Objects[0].Type != "page" {
+			t.Errorf("file object type = %q, want page", doc.Objects[0].Type)
 		}
 
 		if len(doc.Sections) != 3 {
@@ -626,7 +628,7 @@ func TestParseDocument_DeepHeadingHierarchy(t *testing.T) {
 func TestFindScopeForLine(t *testing.T) {
 	t.Parallel()
 
-	sections := []*ParsedSection{
+	sections := []*model.Section{
 		{ID: "doc#intro", LineStart: 5},
 		{ID: "doc#details", LineStart: 12},
 	}
@@ -677,7 +679,7 @@ next body
 		t.Fatalf("ParseDocument failed: %v", err)
 	}
 
-	sections := map[string]*ParsedSection{}
+	sections := map[string]*model.Section{}
 	for _, section := range doc.Sections {
 		sections[section.ID] = section
 	}
@@ -780,8 +782,8 @@ func TestParseDocument_TraitOffsets(t *testing.T) {
 			if trait.Line != tt.wantLine {
 				t.Errorf("Line = %d, want %d", trait.Line, tt.wantLine)
 			}
-			if trait.StartOffset != tt.wantStart || trait.EndOffset != tt.wantEnd {
-				t.Errorf("offsets = [%d, %d), want [%d, %d)", trait.StartOffset, trait.EndOffset, tt.wantStart, tt.wantEnd)
+			if trait.PositionStart != tt.wantStart || trait.PositionEnd != tt.wantEnd {
+				t.Errorf("offsets = [%d, %d), want [%d, %d)", trait.PositionStart, trait.PositionEnd, tt.wantStart, tt.wantEnd)
 			}
 		})
 	}

@@ -551,7 +551,7 @@ func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64
 	defer objStmt.Close()
 
 	for _, obj := range doc.Objects {
-		fieldsJSON, err := json.Marshal(fieldsToMap(obj.Fields))
+		fieldsJSON, err := json.Marshal(obj.Fields)
 		if err != nil {
 			return err
 		}
@@ -567,7 +567,7 @@ func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64
 		_, err = objStmt.Exec(
 			obj.ID,
 			doc.FilePath,
-			obj.ObjectType,
+			obj.Type,
 			string(fieldsJSON),
 			obj.LineStart,
 			alias,
@@ -593,10 +593,14 @@ func indexSections(tx *sql.Tx, doc *parser.ParsedDocument, indexedAt int64) erro
 	defer stmt.Close()
 
 	for _, section := range doc.Sections {
+		filePath := section.FilePath
+		if filePath == "" {
+			filePath = doc.FilePath
+		}
 		_, err := stmt.Exec(
 			section.ID,
 			section.FileObjectID,
-			doc.FilePath,
+			filePath,
 			section.Slug,
 			section.Title,
 			section.Level,
@@ -656,21 +660,12 @@ func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schem
 }
 
 func traitValueForIndex(value schema.FieldValue) string {
-	if value.IsNull() {
-		return ""
-	}
-	if _, ok := value.AsArray(); ok {
-		data, err := json.Marshal(value.Raw())
-		if err == nil {
-			return string(data)
-		}
-	}
-	return parser.FormatFieldValueLiteral(value)
+	return schema.TraitIndexString(value)
 }
 
 type indexedTrait struct {
 	ID    string
-	Trait *parser.ParsedTrait
+	Trait *model.Trait
 }
 
 func indexedTraits(doc *parser.ParsedDocument, sch *schema.Schema) []indexedTrait {
@@ -705,7 +700,7 @@ func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error
 	// Extract additional refs from ref-typed fields in frontmatter.
 	// This allows `company: cursor` to work when the schema declares `company: ref`.
 	if sch != nil {
-		schemaRefs := extractRefsFromSchemaFields(doc.Objects, sch)
+		schemaRefs := parser.SchemaFieldRefsAsReferences(parser.ExtractSchemaFieldRefs(doc.Objects, sch))
 		allRefs = mergeRefs(allRefs, schemaRefs)
 	}
 
@@ -716,9 +711,9 @@ func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error
 			ref.TargetRaw,
 			ref.DisplayText,
 			doc.FilePath,
-			ref.Line,
-			ref.Start,
-			ref.End,
+			ref.LineOrZero(),
+			ref.PositionStartOrZero(),
+			ref.PositionEndOrZero(),
 		)
 		if err != nil {
 			return err
@@ -728,19 +723,12 @@ func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error
 	return nil
 }
 
-type fieldRefToIndex struct {
-	SourceID  string
-	FieldName string
-	TargetRaw string
-	Line      int
-}
-
 func indexFieldRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
 	if sch == nil {
 		return nil
 	}
 
-	fieldRefs := extractFieldRefsFromSchemaFields(doc.Objects, sch)
+	fieldRefs := parser.ExtractSchemaFieldRefs(doc.Objects, sch)
 	if len(fieldRefs) == 0 {
 		return nil
 	}
@@ -796,12 +784,12 @@ func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) erro
 
 		var fieldDefs map[string]*schema.FieldDefinition
 		if sch != nil {
-			if typeDef := sch.Types[obj.ObjectType]; typeDef != nil {
+			if typeDef := sch.Types[obj.Type]; typeDef != nil {
 				fieldDefs = typeDef.Fields
 			}
 		}
 		for fieldName, fieldValue := range obj.Fields {
-			if obj.ObjectType == "date" && fieldName == "date" {
+			if obj.Type == "date" && fieldName == "date" {
 				continue
 			}
 			for _, dateStr := range extractDateStringsForField(fieldValue, fieldDefs[fieldName], sch == nil) {
@@ -928,8 +916,8 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error 
 	for _, obj := range doc.Objects {
 		// Get title: check schema name_field first, then "title" field, then object ID
 		title := ""
-		if sch != nil && obj.ObjectType != "" {
-			if typeDef, ok := sch.Types[obj.ObjectType]; ok && typeDef.NameField != "" {
+		if sch != nil && obj.Type != "" {
+			if typeDef, ok := sch.Types[obj.Type]; ok && typeDef.NameField != "" {
 				if nameVal, ok := obj.Fields[typeDef.NameField]; ok {
 					if s, ok := nameVal.AsString(); ok {
 						title = s
@@ -986,8 +974,8 @@ func extractSectionContent(lines []string, lineStart int, lineEnd *int) string {
 	return strings.Join(lines[start:end], "\n")
 }
 
-func generatedDateObjectDate(obj *parser.ParsedObject) string {
-	if obj == nil || obj.ObjectType != "date" {
+func generatedDateObjectDate(obj *model.Object) string {
+	if obj == nil || obj.Type != "date" {
 		return ""
 	}
 
@@ -1625,15 +1613,6 @@ func (d *Database) FindDuplicateAliases() ([]DuplicateAlias, error) {
 	return duplicates, rows.Err()
 }
 
-// Helper to convert FieldValue map to interface map for JSON serialization.
-func fieldsToMap(fields map[string]schema.FieldValue) map[string]interface{} {
-	result := make(map[string]interface{}, len(fields))
-	for k, v := range fields {
-		result[k] = v.Raw()
-	}
-	return result
-}
-
 // getTraitDefault returns the default value for a trait from the schema.
 // For boolean traits with default: true, returns "true".
 // For other traits, returns the default value as a string, or nil if no default.
@@ -2027,108 +2006,11 @@ func (d *Database) resolveFieldRefBatch(res *resolver.Resolver, refs []fieldRefT
 	return tx.Commit()
 }
 
-// extractRefsFromSchemaFields extracts refs from ref-typed fields that are bare strings.
-// This enables `company: cursor` to work when the schema declares `company: ref`.
-//
-// The parser doesn't have schema context, so bare strings like "cursor" are stored as strings.
-// At index time, we use the schema to identify ref-typed fields and extract their values as refs.
-func extractRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Schema) []*parser.ParsedRef {
-	schemaRefs := extractSchemaFieldRefs(objects, sch)
-	if len(schemaRefs) == 0 {
-		return nil
-	}
-
-	refs := make([]*parser.ParsedRef, 0, len(schemaRefs))
-	for _, schemaRef := range schemaRefs {
-		refs = append(refs, &parser.ParsedRef{
-			SourceID:  schemaRef.SourceID,
-			TargetRaw: schemaRef.TargetRaw,
-			Line:      schemaRef.Line,
-		})
-	}
-
-	return refs
-}
-
-func extractFieldRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Schema) []fieldRefToIndex {
-	schemaRefs := extractSchemaFieldRefs(objects, sch)
-	if len(schemaRefs) == 0 {
-		return nil
-	}
-
-	refs := make([]fieldRefToIndex, 0, len(schemaRefs))
-	for _, schemaRef := range schemaRefs {
-		refs = append(refs, fieldRefToIndex(schemaRef))
-	}
-
-	return refs
-}
-
-type schemaFieldRef struct {
-	SourceID  string
-	FieldName string
-	TargetRaw string
-	Line      int
-}
-
-func extractSchemaFieldRefs(objects []*parser.ParsedObject, sch *schema.Schema) []schemaFieldRef {
-	if sch == nil {
-		return nil
-	}
-
-	var refs []schemaFieldRef
-	opts := parser.RefExtractOptions{AllowBareStrings: true}
-
-	for _, obj := range objects {
-		typeDef := sch.Types[obj.ObjectType]
-		if typeDef == nil {
-			continue
-		}
-
-		for fieldName, fieldValue := range obj.Fields {
-			fieldDef := typeDef.Fields[fieldName]
-			if fieldDef == nil {
-				continue
-			}
-
-			switch fieldDef.Type {
-			case schema.FieldTypeRef:
-				if targets := parser.ExtractRefsFromFieldValue(fieldValue, opts); len(targets) > 0 {
-					if targets[0].TargetRaw == "" {
-						continue
-					}
-					refs = append(refs, schemaFieldRef{
-						SourceID:  obj.ID,
-						FieldName: fieldName,
-						TargetRaw: targets[0].TargetRaw,
-						Line:      obj.LineStart,
-					})
-				}
-
-			case schema.FieldTypeRefArray:
-				for _, target := range parser.ExtractRefsFromFieldValue(fieldValue, opts) {
-					if target.TargetRaw == "" {
-						continue
-					}
-					refs = append(refs, schemaFieldRef{
-						SourceID:  obj.ID,
-						FieldName: fieldName,
-						TargetRaw: target.TargetRaw,
-						Line:      obj.LineStart,
-					})
-				}
-			}
-		}
-	}
-
-	return refs
-}
-
 // mergeRefs merges two ref slices, deduplicating by (sourceID, targetRaw) pairs.
 // This prevents double-indexing when a ref is both:
 // 1. Found by raw YAML scanning (as [[target]])
 // 2. Extracted from a ref-typed field
-func mergeRefs(existing, additional []*parser.ParsedRef) []*parser.ParsedRef {
+func mergeRefs(existing, additional []*model.Reference) []*model.Reference {
 	// Build a set of existing (sourceID, targetRaw) pairs
 	seen := make(map[string]bool)
 	for _, ref := range existing {

@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/schema"
+
+	"github.com/aidanlsb/raven/internal/model"
 )
 
 func TestParseTraitAnnotations(t *testing.T) {
@@ -474,8 +476,8 @@ func TestTraitAnnotationValueHelpers(t *testing.T) {
 			}
 		})
 
-		t.Run("ParsedTrait/"+tt.name, func(t *testing.T) {
-			pt := &ParsedTrait{TraitType: "test", Value: tt.value}
+		t.Run("Trait/"+tt.name, func(t *testing.T) {
+			pt := &model.Trait{TraitType: "test", Value: tt.value}
 			if got := pt.HasValue(); got != tt.wantHasValue {
 				t.Errorf("HasValue() = %v, want %v", got, tt.wantHasValue)
 			}

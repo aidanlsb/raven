@@ -3,6 +3,7 @@ package index
 import (
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -26,12 +27,12 @@ func TestFieldRefsResolveUnambiguous(t *testing.T) {
 
 	companyDoc := &parser.ParsedDocument{
 		FilePath: "companies/cursor.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "companies/cursor",
-				ObjectType: "company",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "companies/cursor",
+				Type:      "company",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
 	}
@@ -41,10 +42,10 @@ func TestFieldRefsResolveUnambiguous(t *testing.T) {
 
 	personDoc := &parser.ParsedDocument{
 		FilePath: "people/ada.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "people/ada",
-				ObjectType: "person",
+				ID:   "people/ada",
+				Type: "person",
 				Fields: map[string]schema.FieldValue{
 					"company": schema.String("cursor"),
 				},
@@ -97,23 +98,23 @@ func TestFieldRefsResolveAmbiguous(t *testing.T) {
 	companyDocs := []*parser.ParsedDocument{
 		{
 			FilePath: "companies/cursor.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "companies/cursor",
-					ObjectType: "company",
-					Fields:     map[string]schema.FieldValue{},
-					LineStart:  1,
+					ID:        "companies/cursor",
+					Type:      "company",
+					Fields:    map[string]schema.FieldValue{},
+					LineStart: 1,
 				},
 			},
 		},
 		{
 			FilePath: "orgs/cursor.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "orgs/cursor",
-					ObjectType: "company",
-					Fields:     map[string]schema.FieldValue{},
-					LineStart:  1,
+					ID:        "orgs/cursor",
+					Type:      "company",
+					Fields:    map[string]schema.FieldValue{},
+					LineStart: 1,
 				},
 			},
 		},
@@ -126,10 +127,10 @@ func TestFieldRefsResolveAmbiguous(t *testing.T) {
 
 	personDoc := &parser.ParsedDocument{
 		FilePath: "people/ada.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "people/ada",
-				ObjectType: "person",
+				ID:   "people/ada",
+				Type: "person",
 				Fields: map[string]schema.FieldValue{
 					"company": schema.String("cursor"),
 				},

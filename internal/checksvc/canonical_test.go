@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -17,8 +18,8 @@ func TestDetectNonCanonicalIssues_NoDirectoriesConfig(t *testing.T) {
 	docs := []*parser.ParsedDocument{
 		{
 			FilePath: "objects/person/john.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "objects/person/john", ObjectType: "person", LineStart: 1},
+			Objects: []*model.Object{
+				{ID: "objects/person/john", Type: "person", LineStart: 1},
 			},
 		},
 	}
@@ -35,8 +36,8 @@ func TestDetectNonCanonicalIssues_FlagsTypedObjectOutsideRoot(t *testing.T) {
 	docs := []*parser.ParsedDocument{
 		{
 			FilePath: "objects/person/john.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "objects/person/john", ObjectType: "person", LineStart: 1},
+			Objects: []*model.Object{
+				{ID: "objects/person/john", Type: "person", LineStart: 1},
 			},
 		},
 	}
@@ -65,8 +66,8 @@ func TestDetectNonCanonicalIssues_AlreadyCanonical(t *testing.T) {
 	docs := []*parser.ParsedDocument{
 		{
 			FilePath: "type/person/john.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "person/john", ObjectType: "person", LineStart: 1},
+			Objects: []*model.Object{
+				{ID: "person/john", Type: "person", LineStart: 1},
 			},
 		},
 	}
@@ -84,9 +85,9 @@ func TestDetectNonCanonicalIssues_SkipsDailyAndProtected(t *testing.T) {
 	cfg.ProtectedPrefixes = []string{"inbox/"}
 
 	docs := []*parser.ParsedDocument{
-		{FilePath: "daily/2026-04-19.md", Objects: []*parser.ParsedObject{{ID: "daily/2026-04-19", ObjectType: "page", LineStart: 1}}},
-		{FilePath: "inbox/quick-note.md", Objects: []*parser.ParsedObject{{ID: "inbox/quick-note", ObjectType: "person", LineStart: 1}}},
-		{FilePath: ".trash/old.md", Objects: []*parser.ParsedObject{{ID: ".trash/old", ObjectType: "person", LineStart: 1}}},
+		{FilePath: "daily/2026-04-19.md", Objects: []*model.Object{{ID: "daily/2026-04-19", Type: "page", LineStart: 1}}},
+		{FilePath: "inbox/quick-note.md", Objects: []*model.Object{{ID: "inbox/quick-note", Type: "person", LineStart: 1}}},
+		{FilePath: ".trash/old.md", Objects: []*model.Object{{ID: ".trash/old", Type: "person", LineStart: 1}}},
 	}
 	issues := detectNonCanonicalIssues(docs, schemaWithPerson(), cfg)
 	if filterByType(issues, check.IssueNonCanonicalPath) != nil {
@@ -101,8 +102,8 @@ func TestDetectNonCanonicalIssues_PageOutsidePagesRoot(t *testing.T) {
 	docs := []*parser.ParsedDocument{
 		{
 			FilePath: "pages/old-note.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "pages/old-note", ObjectType: "page", LineStart: 1},
+			Objects: []*model.Object{
+				{ID: "pages/old-note", Type: "page", LineStart: 1},
 			},
 		},
 	}
@@ -123,10 +124,10 @@ func TestDetectNonCanonicalIssues_RefIncludesRootPrefix(t *testing.T) {
 	docs := []*parser.ParsedDocument{
 		{
 			FilePath: "type/notes/today.md",
-			Refs: []*parser.ParsedRef{
-				{TargetRaw: "type/person/john", Line: 5},
-				{TargetRaw: "person/freya", Line: 6},
-				{TargetRaw: "page/welcome", Line: 7},
+			Refs: []*model.Reference{
+				{TargetRaw: "type/person/john", Line: model.IntPtr(5)},
+				{TargetRaw: "person/freya", Line: model.IntPtr(6)},
+				{TargetRaw: "page/welcome", Line: model.IntPtr(7)},
 			},
 		},
 	}
@@ -153,8 +154,8 @@ func TestDetectNonCanonicalIssues_DailyDirectoryTypeMismatch(t *testing.T) {
 	docs := []*parser.ParsedDocument{
 		{
 			FilePath: "daily/2026-04-19.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "daily/2026-04-19", ObjectType: "page", LineStart: 1},
+			Objects: []*model.Object{
+				{ID: "daily/2026-04-19", Type: "page", LineStart: 1},
 			},
 		},
 	}
@@ -183,8 +184,8 @@ func TestDetectNonCanonicalIssues_DefaultPathTypeMismatch(t *testing.T) {
 	docs := []*parser.ParsedDocument{
 		{
 			FilePath: "type/person/freya.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "person/freya", ObjectType: "project", LineStart: 1},
+			Objects: []*model.Object{
+				{ID: "person/freya", Type: "project", LineStart: 1},
 			},
 		},
 	}

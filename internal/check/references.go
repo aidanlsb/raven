@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
-	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 )
@@ -76,24 +76,25 @@ func (v *Validator) isDailyNotePath(targetPath string) bool {
 	return !strings.Contains(datePart, "/") && dates.IsValidDate(datePart)
 }
 
-func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue {
+func (v *Validator) validateRef(filePath string, ref *model.Reference) []Issue {
 	return v.validateRefWithContext(filePath, "", ref, "", "")
 }
 
 // validateRefWithContext validates a reference with optional type context.
 // If targetType is provided (from a typed field), we have certain confidence about the type.
-func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref *parser.ParsedRef, targetType, fieldName string) []Issue {
+func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref *model.Reference, targetType, fieldName string) []Issue {
 	var issues []Issue
 
 	if ref == nil || ref.TargetRaw == "" {
 		return issues
 	}
+	line := ref.LineOrZero()
 	if strings.HasPrefix(ref.TargetRaw, "#") {
 		issues = append(issues, Issue{
 			Level:    LevelError,
 			Type:     IssueLocalFragmentRef,
 			FilePath: filePath,
-			Line:     ref.Line,
+			Line:     line,
 			Message:  fmt.Sprintf("Local fragment reference [[%s]] is not supported", ref.TargetRaw),
 			Value:    ref.TargetRaw,
 			FixHint:  "Use a global section reference like [[object#fragment]]",
@@ -116,7 +117,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 			Level:    LevelError,
 			Type:     IssueAmbiguousReference,
 			FilePath: filePath,
-			Line:     ref.Line,
+			Line:     line,
 			Message:  message,
 			Value:    ref.TargetRaw,
 			FixHint:  fixHint,
@@ -130,7 +131,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 					Level:    LevelWarning,
 					Type:     IssueStaleFragment,
 					FilePath: filePath,
-					Line:     ref.Line,
+					Line:     line,
 					Message:  fmt.Sprintf("Fragment reference [[%s]] not found — '%s' exists but has no section '#%s'", ref.TargetRaw, v.displayID(baseResult.TargetID), fragment),
 					Value:    ref.TargetRaw,
 					FixHint:  "The heading may have been renamed. Update the fragment to match an existing section slug. To rename a heading safely next time, use 'rvn move <file#section> \"<new heading text>\"' which rewrites inbound references.",
@@ -161,7 +162,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 				Level:    LevelError,
 				Type:     IssueMissingAsset,
 				FilePath: filePath,
-				Line:     ref.Line,
+				Line:     line,
 				Message:  fmt.Sprintf("Asset reference %q not found", ref.TargetRaw),
 				Value:    ref.TargetRaw,
 				FixHint:  "Add the asset file under the configured assets root or update the Markdown link",
@@ -173,7 +174,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 			Level:      LevelError,
 			Type:       IssueMissingReference,
 			FilePath:   filePath,
-			Line:       ref.Line,
+			Line:       line,
 			Message:    fmt.Sprintf("Reference [[%s]] not found", ref.TargetRaw),
 			Value:      ref.TargetRaw,
 			FixCommand: fixCmd,
@@ -181,7 +182,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 		})
 
 		// Track this missing reference with type inference
-		v.trackMissingRef(ref.TargetRaw, filePath, sourceObjectID, ref.Line, targetType, fieldName)
+		v.trackMissingRef(ref.TargetRaw, filePath, sourceObjectID, line, targetType, fieldName)
 	} else {
 		// Reference resolved successfully - perform additional checks
 
@@ -195,7 +196,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 				Level:    LevelWarning,
 				Type:     IssueShortRefCouldBeFullPath,
 				FilePath: filePath,
-				Line:     ref.Line,
+				Line:     line,
 				Message:  fmt.Sprintf("Short reference [[%s]] could be written as [[%s]] for clarity", ref.TargetRaw, suggestedID),
 				Value:    ref.TargetRaw,
 				FixHint:  fmt.Sprintf("Consider using full path: [[%s]]", suggestedID),
@@ -210,7 +211,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 					Level:    LevelError,
 					Type:     IssueWrongTargetType,
 					FilePath: filePath,
-					Line:     ref.Line,
+					Line:     line,
 					Message:  fmt.Sprintf("Field '%s' expects type '%s', but [[%s]] is type '%s'", fieldName, targetType, ref.TargetRaw, actualType),
 					Value:    ref.TargetRaw,
 					FixHint:  fmt.Sprintf("Reference a '%s' object instead, or change the field's target type", targetType),

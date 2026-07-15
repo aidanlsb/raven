@@ -3,6 +3,7 @@ package parser
 import (
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
@@ -18,9 +19,18 @@ type RefExtractOptions struct {
 }
 
 // ExtractedRef represents a resolved ref target and optional display text.
+// This is a lightweight extraction intermediate; document-level refs use model.Reference.
 type ExtractedRef struct {
 	TargetRaw   string
 	DisplayText *string
+}
+
+// SchemaFieldRef is a ref discovered from a schema-typed frontmatter field.
+type SchemaFieldRef struct {
+	SourceID  string
+	FieldName string
+	TargetRaw string
+	Line      int
 }
 
 // ExtractRefsFromFieldValue extracts refs from a FieldValue using the provided options.
@@ -53,5 +63,84 @@ func ExtractRefsFromFieldValue(fv schema.FieldValue, opts RefExtractOptions) []E
 		}
 	}
 
+	return refs
+}
+
+// ExtractSchemaFieldRefs extracts refs from ref / ref[] typed object fields.
+//
+// The parser is schema-blind at parse time, so bare strings like `company: cursor`
+// stay strings until a schema-aware caller (index, check) runs this helper.
+func ExtractSchemaFieldRefs(objects []*model.Object, sch *schema.Schema) []SchemaFieldRef {
+	if sch == nil {
+		return nil
+	}
+
+	var refs []SchemaFieldRef
+	opts := RefExtractOptions{AllowBareStrings: true}
+
+	for _, obj := range objects {
+		if obj == nil {
+			continue
+		}
+		typeDef := sch.Types[obj.Type]
+		if typeDef == nil {
+			continue
+		}
+
+		for fieldName, fieldValue := range obj.Fields {
+			fieldDef := typeDef.Fields[fieldName]
+			if fieldDef == nil {
+				continue
+			}
+
+			switch fieldDef.Type {
+			case schema.FieldTypeRef:
+				if targets := ExtractRefsFromFieldValue(fieldValue, opts); len(targets) > 0 {
+					if targets[0].TargetRaw == "" {
+						continue
+					}
+					refs = append(refs, SchemaFieldRef{
+						SourceID:  obj.ID,
+						FieldName: fieldName,
+						TargetRaw: targets[0].TargetRaw,
+						Line:      obj.LineStart,
+					})
+				}
+
+			case schema.FieldTypeRefArray:
+				for _, target := range ExtractRefsFromFieldValue(fieldValue, opts) {
+					if target.TargetRaw == "" {
+						continue
+					}
+					refs = append(refs, SchemaFieldRef{
+						SourceID:  obj.ID,
+						FieldName: fieldName,
+						TargetRaw: target.TargetRaw,
+						Line:      obj.LineStart,
+					})
+				}
+			}
+		}
+	}
+
+	return refs
+}
+
+// SchemaFieldRefsAsReferences converts schema field refs into model.Reference values.
+func SchemaFieldRefsAsReferences(schemaRefs []SchemaFieldRef) []*model.Reference {
+	if len(schemaRefs) == 0 {
+		return nil
+	}
+	refs := make([]*model.Reference, 0, len(schemaRefs))
+	for _, schemaRef := range schemaRefs {
+		refs = append(refs, model.NewInlineReference(
+			schemaRef.SourceID,
+			schemaRef.TargetRaw,
+			nil,
+			schemaRef.Line,
+			0,
+			0,
+		))
+	}
 	return refs
 }

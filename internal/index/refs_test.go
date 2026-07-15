@@ -3,6 +3,7 @@ package index
 import (
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -22,12 +23,12 @@ func TestResolveReferences(t *testing.T) {
 	doc1 := &parser.ParsedDocument{
 		FilePath:   "people/freya.md",
 		RawContent: "# Freya",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "people/freya",
-				ObjectType: "person",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "people/freya",
+				Type:      "person",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
 	}
@@ -39,24 +40,24 @@ func TestResolveReferences(t *testing.T) {
 	doc2 := &parser.ParsedDocument{
 		FilePath:   "daily/2025-02-01.md",
 		RawContent: "Met with [[people/freya]] and [[thor]]",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "daily/2025-02-01",
-				ObjectType: "date",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "daily/2025-02-01",
+				Type:      "date",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
-		Refs: []*parser.ParsedRef{
+		Refs: []*model.Reference{
 			{
 				SourceID:  "daily/2025-02-01",
 				TargetRaw: "people/freya",
-				Line:      1,
+				Line:      model.IntPtr(1),
 			},
 			{
 				SourceID:  "daily/2025-02-01",
 				TargetRaw: "thor", // Short reference - should not resolve (ambiguous or not found)
-				Line:      1,
+				Line:      model.IntPtr(1),
 			},
 		},
 	}
@@ -68,12 +69,12 @@ func TestResolveReferences(t *testing.T) {
 	doc3 := &parser.ParsedDocument{
 		FilePath:   "people/thor.md",
 		RawContent: "# Thor",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "people/thor",
-				ObjectType: "person",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "people/thor",
+				Type:      "person",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
 	}
@@ -135,12 +136,12 @@ func TestResolveReferences_DateShorthand(t *testing.T) {
 	doc1 := &parser.ParsedDocument{
 		FilePath:   "daily/2025-02-01.md",
 		RawContent: "# Feb 1",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "daily/2025-02-01",
-				ObjectType: "date",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "daily/2025-02-01",
+				Type:      "date",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
 	}
@@ -152,19 +153,19 @@ func TestResolveReferences_DateShorthand(t *testing.T) {
 	doc2 := &parser.ParsedDocument{
 		FilePath:   "projects/test.md",
 		RawContent: "See [[2025-02-01]]",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "projects/test",
-				ObjectType: "project",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "projects/test",
+				Type:      "project",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
-		Refs: []*parser.ParsedRef{
+		Refs: []*model.Reference{
 			{
 				SourceID:  "projects/test",
 				TargetRaw: "2025-02-01", // Date shorthand
-				Line:      1,
+				Line:      model.IntPtr(1),
 			},
 		},
 	}
@@ -208,19 +209,19 @@ func TestResolveReferences_UnresolvedRef(t *testing.T) {
 	doc := &parser.ParsedDocument{
 		FilePath:   "test.md",
 		RawContent: "See [[nonexistent]]",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "test",
-				ObjectType: "page",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "test",
+				Type:      "page",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
-		Refs: []*parser.ParsedRef{
+		Refs: []*model.Reference{
 			{
 				SourceID:  "test",
 				TargetRaw: "nonexistent",
-				Line:      1,
+				Line:      model.IntPtr(1),
 			},
 		},
 	}

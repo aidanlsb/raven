@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
@@ -64,7 +65,7 @@ func renameSectionByReference(req MoveByReferenceRequest, resolved *readsvc.Reso
 	if err != nil {
 		return nil, newError(ErrorValidationFailed, "failed to parse source file", "Fix the file content and try again", nil, err)
 	}
-	var target *parser.ParsedSection
+	var target *model.Section
 	for _, section := range doc.Sections {
 		if section != nil && section.ID == oldSectionID {
 			target = section
@@ -88,7 +89,7 @@ func renameSectionByReference(req MoveByReferenceRequest, resolved *readsvc.Reso
 	if err != nil {
 		return nil, newError(ErrorValidationFailed, "failed to parse renamed content", "Check the new heading text and try again", nil, err)
 	}
-	var renamed *parser.ParsedSection
+	var renamed *model.Section
 	for _, section := range updatedDoc.Sections {
 		if section != nil && section.LineStart == target.LineStart {
 			renamed = section

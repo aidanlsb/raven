@@ -162,10 +162,10 @@ func TestPrintObjectTableIncludesHeadersNameFieldDynamicFieldsAndLocation(t *tes
 				Type:      "project",
 				FilePath:  "projects/raven.md",
 				LineStart: 3,
-				Fields: map[string]interface{}{
-					"name":   "Raven Project",
-					"owner":  "people/aidan",
-					"status": "active",
+				Fields: map[string]schema.FieldValue{
+					"name":   schema.String("Raven Project"),
+					"owner":  schema.String("people/aidan"),
+					"status": schema.String("active"),
 				},
 			},
 		}, sch)
@@ -224,15 +224,14 @@ func TestPrintQueryTraitResultsIncludesColumnHeaders(t *testing.T) {
 
 	value := "open"
 	out := captureStdout(t, func() {
-		printQueryTraitResults("trait:status", "status", []model.Trait{
-			{
-				TraitType: "status",
-				Value:     &value,
-				Content:   "Review section query output",
-				FilePath:  "page/raven.md",
-				Line:      23,
-			},
-		})
+		trait := model.Trait{
+			TraitType: "status",
+			Content:   "Review section query output",
+			FilePath:  "page/raven.md",
+			Line:      23,
+		}
+		trait.SetIndexValueString(&value)
+		printQueryTraitResults("trait:status", "status", []model.Trait{trait})
 	})
 
 	for _, want := range []string{"content", "trait", "location", "Review section query output", "@status(open)", "page/raven.md:23"} {

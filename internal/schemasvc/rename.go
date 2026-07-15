@@ -339,7 +339,7 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 
 		hasFileLevelOldType := false
 		for _, obj := range result.Document.Objects {
-			if obj.ObjectType == oldName && !strings.Contains(obj.ID, "#") {
+			if obj.Type == oldName && !strings.Contains(obj.ID, "#") {
 				hasFileLevelOldType = true
 				changes = append(changes, TypeRenameChange{
 					FilePath:    result.RelativePath,

@@ -98,8 +98,7 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 			}
 			if !result.OK {
 				if isJSONOutput() {
-					outputCanonicalResultJSON(result)
-					return nil
+					return outputCanonicalResultJSON(result)
 				}
 				if err := handleFailure(result); err != nil {
 					return err
@@ -110,8 +109,7 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 				return opts.HandleResult(cmd, result)
 			}
 			if isJSONOutput() {
-				outputCanonicalResultJSON(result)
-				return nil
+				return outputCanonicalResultJSON(result)
 			}
 			if opts.RenderHuman != nil {
 				return opts.RenderHuman(cmd, result)

@@ -58,9 +58,11 @@ func openWorkspace(vaultPath string) (*workspace, error) {
 	}
 
 	ws := &workspace{rt: rt}
-	if _, err := readsvc.SmartReindex(rt); err != nil {
+	if report, err := readsvc.SmartReindex(rt); err != nil {
 		// A failed reindex leaves stale (but usable) index data; don't abort startup.
 		fmt.Fprintf(os.Stderr, "rvn lsp: initial reindex failed: %v\n", err)
+	} else if len(report.Failures) > 0 {
+		fmt.Fprintf(os.Stderr, "rvn lsp: initial reindex skipped %d file(s)\n", len(report.Failures))
 	}
 	if err := ws.rebuildCaches(); err != nil {
 		rt.Close()
@@ -105,8 +107,10 @@ func (ws *workspace) refresh() error {
 		ws.rt.Schema = sch
 	}
 
-	if _, err := readsvc.SmartReindex(ws.rt); err != nil {
+	if report, err := readsvc.SmartReindex(ws.rt); err != nil {
 		return fmt.Errorf("reindex failed: %w", err)
+	} else if len(report.Failures) > 0 {
+		fmt.Fprintf(os.Stderr, "rvn lsp: reindex skipped %d file(s)\n", len(report.Failures))
 	}
 	return ws.rebuildCaches()
 }

@@ -29,10 +29,10 @@ func TestBrowseItemsForObjectResultsUseNameFieldAndDetails(t *testing.T) {
 			Type:      "issue",
 			FilePath:  "type/issue/check-if-queries-return-the-fields-in-the-printed-table.md",
 			LineStart: 1,
-			Fields: map[string]interface{}{
-				"title":   "Check if queries return the fields in the printed table",
-				"project": "project/raven",
-				"status":  "open",
+			Fields: map[string]schema.FieldValue{
+				"title":   schema.String("Check if queries return the fields in the printed table"),
+				"project": schema.String("project/raven"),
+				"status":  schema.String("open"),
 			},
 		},
 	}, sch)
@@ -68,17 +68,16 @@ func TestBrowseItemsForObjectResultsUseNameFieldAndDetails(t *testing.T) {
 
 func TestBrowseItemsForTraitResultsUseColumnsAndSearchText(t *testing.T) {
 	value := "done"
-	items := browseItemsForTraitResults([]model.Trait{
-		{
-			ID:             "type/project/raven.md:trait:1",
-			TraitType:      "todo",
-			Value:          &value,
-			Content:        "Polish the Raven query picker so trait result rows have enough surrounding context",
-			FilePath:       "type/project/raven.md",
-			Line:           42,
-			ParentObjectID: "project/raven",
-		},
-	})
+	trait := model.Trait{
+		ID:             "type/project/raven.md:trait:1",
+		TraitType:      "todo",
+		Content:        "Polish the Raven query picker so trait result rows have enough surrounding context",
+		FilePath:       "type/project/raven.md",
+		Line:           42,
+		ParentObjectID: "project/raven",
+	}
+	trait.SetIndexValueString(&value)
+	items := browseItemsForTraitResults([]model.Trait{trait})
 
 	if len(items) != 1 {
 		t.Fatalf("expected 1 browse item, got %d", len(items))

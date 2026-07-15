@@ -2,10 +2,10 @@ package query
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
@@ -16,9 +16,11 @@ func scanObjectRows(rows *sql.Rows) ([]model.Object, error) {
 		if err := rows.Scan(&r.ID, &r.Type, &fieldsJSON, &r.FilePath, &r.LineStart); err != nil {
 			return model.Object{}, err
 		}
-		if err := json.Unmarshal([]byte(fieldsJSON), &r.Fields); err != nil {
-			r.Fields = make(map[string]interface{})
+		fields, err := schema.FieldsFromJSON([]byte(fieldsJSON))
+		if err != nil || fields == nil {
+			fields = make(map[string]schema.FieldValue)
 		}
+		r.Fields = fields
 		return r, nil
 	})
 }
@@ -26,8 +28,13 @@ func scanObjectRows(rows *sql.Rows) ([]model.Object, error) {
 func scanTraitRows(rows *sql.Rows) ([]model.Trait, error) {
 	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Trait, error) {
 		var r model.Trait
-		if err := rows.Scan(&r.ID, &r.TraitType, &r.Value, &r.Content, &r.FilePath, &r.Line, &r.ParentObjectID); err != nil {
+		var value sql.NullString
+		if err := rows.Scan(&r.ID, &r.TraitType, &value, &r.Content, &r.FilePath, &r.Line, &r.ParentObjectID); err != nil {
 			return model.Trait{}, err
+		}
+		if value.Valid {
+			s := value.String
+			r.SetIndexValueString(&s)
 		}
 		return r, nil
 	})

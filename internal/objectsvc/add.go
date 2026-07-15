@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/filelock"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -42,7 +43,7 @@ func ResolveAddHeadingTarget(
 	}
 
 	prefix := fileObjectID + "#"
-	candidates := make([]*parser.ParsedSection, 0, len(doc.Sections))
+	candidates := make([]*model.Section, 0, len(doc.Sections))
 	for _, section := range doc.Sections {
 		if section == nil {
 			continue
@@ -269,7 +270,7 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *p
 		return 0, newError(ErrorInvalidInput, "failed to parse target file", "Fix the target file content and try again", nil, err)
 	}
 
-	var target *parser.ParsedSection
+	var target *model.Section
 	for _, section := range doc.Sections {
 		if section != nil && section.ID == objectID {
 			target = section
@@ -387,7 +388,7 @@ func appendedLineNumber(content []byte) int {
 	return lineCount + 1
 }
 
-func resolveSectionByHeadingText(candidates []*parser.ParsedSection, headingText string) (string, error) {
+func resolveSectionByHeadingText(candidates []*model.Section, headingText string) (string, error) {
 	text := strings.TrimSpace(headingText)
 	if text == "" {
 		return "", newError(ErrorInvalidInput, "heading text cannot be empty", "Pass a non-empty heading", nil, nil)

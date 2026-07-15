@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -56,6 +57,9 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 		data, convErr := structToMap(checksvc.BuildJSON(vaultPath, result))
 		if convErr != nil {
 			return commandexec.Failure("INTERNAL_ERROR", "failed to build check response", nil, "")
+		}
+		if warnings := checkIncompleteWarnings(result); len(warnings) > 0 {
+			return commandexec.SuccessWithWarnings(data, warnings, nil)
 		}
 		return commandexec.Success(data, nil)
 	}
@@ -198,6 +202,24 @@ func checkScopeData(result *checksvc.RunResult) map[string]interface{} {
 		"type":  result.Scope.Type,
 		"value": result.Scope.Value,
 	}
+}
+
+func checkIncompleteWarnings(result *checksvc.RunResult) []commandexec.Warning {
+	if result == nil {
+		return nil
+	}
+	var warnings []commandexec.Warning
+	for _, issue := range result.Issues {
+		if issue.Type != check.IssueCheckIncomplete {
+			continue
+		}
+		warnings = append(warnings, commandexec.Warning{
+			Code:    codes.WarnCheckRunIncomplete,
+			Message: issue.Message,
+			Ref:     "Index-backed checks did not fully run; treat results as incomplete until the subsystem is fixed",
+		})
+	}
+	return warnings
 }
 
 func withBoolArg(args map[string]interface{}, key string) map[string]interface{} {

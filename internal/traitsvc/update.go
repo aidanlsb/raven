@@ -289,8 +289,8 @@ func precomputeResolvedValues(traits []model.Trait, newValue string, sch *schema
 }
 
 func traitExistingValue(sch *schema.Schema, t model.Trait) string {
-	if t.Value != nil {
-		return *t.Value
+	if s := t.IndexValueString(); s != nil {
+		return *s
 	}
 	if sch == nil {
 		return ""

@@ -100,11 +100,9 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 			"results": results,
 		}
 		if len(warnings) > 0 {
-			outputSuccessWithWarnings(data, warnings, nil)
-		} else {
-			outputSuccess(data, nil)
+			return outputSuccessWithWarnings(data, warnings, nil)
 		}
-		return nil
+		return outputSuccess(data, nil)
 	}
 
 	// Human-readable output

@@ -2,6 +2,7 @@ package model
 
 // Reference represents a wikilink reference from one location to another.
 // This is used for both backlinks (who references X?) and outlinks (what does X reference?).
+// Parse/index paths also use this as the canonical in-document reference type.
 type Reference struct {
 	// SourceID is the ID of the object or trait containing the reference.
 	SourceID string `json:"source_id"`
@@ -29,6 +30,50 @@ type Reference struct {
 
 	// DisplayText is the display text of the wikilink, if different from target.
 	DisplayText *string `json:"display_text,omitempty"`
+}
+
+// IntPtr returns a pointer to v. Useful when constructing References.
+func IntPtr(v int) *int {
+	return &v
+}
+
+// NewInlineReference builds a parse-time reference with line and optional span.
+func NewInlineReference(sourceID, targetRaw string, displayText *string, line, start, end int) *Reference {
+	ref := &Reference{
+		SourceID:    sourceID,
+		TargetRaw:   targetRaw,
+		DisplayText: displayText,
+		Line:        IntPtr(line),
+	}
+	if start != 0 || end != 0 {
+		ref.PositionStart = IntPtr(start)
+		ref.PositionEnd = IntPtr(end)
+	}
+	return ref
+}
+
+// LineOrZero returns the 1-indexed line number, or 0 when unset.
+func (r *Reference) LineOrZero() int {
+	if r == nil || r.Line == nil {
+		return 0
+	}
+	return *r.Line
+}
+
+// PositionStartOrZero returns the start offset, or 0 when unset.
+func (r *Reference) PositionStartOrZero() int {
+	if r == nil || r.PositionStart == nil {
+		return 0
+	}
+	return *r.PositionStart
+}
+
+// PositionEndOrZero returns the end offset, or 0 when unset.
+func (r *Reference) PositionEndOrZero() int {
+	if r == nil || r.PositionEnd == nil {
+		return 0
+	}
+	return *r.PositionEnd
 }
 
 // ReferenceInputError describes a non-fatal error for one input in a bulk

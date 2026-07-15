@@ -137,7 +137,9 @@ func runCheckCommand(args []string, action checkAction, legacyFlagInvocation boo
 	}
 
 	if jsonOutput {
-		outputJSON(result)
+		if err := outputJSON(result); err != nil {
+			return err
+		}
 		if checkShouldExit(result) {
 			os.Exit(1)
 		}
@@ -218,7 +220,9 @@ func handleCheckLeafFailure(result commandexec.Result) error {
 
 func handleCheckFixResult(_ *cobra.Command, result commandexec.Result) error {
 	if jsonOutput {
-		outputJSON(result)
+		if err := outputJSON(result); err != nil {
+			return err
+		}
 		if checkShouldExit(result) {
 			os.Exit(1)
 		}
@@ -234,7 +238,9 @@ func handleCheckFixResult(_ *cobra.Command, result commandexec.Result) error {
 
 func handleCheckCreateMissingResult(_ *cobra.Command, result commandexec.Result) error {
 	if jsonOutput {
-		outputJSON(result)
+		if err := outputJSON(result); err != nil {
+			return err
+		}
 		if checkShouldExit(result) {
 			os.Exit(1)
 		}
@@ -407,8 +413,7 @@ func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Resu
 	missingRefs := decodeMissingRefs(data["missing_ref_items"])
 	undefinedTraits := decodeUndefinedTraits(data["undefined_trait_items"])
 	if jsonOutput {
-		outputJSON(result)
-		return nil
+		return outputJSON(result)
 	}
 
 	vaultCfg, err := loadVaultConfigSafe(vaultPath)
@@ -624,7 +629,7 @@ func printIssueSummaryItem(item CheckSummaryJSON) {
 
 func looksLikeWarningIssue(issueType string) bool {
 	switch issueType {
-	case string(check.IssueStaleIndex), string(check.IssueUnusedType), string(check.IssueUnusedTrait), string(check.IssueShortRefCouldBeFullPath):
+	case string(check.IssueStaleIndex), string(check.IssueCheckIncomplete), string(check.IssueUnusedType), string(check.IssueUnusedTrait), string(check.IssueShortRefCouldBeFullPath):
 		return true
 	default:
 		return false

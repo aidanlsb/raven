@@ -11,8 +11,7 @@ import (
 
 func renderCanonicalBulkResult(result commandexec.Result) error {
 	if isJSONOutput() {
-		outputJSON(result)
-		return nil
+		return outputJSON(result)
 	}
 
 	data, ok := result.Data.(map[string]interface{})

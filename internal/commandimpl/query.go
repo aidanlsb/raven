@@ -20,7 +20,7 @@ import (
 )
 
 // HandleQuery executes the canonical `query` command path.
-func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Result {
+func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.Result) {
 	start := time.Now()
 	vaultPath := strings.TrimSpace(req.VaultPath)
 	if vaultPath == "" {
@@ -73,10 +73,19 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 		DB:        db,
 	}
 
+	var refreshWarnings []commandexec.Warning
+	defer func() {
+		if out.OK && len(refreshWarnings) > 0 {
+			out.Warnings = append(append([]commandexec.Warning{}, refreshWarnings...), out.Warnings...)
+		}
+	}()
+
 	if boolArg(req.Args, "refresh") {
-		if _, err := readsvc.SmartReindex(rt); err != nil {
+		report, err := readsvc.SmartReindex(rt)
+		if err != nil {
 			return commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to refresh index: %v", err), nil, "Run 'rvn reindex' to rebuild the database")
 		}
+		refreshWarnings = refreshFailureWarnings(report)
 	} else {
 		_, _, _ = readsvc.CheckStaleness(rt)
 	}
@@ -417,7 +426,7 @@ func traitQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interface{
 			"num":        result.Offset + i + 1,
 			"id":         row.ID,
 			"trait_type": row.TraitType,
-			"value":      row.Value,
+			"value":      row.IndexValueString(),
 			"content":    row.Content,
 			"file_path":  row.FilePath,
 			"line":       row.Line,
@@ -778,4 +787,35 @@ func intPointerRaw(raw interface{}) (*int, bool) {
 	default:
 		return nil, false
 	}
+}
+
+func refreshFailureWarnings(report readsvc.SmartReindexReport) []commandexec.Warning {
+	if len(report.Failures) == 0 {
+		return nil
+	}
+
+	const maxListed = 5
+	listed := make([]string, 0, maxListed)
+	for i, failure := range report.Failures {
+		if i >= maxListed {
+			break
+		}
+		listed = append(listed, fmt.Sprintf("%s (%s: %s)", failure.Path, failure.Stage, failure.ErrMsg))
+	}
+	message := fmt.Sprintf(
+		"refresh skipped %d file(s); index may be incomplete",
+		len(report.Failures),
+	)
+	if len(listed) > 0 {
+		message = fmt.Sprintf("%s: %s", message, strings.Join(listed, "; "))
+	}
+	if len(report.Failures) > maxListed {
+		message = fmt.Sprintf("%s; and %d more", message, len(report.Failures)-maxListed)
+	}
+
+	return []commandexec.Warning{{
+		Code:    codes.WarnIndexUpdateFailed,
+		Message: message,
+		Ref:     "Run 'rvn reindex' or 'rvn check' to inspect failed files",
+	}}
 }

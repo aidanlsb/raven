@@ -50,8 +50,7 @@ func prepareInitArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
 
 func handleInitResult(_ *cobra.Command, result commandexec.Result) error {
 	if isJSONOutput() {
-		outputJSON(result)
-		return nil
+		return outputJSON(result)
 	}
 
 	data := canonicalDataMap(result)

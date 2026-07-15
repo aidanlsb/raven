@@ -620,7 +620,7 @@ func resolveReferenceType(rt *readsvc.Runtime, parseOpts *parser.ParseOptions, r
 
 	for _, obj := range doc.Objects {
 		if obj.ID == resolved.ObjectID {
-			return obj.ObjectType, nil
+			return obj.Type, nil
 		}
 	}
 

@@ -123,11 +123,31 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 	var aliases map[string]string
 	var duplicateAliases []index.DuplicateAlias
 	var canonicalResolver *resolver.Resolver
+	recordIncomplete := func(subsystem string, cause error) {
+		issue := check.Issue{
+			Level:      check.LevelWarning,
+			Type:       check.IssueCheckIncomplete,
+			FilePath:   "",
+			Line:       0,
+			Message:    fmt.Sprintf("Check incomplete: %s unavailable: %v", subsystem, cause),
+			Value:      subsystem,
+			FixCommand: "rvn reindex",
+			FixHint:    "Fix the named index subsystem and re-run check",
+		}
+		if shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
+			allIssues = append(allIssues, issue)
+			result.WarningCount++
+		}
+	}
 	db, err := index.Open(vaultPath)
-	if err == nil {
+	if err != nil {
+		recordIncomplete("index", err)
+	} else {
 		defer db.Close()
 		stalenessInfo, stalenessErr := db.CheckStaleness(vaultPath)
-		if stalenessErr == nil && stalenessInfo.IsStale {
+		if stalenessErr != nil {
+			recordIncomplete("index staleness", stalenessErr)
+		} else if stalenessInfo.IsStale {
 			staleFiles := filterIncludedPaths(stalenessInfo.StaleFiles, excludeMatcher)
 			staleCount := len(staleFiles)
 			if staleCount > 0 && scope.Type == "full" {
@@ -148,12 +168,24 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 			result.StaleWarningShown = staleCount > 0
 		}
 
-		aliases, _ = db.AllAliases()
-		duplicateAliases, _ = db.FindDuplicateAliases()
-		canonicalResolver, _ = db.Resolver(index.ResolverOptions{
+		var aliasesErr error
+		aliases, aliasesErr = db.AllAliases()
+		if aliasesErr != nil {
+			recordIncomplete("aliases", aliasesErr)
+		}
+		var duplicateAliasesErr error
+		duplicateAliases, duplicateAliasesErr = db.FindDuplicateAliases()
+		if duplicateAliasesErr != nil {
+			recordIncomplete("duplicate aliases", duplicateAliasesErr)
+		}
+		var resolverErr error
+		canonicalResolver, resolverErr = db.Resolver(index.ResolverOptions{
 			DailyDirectory: vaultCfg.GetDailyDirectory(),
 			Schema:         sch,
 		})
+		if resolverErr != nil {
+			recordIncomplete("resolver", resolverErr)
+		}
 	}
 
 	walkPath := vaultPath
@@ -191,7 +223,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 		}
 
 		for _, obj := range walkResult.Document.Objects {
-			allObjectInfos = append(allObjectInfos, check.ObjectInfo{ID: obj.ID, Type: obj.ObjectType})
+			allObjectInfos = append(allObjectInfos, check.ObjectInfo{ID: obj.ID, Type: obj.Type})
 		}
 
 		if isFileInScope(walkResult.Path, scope, walkPath, targetFileSet) {
@@ -670,7 +702,7 @@ func isIssueInScope(issue check.Issue, doc *parser.ParsedDocument, scope *Scope)
 	switch scope.Type {
 	case "type_filter":
 		for _, obj := range doc.Objects {
-			if obj.ObjectType == scope.Value {
+			if obj.Type == scope.Value {
 				return true
 			}
 		}

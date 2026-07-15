@@ -1,7 +1,11 @@
 // Package schema handles schema loading and validation.
 package schema
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strconv"
+	"strings"
+)
 
 // CurrentSchemaVersion is the latest schema format version.
 const CurrentSchemaVersion = 1
@@ -318,6 +322,98 @@ func (fv FieldValue) Raw() interface{} {
 // MarshalJSON implements json.Marshaler.
 func (fv FieldValue) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fv.Raw())
+}
+
+// FormatLiteral renders a FieldValue using Raven's inline literal syntax.
+func FormatLiteral(value FieldValue) string {
+	if value.IsNull() {
+		return ""
+	}
+	if arr, ok := value.AsArray(); ok {
+		parts := make([]string, 0, len(arr))
+		for _, item := range arr {
+			parts = append(parts, FormatLiteral(item))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	}
+	if s, ok := value.AsString(); ok {
+		return s
+	}
+	if n, ok := value.AsNumber(); ok {
+		if n == float64(int64(n)) {
+			return strconv.FormatInt(int64(n), 10)
+		}
+		return strconv.FormatFloat(n, 'f', -1, 64)
+	}
+	if b, ok := value.AsBool(); ok {
+		return strconv.FormatBool(b)
+	}
+	if raw := value.Raw(); raw != nil {
+		if b, err := json.Marshal(raw); err == nil {
+			return string(b)
+		}
+	}
+	return ""
+}
+
+// TraitIndexString returns the index/wire string form used for trait values.
+// Arrays are JSON-encoded; other values use FormatLiteral.
+func TraitIndexString(value FieldValue) string {
+	if value.IsNull() {
+		return ""
+	}
+	if _, ok := value.AsArray(); ok {
+		data, err := json.Marshal(value.Raw())
+		if err == nil {
+			return string(data)
+		}
+	}
+	return FormatLiteral(value)
+}
+
+// FieldsFromJSON unmarshals a JSON object into typed field values.
+func FieldsFromJSON(data []byte) (map[string]FieldValue, error) {
+	if len(data) == 0 || string(data) == "null" {
+		return map[string]FieldValue{}, nil
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	fields := make(map[string]FieldValue, len(raw))
+	for key, value := range raw {
+		fields[key] = FieldValueFromRaw(value)
+	}
+	return fields, nil
+}
+
+// FieldValueFromRaw converts a decoded JSON/YAML-ish value into a FieldValue.
+// Strings are treated as plain strings (not wikilink refs).
+func FieldValueFromRaw(value interface{}) FieldValue {
+	switch v := value.(type) {
+	case string:
+		return String(v)
+	case float64:
+		return Number(v)
+	case float32:
+		return Number(float64(v))
+	case int:
+		return Number(float64(v))
+	case int64:
+		return Number(float64(v))
+	case bool:
+		return Bool(v)
+	case []interface{}:
+		items := make([]FieldValue, 0, len(v))
+		for _, item := range v {
+			items = append(items, FieldValueFromRaw(item))
+		}
+		return Array(items)
+	case nil:
+		return Null()
+	default:
+		return Null()
+	}
 }
 
 // Helper function to create a float64 pointer.

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -46,20 +47,20 @@ func TestCheckStaleness(t *testing.T) {
 
 	staleDoc := &parser.ParsedDocument{
 		FilePath: "notes/stale.md",
-		Objects: []*parser.ParsedObject{
-			{ID: "notes/stale", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+		Objects: []*model.Object{
+			{ID: "notes/stale", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 		},
 	}
 	freshDoc := &parser.ParsedDocument{
 		FilePath: "notes/fresh.md",
-		Objects: []*parser.ParsedObject{
-			{ID: "notes/fresh", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+		Objects: []*model.Object{
+			{ID: "notes/fresh", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 		},
 	}
 	missingDoc := &parser.ParsedDocument{
 		FilePath: "notes/missing.md",
-		Objects: []*parser.ParsedObject{
-			{ID: "notes/missing", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+		Objects: []*model.Object{
+			{ID: "notes/missing", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 		},
 	}
 
@@ -137,34 +138,34 @@ func TestRemoveDeletedFiles(t *testing.T) {
 	existsDoc := &parser.ParsedDocument{
 		FilePath:   "notes/exists.md",
 		RawContent: "ok",
-		Objects: []*parser.ParsedObject{
-			{ID: "notes/exists", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+		Objects: []*model.Object{
+			{ID: "notes/exists", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 		},
 	}
 	missingDoc := &parser.ParsedDocument{
 		FilePath:   "notes/missing.md",
 		RawContent: "missing",
-		Objects: []*parser.ParsedObject{
-			{ID: "notes/missing", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+		Objects: []*model.Object{
+			{ID: "notes/missing", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 		},
-		Traits: []*parser.ParsedTrait{
+		Traits: []*model.Trait{
 			{TraitType: "flag", Value: nil, Content: "x", ParentObjectID: "notes/missing", Line: 2},
 		},
-		Refs: []*parser.ParsedRef{
-			{SourceID: "notes/missing", TargetRaw: "people/freya", Line: 3},
+		Refs: []*model.Reference{
+			{SourceID: "notes/missing", TargetRaw: "people/freya", Line: model.IntPtr(3)},
 		},
 	}
 	alsoMissingDoc := &parser.ParsedDocument{
 		FilePath:   "notes/also-missing.md",
 		RawContent: "also missing",
-		Objects: []*parser.ParsedObject{
-			{ID: "notes/also-missing", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+		Objects: []*model.Object{
+			{ID: "notes/also-missing", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 		},
-		Traits: []*parser.ParsedTrait{
+		Traits: []*model.Trait{
 			{TraitType: "flag", Value: nil, Content: "y", ParentObjectID: "notes/also-missing", Line: 2},
 		},
-		Refs: []*parser.ParsedRef{
-			{SourceID: "notes/also-missing", TargetRaw: "people/thor", Line: 3},
+		Refs: []*model.Reference{
+			{SourceID: "notes/also-missing", TargetRaw: "people/thor", Line: model.IntPtr(3)},
 		},
 	}
 
@@ -231,20 +232,20 @@ func TestRemoveFilesWithPrefix(t *testing.T) {
 	docs := []*parser.ParsedDocument{
 		{
 			FilePath: ".trash/a.md",
-			Objects: []*parser.ParsedObject{
-				{ID: ".trash/a", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			Objects: []*model.Object{
+				{ID: ".trash/a", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 			},
 		},
 		{
 			FilePath: ".trash/b.md",
-			Objects: []*parser.ParsedObject{
-				{ID: ".trash/b", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			Objects: []*model.Object{
+				{ID: ".trash/b", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 			},
 		},
 		{
 			FilePath: "keep/c.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "keep/c", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			Objects: []*model.Object{
+				{ID: "keep/c", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 			},
 		},
 	}
@@ -296,10 +297,10 @@ func TestAllNameFieldValues(t *testing.T) {
 
 	doc := &parser.ParsedDocument{
 		FilePath: "books/the-prose-edda.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "books/the-prose-edda",
-				ObjectType: "book",
+				ID:   "books/the-prose-edda",
+				Type: "book",
 				Fields: map[string]schema.FieldValue{
 					"title": schema.String("The Prose Edda"),
 				},

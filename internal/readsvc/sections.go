@@ -87,18 +87,12 @@ func ReadSections(rt *Runtime, reference string) (*SectionsResult, error) {
 				continue
 			}
 		}
-		sections = append(sections, model.Section{
-			ID:              section.ID,
-			FileObjectID:    section.FileObjectID,
-			FilePath:        relPath,
-			Slug:            section.Slug,
-			Title:           section.Title,
-			Level:           section.Level,
-			LineStart:       section.LineStart,
-			LineEnd:         section.LineEnd,
-			SubtreeLineEnd:  section.SubtreeLineEnd,
-			ParentSectionID: section.ParentSectionID,
-		})
+		// Parser already stamps FilePath; keep relPath as a fallback for fixtures.
+		out := *section
+		if out.FilePath == "" {
+			out.FilePath = relPath
+		}
+		sections = append(sections, out)
 	}
 
 	return &SectionsResult{

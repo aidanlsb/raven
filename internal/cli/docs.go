@@ -97,8 +97,7 @@ Examples:
 		}
 
 		if isJSONOutput() {
-			outputJSON(result)
-			return nil
+			return outputJSON(result)
 		}
 
 		data := canonicalDataMap(result)
@@ -184,12 +183,11 @@ func renderDocsSearch(_ *cobra.Command, result commandexec.Result) error {
 
 func outputDocsSections(sections []docsSectionView) error {
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
+		return outputSuccess(map[string]interface{}{
 			"sections":       sections,
 			"command_docs":   "rvn help <command>",
 			"navigation_tip": "rvn docs <section> <topic>",
 		}, &Meta{Count: len(sections)})
-		return nil
 	}
 
 	fmt.Println(ui.SectionHeader("Documentation section commands"))
@@ -218,12 +216,11 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 				Path:  t.Path,
 			})
 		}
-		outputSuccess(map[string]interface{}{
+		return outputSuccess(map[string]interface{}{
 			"section": section.ID,
 			"title":   section.Title,
 			"topics":  items,
 		}, &Meta{Count: len(items)})
-		return nil
 	}
 
 	fmt.Println(ui.SectionHeader(fmt.Sprintf("Documentation topic commands for %s [%s]", section.Title, section.ID)))
@@ -256,14 +253,13 @@ func outputDocsTopicContent(docsFS fs.FS, topic docsTopicRecord) error {
 	}
 
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
+		return outputSuccess(map[string]interface{}{
 			"section": topic.Section,
 			"topic":   topic.ID,
 			"title":   topic.Title,
 			"path":    topic.Path,
 			"content": string(content),
 		}, nil)
-		return nil
 	}
 
 	renderedContent := string(content)
@@ -284,8 +280,7 @@ func outputDocsTopicContent(docsFS fs.FS, topic docsTopicRecord) error {
 
 func outputDocsTopicContentData(data map[string]interface{}) error {
 	if isJSONOutput() {
-		outputSuccess(data, nil)
-		return nil
+		return outputSuccess(data, nil)
 	}
 
 	renderedContent := stringValue(data["content"])
@@ -428,8 +423,7 @@ func pickDocsTopic(section docsSectionView, topics []docsTopicRecord) (docsTopic
 func handleCanonicalDocsFailure(result commandexec.Result, args []string) error {
 	if result.Error == nil {
 		if isJSONOutput() {
-			outputJSON(result)
-			return nil
+			return outputJSON(result)
 		}
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
@@ -449,8 +443,7 @@ func handleCanonicalDocsFailure(result commandexec.Result, args []string) error 
 	if isJSONOutput() {
 		result.Error.Message = message
 		result.Error.Suggestion = suggestion
-		outputJSON(result)
-		return nil
+		return outputJSON(result)
 	}
 
 	return handleErrorWithDetails(result.Error.Code, message, suggestion, result.Error.Details)

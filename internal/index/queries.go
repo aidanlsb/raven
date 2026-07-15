@@ -2,13 +2,14 @@ package index
 
 import (
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // QueryTraits queries traits by type with optional value filter.
@@ -48,8 +49,13 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]model.T
 	var results []model.Trait
 	for rows.Next() {
 		var result model.Trait
-		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID); err != nil {
+		var value sql.NullString
+		if err := rows.Scan(&result.ID, &result.TraitType, &value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID); err != nil {
 			return nil, err
+		}
+		if value.Valid {
+			s := value.String
+			result.SetIndexValueString(&s)
 		}
 		results = append(results, result)
 	}
@@ -79,7 +85,7 @@ func (d *Database) GetSection(id string) (*model.Section, error) {
 	if err == nil {
 		return &section, nil
 	}
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return nil, err
@@ -207,9 +213,11 @@ func (d *Database) QueryObjects(objectType string) ([]model.Object, error) {
 		if err := rows.Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart); err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal([]byte(fieldsJSON), &result.Fields); err != nil || result.Fields == nil {
-			result.Fields = make(map[string]interface{})
+		fields, err := schema.FieldsFromJSON([]byte(fieldsJSON))
+		if err != nil || fields == nil {
+			fields = make(map[string]schema.FieldValue)
 		}
+		result.Fields = fields
 		results = append(results, result)
 	}
 
@@ -235,9 +243,11 @@ func (d *Database) AllObjects() ([]model.Object, error) {
 		if err := rows.Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart); err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal([]byte(fieldsJSON), &result.Fields); err != nil || result.Fields == nil {
-			result.Fields = make(map[string]interface{})
+		fields, err := schema.FieldsFromJSON([]byte(fieldsJSON))
+		if err != nil || fields == nil {
+			fields = make(map[string]schema.FieldValue)
 		}
+		result.Fields = fields
 		results = append(results, result)
 	}
 	return results, rows.Err()
@@ -417,16 +427,18 @@ func (d *Database) GetObject(id string) (*model.Object, error) {
 		id,
 	).Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	if err := json.Unmarshal([]byte(fieldsJSON), &result.Fields); err != nil || result.Fields == nil {
-		result.Fields = make(map[string]interface{})
+	fields, err := schema.FieldsFromJSON([]byte(fieldsJSON))
+	if err != nil || fields == nil {
+		fields = make(map[string]schema.FieldValue)
 	}
+	result.Fields = fields
 
 	return &result, nil
 }
@@ -434,16 +446,21 @@ func (d *Database) GetObject(id string) (*model.Object, error) {
 // GetTrait retrieves a single trait by ID.
 func (d *Database) GetTrait(id string) (*model.Trait, error) {
 	var result model.Trait
+	var value sql.NullString
 	err := d.db.QueryRow(
 		"SELECT id, trait_type, value, content, file_path, line_number, parent_object_id FROM traits WHERE id = ?",
 		id,
-	).Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID)
+	).Scan(&result.ID, &result.TraitType, &value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if value.Valid {
+		s := value.String
+		result.SetIndexValueString(&s)
 	}
 
 	return &result, nil

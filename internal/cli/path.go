@@ -10,10 +10,9 @@ import (
 
 func outputVaultPath(path string) error {
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
+		return outputSuccess(map[string]interface{}{
 			"path": path,
 		}, nil)
-		return nil
 	}
 	fmt.Println(path)
 	return nil

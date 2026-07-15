@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -93,7 +94,7 @@ func detectNonCanonicalPath(
 		return nil
 	}
 
-	expectedRoot, isPage := expectedRootForType(fileObj.ObjectType, objectsRoot, pagesRoot)
+	expectedRoot, isPage := expectedRootForType(fileObj.Type, objectsRoot, pagesRoot)
 	if expectedRoot == "" {
 		return nil
 	}
@@ -101,10 +102,10 @@ func detectNonCanonicalPath(
 		return nil
 	}
 
-	canonicalPath, canFix := canonicalDestinationPath(relPath, fileObj.ObjectType, isPage, expectedRoot, sch)
+	canonicalPath, canFix := canonicalDestinationPath(relPath, fileObj.Type, isPage, expectedRoot, sch)
 
 	displayValue := relPath
-	message := fmt.Sprintf("File %q is outside the configured root %q for type %q", relPath, expectedRoot, displayType(fileObj.ObjectType))
+	message := fmt.Sprintf("File %q is outside the configured root %q for type %q", relPath, expectedRoot, displayType(fileObj.Type))
 	fixHint := fmt.Sprintf("Move file under %q to match the configured directories", expectedRoot)
 	fixCommand := ""
 	if canFix && canonicalPath != relPath {
@@ -147,11 +148,11 @@ func detectDirectoryTypeMismatch(
 	}
 
 	expectedType, ok := expectedTypeForDirectory(relPath, sch, vaultCfg)
-	if !ok || expectedType == "" || fileObj.ObjectType == expectedType {
+	if !ok || expectedType == "" || fileObj.Type == expectedType {
 		return nil
 	}
 
-	actualType := displayType(fileObj.ObjectType)
+	actualType := displayType(fileObj.Type)
 	return []check.Issue{{
 		Level:      check.LevelError,
 		Type:       check.IssueDirectoryTypeMismatch,
@@ -223,7 +224,7 @@ func expectedTypeForObjectRootTail(tail string, sch *schema.Schema) (string, boo
 }
 
 // primaryFileObject returns the file-backed object for a parsed document, if any.
-func primaryFileObject(doc *parser.ParsedDocument) *parser.ParsedObject {
+func primaryFileObject(doc *parser.ParsedDocument) *model.Object {
 	for _, obj := range doc.Objects {
 		if obj == nil {
 			continue
@@ -327,7 +328,7 @@ func detectNonCanonicalRefs(doc *parser.ParsedDocument, objectsRoot, pagesRoot s
 			Level:    check.LevelWarning,
 			Type:     check.IssueNonCanonicalRef,
 			FilePath: doc.FilePath,
-			Line:     ref.Line,
+			Line:     ref.LineOrZero(),
 			Message:  fmt.Sprintf("Reference [[%s]] includes the configured root prefix; canonical form is [[%s]]", raw, stripped),
 			Value:    raw,
 			FixHint:  fmt.Sprintf("Drop the configured root prefix: [[%s]]", stripped),

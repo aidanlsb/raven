@@ -26,16 +26,29 @@ func CheckStaleness(rt *Runtime) (bool, []string, error) {
 	return len(staleFiles) > 0, staleFiles, nil
 }
 
-func SmartReindex(rt *Runtime) (int, error) {
+// SmartReindexFailure records a file that could not be refreshed.
+type SmartReindexFailure struct {
+	Path   string
+	Stage  string // "parse" or "index"
+	ErrMsg string
+}
+
+// SmartReindexReport summarizes an incremental refresh.
+type SmartReindexReport struct {
+	Indexed  int
+	Failures []SmartReindexFailure
+}
+
+func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 	if rt == nil || rt.DB == nil {
-		return 0, fmt.Errorf("runtime with database is required")
+		return SmartReindexReport{}, fmt.Errorf("runtime with database is required")
 	}
 
 	vaultCfg := rt.VaultCfg
 	if vaultCfg == nil {
 		loaded, err := config.LoadVaultConfig(rt.VaultPath)
 		if err != nil {
-			return 0, err
+			return SmartReindexReport{}, err
 		}
 		vaultCfg = loaded
 		rt.VaultCfg = loaded
@@ -46,27 +59,32 @@ func SmartReindex(rt *Runtime) (int, error) {
 	if sch == nil {
 		loaded, err := schema.Load(rt.VaultPath)
 		if err != nil {
-			return 0, err
+			return SmartReindexReport{}, err
 		}
 		sch = loaded
 	}
 
 	if _, err := rt.DB.RemoveDeletedFiles(rt.VaultPath); err != nil {
-		return 0, err
+		return SmartReindexReport{}, err
 	}
 	matcher, err := excludeMatcher(rt)
 	if err != nil {
-		return 0, err
+		return SmartReindexReport{}, err
 	}
 	if err := removeExcludedIndexedFiles(rt, matcher); err != nil {
-		return 0, err
+		return SmartReindexReport{}, err
 	}
 
 	walkOpts := &vault.WalkOptions{ParseOptions: buildParseOptions(vaultCfg), ExcludeMatcher: matcher}
-	reindexed := 0
+	report := SmartReindexReport{}
 	err = vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(result vault.WalkResult) error {
 		if result.Error != nil {
-			return nil //nolint:nilerr // skip files with errors
+			report.Failures = append(report.Failures, SmartReindexFailure{
+				Path:   result.RelativePath,
+				Stage:  "parse",
+				ErrMsg: result.Error.Error(),
+			})
+			return nil //nolint:nilerr // record and continue; caller surfaces Failures
 		}
 
 		indexedMtime, err := rt.DB.GetFileMtime(result.RelativePath)
@@ -75,17 +93,22 @@ func SmartReindex(rt *Runtime) (int, error) {
 		}
 
 		if err := rt.DB.IndexDocumentWithMtime(result.Document, sch, result.FileMtime); err != nil {
-			return nil //nolint:nilerr // skip files that fail to index
+			report.Failures = append(report.Failures, SmartReindexFailure{
+				Path:   result.RelativePath,
+				Stage:  "index",
+				ErrMsg: err.Error(),
+			})
+			return nil //nolint:nilerr // record and continue; caller surfaces Failures
 		}
 
-		reindexed++
+		report.Indexed++
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return report, err
 	}
 
-	return reindexed, nil
+	return report, nil
 }
 
 func excludeMatcher(rt *Runtime) (*ravenignore.Matcher, error) {

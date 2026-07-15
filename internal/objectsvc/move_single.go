@@ -171,7 +171,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 
 	fileType := ""
 	if len(doc.Objects) > 0 {
-		fileType = doc.Objects[0].ObjectType
+		fileType = doc.Objects[0].Type
 	}
 
 	destDir := filepath.Dir(relDest)

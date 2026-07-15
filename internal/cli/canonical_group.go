@@ -15,8 +15,7 @@ func canonicalGroupDefaultRunE(commandID string, vaultPath func() string, render
 
 		result := executeCanonicalCommand(commandID, path, nil)
 		if isJSONOutput() {
-			outputCanonicalResultJSON(result)
-			return nil
+			return outputCanonicalResultJSON(result)
 		}
 		if err := handleCanonicalFailure(result); err != nil {
 			return err

@@ -111,6 +111,9 @@ func formatFieldValueSimple(val interface{}) string {
 	if val == nil {
 		return ""
 	}
+	if fv, ok := val.(schema.FieldValue); ok {
+		return formatFieldValueSimple(fv.Raw())
+	}
 	switch v := val.(type) {
 	case string:
 		return shortenRefIfNeeded(v)
@@ -347,8 +350,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 	}
 	if !result.OK {
 		if isJSONOutput() {
-			outputJSON(result)
-			return nil
+			return outputJSON(result)
 		}
 		if result.Error != nil {
 			return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
@@ -357,8 +359,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 	}
 
 	if isJSONOutput() {
-		outputJSON(result)
-		return nil
+		return outputJSON(result)
 	}
 
 	data, _ := result.Data.(map[string]interface{})
@@ -511,8 +512,8 @@ func browseItemsForTraitResults(results []model.Trait) []picker.Item {
 	items := make([]picker.Item, 0, len(results))
 	for _, result := range results {
 		value := ""
-		if result.Value != nil && *result.Value != result.TraitType {
-			value = *result.Value
+		if idx := result.IndexValueString(); idx != nil && *idx != result.TraitType {
+			value = *idx
 		}
 		detail := "@" + result.TraitType
 		if value != "" {
@@ -759,8 +760,7 @@ func executeCanonicalQuery(args map[string]interface{}) commandexec.Result {
 func renderCanonicalQueryApplyResult(args map[string]interface{}, result commandexec.Result) error {
 	if !result.OK {
 		if isJSONOutput() {
-			outputJSON(result)
-			return nil
+			return outputJSON(result)
 		}
 		if result.Error != nil {
 			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
@@ -866,7 +866,7 @@ func objectResultsFromAny(raw interface{}) []model.Object {
 			results = append(results, model.Object{
 				ID:        stringValue(entry["id"]),
 				Type:      stringValue(entry["type"]),
-				Fields:    mapValue(entry["fields"]),
+				Fields:    fieldsFromAny(entry["fields"]),
 				FilePath:  stringValue(entry["file_path"]),
 				LineStart: intFromAny(entry["line"]),
 			})
@@ -888,7 +888,7 @@ func objectResultsFromAny(raw interface{}) []model.Object {
 		results = append(results, model.Object{
 			ID:        stringValue(entry["id"]),
 			Type:      stringValue(entry["type"]),
-			Fields:    mapValue(entry["fields"]),
+			Fields:    fieldsFromAny(entry["fields"]),
 			FilePath:  stringValue(entry["file_path"]),
 			LineStart: intFromAny(entry["line"]),
 		})
@@ -896,19 +896,32 @@ func objectResultsFromAny(raw interface{}) []model.Object {
 	return results
 }
 
+func fieldsFromAny(raw interface{}) map[string]schema.FieldValue {
+	m := mapValue(raw)
+	if len(m) == 0 {
+		return nil
+	}
+	fields := make(map[string]schema.FieldValue, len(m))
+	for key, value := range m {
+		fields[key] = schema.FieldValueFromRaw(value)
+	}
+	return fields
+}
+
 func traitResultsFromAny(raw interface{}) []model.Trait {
 	if rows, ok := raw.([]map[string]interface{}); ok {
 		results := make([]model.Trait, 0, len(rows))
 		for _, entry := range rows {
-			results = append(results, model.Trait{
+			trait := model.Trait{
 				ID:             stringValue(entry["id"]),
 				TraitType:      stringValue(entry["trait_type"]),
-				Value:          stringPointer(entry["value"]),
 				Content:        stringValue(entry["content"]),
 				FilePath:       stringValue(entry["file_path"]),
 				Line:           intFromAny(entry["line"]),
 				ParentObjectID: stringValue(entry["object_id"]),
-			})
+			}
+			trait.SetIndexValueString(stringPointer(entry["value"]))
+			results = append(results, trait)
 		}
 		return results
 	}
@@ -924,15 +937,16 @@ func traitResultsFromAny(raw interface{}) []model.Trait {
 		if !ok {
 			continue
 		}
-		results = append(results, model.Trait{
+		trait := model.Trait{
 			ID:             stringValue(entry["id"]),
 			TraitType:      stringValue(entry["trait_type"]),
-			Value:          stringPointer(entry["value"]),
 			Content:        stringValue(entry["content"]),
 			FilePath:       stringValue(entry["file_path"]),
 			Line:           intFromAny(entry["line"]),
 			ParentObjectID: stringValue(entry["object_id"]),
-		})
+		}
+		trait.SetIndexValueString(stringPointer(entry["value"]))
+		results = append(results, trait)
 	}
 	return results
 }

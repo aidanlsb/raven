@@ -26,30 +26,33 @@ type Warning = commandexec.Warning
 type Meta = commandexec.Meta
 
 // outputJSON outputs the response as JSON to stdout.
-func outputJSON(resp Response) {
+func outputJSON(resp Response) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(resp)
+	if err := enc.Encode(resp); err != nil {
+		return fmt.Errorf("failed to write JSON output: %w", err)
+	}
+	return nil
 }
 
 // outputSuccess outputs a successful JSON response.
-func outputSuccess(data interface{}, meta *Meta) {
-	outputJSON(commandexec.Success(data, meta))
+func outputSuccess(data interface{}, meta *Meta) error {
+	return outputJSON(commandexec.Success(data, meta))
 }
 
 // outputSuccessWithWarnings outputs a successful JSON response with warnings.
-func outputSuccessWithWarnings(data interface{}, warnings []Warning, meta *Meta) {
-	outputJSON(commandexec.SuccessWithWarnings(data, warnings, meta))
+func outputSuccessWithWarnings(data interface{}, warnings []Warning, meta *Meta) error {
+	return outputJSON(commandexec.SuccessWithWarnings(data, warnings, meta))
 }
 
 // outputError outputs an error JSON response.
-func outputError(code codes.ErrorCode, message string, details interface{}, suggestion string) {
-	outputJSON(commandexec.Failure(code, message, details, suggestion))
+func outputError(code codes.ErrorCode, message string, details interface{}, suggestion string) error {
+	return outputJSON(commandexec.Failure(code, message, details, suggestion))
 }
 
 // outputErrorFromErr converts a Go error to a JSON error response.
-func outputErrorFromErr(code codes.ErrorCode, err error, suggestion string) {
-	outputError(code, err.Error(), nil, suggestion)
+func outputErrorFromErr(code codes.ErrorCode, err error, suggestion string) error {
+	return outputError(code, err.Error(), nil, suggestion)
 }
 
 // isJSONOutput returns true if JSON output is enabled.
@@ -61,7 +64,9 @@ func isJSONOutput() bool {
 // In JSON mode, outputs a JSON error. In text mode, returns the error for Cobra.
 func handleError(code codes.ErrorCode, err error, suggestion string) error {
 	if jsonOutput {
-		outputErrorFromErr(code, err, suggestion)
+		if encErr := outputErrorFromErr(code, err, suggestion); encErr != nil {
+			return encErr
+		}
 		return nil // Don't let Cobra also print the error
 	}
 	return err
@@ -70,7 +75,9 @@ func handleError(code codes.ErrorCode, err error, suggestion string) error {
 // handleErrorMsg handles an error message appropriately based on output mode.
 func handleErrorMsg(code codes.ErrorCode, message, suggestion string) error {
 	if jsonOutput {
-		outputError(code, message, nil, suggestion)
+		if encErr := outputError(code, message, nil, suggestion); encErr != nil {
+			return encErr
+		}
 		return nil
 	}
 	return fmt.Errorf("%s", message)
@@ -79,7 +86,9 @@ func handleErrorMsg(code codes.ErrorCode, message, suggestion string) error {
 // handleErrorWithDetails handles an error with structured details.
 func handleErrorWithDetails(code codes.ErrorCode, message, suggestion string, details interface{}) error {
 	if jsonOutput {
-		outputError(code, message, details, suggestion)
+		if encErr := outputError(code, message, details, suggestion); encErr != nil {
+			return encErr
+		}
 		return nil
 	}
 	return fmt.Errorf("%s", message)

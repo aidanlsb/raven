@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -36,10 +37,10 @@ func TestValidatorBasic(t *testing.T) {
 	t.Run("valid document", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
 			FilePath: "people/freya.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "people/freya",
-					ObjectType: "person",
+					ID:   "people/freya",
+					Type: "person",
 					Fields: map[string]schema.FieldValue{
 						"name": schema.String("Freya"),
 					},
@@ -56,11 +57,11 @@ func TestValidatorBasic(t *testing.T) {
 	t.Run("missing required field", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
 			FilePath: "people/thor.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "people/thor",
-					ObjectType: "person",
-					Fields:     map[string]schema.FieldValue{}, // Missing 'name'
+					ID:     "people/thor",
+					Type:   "person",
+					Fields: map[string]schema.FieldValue{}, // Missing 'name'
 				},
 			},
 		}
@@ -81,14 +82,14 @@ func TestValidatorBasic(t *testing.T) {
 	t.Run("broken reference", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
 			FilePath: "projects/website.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "projects/website",
-					ObjectType: "project",
+					ID:   "projects/website",
+					Type: "project",
 				},
 			},
-			Refs: []*parser.ParsedRef{
-				{SourceID: "projects/website", TargetRaw: "people/nonexistent", Line: 10},
+			Refs: []*model.Reference{
+				{SourceID: "projects/website", TargetRaw: "people/nonexistent", Line: model.IntPtr(10)},
 			},
 		}
 
@@ -108,14 +109,14 @@ func TestValidatorBasic(t *testing.T) {
 	t.Run("valid reference", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
 			FilePath: "projects/website.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "projects/website",
-					ObjectType: "project",
+					ID:   "projects/website",
+					Type: "project",
 				},
 			},
-			Refs: []*parser.ParsedRef{
-				{SourceID: "projects/bifrost", TargetRaw: "people/freya", Line: 10},
+			Refs: []*model.Reference{
+				{SourceID: "projects/bifrost", TargetRaw: "people/freya", Line: model.IntPtr(10)},
 			},
 		}
 
@@ -146,10 +147,10 @@ func TestValidatorUnknownFrontmatterKey(t *testing.T) {
 
 	doc := &parser.ParsedDocument{
 		FilePath: "people/freya.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "people/freya",
-				ObjectType: "person",
+				ID:   "people/freya",
+				Type: "person",
 				Fields: map[string]schema.FieldValue{
 					"name":          schema.String("Freya"),
 					"unknown_field": schema.String("should trigger error"),
@@ -194,13 +195,13 @@ func TestValidatorTraitValidation(t *testing.T) {
 		dueValue := schema.String("2025-02-01")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "notes/test",
-					ObjectType: "page",
+					ID:   "notes/test",
+					Type: "page",
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "due",
 					Value:          &dueValue,
@@ -222,13 +223,13 @@ func TestValidatorTraitValidation(t *testing.T) {
 		badValue := schema.String("not-a-date")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "notes/test",
-					ObjectType: "page",
+					ID:   "notes/test",
+					Type: "page",
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "due",
 					Value:          &badValue,
@@ -255,13 +256,13 @@ func TestValidatorTraitValidation(t *testing.T) {
 		badValue := schema.String("critical") // Not in enum
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "notes/test",
-					ObjectType: "page",
+					ID:   "notes/test",
+					Type: "page",
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "priority",
 					Value:          &badValue,
@@ -288,13 +289,13 @@ func TestValidatorTraitValidation(t *testing.T) {
 		scoreValue := schema.String("5")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "notes/test",
-					ObjectType: "page",
+					ID:   "notes/test",
+					Type: "page",
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "score",
 					Value:          &scoreValue,
@@ -316,13 +317,13 @@ func TestValidatorTraitValidation(t *testing.T) {
 		scoreValue := schema.String("not-a-number")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "notes/test",
-					ObjectType: "page",
+					ID:   "notes/test",
+					Type: "page",
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "score",
 					Value:          &scoreValue,
@@ -365,10 +366,10 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 		// @done with no value - should be valid (defaults to true)
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/test", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/test", Type: "page"},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{TraitType: "done", Value: nil, ParentObjectID: "notes/test", Line: 5},
 			},
 		}
@@ -386,10 +387,10 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 		trueValue := schema.String("true")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/test", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/test", Type: "page"},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{TraitType: "done", Value: &trueValue, ParentObjectID: "notes/test", Line: 5},
 			},
 		}
@@ -407,10 +408,10 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 		falseValue := schema.String("false")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/test", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/test", Type: "page"},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{TraitType: "toread", Value: &falseValue, ParentObjectID: "notes/test", Line: 5},
 			},
 		}
@@ -428,10 +429,10 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 		badValue := schema.String("maybe")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/test", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/test", Type: "page"},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{TraitType: "done", Value: &badValue, ParentObjectID: "notes/test", Line: 5},
 			},
 		}
@@ -467,10 +468,10 @@ func TestValidatorNilTraitDefinition(t *testing.T) {
 	v := NewValidator(s, []string{"notes/test"})
 	doc := &parser.ParsedDocument{
 		FilePath: "notes/test.md",
-		Objects: []*parser.ParsedObject{
-			{ID: "notes/test", ObjectType: "page"},
+		Objects: []*model.Object{
+			{ID: "notes/test", Type: "page"},
 		},
-		Traits: []*parser.ParsedTrait{
+		Traits: []*model.Trait{
 			{TraitType: "broken", ParentObjectID: "notes/test", Line: 5},
 		},
 	}
@@ -554,10 +555,10 @@ func TestValidatorTargetTypeValidation(t *testing.T) {
 	t.Run("correct target type", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
 			FilePath: "projects/website.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "projects/website",
-					ObjectType: "project",
+					ID:   "projects/website",
+					Type: "project",
 					Fields: map[string]schema.FieldValue{
 						"lead": schema.String("people/freya"),
 					},
@@ -576,10 +577,10 @@ func TestValidatorTargetTypeValidation(t *testing.T) {
 	t.Run("wrong target type", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
 			FilePath: "projects/mobile.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "projects/mobile",
-					ObjectType: "project",
+					ID:   "projects/mobile",
+					Type: "project",
 					Fields: map[string]schema.FieldValue{
 						"lead": schema.String("projects/website"), // Wrong - should be person
 					},
@@ -620,8 +621,8 @@ func TestValidatorSchemaIntegrity(t *testing.T) {
 		// Validate a document to populate usedTypes
 		doc := &parser.ParsedDocument{
 			FilePath: "people/freya.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "people/freya", ObjectType: "person"},
+			Objects: []*model.Object{
+				{ID: "people/freya", Type: "person"},
 			},
 		}
 		v.ValidateDocument(doc)
@@ -744,11 +745,11 @@ func TestValidatorShortRefSuggestion(t *testing.T) {
 
 	doc := &parser.ParsedDocument{
 		FilePath: "notes/test.md",
-		Objects: []*parser.ParsedObject{
-			{ID: "notes/test", ObjectType: "page"},
+		Objects: []*model.Object{
+			{ID: "notes/test", Type: "page"},
 		},
-		Refs: []*parser.ParsedRef{
-			{SourceID: "notes/test", TargetRaw: "freya", Line: 5}, // Short ref
+		Refs: []*model.Reference{
+			{SourceID: "notes/test", TargetRaw: "freya", Line: model.IntPtr(5)}, // Short ref
 		},
 	}
 
@@ -788,10 +789,10 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 		validValue := schema.String("2025-02-01T09:00")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/test", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/test", Type: "page"},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "remind",
 					Value:          &validValue,
@@ -813,10 +814,10 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 		badValue := schema.String("not-a-datetime")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/test", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/test", Type: "page"},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "remind",
 					Value:          &badValue,
@@ -937,14 +938,14 @@ func TestAliasCollisionDetection(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/test", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/test", Type: "page"},
 			},
-			Refs: []*parser.ParsedRef{
+			Refs: []*model.Reference{
 				{
 					SourceID:  "notes/test",
 					TargetRaw: "thor", // Ambiguous - matches alias AND short name
-					Line:      5,
+					Line:      model.IntPtr(5),
 				},
 			},
 		}
@@ -988,11 +989,11 @@ func TestValidatorStaleFragment(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/roadmap.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/roadmap", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/roadmap", Type: "page"},
 			},
-			Refs: []*parser.ParsedRef{
-				{SourceID: "notes/roadmap", TargetRaw: "projects/website#old-heading", Line: 5},
+			Refs: []*model.Reference{
+				{SourceID: "notes/roadmap", TargetRaw: "projects/website#old-heading", Line: model.IntPtr(5)},
 			},
 		}
 
@@ -1028,11 +1029,11 @@ func TestValidatorStaleFragment(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/roadmap.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/roadmap", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/roadmap", Type: "page"},
 			},
-			Refs: []*parser.ParsedRef{
-				{SourceID: "notes/roadmap", TargetRaw: "projects/deleted#section", Line: 5},
+			Refs: []*model.Reference{
+				{SourceID: "notes/roadmap", TargetRaw: "projects/deleted#section", Line: model.IntPtr(5)},
 			},
 		}
 
@@ -1062,11 +1063,11 @@ func TestValidatorStaleFragment(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/roadmap.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/roadmap", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/roadmap", Type: "page"},
 			},
-			Refs: []*parser.ParsedRef{
-				{SourceID: "notes/roadmap", TargetRaw: "projects/website#overview", Line: 5},
+			Refs: []*model.Reference{
+				{SourceID: "notes/roadmap", TargetRaw: "projects/website#overview", Line: model.IntPtr(5)},
 			},
 		}
 
@@ -1084,11 +1085,11 @@ func TestValidatorStaleFragment(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/roadmap.md",
-			Objects: []*parser.ParsedObject{
-				{ID: "notes/roadmap", ObjectType: "page"},
+			Objects: []*model.Object{
+				{ID: "notes/roadmap", Type: "page"},
 			},
-			Refs: []*parser.ParsedRef{
-				{SourceID: "notes/roadmap", TargetRaw: "#tasks", Line: 5},
+			Refs: []*model.Reference{
+				{SourceID: "notes/roadmap", TargetRaw: "#tasks", Line: model.IntPtr(5)},
 			},
 		}
 

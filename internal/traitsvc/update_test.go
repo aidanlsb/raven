@@ -65,11 +65,11 @@ func TestBuildPreviewSkipsUnchangedValues(t *testing.T) {
 	traits := []model.Trait{{
 		ID:        "notes/tasks.md:trait:0",
 		TraitType: "todo",
-		Value:     &existing,
 		Content:   "- [x] done",
 		FilePath:  "notes/tasks.md",
 		Line:      1,
 	}}
+	traits[0].SetIndexValueString(&existing)
 	sch := schema.New()
 	sch.Traits["todo"] = &schema.TraitDefinition{
 		Type:   schema.FieldTypeEnum,
@@ -130,11 +130,11 @@ func TestApplyUpdatesModifiesFile(t *testing.T) {
 	traits := []model.Trait{{
 		ID:        "notes/tasks.md:trait:0",
 		TraitType: "todo",
-		Value:     &existing,
 		Content:   "- [ ] Task",
 		FilePath:  "notes/tasks.md",
 		Line:      1,
 	}}
+	traits[0].SetIndexValueString(&existing)
 	sch := schema.New()
 	sch.Traits["todo"] = &schema.TraitDefinition{
 		Type:   schema.FieldTypeEnum,

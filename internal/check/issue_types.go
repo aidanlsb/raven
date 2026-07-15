@@ -20,6 +20,7 @@ const (
 	IssueInvalidDateFormat       IssueType = "invalid_date_format"
 	IssueShortRefCouldBeFullPath IssueType = "short_ref_could_be_full_path"
 	IssueStaleIndex              IssueType = "stale_index"
+	IssueCheckIncomplete         IssueType = "check_incomplete"
 	IssueUnusedType              IssueType = "unused_type"
 	IssueUnusedTrait             IssueType = "unused_trait"
 	IssueMissingTargetType       IssueType = "missing_target_type"
@@ -56,6 +57,7 @@ func AllIssueTypes() []IssueType {
 		IssueInvalidDateFormat,
 		IssueShortRefCouldBeFullPath,
 		IssueStaleIndex,
+		IssueCheckIncomplete,
 		IssueUnusedType,
 		IssueUnusedTrait,
 		IssueMissingTargetType,

@@ -29,14 +29,13 @@ func readEnriched(opts readEnrichedOptions) error {
 	processedBody := body
 
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
+		return outputSuccess(map[string]interface{}{
 			"path":       opts.fileRelPath,
 			"content":    opts.content,
 			"line_count": opts.lineCount,
 			"references": opts.references,
 			"backlinks":  opts.backlinks,
 		}, &Meta{QueryTimeMs: opts.elapsedMs, Count: opts.backlinksCount})
-		return nil
 	}
 
 	display := ui.NewDisplayContext()

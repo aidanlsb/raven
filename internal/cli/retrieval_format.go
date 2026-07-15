@@ -39,8 +39,8 @@ func printQueryTraitResults(queryStr, traitName string, results []model.Trait) {
 
 	for i, r := range results {
 		value := ""
-		if r.Value != nil && *r.Value != r.TraitType {
-			value = *r.Value
+		if idx := r.IndexValueString(); idx != nil && *idx != r.TraitType {
+			value = *idx
 		}
 		traitStr := ui.Trait(r.TraitType, value)
 

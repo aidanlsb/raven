@@ -392,7 +392,7 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 				for _, obj := range objects {
 					fields := obj.Fields
 					if fields == nil {
-						fields = map[string]interface{}{}
+						fields = map[string]schema.FieldValue{}
 					}
 					if _, hasField := fields[fieldName]; !hasField {
 						missing = append(missing, obj.ID)

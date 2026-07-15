@@ -60,7 +60,7 @@ Examples:
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
+			return outputSuccess(map[string]interface{}{
 				"client":      string(client),
 				"config_path": cfgPath,
 				"result":      result.String(),
@@ -69,7 +69,6 @@ Examples:
 					"args":    entry.Args,
 				},
 			}, nil)
-			return nil
 		}
 
 		switch result {
@@ -114,12 +113,11 @@ Examples:
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
+			return outputSuccess(map[string]interface{}{
 				"client":      string(client),
 				"config_path": cfgPath,
 				"removed":     removed,
 			}, nil)
-			return nil
 		}
 
 		if removed {
@@ -208,10 +206,9 @@ Examples:
 					installed++
 				}
 			}
-			outputSuccess(map[string]interface{}{
+			return outputSuccess(map[string]interface{}{
 				"clients": statuses,
 			}, &Meta{Count: installed})
-			return nil
 		}
 
 		return nil
@@ -243,17 +240,16 @@ Examples:
 		if isJSONOutput() {
 			if mcpclient.IsTOMLClient(client) {
 				cfgPath, _ := mcpclient.ConfigPath(client, "")
-				outputSuccess(map[string]interface{}{
+				return outputSuccess(map[string]interface{}{
 					"client":      string(client),
 					"format":      "toml",
 					"config_path": cfgPath,
 					"snippet": fmt.Sprintf("[mcp_servers.raven]\ncommand = %q\nargs = %s\n",
 						entry.Command, mustMarshalArgs(entry.Args)),
 				}, nil)
-				return nil
 			}
 
-			outputSuccess(map[string]interface{}{
+			return outputSuccess(map[string]interface{}{
 				"mcpServers": map[string]interface{}{
 					"raven": map[string]interface{}{
 						"command": entry.Command,
@@ -261,7 +257,6 @@ Examples:
 					},
 				},
 			}, nil)
-			return nil
 		}
 
 		snippet, err := mcpclient.ShowSnippet(client, entry)

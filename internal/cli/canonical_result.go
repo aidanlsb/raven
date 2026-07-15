@@ -2,8 +2,8 @@ package cli
 
 import "github.com/aidanlsb/raven/internal/commandexec"
 
-func outputCanonicalResultJSON(result commandexec.Result) {
-	outputJSON(result)
+func outputCanonicalResultJSON(result commandexec.Result) error {
+	return outputJSON(result)
 }
 
 func handleCanonicalFailure(result commandexec.Result) error {

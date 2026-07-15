@@ -133,8 +133,7 @@ func openFileInEditorAtLine(filePath, relPath string, line int, skipOpenMessage 
 
 func handleOpenResult(cmd *cobra.Command, result commandexec.Result) error {
 	if isJSONOutput() {
-		outputJSON(result)
-		return nil
+		return outputJSON(result)
 	}
 
 	bulk, _ := cmd.Flags().GetBool("stdin")

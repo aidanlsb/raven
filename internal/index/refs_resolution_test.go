@@ -13,7 +13,7 @@ import (
 // resolution permutations. This covers the full flow:
 //
 // 1. YAML frontmatter parsing → FieldValue
-// 2. Reference extraction → ParsedRef
+// 2. Reference extraction → model.Reference
 // 3. Indexing → refs table (target_raw, target_id)
 // 4. Resolution → resolver.Resolve()
 // 5. Query/Backlinks → finding the refs

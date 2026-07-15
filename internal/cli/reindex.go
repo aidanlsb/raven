@@ -52,8 +52,7 @@ func invokeReindex(cmd *cobra.Command, commandID, vaultPath string, args map[str
 
 func handleReindexResult(cmd *cobra.Command, result commandexec.Result) error {
 	if jsonOutput {
-		outputJSON(result)
-		return nil
+		return outputJSON(result)
 	}
 
 	dryRun, _ := cmd.Flags().GetBool("dry-run")

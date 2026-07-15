@@ -674,6 +674,8 @@ Validates managed vault files against the schema. Paths matched by `raven.yaml` 
 | `directory_type_mismatch` | File lives in a directory that implies a different type | Reclassify the object to the expected type |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix | Run `rvn check fix --confirm` to strip the prefix |
 | `orphaned_asset` | Indexed asset has no incoming references | Link it from a note or remove it if unused |
+| `stale_index` | Index may be stale | Run `rvn reindex` |
+| `check_incomplete` | An index-backed check subsystem failed | Fix the named subsystem (often `rvn reindex`) and re-run check |
 
 For reference resolution details and ambiguity behavior, see `types-and-traits/file-format.md` (References section).
 

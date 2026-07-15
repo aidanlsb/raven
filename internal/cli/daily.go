@@ -47,8 +47,7 @@ func handleDailyResult(cmd *cobra.Command, result commandexec.Result) error {
 		}
 		payload["opened"] = opened
 		payload["editor"] = editor
-		outputSuccess(payload, result.Meta)
-		return nil
+		return outputSuccess(payload, result.Meta)
 	}
 
 	openFileInEditor(filePath, relativePath, created)

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/filelock"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -81,16 +82,16 @@ func TestDatabase(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "test",
-					ObjectType: "page",
-					Fields:     make(map[string]schema.FieldValue),
-					LineStart:  1,
+					ID:        "test",
+					Type:      "page",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
 				},
 			},
-			Traits: []*parser.ParsedTrait{},
-			Refs:   []*parser.ParsedRef{},
+			Traits: []*model.Trait{},
+			Refs:   []*model.Reference{},
 		}
 
 		if err := db.IndexDocument(doc, sch); err != nil {
@@ -121,15 +122,15 @@ func TestDatabase(t *testing.T) {
 		value := schema.Array([]schema.FieldValue{schema.String("raven"), schema.String("skills")})
 		doc := &parser.ParsedDocument{
 			FilePath: "test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "test",
-					ObjectType: "page",
-					Fields:     make(map[string]schema.FieldValue),
-					LineStart:  1,
+					ID:        "test",
+					Type:      "page",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "tags",
 					Value:          &value,
@@ -138,7 +139,7 @@ func TestDatabase(t *testing.T) {
 					Line:           1,
 				},
 			},
-			Refs: []*parser.ParsedRef{},
+			Refs: []*model.Reference{},
 		}
 		sch := schema.New()
 		sch.Traits["tags"] = &schema.TraitDefinition{Type: schema.FieldTypeStringArray}
@@ -165,12 +166,12 @@ func TestDatabase(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "daily/2026-05-23.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "daily/2026-05-23",
-					ObjectType: "date",
-					Fields:     make(map[string]schema.FieldValue),
-					LineStart:  1,
+					ID:        "daily/2026-05-23",
+					Type:      "date",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
 				},
 			},
 		}
@@ -202,12 +203,12 @@ func TestDatabase(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "test",
-					ObjectType: "page",
-					Fields:     make(map[string]schema.FieldValue),
-					LineStart:  1,
+					ID:        "test",
+					Type:      "page",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
 				},
 			},
 		}
@@ -238,15 +239,15 @@ func TestDatabase(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "test",
-					ObjectType: "page",
-					Fields:     make(map[string]schema.FieldValue),
-					LineStart:  1,
+					ID:        "test",
+					Type:      "page",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "highlight",
 					Value:          nil, // Bare trait, no value
@@ -272,7 +273,7 @@ func TestDatabase(t *testing.T) {
 			t.Errorf("expected 1 result for highlight=true, got %d", len(results))
 		}
 
-		if len(results) > 0 && (results[0].Value == nil || *results[0].Value != "true") {
+		if len(results) > 0 && (results[0].Value == nil || results[0].IndexValueString() == nil || *results[0].IndexValueString() != "true") {
 			t.Errorf("expected value 'true', got %v", results[0].Value)
 		}
 	})
@@ -293,15 +294,15 @@ func TestDatabase(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "test",
-					ObjectType: "page",
-					Fields:     make(map[string]schema.FieldValue),
-					LineStart:  1,
+					ID:        "test",
+					Type:      "page",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "pinned",
 					Value:          nil, // Bare trait
@@ -345,15 +346,15 @@ func TestDatabase(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "test",
-					ObjectType: "page",
-					Fields:     make(map[string]schema.FieldValue),
-					LineStart:  1,
+					ID:        "test",
+					Type:      "page",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "priority",
 					Value:          nil, // Bare trait, should get default "medium"
@@ -396,16 +397,16 @@ func TestDatabase(t *testing.T) {
 # Freya
 
 - @highlight Hello`,
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "people/freya",
-					ObjectType: "person",
-					Fields:     map[string]schema.FieldValue{},
-					LineStart:  1,
+					ID:        "people/freya",
+					Type:      "person",
+					Fields:    map[string]schema.FieldValue{},
+					LineStart: 1,
 				},
 				{
-					ID:         "people/freya#notes",
-					ObjectType: "section",
+					ID:   "people/freya#notes",
+					Type: "section",
 					Fields: map[string]schema.FieldValue{
 						"title": schema.String("Notes"),
 						"level": schema.Number(2),
@@ -413,7 +414,7 @@ func TestDatabase(t *testing.T) {
 					LineStart: 5,
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "highlight",
 					Value:          nil,
@@ -422,13 +423,13 @@ func TestDatabase(t *testing.T) {
 					Line:           7,
 				},
 			},
-			Refs: []*parser.ParsedRef{
+			Refs: []*model.Reference{
 				{
-					SourceID:  "people/freya",
-					TargetRaw: "projects/website",
-					Line:      8,
-					Start:     0,
-					End:       0,
+					SourceID:      "people/freya",
+					TargetRaw:     "projects/website",
+					Line:          model.IntPtr(8),
+					PositionStart: model.IntPtr(0),
+					PositionEnd:   model.IntPtr(0),
 				},
 			},
 		}
@@ -491,16 +492,16 @@ func TestDatabase(t *testing.T) {
 # Freya
 
 - @highlight Hello`,
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "people/freya",
-					ObjectType: "person",
-					Fields:     map[string]schema.FieldValue{},
-					LineStart:  1,
+					ID:        "people/freya",
+					Type:      "person",
+					Fields:    map[string]schema.FieldValue{},
+					LineStart: 1,
 				},
 				{
-					ID:         "people/freya#notes",
-					ObjectType: "section",
+					ID:   "people/freya#notes",
+					Type: "section",
 					Fields: map[string]schema.FieldValue{
 						"title": schema.String("Notes"),
 						"level": schema.Number(2),
@@ -508,7 +509,7 @@ func TestDatabase(t *testing.T) {
 					LineStart: 5,
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "highlight",
 					Value:          nil,
@@ -517,13 +518,13 @@ func TestDatabase(t *testing.T) {
 					Line:           7,
 				},
 			},
-			Refs: []*parser.ParsedRef{
+			Refs: []*model.Reference{
 				{
-					SourceID:  "people/freya",
-					TargetRaw: "projects/website",
-					Line:      8,
-					Start:     0,
-					End:       0,
+					SourceID:      "people/freya",
+					TargetRaw:     "projects/website",
+					Line:          model.IntPtr(8),
+					PositionStart: model.IntPtr(0),
+					PositionEnd:   model.IntPtr(0),
 				},
 			},
 		}
@@ -590,10 +591,10 @@ func TestDatabase(t *testing.T) {
 		doc := &parser.ParsedDocument{
 			FilePath:   "projects/website.md",
 			RawContent: "# Website",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "projects/website",
-					ObjectType: "project",
+					ID:   "projects/website",
+					Type: "project",
 					Fields: map[string]schema.FieldValue{
 						"alias": schema.String("WebSiteAlias"),
 					},
@@ -638,10 +639,10 @@ func TestDatabase(t *testing.T) {
 
 		doc1 := &parser.ParsedDocument{
 			FilePath: "books/first.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "books/first",
-					ObjectType: "book",
+					ID:   "books/first",
+					Type: "book",
 					Fields: map[string]schema.FieldValue{
 						"title": schema.String("Shared Display Name"),
 					},
@@ -651,10 +652,10 @@ func TestDatabase(t *testing.T) {
 		}
 		doc2 := &parser.ParsedDocument{
 			FilePath: "books/second.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "books/second",
-					ObjectType: "book",
+					ID:   "books/second",
+					Type: "book",
 					Fields: map[string]schema.FieldValue{
 						"title": schema.String("Shared Display Name"),
 					},
@@ -704,15 +705,15 @@ func TestDatabase(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "test.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "test",
-					ObjectType: "page",
-					Fields:     make(map[string]schema.FieldValue),
-					LineStart:  1,
+					ID:        "test",
+					Type:      "page",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
 				},
 			},
-			Traits: []*parser.ParsedTrait{
+			Traits: []*model.Trait{
 				{
 					TraitType:      "defined", // This one IS in schema
 					Value:          nil,
@@ -912,10 +913,10 @@ func TestIndexDatesUsesSchemaFieldTypes(t *testing.T) {
 
 	doc := &parser.ParsedDocument{
 		FilePath: "task/a.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "task/a",
-				ObjectType: "task",
+				ID:   "task/a",
+				Type: "task",
 				Fields: map[string]schema.FieldValue{
 					"due":   schema.Date("2026-04-05"),
 					"title": schema.String("2026-04-05"),
@@ -971,10 +972,10 @@ func TestIndexDatesIndexesDateTargetRefs(t *testing.T) {
 
 	doc := &parser.ParsedDocument{
 		FilePath: "brief/a.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "brief/a",
-				ObjectType: "brief",
+				ID:   "brief/a",
+				Type: "brief",
 				Fields: map[string]schema.FieldValue{
 					"date":      schema.String("2026-04-05"),
 					"next_date": schema.String("daily/2026-04-06"),
@@ -1039,15 +1040,15 @@ func TestTraitIDConsistency(t *testing.T) {
 	dueValue := schema.Date("2025-03-15")
 	doc := &parser.ParsedDocument{
 		FilePath: "test.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "test",
-				ObjectType: "page",
-				Fields:     make(map[string]schema.FieldValue),
-				LineStart:  1,
+				ID:        "test",
+				Type:      "page",
+				Fields:    make(map[string]schema.FieldValue),
+				LineStart: 1,
 			},
 		},
-		Traits: []*parser.ParsedTrait{
+		Traits: []*model.Trait{
 			{
 				// raw index 0 — undefined, must be skipped
 				TraitType:      "undefined",
@@ -1108,15 +1109,15 @@ func TestDateIndexTraitIDsTrackIndexedTraitOrder(t *testing.T) {
 	statusValue := schema.String("active")
 	doc := &parser.ParsedDocument{
 		FilePath: "notes/plan.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "notes/plan",
-				ObjectType: "note",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "notes/plan",
+				Type:      "note",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
-		Traits: []*parser.ParsedTrait{
+		Traits: []*model.Trait{
 			{
 				TraitType:      "undefined",
 				Content:        "skip me",
@@ -1306,10 +1307,10 @@ func TestAliasIndexing(t *testing.T) {
 	t.Run("alias stored in objects table", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
 			FilePath: "people/freya.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "people/freya",
-					ObjectType: "person",
+					ID:   "people/freya",
+					Type: "person",
 					Fields: map[string]schema.FieldValue{
 						"name":  schema.String("Freya"),
 						"alias": schema.String("goddess"),
@@ -1345,10 +1346,10 @@ func TestAliasIndexing(t *testing.T) {
 		docs := []*parser.ParsedDocument{
 			{
 				FilePath: "people/freya.md",
-				Objects: []*parser.ParsedObject{
+				Objects: []*model.Object{
 					{
-						ID:         "people/freya",
-						ObjectType: "person",
+						ID:   "people/freya",
+						Type: "person",
 						Fields: map[string]schema.FieldValue{
 							"alias": schema.String("goddess"),
 						},
@@ -1358,10 +1359,10 @@ func TestAliasIndexing(t *testing.T) {
 			},
 			{
 				FilePath: "people/thor.md",
-				Objects: []*parser.ParsedObject{
+				Objects: []*model.Object{
 					{
-						ID:         "people/thor",
-						ObjectType: "person",
+						ID:   "people/thor",
+						Type: "person",
 						Fields: map[string]schema.FieldValue{
 							"alias": schema.String("thunder"),
 						},
@@ -1371,12 +1372,12 @@ func TestAliasIndexing(t *testing.T) {
 			},
 			{
 				FilePath: "people/loki.md",
-				Objects: []*parser.ParsedObject{
+				Objects: []*model.Object{
 					{
-						ID:         "people/loki",
-						ObjectType: "person",
-						Fields:     map[string]schema.FieldValue{}, // No alias
-						LineStart:  1,
+						ID:        "people/loki",
+						Type:      "person",
+						Fields:    map[string]schema.FieldValue{}, // No alias
+						LineStart: 1,
 					},
 				},
 			},
@@ -1413,10 +1414,10 @@ func TestAliasIndexing(t *testing.T) {
 		// Index a document with an alias
 		doc1 := &parser.ParsedDocument{
 			FilePath: "people/freya.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "people/freya",
-					ObjectType: "person",
+					ID:   "people/freya",
+					Type: "person",
 					Fields: map[string]schema.FieldValue{
 						"alias": schema.String("goddess"),
 					},
@@ -1431,21 +1432,21 @@ func TestAliasIndexing(t *testing.T) {
 		// Index a document that references the alias
 		doc2 := &parser.ParsedDocument{
 			FilePath: "notes/meeting.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "notes/meeting",
-					ObjectType: "page",
-					Fields:     map[string]schema.FieldValue{},
-					LineStart:  1,
+					ID:        "notes/meeting",
+					Type:      "page",
+					Fields:    map[string]schema.FieldValue{},
+					LineStart: 1,
 				},
 			},
-			Refs: []*parser.ParsedRef{
+			Refs: []*model.Reference{
 				{
-					SourceID:  "notes/meeting",
-					TargetRaw: "goddess", // Reference by alias
-					Line:      5,
-					Start:     0,
-					End:       10,
+					SourceID:      "notes/meeting",
+					TargetRaw:     "goddess", // Reference by alias
+					Line:          model.IntPtr(5),
+					PositionStart: model.IntPtr(0),
+					PositionEnd:   model.IntPtr(10),
 				},
 			},
 		}
@@ -1478,10 +1479,10 @@ func TestAliasIndexing(t *testing.T) {
 		docs := []*parser.ParsedDocument{
 			{
 				FilePath: "people/freya.md",
-				Objects: []*parser.ParsedObject{
+				Objects: []*model.Object{
 					{
-						ID:         "people/freya",
-						ObjectType: "person",
+						ID:   "people/freya",
+						Type: "person",
 						Fields: map[string]schema.FieldValue{
 							"alias": schema.String("goddess"), // Same alias
 						},
@@ -1491,10 +1492,10 @@ func TestAliasIndexing(t *testing.T) {
 			},
 			{
 				FilePath: "people/frigg.md",
-				Objects: []*parser.ParsedObject{
+				Objects: []*model.Object{
 					{
-						ID:         "people/frigg",
-						ObjectType: "person",
+						ID:   "people/frigg",
+						Type: "person",
 						Fields: map[string]schema.FieldValue{
 							"alias": schema.String("goddess"), // Same alias!
 						},
@@ -1542,10 +1543,10 @@ func TestAliasIndexing(t *testing.T) {
 		docs := []*parser.ParsedDocument{
 			{
 				FilePath: "people/frigg.md",
-				Objects: []*parser.ParsedObject{
+				Objects: []*model.Object{
 					{
-						ID:         "people/frigg",
-						ObjectType: "person",
+						ID:   "people/frigg",
+						Type: "person",
 						Fields: map[string]schema.FieldValue{
 							"alias": schema.String("goddess"),
 						},
@@ -1555,10 +1556,10 @@ func TestAliasIndexing(t *testing.T) {
 			},
 			{
 				FilePath: "people/freya.md",
-				Objects: []*parser.ParsedObject{
+				Objects: []*model.Object{
 					{
-						ID:         "people/freya",
-						ObjectType: "person",
+						ID:   "people/freya",
+						Type: "person",
 						Fields: map[string]schema.FieldValue{
 							"alias": schema.String("goddess"),
 						},
@@ -1596,10 +1597,10 @@ func TestAliasIndexing(t *testing.T) {
 		docs := []*parser.ParsedDocument{
 			{
 				FilePath: "people/freya.md",
-				Objects: []*parser.ParsedObject{
+				Objects: []*model.Object{
 					{
-						ID:         "people/freya",
-						ObjectType: "person",
+						ID:   "people/freya",
+						Type: "person",
 						Fields: map[string]schema.FieldValue{
 							"alias": schema.String("goddess"),
 						},
@@ -1609,10 +1610,10 @@ func TestAliasIndexing(t *testing.T) {
 			},
 			{
 				FilePath: "people/frigg.md",
-				Objects: []*parser.ParsedObject{
+				Objects: []*model.Object{
 					{
-						ID:         "people/frigg",
-						ObjectType: "person",
+						ID:   "people/frigg",
+						Type: "person",
 						Fields: map[string]schema.FieldValue{
 							"alias": schema.String("goddess"),
 						},
@@ -1651,10 +1652,10 @@ func TestAliasIndexing(t *testing.T) {
 
 		doc := &parser.ParsedDocument{
 			FilePath: "people/freya.md",
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         "people/freya",
-					ObjectType: "person",
+					ID:   "people/freya",
+					Type: "person",
 					Fields: map[string]schema.FieldValue{
 						"alias": schema.String(""), // Empty alias
 					},
@@ -1730,12 +1731,12 @@ func TestAllIndexedFilePaths(t *testing.T) {
 	for _, file := range files {
 		doc := &parser.ParsedDocument{
 			FilePath: file,
-			Objects: []*parser.ParsedObject{
+			Objects: []*model.Object{
 				{
-					ID:         file[:len(file)-3], // strip .md
-					ObjectType: "page",
-					Fields:     make(map[string]schema.FieldValue),
-					LineStart:  1,
+					ID:        file[:len(file)-3], // strip .md
+					Type:      "page",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
 				},
 			},
 		}
@@ -1956,12 +1957,12 @@ func TestResolveReferencesBatched(t *testing.T) {
 
 	targetDoc := &parser.ParsedDocument{
 		FilePath: "people/freya.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "people/freya",
-				ObjectType: "person",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "people/freya",
+				Type:      "person",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
 	}
@@ -1970,23 +1971,23 @@ func TestResolveReferencesBatched(t *testing.T) {
 	}
 
 	refCount := 800
-	refs := make([]*parser.ParsedRef, 0, refCount)
+	refs := make([]*model.Reference, 0, refCount)
 	for i := 0; i < refCount; i++ {
-		refs = append(refs, &parser.ParsedRef{
+		refs = append(refs, &model.Reference{
 			SourceID:  "notes/meeting",
 			TargetRaw: "people/freya",
-			Line:      i + 1,
+			Line:      model.IntPtr(i + 1),
 		})
 	}
 
 	refDoc := &parser.ParsedDocument{
 		FilePath: "notes/meeting.md",
-		Objects: []*parser.ParsedObject{
+		Objects: []*model.Object{
 			{
-				ID:         "notes/meeting",
-				ObjectType: "page",
-				Fields:     map[string]schema.FieldValue{},
-				LineStart:  1,
+				ID:        "notes/meeting",
+				Type:      "page",
+				Fields:    map[string]schema.FieldValue{},
+				LineStart: 1,
 			},
 		},
 		Refs: refs,

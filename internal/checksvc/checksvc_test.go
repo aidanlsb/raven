@@ -253,3 +253,43 @@ func hasIssue(issues []check.Issue, issueType check.IssueType) bool {
 	}
 	return false
 }
+
+func TestRun_ReportsCheckIncompleteWhenIndexUnavailable(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/ok.md", "---\ntype: person\nname: Ok\n---\nbody\n").
+		Build()
+
+	ravenDir := filepath.Join(vault.Path, ".raven")
+	if err := os.RemoveAll(ravenDir); err != nil {
+		t.Fatalf("remove .raven: %v", err)
+	}
+	if err := os.WriteFile(ravenDir, []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("write .raven file: %v", err)
+	}
+
+	sch, err := schema.Load(vault.Path)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+
+	result, err := Run(vault.Path, &config.VaultConfig{}, sch, Options{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !hasIssue(result.Issues, check.IssueCheckIncomplete) {
+		t.Fatalf("issues = %#v, want check_incomplete", result.Issues)
+	}
+	found := false
+	for _, issue := range result.Issues {
+		if issue.Type == check.IssueCheckIncomplete && issue.Value == "index" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("issues = %#v, want check_incomplete for index subsystem", result.Issues)
+	}
+}

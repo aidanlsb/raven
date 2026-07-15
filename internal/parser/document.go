@@ -6,71 +6,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // ParsedDocument represents a fully parsed document.
 type ParsedDocument struct {
-	FilePath   string          // File path relative to vault
-	RawContent string          // Raw markdown content
-	Body       string          // Content without frontmatter (for full-text search indexing)
-	Objects    []*ParsedObject // All objects in this document
-	Sections   []*ParsedSection
-	Traits     []*ParsedTrait // All traits in this document
-	Refs       []*ParsedRef   // All references in this document
-}
-
-// ParsedObject represents a parsed file-backed object.
-type ParsedObject struct {
-	ID         string                       // Unique file-backed object ID
-	ObjectType string                       // Type name
-	Fields     map[string]schema.FieldValue // Fields/metadata
-	LineStart  int                          // Line where this object starts
-}
-
-// ParsedSection represents a markdown heading-derived section.
-type ParsedSection struct {
-	ID              string  // Unique ID: file-id#slug
-	FileObjectID    string  // Containing file-backed object ID
-	Slug            string  // Fragment slug without file prefix
-	Title           string  // Heading text
-	Level           int     // Markdown heading level
-	LineStart       int     // Line where this section starts
-	LineEnd         *int    // Direct section end: line before the next heading of any level
-	SubtreeLineEnd  *int    // Subtree end: line before the next same-or-higher heading
-	ParentSectionID *string // Parent section ID, nil for top-level sections
-}
-
-// ParsedTrait represents a parsed trait annotation.
-type ParsedTrait struct {
-	TraitType      string             // Trait type name (e.g., "due", "priority", "highlight")
-	Value          *schema.FieldValue // Trait value (nil for boolean traits)
-	Content        string             // The content the trait annotates
-	ParentObjectID string             // Parent object ID
-	Line           int                // Line number
-	StartOffset    int                // Byte offset of the annotation start within the line (includes leading delimiter)
-	EndOffset      int                // Byte offset just past the annotation end within the line
-}
-
-// HasValue returns true if this trait has a value.
-func (t *ParsedTrait) HasValue() bool {
-	return traitHasValue(t.Value)
-}
-
-// ValueString returns the value as a string, or empty string if no value.
-func (t *ParsedTrait) ValueString() string {
-	return traitValueString(t.Value)
-}
-
-// ParsedRef represents a parsed reference.
-type ParsedRef struct {
-	SourceID    string  // Source object ID
-	TargetRaw   string  // Raw target (as written)
-	DisplayText *string // Display text
-	Line        int     // Line number
-	Start       int     // Start position
-	End         int     // End position
+	FilePath   string             // File path relative to vault
+	RawContent string             // Raw markdown content
+	Body       string             // Content without frontmatter (for full-text search indexing)
+	Objects    []*model.Object    // All objects in this document
+	Sections   []*model.Section   // All sections in this document
+	Traits     []*model.Trait     // All traits in this document
+	Refs       []*model.Reference // All references in this document
 }
 
 // ParseOptions contains options for parsing documents.
@@ -94,10 +43,10 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	relativePath := vaultRelativePath(filePath, vaultPath)
 	fileID := filePathToID(relativePath, opts)
 
-	var objects []*ParsedObject
-	var sections []*ParsedSection
-	var traits []*ParsedTrait
-	var refs []*ParsedRef
+	var objects []*model.Object
+	var sections []*model.Section
+	var traits []*model.Trait
+	var refs []*model.Reference
 
 	// Parse frontmatter
 	frontmatter, err := ParseFrontmatter(content)
@@ -111,11 +60,12 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	fileFields := copyFrontmatterFields(frontmatter)
 	fileType := fileObjectType(frontmatter)
 
-	objects = append(objects, &ParsedObject{
-		ID:         fileID,
-		ObjectType: fileType,
-		Fields:     fileFields,
-		LineStart:  1,
+	objects = append(objects, &model.Object{
+		ID:        fileID,
+		Type:      fileType,
+		Fields:    fileFields,
+		FilePath:  relativePath,
+		LineStart: 1,
 	})
 
 	// Extract references from frontmatter, if present.
@@ -125,7 +75,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	// from `rvn backlinks`. Frontmatter content starts on line 2 (the line after
 	// the opening '---') and ends at frontmatter.EndLine-1.
 	if frontmatter != nil && frontmatter.Raw != "" {
-		refs = append(refs, frontmatterRefs(frontmatter, fileID)...)
+		refs = append(refs, frontmatterRefs(frontmatter, fileID, relativePath)...)
 	}
 
 	// Use goldmark AST to extract all content from the body.
@@ -164,9 +114,10 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 			parentSectionID = &parent
 		}
 
-		sections = append(sections, &ParsedSection{
+		sections = append(sections, &model.Section{
 			ID:              sectionID,
 			FileObjectID:    fileID,
+			FilePath:        relativePath,
 			Slug:            slug,
 			Title:           heading.Text,
 			Level:           heading.Level,
@@ -181,14 +132,15 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	for _, astTrait := range astContent.Traits {
 		parentID := findScopeForLine(fileID, sections, astTrait.Line)
 
-		traits = append(traits, &ParsedTrait{
+		traits = append(traits, &model.Trait{
 			TraitType:      astTrait.TraitName,
 			Value:          astTrait.Value,
 			Content:        astTrait.Content,
+			FilePath:       relativePath,
 			ParentObjectID: parentID,
 			Line:           astTrait.Line,
-			StartOffset:    astTrait.StartOffset,
-			EndOffset:      astTrait.EndOffset,
+			PositionStart:  astTrait.StartOffset,
+			PositionEnd:    astTrait.EndOffset,
 		})
 	}
 
@@ -197,14 +149,16 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	for _, astRef := range astContent.Refs {
 		parentID := findScopeForLine(fileID, sections, astRef.Line)
 
-		refs = append(refs, &ParsedRef{
-			SourceID:    parentID,
-			TargetRaw:   astRef.TargetRaw,
-			DisplayText: astRef.DisplayText,
-			Line:        astRef.Line,
-			Start:       astRef.Start,
-			End:         astRef.End,
-		})
+		ref := model.NewInlineReference(
+			parentID,
+			astRef.TargetRaw,
+			astRef.DisplayText,
+			astRef.Line,
+			astRef.Start,
+			astRef.End,
+		)
+		ref.FilePath = relativePath
+		refs = append(refs, ref)
 	}
 
 	computeSectionLineEnds(sections)
@@ -278,21 +232,23 @@ func fileObjectType(frontmatter *Frontmatter) string {
 	return fileType
 }
 
-func frontmatterRefs(frontmatter *Frontmatter, fileID string) []*ParsedRef {
+func frontmatterRefs(frontmatter *Frontmatter, fileID, filePath string) []*model.Reference {
 	if frontmatter == nil || frontmatter.Raw == "" {
 		return nil
 	}
 	fmRefs := ExtractRefs(frontmatter.Raw, 2)
-	refs := make([]*ParsedRef, 0, len(fmRefs))
+	refs := make([]*model.Reference, 0, len(fmRefs))
 	for _, refItem := range fmRefs {
-		refs = append(refs, &ParsedRef{
-			SourceID:    fileID,
-			TargetRaw:   refItem.TargetRaw,
-			DisplayText: refItem.DisplayText,
-			Line:        refItem.Line,
-			Start:       refItem.Start,
-			End:         refItem.End,
-		})
+		ref := model.NewInlineReference(
+			fileID,
+			refItem.TargetRaw,
+			refItem.DisplayText,
+			refItem.Line,
+			refItem.Start,
+			refItem.End,
+		)
+		ref.FilePath = filePath
+		refs = append(refs, ref)
 	}
 	return refs
 }
@@ -324,7 +280,7 @@ func uniqueSlug(baseSlug string, usedIDs map[string]int) string {
 }
 
 // findScopeForLine finds the nearest containing scope ID for a line.
-func findScopeForLine(fileID string, sections []*ParsedSection, line int) string {
+func findScopeForLine(fileID string, sections []*model.Section, line int) string {
 	idx := sort.Search(len(sections), func(i int) bool {
 		return sections[i].LineStart > line
 	})
@@ -335,7 +291,7 @@ func findScopeForLine(fileID string, sections []*ParsedSection, line int) string
 }
 
 // computeSectionLineEnds computes direct and subtree line ranges for each section.
-func computeSectionLineEnds(sections []*ParsedSection) {
+func computeSectionLineEnds(sections []*model.Section) {
 	if len(sections) == 0 {
 		return
 	}
