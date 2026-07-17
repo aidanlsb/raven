@@ -121,8 +121,3 @@ func (e *Executor) buildTraitPredicateSQL(pred Predicate, alias string) (string,
 func (e *Executor) buildSectionPredicateSQL(pred Predicate, alias string) (string, []interface{}, error) {
 	return e.buildPredicateSQL(QueryTypeSection, pred, alias, "")
 }
-
-// buildAssetPredicateSQL builds SQL for an asset predicate.
-func (e *Executor) buildAssetPredicateSQL(pred Predicate, alias string) (string, []interface{}, error) {
-	return e.buildPredicateSQL(QueryTypeAsset, pred, alias, "")
-}
