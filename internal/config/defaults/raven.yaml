@@ -57,7 +57,9 @@ queries:
     query: "trait:due oneof(.value, [today, tomorrow])"
     description: "Items due today or tomorrow"
 
-  # Active projects
-  active-projects:
-    query: "type:project has(trait:todo)"
-    description: "Projects marked with @todo"
+  # Projects with open todos anywhere in their content.
+  # Traits attach to the nearest section, so use contains() (recursive) rather
+  # than has() (direct-only), which would miss todos under a heading.
+  projects-with-todos:
+    query: "type:project contains(trait:todo)"
+    description: "Projects that contain @todo traits anywhere in their content"

@@ -16,15 +16,17 @@ Quick reference for common Raven Query Language (RQL) patterns.
 - Array membership:
   - `.field == value` (works for arrays)
   - `any(.field, _ == value)` (explicit)
-- List membership: `oneof(.field, [a, b, c])`
+- List membership: `oneof(.field, [a, b, c])` (this is set membership, NOT the scope predicate `in(...)`)
 - String matching: `includes(.field, "text")`, `startswith(...)`, `endswith(...)`, `matches(...)`
 - Text search: `content("phrase")`
 - References:
   - `refs([[target]])` (objects/traits that reference target)
   - `refs(type:project .status==active)`
-  - Direct scope: `in([[target]])`, `in(type:...)`, `in(section ...)`
-  - Recursive scope: `within([[target]])`, `within(type:...)`, `within(section ...)`
-  - Downward scope: `has(section ...)`, `has(trait:...)`, `contains(section ...)`, `contains(trait:...)`
+  - Upward scope (on `trait:`/`section`) — direct: `in([[target]])`, `in(type:...)`, `in(section ...)`
+  - Upward scope (on `trait:`/`section`) — recursive: `within([[target]])`, `within(type:...)`, `within(section ...)`
+  - Downward scope (on `type:`/`section`): `has(section ...)`, `has(trait:...)`, `contains(section ...)`, `contains(trait:...)`
+
+**Scope is root-dependent, and traits attach to the nearest section.** Lead with the forgiving forms: `type:project contains(trait:todo ...)` (not `has`) and `trait:todo within(type:project)` (not `in`). A `@todo` under `## Tasks` is not directly on the project object, so `has`/`in` (direct-only) usually return nothing.
 
 ## Sub-queries
 
@@ -64,7 +66,7 @@ This can be very useful to provide lots of information to the user. If a questio
 - Todos under a topic section:
   - `trait:todo .value == todo within(section includes(.title, "pricing"))`
 - Path-scoped pages with open todos:
-  - `type:page matches(.path, "^pages/work/") has(trait:todo .value == todo)`
+  - `type:page matches(.path, "^pages/work/") contains(trait:todo .value == todo)`
 - Due tomorrow:
   - `trait:due .value == tomorrow`
 - Meetings with an attendee:

@@ -5,6 +5,7 @@
 - Check type and field names with `rvn schema`.
 - Validate query mode: `type:<type>` vs `section` vs `trait:<name>` vs `asset`.
 - Remove predicates one-by-one to isolate the failing constraint.
+- Scope trap: traits attach to the nearest section, so `type:project has(trait:todo)` (direct-only) usually returns nothing. Use `contains(trait:todo ...)` from the object side or `within(type:project)` from the trait side.
 
 ## Ambiguous references
 

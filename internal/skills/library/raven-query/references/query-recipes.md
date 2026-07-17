@@ -12,10 +12,13 @@ rvn query 'type:project .status==active' --ids --json
 
 ## References and scope
 
+Lead with the forgiving scope forms `contains(...)`/`within(...)`; traits attach to the nearest section, so `has(trait:todo)`/`in(type:...)` miss todos nested under headings.
+
 ```bash
 rvn query 'type:meeting refs([[project/website]])' --json
 rvn query 'section within(type:project .status==active)' --json
 rvn query 'type:project contains(trait:todo .value==todo)' --json
+rvn query 'trait:todo .value==todo within(type:project .status==active)' --json
 ```
 
 ## Assets

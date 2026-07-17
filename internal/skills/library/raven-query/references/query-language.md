@@ -18,6 +18,29 @@ asset .extension==pdf
 
 Every query returns exactly one result kind: objects, sections, traits, or assets. Use `rvn schema`, `rvn schema type <name>`, and `rvn schema trait <name>` to verify local names before writing specific predicates.
 
+## Predicate-by-root capability matrix
+
+Scope/structural predicates are root-dependent. Predicates rejected for a root produce a validation error.
+
+| Predicate / family | `type:<t>` | `section` | `trait:<name>` | `asset` |
+|--------------------|:----------:|:---------:|:--------------:|:-------:|
+| Field compares, `exists(.field)` | yes | yes (built-in fields) | yes (`.value`) | yes |
+| `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes |
+| String funcs (`includes`/`startswith`/`endswith`/`matches`) | yes | yes (non-numeric) | yes (`.value`) | yes |
+| `any`/`all`/`none` | yes (array fields) | no | yes (array `.value`) | no |
+| `has(...)` (direct downward) | yes | yes | no | no |
+| `contains(...)` (recursive downward) | yes | yes | no | no |
+| `in(...)` (direct upward scope) | no | yes | yes | no |
+| `within(...)` (recursive upward scope) | no | yes | yes | no |
+| `at(trait:...)` | no | no | yes | no |
+| `refs(...)` | yes | yes | yes | no |
+| `refd(...)` | yes | yes | no | yes |
+| `content("term")` | yes | yes | yes | no |
+
+Scope shortcuts: downward (`has`/`contains`) live on container roots (`type:`/`section`); upward (`in`/`within`) live on contained roots (`trait:`/`section`). `has`/`in` are direct-only; `contains`/`within` are recursive.
+
+Traits attach to the nearest section, so lead with the forgiving forms: use `type:project contains(trait:todo ...)` (not `has`) and `trait:todo within(type:project)` (not `in`). `in(...)` is containment scope, not set membership — for value-in-a-set use `oneof(.field, [...])`.
+
 ## Scalar predicates
 
 - Equality and inequality: `.field==value`, `.field!=value`
@@ -68,8 +91,10 @@ Scope predicates accept nested type/section queries, wikilinks, or unambiguous t
 section within(type:project)
 type:meeting refs([[project/website]])
 type:project refd(type:meeting)
-type:project has(trait:todo .value==todo)
+type:project contains(trait:todo .value==todo)
 ```
+
+`has()` matches traits/sections directly on the object; `contains()` searches the whole section tree. Because traits attach to the nearest section, a `@todo` under a `## Tasks` heading is not directly on the object — `type:project has(trait:todo)` usually returns nothing, so prefer `type:project contains(trait:todo .value==todo)`.
 
 ## Trait-query predicates
 
@@ -91,6 +116,8 @@ trait:todo refs([[person/freya]])
 trait:tags any(.value, _ == "raven")
 trait:reviewers any(.value, _ == [[person/freya]])
 ```
+
+`in(...)` matches only the direct scope; `within(...)` matches any ancestor scope. Prefer `within(type:project ...)` for inline traits that live under a heading. `in(...)` is scope containment, not set membership — for "value is one of a set" use `oneof(.value, [...])`.
 
 `refd(...)`, `has(...)`, downward scope predicates, and arbitrary fields other than `.value` are not valid on trait queries.
 

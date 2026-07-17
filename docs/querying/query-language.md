@@ -14,6 +14,19 @@
 | `rvn backlinks` | All incoming references to one specific object or asset |
 | `rvn outlinks` | All outgoing references from one specific target |
 | `rvn read` | Full file content after you already identified relevant objects |
+| `rvn resolve` | Map a shorthand/alias/date to its target object ID (no content) |
+| `rvn date` / `rvn daily` | Everything for one date / open or create a daily note |
+
+Retrieval commands overlap. When several could work, this table picks the sharpest tool for each intent:
+
+| Intent | Prefer | Alternatives / notes |
+|--------|--------|----------------------|
+| Find files mentioning a word | `rvn search "word"` | `rvn query 'type:<t> content("word")'` scopes the text match to a type/section/trait root; use it when you know the structure |
+| Find **real** todo/due traits (not prose) | `rvn query 'trait:todo'` | `rvn search "@todo"` matches the literal text `@todo` and cannot tell a real trait from a mention |
+| What links here (incoming refs) | `rvn backlinks <id>` | `rvn query '... refd(...)'` for structured/bulk use; `rvn read <id>` appends backlinks after content |
+| What does this link to (outgoing) | `rvn outlinks <id>` | `rvn query '... refs(...)'` when you need structured filtering |
+| Resolve a shorthand/alias/date | `rvn resolve <ref>` | `rvn read <ref>` also resolves, but returns full content |
+| Everything on a date | `rvn date <date>` / `rvn daily <date>` | `rvn query 'type:date .date==<date>'` for the daily-note object; `rvn query 'trait:due .value==<date>'` for items due that date |
 
 ### Choose Query Type
 
@@ -26,10 +39,56 @@
 
 Core rules:
 1. Every query returns exactly one kind of result (objects, sections, traits, or assets).
-2. Queries can nest arbitrarily, e.g. `type:project has(trait:...)`.
+2. Queries can nest arbitrarily, e.g. `type:project contains(trait:...)`.
 3. Boolean composition is `AND` (space), `OR` (`|`), and `NOT` (`!`).
 
 Assets can participate as reference targets in object and trait queries, and `asset` queries return asset rows directly.
+
+## Predicate-by-Root Capability Matrix
+
+Which predicates are legal depends on the query root. Predicates rejected for a root produce a validation error. Field, string, and array predicates are also subject to schema field types (see the per-root predicate sections below).
+
+| Predicate / family | `type:<t>` | `section` | `trait:<name>` | `asset` |
+|--------------------|:----------:|:---------:|:--------------:|:-------:|
+| Field compares (`==`, `!=`, `<`, `>`, `<=`, `>=`), `exists(.field)` | yes (schema fields) | yes (built-in section fields) | yes (`.value` only) | yes (asset fields) |
+| `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes |
+| String funcs (`includes`, `startswith`, `endswith`, `matches`) | yes (string fields) | yes (non-numeric fields) | yes (`.value` only) | yes (string fields) |
+| Array quantifiers (`any`, `all`, `none`) | yes (array fields) | no | yes (array-valued `.value`) | no |
+| `has(...)` — direct downward | yes | yes | no | no |
+| `contains(...)` — recursive downward | yes | yes | no | no |
+| `in(...)` — direct upward scope | no | yes | yes | no |
+| `within(...)` — recursive upward scope | no | yes | yes | no |
+| `at(trait:...)` — co-located trait | no | no | yes | no |
+| `refs(...)` — outgoing reference | yes | yes | yes | no |
+| `refd(...)` — incoming reference | yes | yes | no | yes |
+| `content("term")` — full-text | yes | yes | yes | no |
+
+Reading the scope rows:
+
+- **Downward** predicates (`has`, `contains`) look from a container to what it holds, so they live on the container roots `type:` and `section`.
+- **Upward** predicates (`in`, `within`) look from an inner item to the scope around it, so they live on the contained roots `trait:` and `section`.
+- `has`/`in` match the **direct** relationship only; `contains`/`within` match **recursively** through the section tree.
+
+### Common Mistake: Todos Under a Heading
+
+Traits attach to the **nearest section**, not to the file object. A `@todo` written under a `## Tasks` heading is nested in that section, so it is not *directly* on the project object. As a result:
+
+- `type:project has(trait:todo)` usually returns **nothing** (no todo directly on the object).
+- `type:project contains(trait:todo .value==todo)` is correct — it searches the whole section tree.
+- From the trait side, use `trait:todo within(type:project)`, not `in(type:project)`.
+
+Lead with the forgiving forms `contains`/`within` unless you specifically want a direct-only match.
+
+### Naming Collision: `in()` vs `oneof()`
+
+`in(...)` is a **scope** predicate (containment) on `trait:`/`section` queries — it has nothing to do with set membership. If you come from SQL and want "field is one of these values," use `oneof(.field, [a,b,c])` instead:
+
+```text
+trait:todo in(type:project)               # scope: todos directly in a project
+type:project oneof(.status, [active,paused])  # membership: status is one of a set
+```
+
+There is no `in()` set-membership form and no `inside()` alias; the containment predicate is always `in()`/`within()`, and membership is always `oneof()`.
 
 ## Query Shapes
 
@@ -182,6 +241,8 @@ type:project none(.tags, _ == "deprecated")
 
 `refs` accepts direct targets or nested object/section queries.
 
+`has` matches only traits/sections *directly* on the object; `contains` searches the whole section tree. Because traits attach to the nearest section, prefer `contains(trait:...)` for inline traits like `@todo`/`@due` that usually live under a heading. See [Common Mistake: Todos Under a Heading](#common-mistake-todos-under-a-heading).
+
 Examples:
 
 ```text
@@ -274,6 +335,8 @@ type:brief .date==today
 | `refs(...)` | Trait's line references target or query match |
 | `content("term")` | Trait's line contains term |
 | `any(.value, ...)`, `all(.value, ...)`, `none(.value, ...)` | Element predicates for array-valued traits |
+
+`in(...)` matches only when the trait sits *directly* in the named scope; `within(...)` matches any ancestor scope. Since a `@todo` under `## Tasks` sits in that section (not directly on the project object), prefer `within(type:project ...)` over `in(type:project ...)`. Note `in(...)` is scope containment, not set membership — for "value is one of a set" use `oneof(.value, [...])`. See [Naming Collision: `in()` vs `oneof()`](#naming-collision-in-vs-oneof).
 
 Examples:
 
