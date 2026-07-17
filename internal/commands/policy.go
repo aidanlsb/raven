@@ -102,7 +102,6 @@ var previewModeByCommandID = map[string]PreviewMode{
 	"set":    PreviewModeBulkPreviewDefault,
 	"update": PreviewModeBulkPreviewDefault,
 
-	"check":                PreviewModePreviewDefault,
 	"check create-missing": PreviewModePreviewDefault,
 	"check_fix":            PreviewModePreviewDefault,
 	"query":                PreviewModePreviewDefault,

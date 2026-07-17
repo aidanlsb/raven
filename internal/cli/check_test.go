@@ -38,7 +38,6 @@ func TestCheckJSONUsesStandardEnvelope(t *testing.T) {
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevStrict := checkStrict
-	prevCreateMissing := checkCreateMissing
 	prevByFile := checkByFile
 	prevVerbose := checkVerbose
 	prevType := checkType
@@ -46,13 +45,11 @@ func TestCheckJSONUsesStandardEnvelope(t *testing.T) {
 	prevIssues := checkIssues
 	prevExclude := checkExclude
 	prevErrorsOnly := checkErrorsOnly
-	prevFix := checkFix
 	prevConfirm := checkConfirm
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		checkStrict = prevStrict
-		checkCreateMissing = prevCreateMissing
 		checkByFile = prevByFile
 		checkVerbose = prevVerbose
 		checkType = prevType
@@ -60,14 +57,12 @@ func TestCheckJSONUsesStandardEnvelope(t *testing.T) {
 		checkIssues = prevIssues
 		checkExclude = prevExclude
 		checkErrorsOnly = prevErrorsOnly
-		checkFix = prevFix
 		checkConfirm = prevConfirm
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	checkStrict = false
-	checkCreateMissing = false
 	checkByFile = false
 	checkVerbose = false
 	checkType = ""
@@ -75,7 +70,6 @@ func TestCheckJSONUsesStandardEnvelope(t *testing.T) {
 	checkIssues = ""
 	checkExclude = ""
 	checkErrorsOnly = false
-	checkFix = false
 	checkConfirm = false
 
 	out := captureStdout(t, func() {

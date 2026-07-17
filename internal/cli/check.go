@@ -17,17 +17,15 @@ import (
 )
 
 var (
-	checkStrict        bool
-	checkCreateMissing bool
-	checkByFile        bool
-	checkVerbose       bool
-	checkType          string
-	checkTrait         string
-	checkIssues        string
-	checkExclude       string
-	checkErrorsOnly    bool
-	checkFix           bool
-	checkConfirm       bool
+	checkStrict     bool
+	checkByFile     bool
+	checkVerbose    bool
+	checkType       string
+	checkTrait      string
+	checkIssues     string
+	checkExclude    string
+	checkErrorsOnly bool
+	checkConfirm    bool
 )
 
 type CheckIssueJSON = checksvc.CheckIssueJSON
@@ -35,31 +33,13 @@ type CheckSummaryJSON = checksvc.CheckSummaryJSON
 type CheckScopeJSON = checksvc.CheckScopeJSON
 type CheckResultJSON = checksvc.CheckResultJSON
 
-type checkAction string
-
-const (
-	checkActionValidateOnly  checkAction = "validate"
-	checkActionFix           checkAction = "fix"
-	checkActionCreateMissing checkAction = "create-missing"
-)
-
 var checkCmd = &cobra.Command{
 	Use:   "check [path]",
 	Short: "Validate the vault",
 	Long:  `Checks all files for errors and warnings (type mismatches, broken references, etc.)`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		action := checkActionValidateOnly
-		if checkFix && checkCreateMissing {
-			return handleErrorMsg(ErrInvalidInput, "cannot combine --fix with --create-missing", "Use one action at a time")
-		}
-		if checkFix {
-			action = checkActionFix
-		}
-		if checkCreateMissing {
-			action = checkActionCreateMissing
-		}
-		return runCheckCommand(args, action, true)
+		return runCheckCommand(args)
 	},
 }
 
@@ -81,59 +61,35 @@ var checkCreateMissingCmd = newCanonicalLeafCommand("check create-missing", cano
 	SkipFlagBinding: true,
 })
 
-func runCheckCommand(args []string, action checkAction, legacyFlagInvocation bool) error {
+func runCheckCommand(args []string) error {
 	vaultPath := getVaultPath()
 	argsMap := map[string]interface{}{
-		"strict":         checkStrict,
-		"type":           checkType,
-		"trait":          checkTrait,
-		"issues":         checkIssues,
-		"exclude":        checkExclude,
-		"errors-only":    checkErrorsOnly,
-		"by-file":        checkByFile,
-		"verbose":        checkVerbose,
-		"fix":            action == checkActionFix,
-		"confirm":        checkConfirm,
-		"create-missing": action == checkActionCreateMissing,
+		"strict":      checkStrict,
+		"type":        checkType,
+		"trait":       checkTrait,
+		"issues":      checkIssues,
+		"exclude":     checkExclude,
+		"errors-only": checkErrorsOnly,
+		"by-file":     checkByFile,
+		"verbose":     checkVerbose,
 	}
 	if len(args) > 0 {
 		argsMap["path"] = args[0]
-	}
-
-	confirm := checkConfirm
-	if action == checkActionCreateMissing && !jsonOutput {
-		confirm = false
-		argsMap["confirm"] = false
 	}
 
 	result := executeCanonicalRequest(commandexec.Request{
 		CommandID: "check",
 		VaultPath: vaultPath,
 		Args:      argsMap,
-		Confirm:   confirm,
 	})
 	if !result.OK {
-		if legacyFlagInvocation && action == checkActionCreateMissing && result.Error != nil && result.Error.Code == ErrInvalidInput {
-			if !jsonOutput {
-				fmt.Println(ui.Hint("`--create-missing` is ignored for scoped checks; run on full vault to create pages."))
-			}
-			argsMap["create-missing"] = false
-			action = checkActionValidateOnly
-			result = executeCanonicalRequest(commandexec.Request{
-				CommandID: "check",
-				VaultPath: vaultPath,
-				Args:      argsMap,
-			})
+		if result.Error == nil {
+			return handleErrorMsg(ErrInternal, "check failed", "")
 		}
-		if !result.OK {
-			if result.Error == nil {
-				return handleErrorMsg(ErrInternal, "check failed", "")
-			}
-			if result.Error.Details != nil {
-				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
+		if result.Error.Details != nil {
+			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
 		}
+		return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
 	}
 
 	if jsonOutput {
@@ -147,19 +103,7 @@ func runCheckCommand(args []string, action checkAction, legacyFlagInvocation boo
 	}
 
 	printCheckScopeHeader(vaultPath, checkScopeFromResult(result))
-
-	switch action {
-	case checkActionValidateOnly:
-		renderCanonicalCheckValidate(result)
-	case checkActionFix:
-		renderCanonicalCheckFix(result)
-	case checkActionCreateMissing:
-		if err := renderCanonicalCheckCreateMissing(vaultPath, result); err != nil {
-			return err
-		}
-	default:
-		return handleErrorMsg(ErrInvalidInput, "unknown check action", "")
-	}
+	renderCanonicalCheckValidate(result)
 
 	if checkShouldExit(result) {
 		os.Exit(1)
@@ -925,11 +869,8 @@ func init() {
 	bindCheckScopeFlags(checkFixCmd)
 
 	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
-	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Create missing referenced pages (interactive by default; with --json requires --confirm)")
 	checkCmd.Flags().BoolVar(&checkByFile, "by-file", false, "Group issues by file path")
 	checkCmd.Flags().BoolVarP(&checkVerbose, "verbose", "V", false, "Show all issues with full details")
-	checkCmd.Flags().BoolVar(&checkFix, "fix", false, "Preview/apply safe auto-fixes for unambiguous check issues")
-	checkCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply fixes/create-missing in non-interactive mode (without this flag, shows preview only)")
 
 	checkFixCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
 	checkFixCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply fixes (without this flag, shows preview only)")

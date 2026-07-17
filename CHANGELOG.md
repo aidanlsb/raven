@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent skill commands now use the portable Agent Skills directories (`~/.agents/skills` for user scope and `.agents/skills` for project scope). The runtime-specific `--target` flag has been removed; use `--dest` for a custom install root.
 - Agent setup documentation now leads with skill installation and describes all seven packaged Raven skills.
 
+### Removed
+- `rvn check` no longer accepts the `--fix`, `--create-missing`, or `--confirm` flags. Repairs live solely on the subcommands `rvn check fix` and `rvn check create-missing` (and the equivalent `check_fix` / `check create-missing` MCP tools), removing the duplicate entry points and the ambiguity of parent-level `--confirm`. `rvn check` is now a read-only validation command.
+
 ## [v0.0.28] - 2026-07-08
 
 ### Added

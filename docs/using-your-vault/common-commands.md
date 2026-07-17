@@ -308,9 +308,11 @@ Key flags:
 - `--issues` — only report specific issue types (comma-separated)
 - `--exclude` — exclude specific issue types
 - `--strict` — treat warnings as errors
-- `--fix` — preview/apply safe auto-fixes for unambiguous check issues
-- `create-missing` — preview/create pages for unresolved references
 - `--verbose` / `-V` — full details for every issue
+
+Repairs are separate subcommands, not flags on `rvn check`:
+- `rvn check fix` — preview/apply safe auto-fixes for unambiguous check issues
+- `rvn check create-missing` — preview/create pages for unresolved references
 
 ### `rvn resolve`
 

@@ -106,7 +106,7 @@ and adds:
 Remediate by creating the targets when appropriate:
 
 ```text
-raven_invoke(command="check", subcommand="create-missing", args={"confirm":true})
+raven_invoke(command="check create-missing", args={"confirm":true})
 ```
 
 or create a specific page directly with the suggested `new` command. Link integrity is a

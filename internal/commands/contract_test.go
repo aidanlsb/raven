@@ -166,7 +166,6 @@ func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
 	t.Parallel()
 
 	for _, commandID := range []string{
-		"check",
 		"check create-missing",
 		"check_fix",
 		"query",
