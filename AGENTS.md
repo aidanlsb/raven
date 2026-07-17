@@ -94,6 +94,14 @@ make check              # fmt-check + lint + test (run before submitting)
 - All CLI commands support `--json` output with a standard envelope: `{ ok, data, error?, warnings?, meta? }`.
 - Warning codes are also defined in `errors.go` (e.g., `WarnBacklinks`, `WarnUnknownField`).
 
+#### Schema/config load-failure policy
+
+A missing `schema.yaml` is never a failure — `schema.Load` returns a default (empty) schema with a nil error, and continuing is always safe. A load *failure* means the file exists but is unreadable or invalid. Handle load failures explicitly per operation; never silently continue when the operation relies on schema:
+
+- **Fatal** when the operation relies on schema for safety or correctness — reference-resolving mutations (`delete`, `edit`, `move`, and other mutations that need validation/ref checks). These return `SCHEMA_INVALID` (or `CONFIG_INVALID` for `raven.yaml`) and must not proceed with a corrupt schema.
+- **Warning with degraded behavior** when continuing is intentional and safe (read/render paths). Emit the stable `SCHEMA_LOAD_FAILED` warning code rather than swallowing the error. `readsvc.NewRuntime` records the failure on `Runtime.SchemaLoadErr` (when `RuntimeOptions.RequireSchema` is false) so callers can surface it; set `RequireSchema` to make it fatal.
+- **Intentionally schema-free** only where truly appropriate, and never silently. The long-running LSP tolerates a broken schema (diagnostics degrade to the built-in schema) but logs the degradation to stderr instead of keeping stale state silently.
+
 ### CLI Patterns
 
 - Every command must be registered in `internal/commands/registry.go` with full metadata (description, args, flags, examples, use cases). This registry drives both Cobra command generation and MCP tool schema generation.

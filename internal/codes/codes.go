@@ -92,6 +92,7 @@ const (
 	WarnRefNotFound        WarningCode = "REF_NOT_FOUND"
 	WarnDeprecated         WarningCode = "DEPRECATED"
 	WarnSchemaOutdated     WarningCode = "SCHEMA_OUTDATED"
+	WarnSchemaLoadFailed   WarningCode = "SCHEMA_LOAD_FAILED"
 	WarnDatabaseOutdated   WarningCode = "DATABASE_OUTDATED"
 	WarnIndexUpdateFailed  WarningCode = "INDEX_UPDATE_FAILED"
 	WarnDocsFetchFailed    WarningCode = "DOCS_FETCH_FAILED"
@@ -121,7 +122,7 @@ var knownErrorCodes = map[ErrorCode]struct{}{
 }
 
 var knownWarningCodes = map[WarningCode]struct{}{
-	WarnRefNotFound: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnDocsFetchFailed: {},
+	WarnRefNotFound: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnSchemaLoadFailed: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnDocsFetchFailed: {},
 	WarnWrongCommand: {}, WarnMissingField: {}, WarnBacklinks: {}, WarnSectionSkipped: {}, WarnUnknownField: {}, WarnTypeMismatch: {},
 	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {}, WarnCheckRunIncomplete: {}, WarnVaultFallback: {},
 }
