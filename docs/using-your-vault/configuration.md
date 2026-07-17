@@ -43,6 +43,9 @@ personal = "/Users/you/personal-notes"
 accent = "39"
 code_theme = "monokai"
 markdown_style = "auto"
+
+[mcp]
+strict_vault = true
 ```
 
 ### Keys
@@ -57,6 +60,7 @@ markdown_style = "auto"
 | `[ui].accent` | string | unset | Accent color for styled terminal output. Supports ANSI (`"0"`-`"255"`) or hex (`"#RRGGBB"` / `"#RGB"`). |
 | `[ui].code_theme` | string | unset (`monokai` effective default) | Markdown code-block theme (Glamour/Chroma), for example `monokai`, `dracula`, `github` |
 | `[ui].markdown_style` | string | unset (`auto` effective default) | Full Glamour Markdown style: `auto`, `raven`, a built-in style name such as `dark`/`light`, or a custom style JSON path |
+| `[mcp].strict_vault` | bool | `false` | When true, the MCP server requires an explicit vault (`vault`/`vault_path` or a pinned vault) for vault-scoped calls; ambient fallback is rejected with `VAULT_AMBIGUOUS`. Overridden by `rvn serve --strict-vault`. |
 
 ### UI options in detail
 
