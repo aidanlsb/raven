@@ -30,17 +30,23 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
      - If `is_first_vault` is `false` with `needs_user_choice_for_activate` / `needs_user_choice_for_default` set to `true`, another vault already exists; `post_init.actions` lists the `activate` / `set_default` actions — ask the user before running them.
      - If init did **not** register or route the vault (fields are `false`, or `post_init` is absent on older builds), offer to finish setup using the commands in `post_init.commands` / `post_init.next_steps`. Ask before setting a default or active vault, since routing is machine-wide config.
    - After init, work against this vault (pass `--vault <name>` or `--vault-path <path>` if it is not yet the active vault).
-3. **Explain the vault model:**
+3. **Set up the editor (once a vault exists).** Keep this short — it is one onboarding step, not an editor deep-dive.
+   - Inspect current settings with `rvn config show --json` (and note `$EDITOR` if it is relevant to the user's choice).
+   - If `editor` is unset, or the user wants to change it, ask which editor they use (common: `cursor`, `code`, `nvim`).
+   - Apply with `rvn config set --editor <cmd> --editor-mode auto --json`. Ask before changing machine-wide config, consistent with the rule about global/default vault routing.
+   - Confirm with `rvn config show --json`.
+   - **LSP pointer (awareness only).** Mention that Raven ships a built-in LSP (`rvn lsp`) that gives diagnostics, completion, go-to-definition, and find-references in any editor with an LSP client, and point at `docs/using-your-vault/editor-integration.md` (or the `rvn docs` equivalent). Do not auto-configure nvim/vscode plugins here — make the user aware and hand off.
+4. **Explain the vault model:**
    - Markdown files are the durable source of truth.
    - `.raven/` is derived cache and local metadata.
    - `raven.yaml` is vault-local config.
    - `schema.yaml` defines types, fields, traits, and templates.
-4. Inspect schema shape with `rvn schema --json`; use `rvn schema type <name> --json` and `rvn schema trait <name> --json` for focused explanations.
-5. Demonstrate one safe create flow with `rvn new <type> "<title>" --json`, choosing an existing simple type.
-6. Demonstrate traits by adding a line with a defined trait through `rvn add "..." --to today --json` or explaining how to create a missing trait with `rvn schema add trait ... --json`.
-7. Demonstrate references with `[[object/id]]`, then use `rvn backlinks <id> --json` to show the graph.
-8. Demonstrate daily notes with `rvn daily --json` and `rvn add "..." --json`.
-9. Verify health with `rvn check --json`; use `rvn reindex --json` if the index is stale.
+5. Inspect schema shape with `rvn schema --json`; use `rvn schema type <name> --json` and `rvn schema trait <name> --json` for focused explanations.
+6. Demonstrate one safe create flow with `rvn new <type> "<title>" --json`, choosing an existing simple type.
+7. Demonstrate traits by adding a line with a defined trait through `rvn add "..." --to today --json` or explaining how to create a missing trait with `rvn schema add trait ... --json`.
+8. Demonstrate references with `[[object/id]]`, then use `rvn backlinks <id> --json` to show the graph.
+9. Demonstrate daily notes with `rvn daily --json` and `rvn add "..." --json`.
+10. Verify health with `rvn check --json`; use `rvn reindex --json` if the index is stale.
 
 ## Teaching points
 
@@ -52,7 +58,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 
 ## Cross-references
 
-- Use `raven-vault-admin` for vault setup, active/default vault selection, and config changes.
+- Use `raven-vault-admin` for vault setup, active/default vault selection, and deeper config changes (editor, UI, and other machine-level settings).
 - Use `raven-schema` when onboarding requires new types, fields, or traits.
 - Use `raven-core` for creating objects, adding notes, editing content, daily notes, and references.
 - Use `raven-query` for search, structured query examples, and saved queries.
