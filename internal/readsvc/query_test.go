@@ -81,6 +81,71 @@ func TestExecuteQuery_ObjectModes(t *testing.T) {
 	}
 }
 
+func TestExecuteQueryResult_HasMoreAndNextOffset(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		result         *ExecuteQueryResult
+		wantHasMore    bool
+		wantNextOffset int
+	}{
+		{
+			name:           "nil result",
+			result:         nil,
+			wantHasMore:    false,
+			wantNextOffset: 0,
+		},
+		{
+			name:           "unlimited full result set",
+			result:         &ExecuteQueryResult{Total: 5, Returned: 5, Offset: 0, Limit: 0},
+			wantHasMore:    false,
+			wantNextOffset: 5,
+		},
+		{
+			name:           "first page with more",
+			result:         &ExecuteQueryResult{Total: 120, Returned: 50, Offset: 0, Limit: 50},
+			wantHasMore:    true,
+			wantNextOffset: 50,
+		},
+		{
+			name:           "middle page with more",
+			result:         &ExecuteQueryResult{Total: 120, Returned: 50, Offset: 50, Limit: 50},
+			wantHasMore:    true,
+			wantNextOffset: 100,
+		},
+		{
+			name:           "last partial page",
+			result:         &ExecuteQueryResult{Total: 120, Returned: 20, Offset: 100, Limit: 50},
+			wantHasMore:    false,
+			wantNextOffset: 120,
+		},
+		{
+			name:           "offset past end",
+			result:         &ExecuteQueryResult{Total: 120, Returned: 0, Offset: 200, Limit: 50},
+			wantHasMore:    false,
+			wantNextOffset: 200,
+		},
+		{
+			name:           "exact last page",
+			result:         &ExecuteQueryResult{Total: 100, Returned: 50, Offset: 50, Limit: 50},
+			wantHasMore:    false,
+			wantNextOffset: 100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.result.HasMore(); got != tt.wantHasMore {
+				t.Errorf("HasMore() = %v, want %v", got, tt.wantHasMore)
+			}
+			if got := tt.result.NextOffset(); got != tt.wantNextOffset {
+				t.Errorf("NextOffset() = %d, want %d", got, tt.wantNextOffset)
+			}
+		})
+	}
+}
+
 func TestExecuteQuery_TraitModes(t *testing.T) {
 	t.Parallel()
 	rt := seededRuntime(t)

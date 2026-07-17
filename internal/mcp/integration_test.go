@@ -2403,7 +2403,7 @@ status: paused
 		})
 		cliResult := vCLI.RunCLI("query", "type:project .status==active", "--limit", "10", "--offset", "0")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_kind", "type", "items", "total", "returned", "offset", "limit"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_kind", "type", "items", "total", "returned", "offset", "limit", "has_more"})
 	})
 
 	t.Run("query_asset", func(t *testing.T) {
@@ -2443,7 +2443,7 @@ See [[assets/pdfs/paper.pdf]].
 		})
 		cliResult := vCLI.RunCLI("query", "asset .extension==pdf", "--limit", "10", "--offset", "0")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_kind", "items", "total", "returned", "offset", "limit"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_kind", "items", "total", "returned", "offset", "limit", "has_more"})
 	})
 
 	t.Run("query_apply_object_preview", func(t *testing.T) {
