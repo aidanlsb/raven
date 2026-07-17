@@ -30,7 +30,8 @@ Important:
 
 For `resources/read`, the vault-scoped Raven URIs `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional top-level `vault` or `vault_path` params.
 - Use one or the other for that read.
-- `resources/list` still reflects the server's pinned/current vault.
+- `resources/list` accepts the same `vault`/`vault_path` params, so list and read stay consistent.
+- Both `resources/list` and `resources/read` return a `vault_context` object for vault-scoped requests so you can confirm the target vault.
 
 ## Error handling rules
 
@@ -87,7 +88,8 @@ one call, so `has_more` is `false` and `next_offset` is omitted. See
 
 ## Vault context
 
-Vault-bound responses include a `vault_context` block in `meta`:
+Vault-bound responses always include a `vault_context` block in `meta`, so you can
+confirm which vault was used on every vault-scoped call:
 
 ```json
 {
@@ -106,7 +108,26 @@ Fields:
 - `source` — how the vault was selected: `vault_path` (explicit path override), `vault` (named vault from invocation), `pinned` (server pinned path), `base_args` (from serve flags), `active_vault`, `default_vault`, or `default_vault_fallback`.
 - `name` — configured vault name (omitted when no name could be resolved).
 
+Vault-scoped `resources/list` and `resources/read` responses also return a
+top-level `vault_context` object with the same fields.
+
 Commands that do not require vault resolution (e.g. `version`, `config show`) omit `vault_context`.
+
+### Explicit vs ambient vaults
+
+`vault_path`, `vault`, `pinned`, and `base_args` are *explicit* sources you (or the
+server operator) chose. `active_vault`, `default_vault`, and
+`default_vault_fallback` are *ambient* — they come from mutable global state, so a
+call that omits an explicit vault can silently target whatever vault was last made
+active. To be certain which vault a write hits, pass `vault` or `vault_path`.
+
+- `VAULT_FALLBACK` warning: a write resolved its vault from ambient state while
+  more than one vault is configured. Confirm `vault_context` is the vault you
+  intended, or re-issue the call with an explicit `vault`/`vault_path`.
+- `VAULT_AMBIGUOUS` error: the server runs in strict vault mode
+  (`rvn serve --strict-vault` or `[mcp] strict_vault = true`) and the call lacked
+  an explicit `vault`/`vault_path` with no server-pinned vault. Retry with an
+  explicit vault.
 
 ## Warnings
 

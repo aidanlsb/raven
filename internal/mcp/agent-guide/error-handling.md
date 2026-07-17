@@ -40,7 +40,19 @@ If a write fails because the path is excluded, treat that as a vault-management
 boundary. Excluded files are not Raven-managed; ask whether to change
 `raven.yaml` `exclude` before retrying as a Raven content mutation.
 
-## 5. Recovery loop for check/repair tasks
+## 5. Vault targeting failures
+
+- `VAULT_AMBIGUOUS`: the server runs in strict vault mode and the call did not
+  specify a vault (no `vault`/`vault_path` and no server-pinned vault). Retry with
+  an explicit `vault` (configured name) or `vault_path` (absolute directory).
+- `VAULT_NOT_FOUND` / `VAULT_RESOLUTION_FAILED`: the requested vault could not be
+  resolved. Verify the name/path and that the vault exists.
+- `VAULT_FALLBACK` warning (not an error): a write resolved its vault from ambient
+  state (active/default vault) while multiple vaults are configured. Check
+  `meta.vault_context` and, if it is not the intended vault, re-issue with an
+  explicit `vault`/`vault_path` before continuing.
+
+## 6. Recovery loop for check/repair tasks
 
 ```text
 raven_invoke(command="check")

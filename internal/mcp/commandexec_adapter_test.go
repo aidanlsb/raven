@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -191,6 +192,176 @@ func TestVaultContextNilMetaCreated(t *testing.T) {
 	}
 	if result.Meta.VaultContext.Source != "active_vault" {
 		t.Fatalf("vault_context.source = %q, want %q", result.Meta.VaultContext.Source, "active_vault")
+	}
+}
+
+func TestCallCanonicalCommandStrictModeReturnsVaultAmbiguous(t *testing.T) {
+	t.Parallel()
+
+	registry := commandexec.NewHandlerRegistry()
+	registry.Register("reindex", func(_ context.Context, _ commandexec.Request) commandexec.Result {
+		t.Fatal("handler should not run when vault resolution fails")
+		return commandexec.Success(nil, nil)
+	})
+
+	server := &Server{
+		strictVault: true,
+		invoker:     commandexec.NewInvoker(registry, nil),
+	}
+
+	out, isErr, handled := server.callCanonicalCommandWithContext(context.Background(), "reindex", map[string]interface{}{"dry-run": true}, "", "")
+	if !handled {
+		t.Fatal("expected command to be handled")
+	}
+	if !isErr {
+		t.Fatalf("expected error result, got: %s", out)
+	}
+
+	var envelope struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if envelope.OK {
+		t.Fatalf("expected ok=false, got true: %s", out)
+	}
+	if envelope.Error.Code != "VAULT_AMBIGUOUS" {
+		t.Fatalf("error code = %q, want VAULT_AMBIGUOUS", envelope.Error.Code)
+	}
+}
+
+func TestCallCanonicalCommandStrictModeAllowsExplicitVaultPath(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("types: {}\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+
+	registry := commandexec.NewHandlerRegistry()
+	registry.Register("reindex", func(_ context.Context, req commandexec.Request) commandexec.Result {
+		if req.VaultPath != vaultPath {
+			t.Fatalf("handler vault path = %q, want %q", req.VaultPath, vaultPath)
+		}
+		return commandexec.Success(map[string]interface{}{"ok": true}, nil)
+	})
+
+	server := &Server{
+		strictVault: true,
+		invoker:     commandexec.NewInvoker(registry, nil),
+	}
+
+	out, isErr, handled := server.callCanonicalCommandWithContext(context.Background(), "reindex", map[string]interface{}{"dry-run": true}, "", vaultPath)
+	if !handled {
+		t.Fatal("expected command to be handled")
+	}
+	if isErr {
+		t.Fatalf("expected success, got error: %s", out)
+	}
+}
+
+func TestCallCanonicalCommandWarnsOnAmbientFallbackWithMultipleVaults(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	vaultA := filepath.Join(tmp, "vault-a")
+	vaultB := filepath.Join(tmp, "vault-b")
+	for _, p := range []string{vaultA, vaultB} {
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", p, err)
+		}
+	}
+	configPath := filepath.Join(tmp, "config.toml")
+	cfg := "default_vault = \"a\"\n[vaults]\na = " + strconv.Quote(vaultA) + "\nb = " + strconv.Quote(vaultB) + "\n"
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	registry := commandexec.NewHandlerRegistry()
+	registry.Register("reindex", func(_ context.Context, _ commandexec.Request) commandexec.Result {
+		return commandexec.Success(map[string]interface{}{"ok": true}, nil)
+	})
+
+	server := &Server{
+		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+		invoker:  commandexec.NewInvoker(registry, nil),
+	}
+
+	out, isErr, handled := server.callCanonicalCommandWithContext(context.Background(), "reindex", map[string]interface{}{"dry-run": true}, "", "")
+	if !handled {
+		t.Fatal("expected command to be handled")
+	}
+	if isErr {
+		t.Fatalf("expected success, got error: %s", out)
+	}
+
+	var envelope struct {
+		OK       bool `json:"ok"`
+		Warnings []struct {
+			Code string `json:"code"`
+		} `json:"warnings"`
+		Meta struct {
+			VaultContext *commandexec.VaultContext `json:"vault_context"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if envelope.Meta.VaultContext == nil || envelope.Meta.VaultContext.Source != "default_vault" {
+		t.Fatalf("expected default_vault source, got %#v", envelope.Meta.VaultContext)
+	}
+	found := false
+	for _, w := range envelope.Warnings {
+		if w.Code == "VAULT_FALLBACK" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected VAULT_FALLBACK warning, got: %s", out)
+	}
+}
+
+func TestCallCanonicalCommandNoFallbackWarningForSingleVault(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	vaultA := filepath.Join(tmp, "vault-a")
+	if err := os.MkdirAll(vaultA, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	configPath := filepath.Join(tmp, "config.toml")
+	cfg := "default_vault = \"a\"\n[vaults]\na = " + strconv.Quote(vaultA) + "\n"
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	registry := commandexec.NewHandlerRegistry()
+	registry.Register("reindex", func(_ context.Context, _ commandexec.Request) commandexec.Result {
+		return commandexec.Success(map[string]interface{}{"ok": true}, nil)
+	})
+
+	server := &Server{
+		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+		invoker:  commandexec.NewInvoker(registry, nil),
+	}
+
+	out, _, _ := server.callCanonicalCommandWithContext(context.Background(), "reindex", map[string]interface{}{"dry-run": true}, "", "")
+	var envelope struct {
+		Warnings []struct {
+			Code string `json:"code"`
+		} `json:"warnings"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	for _, w := range envelope.Warnings {
+		if w.Code == "VAULT_FALLBACK" {
+			t.Fatalf("did not expect VAULT_FALLBACK warning for single vault: %s", out)
+		}
 	}
 }
 

@@ -107,6 +107,66 @@ func TestMCPIntegration_InvokeVaultPathOverride(t *testing.T) {
 	}
 }
 
+func TestMCPIntegration_StrictVaultRejectsAmbientFallback(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	globalDir := t.TempDir()
+	configPath := filepath.Join(globalDir, "config.toml")
+	cfg := "default_vault = \"primary\"\n[vaults]\nprimary = \"" + v.Path + "\"\n"
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
+	server.strictVault = true
+
+	// Without an explicit vault, strict mode must refuse to fall back.
+	result := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "new",
+		"args": map[string]interface{}{
+			"type":  "person",
+			"title": "Strict No Vault",
+		},
+	})
+	if !result.IsError {
+		t.Fatalf("expected VAULT_AMBIGUOUS error, got success: %s", result.Text)
+	}
+	var envelope struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(result.Text), &envelope); err != nil {
+		t.Fatalf("parse envelope: %v; text=%s", err, result.Text)
+	}
+	if envelope.Error.Code != "VAULT_AMBIGUOUS" {
+		t.Fatalf("error code = %q, want VAULT_AMBIGUOUS; text=%s", envelope.Error.Code, result.Text)
+	}
+	if v.FileExists("people/strict-no-vault.md") {
+		t.Fatal("expected no object to be created when strict resolution fails")
+	}
+
+	// With an explicit vault_path, strict mode allows the write.
+	ok := server.callTool("raven_invoke", map[string]interface{}{
+		"command":    "new",
+		"vault_path": v.Path,
+		"args": map[string]interface{}{
+			"type":  "person",
+			"title": "Strict With Vault",
+		},
+	})
+	if ok.IsError {
+		t.Fatalf("expected strict invoke with explicit vault to succeed, got error: %s", ok.Text)
+	}
+	if !v.FileExists("people/strict-with-vault.md") {
+		t.Fatal("expected object to be created with explicit vault_path")
+	}
+}
+
 // TestMCPIntegration_ServeRejectsLegacyToolNames ensures the live `rvn serve`
 // JSON-RPC path only accepts compact tools and rejects legacy names.
 func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
@@ -4099,10 +4159,11 @@ func runCLIWithConfig(t *testing.T, binary, configPath string, args ...string) *
 
 // testServer wraps the MCP Server for testing purposes.
 type testServer struct {
-	t          *testing.T
-	vaultPath  string
-	baseArgs   []string
-	executable string
+	t           *testing.T
+	vaultPath   string
+	baseArgs    []string
+	executable  string
+	strictVault bool
 }
 
 // toolResult represents the result of a tool call.
@@ -4149,6 +4210,7 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 	} else {
 		server = mcp.NewServerWithExecutable(s.vaultPath, s.executable)
 	}
+	server.SetStrictVault(s.strictVault)
 
 	// Create a simulated JSON-RPC request
 	paramsBytes, _ := json.Marshal(map[string]interface{}{

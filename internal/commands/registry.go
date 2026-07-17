@@ -317,6 +317,7 @@ post-init setup suggestions instead of mutating global config implicitly.`,
 		Examples: []string{
 			"rvn serve",
 			"rvn serve --vault personal",
+			"rvn serve --strict-vault",
 		},
 		UseCases: []string{
 			"Launch Raven MCP server for local clients",
