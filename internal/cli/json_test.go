@@ -11,7 +11,13 @@ import (
 )
 
 func TestOutputJSONPropagatesWriteErrors(t *testing.T) {
-	t.Parallel()
+	// This test mutates the global os.Stdout, which is shared with the
+	// captureStdout helper used by other (parallel) tests. Hold the same mutex
+	// so the swap is mutually exclusive with those captures; otherwise a
+	// concurrent capture can replace our closed pipe with a working one and the
+	// write unexpectedly succeeds (flaky "expected write error, got nil").
+	captureStdoutMu.Lock()
+	defer captureStdoutMu.Unlock()
 
 	r, w, err := os.Pipe()
 	if err != nil {
