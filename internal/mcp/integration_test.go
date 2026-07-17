@@ -2844,11 +2844,11 @@ type: page
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 
-		// Isolate global config: init now auto-registers the new vault, so both
-		// sides must write to their own throwaway config instead of the host's.
-		mcpConfig := filepath.Join(t.TempDir(), "config.toml")
-		cliConfig := filepath.Join(t.TempDir(), "config.toml")
-		server := newTestServerWithBaseArgs(t, baseArgsForConfig(mcpConfig), binary)
+		// Init now auto-registers the new vault, so both sides must write to a
+		// throwaway config instead of the host's. Share one config dir so the
+		// derived docs path (and thus the docs envelope) stays identical.
+		sharedConfig := filepath.Join(t.TempDir(), "config.toml")
+		server := newTestServerWithBaseArgs(t, baseArgsForConfig(sharedConfig), binary)
 
 		mcpInitPath := filepath.Join(vMCP.Path, "new-vault")
 		cliInitPath := filepath.Join(vCLI.Path, "new-vault")
@@ -2856,7 +2856,7 @@ type: page
 		mcpResult := server.callTool("init", map[string]interface{}{
 			"path": mcpInitPath,
 		})
-		cliResult := runCLIWithConfig(t, binary, cliConfig, "init", cliInitPath)
+		cliResult := runCLIWithConfig(t, binary, sharedConfig, "init", cliInitPath)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "created_config", "created_schema", "gitignore_state", "docs"})
 	})

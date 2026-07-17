@@ -490,11 +490,7 @@ func runVaultCurrent(t *testing.T, binary, configFile, stateFile string) map[str
 	if !resp.OK {
 		t.Fatalf("expected vault current success, got: %s", output)
 	}
-	current, ok := resp.Data["current"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("current = %#v, want map", resp.Data["current"])
-	}
-	return current
+	return resp.Data
 }
 
 func mustPostInitBool(t *testing.T, data map[string]interface{}, key string, want bool) {
