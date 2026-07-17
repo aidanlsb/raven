@@ -2260,6 +2260,43 @@ func TestIntegration_ImportUnknownFieldReturnsStructuredItemError(t *testing.T) 
 	v.AssertFileNotExists("people/freya.md")
 }
 
+// TestIntegration_ImportRespectsProtectedPathsOnUpdate verifies that importing an
+// update into a protected path is rejected per item and leaves the existing
+// object untouched, matching objectsvc's content-mutation guardrails.
+func TestIntegration_ImportRespectsProtectedPathsOnUpdate(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML("protected_prefixes:\n  - people/\n").
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n\n# Freya\n").
+		Build()
+
+	result := v.RunCLIWithStdin(`[{"name":"Freya","email":"freya@example.com"}]`, "import", "person")
+	result.MustSucceed(t)
+
+	if got, ok := result.Data["errors"].(float64); !ok || int(got) != 1 {
+		t.Fatalf("expected errors=1, got: %#v", result.Data["errors"])
+	}
+
+	results := result.DataList("results")
+	if len(results) != 1 {
+		t.Fatalf("expected exactly 1 import result item, got %d", len(results))
+	}
+	item, ok := results[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected import result object, got: %#v", results[0])
+	}
+	if item["action"] != "error" {
+		t.Fatalf("expected import action=error, got: %#v", item["action"])
+	}
+	if item["code"] != "VALIDATION_FAILED" {
+		t.Fatalf("expected import error code VALIDATION_FAILED, got: %#v", item["code"])
+	}
+
+	// The protected object must be left untouched.
+	v.AssertFileNotContains("people/freya.md", "email: freya@example.com")
+}
+
 func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *testing.T) {
 	t.Parallel()
 

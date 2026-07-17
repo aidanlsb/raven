@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -15,6 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -309,26 +309,6 @@ func FieldsToStringMap(fields map[string]interface{}, _ string) map[string]strin
 	return result
 }
 
-func ReplaceBodyContent(fileContent, newBody string) string {
-	lines := strings.Split(fileContent, "\n")
-	_, endLine, ok := parser.FrontmatterBounds(lines)
-	if !ok || endLine == -1 {
-		return newBody
-	}
-
-	var result strings.Builder
-	for i := 0; i <= endLine; i++ {
-		result.WriteString(lines[i])
-		result.WriteString("\n")
-	}
-	result.WriteString("\n")
-	result.WriteString(newBody)
-	if !strings.HasSuffix(newBody, "\n") {
-		result.WriteString("\n")
-	}
-	return result.String()
-}
-
 type ResultItem struct {
 	ID      string                 `json:"id"`
 	Action  string                 `json:"action"`
@@ -450,17 +430,20 @@ func Run(req RunRequest) (*RunResult, error) {
 			continue
 		}
 
-		if exists {
-			itemResult, warnMsgs, filePath := updateObject(vaultPath, targetPath, itemCfg.TypeName, mapped, contentValue, sch, vaultCfg)
-			result.Results = append(result.Results, itemResult)
-			result.WarningMessages = append(result.WarningMessages, warnMsgs...)
-			if filePath != "" {
-				result.ChangedFilePaths = append(result.ChangedFilePaths, filePath)
-			}
-			continue
-		}
-
-		itemResult, warnMsgs, filePath := createObject(vaultPath, matchValue, targetName, targetPath, itemCfg.TypeName, mapped, contentValue, sch, vaultCfg, templateDir, objectsRoot, pagesRoot)
+		itemResult, warnMsgs, filePath := applyObject(applyObjectRequest{
+			VaultPath:   vaultPath,
+			Exists:      exists,
+			TargetName:  targetName,
+			TargetPath:  targetPath,
+			TypeName:    itemCfg.TypeName,
+			Fields:      mapped,
+			Content:     contentValue,
+			Schema:      sch,
+			VaultConfig: vaultCfg,
+			ObjectsRoot: objectsRoot,
+			PagesRoot:   pagesRoot,
+			TemplateDir: templateDir,
+		})
 		result.Results = append(result.Results, itemResult)
 		result.WarningMessages = append(result.WarningMessages, warnMsgs...)
 		if filePath != "" {
@@ -475,122 +458,79 @@ func importTargetName(matchValue string) string {
 	return pages.Slugify(matchValue)
 }
 
-func createObject(
-	vaultPath, title, targetName, resolvedTargetPath, typeName string,
-	fields map[string]interface{},
-	content string,
-	sch *schema.Schema,
-	vaultCfg *config.VaultConfig,
-	templateDir, objectsRoot, pagesRoot string,
-) (ResultItem, []string, string) {
-	warnings := []string{}
+type applyObjectRequest struct {
+	VaultPath   string
+	Exists      bool
+	TargetName  string
+	TargetPath  string
+	TypeName    string
+	Fields      map[string]interface{}
+	Content     string
+	Schema      *schema.Schema
+	VaultConfig *config.VaultConfig
+	ObjectsRoot string
+	PagesRoot   string
+	TemplateDir string
+}
 
-	typedFields := fieldsToSchemaValues(fields)
-	delete(typedFields, "type")
-	validatedTypedFields, warningMessages, err := fieldmutation.PrepareValidatedFieldMutationValues(
-		typeName,
-		nil,
-		typedFields,
-		sch,
-		map[string]bool{"type": true, "alias": true},
-		&fieldmutation.RefValidationContext{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
-		},
-	)
-	if err != nil {
-		return mutationErrorResult(resolvedTargetPath, err, ""), warnings, ""
-	}
-	warnings = append(warnings, warningMessages...)
+// applyObject creates or updates a single imported object by routing through
+// objectsvc.Upsert. Sharing that primitive keeps import aligned with the rest of
+// Raven on protected/excluded-path safeguards, field validation, and write
+// semantics, instead of reimplementing them here.
+//
+// Import keeps one body nuance that upsert does not model: on create it appends
+// the content field after any template body, while on update it replaces the
+// body. So the body is only handed to upsert for replacement on update; on
+// create the object is written without body content and the content is appended
+// afterwards.
+func applyObject(req applyObjectRequest) (ResultItem, []string, string) {
+	fieldValues := fieldsToSchemaValues(req.Fields)
+	delete(fieldValues, "type")
 
-	createResult, err := pages.Create(pages.CreateOptions{
-		VaultPath:         vaultPath,
-		TypeName:          typeName,
-		Title:             title,
-		TargetPath:        targetName,
-		Fields:            validatedTypedFields,
-		Schema:            sch,
-		TemplateDir:       templateDir,
-		ProtectedPrefixes: vaultCfg.ProtectedPrefixes,
-		ObjectsRoot:       objectsRoot,
-		PagesRoot:         pagesRoot,
+	replaceBody := req.Exists && req.Content != ""
+
+	result, err := objectsvc.Upsert(objectsvc.UpsertRequest{
+		VaultPath:   req.VaultPath,
+		TypeName:    req.TypeName,
+		TargetPath:  req.TargetName,
+		ReplaceBody: replaceBody,
+		Content:     req.Content,
+		FieldValues: fieldValues,
+		VaultConfig: req.VaultConfig,
+		Schema:      req.Schema,
+		ObjectsRoot: req.ObjectsRoot,
+		PagesRoot:   req.PagesRoot,
+		TemplateDir: req.TemplateDir,
 	})
 	if err != nil {
-		return ResultItem{ID: resolvedTargetPath, Action: "error", Reason: err.Error()}, warnings, ""
+		return mutationErrorResult(req.TargetPath, err), nil, ""
 	}
 
-	if content != "" {
-		if err := appendContentToFile(createResult.FilePath, content); err != nil {
-			return ResultItem{ID: resolvedTargetPath, Action: "error", Reason: fmt.Sprintf("failed to write content: %v", err)}, warnings, ""
+	if !req.Exists && req.Content != "" {
+		if err := appendContentToFile(result.FilePath, req.Content); err != nil {
+			return ResultItem{
+				ID:     req.TargetPath,
+				Action: "error",
+				Reason: fmt.Sprintf("failed to write content: %v", err),
+			}, result.WarningMessages, ""
 		}
 	}
 
 	return ResultItem{
-		ID:     vaultCfg.FilePathToObjectID(createResult.RelativePath),
-		Action: "created",
-		File:   createResult.RelativePath,
-	}, warnings, createResult.FilePath
+		ID:     req.VaultConfig.FilePathToObjectID(result.RelativePath),
+		Action: importActionForUpsertStatus(result.Status),
+		File:   result.RelativePath,
+	}, result.WarningMessages, result.FilePath
 }
 
-func updateObject(
-	vaultPath, targetPath, typeName string,
-	fields map[string]interface{},
-	newContent string,
-	sch *schema.Schema,
-	vaultCfg *config.VaultConfig,
-) (ResultItem, []string, string) {
-	warnings := []string{}
-
-	slugPath := pages.SlugifyPath(targetPath)
-	filePath := filepath.Join(vaultPath, slugPath)
-	if !strings.HasSuffix(filePath, ".md") {
-		filePath += ".md"
+// importActionForUpsertStatus maps an upsert status onto the action vocabulary
+// used in import results. Import historically reports every existing-object
+// write as "updated", so an unchanged upsert is reported the same way.
+func importActionForUpsertStatus(status string) string {
+	if status == "created" {
+		return "created"
 	}
-
-	fileData, err := os.ReadFile(filePath)
-	if err != nil {
-		return ResultItem{ID: targetPath, Action: "error", Reason: fmt.Sprintf("read error: %v", err)}, warnings, ""
-	}
-
-	fm, err := parser.ParseFrontmatter(string(fileData))
-	if err != nil || fm == nil {
-		return ResultItem{ID: targetPath, Action: "error", Reason: "failed to parse frontmatter"}, warnings, ""
-	}
-
-	typedUpdates := fieldsToSchemaValues(fields)
-	delete(typedUpdates, "type")
-
-	updatedFile, warningMessages, err := fieldmutation.PrepareValidatedFrontmatterMutationValues(
-		string(fileData),
-		fm,
-		typeName,
-		typedUpdates,
-		sch,
-		map[string]bool{"type": true, "alias": true},
-		&fieldmutation.RefValidationContext{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
-		},
-	)
-	if err != nil {
-		return mutationErrorResult(targetPath, err, "update error"), warnings, ""
-	}
-	warnings = append(warnings, warningMessages...)
-
-	if newContent != "" {
-		updatedFile = ReplaceBodyContent(updatedFile, newContent)
-	}
-
-	if err := atomicfile.WriteFile(filePath, []byte(updatedFile), 0o644); err != nil {
-		return ResultItem{ID: targetPath, Action: "error", Reason: fmt.Sprintf("write error: %v", err)}, warnings, ""
-	}
-
-	relPath, _ := filepath.Rel(vaultPath, filePath)
-	return ResultItem{
-		ID:     vaultCfg.FilePathToObjectID(relPath),
-		Action: "updated",
-		File:   relPath,
-	}, warnings, filePath
+	return "updated"
 }
 
 func fieldsToSchemaValues(fields map[string]interface{}) map[string]schema.FieldValue {
@@ -601,7 +541,7 @@ func fieldsToSchemaValues(fields map[string]interface{}) map[string]schema.Field
 	return values
 }
 
-func mutationErrorResult(id string, err error, fallbackPrefix string) ResultItem {
+func mutationErrorResult(id string, err error) ResultItem {
 	var unknownErr *fieldmutation.UnknownFieldMutationError
 	if errors.As(err, &unknownErr) {
 		return ResultItem{
@@ -623,14 +563,21 @@ func mutationErrorResult(id string, err error, fallbackPrefix string) ResultItem
 		}
 	}
 
-	reason := err.Error()
-	if strings.TrimSpace(fallbackPrefix) != "" {
-		reason = fmt.Sprintf("%s: %v", fallbackPrefix, err)
+	var svcErr *objectsvc.Error
+	if errors.As(err, &svcErr) {
+		return ResultItem{
+			ID:      id,
+			Action:  "error",
+			Reason:  svcErr.Error(),
+			Code:    string(svcErr.Code),
+			Details: svcErr.Details,
+		}
 	}
+
 	return ResultItem{
 		ID:     id,
 		Action: "error",
-		Reason: reason,
+		Reason: err.Error(),
 	}
 }
 
