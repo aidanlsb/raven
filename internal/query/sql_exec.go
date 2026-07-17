@@ -9,6 +9,14 @@ import (
 	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
+// wrapQueryExecError wraps a database execution error with a concise, stable
+// message. The generated SQL is intentionally omitted so it does not leak into
+// user/agent-facing DATABASE_ERROR messages; the underlying DB error is
+// preserved via %w for programmatic inspection.
+func wrapQueryExecError(err error) error {
+	return fmt.Errorf("query failed: %w", err)
+}
+
 func scanObjectRows(rows *sql.Rows) ([]model.Object, error) {
 	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Object, error) {
 		var r model.Object
@@ -116,7 +124,7 @@ func (e *Executor) executeObjectPageQuery(q *Query, limit, offset int) ([]model.
 
 	rows, err := e.db.Query(sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return nil, wrapQueryExecError(err)
 	}
 	return scanObjectRows(rows)
 }
@@ -133,7 +141,7 @@ func (e *Executor) executeObjectIDQuery(q *Query, limit, offset int) ([]string, 
 
 	rows, err := e.db.Query(sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return nil, wrapQueryExecError(err)
 	}
 	return scanIDRows(rows)
 }
@@ -150,7 +158,7 @@ func (e *Executor) executeObjectCountQuery(q *Query) (int, error) {
 
 	count, err := e.executeCountQuery(sqlStr, args)
 	if err != nil {
-		return 0, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return 0, wrapQueryExecError(err)
 	}
 	return count, nil
 }
@@ -173,7 +181,7 @@ func (e *Executor) executeTraitPageQuery(q *Query, limit, offset int) ([]model.T
 
 	rows, err := e.db.Query(sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return nil, wrapQueryExecError(err)
 	}
 
 	return scanTraitRows(rows)
@@ -191,7 +199,7 @@ func (e *Executor) executeTraitIDQuery(q *Query, limit, offset int) ([]string, e
 
 	rows, err := e.db.Query(sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return nil, wrapQueryExecError(err)
 	}
 
 	return scanIDRows(rows)
@@ -209,7 +217,7 @@ func (e *Executor) executeTraitCountQuery(q *Query) (int, error) {
 
 	count, err := e.executeCountQuery(sqlStr, args)
 	if err != nil {
-		return 0, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return 0, wrapQueryExecError(err)
 	}
 	return count, nil
 }
@@ -232,7 +240,7 @@ func (e *Executor) executeAssetPageQuery(q *Query, limit, offset int) ([]model.A
 
 	rows, err := e.db.Query(sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return nil, wrapQueryExecError(err)
 	}
 	return scanAssetRows(rows)
 }
@@ -249,7 +257,7 @@ func (e *Executor) executeAssetIDQuery(q *Query, limit, offset int) ([]string, e
 
 	rows, err := e.db.Query(sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return nil, wrapQueryExecError(err)
 	}
 	return scanIDRows(rows)
 }
@@ -266,7 +274,7 @@ func (e *Executor) executeAssetCountQuery(q *Query) (int, error) {
 
 	count, err := e.executeCountQuery(sqlStr, args)
 	if err != nil {
-		return 0, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return 0, wrapQueryExecError(err)
 	}
 	return count, nil
 }
@@ -287,7 +295,7 @@ func (e *Executor) executeSectionPageQuery(q *Query, limit, offset int) ([]model
 
 	rows, err := e.db.Query(sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return nil, wrapQueryExecError(err)
 	}
 	return scanSectionRows(rows)
 }
@@ -304,7 +312,7 @@ func (e *Executor) executeSectionIDQuery(q *Query, limit, offset int) ([]string,
 
 	rows, err := e.db.Query(sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return nil, wrapQueryExecError(err)
 	}
 	return scanIDRows(rows)
 }
@@ -321,7 +329,7 @@ func (e *Executor) executeSectionCountQuery(q *Query) (int, error) {
 
 	count, err := e.executeCountQuery(sqlStr, args)
 	if err != nil {
-		return 0, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+		return 0, wrapQueryExecError(err)
 	}
 	return count, nil
 }
