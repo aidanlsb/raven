@@ -82,6 +82,7 @@ const (
 	WarnRefNotFound        = codes.WarnRefNotFound
 	WarnDeprecated         = codes.WarnDeprecated
 	WarnSchemaOutdated     = codes.WarnSchemaOutdated
+	WarnSchemaLoadFailed   = codes.WarnSchemaLoadFailed
 	WarnDatabaseOutdated   = codes.WarnDatabaseOutdated
 	WarnIndexUpdateFailed  = codes.WarnIndexUpdateFailed
 	WarnDocsFetchFailed    = codes.WarnDocsFetchFailed
