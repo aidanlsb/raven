@@ -1555,6 +1555,73 @@ func TestMCPIntegration_SearchSyntaxErrorsReturnInvalidInput(t *testing.T) {
 	}
 }
 
+func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
+	t.Parallel()
+	binary := testutil.BuildCLI(t)
+
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
+
+	vaultRoot := t.TempDir()
+	firstPath := filepath.Join(vaultRoot, "first")
+	secondPath := filepath.Join(vaultRoot, "second")
+
+	// First vault on the machine: auto-registered, default, and active.
+	first := mcpInitPostInit(t, server, firstPath)
+	mustToolBool(t, first, "already_registered", true)
+	mustToolBool(t, first, "is_first_vault", true)
+	mustToolBool(t, first, "is_default", true)
+	mustToolBool(t, first, "is_active", true)
+
+	// Second vault: registered but routing must be left to the user.
+	second := mcpInitPostInit(t, server, secondPath)
+	if got := second["registered_name"]; got != "second" {
+		t.Fatalf("registered_name = %#v, want %q", got, "second")
+	}
+	mustToolBool(t, second, "already_registered", true)
+	mustToolBool(t, second, "registered", true)
+	mustToolBool(t, second, "is_first_vault", false)
+	mustToolBool(t, second, "has_existing_default", true)
+	mustToolBool(t, second, "is_default", false)
+	mustToolBool(t, second, "is_active", false)
+	mustToolBool(t, second, "needs_user_choice_for_activate", true)
+	mustToolBool(t, second, "needs_user_choice_for_default", true)
+}
+
+func mcpInitPostInit(t *testing.T, server *testServer, path string) map[string]interface{} {
+	t.Helper()
+	res := server.callTool("init", map[string]interface{}{"path": path})
+	if res.IsError {
+		t.Fatalf("init returned error: %s", res.Text)
+	}
+	var resp struct {
+		OK   bool                   `json:"ok"`
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.Text), &resp); err != nil {
+		t.Fatalf("unmarshal init response: %v\n%s", err, res.Text)
+	}
+	if !resp.OK {
+		t.Fatalf("expected init success, got: %s", res.Text)
+	}
+	postInit, ok := resp.Data["post_init"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("post_init = %#v, want map", resp.Data["post_init"])
+	}
+	return postInit
+}
+
+func mustToolBool(t *testing.T, data map[string]interface{}, key string, want bool) {
+	t.Helper()
+	got, ok := data[key].(bool)
+	if !ok {
+		t.Fatalf("%s = %#v, want bool", key, data[key])
+	}
+	if got != want {
+		t.Fatalf("%s = %v, want %v", key, got, want)
+	}
+}
+
 func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 	t.Parallel()
 	binary := testutil.BuildCLI(t)
@@ -2776,7 +2843,12 @@ type: page
 	t.Run("init", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
-		server := newTestServer(t, vMCP.Path, binary)
+
+		// Isolate global config: init now auto-registers the new vault, so both
+		// sides must write to their own throwaway config instead of the host's.
+		mcpConfig := filepath.Join(t.TempDir(), "config.toml")
+		cliConfig := filepath.Join(t.TempDir(), "config.toml")
+		server := newTestServerWithBaseArgs(t, baseArgsForConfig(mcpConfig), binary)
 
 		mcpInitPath := filepath.Join(vMCP.Path, "new-vault")
 		cliInitPath := filepath.Join(vCLI.Path, "new-vault")
@@ -2784,7 +2856,7 @@ type: page
 		mcpResult := server.callTool("init", map[string]interface{}{
 			"path": mcpInitPath,
 		})
-		cliResult := vCLI.RunCLI("init", cliInitPath)
+		cliResult := runCLIWithConfig(t, binary, cliConfig, "init", cliInitPath)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "created_config", "created_schema", "gitignore_state", "docs"})
 	})

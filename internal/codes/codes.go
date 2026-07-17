@@ -89,24 +89,25 @@ const (
 )
 
 const (
-	WarnRefNotFound        WarningCode = "REF_NOT_FOUND"
-	WarnDeprecated         WarningCode = "DEPRECATED"
-	WarnSchemaOutdated     WarningCode = "SCHEMA_OUTDATED"
-	WarnSchemaLoadFailed   WarningCode = "SCHEMA_LOAD_FAILED"
-	WarnDatabaseOutdated   WarningCode = "DATABASE_OUTDATED"
-	WarnIndexUpdateFailed  WarningCode = "INDEX_UPDATE_FAILED"
-	WarnDocsFetchFailed    WarningCode = "DOCS_FETCH_FAILED"
-	WarnWrongCommand       WarningCode = "WRONG_COMMAND"
-	WarnMissingField       WarningCode = "MISSING_REQUIRED_FIELD"
-	WarnBacklinks          WarningCode = "HAS_BACKLINKS"
-	WarnSectionSkipped     WarningCode = "SECTION_SKIPPED"
-	WarnUnknownField       WarningCode = "UNKNOWN_FIELD"
-	WarnTypeMismatch       WarningCode = "TYPE_DIRECTORY_MISMATCH"
-	WarnOrphanedFiles      WarningCode = "ORPHANED_FILES"
-	WarnOrphanedTraits     WarningCode = "ORPHANED_TRAITS"
-	WarnCheckIncomplete    WarningCode = "CHECK_APPLY_INCOMPLETE"
-	WarnCheckRunIncomplete WarningCode = "CHECK_INCOMPLETE"
-	WarnVaultFallback      WarningCode = "VAULT_FALLBACK"
+	WarnRefNotFound         WarningCode = "REF_NOT_FOUND"
+	WarnDeprecated          WarningCode = "DEPRECATED"
+	WarnSchemaOutdated      WarningCode = "SCHEMA_OUTDATED"
+	WarnSchemaLoadFailed    WarningCode = "SCHEMA_LOAD_FAILED"
+	WarnDatabaseOutdated    WarningCode = "DATABASE_OUTDATED"
+	WarnIndexUpdateFailed   WarningCode = "INDEX_UPDATE_FAILED"
+	WarnDocsFetchFailed     WarningCode = "DOCS_FETCH_FAILED"
+	WarnWrongCommand        WarningCode = "WRONG_COMMAND"
+	WarnMissingField        WarningCode = "MISSING_REQUIRED_FIELD"
+	WarnBacklinks           WarningCode = "HAS_BACKLINKS"
+	WarnSectionSkipped      WarningCode = "SECTION_SKIPPED"
+	WarnUnknownField        WarningCode = "UNKNOWN_FIELD"
+	WarnTypeMismatch        WarningCode = "TYPE_DIRECTORY_MISMATCH"
+	WarnOrphanedFiles       WarningCode = "ORPHANED_FILES"
+	WarnOrphanedTraits      WarningCode = "ORPHANED_TRAITS"
+	WarnCheckIncomplete     WarningCode = "CHECK_APPLY_INCOMPLETE"
+	WarnCheckRunIncomplete  WarningCode = "CHECK_INCOMPLETE"
+	WarnVaultFallback       WarningCode = "VAULT_FALLBACK"
+	WarnVaultRegisterFailed WarningCode = "VAULT_REGISTER_FAILED"
 )
 
 var knownErrorCodes = map[ErrorCode]struct{}{
@@ -125,6 +126,7 @@ var knownWarningCodes = map[WarningCode]struct{}{
 	WarnRefNotFound: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnSchemaLoadFailed: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnDocsFetchFailed: {},
 	WarnWrongCommand: {}, WarnMissingField: {}, WarnBacklinks: {}, WarnSectionSkipped: {}, WarnUnknownField: {}, WarnTypeMismatch: {},
 	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {}, WarnCheckRunIncomplete: {}, WarnVaultFallback: {},
+	WarnVaultRegisterFailed: {},
 }
 
 // IsErrorCode reports whether code is part of Raven's stable error contract.

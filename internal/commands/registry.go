@@ -292,10 +292,18 @@ Creates:
 Also attempts to fetch docs into Raven's global docs directory. If docs fetch fails, initialization
 still succeeds and returns a warning with a retry command.
 
-In interactive terminal mode, Raven follows up after initialization and can help
-register the new vault in global config, set it as the default vault, and/or
-activate it. In --json mode, init remains non-interactive and returns structured
-post-init setup suggestions instead of mutating global config implicitly.`,
+First-run vault policy (applied in both --json and interactive mode):
+  - The new vault is always auto-registered in global config under a suggested name.
+  - If it is the first vault on the machine (no default, no active, no other registered
+    vault), it is also set as the default and active vault, so first-run just works.
+  - If another vault already exists, the vault is registered but the default and active
+    vault are left unchanged; changing them requires an explicit user decision.
+
+The post_init object reports what happened (is_first_vault, has_existing_default, registered,
+is_default, is_active), the choices that still need the user's consent
+(needs_user_choice_for_activate, needs_user_choice_for_default), invocable actions, and guidance.
+Agents must ask the user before activating the vault or changing the default when another vault
+already existed. In interactive mode, Raven prompts for those same choices instead.`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "Directory path to initialize as a vault", Required: true},
 		},

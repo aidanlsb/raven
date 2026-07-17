@@ -24,17 +24,19 @@ This is the primary path for a brand-new user. Ask for the intended path first (
 rvn init /path/to/vault --json
 ```
 
-`rvn init` creates `raven.yaml`, `schema.yaml`, `.raven/`, and starter vault content. Let init own registration and default/active routing — read its `post_init` block before running any `vault` command.
+`rvn init` creates `raven.yaml`, `schema.yaml`, `.raven/`, and starter vault content, and applies the first-run vault policy. Let init own registration and default/active routing — read its `post_init` block before running any `vault` command.
 
 Inspect `post_init` and act accordingly:
+- `is_first_vault: true` — this was the first vault on the machine: it is registered, set as the default, and active, and `post_init.actions` is empty. It is ready to use; proceed directly.
 - `already_registered: true` — the vault is registered; do **not** run `rvn vault add`.
 - `is_default: true` — it is already the default; do **not** run `rvn vault pin`.
 - `is_active: true` — it is already active; do **not** run `rvn vault use`.
-- Any of those `false` (or `post_init` absent on older builds) — offer to finish setup using the commands surfaced in `post_init.commands` / `post_init.next_steps`. Ask the user before setting a default or active vault, since that is machine-wide routing.
+- `is_first_vault: false` with `needs_user_choice_for_activate` / `needs_user_choice_for_default` set — another vault already exists; `post_init.actions` lists the `activate` / `set_default` actions. Ask the user before running them (or before `rvn vault use <name>` / `rvn vault pin <name>`).
+- Any routing field `false` (or `post_init` absent on older builds) — offer to finish setup using the commands surfaced in `post_init.commands` / `post_init.next_steps`. Ask the user before setting a default or active vault, since that is machine-wide routing.
 
 Different builds behave differently, so branch on the fields rather than assuming:
-- First vault may be registered and set as default/active automatically.
-- A later vault may be registered automatically but leave default/active to the user (ask first).
+- First vault is registered and set as default/active automatically (`is_first_vault: true`, empty `post_init.actions`).
+- A later vault is registered automatically but leaves default/active to the user — ask first (`needs_user_choice_for_activate` / `needs_user_choice_for_default`).
 - Older builds may register nothing in `--json` mode, in which case `post_init.commands.register_and_pin` and `post_init.commands.activate` show the exact commands to run once the user agrees.
 
 After init, tour the new vault. If it is not yet the active vault, target it explicitly:
