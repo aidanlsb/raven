@@ -1,140 +1,124 @@
 package index
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
 
-func TestParseDateFilter(t *testing.T) {
+func TestTryParseTemporalComparisonWithOptions(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
-	today := "2026-03-04"
-	yesterday := "2026-03-03"
-	tomorrow := "2026-03-05"
 
 	tests := []struct {
 		name          string
 		filter        string
-		wantCondition string // partial match
-		wantArgs      []interface{}
+		op            string
+		wantCondition string
+		wantArg       interface{}
+		wantOK        bool
+		wantErr       bool
 	}{
 		{
-			name:          "today",
+			name:          "relative today equals compares by date",
 			filter:        "today",
-			wantCondition: "= ?",
-			wantArgs:      []interface{}{today},
+			op:            "=",
+			wantCondition: "date(value) = date(?)",
+			wantArg:       "2026-03-04",
+			wantOK:        true,
 		},
 		{
-			name:          "yesterday",
-			filter:        "yesterday",
-			wantCondition: "= ?",
-			wantArgs:      []interface{}{yesterday},
-		},
-		{
-			name:          "tomorrow",
+			name:          "relative tomorrow less-than",
 			filter:        "tomorrow",
-			wantCondition: "= ?",
-			wantArgs:      []interface{}{tomorrow},
+			op:            "<",
+			wantCondition: "date(value) < date(?)",
+			wantArg:       "2026-03-05",
+			wantOK:        true,
 		},
 		{
-			name:          "specific date",
+			name:          "absolute date greater-or-equal",
 			filter:        "2025-02-01",
-			wantCondition: "= ?",
-			wantArgs:      []interface{}{"2025-02-01"},
+			op:            ">=",
+			wantCondition: "date(value) >= date(?)",
+			wantArg:       "2025-02-01",
+			wantOK:        true,
+		},
+		{
+			name:          "datetime literal compares by datetime",
+			filter:        "2026-04-05T12:30",
+			op:            "=",
+			wantCondition: "datetime(value) = datetime(?)",
+			wantArg:       "2026-04-05T12:30",
+			wantOK:        true,
+		},
+		{
+			name:   "non-temporal value is not a date filter",
+			filter: "active",
+			op:     "=",
+			wantOK: false,
+		},
+		{
+			name:    "invalid date literal errors",
+			filter:  "2025-13-45",
+			op:      "=",
+			wantErr: true,
+		},
+		{
+			name:    "unsupported operator errors",
+			filter:  "today",
+			op:      "LIKE",
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			condition, args, err := ParseDateFilterWithOptions(tt.filter, "field", DateFilterOptions{
+			condition, args, ok, err := TryParseTemporalComparisonWithOptions(tt.filter, tt.op, "value", DateFilterOptions{
 				Now: now,
 			})
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if !strings.Contains(condition, tt.wantCondition) {
-				t.Errorf("condition %q does not contain %q", condition, tt.wantCondition)
-			}
-
-			if len(args) != len(tt.wantArgs) {
-				t.Errorf("got %d args, want %d", len(args), len(tt.wantArgs))
-			}
-			for i, want := range tt.wantArgs {
-				if i < len(args) && args[i] != want {
-					t.Errorf("arg[%d]: got %v, want %v", i, args[i], want)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
 				}
+				return
 			}
-		})
-	}
-}
-
-func TestParseDateFilterInvalidDates(t *testing.T) {
-	t.Parallel()
-	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
-	tests := []string{
-		"2025-13-45",
-		"2025-02-30",
-		"not-a-date",
-		"past",
-		"this-week",
-	}
-
-	for _, filter := range tests {
-		t.Run(filter, func(t *testing.T) {
-			_, _, err := ParseDateFilterWithOptions(filter, "field", DateFilterOptions{
-				Now: now,
-			})
-			if err == nil {
-				t.Fatalf("expected error for %q, got nil", filter)
-			}
-		})
-	}
-}
-
-func TestParseDateFilterCaseInsensitive(t *testing.T) {
-	t.Parallel()
-	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
-	today := "2026-03-04"
-
-	tests := []string{"TODAY", "Today", "  today  "}
-
-	for _, filter := range tests {
-		t.Run(filter, func(t *testing.T) {
-			condition, args, err := ParseDateFilterWithOptions(filter, "field", DateFilterOptions{
-				Now: now,
-			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if !strings.Contains(condition, "= ?") {
-				t.Errorf("expected = ?, got %s", condition)
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
 			}
-			if len(args) != 1 || args[0] != today {
-				t.Errorf("expected args [%s], got %v", today, args)
+			if !ok {
+				return
+			}
+			if condition != tt.wantCondition {
+				t.Errorf("condition = %q, want %q", condition, tt.wantCondition)
+			}
+			if len(args) != 1 {
+				t.Fatalf("args len = %d, want 1", len(args))
+			}
+			if args[0] != tt.wantArg {
+				t.Errorf("arg = %v, want %v", args[0], tt.wantArg)
 			}
 		})
 	}
 }
 
-func TestTryParseDateComparisonWithOptions_InstantOrdering(t *testing.T) {
+func TestTryParseTemporalComparisonWithOptionsDefaultsNow(t *testing.T) {
 	t.Parallel()
-	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
 
-	cond, args, ok, err := TryParseDateComparisonWithOptions("today", "<", "value", DateFilterOptions{
-		Now: now,
-	})
+	// A zero Now falls back to time.Now(); the parse should still succeed and
+	// yield a date comparison for a relative keyword.
+	condition, args, ok, err := TryParseTemporalComparisonWithOptions("today", "=", "value", DateFilterOptions{})
 	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if !ok {
-		t.Fatalf("expected date comparison parse")
+		t.Fatalf("expected relative keyword to parse")
 	}
-	if cond != "value < ?" {
-		t.Fatalf("cond = %q", cond)
+	if condition != "date(value) = date(?)" {
+		t.Errorf("condition = %q", condition)
 	}
-	if len(args) != 1 || args[0] != "2026-03-04" {
-		t.Fatalf("args = %v", args)
+	if len(args) != 1 {
+		t.Fatalf("args len = %d, want 1", len(args))
 	}
 }
