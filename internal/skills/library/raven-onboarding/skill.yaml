@@ -1,7 +1,7 @@
 id: raven-onboarding
 title: Raven Onboarding
 version: 1
-summary: Guided first-session onboarding that detects vault state, creates the first vault when none exists, then teaches Raven concepts.
+summary: Intent-first onboarding that detects vault state, creates the first vault when none exists, then designs a small personalized schema from the user's real goals and seeds it with their own content.
 entry: body.md
 references:
   - references/onboarding-playbook.md
@@ -28,6 +28,7 @@ coverage:
     - schema validate
     - new
     - add
+    - set
     - read
     - resolve
     - query

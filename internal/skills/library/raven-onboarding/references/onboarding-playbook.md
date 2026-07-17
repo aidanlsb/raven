@@ -1,6 +1,8 @@
 # Raven Onboarding Playbook
 
-Use these flows as scripts. Narrate what each command proves, and pause before mutating config or schema.
+Use these flows as scripts for an **intent-first** first session: detect state, create a vault if needed, then design a small personalized schema *from a conversation about the user's work*, seed it with their real content, and teach the mechanics against that data. Narrate what each command proves, and pause before mutating config or schema.
+
+The order that matters: **discover intent → propose a tiny schema in plain English → confirm → apply → seed real data → teach by doing → hand off.** Do not lead with "run schema / new / add." Those commands come after the design conversation.
 
 ## Detect vault state first
 
@@ -12,7 +14,7 @@ rvn vault list --json
 
 Read the result:
 - Empty `vaults` (or `meta.count` of `0`): there is no vault yet. Follow **New vault setup**.
-- One or more entries: at least one vault exists. Follow **Existing vault tour**. Use `active_vault` and `default_vault` to see whether one is already selected.
+- One or more entries: at least one vault exists. Target it, then run the **Discover intent** conversation against what they already have (see **Existing vault tour**). Use `active_vault` and `default_vault` to see whether one is already selected.
 
 Only run `rvn vault current --json` once a vault exists — it is for confirming which vault is resolved, not for detecting the empty state.
 
@@ -39,38 +41,15 @@ Different builds behave differently, so branch on the fields rather than assumin
 - A later vault is registered automatically but leaves default/active to the user — ask first (`needs_user_choice_for_activate` / `needs_user_choice_for_default`).
 - Older builds may register nothing in `--json` mode, in which case `post_init.commands.register_and_pin` and `post_init.commands.activate` show the exact commands to run once the user agrees.
 
-After init, tour the new vault. If it is not yet the active vault, target it explicitly:
+The starter vault ships a small default schema — `person` and `project` types plus `todo`, `due`, and `priority` traits. Treat these as a starting point to extend during the design conversation, not as the final model. Do **not** install extra preset types on your own; the schema grows from what the user tells you.
+
+If the vault is not yet the active vault, target it explicitly for everything below:
 
 ```bash
-rvn vault stats --vault <name> --json   # or: --vault-path /path/to/vault
-rvn schema --vault <name> --json
+rvn schema --vault <name> --json          # or: --vault-path /path/to/vault
 ```
 
 The active/default vault is machine config, not vault content.
-
-## Existing vault tour
-
-```bash
-rvn vault current --json
-rvn vault path --json
-rvn vault stats --json
-rvn schema --json
-rvn query 'type:project' --limit 5 --json
-rvn query 'trait:todo' --limit 5 --json
-```
-
-Explain what exists before proposing changes. If the schema does not define `project` or `todo`, choose another existing type or trait from `rvn schema --json`.
-
-## Explain config surfaces
-
-```bash
-rvn config show --json
-rvn vault config show --json
-```
-
-Teach the distinction:
-- Global config tracks named vaults, default vault, editor, UI, and state file location.
-- Vault-local config in `raven.yaml` controls directories, capture settings, auto-reindex, deletion policy, protected prefixes, and exclude patterns.
 
 ## Set up the editor
 
@@ -96,86 +75,219 @@ rvn lsp   # LSP server over stdio; part of the rvn binary, nothing extra to inst
 
 Point the user at `docs/using-your-vault/editor-integration.md` (or the `rvn docs` equivalent) for editor-specific wiring. Do **not** auto-configure Neovim/VS Code plugins from onboarding — make the user aware and hand off. For deeper config and UI settings, use `raven-vault-admin`.
 
-## Add schema safely
+## Discover intent
 
-Preview the design with the user before running these commands.
+This is the core of onboarding. Do it **before** proposing types or running any schema command. Ask about the user's real life and problems, not Raven's features.
+
+Prompt bank (pick a couple, follow the thread):
+- "What are you trying to keep track of that keeps slipping through the cracks?"
+- "What did you do this week that you wish you'd written down?"
+- "What do you look up or search for over and over?"
+- "Who and what do you deal with regularly — people, clients, projects, papers, recipes, workouts?"
+- "When something falls apart, what information do you wish you'd had?"
+
+Listen for two things:
+
+| You hear… | It's probably a… |
+|-----------|------------------|
+| a recurring **noun** (project, client, paper, meeting, book, workout) | candidate **type** |
+| a recurring **verb / status** (follow up, review, decide, remember, due) | candidate **trait** or **field** |
+
+Read posture from *how* they answer — do not ask them to pick a mode:
+
+| Signal | Posture | How to respond |
+|--------|---------|----------------|
+| jargon, asks for the exact command/flag, "just set it up", moves fast | power | be concise; point at files/commands; minimal narration |
+| asks "why", wants the difference, likes tradeoffs | curious | explain reasoning and tradeoffs; catch over-engineering |
+| short answers, "you decide", "whatever's easiest" | low-effort | propose a default; ask one yes/no; do the work |
+
+If intent is genuinely vague, offer one or two example shapes **to react to**, not to install:
+- Work / delivery: `project`, `person`, `meeting` (+ `todo`, `due` traits).
+- Research / reading: `source`, `note` (+ `highlight`, `todo` traits).
+- Personal CRM: `person`, `interaction`.
+
+Present these as "some people start with X; does anything there match how you work?" — never as canned presets to apply wholesale.
+
+## Propose a tiny schema in plain English
+
+Before touching `schema.yaml`, describe the model in words and get a "yes." Use a compact proposal like:
+
+> Here's what I'd start with:
+> - **project** — the things you're driving. Fields: `status` (active/paused/done), `owner`.
+> - **person** — people you work with. (Reuse the built-in `person` type.)
+> - **meeting** — notes from a conversation. Fields: `date`, and a link to the `project` and the `people` there.
+>
+> Tasks and due dates won't be types — they'll be `@todo` / `@due(...)` traits on the lines where they come up. Sound right, or should we cut or rename anything?
+
+Rules for the proposal:
+- **2–4 types to start.** Warn out loud against ten types on day one. A few well-chosen types beat a sprawling model the user abandons.
+- Only add fields worth **filtering or grouping on**. Everything else stays prose.
+- Name the reference topology in a sentence before adding `ref` fields (see **References: sketch the topology first**).
+- Call out anything that should stay a plain page for now (see **When a page is enough**).
+- Reuse defaults (`person`, `project`, `todo`, `due`, `priority`) instead of re-creating them.
+
+## Field vs trait cheat sheet
+
+Teach this once, clearly, while proposing the model. The decision rule: **Is this a fact about the whole file, or about one line among many in it?** Whole file → field. One line → trait.
+
+| | Field | Trait |
+|---|-------|-------|
+| Scope | the whole object/file | one line of prose |
+| How many per object | usually one | many |
+| Where it lives | frontmatter (YAML) | inline in the body |
+| Written as | `status: active` | `@todo`, `@due(2026-02-01)` |
+| Set / updated with | `rvn set <id> status=active --json` | `rvn add "@todo ..." --json` |
+| Good for | status, owner, stage, date, category | tasks, decisions, highlights, priorities |
+| Example | a project's `status`, a meeting's `date` | `- @todo(...) email the vendor` on a bullet |
+
+Anti-pattern to avoid in a starter schema: giving one concept **both** homes — for example a `due` *field* and a `@due` *trait*. Pick one home per concept so queries stay unambiguous. Due dates that live on individual tasks are a trait; a single date that describes the whole object (a meeting's date) is a field.
+
+## References: sketch the topology first
+
+Before adding any `ref` field, say in one sentence what points at what. For example: "a meeting points at the people who were there and the project it's about; a project points at its owner."
+
+- Use `ref` / `ref[]` fields for **structural** relationships you will query (meeting → project, project → owner).
+- Use plain `[[wikilinks]]` in prose for **incidental** mentions.
+- Prefer a few meaningful links over wiring everything to everything — ref spaghetti is hard to reason about and query later.
+- `ref` and `ref[]` fields must specify a `--target` type.
+
+## When a page is enough
+
+Not everything needs a type. If a category has no fields worth querying and no repeated structure, keep it as a plain page or a daily-note entry.
+
+- A capture bucket ("ideas", "random notes") can live in daily notes until a pattern emerges.
+- Promote a bucket to a type only once you keep wanting the same fields on each instance, or you want to query across them.
+- A type earns its place by being queried across many instances — otherwise it is probably a page.
+
+## Apply the agreed schema
+
+Only after the user has said yes to the plain-English design. Ask before mutating schema. Inspect first so you extend rather than duplicate:
+
+```bash
+rvn schema --json
+rvn schema type person --json
+```
+
+Then apply exactly the agreed set. Worked example for the "project / person / meeting" design above:
 
 ```bash
 rvn schema add type meeting --name-field title --default-path meeting/ --json
+rvn schema add field project status --type enum --values active,paused,done --json
+rvn schema add field project owner --type ref --target person --json
+rvn schema add field meeting date --type date --json
 rvn schema add field meeting project --type ref --target project --json
-rvn schema add field meeting with --type ref[] --target person --json
-rvn schema add trait decision --type bool --json
+rvn schema add field meeting people --type ref[] --target person --json
 rvn schema validate --json
 rvn reindex --json
 rvn check --json
 ```
 
-Explain:
-- Types define files/objects.
-- Fields live in frontmatter and are validated by type.
-- Traits live inline in Markdown body text.
-- `ref` and `ref[]` fields should specify a target type.
-
-If the target types do not exist, stop and ask whether to create them or choose different fields.
-
-## Create the first object
-
-Use a type from the actual schema. For a starter project/person flow:
+If the user's line-level facts need a trait beyond the defaults (`todo` / `due` / `priority`) — for example a research workflow that highlights sources — define it once:
 
 ```bash
-rvn new project "Raven Onboarding Demo" --json
-rvn new person "Demo User" --json
-rvn read project/raven-onboarding-demo --json
+rvn schema add trait highlight --type bool --json
 ```
 
-If required fields are missing, read the error details and retry with `--field` or `--field-json`.
+Explain, briefly:
+- Types define files/objects; fields live in frontmatter and are validated by type.
+- Traits are defined here but *written* inline in body text, not set as frontmatter (see seeding below).
+- `ref` and `ref[]` fields must name a `--target` type.
 
-## Demonstrate daily capture
+If a target type does not exist, stop and ask whether to create it or cut the field. Keep the set to what the user agreed — do not add "nice to have" types on your own.
+
+## Seed real data from their world
+
+Use the user's **real** projects, people, and tasks. Do not invent "Demo User" / "Website Redesign" unless the user genuinely has nothing to offer yet. Substitute their names into the commands:
+
+```bash
+rvn new project "<a real project they named>" --json
+rvn new person "<a real collaborator>" --json
+rvn set project/<their-project-id> status=active --json
+rvn read project/<their-project-id> --json
+```
+
+Then capture a real line-level fact as a trait, linked to a real object:
 
 ```bash
 rvn daily --json
-rvn add "Learning Raven with [[project/raven-onboarding-demo]]" --json
-rvn add "@todo Try one Raven query against [[project/raven-onboarding-demo]]" --json
-rvn date today --json
+rvn add "@todo <a real next action> for [[project/<their-project-id>]]" --json
+rvn add "@due(2026-02-01) <a real deadline they mentioned>" --json
 ```
 
-Explain that `rvn add` appends to the configured capture destination, which defaults to today's daily note.
+Notes:
+- `rvn new` auto-populates the type's name field from the title. Use `--field name=value` for fields you already know.
+- If required fields are missing, read the error details and retry with `--field` or `--field-json`.
+- `rvn add` appends to the configured capture destination, which defaults to today's daily note.
 
-## Demonstrate references and backlinks
+## Teach by doing — against their data
 
-```bash
-rvn resolve project/raven-onboarding-demo --json
-rvn backlinks project/raven-onboarding-demo --json
-rvn outlinks daily/YYYY-MM-DD --json
-```
+Keep every mechanic attached to the content you just seeded, not a separate generic tour.
 
-Teach:
-- `[[project/raven-onboarding-demo]]` creates a link.
-- `rvn backlinks` finds content pointing at an object.
-- `rvn outlinks` shows links from an object.
-- Exact object IDs are safest for automation.
-
-## Demonstrate query
-
-Start broad, then narrow:
+Query what they created, and narrate the schema-to-query loop:
 
 ```bash
 rvn query 'type:project' --count-only --json
 rvn query 'type:project' --limit 10 --json
 rvn query 'trait:todo' --limit 10 --json
-rvn search 'onboarding demo' --json
+rvn query 'trait:due .value<today' --limit 10 --json
+rvn search '<a word from their real content>' --json
 ```
 
-Use `raven-query` for deeper RQL examples once the user understands objects, traits, and references.
+Show the reference graph without manual bookkeeping:
 
-## Wrap-up checklist
+```bash
+rvn resolve project/<their-project-id> --json
+rvn backlinks project/<their-project-id> --json
+rvn outlinks daily/YYYY-MM-DD --json
+```
 
-Before ending onboarding, make sure the user has seen:
-- Which vault is active and where it lives.
-- What `raven.yaml` and `schema.yaml` are responsible for.
-- At least one type and one trait from the actual schema.
-- One object created through `rvn new`.
-- One line captured through `rvn add`.
-- One `[[reference]]` plus a backlinks check.
-- One query or search.
-- A final `rvn check --json` result.
+Teach the two write homes concretely by contrast:
+- Update a **field**: `rvn set project/<their-project-id> status=paused --json`.
+- Mark a **line** with a **trait**: `rvn add "@todo review the plan" --json`.
+
+Then verify health:
+
+```bash
+rvn check --json     # explain a clean result, or walk any issues
+rvn reindex --json   # only if the index is stale
+```
+
+Use `raven-query` for deeper RQL examples once the user is comfortable with objects, traits, and references.
+
+## Existing vault tour
+
+When a vault already exists, stay intent-first: understand what's there, then ask what isn't working, then propose small additions.
+
+```bash
+rvn vault current --json
+rvn vault path --json
+rvn vault stats --json
+rvn schema --json
+rvn query 'type:project' --limit 5 --json
+rvn query 'trait:todo' --limit 5 --json
+```
+
+Summarize what exists before proposing changes. Then run the **Discover intent** conversation framed around gaps: "What are you trying to do here that isn't working yet?" Propose a small, additive change (a field or trait, rarely a whole new type), confirm, and apply it the same way as a new vault. If the schema does not define `project` or `todo`, pick another existing type or trait from `rvn schema --json`.
+
+## Config surfaces (reference)
+
+Explain these only if the user asks or the setup calls for it:
+
+```bash
+rvn config show --json
+rvn vault config show --json
+```
+
+- Global config tracks named vaults, default vault, editor, UI, and state file location.
+- Vault-local config in `raven.yaml` controls directories, capture settings, auto-reindex, deletion policy, protected prefixes, and exclude patterns.
+
+## Handoff checklist
+
+Before ending onboarding, make sure the user has:
+- A clear picture of which vault is active and where it lives.
+- A tiny schema they agreed to — 2–4 types and the traits that matter — described in their own words.
+- Understood the field-vs-trait rule (whole file vs one line).
+- At least one real object created through `rvn new` and one real line captured through `rvn add`.
+- One `[[reference]]` plus a backlinks check against their data.
+- One query against their content and a clean (or explained) `rvn check --json`.
+- A next step for tomorrow: `rvn daily` to capture, `rvn add "@todo ..."` for tasks, `rvn query ...` to retrieve.
