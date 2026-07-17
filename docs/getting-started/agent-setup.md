@@ -156,10 +156,13 @@ up Raven from scratch:
 
 The agent detects your vault state, creates a first vault with `rvn init` when
 none exists (asking where to put it), sets your editor with `rvn config set
---editor <cmd> --editor-mode auto` (asking first, since it is machine-wide), and
-then teaches create, query, and check against that vault. It can also point you
-at Raven's built-in LSP (`rvn lsp`, see `using-your-vault/editor-integration.md`)
-for in-editor diagnostics and completion. MCP is optional throughout.
+--editor <cmd> --editor-mode auto` (asking first, since it is machine-wide), then
+asks what you're trying to keep track of and proposes a small, personalized
+schema in plain English before applying it. Once you agree, it seeds that schema
+with your real projects, people, and tasks and teaches create, query, and check
+against your own data. It can also point you at Raven's built-in LSP (`rvn lsp`,
+see `using-your-vault/editor-integration.md`) for in-editor diagnostics and
+completion. MCP is optional throughout.
 
 ## Creating a new vault with an agent
 
@@ -185,20 +188,20 @@ Agents should read the `post_init` object in the response:
 
 After installing the onboarding skill, a good first prompt is:
 
-> Use the raven-onboarding skill to help me onboard to Raven in this vault. Start by inspecting the schema, traits, and vault stats. Then walk me through one concrete create flow, one query, and one check, explaining each step as you go.
+> Use the raven-onboarding skill to help me set up Raven. Ask me what I'm trying to keep track of, then propose a small schema (a few types) in plain English before changing anything. Once I agree, set it up and seed it with my real projects, people, and tasks, then show me one query, one backlinks lookup, and one check against my own data, explaining each step.
 
-That prompt forces the agent to inspect the actual vault before making changes and gives you a quick end-to-end validation of the setup.
+That prompt keeps the agent intent-first: it designs a small model around your goals — asking before it applies any schema change — and validates the setup end-to-end against your real content instead of running a generic feature tour.
 
 ## What a healthy setup looks like
 
 Your agent should be able to:
 
-- inspect the schema
-- list or read saved queries
+- inspect the schema and reuse what's already there
+- propose a small, personalized schema from what you're trying to track — and ask before applying it
 - create a typed item through Raven instead of direct file writes
 - query the vault and explain what it found
 
-If the agent can do those four things, the integration is in good shape.
+If the agent can do those things, the integration is in good shape.
 
 ## Common mistakes
 
