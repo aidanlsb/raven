@@ -33,7 +33,7 @@ func TestValidateRequestDefaultsPreviewForPreviewCommands(t *testing.T) {
 	t.Parallel()
 
 	req, result, ok := validateRequest(context.Background(), commandexec.Request{
-		CommandID: "check",
+		CommandID: "check_fix",
 		Args:      map[string]any{},
 	})
 	if !ok {

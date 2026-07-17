@@ -1249,9 +1249,7 @@ owner: "[[freya]]"
 
 	server.callTool("reindex", nil)
 
-	preview := server.callTool("check", map[string]interface{}{
-		"fix": true,
-	})
+	preview := server.callTool("check_fix", map[string]interface{}{})
 	if preview.IsError {
 		t.Fatalf("expected check fix preview to succeed, got error: %s", preview.Text)
 	}
@@ -1273,8 +1271,7 @@ owner: "[[freya]]"
 		t.Fatalf("expected at least 1 fixable issue, got %d", previewResp.Data.FixableIssues)
 	}
 
-	apply := server.callTool("check", map[string]interface{}{
-		"fix":     true,
+	apply := server.callTool("check_fix", map[string]interface{}{
 		"confirm": true,
 	})
 	if apply.IsError {
@@ -1331,9 +1328,8 @@ meeting: "[[meeting/all-hands]]"
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	result := server.callTool("check", map[string]interface{}{
-		"create-missing": true,
-		"confirm":        true,
+	result := server.callTool("check create-missing", map[string]interface{}{
+		"confirm": true,
 	})
 	if result.IsError {
 		t.Fatalf("expected create-missing to succeed, got error: %s", result.Text)

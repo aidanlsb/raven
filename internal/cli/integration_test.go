@@ -2025,7 +2025,7 @@ meeting: "[[meeting/all-hands]]"
 }
 
 // TestIntegration_CheckCreateMissingRespectsDirectoryRoots verifies that
-// `check --create-missing` creates typed objects under configured directory roots.
+// `check create-missing` creates typed objects under configured directory roots.
 func TestIntegration_CheckCreateMissingRespectsDirectoryRoots(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
@@ -2053,10 +2053,10 @@ meeting: "[[meeting/all-hands]]"
 
 	v.RunCLI("reindex").MustSucceed(t)
 
-	// check --create-missing is interactive and non-JSON; accept default "yes"
+	// check create-missing is interactive and non-JSON; accept default "yes"
 	// for "Certain (from typed fields)" prompts by sending an empty line.
 	binary := testutil.BuildCLI(t)
-	cmd := exec.Command(binary, "--vault-path", v.Path, "check", "--create-missing")
+	cmd := exec.Command(binary, "--vault-path", v.Path, "check", "create-missing")
 	cmd.Stdin = strings.NewReader("\n")
 	output, _ := cmd.CombinedOutput()
 	outputStr := string(output)
@@ -2104,7 +2104,7 @@ See [[meeting/all-hands]] for notes.
 	// - Create new type meeting?: y
 	// - Default path for meeting: meeting/
 	binary := testutil.BuildCLI(t)
-	cmd := exec.Command(binary, "--vault-path", v.Path, "check", "--create-missing")
+	cmd := exec.Command(binary, "--vault-path", v.Path, "check", "create-missing")
 	cmd.Stdin = strings.NewReader("meeting\ny\nmeeting/\n")
 	output, _ := cmd.CombinedOutput()
 	outputStr := string(output)
@@ -2158,7 +2158,7 @@ meeting: "[[meeting/all-hands]]"
 
 	// Agent-style call: JSON mode + create-missing + confirm.
 	binary := testutil.BuildCLI(t)
-	cmd := exec.Command(binary, "--vault-path", v.Path, "--json", "check", "--create-missing", "--confirm")
+	cmd := exec.Command(binary, "--vault-path", v.Path, "--json", "check", "create-missing", "--confirm")
 	_, _ = cmd.CombinedOutput() // check may exit non-zero due validation issues; side effects are what we validate.
 
 	v.AssertFileExists("objects/meeting/all-hands.md")
@@ -2180,7 +2180,7 @@ func TestIntegration_CheckCreateMissingInfersDateFromDailyDirectory(t *testing.T
 	v.RunCLI("reindex").MustSucceed(t)
 
 	binary := testutil.BuildCLI(t)
-	cmd := exec.Command(binary, "--vault-path", v.Path, "--json", "check", "--create-missing", "--confirm")
+	cmd := exec.Command(binary, "--vault-path", v.Path, "--json", "check", "create-missing", "--confirm")
 	_, _ = cmd.CombinedOutput() // check may exit non-zero due validation issues; side effects are what we validate.
 
 	v.AssertFileExists("journal/2026-06-30.md")

@@ -1172,9 +1172,6 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			{Name: "errors-only", Description: "Only report errors, skip warnings", Type: FlagTypeBool},
 			{Name: "by-file", Description: "Group issues by file path", Type: FlagTypeBool},
 			{Name: "verbose", Short: "V", Description: "Show all issues with full details", Type: FlagTypeBool},
-			{Name: "fix", Description: "Preview/apply safe auto-fixes for unambiguous check issues", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply fixes/create-missing in non-interactive mode (without this flag, shows preview only)", Type: FlagTypeBool},
-			{Name: "create-missing", Description: "Create missing referenced pages (interactive by default; with --json requires --confirm)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn check --json",
@@ -1194,7 +1191,6 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			"Verify all objects of a type are valid",
 			"Check all trait usages for correct values",
 			"Focus on specific issue types",
-			"Preview and create deterministic missing referenced pages",
 		},
 	},
 	"check_fix": {

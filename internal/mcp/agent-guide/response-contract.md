@@ -48,7 +48,7 @@ There are two mutation classes with different defaults:
    response carries `preview=true` or `status="preview"`) without writing.
 2. High-blast-radius operations are preview-first and require `confirm=true` to
    apply: any bulk write (`stdin=true`), `query` with `apply`, `schema rename`,
-   and `check` fixes (`fix`, `create-missing`).
+   and the `check fix` / `check create-missing` repair subcommands.
 
 Examples:
 
