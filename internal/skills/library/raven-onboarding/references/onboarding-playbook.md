@@ -2,23 +2,49 @@
 
 Use these flows as scripts. Narrate what each command proves, and pause before mutating config or schema.
 
+## Detect vault state first
+
+Always start here. Do not assume a vault already exists.
+
+```bash
+rvn vault list --json
+```
+
+Read the result:
+- Empty `vaults` (or `meta.count` of `0`): there is no vault yet. Follow **New vault setup**.
+- One or more entries: at least one vault exists. Follow **Existing vault tour**. Use `active_vault` and `default_vault` to see whether one is already selected.
+
+Only run `rvn vault current --json` once a vault exists — it is for confirming which vault is resolved, not for detecting the empty state.
+
 ## New vault setup
 
-Ask for the intended path first, then run:
+This is the primary path for a brand-new user. Ask for the intended path first (suggest a sensible default such as `~/notes` or `~/raven`), then initialize:
 
 ```bash
 rvn init /path/to/vault --json
-rvn vault add personal /path/to/vault --json
-rvn vault use personal --json
-rvn vault stats --vault personal --json
-rvn schema --vault personal --json
 ```
 
-Explain:
-- `rvn init` creates `raven.yaml`, `schema.yaml`, `.raven/`, and starter vault content.
-- `rvn vault add` registers a machine-local name for the vault.
-- `rvn vault use` sets the active vault for later commands.
-- The active/default vault is machine config, not vault content.
+`rvn init` creates `raven.yaml`, `schema.yaml`, `.raven/`, and starter vault content. Let init own registration and default/active routing — read its `post_init` block before running any `vault` command.
+
+Inspect `post_init` and act accordingly:
+- `already_registered: true` — the vault is registered; do **not** run `rvn vault add`.
+- `is_default: true` — it is already the default; do **not** run `rvn vault pin`.
+- `is_active: true` — it is already active; do **not** run `rvn vault use`.
+- Any of those `false` (or `post_init` absent on older builds) — offer to finish setup using the commands surfaced in `post_init.commands` / `post_init.next_steps`. Ask the user before setting a default or active vault, since that is machine-wide routing.
+
+Different builds behave differently, so branch on the fields rather than assuming:
+- First vault may be registered and set as default/active automatically.
+- A later vault may be registered automatically but leave default/active to the user (ask first).
+- Older builds may register nothing in `--json` mode, in which case `post_init.commands.register_and_pin` and `post_init.commands.activate` show the exact commands to run once the user agrees.
+
+After init, tour the new vault. If it is not yet the active vault, target it explicitly:
+
+```bash
+rvn vault stats --vault <name> --json   # or: --vault-path /path/to/vault
+rvn schema --vault <name> --json
+```
+
+The active/default vault is machine config, not vault content.
 
 ## Existing vault tour
 

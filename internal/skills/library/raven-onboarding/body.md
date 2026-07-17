@@ -1,34 +1,44 @@
 # Raven Onboarding
 
-Use this skill when a user asks to learn Raven, set up a first vault, or have an agent walk them through Raven concepts in an existing vault.
+Use this skill when a user wants to learn Raven, set up their first vault, or have an agent walk them through Raven concepts. It works end-to-end from a clean machine with **no vault yet**, as well as for users who already have a vault.
 
 This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, preserving the same JSON expectations.
 
 ## Operating rules
 
-- Start by identifying whether the user needs a new vault, an existing vault connected, or a tour of the current vault.
-- Do not assume the current working directory is the intended vault; verify with `rvn vault current --json` and `rvn vault path --json` when possible.
-- Teach from the user's actual vault: inspect `raven.yaml`, `schema.yaml`, types, traits, and vault stats before giving workflow-specific advice.
+- Begin by detecting state, not by assuming a vault exists. A brand-new user may have zero vaults, no default, and no active vault — that is a normal starting point, not an error.
+- Do not assume the current working directory is the intended vault. Once a vault exists, confirm context with `rvn vault current --json` and `rvn vault path --json` when possible.
+- Once a vault exists, teach from the user's actual vault: inspect `raven.yaml`, `schema.yaml`, types, traits, and vault stats before giving workflow-specific advice.
 - Use `rvn ... --json` for all commands so results are deterministic.
 - Prefer Raven commands over direct file edits for onboarding demos.
 - Ask before changing schema or global/default vault routing.
+- Let `rvn init` own vault registration and default/active routing. Read its `post_init` output and do not blindly re-run `vault add` / `vault use` when init already handled them.
 
 ## First-session flow
 
-1. Establish the vault context:
-   - New vault: explain `rvn init <path> --json`, then ask for the target path before running it.
-   - Existing vault: inspect `rvn vault list --json`, `rvn vault current --json`, and `rvn vault stats --json`.
-2. Explain the vault model:
+1. **Detect vault state.** Run `rvn vault list --json` and read the result:
+   - Empty `vaults` (or `meta.count` of `0`) means there is no vault yet — follow the new-vault path below.
+   - One or more entries means at least one vault exists — follow the existing-vault tour. Use `active_vault` / `default_vault` to see whether one is already selected.
+   - There is no need to run `rvn vault current --json` first when no vault exists; detection above already covers the empty state.
+2. **If there is no vault yet, create one (primary path):**
+   - Ask where to create it. Suggest a sensible default such as `~/notes` or `~/raven`, but let the user choose.
+   - Run `rvn init <path> --json`.
+   - Read `post_init` from the result and honor what init already did:
+     - If `already_registered` is `true`, the vault is registered — do not run `rvn vault add` again.
+     - If `is_default` is `true` and/or `is_active` is `true`, routing is already set — do not run `rvn vault pin` / `rvn vault use` for those.
+     - If init did **not** register or route the vault (fields are `false`, or `post_init` is absent on older builds), offer to finish setup using the commands in `post_init.commands` / `post_init.next_steps`. Ask before setting a default or active vault, since routing is machine-wide config.
+   - After init, work against this vault (pass `--vault <name>` or `--vault-path <path>` if it is not yet the active vault).
+3. **Explain the vault model:**
    - Markdown files are the durable source of truth.
    - `.raven/` is derived cache and local metadata.
    - `raven.yaml` is vault-local config.
    - `schema.yaml` defines types, fields, traits, and templates.
-3. Inspect schema shape with `rvn schema --json`; use `rvn schema type <name> --json` and `rvn schema trait <name> --json` for focused explanations.
-4. Demonstrate one safe create flow with `rvn new <type> "<title>" --json`, choosing an existing simple type.
-5. Demonstrate traits by adding a line with a defined trait through `rvn add "..." --to today --json` or explaining how to create a missing trait with `rvn schema add trait ... --json`.
-6. Demonstrate references with `[[object/id]]`, then use `rvn backlinks <id> --json` to show the graph.
-7. Demonstrate daily notes with `rvn daily --json` and `rvn add "..." --json`.
-8. Verify health with `rvn check --json`; use `rvn reindex --json` if the index is stale.
+4. Inspect schema shape with `rvn schema --json`; use `rvn schema type <name> --json` and `rvn schema trait <name> --json` for focused explanations.
+5. Demonstrate one safe create flow with `rvn new <type> "<title>" --json`, choosing an existing simple type.
+6. Demonstrate traits by adding a line with a defined trait through `rvn add "..." --to today --json` or explaining how to create a missing trait with `rvn schema add trait ... --json`.
+7. Demonstrate references with `[[object/id]]`, then use `rvn backlinks <id> --json` to show the graph.
+8. Demonstrate daily notes with `rvn daily --json` and `rvn add "..." --json`.
+9. Verify health with `rvn check --json`; use `rvn reindex --json` if the index is stale.
 
 ## Teaching points
 

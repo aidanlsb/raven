@@ -111,13 +111,34 @@ To remove Raven from a client config again:
 rvn mcp remove --client codex
 ```
 
+## From zero: the happy path
+
+You do not need a vault before involving an agent. The onboarding skill can set
+up Raven from scratch:
+
+1. Install the CLI and sync the skills (above).
+2. Open your agent.
+3. Paste the recommended first prompt below. A vault is optional — if you don't
+   have one yet, the agent will help you create it.
+
+The agent detects your vault state, creates a first vault with `rvn init` when
+none exists (asking where to put it), and then teaches create, query, and check
+against that vault. MCP is optional throughout.
+
 ## Recommended first prompt
 
 After installing the onboarding skill, a good first prompt is:
 
-> Use the raven-onboarding skill to help me onboard to Raven in this vault. Start by inspecting the schema, traits, and vault stats. Then walk me through one concrete create flow, one query, and one check, explaining each step as you go.
+> Use the raven-onboarding skill to set up Raven from scratch. First detect
+> whether I already have a vault. If I don't, help me create my first vault,
+> then walk me through one concrete create flow, one query, and one check,
+> explaining each step as you go. If I already have a vault, inspect its schema,
+> traits, and stats first, then do the same walkthrough.
 
-That prompt forces the agent to inspect the actual vault before making changes and gives you a quick end-to-end validation of the setup.
+That prompt works whether or not you already have a vault. When a vault exists
+it forces the agent to inspect it before making changes; when one does not, the
+agent creates it first. Either way you get a quick end-to-end validation of the
+setup.
 
 ## What a healthy setup looks like
 

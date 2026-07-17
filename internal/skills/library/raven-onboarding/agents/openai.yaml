@@ -1,3 +1,3 @@
 name: raven-onboarding
-description: Guided first-session onboarding for new Raven users and vaults.
-default_prompt: Walk the user through Raven using CLI (`rvn`) commands with --json, starting from the actual vault context.
+description: Guided first-session onboarding that detects vault state, creates the first vault when none exists, then teaches Raven concepts.
+default_prompt: Walk the user through Raven using CLI (`rvn`) commands with --json. First detect vault state with `rvn vault list`; if there is no vault yet, help create the first one with `rvn init` and honor its post_init output before teaching create, query, and check.
