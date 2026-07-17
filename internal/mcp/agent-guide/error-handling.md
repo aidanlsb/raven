@@ -52,7 +52,16 @@ boundary. Excluded files are not Raven-managed; ask whether to change
   `meta.vault_context` and, if it is not the intended vault, re-issue with an
   explicit `vault`/`vault_path` before continuing.
 
-## 6. Recovery loop for check/repair tasks
+## 6. Schema/config load failures
+
+A missing `schema.yaml` or `raven.yaml` is not a failure — Raven falls back to defaults. A load *failure* means the file exists but is unreadable or invalid, and it is handled per operation:
+
+- Safety-sensitive mutations (`delete`, `edit`, `move`, and mutations needing validation/ref checks) fail with `SCHEMA_INVALID` (or `CONFIG_INVALID`). They never proceed with a corrupt schema. Fix the file and retry.
+- Read/render paths continue in a degraded mode and attach a `SCHEMA_LOAD_FAILED` warning; type-aware output may be incomplete until the schema is fixed.
+
+Treat either signal as a prompt to repair `schema.yaml`/`raven.yaml` before relying on validation, missing-reference warnings, or delete safety.
+
+## 7. Recovery loop for check/repair tasks
 
 ```text
 raven_invoke(command="check")
