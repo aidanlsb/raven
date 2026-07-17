@@ -122,8 +122,11 @@ up Raven from scratch:
    have one yet, the agent will help you create it.
 
 The agent detects your vault state, creates a first vault with `rvn init` when
-none exists (asking where to put it), and then teaches create, query, and check
-against that vault. MCP is optional throughout.
+none exists (asking where to put it), sets your editor with `rvn config set
+--editor <cmd> --editor-mode auto` (asking first, since it is machine-wide), and
+then teaches create, query, and check against that vault. It can also point you
+at Raven's built-in LSP (`rvn lsp`, see `using-your-vault/editor-integration.md`)
+for in-editor diagnostics and completion. MCP is optional throughout.
 
 ## Creating a new vault with an agent
 

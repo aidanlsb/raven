@@ -17,7 +17,10 @@ coverage:
     - vault use
     - vault pin
     - vault config show
+    - config
     - config show
+    - config set
+    - lsp
     - schema
     - schema add type
     - schema add field

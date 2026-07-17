@@ -72,6 +72,30 @@ Teach the distinction:
 - Global config tracks named vaults, default vault, editor, UI, and state file location.
 - Vault-local config in `raven.yaml` controls directories, capture settings, auto-reindex, deletion policy, protected prefixes, and exclude patterns.
 
+## Set up the editor
+
+Once a vault exists, help the user point Raven at their editor. Keep it short.
+
+```bash
+rvn config show --json                                    # inspect current settings; note $EDITOR if relevant
+rvn config set --editor cursor --editor-mode auto --json  # ask first — this is machine-wide config
+rvn config show --json                                    # confirm
+```
+
+- If `editor` is already set and the user is happy with it, skip the change.
+- Ask which editor they use before writing config (common: `cursor`, `code`, `nvim`). `--editor-mode auto` lets Raven decide terminal vs GUI launch.
+- Changing the editor edits machine-wide `config.toml`, so ask first — same rule as default/active vault routing.
+
+### LSP pointer (awareness only)
+
+Raven ships a built-in LSP (`rvn lsp`) that any LSP-capable editor can use for diagnostics, completion, go-to-definition, and find-references over vault files:
+
+```bash
+rvn lsp   # LSP server over stdio; part of the rvn binary, nothing extra to install
+```
+
+Point the user at `docs/using-your-vault/editor-integration.md` (or the `rvn docs` equivalent) for editor-specific wiring. Do **not** auto-configure Neovim/VS Code plugins from onboarding — make the user aware and hand off. For deeper config and UI settings, use `raven-vault-admin`.
+
 ## Add schema safely
 
 Preview the design with the user before running these commands.
