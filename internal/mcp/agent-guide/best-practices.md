@@ -22,7 +22,7 @@
 
 6. Prefer one strong query over many weak queries.
 - Compose with predicates and relationships (`within`, `has`, `refs`, `ancestor`).
-- Use `count-only`, `limit`, and `offset` for large sets.
+- Use `count-only` to size large sets, then `limit`/`offset` to page; loop while `has_more` is `true`, advancing `offset` to the returned `next_offset`.
 
 7. Use issue-driven repair loops.
 - `raven_invoke(command="check")` -> prioritize issue types -> apply fixes -> re-check scope.

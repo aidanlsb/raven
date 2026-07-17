@@ -509,6 +509,64 @@ func TestIntegration_QueryByField(t *testing.T) {
 	result.AssertResultCount(t, "items", 1)
 }
 
+// TestIntegration_QueryPaging verifies the agent-friendly paging fields
+// (has_more / next_offset) in the query JSON envelope.
+func TestIntegration_QueryPaging(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "project", "Project Alpha", "--field", "status=active").MustSucceed(t)
+	v.RunCLI("new", "project", "Project Beta", "--field", "status=active").MustSucceed(t)
+	v.RunCLI("new", "project", "Project Gamma", "--field", "status=active").MustSucceed(t)
+
+	// Unlimited (default): full result set, no more pages.
+	unlimited := v.RunCLI("query", "type:project .status==active").MustSucceed(t)
+	unlimited.AssertResultCount(t, "items", 3)
+	if got := unlimited.Data["total"]; got != float64(3) {
+		t.Fatalf("unlimited total = %#v, want 3", got)
+	}
+	if got, ok := unlimited.Data["has_more"]; !ok || got != false {
+		t.Fatalf("unlimited has_more = %#v (present=%v), want false", got, ok)
+	}
+	if _, ok := unlimited.Data["next_offset"]; ok {
+		t.Fatalf("unlimited should not include next_offset, got %#v", unlimited.Data["next_offset"])
+	}
+
+	// First page with more results available.
+	first := v.RunCLI("query", "type:project .status==active", "--limit", "2", "--offset", "0").MustSucceed(t)
+	first.AssertResultCount(t, "items", 2)
+	if got := first.Data["total"]; got != float64(3) {
+		t.Fatalf("first page total = %#v, want 3", got)
+	}
+	if got, ok := first.Data["has_more"]; !ok || got != true {
+		t.Fatalf("first page has_more = %#v (present=%v), want true", got, ok)
+	}
+	if got := first.Data["next_offset"]; got != float64(2) {
+		t.Fatalf("first page next_offset = %#v, want 2", got)
+	}
+
+	// Last page: no more results, next_offset omitted.
+	last := v.RunCLI("query", "type:project .status==active", "--limit", "2", "--offset", "2").MustSucceed(t)
+	last.AssertResultCount(t, "items", 1)
+	if got, ok := last.Data["has_more"]; !ok || got != false {
+		t.Fatalf("last page has_more = %#v (present=%v), want false", got, ok)
+	}
+	if _, ok := last.Data["next_offset"]; ok {
+		t.Fatalf("last page should not include next_offset, got %#v", last.Data["next_offset"])
+	}
+
+	// --ids responses carry the same paging fields.
+	ids := v.RunCLI("query", "type:project .status==active", "--ids", "--limit", "2", "--offset", "0").MustSucceed(t)
+	if got, ok := ids.Data["has_more"]; !ok || got != true {
+		t.Fatalf("ids has_more = %#v (present=%v), want true", got, ok)
+	}
+	if got := ids.Data["next_offset"]; got != float64(2) {
+		t.Fatalf("ids next_offset = %#v, want 2", got)
+	}
+}
+
 func TestIntegration_QueryErrorsSuggestCorrectSyntax(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

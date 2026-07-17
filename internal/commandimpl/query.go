@@ -146,13 +146,15 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 
 	if idsOnly {
 		meta.Count = result.Returned
-		return commandexec.Success(map[string]interface{}{
+		data := map[string]interface{}{
 			"ids":      result.IDs,
 			"total":    result.Total,
 			"returned": result.Returned,
 			"offset":   result.Offset,
 			"limit":    result.Limit,
-		}, meta)
+		}
+		addQueryPagingFields(data, result)
+		return commandexec.Success(data, meta)
 	}
 
 	if result.QueryKind == "type" {
@@ -165,6 +167,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 			"offset":     result.Offset,
 			"limit":      result.Limit,
 		}
+		addQueryPagingFields(data, result)
 		if isSavedQuery && queryName != "" {
 			data["saved_query"] = queryName
 		} else {
@@ -183,6 +186,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 			"offset":     result.Offset,
 			"limit":      result.Limit,
 		}
+		addQueryPagingFields(data, result)
 		if isSavedQuery && queryName != "" {
 			data["saved_query"] = queryName
 		}
@@ -199,6 +203,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 			"offset":     result.Offset,
 			"limit":      result.Limit,
 		}
+		addQueryPagingFields(data, result)
 		if isSavedQuery && queryName != "" {
 			data["saved_query"] = queryName
 		}
@@ -214,12 +219,27 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 		"offset":     result.Offset,
 		"limit":      result.Limit,
 	}
+	addQueryPagingFields(data, result)
 	if isSavedQuery && queryName != "" {
 		data["saved_query"] = queryName
 	} else {
 		data["trait"] = result.TypeName
 	}
 	return commandexec.Success(data, meta)
+}
+
+// addQueryPagingFields adds agent-friendly paging affordances to a query
+// response. `has_more` is always present alongside the existing total/returned/
+// offset/limit fields so agents can loop without guessing. `next_offset` is a
+// forward cursor included only when more results remain. For unlimited queries
+// (the default) total equals returned, so has_more is false and no next_offset
+// is emitted.
+func addQueryPagingFields(data map[string]interface{}, result *readsvc.ExecuteQueryResult) {
+	hasMore := result.HasMore()
+	data["has_more"] = hasMore
+	if hasMore {
+		data["next_offset"] = result.NextOffset()
+	}
 }
 
 func handleQueryApply(ctx context.Context, req commandexec.Request, result *readsvc.ExecuteQueryResult, applyArgs []string, queryTimeMs int64) commandexec.Result {

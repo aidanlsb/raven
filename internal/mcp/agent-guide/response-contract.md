@@ -70,6 +70,21 @@ Because single-object writes apply on the first call, only invoke them when the
 user intent is clear. When unsure about a `delete`/`move`, inspect the object
 (and run `backlinks` for deletes) or call with `dry-run=true` first.
 
+## Paging fields
+
+Commands that return result windows expose paging affordances in `data` so you
+can loop without guessing:
+
+- `query` and `docs search` include `total`/`returned`/`offset`/`limit` and a
+  `has_more` boolean.
+- When `has_more` is `true`, `query` also returns `next_offset` — use it as the
+  next request's `offset`. Loop while `has_more` is `true`; stop when it is
+  `false`.
+
+`query` is unlimited by default (`limit` 0): the full result set comes back in
+one call, so `has_more` is `false` and `next_offset` is omitted. See
+`raven://guide/query-at-scale` for the count-then-page pattern.
+
 ## Vault context
 
 Vault-bound responses include a `vault_context` block in `meta`:

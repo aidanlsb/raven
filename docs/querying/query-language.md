@@ -322,6 +322,8 @@ rvn query 'trait:todo .value==todo' --pipe | rvn pick --multi | rvn update --std
 Key flags:
 - `--json` — structured JSON output (recommended for agents and scripts)
 - `--ids` — output one ID per line for piping to other commands
+- `--count-only` — return only the total match count (no items or IDs)
+- `--limit` / `--offset` — page through results (see [Counting and Pagination](#counting-and-pagination); unlimited by default)
 - `--pipe` — output tab-separated rows for pipe workflows, including `rvn pick`
 - `--refresh` — reindex changed files before running the query (useful after editing files outside Raven)
 - `--browse` — open an interactive Raven picker and open the selected result in your configured editor
@@ -330,9 +332,17 @@ Use `rvn pick` when you want Raven-native interactive selection in a pipeline. I
 
 Section query IDs are stable `file#slug` IDs and asset query IDs are stable asset paths. Section and asset queries do not support `--apply`; use `--ids` to pass IDs to commands that explicitly support them.
 
-### Pagination
+### Counting and Pagination
 
-Use `--limit` and `--offset` to paginate large result sets:
+Results are **unlimited by default** (`--limit 0`) — omitting `--limit` returns the full result set.
+
+Use `--count-only` to return just the total match count, with no items or IDs. This is the cheapest way to probe how large a result set is before deciding how to read it:
+
+```bash
+rvn query 'type:project' --count-only --json           # Just the total count
+```
+
+Use `--limit` and `--offset` to page through large result sets:
 
 ```bash
 rvn query 'type:project' --limit 20                   # First 20 results
@@ -340,7 +350,29 @@ rvn query 'type:project' --limit 20 --offset 20       # Next 20
 rvn query 'trait:todo' --limit 50 --json                 # Cap results at 50
 ```
 
-The response metadata includes total count information so you know whether more results exist.
+The JSON response includes `total`, `returned`, `offset`, and `limit`, plus paging affordances so you can loop without guessing:
+
+- `has_more` — `true` when more results exist beyond the returned window.
+- `next_offset` — the offset to use for the next page (only present when `has_more` is `true`).
+
+The batch pattern is: probe with `--count-only`, then page with `--limit`/`--offset`, requesting the next page at `next_offset` while `has_more` is `true`. For an unlimited (default) query the full set is returned in one call, so `has_more` is `false` and `next_offset` is omitted.
+
+```json
+{
+  "ok": true,
+  "data": {
+    "query_kind": "type",
+    "type": "project",
+    "items": [ ... 20 items ... ],
+    "total": 47,
+    "returned": 20,
+    "offset": 0,
+    "limit": 20,
+    "has_more": true,
+    "next_offset": 20
+  }
+}
+```
 
 ### Save and Reuse Queries
 
