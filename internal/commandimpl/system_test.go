@@ -81,6 +81,15 @@ func TestSetupInitVaultFirstVaultRegistersPinsAndActivates(t *testing.T) {
 		t.Fatalf("next_steps len = %d, want 0 for first vault (%#v)", len(steps), steps)
 	}
 
+	// A first vault is fully configured: no pending actions for the agent.
+	actions, ok := data["actions"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("actions = %#v, want map", data["actions"])
+	}
+	if len(actions) != 0 {
+		t.Fatalf("actions = %#v, want empty for first vault", actions)
+	}
+
 	ctx, err := configsvc.LoadVaultContext(configsvc.ContextOptions{ConfigPathOverride: configPath, StatePathOverride: statePath})
 	if err != nil {
 		t.Fatalf("load vault context: %v", err)

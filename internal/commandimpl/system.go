@@ -355,25 +355,32 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 		"register_activate": "rvn vault add " + nameForCommands + " " + quotedPath + " --json && rvn vault use " + nameForCommands + " --json",
 	}
 
-	// Structured, invocable next actions (command IDs + args), for agents that
-	// should act on the payload rather than parse shell strings.
+	// Structured, invocable next actions (command IDs + args) for agents that
+	// should act on the payload rather than parse shell strings. Only *pending*
+	// actions are listed: a first vault is fully configured, so this is empty and
+	// the agent can proceed immediately without activating or pinning anything.
 	actions := map[string]interface{}{}
-	if alreadyRegistered {
-		actions["activate"] = map[string]interface{}{
-			"command":     "vault use",
-			"args":        map[string]interface{}{"name": s.registeredName},
-			"description": "Set this vault as the active vault (machine-local state).",
-		}
-		actions["set_default"] = map[string]interface{}{
-			"command":     "vault pin",
-			"args":        map[string]interface{}{"name": s.registeredName},
-			"description": "Set this vault as the default vault.",
-		}
-	} else {
+	switch {
+	case !alreadyRegistered:
 		actions["register"] = map[string]interface{}{
 			"command":     "vault add",
 			"args":        map[string]interface{}{"name": s.suggestedName, "path": s.cleanPath},
 			"description": "Register this vault in global config.",
+		}
+	default:
+		if needsActivateChoice {
+			actions["activate"] = map[string]interface{}{
+				"command":     "vault use",
+				"args":        map[string]interface{}{"name": s.registeredName},
+				"description": "Set this vault as the active vault (machine-local state). Ask the user first.",
+			}
+		}
+		if needsDefaultChoice {
+			actions["set_default"] = map[string]interface{}{
+				"command":     "vault pin",
+				"args":        map[string]interface{}{"name": s.registeredName},
+				"description": "Set this vault as the default vault. Ask the user first.",
+			}
 		}
 	}
 
@@ -386,7 +393,9 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 		nextSteps = append(nextSteps, "Register and set as default: "+commands["register_and_pin"].(string))
 		nextSteps = append(nextSteps, "After registering, make it active: "+commands["activate"].(string))
 	case s.isFirstVault:
-		guidance = fmt.Sprintf("First vault on this machine: registered as %q, set as the default, and activated. No further vault setup is needed.", s.registeredName)
+		// Zero -> first vault: fully configured. No pending actions or next steps;
+		// the agent can proceed immediately.
+		guidance = fmt.Sprintf("First vault on this machine: registered as %q and set as the default and active vault. It is ready to use now — no further vault setup is needed, and later commands resolve to it automatically.", s.registeredName)
 	default:
 		guidance = fmt.Sprintf("Another vault is already configured on this machine. The new vault was registered as %q but was NOT activated or set as default. Ask the user before activating it or changing the default vault.", s.registeredName)
 		if needsDefaultChoice {

@@ -1572,6 +1572,14 @@ func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
 	mustToolBool(t, first, "is_first_vault", true)
 	mustToolBool(t, first, "is_default", true)
 	mustToolBool(t, first, "is_active", true)
+	mustToolBool(t, first, "needs_user_choice_for_activate", false)
+	mustToolBool(t, first, "needs_user_choice_for_default", false)
+	// Fully configured: no pending actions, so the agent can proceed immediately.
+	if actions, ok := first["actions"].(map[string]interface{}); !ok {
+		t.Fatalf("actions = %#v, want map", first["actions"])
+	} else if len(actions) != 0 {
+		t.Fatalf("actions = %#v, want empty for first vault", actions)
+	}
 
 	// Second vault: registered but routing must be left to the user.
 	second := mcpInitPostInit(t, server, secondPath)

@@ -393,6 +393,17 @@ func TestIntegration_InitFirstVaultAutoRegisters(t *testing.T) {
 	mustPostInitBool(t, postInit, "needs_user_choice_for_activate", false)
 	mustPostInitBool(t, postInit, "needs_user_choice_for_default", false)
 
+	// A first vault is fully configured: no pending actions and no next steps,
+	// so an agent can proceed without guessing.
+	if actions, ok := postInit["actions"].(map[string]interface{}); !ok {
+		t.Fatalf("actions = %#v, want map", postInit["actions"])
+	} else if len(actions) != 0 {
+		t.Fatalf("actions = %#v, want empty for first vault", actions)
+	}
+	if steps, ok := postInit["next_steps"].([]interface{}); ok && len(steps) != 0 {
+		t.Fatalf("next_steps = %#v, want empty for first vault", steps)
+	}
+
 	// The new vault now resolves via active_vault without any explicit flag.
 	current := runVaultCurrent(t, binary, configFile, stateFile)
 	if got := current["name"]; got != "new-notes" {
