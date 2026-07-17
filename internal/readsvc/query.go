@@ -65,244 +65,52 @@ func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, er
 		return nil, err
 	}
 
-	if rt.Schema != nil {
-		validator := query.NewValidator(rt.Schema)
-		if err := validator.Validate(q); err != nil {
-			return nil, err
-		}
+	// Structural validation is mandatory regardless of schema presence: the
+	// root/predicate legality matrix, trait .value rules, and built-in field
+	// checks always run. Schema-dependent checks (unknown types/traits/fields)
+	// only run when a schema is available. NewValidator tolerates a nil schema.
+	if err := query.NewValidator(rt.Schema).Validate(q); err != nil {
+		return nil, err
 	}
 
 	executor := query.NewExecutor(rt.DB.DB())
 	executor.SetDailyDirectory(rt.VaultCfg.GetDailyDirectory())
 	executor.SetSchema(rt.Schema)
 
-	queryKind := "trait"
-	if q.Type == query.QueryTypeObject {
-		queryKind = "type"
-	} else if q.Type == query.QueryTypeAsset {
-		queryKind = "asset"
-	} else if q.Type == query.QueryTypeSection {
-		queryKind = "section"
-	}
-	result := &ExecuteQueryResult{
-		QueryKind: queryKind,
-		TypeName:  q.TypeName,
-		Offset:    req.Offset,
+	runResult, err := executor.Run(q, query.RunRequest{
+		IDsOnly:   req.IDsOnly,
+		CountOnly: req.CountOnly,
 		Limit:     req.Limit,
-	}
-	paginated := req.Limit > 0 || req.Offset > 0
-
-	if q.Type == query.QueryTypeObject {
-		if req.CountOnly {
-			total, err := executor.ExecuteObjectCountQuery(q)
-			if err != nil {
-				return nil, err
-			}
-			result.Total = total
-			return result, nil
-		}
-
-		if req.IDsOnly {
-			ids, err := executor.ExecuteObjectIDQuery(q, req.Limit, req.Offset)
-			if err != nil {
-				return nil, err
-			}
-			if paginated {
-				total, err := executor.ExecuteObjectCountQuery(q)
-				if err != nil {
-					return nil, err
-				}
-				result.Total = total
-			} else {
-				result.Total = len(ids)
-			}
-			result.IDs = ids
-			result.Returned = len(ids)
-			return result, nil
-		}
-
-		if paginated {
-			total, err := executor.ExecuteObjectCountQuery(q)
-			if err != nil {
-				return nil, err
-			}
-			rows, err := executor.ExecuteObjectPageQuery(q, req.Limit, req.Offset)
-			if err != nil {
-				return nil, err
-			}
-			result.Total = total
-			result.Objects = rows
-			result.Returned = len(rows)
-			return result, nil
-		}
-
-		rows, err := executor.ExecuteObjectQuery(q)
-		if err != nil {
-			return nil, err
-		}
-		result.Total = len(rows)
-		result.Objects = rows
-		result.Returned = len(rows)
-		return result, nil
-	}
-
-	if q.Type == query.QueryTypeAsset {
-		if req.CountOnly {
-			total, err := executor.ExecuteAssetCountQuery(q)
-			if err != nil {
-				return nil, err
-			}
-			result.Total = total
-			return result, nil
-		}
-
-		if req.IDsOnly {
-			ids, err := executor.ExecuteAssetIDQuery(q, req.Limit, req.Offset)
-			if err != nil {
-				return nil, err
-			}
-			if paginated {
-				total, err := executor.ExecuteAssetCountQuery(q)
-				if err != nil {
-					return nil, err
-				}
-				result.Total = total
-			} else {
-				result.Total = len(ids)
-			}
-			result.IDs = ids
-			result.Returned = len(ids)
-			return result, nil
-		}
-
-		if paginated {
-			total, err := executor.ExecuteAssetCountQuery(q)
-			if err != nil {
-				return nil, err
-			}
-			rows, err := executor.ExecuteAssetPageQuery(q, req.Limit, req.Offset)
-			if err != nil {
-				return nil, err
-			}
-			result.Total = total
-			result.Assets = rows
-			result.Returned = len(rows)
-			return result, nil
-		}
-
-		rows, err := executor.ExecuteAssetQuery(q)
-		if err != nil {
-			return nil, err
-		}
-		result.Total = len(rows)
-		result.Assets = rows
-		result.Returned = len(rows)
-		return result, nil
-	}
-
-	if q.Type == query.QueryTypeSection {
-		if req.CountOnly {
-			total, err := executor.ExecuteSectionCountQuery(q)
-			if err != nil {
-				return nil, err
-			}
-			result.Total = total
-			return result, nil
-		}
-
-		if req.IDsOnly {
-			ids, err := executor.ExecuteSectionIDQuery(q, req.Limit, req.Offset)
-			if err != nil {
-				return nil, err
-			}
-			if paginated {
-				total, err := executor.ExecuteSectionCountQuery(q)
-				if err != nil {
-					return nil, err
-				}
-				result.Total = total
-			} else {
-				result.Total = len(ids)
-			}
-			result.IDs = ids
-			result.Returned = len(ids)
-			return result, nil
-		}
-
-		if paginated {
-			total, err := executor.ExecuteSectionCountQuery(q)
-			if err != nil {
-				return nil, err
-			}
-			rows, err := executor.ExecuteSectionPageQuery(q, req.Limit, req.Offset)
-			if err != nil {
-				return nil, err
-			}
-			result.Total = total
-			result.Sections = rows
-			result.Returned = len(rows)
-			return result, nil
-		}
-
-		rows, err := executor.ExecuteSectionQuery(q)
-		if err != nil {
-			return nil, err
-		}
-		result.Total = len(rows)
-		result.Sections = rows
-		result.Returned = len(rows)
-		return result, nil
-	}
-
-	if req.CountOnly {
-		total, err := executor.ExecuteTraitCountQuery(q)
-		if err != nil {
-			return nil, err
-		}
-		result.Total = total
-		return result, nil
-	}
-
-	if req.IDsOnly {
-		ids, err := executor.ExecuteTraitIDQuery(q, req.Limit, req.Offset)
-		if err != nil {
-			return nil, err
-		}
-		if paginated {
-			total, err := executor.ExecuteTraitCountQuery(q)
-			if err != nil {
-				return nil, err
-			}
-			result.Total = total
-		} else {
-			result.Total = len(ids)
-		}
-		result.IDs = ids
-		result.Returned = len(ids)
-		return result, nil
-	}
-
-	if paginated {
-		total, err := executor.ExecuteTraitCountQuery(q)
-		if err != nil {
-			return nil, err
-		}
-		rows, err := executor.ExecuteTraitPageQuery(q, req.Limit, req.Offset)
-		if err != nil {
-			return nil, err
-		}
-		result.Total = total
-		result.Traits = rows
-		result.Returned = len(rows)
-		return result, nil
-	}
-
-	rows, err := executor.ExecuteTraitQuery(q)
+		Offset:    req.Offset,
+	})
 	if err != nil {
 		return nil, err
 	}
-	result.Total = len(rows)
-	result.Traits = rows
-	result.Returned = len(rows)
-	return result, nil
+
+	return &ExecuteQueryResult{
+		QueryKind: queryKindString(q.Type),
+		TypeName:  q.TypeName,
+		Total:     runResult.Total,
+		Returned:  runResult.Returned,
+		Offset:    req.Offset,
+		Limit:     req.Limit,
+		IDs:       runResult.IDs,
+		Objects:   runResult.Objects,
+		Traits:    runResult.Traits,
+		Assets:    runResult.Assets,
+		Sections:  runResult.Sections,
+	}, nil
+}
+
+func queryKindString(t query.QueryType) string {
+	switch t {
+	case query.QueryTypeObject:
+		return "type"
+	case query.QueryTypeAsset:
+		return "asset"
+	case query.QueryTypeSection:
+		return "section"
+	default:
+		return "trait"
+	}
 }

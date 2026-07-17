@@ -106,232 +106,73 @@ func (e *Executor) executeCountQuery(sqlStr string, args []interface{}) (int, er
 	return count, nil
 }
 
-// executeObjectQuery executes a type query and returns matching objects.
-// External callers should use ExecuteObjectQuery.
+// The internal execute* methods below are thin, non-scoping adapters over the
+// generic entity runners in entity_query.go. They keep the typed method surface
+// (used by unit tests, the public Execute* wrappers, and Execute) while the
+// SQL/scan logic lives in exactly one place.
+
 func (e *Executor) executeObjectQuery(q *Query) ([]model.Object, error) {
-	return e.executeObjectPageQuery(q, 0, 0)
+	return runEntityPageRows(e, q, objectSpec, 0, 0, scanObjectRows)
 }
 
 func (e *Executor) executeObjectPageQuery(q *Query, limit, offset int) ([]model.Object, error) {
-	if q.Type != QueryTypeObject {
-		return nil, fmt.Errorf("expected type query, got trait query")
-	}
-
-	sqlStr, args, err := e.buildObjectPageSQL(q, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := e.db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, wrapQueryExecError(err)
-	}
-	return scanObjectRows(rows)
+	return runEntityPageRows(e, q, objectSpec, limit, offset, scanObjectRows)
 }
 
 func (e *Executor) executeObjectIDQuery(q *Query, limit, offset int) ([]string, error) {
-	if q.Type != QueryTypeObject {
-		return nil, fmt.Errorf("expected type query, got trait query")
-	}
-
-	sqlStr, args, err := e.buildObjectIDSQL(q, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := e.db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, wrapQueryExecError(err)
-	}
-	return scanIDRows(rows)
+	return runEntityIDs(e, q, objectSpec, limit, offset)
 }
 
 func (e *Executor) executeObjectCountQuery(q *Query) (int, error) {
-	if q.Type != QueryTypeObject {
-		return 0, fmt.Errorf("expected type query, got trait query")
-	}
-
-	sqlStr, args, err := e.buildObjectCountSQL(q)
-	if err != nil {
-		return 0, err
-	}
-
-	count, err := e.executeCountQuery(sqlStr, args)
-	if err != nil {
-		return 0, wrapQueryExecError(err)
-	}
-	return count, nil
+	return runEntityCount(e, q, objectSpec)
 }
 
-// executeTraitQuery executes a trait query and returns matching traits.
-// External callers should use ExecuteTraitQuery.
 func (e *Executor) executeTraitQuery(q *Query) ([]model.Trait, error) {
-	return e.executeTraitPageQuery(q, 0, 0)
+	return runEntityPageRows(e, q, traitSpec, 0, 0, scanTraitRows)
 }
 
 func (e *Executor) executeTraitPageQuery(q *Query, limit, offset int) ([]model.Trait, error) {
-	if q.Type != QueryTypeTrait {
-		return nil, fmt.Errorf("expected trait query, got type query")
-	}
-
-	sqlStr, args, err := e.buildTraitPageSQL(q, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := e.db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, wrapQueryExecError(err)
-	}
-
-	return scanTraitRows(rows)
+	return runEntityPageRows(e, q, traitSpec, limit, offset, scanTraitRows)
 }
 
 func (e *Executor) executeTraitIDQuery(q *Query, limit, offset int) ([]string, error) {
-	if q.Type != QueryTypeTrait {
-		return nil, fmt.Errorf("expected trait query, got type query")
-	}
-
-	sqlStr, args, err := e.buildTraitIDSQL(q, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := e.db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, wrapQueryExecError(err)
-	}
-
-	return scanIDRows(rows)
+	return runEntityIDs(e, q, traitSpec, limit, offset)
 }
 
 func (e *Executor) executeTraitCountQuery(q *Query) (int, error) {
-	if q.Type != QueryTypeTrait {
-		return 0, fmt.Errorf("expected trait query, got type query")
-	}
-
-	sqlStr, args, err := e.buildTraitCountSQL(q)
-	if err != nil {
-		return 0, err
-	}
-
-	count, err := e.executeCountQuery(sqlStr, args)
-	if err != nil {
-		return 0, wrapQueryExecError(err)
-	}
-	return count, nil
+	return runEntityCount(e, q, traitSpec)
 }
 
-// executeAssetQuery executes an asset query and returns matching assets.
-// External callers should use ExecuteAssetQuery.
 func (e *Executor) executeAssetQuery(q *Query) ([]model.Asset, error) {
-	return e.executeAssetPageQuery(q, 0, 0)
+	return runEntityPageRows(e, q, assetSpec, 0, 0, scanAssetRows)
 }
 
 func (e *Executor) executeAssetPageQuery(q *Query, limit, offset int) ([]model.Asset, error) {
-	if q.Type != QueryTypeAsset {
-		return nil, fmt.Errorf("expected asset query")
-	}
-
-	sqlStr, args, err := e.buildAssetPageSQL(q, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := e.db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, wrapQueryExecError(err)
-	}
-	return scanAssetRows(rows)
+	return runEntityPageRows(e, q, assetSpec, limit, offset, scanAssetRows)
 }
 
 func (e *Executor) executeAssetIDQuery(q *Query, limit, offset int) ([]string, error) {
-	if q.Type != QueryTypeAsset {
-		return nil, fmt.Errorf("expected asset query")
-	}
-
-	sqlStr, args, err := e.buildAssetIDSQL(q, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := e.db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, wrapQueryExecError(err)
-	}
-	return scanIDRows(rows)
+	return runEntityIDs(e, q, assetSpec, limit, offset)
 }
 
 func (e *Executor) executeAssetCountQuery(q *Query) (int, error) {
-	if q.Type != QueryTypeAsset {
-		return 0, fmt.Errorf("expected asset query")
-	}
-
-	sqlStr, args, err := e.buildAssetCountSQL(q)
-	if err != nil {
-		return 0, err
-	}
-
-	count, err := e.executeCountQuery(sqlStr, args)
-	if err != nil {
-		return 0, wrapQueryExecError(err)
-	}
-	return count, nil
+	return runEntityCount(e, q, assetSpec)
 }
 
 func (e *Executor) executeSectionQuery(q *Query) ([]model.Section, error) {
-	return e.executeSectionPageQuery(q, 0, 0)
+	return runEntityPageRows(e, q, sectionSpec, 0, 0, scanSectionRows)
 }
 
 func (e *Executor) executeSectionPageQuery(q *Query, limit, offset int) ([]model.Section, error) {
-	if q.Type != QueryTypeSection {
-		return nil, fmt.Errorf("expected section query")
-	}
-
-	sqlStr, args, err := e.buildSectionPageSQL(q, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := e.db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, wrapQueryExecError(err)
-	}
-	return scanSectionRows(rows)
+	return runEntityPageRows(e, q, sectionSpec, limit, offset, scanSectionRows)
 }
 
 func (e *Executor) executeSectionIDQuery(q *Query, limit, offset int) ([]string, error) {
-	if q.Type != QueryTypeSection {
-		return nil, fmt.Errorf("expected section query")
-	}
-
-	sqlStr, args, err := e.buildSectionIDSQL(q, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := e.db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, wrapQueryExecError(err)
-	}
-	return scanIDRows(rows)
+	return runEntityIDs(e, q, sectionSpec, limit, offset)
 }
 
 func (e *Executor) executeSectionCountQuery(q *Query) (int, error) {
-	if q.Type != QueryTypeSection {
-		return 0, fmt.Errorf("expected section query")
-	}
-
-	sqlStr, args, err := e.buildSectionCountSQL(q)
-	if err != nil {
-		return 0, err
-	}
-
-	count, err := e.executeCountQuery(sqlStr, args)
-	if err != nil {
-		return 0, wrapQueryExecError(err)
-	}
-	return count, nil
+	return runEntityCount(e, q, sectionSpec)
 }
 
 // ExecuteObjectQuery executes a type query and returns matching objects.

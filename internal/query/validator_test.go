@@ -54,6 +54,72 @@ func TestValidator_NilQuery(t *testing.T) {
 	}
 }
 
+// TestValidator_StructuralWithoutSchema verifies that with a nil schema the
+// validator still enforces structural rules (root/predicate legality, trait
+// .value restrictions, built-in asset/section fields) while skipping
+// schema-dependent checks (unknown types/traits/fields). NewValidator(nil) must
+// not panic.
+func TestValidator_StructuralWithoutSchema(t *testing.T) {
+	t.Parallel()
+
+	v := NewValidator(nil)
+
+	structurallyIllegal := []struct {
+		query   string
+		wantMsg string
+	}{
+		{"type:project in(type:project)", "in() predicate is only valid for trait and section queries"},
+		{"type:project at(trait:todo)", "at() predicate is only valid for trait queries"},
+		{`asset content("x")`, "content() predicate is not valid for asset queries"},
+		{"asset .bogus==1", "asset has no field 'bogus'"},
+		{"trait:todo refd([[project/raven]])", "refd() predicate is only valid for type queries"},
+		{"trait:todo .other==x", "field predicates other than .value are only valid for type queries"},
+		{"section any(.tags, _ == z)", "array predicates are not valid for section queries"},
+		{"section .bogus==1", "section has no field 'bogus'"},
+	}
+	for _, tt := range structurallyIllegal {
+		t.Run("illegal/"+tt.query, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+			err = v.Validate(q)
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("expected *ValidationError, got %T: %v", err, err)
+			}
+			if !strings.Contains(ve.Message, tt.wantMsg) {
+				t.Fatalf("message = %q, want substring %q", ve.Message, tt.wantMsg)
+			}
+		})
+	}
+
+	// Structurally valid, and schema-dependent illegality that must be skipped
+	// when no schema is present.
+	allowed := []string{
+		"type:project",
+		"trait:todo",
+		"type:project has(trait:todo)",
+		"asset .extension==pdf",
+		"section .title==Intro",
+		// Schema-dependent: unknown type/trait/field cannot be caught without a schema.
+		"type:totallyunknown",
+		"trait:totallyunknown",
+		"type:project .unknownfield==x",
+	}
+	for _, queryStr := range allowed {
+		t.Run("allowed/"+queryStr, func(t *testing.T) {
+			q, err := Parse(queryStr)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+			if err := v.Validate(q); err != nil {
+				t.Fatalf("unexpected validation error without schema: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidator_UnknownTrait(t *testing.T) {
 	t.Parallel()
 	sch := &schema.Schema{

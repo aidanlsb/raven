@@ -386,7 +386,7 @@ func TestBuildWithinPredicateSQL_AddsDepthGuard(t *testing.T) {
 		SubQuery: &Query{Type: QueryTypeObject, TypeName: "project"},
 	}
 
-	cond, args, err := e.buildWithinPredicateSQL(p, "t", predicateKindTrait)
+	cond, args, err := e.buildWithinPredicateSQL(p, "t", QueryTypeTrait)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

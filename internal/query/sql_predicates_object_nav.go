@@ -99,16 +99,16 @@ func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string)
 	}
 }
 
-func (e *Executor) buildInPredicateSQL(p *InPredicate, alias string, kind predicateKind) (string, []interface{}, error) {
-	parentExpr := scopeParentExpr(alias, kind)
+func (e *Executor) buildInPredicateSQL(p *InPredicate, alias string, root QueryType) (string, []interface{}, error) {
+	parentExpr := scopeParentExpr(alias, root)
 	if parentExpr == "" {
 		return "", nil, fmt.Errorf("in() is not valid for this query")
 	}
 	return e.buildScopeMatchPredicate(p.Target, p.SubQuery, parentExpr, p.Negated())
 }
 
-func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string, kind predicateKind) (string, []interface{}, error) {
-	scopeID := currentScopeExpr(alias, kind)
+func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string, root QueryType) (string, []interface{}, error) {
+	scopeID := currentScopeExpr(alias, root)
 	if scopeID == "" {
 		return "", nil, fmt.Errorf("within() is not valid for this query")
 	}
@@ -232,22 +232,22 @@ func directSectionParentCondition(sectionAlias, parentExpr string) string {
 	return fmt.Sprintf("COALESCE(%s.parent_section_id, %s.file_object_id) = %s", sectionAlias, sectionAlias, parentExpr)
 }
 
-func currentScopeExpr(alias string, kind predicateKind) string {
-	switch kind {
-	case predicateKindTrait:
+func currentScopeExpr(alias string, root QueryType) string {
+	switch root {
+	case QueryTypeTrait:
 		return fmt.Sprintf("%s.parent_object_id", alias)
-	case predicateKindSection, predicateKindObject:
+	case QueryTypeSection, QueryTypeObject:
 		return fmt.Sprintf("%s.id", alias)
 	default:
 		return ""
 	}
 }
 
-func scopeParentExpr(alias string, kind predicateKind) string {
-	switch kind {
-	case predicateKindTrait:
+func scopeParentExpr(alias string, root QueryType) string {
+	switch root {
+	case QueryTypeTrait:
 		return fmt.Sprintf("%s.parent_object_id", alias)
-	case predicateKindSection:
+	case QueryTypeSection:
 		return fmt.Sprintf("COALESCE(%s.parent_section_id, %s.file_object_id)", alias, alias)
 	default:
 		return ""
