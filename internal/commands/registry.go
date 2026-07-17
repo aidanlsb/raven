@@ -795,6 +795,14 @@ You can then pass inputs by position (in args order) or as key=value pairs.
 Use --ids to output just IDs (one per line) for piping to other commands.
 Use --limit/--offset for paginated result windows.
 Use --count-only to return only the total match count without items.
+
+Results are unlimited by default (--limit 0). To batch a large result set
+without pulling everything at once:
+1. Probe the size with --count-only to get the total.
+2. Page with --limit and --offset, looping while the JSON has_more field is
+   true and starting each next request at the returned next_offset.
+The JSON envelope includes total, returned, offset, limit, and has_more (plus
+next_offset when has_more is true) so you can loop without guessing.
 Use --browse to open an interactive Raven picker with filtering and editor
 handoff for the selected result.
 Use --apply to run a bulk operation directly on query results.
@@ -847,6 +855,8 @@ For trait queries (trait:...):
 			"Find items matching specific criteria",
 			"Find traits with specific values",
 			"Find assets by extension, media type, path, size, or referencing objects",
+			"Probe result size with --count-only before reading",
+			"Page through large result sets with --limit/--offset while has_more is true",
 			"Bulk update query results with --apply",
 			"Pipe query results to other commands with --ids",
 		},

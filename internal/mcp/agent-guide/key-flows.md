@@ -112,6 +112,9 @@ raven_invoke(command="query", args={
 })
 ```
 
+Page through large result sets by looping while `has_more` is `true`, sending the
+response's `next_offset` as the next request's `offset`. See `raven://guide/query-at-scale`.
+
 ## 8. Import and template setup
 
 ```text
