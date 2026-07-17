@@ -91,8 +91,24 @@ rvn mcp show --client cursor
 
 ### Agent Onboarding
 
-After installing the onboarding skill, ask your agent to use it to introduce
-Raven in the context of your vault.
+You don't need to run `rvn init` before involving an agent. The onboarding
+skill sets up Raven from scratch:
+
+1. Install the CLI (above).
+2. Sync the skills (`rvn skill sync raven-onboarding --confirm` and
+   `rvn skill sync raven-core --confirm`).
+3. Ask your agent to onboard you.
+
+The agent detects whether you already have a vault, creates your first one with
+`rvn init` if you don't, and then walks you through creating, querying, and
+checking content. A good first prompt:
+
+> Use the raven-onboarding skill to set up Raven from scratch. If I don't have a
+> vault yet, help me create one, then walk me through one create flow, one
+> query, and one check.
+
+Prefer to set up the vault yourself first? The DIY `rvn init ~/notes` flow above
+still works — the agent will detect the existing vault and skip creation.
 
 See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 
