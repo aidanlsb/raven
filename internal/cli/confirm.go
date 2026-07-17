@@ -28,6 +28,13 @@ func promptForConfirm(message string) bool {
 	fmt.Printf("%s %s ", message, ui.Hint("[y/N]"))
 	reader := bufio.NewReader(os.Stdin)
 	response, _ := reader.ReadString('\n')
+	return confirmResponseIsYes(response)
+}
+
+// confirmResponseIsYes reports whether a raw [y/N] prompt response is
+// affirmative. Only an explicit "y"/"yes" (case-insensitive) applies; empty,
+// "n"/"no", or anything else aborts.
+func confirmResponseIsYes(response string) bool {
 	response = strings.TrimSpace(strings.ToLower(response))
 	return response == "y" || response == "yes"
 }

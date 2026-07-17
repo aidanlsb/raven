@@ -2482,6 +2482,46 @@ Preview is returned by default. Use --confirm to apply writes.`,
 			"Preview packaged skill sync before writing files",
 		},
 	},
+	"skill_install": {
+		Name:        "skill install",
+		Use:         "install [skill...]",
+		Description: "Install shipped Raven skills",
+		VaultScope:  VaultScopeNone,
+		LongDesc: `Install shipped Raven skills in one command.
+
+This is the primary first-run path for agents and users. With no arguments it
+installs the full set of shipped skills; pass one or more skill names to narrow
+the install to specific skills. Missing skills are installed and any already
+Raven-managed skills are aligned with the current shipped version. Existing
+non-Raven skills at the same path are left untouched.
+
+The default install root is ~/.agents/skills for user scope or .agents/skills
+in the current project. Use --dest to install elsewhere.
+
+In an interactive terminal Raven prints the plan and prompts before writing.
+For non-interactive or --json runs, pass --yes to apply; without it the command
+returns a preview and reports that confirmation is required.
+
+To only update or realign skills that are already installed, use
+'rvn skill sync' instead.`,
+		Flags: []FlagMeta{
+			{Name: "names", Description: "Shipped skill names to install (default: all shipped skills)", Type: FlagTypeStringSlice, Examples: []string{"raven-core", "raven-query"}},
+			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
+			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
+			{Name: "yes", Description: "Apply changes without prompting (required for --json/non-interactive runs)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn skill install",
+			"rvn skill install --yes --json",
+			"rvn skill install raven-core raven-query --yes --json",
+			"rvn skill install --scope project --yes --json",
+		},
+		UseCases: []string{
+			"First-run install of all shipped Raven skills",
+			"Install a specific set of Raven skills",
+			"Preview the skill install before writing files",
+		},
+	},
 	"skill_remove": {
 		Name:        "skill remove",
 		Description: "Remove an installed Raven skill",

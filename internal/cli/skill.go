@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/skills"
+	"github.com/aidanlsb/raven/internal/skillsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -25,6 +26,21 @@ var skillSyncCmd = newCanonicalLeafCommand("skill_sync", canonicalLeafOptions{
 	RenderHuman: renderSkillSync,
 })
 
+var (
+	skillInstallYes     bool
+	skillInstallConfirm bool
+	skillInstallScope   string
+	skillInstallDest    string
+)
+
+var skillInstallCmd = newCanonicalLeafCommand("skill_install", canonicalLeafOptions{
+	Args:            cobra.ArbitraryArgs,
+	BuildArgs:       buildSkillInstallArgs,
+	Invoke:          invokeSkillInstall,
+	RenderHuman:     renderSkillInstall,
+	SkipFlagBinding: true,
+})
+
 var skillRemoveCmd = newCanonicalLeafCommand("skill_remove", canonicalLeafOptions{
 	RenderHuman: renderSkillRemove,
 })
@@ -34,11 +50,79 @@ var skillDoctorCmd = newCanonicalLeafCommand("skill_doctor", canonicalLeafOption
 })
 
 func init() {
+	skillInstallCmd.Flags().BoolVar(&skillInstallYes, "yes", false, "Apply changes without prompting (required for --json/non-interactive runs)")
+	skillInstallCmd.Flags().BoolVar(&skillInstallConfirm, "confirm", false, "Alias for --yes")
+	skillInstallCmd.Flags().StringVar(&skillInstallScope, "scope", "user", "Install scope: user or project")
+	skillInstallCmd.Flags().StringVar(&skillInstallDest, "dest", "", "Override install root path")
+
 	skillCmd.AddCommand(skillListCmd)
+	skillCmd.AddCommand(skillInstallCmd)
 	skillCmd.AddCommand(skillSyncCmd)
 	skillCmd.AddCommand(skillRemoveCmd)
 	skillCmd.AddCommand(skillDoctorCmd)
 	rootCmd.AddCommand(skillCmd)
+}
+
+func buildSkillInstallArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
+	built := map[string]interface{}{}
+	if len(args) > 0 {
+		built["names"] = stringsToAny(args)
+	}
+	if skillInstallScope != "" {
+		built["scope"] = skillInstallScope
+	}
+	if skillInstallDest != "" {
+		built["dest"] = skillInstallDest
+	}
+	return built, nil
+}
+
+func invokeSkillInstall(_ *cobra.Command, commandID, _ string, args map[string]interface{}) commandexec.Result {
+	apply := skillInstallYes || skillInstallConfirm
+
+	// Non-interactive or --json: never prompt. Apply only with --yes/--confirm;
+	// otherwise return a preview that flags confirmation as required.
+	if !shouldPromptForConfirm() {
+		return executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			Args:      args,
+			Confirm:   apply,
+		})
+	}
+
+	// Interactive terminal with an explicit --yes/--confirm still applies without
+	// prompting.
+	if apply {
+		return executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			Args:      args,
+			Confirm:   true,
+		})
+	}
+
+	// Interactive terminal: preview, print the plan, and prompt before writing.
+	preview := executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		Args:      args,
+	})
+	if !preview.OK {
+		return preview
+	}
+	data := canonicalDataMap(preview)
+	if !boolValue(data["needs_confirm"]) {
+		return preview
+	}
+
+	printSkillInstallPlan(data)
+	if !promptForConfirm("Install these skills?") {
+		return commandexec.Success(map[string]interface{}{"mode": "cancelled"}, nil)
+	}
+
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		Args:      args,
+		Confirm:   true,
+	})
 }
 
 func renderSkillList(_ *cobra.Command, result commandexec.Result) error {
@@ -105,6 +189,56 @@ func renderSkillSync(_ *cobra.Command, result commandexec.Result) error {
 	return nil
 }
 
+func renderSkillInstall(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	mode := stringValue(data["mode"])
+	root := stringValue(data["root"])
+
+	switch mode {
+	case "cancelled":
+		fmt.Println(ui.Star("Cancelled. No skills were installed."))
+		return nil
+	case "applied":
+		fmt.Println(ui.Checkf("Installed skills at %s", ui.FilePath(root)))
+		fmt.Println(ui.Hint(fmt.Sprintf("Applied %d file changes", intValue(data["actions_applied"]))))
+		return nil
+	}
+
+	printSkillInstallPlan(data)
+	if boolValue(data["needs_confirm"]) {
+		fmt.Println(ui.Warning("Preview only — re-run with --yes to install."))
+	} else {
+		fmt.Println(ui.Hint("All requested skills are already installed and up to date."))
+	}
+	return nil
+}
+
+func printSkillInstallPlan(data map[string]interface{}) {
+	entries := skillInstallResultsFromAny(data["skills"])
+	fmt.Println(ui.SectionHeader("Skill install plan"))
+	fmt.Printf("%s %s\n", ui.Hint("target:"), ui.FilePath(stringValue(data["root"])))
+	for _, entry := range entries {
+		status := skillInstallStatus(entry.Plan)
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(entry.Name), ui.Hint("("+status+")"))))
+	}
+}
+
+func skillInstallStatus(plan *skills.SyncPlan) string {
+	if plan == nil {
+		return "no changes"
+	}
+	switch {
+	case plan.Installed > 0:
+		return "install"
+	case plan.Updated > 0:
+		return "update"
+	case plan.Skipped > 0:
+		return "skipped (unmanaged)"
+	default:
+		return "up to date"
+	}
+}
+
 func renderSkillRemove(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	plan := skillRemovePlanFromAny(data["plan"])
@@ -153,6 +287,11 @@ func skillSummariesFromAny(raw interface{}) []skills.Summary {
 func skillSyncPlanFromAny(raw interface{}) *skills.SyncPlan {
 	plan, _ := raw.(*skills.SyncPlan)
 	return plan
+}
+
+func skillInstallResultsFromAny(raw interface{}) []skillsvc.InstallSkillResult {
+	entries, _ := raw.([]skillsvc.InstallSkillResult)
+	return entries
 }
 
 func skillRemovePlanFromAny(raw interface{}) *skills.RemovePlan {

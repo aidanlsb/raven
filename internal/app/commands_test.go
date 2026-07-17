@@ -29,6 +29,44 @@ func TestValidateRequestNormalizesConfirmArg(t *testing.T) {
 	}
 }
 
+func TestValidateRequestNormalizesYesArgToConfirm(t *testing.T) {
+	t.Parallel()
+
+	req, result, ok := validateRequest(context.Background(), commandexec.Request{
+		CommandID: "skill_install",
+		Args: map[string]any{
+			"yes": true,
+		},
+	})
+	if !ok {
+		t.Fatalf("validateRequest failed: %#v", result)
+	}
+	if !req.Confirm {
+		t.Fatal("Confirm = false, want true from normalized yes arg")
+	}
+	if req.Preview {
+		t.Fatal("Preview = true, want false when yes is true")
+	}
+}
+
+func TestValidateRequestDefaultsPreviewForSkillInstall(t *testing.T) {
+	t.Parallel()
+
+	req, result, ok := validateRequest(context.Background(), commandexec.Request{
+		CommandID: "skill_install",
+		Args:      map[string]any{},
+	})
+	if !ok {
+		t.Fatalf("validateRequest failed: %#v", result)
+	}
+	if req.Confirm {
+		t.Fatal("Confirm = true, want false")
+	}
+	if !req.Preview {
+		t.Fatal("Preview = false, want true for skill install without yes")
+	}
+}
+
 func TestValidateRequestDefaultsPreviewForPreviewCommands(t *testing.T) {
 	t.Parallel()
 

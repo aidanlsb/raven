@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `rvn skill install` installs shipped Raven skills in one command — the full catalog by default, or a narrowed set when skill names are given — so first-run setup no longer requires chaining named `rvn skill sync ... --confirm` calls. In an interactive terminal it prints the plan and prompts `Install these skills? [y/N]` before writing. In non-interactive or `--json` runs it does not prompt: pass `--yes` to apply (with `--confirm` accepted as an alias), otherwise it returns a preview with a top-level `needs_confirm` flag and per-skill plan so agents know a confirm is still required.
+
 ### Changed
 - Agent skill commands now use the portable Agent Skills directories (`~/.agents/skills` for user scope and `.agents/skills` for project scope). The runtime-specific `--target` flag has been removed; use `--dest` for a custom install root.
 - Agent setup documentation now leads with skill installation and describes all seven packaged Raven skills.

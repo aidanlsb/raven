@@ -53,7 +53,10 @@ func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Re
 	}
 
 	req.Args = normalized
-	req.Confirm = req.Confirm || normalizedBoolArg(normalized, "confirm")
+	// `yes` is an apply flag used by commands that prompt in interactive
+	// terminals (e.g. skill install); treat it like `confirm` for non-interactive
+	// and MCP callers so preview/apply resolution stays consistent.
+	req.Confirm = req.Confirm || normalizedBoolArg(normalized, "confirm") || normalizedBoolArg(normalized, "yes")
 	switch {
 	case normalizedBoolArg(normalized, "dry-run"):
 		// An explicit dry run always previews and never applies, even if the

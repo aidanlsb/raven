@@ -19,12 +19,40 @@ from a shell. MCP is not required, but it provides a structured tool interface.
 ## Install Raven skills
 
 Raven packages skills using the open [Agent Skills](https://agentskills.io/)
-standard. List the available skills and install the recommended starting set:
+standard. The primary first-run path is `rvn skill install`, which installs the
+shipped skills in one command:
+
+```bash
+rvn skill install          # interactive: prints the plan and prompts [y/N]
+rvn skill install --yes    # agents / CI: apply without prompting
+```
+
+In an interactive terminal `rvn skill install` prints the plan (what will be
+installed or updated) and prompts `Install these skills? [y/N]` before writing.
+
+In non-interactive or `--json` runs it never prompts — agents cannot answer a
+`y/N` prompt. Pass `--yes` to apply; without it the command returns a preview
+and sets `needs_confirm: true`. The preview lists each skill with its planned
+action (`install`, `update`, or `up to date`) so an agent can tell whether a
+confirm is still required. After `--yes`, the response reports
+`mode: "applied"` and the number of file changes made:
+
+```bash
+rvn skill install --json          # Preview only — needs_confirm: true
+rvn skill install --yes --json    # Installs all shipped skills
+```
+
+By default it installs every shipped skill. Pass one or more names to narrow
+the install:
+
+```bash
+rvn skill install raven-core raven-query --yes --json
+```
+
+You can also list the catalog first:
 
 ```bash
 rvn skill list --json
-rvn skill sync raven-onboarding --confirm --json
-rvn skill sync raven-core --confirm --json
 ```
 
 | Skill | Use it for |
@@ -37,25 +65,30 @@ rvn skill sync raven-core --confirm --json
 | `raven-templates` | Template files and schema-template bindings |
 | `raven-vault-admin` | Vault setup, selection, and configuration |
 
-User-scoped skills install to `~/.agents/skills`. To install a skill in the
-current project instead:
+User-scoped skills install to `~/.agents/skills`. To install into the current
+project instead:
 
 ```bash
-rvn skill sync raven-core --scope project --confirm --json
+rvn skill install --scope project --yes --json
 ```
 
 That writes to `.agents/skills`. Use `--dest /path/to/skills` with any skill
 command when an agent needs a different location.
 
-To refresh already installed Raven-managed skills, run:
+### Updating already-installed skills
+
+`rvn skill install` is for first-time installation. To refresh skills that are
+already installed, use `rvn skill sync`:
 
 ```bash
 rvn skill sync --confirm --json
 ```
 
 The no-name sync updates or removes existing Raven-managed skills and reports
-shipped skills that are not installed. It does not install missing skills
-unless you name one explicitly.
+shipped skills that are not installed. It does **not** install missing skills
+unless you name one explicitly — use `rvn skill install` to install missing
+skills, or `rvn skill sync <name> --confirm` to install/realign a specific
+skill.
 
 ## Inspect and remove skills
 
@@ -116,7 +149,7 @@ rvn mcp remove --client codex
 You do not need a vault before involving an agent. The onboarding skill can set
 up Raven from scratch:
 
-1. Install the CLI and sync the skills (above).
+1. Install the CLI and install the skills with `rvn skill install` (above).
 2. Open your agent.
 3. Paste the recommended first prompt below. A vault is optional — if you don't
    have one yet, the agent will help you create it.
@@ -149,16 +182,9 @@ Agents should read the `post_init` object in the response:
 
 After installing the onboarding skill, a good first prompt is:
 
-> Use the raven-onboarding skill to set up Raven from scratch. First detect
-> whether I already have a vault. If I don't, help me create my first vault,
-> then walk me through one concrete create flow, one query, and one check,
-> explaining each step as you go. If I already have a vault, inspect its schema,
-> traits, and stats first, then do the same walkthrough.
+> Use the raven-onboarding skill to help me onboard to Raven in this vault. Start by inspecting the schema, traits, and vault stats. Then walk me through one concrete create flow, one query, and one check, explaining each step as you go.
 
-That prompt works whether or not you already have a vault. When a vault exists
-it forces the agent to inspect it before making changes; when one does not, the
-agent creates it first. Either way you get a quick end-to-end validation of the
-setup.
+That prompt forces the agent to inspect the actual vault before making changes and gives you a quick end-to-end validation of the setup.
 
 ## What a healthy setup looks like
 
