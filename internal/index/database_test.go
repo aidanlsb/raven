@@ -14,6 +14,41 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
+// traitsByType reads all indexed traits of a given trait type straight from the
+// traits table. It supports white-box indexing assertions in this package.
+// The production list-by-type path is the RQL executor (internal/query), which
+// imports internal/index; reading the table directly here keeps the index tests
+// free of that import cycle while asserting the same indexed rows.
+func traitsByType(t *testing.T, db *Database, traitType string) []model.Trait {
+	t.Helper()
+	rows, err := db.db.Query(
+		"SELECT id, trait_type, value, content, file_path, line_number, parent_object_id FROM traits WHERE trait_type = ? ORDER BY line_number",
+		traitType,
+	)
+	if err != nil {
+		t.Fatalf("failed to query traits: %v", err)
+	}
+	defer rows.Close()
+
+	var results []model.Trait
+	for rows.Next() {
+		var trait model.Trait
+		var value sql.NullString
+		if err := rows.Scan(&trait.ID, &trait.TraitType, &value, &trait.Content, &trait.FilePath, &trait.Line, &trait.ParentObjectID); err != nil {
+			t.Fatalf("failed to scan trait: %v", err)
+		}
+		if value.Valid {
+			s := value.String
+			trait.SetIndexValueString(&s)
+		}
+		results = append(results, trait)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("trait rows error: %v", err)
+	}
+	return results
+}
+
 func TestDatabase(t *testing.T) {
 	t.Parallel()
 	// Create a minimal schema for testing
@@ -318,15 +353,11 @@ func TestDatabase(t *testing.T) {
 			t.Fatalf("failed to index document: %v", err)
 		}
 
-		// Query for traits with value "true"
-		trueFilter := "true"
-		results, err := db.QueryTraits("highlight", &trueFilter)
-		if err != nil {
-			t.Fatalf("failed to query traits: %v", err)
-		}
+		// The bare highlight trait should be indexed with its default value "true".
+		results := traitsByType(t, db, "highlight")
 
 		if len(results) != 1 {
-			t.Errorf("expected 1 result for highlight=true, got %d", len(results))
+			t.Errorf("expected 1 result for highlight, got %d", len(results))
 		}
 
 		if len(results) > 0 && (results[0].Value == nil || results[0].IndexValueString() == nil || *results[0].IndexValueString() != "true") {
@@ -373,15 +404,14 @@ func TestDatabase(t *testing.T) {
 			t.Fatalf("failed to index document: %v", err)
 		}
 
-		// Query for traits with value "true"
-		trueFilter := "true"
-		results, err := db.QueryTraits("pinned", &trueFilter)
-		if err != nil {
-			t.Fatalf("failed to query traits: %v", err)
-		}
+		// A bare boolean trait without an explicit default should index as "true".
+		results := traitsByType(t, db, "pinned")
 
 		if len(results) != 1 {
-			t.Errorf("expected 1 result for pinned=true, got %d", len(results))
+			t.Errorf("expected 1 result for pinned, got %d", len(results))
+		}
+		if len(results) > 0 && (results[0].IndexValueString() == nil || *results[0].IndexValueString() != "true") {
+			t.Errorf("expected value 'true', got %v", results[0].Value)
 		}
 	})
 
@@ -425,15 +455,14 @@ func TestDatabase(t *testing.T) {
 			t.Fatalf("failed to index document: %v", err)
 		}
 
-		// Query for traits with value "medium"
-		mediumFilter := "medium"
-		results, err := db.QueryTraits("priority", &mediumFilter)
-		if err != nil {
-			t.Fatalf("failed to query traits: %v", err)
-		}
+		// The bare enum priority trait should index with its default "medium".
+		results := traitsByType(t, db, "priority")
 
 		if len(results) != 1 {
-			t.Errorf("expected 1 result for priority=medium, got %d", len(results))
+			t.Errorf("expected 1 result for priority, got %d", len(results))
+		}
+		if len(results) > 0 && (results[0].IndexValueString() == nil || *results[0].IndexValueString() != "medium") {
+			t.Errorf("expected value 'medium', got %v", results[0].Value)
 		}
 	})
 
@@ -791,20 +820,13 @@ func TestDatabase(t *testing.T) {
 			t.Fatalf("failed to index document: %v", err)
 		}
 
-		// Query for defined trait - should find 1
-		definedResults, err := db.QueryTraits("defined", nil)
-		if err != nil {
-			t.Fatalf("failed to query traits: %v", err)
-		}
+		// Defined trait is indexed; undefined trait is not (schema is source of truth).
+		definedResults := traitsByType(t, db, "defined")
 		if len(definedResults) != 1 {
 			t.Errorf("expected 1 result for 'defined' trait, got %d", len(definedResults))
 		}
 
-		// Query for undefined trait - should find 0 (not indexed)
-		undefinedResults, err := db.QueryTraits("undefined", nil)
-		if err != nil {
-			t.Fatalf("failed to query traits: %v", err)
-		}
+		undefinedResults := traitsByType(t, db, "undefined")
 		if len(undefinedResults) != 0 {
 			t.Errorf("expected 0 results for undefined trait, got %d (schema is source of truth)", len(undefinedResults))
 		}
