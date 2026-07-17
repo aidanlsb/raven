@@ -3,6 +3,7 @@ package commandimpl
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -101,7 +102,7 @@ func indexUpdateWarning(vaultPath, filePath, prefix string, err error) commandex
 }
 
 // missingRefEnvelope detects references in the given files whose targets do not
-// exist yet and returns success-envelope data fields plus REF_NOT_FOUND
+// exist yet and returns success-envelope data fields plus REF_TARGET_MISSING
 // warnings. Writes remain permissive: this only annotates a successful response
 // so callers can surface the missing target (interactively in the CLI, or via
 // the warning/data for agents). Detection failures are non-fatal and produce no
@@ -128,17 +129,47 @@ func missingRefEnvelope(vaultPath string, vaultCfg *config.VaultConfig, sch *sch
 
 func missingRefWarning(ref *check.MissingRef) commandexec.Warning {
 	warning := commandexec.Warning{
-		Code:    codes.WarnRefNotFound,
+		Code:    codes.WarnRefTargetMissing,
 		Message: fmt.Sprintf("Reference [[%s]] does not exist yet", ref.TargetPath),
 		Ref:     "Run 'rvn check create-missing' to create missing referenced pages",
 	}
 	if ref.InferredType != "" {
+		title := missingRefTitle(ref.TargetPath)
 		warning.SuggestedType = ref.InferredType
-		warning.CreateCommand = fmt.Sprintf("rvn new %s %q", ref.InferredType, ref.TargetPath)
+		warning.CreateCommand = fmt.Sprintf("rvn new %s %q --path %q --json", ref.InferredType, title, ref.TargetPath)
+		warning.CreateInvoke = &commandexec.Invoke{
+			Command: "new",
+			Args: map[string]interface{}{
+				"type":  ref.InferredType,
+				"title": title,
+				"path":  ref.TargetPath,
+			},
+		}
 	} else {
 		warning.CreateCommand = "rvn check create-missing"
+		warning.CreateInvoke = &commandexec.Invoke{
+			Command: "check create-missing",
+			Args:    map[string]interface{}{"confirm": true},
+		}
 	}
 	return warning
+}
+
+// missingRefTitle derives a plain display title from a reference target path.
+// `new` rejects titles that contain path separators, so we use the final path
+// segment (e.g. "people/ghost" -> "ghost") while the full target is preserved
+// via the invocation's explicit path argument.
+func missingRefTitle(targetPath string) string {
+	trimmed := strings.TrimSpace(targetPath)
+	trimmed = strings.TrimRight(trimmed, "/")
+	if trimmed == "" {
+		return "new-object"
+	}
+	base := path.Base(trimmed)
+	if base == "" || base == "." || base == "/" {
+		return "new-object"
+	}
+	return base
 }
 
 // mergeDataFields copies src entries into dst, allocating dst when needed.

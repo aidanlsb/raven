@@ -101,7 +101,10 @@ and adds:
 - `data.missing_refs` — count of missing reference targets.
 - `data.missing_ref_items` — the missing references, including an inferred `type` when known
   (same shape as `check create-missing`).
-- one `REF_NOT_FOUND` warning per missing target, with `suggested_type` and a `create_command`.
+- one `REF_TARGET_MISSING` warning per missing target, with `suggested_type`, a
+  `create_command` string, and a structured `create_invoke` (`{command, args}`) you can
+  pass straight to `raven_invoke` without shell-parsing. (`REF_TARGET_MISSING` is a
+  benign write-time warning — distinct from the fatal `REF_NOT_FOUND` read/resolve error.)
 
 Remediate by creating the targets when appropriate:
 

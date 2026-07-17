@@ -89,7 +89,11 @@ const (
 )
 
 const (
-	WarnRefNotFound         WarningCode = "REF_NOT_FOUND"
+	// WarnRefTargetMissing signals a successful, permissive write that introduced
+	// a reference whose target does not exist yet. It is intentionally distinct
+	// from the fatal ErrRefNotFound (REF_NOT_FOUND) error used on read/resolve
+	// failures so agents can branch on the code alone.
+	WarnRefTargetMissing    WarningCode = "REF_TARGET_MISSING"
 	WarnDeprecated          WarningCode = "DEPRECATED"
 	WarnSchemaOutdated      WarningCode = "SCHEMA_OUTDATED"
 	WarnSchemaLoadFailed    WarningCode = "SCHEMA_LOAD_FAILED"
@@ -123,7 +127,7 @@ var knownErrorCodes = map[ErrorCode]struct{}{
 }
 
 var knownWarningCodes = map[WarningCode]struct{}{
-	WarnRefNotFound: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnSchemaLoadFailed: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnDocsFetchFailed: {},
+	WarnRefTargetMissing: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnSchemaLoadFailed: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnDocsFetchFailed: {},
 	WarnWrongCommand: {}, WarnMissingField: {}, WarnBacklinks: {}, WarnSectionSkipped: {}, WarnUnknownField: {}, WarnTypeMismatch: {},
 	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {}, WarnCheckRunIncomplete: {}, WarnVaultFallback: {},
 	WarnVaultRegisterFailed: {},

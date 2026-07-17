@@ -40,8 +40,17 @@ type CLIError struct {
 
 // CLIWarning represents a warning from the CLI.
 type CLIWarning struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code          string     `json:"code"`
+	Message       string     `json:"message"`
+	SuggestedType string     `json:"suggested_type,omitempty"`
+	CreateCommand string     `json:"create_command,omitempty"`
+	CreateInvoke  *CLIInvoke `json:"create_invoke,omitempty"`
+}
+
+// CLIInvoke is the structured remediation payload carried by a warning.
+type CLIInvoke struct {
+	Command string                 `json:"command"`
+	Args    map[string]interface{} `json:"args,omitempty"`
 }
 
 // CLIMeta contains metadata from the response.

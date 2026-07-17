@@ -9,10 +9,65 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
+
+func TestMissingRefWarning_InferredType(t *testing.T) {
+	t.Parallel()
+
+	w := missingRefWarning(&check.MissingRef{TargetPath: "people/ghost", InferredType: "person"})
+
+	if w.Code != codes.WarnRefTargetMissing {
+		t.Fatalf("code = %q, want %q", w.Code, codes.WarnRefTargetMissing)
+	}
+	if w.SuggestedType != "person" {
+		t.Fatalf("suggested_type = %q, want person", w.SuggestedType)
+	}
+	if w.CreateCommand == "" {
+		t.Fatal("expected create_command hint, got empty")
+	}
+	if w.CreateInvoke == nil {
+		t.Fatal("expected structured create_invoke, got nil")
+	}
+	if w.CreateInvoke.Command != "new" {
+		t.Fatalf("create_invoke.command = %q, want new", w.CreateInvoke.Command)
+	}
+	if got := w.CreateInvoke.Args["type"]; got != "person" {
+		t.Fatalf("create_invoke.args.type = %#v, want person", got)
+	}
+	if got := w.CreateInvoke.Args["path"]; got != "people/ghost" {
+		t.Fatalf("create_invoke.args.path = %#v, want people/ghost", got)
+	}
+	if got := w.CreateInvoke.Args["title"]; got != "ghost" {
+		t.Fatalf("create_invoke.args.title = %#v, want ghost", got)
+	}
+}
+
+func TestMissingRefWarning_UnknownTypeFallsBackToCheck(t *testing.T) {
+	t.Parallel()
+
+	w := missingRefWarning(&check.MissingRef{TargetPath: "misc/thing"})
+
+	if w.Code != codes.WarnRefTargetMissing {
+		t.Fatalf("code = %q, want %q", w.Code, codes.WarnRefTargetMissing)
+	}
+	if w.SuggestedType != "" {
+		t.Fatalf("suggested_type = %q, want empty", w.SuggestedType)
+	}
+	if w.CreateInvoke == nil {
+		t.Fatal("expected structured create_invoke, got nil")
+	}
+	if w.CreateInvoke.Command != "check create-missing" {
+		t.Fatalf("create_invoke.command = %q, want check create-missing", w.CreateInvoke.Command)
+	}
+	if got := w.CreateInvoke.Args["confirm"]; got != true {
+		t.Fatalf("create_invoke.args.confirm = %#v, want true", got)
+	}
+}
 
 func TestAutoReindexWarnings_ClassifiesFailures(t *testing.T) {
 	t.Parallel()
