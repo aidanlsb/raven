@@ -755,6 +755,22 @@ text discovery when you do not yet know the right type, trait, or structural
 context. Search returns file/snippet matches; query returns schema-aware item
 rows, section rows, real trait rows, or asset rows.
 
+Choose the right retrieval tool:
+- query — structured filtering by type/section/trait/asset, field values, scope,
+  and references. Returns real items you can filter and bulk-apply to.
+- search — free-text discovery when you do not know the structure yet. Returns
+  file/snippet matches only. search "@todo" finds the text "@todo", NOT real
+  todo traits; use query 'trait:todo' for real traits.
+- backlinks <id> — all incoming references to one specific object or asset.
+  (Equivalent query: refd(...); read also appends backlinks.)
+- outlinks <id> — all outgoing references from one specific object.
+- read <ref> — full file content after you already identified the object.
+- resolve <ref> — turn a shorthand/alias/date into its target object ID without
+  reading content.
+- date <date> / daily <date> — everything for one date. In queries, use
+  type:date .date==<date> for daily-note objects, or trait:due .value==<date>
+  for due items on that date.
+
 Query syntax:
 - Type queries: type:<type> [predicates...]
   Examples: type:project .status==active, type:meeting refs([[people/freya]])
@@ -775,7 +791,22 @@ Common predicates:
 - refs(type:...) — References items matching subquery (refs(type:project .status==active))
 - refd(type:...) — Asset is referenced by matching source items (asset refd(type:note))
 - .value==X — Trait value equals X (.value==today, .value==high)
+- oneof(.field, [a,b]) — Field/value is one of a set (this is set membership, NOT
+  the scope predicate in(...); see below)
 - content("text") — Full-text search within content (content("meeting notes"))
+
+Scope predicates are root-dependent, and traits attach to the nearest section:
+- Prefer the forgiving forms contains(...) and within(...) unless you specifically
+  want a direct-only match. A @todo under a "## Tasks" heading is NOT directly on
+  the project object, so type:project has(trait:todo) usually returns nothing;
+  use type:project contains(trait:todo .value==todo) instead. From the trait side,
+  use trait:todo within(type:project ...), not in(type:project ...).
+- Downward (container -> contents), on type:/section: has() = direct child,
+  contains() = anywhere in the section tree.
+- Upward (contents -> container), on trait:/section: in() = direct parent scope,
+  within() = any ancestor scope.
+- Naming collision: in(...) is a SCOPE predicate (containment). Set membership is
+  oneof(.field, [...]). They are unrelated despite the "in" wording.
 
 Common agent patterns:
 - Real open todos: trait:todo .value==todo
@@ -783,7 +814,8 @@ Common agent patterns:
 - Distinguish real traits from plain-text mentions: use trait:todo ... instead of search "@todo"
 - Open todos under a section/topic heading: trait:todo .value==todo within(section includes(.title, "pricing"))
 - Open todos in a daily-note range: trait:todo .value==todo within(type:date .date>=2026-05-01 .date<=2026-05-31)
-- Path + structure together: type:page matches(.path, "^pages/work/") has(trait:todo .value==todo)
+- Projects that contain open todos anywhere: type:project contains(trait:todo .value==todo)
+- Path + structure together: type:page matches(.path, "^pages/work/") contains(trait:todo .value==todo)
 
 Special date values for trait, type:date .date, and date-target ref field comparisons:
 - today, tomorrow, yesterday
@@ -835,6 +867,7 @@ For trait queries (trait:...):
 		},
 		Examples: []string{
 			"rvn query 'type:project .status==active' --json",
+			"rvn query 'type:project contains(trait:todo .value==todo)' --json",
 			"rvn query 'type:meeting has(trait:due)' --json",
 			"rvn query 'type:brief .date==today' --json",
 			"rvn query 'trait:due .value<today' --json",
@@ -1839,6 +1872,22 @@ data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
 		Use:         "search [query]",
 		Description: "Full-text search across all vault content",
 		LongDesc: `Search for content across all files in the vault.
+
+Use search for open-ended text discovery when you do NOT yet know the type,
+trait, or structure. For structured retrieval of real items, traits, or assets,
+prefer 'rvn query' (see 'rvn query --help' for the full retrieval decision tree).
+
+Important: search matches raw text, not Raven structure. search "@todo" finds the
+literal text "@todo" and cannot distinguish a real @todo trait from prose that
+merely mentions it. To find real todo traits, use: rvn query 'trait:todo'. The
+same applies to any @trait token — reach for query 'trait:<name>' once you know
+the structure.
+
+When to use which:
+- search — you only have a text fragment ("find files mentioning pricing").
+- query ... content("term") — text match scoped to a type/section/trait root.
+- backlinks <id> / query ... refd(...) — what references a specific object/asset.
+- resolve <ref> — map a shorthand/alias/date to its object ID.
 
 Uses full-text search with relevance ranking. Supports:
   - Simple words: "meeting notes" (finds pages containing both words)

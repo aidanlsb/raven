@@ -18,13 +18,25 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 3. Prefer structured predicates over broad text search.
 4. Use `search` only when the structure is unknown.
 
-## Query vs search
+## Choosing the retrieval tool
 
-- Use `query` when you want real Raven items, real trait instances, or indexed asset rows.
-- Use `backlinks` when the user asks which notes reference a specific asset.
-- Use `search` when you only know a text fragment and do not yet know the type, trait, or structure.
-- `search` returns file/snippet matches. It does not distinguish a real `@todo` trait from plain prose that happens to mention `@todo`.
+- `query` — real Raven items, real trait instances, or indexed asset rows; filter by type/section/trait/asset, fields, scope, and references.
+- `search` — you only know a text fragment and do not yet know the type, trait, or structure. Returns file/snippet matches; it does NOT distinguish a real `@todo` trait from prose that mentions `@todo`. For real traits use `query "trait:todo"`.
+- `backlinks <id>` — incoming references to one object/asset (structured equivalent: `query "... refd(...)"`; `read` also appends backlinks).
+- `outlinks <id>` — outgoing references from one object (structured equivalent: `query "... refs(...)"`).
+- `resolve <ref>` — map a shorthand/alias/date to its object ID without reading content.
+- `read <ref>` — full file content once you have identified the object.
+- `date <date>` — everything for a date; in RQL use `type:date .date==<date>` for the daily-note object or `trait:due .value==<date>` for items due that day.
 - If the user asks for actual open tasks, due items, briefs, or typed items, start with `query`.
+
+## Scope predicates are root-dependent
+
+Traits attach to the nearest section, so lead with the forgiving forms:
+
+- From the object side use `contains(trait:...)` (recursive), not `has(trait:...)` (direct-only): `type:project has(trait:todo)` usually returns nothing; use `type:project contains(trait:todo .value==todo)`.
+- From the trait side use `within(type:...)` (recursive), not `in(type:...)` (direct-only).
+- `has`/`contains` look downward (on `type:`/`section`); `in`/`within` look upward (on `trait:`/`section`).
+- `in(...)` is scope containment, not set membership — for "value is one of a set" use `oneof(.field, [a,b])`.
 
 ## Examples
 
@@ -71,7 +83,7 @@ raven_invoke(command="query", args={"query_string":"trait:todo .value==todo with
 Open todos in a path plus structured filter:
 
 ```text
-raven_invoke(command="query", args={"query_string":"type:page matches(.path, \"^pages/work/\") has(trait:todo .value==todo)"})
+raven_invoke(command="query", args={"query_string":"type:page matches(.path, \"^pages/work/\") contains(trait:todo .value==todo)"})
 ```
 
 Text mentions instead of real traits:
