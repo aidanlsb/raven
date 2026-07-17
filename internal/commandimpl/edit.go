@@ -29,6 +29,15 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
 	}
 
+	// Edit resolves the target reference (schema-aware) before mutating and
+	// then reports missing-reference warnings, both of which rely on schema.
+	// Treat a schema load failure as fatal so a corrupt schema cannot silently
+	// misresolve the edit target or drop reference validation.
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
+	}
+
 	reference := strings.TrimSpace(stringArg(req.Args, "path"))
 	if reference == "" {
 		reference = strings.TrimSpace(stringArg(req.Args, "reference"))
@@ -45,6 +54,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	rt := &readsvc.Runtime{
 		VaultPath: vaultPath,
 		VaultCfg:  vaultCfg,
+		Schema:    sch,
 	}
 	resolved, err := readsvc.ResolveReference(reference, rt, false)
 	if err != nil {
@@ -116,12 +126,8 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	warnings := autoReindexWarnings(vaultPath, vaultCfg, resolved.FilePath)
 
-	var missingData map[string]interface{}
-	if sch, schErr := schema.Load(vaultPath); schErr == nil {
-		var missingWarnings []commandexec.Warning
-		missingData, missingWarnings = missingRefEnvelope(vaultPath, vaultCfg, sch, relPath)
-		warnings = appendCommandWarnings(warnings, missingWarnings)
-	}
+	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, relPath)
+	warnings = appendCommandWarnings(warnings, missingWarnings)
 
 	if batchMode {
 		applied := make([]map[string]interface{}, 0, len(results))

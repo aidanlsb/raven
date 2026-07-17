@@ -56,6 +56,11 @@ func openWorkspace(vaultPath string) (*workspace, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open vault %s: %w", absPath, err)
 	}
+	// The LSP tolerates a broken schema (diagnostics degrade to the built-in
+	// schema) but never silently: surface the failure on stderr.
+	if rt.SchemaLoadErr != nil {
+		fmt.Fprintf(os.Stderr, "rvn lsp: schema load failed, using built-in schema: %v\n", rt.SchemaLoadErr)
+	}
 
 	ws := &workspace{rt: rt}
 	if report, err := readsvc.SmartReindex(rt); err != nil {
@@ -100,11 +105,18 @@ func (ws *workspace) db() *index.Database {
 // refresh reloads vault config and schema from disk, incrementally reindexes
 // changed files, and rebuilds derived caches. Called after didSave.
 func (ws *workspace) refresh() error {
+	// Reload config and schema from disk. A reload failure keeps the previous
+	// (stale) value so the workspace stays usable, but it is never swallowed:
+	// report it on stderr so the degraded state is visible.
 	if vaultCfg, err := config.LoadVaultConfig(ws.rt.VaultPath); err == nil {
 		ws.rt.VaultCfg = vaultCfg
+	} else {
+		fmt.Fprintf(os.Stderr, "rvn lsp: config reload failed, keeping previous config: %v\n", err)
 	}
 	if sch, err := schema.Load(ws.rt.VaultPath); err == nil {
 		ws.rt.Schema = sch
+	} else {
+		fmt.Fprintf(os.Stderr, "rvn lsp: schema reload failed, keeping previous schema: %v\n", err)
 	}
 
 	if report, err := readsvc.SmartReindex(ws.rt); err != nil {

@@ -24,9 +24,12 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
 	}
 
+	// Move resolves references and rewrites backlinks using the schema, so a
+	// corrupt schema could misresolve targets or update the wrong references.
+	// Treat a schema load failure as fatal on this safety-sensitive path.
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
-		sch = schema.New()
+		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
 	}
 
 	objectIDs := commandIDsArg(req.Args, "object_ids")

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/model"
@@ -340,11 +341,11 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 		if err != nil {
 			return mapReadFailure(err)
 		}
-		return commandexec.Success(map[string]interface{}{
+		return withSchemaLoadWarning(rt, commandexec.Success(map[string]interface{}{
 			"object_id": outline.ObjectID,
 			"path":      outline.Path,
 			"sections":  formatSectionOutline(outline.Sections),
-		}, &commandexec.Meta{Count: len(outline.Sections), QueryTimeMs: time.Since(start).Milliseconds()})
+		}, &commandexec.Meta{Count: len(outline.Sections), QueryTimeMs: time.Since(start).Milliseconds()}))
 	}
 
 	result, err := readsvc.Read(rt, readsvc.ReadRequest{
@@ -375,13 +376,28 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 		if len(result.Lines) > 0 {
 			data["lines"] = result.Lines
 		}
-		return commandexec.Success(data, meta)
+		return withSchemaLoadWarning(rt, commandexec.Success(data, meta))
 	}
 
 	data["references"] = result.References
 	data["backlinks"] = result.Backlinks
 	meta.Count = result.BacklinksCount
-	return commandexec.Success(data, meta)
+	return withSchemaLoadWarning(rt, commandexec.Success(data, meta))
+}
+
+// withSchemaLoadWarning appends a stable SCHEMA_LOAD_FAILED warning to a
+// successful read result when the runtime tolerated a schema load failure
+// (RequireSchema=false). It ensures degraded read paths surface the failure
+// instead of silently returning schema-free output.
+func withSchemaLoadWarning(rt *readsvc.Runtime, result commandexec.Result) commandexec.Result {
+	if rt == nil || rt.SchemaLoadErr == nil || !result.OK {
+		return result
+	}
+	result.Warnings = append(result.Warnings, commandexec.Warning{
+		Code:    codes.WarnSchemaLoadFailed,
+		Message: fmt.Sprintf("schema failed to load; type-aware output may be incomplete: %v", rt.SchemaLoadErr),
+	})
+	return result
 }
 
 func formatSectionOutline(sections []model.Section) []map[string]interface{} {

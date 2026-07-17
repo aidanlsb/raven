@@ -236,9 +236,11 @@ Examples:
 		}
 
 		// Load vault config for saved queries and unknown-query suggestions.
+		// A broken raven.yaml is fatal here (consistent with the canonical
+		// query path, which reports CONFIG_INVALID).
 		vaultCfg, err := config.LoadVaultConfig(vaultPath)
 		if err != nil {
-			return handleError(ErrInternal, err, "")
+			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
 
 		// MCP sends query_string as a single positional arg. Support
@@ -320,6 +322,9 @@ Examples:
 			defer db.Close()
 			db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 
+			// Best-effort: this is already the unknown-query error path, and the
+			// schema only enriches the suggestion. A load failure degrades to a
+			// schema-free suggestion rather than masking the QUERY_INVALID error.
 			sch, schemaErr := schema.Load(vaultPath)
 			if schemaErr != nil {
 				sch = nil
@@ -385,6 +390,10 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 
 	queryKind, _ := data["query_kind"].(string)
 	browse := boolValue(args["browse"])
+	// The schema.Load calls below run only for human-readable rendering, after
+	// the canonical query path (executeCanonicalQuery) already loaded the schema
+	// and treated a load failure as fatal (SCHEMA_INVALID). Reaching this point
+	// means the schema is valid; the loads are best-effort display enrichment.
 	switch queryKind {
 	case "type", "object":
 		objects := objectResultsFromAny(data["items"])

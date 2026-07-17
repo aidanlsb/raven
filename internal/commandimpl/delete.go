@@ -40,7 +40,13 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("MISSING_ARGUMENT", "requires object-id argument", nil, "Usage: rvn delete <object-id>")
 	}
 
-	sch, _ := schema.Load(vaultPath)
+	// Delete resolves the target reference (which is schema-aware) before
+	// removing a file, so a corrupt schema could resolve to the wrong object.
+	// Treat a schema load failure as fatal on this safety-sensitive path.
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
+	}
 	deletionCfg := vaultCfg.GetDeletionConfig()
 	if req.Preview {
 		preview, err := objectsvc.PreviewDeleteByReference(objectsvc.DeleteByReferenceRequest{
