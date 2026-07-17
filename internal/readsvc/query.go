@@ -29,6 +29,26 @@ type ExecuteQueryResult struct {
 	Sections  []model.Section
 }
 
+// HasMore reports whether more results exist beyond the returned window.
+// It is derived from the authoritative Total together with the current
+// Offset and the number of rows Returned. For unlimited queries (no limit
+// and no offset) Total equals Returned, so HasMore is false.
+func (r *ExecuteQueryResult) HasMore() bool {
+	if r == nil {
+		return false
+	}
+	return r.Offset+r.Returned < r.Total
+}
+
+// NextOffset returns the offset an agent should use to fetch the next page.
+// It is only meaningful when HasMore is true.
+func (r *ExecuteQueryResult) NextOffset() int {
+	if r == nil {
+		return 0
+	}
+	return r.Offset + r.Returned
+}
+
 func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, error) {
 	if rt == nil || rt.DB == nil {
 		return nil, fmt.Errorf("runtime with database is required")
