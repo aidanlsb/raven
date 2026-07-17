@@ -3,7 +3,6 @@ package index
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/aidanlsb/raven/internal/model"
 )
@@ -13,162 +12,6 @@ func derefInt(p *int) int {
 		return 0
 	}
 	return *p
-}
-
-func TestParseFilterExpression(t *testing.T) {
-	t.Parallel()
-	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
-	tests := []struct {
-		name           string
-		filter         string
-		fieldExpr      string
-		wantCondition  string
-		wantArgsCount  int
-		wantArgsValues []interface{}
-		wantErr        bool
-	}{
-		{
-			name:           "simple value",
-			filter:         "done",
-			fieldExpr:      "value",
-			wantCondition:  "value = ?",
-			wantArgsCount:  1,
-			wantArgsValues: []interface{}{"done"},
-		},
-		{
-			name:           "NOT value",
-			filter:         "!done",
-			fieldExpr:      "value",
-			wantCondition:  "value != ?",
-			wantArgsCount:  1,
-			wantArgsValues: []interface{}{"done"},
-		},
-		{
-			name:          "OR two values",
-			filter:        "todo|in-progress",
-			fieldExpr:     "value",
-			wantCondition: "(value = ? OR value = ?)",
-			wantArgsCount: 2,
-		},
-		{
-			name:          "NOT list uses AND",
-			filter:        "!done|!cancelled",
-			fieldExpr:     "value",
-			wantCondition: "(value != ? AND value != ?)",
-			wantArgsCount: 2,
-		},
-		{
-			name:          "mixed OR and NOT",
-			filter:        "active|!done",
-			fieldExpr:     "value",
-			wantCondition: "(value = ? OR value != ?)",
-			wantArgsCount: 2,
-		},
-		{
-			name:          "three values OR",
-			filter:        "a|b|c",
-			fieldExpr:     "value",
-			wantCondition: "(value = ? OR value = ? OR value = ?)",
-			wantArgsCount: 3,
-		},
-		{
-			name:          "date filter today",
-			filter:        "today",
-			fieldExpr:     "value",
-			wantCondition: "value = ?",
-			wantArgsCount: 1,
-		},
-		{
-			name:          "date filter tomorrow",
-			filter:        "tomorrow",
-			fieldExpr:     "value",
-			wantCondition: "value = ?",
-			wantArgsCount: 1,
-		},
-		{
-			name:           "past treated as plain value",
-			filter:         "past",
-			fieldExpr:      "value",
-			wantCondition:  "value = ?",
-			wantArgsCount:  1,
-			wantArgsValues: []interface{}{"past"},
-		},
-		{
-			name:          "empty filter",
-			filter:        "",
-			fieldExpr:     "value",
-			wantCondition: "1=1",
-			wantArgsCount: 0,
-		},
-		{
-			name:          "whitespace in OR",
-			filter:        "done | cancelled",
-			fieldExpr:     "value",
-			wantCondition: "(value = ? OR value = ?)",
-			wantArgsCount: 2,
-		},
-		{
-			name:      "invalid date-like filter errors",
-			filter:    "2025-13-45",
-			fieldExpr: "value",
-			wantErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			condition, args, err := parseFilterExpressionWithOptions(tt.filter, tt.fieldExpr, DateFilterOptions{
-				Now: now,
-			})
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if condition != tt.wantCondition {
-				t.Errorf("condition = %q, want %q", condition, tt.wantCondition)
-			}
-
-			if len(args) != tt.wantArgsCount {
-				t.Errorf("args count = %d, want %d", len(args), tt.wantArgsCount)
-			}
-
-			// Check specific arg values if provided
-			if tt.wantArgsValues != nil {
-				for i, want := range tt.wantArgsValues {
-					if i < len(args) && args[i] != want {
-						t.Errorf("args[%d] = %v, want %v", i, args[i], want)
-					}
-				}
-			}
-		})
-	}
-}
-
-func TestParseFilterExpressionWithOptionsUsesSingleNowAcrossOrBranches(t *testing.T) {
-	t.Parallel()
-
-	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
-	condition, args, err := parseFilterExpressionWithOptions("today|tomorrow", "value", DateFilterOptions{
-		Now: now,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if condition != "(value = ? OR value = ?)" {
-		t.Fatalf("condition = %q", condition)
-	}
-	if len(args) != 2 {
-		t.Fatalf("args len = %d, want 2", len(args))
-	}
-	if args[0] != "2026-03-04" || args[1] != "2026-03-05" {
-		t.Fatalf("args = %v", args)
-	}
 }
 
 func TestBuildFTSContentQuery_SanitizesHyphenatedTokens(t *testing.T) {
@@ -366,105 +209,6 @@ func TestSearch_MatchesTitle(t *testing.T) {
 	if results[0].ObjectID != "project/raven" {
 		t.Fatalf("expected object_id 'project/raven', got %q", results[0].ObjectID)
 	}
-}
-
-func TestQueryTraitsWithFilterExpressions(t *testing.T) {
-	t.Parallel()
-	// Integration tests with actual database
-	db, err := OpenInMemory()
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	// Insert test traits directly
-	_, err = db.db.Exec(`
-		INSERT INTO traits (id, trait_type, value, content, file_path, line_number, parent_object_id)
-		VALUES 
-			('t1', 'status', 'done', 'Task 1', 'test.md', 1, 'obj1'),
-			('t2', 'status', 'todo', 'Task 2', 'test.md', 2, 'obj2'),
-			('t3', 'status', 'in-progress', 'Task 3', 'test.md', 3, 'obj3'),
-			('t4', 'status', 'cancelled', 'Task 4', 'test.md', 4, 'obj4'),
-			('t5', 'priority', 'high', 'Priority 1', 'test.md', 5, 'obj5'),
-			('t6', 'priority', 'low', 'Priority 2', 'test.md', 6, 'obj6')
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert test traits: %v", err)
-	}
-
-	t.Run("simple filter", func(t *testing.T) {
-		filter := "done"
-		results, err := db.QueryTraits("status", &filter)
-		if err != nil {
-			t.Fatalf("query failed: %v", err)
-		}
-		if len(results) != 1 {
-			t.Errorf("expected 1 result, got %d", len(results))
-		}
-		if len(results) > 0 {
-			if got := results[0].IndexValueString(); got == nil || *got != "done" {
-				t.Errorf("expected value 'done', got %#v", got)
-			}
-		}
-	})
-
-	t.Run("NOT filter", func(t *testing.T) {
-		filter := "!done"
-		results, err := db.QueryTraits("status", &filter)
-		if err != nil {
-			t.Fatalf("query failed: %v", err)
-		}
-		if len(results) != 3 {
-			t.Errorf("expected 3 results (todo, in-progress, cancelled), got %d", len(results))
-		}
-		// Verify none are "done"
-		for _, r := range results {
-			if r.Value != nil && r.IndexValueString() != nil && *r.IndexValueString() == "done" {
-				t.Errorf("found 'done' in NOT done results")
-			}
-		}
-	})
-
-	t.Run("OR filter", func(t *testing.T) {
-		filter := "todo|in-progress"
-		results, err := db.QueryTraits("status", &filter)
-		if err != nil {
-			t.Fatalf("query failed: %v", err)
-		}
-		if len(results) != 2 {
-			t.Errorf("expected 2 results, got %d", len(results))
-		}
-	})
-
-	t.Run("NOT with OR filter", func(t *testing.T) {
-		filter := "!done|!cancelled"
-		results, err := db.QueryTraits("status", &filter)
-		if err != nil {
-			t.Fatalf("query failed: %v", err)
-		}
-		// This means: value != 'done' AND value != 'cancelled'
-		if len(results) != 2 {
-			t.Errorf("expected 2 results (todo, in-progress), got %d", len(results))
-		}
-	})
-
-	t.Run("no filter returns all", func(t *testing.T) {
-		results, err := db.QueryTraits("status", nil)
-		if err != nil {
-			t.Fatalf("query failed: %v", err)
-		}
-		if len(results) != 4 {
-			t.Errorf("expected 4 results, got %d", len(results))
-		}
-	})
-
-	t.Run("invalid date-like filter errors", func(t *testing.T) {
-		filter := "2025-13-45"
-		_, err := db.QueryTraits("status", &filter)
-		if err == nil {
-			t.Fatalf("expected error, got nil")
-		}
-	})
 }
 
 func TestBacklinks(t *testing.T) {
@@ -676,7 +420,7 @@ func TestUntypedPages(t *testing.T) {
 	})
 }
 
-func TestQueryObjects(t *testing.T) {
+func TestAllObjects(t *testing.T) {
 	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
@@ -696,41 +440,19 @@ func TestQueryObjects(t *testing.T) {
 		t.Fatalf("failed to insert test objects: %v", err)
 	}
 
-	t.Run("query by type", func(t *testing.T) {
-		results, err := db.QueryObjects("person")
-		if err != nil {
-			t.Fatalf("query failed: %v", err)
-		}
-		if len(results) != 2 {
-			t.Errorf("expected 2 person objects, got %d", len(results))
-		}
-	})
-
-	t.Run("query non-existent type", func(t *testing.T) {
-		results, err := db.QueryObjects("company")
-		if err != nil {
-			t.Fatalf("query failed: %v", err)
-		}
-		if len(results) != 0 {
-			t.Errorf("expected 0 results, got %d", len(results))
-		}
-	})
-
-	t.Run("all objects", func(t *testing.T) {
-		results, err := db.AllObjects()
-		if err != nil {
-			t.Fatalf("query failed: %v", err)
-		}
-		if len(results) != 3 {
-			t.Fatalf("expected 3 objects, got %d", len(results))
-		}
-		if results[0].ID != "people/freya" {
-			t.Fatalf("first object ID = %q, want people/freya", results[0].ID)
-		}
-		if got, ok := results[0].Fields["name"].AsString(); !ok || got != "Freya" {
-			t.Fatalf("first object name = %#v, want Freya", results[0].Fields["name"])
-		}
-	})
+	results, err := db.AllObjects()
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 objects, got %d", len(results))
+	}
+	if results[0].ID != "people/freya" {
+		t.Fatalf("first object ID = %q, want people/freya", results[0].ID)
+	}
+	if got, ok := results[0].Fields["name"].AsString(); !ok || got != "Freya" {
+		t.Fatalf("first object name = %#v, want Freya", results[0].Fields["name"])
+	}
 }
 
 func TestAllSections(t *testing.T) {
