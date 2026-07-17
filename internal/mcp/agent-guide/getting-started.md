@@ -6,6 +6,11 @@ Use this guide after quickstart when you need an operational first pass through 
 
 0. If no vault exists yet, initialize one:
    `raven_invoke(command="init", args={"path":"/path/to/vault"})`
+   Init auto-registers the new vault. Read the `post_init` object in the response:
+   - `is_first_vault=true` means it is now the default and active vault; you can proceed.
+   - `is_first_vault=false` with `needs_user_choice_for_activate`/`needs_user_choice_for_default`
+     means another vault already exists. Ask the user before running the `activate` /
+     `set_default` actions; do not silently change the default or active vault.
 1. Understand the schema:
    `raven_invoke(command="schema", args={"subcommand":"types"})`
    `raven_invoke(command="schema", args={"subcommand":"traits"})`

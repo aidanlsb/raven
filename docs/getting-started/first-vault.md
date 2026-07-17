@@ -34,12 +34,13 @@ notes/
 Markdown files are still the durable source of truth. `.raven/` can be rebuilt with `rvn reindex`.
 Raven's long-form docs cache is global and lives next to global config, not inside each vault.
 
-In an interactive terminal, `rvn init` now follows up and can help you:
-- register the vault in global config
-- set it as `default_vault`
-- set it as `active_vault`
+`rvn init` also applies Raven's first-run vault policy so the CLI can find the new vault:
 
-In `--json` mode, Raven stays non-interactive and returns structured post-init setup guidance instead.
+- It auto-registers the vault in global config under a suggested name.
+- If this is the **first vault** on the machine (no `default_vault`, no `active_vault`, no other registered vault), it also sets the vault as `default_vault` and `active_vault` — first run just works.
+- If you already have another vault, `rvn init` still registers the new one but leaves `default_vault` and `active_vault` untouched. A new vault never silently takes over your setup; switching stays an explicit choice.
+
+This is the same in interactive and `--json` mode. In `--json` mode, the `post_init` object reports what happened (`is_first_vault`, `has_existing_default`, `registered`, `is_default`, `is_active`), whether a choice still needs your input (`needs_user_choice_for_activate`, `needs_user_choice_for_default`), plus invocable actions and guidance. In interactive mode, Raven prompts you for the default/active choices only when another vault already exists.
 
 ## Sanity-check the new vault
 
@@ -89,17 +90,18 @@ notes = "/Users/you/notes"
 work = "/Users/you/work-notes"
 ```
 
-## Register this vault globally
+## Register additional vaults
 
-If you want to refer to the vault by name instead of full path:
+Your first vault is registered automatically by `rvn init`. When you create more vaults, `rvn init` also registers each one, but only the first vault is set as default/active. To manage names and routing across multiple vaults:
 
 ```bash
-rvn vault add notes ~/notes --pin --json
+rvn vault add work ~/work-notes --json
 rvn vault list --json
-rvn vault use notes --json
+rvn vault use work --json
+rvn vault pin work --json
 ```
 
-That gives you a stable name, sets it as the default, and makes it the active vault.
+`rvn vault add` gives a vault a stable name, `rvn vault use <name>` switches the active vault, and `rvn vault pin <name>` changes the default. These stay explicit so an additional vault never silently changes which vault your commands target.
 
 ## How Raven decides which vault to use
 
@@ -128,15 +130,14 @@ Use `raven.yaml` for vault behavior that should travel with the vault:
 
 ## Minimal recommended setup
 
-If you only want the essential setup and nothing more:
+On a brand-new machine, `rvn init` alone gives you a working, resolvable vault:
 
 ```bash
 rvn init ~/notes
-rvn vault add notes ~/notes --pin --json
 rvn config set --editor cursor --editor-mode auto --json
 ```
 
-At that point Raven is installed, the vault exists, and the CLI knows how to find it.
+The first `rvn init` registers `~/notes` and sets it as the default and active vault, so the CLI can find it immediately. Add `rvn config set` only if you want to configure the editor.
 
 ## Next steps
 

@@ -27,14 +27,20 @@ var (
 )
 
 type initPostInitInfo struct {
-	Path              string
-	SuggestedName     string
-	RegisteredName    string
-	AlreadyRegistered bool
-	IsActive          bool
-	IsDefault         bool
-	ConfigPath        string
-	StatePath         string
+	Path                string
+	SuggestedName       string
+	RegisteredName      string
+	AlreadyRegistered   bool
+	Registered          bool
+	IsFirstVault        bool
+	HasExistingDefault  bool
+	IsActive            bool
+	IsDefault           bool
+	NeedsActivateChoice bool
+	NeedsDefaultChoice  bool
+	Guidance            string
+	ConfigPath          string
+	StatePath           string
 }
 
 type initPrompter struct {
@@ -98,12 +104,31 @@ func handleInitResult(_ *cobra.Command, result commandexec.Result) error {
 		fmt.Printf("\n%s\n", ui.Star("Existing vault detected. Configuration preserved."))
 	}
 
+	renderInitRegistration(info)
+
 	if initShouldPrompt() {
 		runInitFollowUp(&info)
 	}
 	renderInitNextSteps(info)
 
 	return nil
+}
+
+// renderInitRegistration reports what the first-run vault policy did during init.
+func renderInitRegistration(info initPostInitInfo) {
+	if info.Path == "" || !info.AlreadyRegistered {
+		return
+	}
+	fmt.Println()
+	switch {
+	case info.IsFirstVault:
+		fmt.Println(ui.Checkf("Registered '%s' as your default and active vault.", info.RegisteredName))
+	case info.Registered:
+		fmt.Println(ui.Checkf("Registered vault '%s' in global config.", info.RegisteredName))
+		fmt.Println(ui.Bullet("Left the default and active vault unchanged (another vault is already configured)."))
+	default:
+		fmt.Println(ui.Infof("Vault is already registered as '%s'.", info.RegisteredName))
+	}
 }
 
 func init() {
@@ -118,65 +143,44 @@ func initPostInitInfoFromAny(path string, raw interface{}) initPostInitInfo {
 	info.SuggestedName = stringValue(data["suggested_name"])
 	info.RegisteredName = stringValue(data["registered_name"])
 	info.AlreadyRegistered = boolValue(data["already_registered"])
+	info.Registered = boolValue(data["registered"])
+	info.IsFirstVault = boolValue(data["is_first_vault"])
+	info.HasExistingDefault = boolValue(data["has_existing_default"])
 	info.IsActive = boolValue(data["is_active"])
 	info.IsDefault = boolValue(data["is_default"])
+	info.NeedsActivateChoice = boolValue(data["needs_user_choice_for_activate"])
+	info.NeedsDefaultChoice = boolValue(data["needs_user_choice_for_default"])
+	info.Guidance = stringValue(data["guidance"])
 	info.ConfigPath = stringValue(data["config_path"])
 	info.StatePath = stringValue(data["state_path"])
 	return info
 }
 
+// runInitFollowUp handles interactive setup after init.
+//
+// Registration already happens in the init handler (first-run vault policy), so
+// this only needs to:
+//   - offer a manual retry if auto-registration failed, and
+//   - ask about default/active when the new vault was registered but another vault
+//     already exists (a first vault is fully configured automatically).
 func runInitFollowUp(info *initPostInitInfo) {
-	if info == nil {
+	if info == nil || info.Path == "" {
 		return
 	}
-	if info.Path == "" {
-		return
-	}
-	prompter := newInitPrompter()
 
 	if !info.AlreadyRegistered {
-		fmt.Println()
-		if !prompter.confirm("Register this vault in global config?") {
-			return
-		}
-
-		name := strings.TrimSpace(prompter.input("Vault name?", info.SuggestedName))
-		if name == "" {
-			name = info.SuggestedName
-		}
-		pin := prompter.confirm("Set this as the default vault?")
-		activate := prompter.confirm("Set this as the active vault?")
-
-		addResult := executeCanonicalCommand("vault_add", "", map[string]interface{}{
-			"name": name,
-			"path": info.Path,
-			"pin":  pin,
-		})
-		if !addResult.OK {
-			printInitFollowUpFailure("register vault", addResult)
-			return
-		}
-		_ = renderVaultAdd(nil, addResult)
-		info.AlreadyRegistered = true
-		info.RegisteredName = name
-		info.IsDefault = pin
-
-		if activate {
-			useResult := executeCanonicalCommand("vault_use", "", map[string]interface{}{
-				"name": name,
-			})
-			if !useResult.OK {
-				printInitFollowUpFailure("activate vault", useResult)
-				return
-			}
-			_ = renderVaultUse(nil, useResult)
-			info.IsActive = true
-		}
+		runInitManualRegister(info)
 		return
 	}
 
+	// First vault is fully configured (registered + default + active); nothing to ask.
+	if info.IsFirstVault {
+		return
+	}
+
+	prompter := newInitPrompter()
 	fmt.Println()
-	fmt.Println(ui.Infof("Vault is already registered as '%s'.", info.RegisteredName))
+	fmt.Println(ui.Info("Another vault is already set as default/active. Change it only if you intend to."))
 
 	if !info.IsDefault && prompter.confirm("Set this vault as the default?") {
 		pinResult := executeCanonicalCommand("vault_pin", "", map[string]interface{}{
@@ -184,15 +188,60 @@ func runInitFollowUp(info *initPostInitInfo) {
 		})
 		if !pinResult.OK {
 			printInitFollowUpFailure("set default vault", pinResult)
-			return
+		} else {
+			_ = renderVaultPin(nil, pinResult)
+			info.IsDefault = true
+			info.NeedsDefaultChoice = false
 		}
-		_ = renderVaultPin(nil, pinResult)
-		info.IsDefault = true
 	}
 
 	if !info.IsActive && prompter.confirm("Set this vault as the active vault?") {
 		useResult := executeCanonicalCommand("vault_use", "", map[string]interface{}{
 			"name": info.RegisteredName,
+		})
+		if !useResult.OK {
+			printInitFollowUpFailure("activate vault", useResult)
+		} else {
+			_ = renderVaultUse(nil, useResult)
+			info.IsActive = true
+			info.NeedsActivateChoice = false
+		}
+	}
+}
+
+// runInitManualRegister is the interactive fallback used when auto-registration
+// failed. It mirrors the register/pin/activate prompts.
+func runInitManualRegister(info *initPostInitInfo) {
+	prompter := newInitPrompter()
+	fmt.Println()
+	if !prompter.confirm("Register this vault in global config?") {
+		return
+	}
+
+	name := strings.TrimSpace(prompter.input("Vault name?", info.SuggestedName))
+	if name == "" {
+		name = info.SuggestedName
+	}
+	pin := prompter.confirm("Set this as the default vault?")
+	activate := prompter.confirm("Set this as the active vault?")
+
+	addResult := executeCanonicalCommand("vault_add", "", map[string]interface{}{
+		"name": name,
+		"path": info.Path,
+		"pin":  pin,
+	})
+	if !addResult.OK {
+		printInitFollowUpFailure("register vault", addResult)
+		return
+	}
+	_ = renderVaultAdd(nil, addResult)
+	info.AlreadyRegistered = true
+	info.RegisteredName = name
+	info.IsDefault = pin
+
+	if activate {
+		useResult := executeCanonicalCommand("vault_use", "", map[string]interface{}{
+			"name": name,
 		})
 		if !useResult.OK {
 			printInitFollowUpFailure("activate vault", useResult)
@@ -248,17 +297,24 @@ func renderInitNextSteps(info initPostInitInfo) {
 	if info.Path == "" {
 		return
 	}
+	// Fully configured (first vault, or the user completed the prompts): nothing to do.
 	if info.AlreadyRegistered && info.IsDefault && info.IsActive {
 		return
 	}
 
-	fmt.Println()
-	fmt.Println(ui.SectionHeader("Next steps"))
 	if !info.AlreadyRegistered {
+		fmt.Println()
+		fmt.Println(ui.SectionHeader("Next steps"))
 		fmt.Println(ui.Bullet(ui.Hint(fmt.Sprintf("rvn vault add %s %s --pin", info.SuggestedName, formatInitSuggestedPath(info.Path)))))
 		fmt.Println(ui.Bullet(ui.Hint(fmt.Sprintf("rvn vault use %s", info.SuggestedName))))
 		return
 	}
+
+	// Registered but not default/active: another vault already exists, so only
+	// suggest routing changes with an explicit reminder to decide intentionally.
+	fmt.Println()
+	fmt.Println(ui.SectionHeader("Next steps"))
+	fmt.Println(ui.Bullet(ui.Hint("Another vault is already configured; change routing only if you intend to.")))
 	if !info.IsDefault {
 		fmt.Println(ui.Bullet(ui.Hint(fmt.Sprintf("rvn vault pin %s", info.RegisteredName))))
 	}

@@ -6,8 +6,7 @@
 rvn init /path/to/new-vault --json
 ```
 
-This creates a vault with default config, schema, and index directories.
-In `--json` mode, init is non-interactive: it returns post-init suggestions instead of registering, pinning, or activating the vault implicitly.
+This creates a vault with default config, schema, and index directories, and applies the first-run vault policy: the vault is auto-registered, and if it is the first vault on the machine it is also set as the default and active vault. When another vault already exists, init registers the new vault but leaves default/active unchanged (`post_init` sets `needs_user_choice_for_activate` / `needs_user_choice_for_default`). Ask the user before changing routing.
 
 ## Register and activate named vaults
 

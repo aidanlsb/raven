@@ -405,6 +405,12 @@ rvn vault config exclude remove '*.plan.md'
 
 It also creates the default folders.
 
+Beyond the vault-local files, `rvn init` also registers the new vault in global
+`config.toml`. If it is the first vault on the machine, init sets it as `default_vault`
+and `active_vault` as well; when another vault already exists, init registers the new vault
+but leaves routing unchanged. See
+[Vault Creation & Management](../getting-started/first-vault.md) for the full first-run policy.
+
 ---
 
 ## What belongs in `schema.yaml` (and not here)

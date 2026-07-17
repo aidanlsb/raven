@@ -125,6 +125,26 @@ The agent detects your vault state, creates a first vault with `rvn init` when
 none exists (asking where to put it), and then teaches create, query, and check
 against that vault. MCP is optional throughout.
 
+## Creating a new vault with an agent
+
+If an agent needs to create a vault, have it run `rvn init <path> --json` (or the `init`
+MCP tool). Init applies Raven's first-run vault policy:
+
+- The new vault is auto-registered in global config.
+- If it is the first vault on the machine, it is also set as the default and active vault,
+  so later commands resolve to it automatically.
+- If another vault already exists, init registers the new vault but does **not** change the
+  default or active vault.
+
+Agents should read the `post_init` object in the response:
+
+- On the first vault, `is_first_vault` is `true`, `post_init.actions` is empty, and routing is
+  already applied — the agent can proceed immediately, no further setup needed.
+- When another vault already exists, `needs_user_choice_for_activate` /
+  `needs_user_choice_for_default` are `true` and `post_init.actions` lists the `activate` /
+  `set_default` actions. The agent must ask you before running them — a newly created vault
+  should never silently change which vault other commands target.
+
 ## Recommended first prompt
 
 After installing the onboarding skill, a good first prompt is:

@@ -28,7 +28,6 @@ Then initialize a vault:
 
 ```bash
 rvn init ~/notes
-cd ~/notes
 ```
 
 Raven creates:
@@ -39,6 +38,12 @@ notes/
 ├── raven.yaml    # vault configuration
 └── schema.yaml   # types, fields, and traits
 ```
+
+On a fresh machine, this first `rvn init` also registers `~/notes` in global config
+and sets it as your default and active vault, so the CLI can find it right away — no
+extra setup needed. Additional vaults are registered too, but you switch between them
+explicitly with `rvn vault use` / `rvn vault pin`. See
+[Vault Creation & Management](docs/getting-started/first-vault.md).
 
 ## Agent Setup
 
