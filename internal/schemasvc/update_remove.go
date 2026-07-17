@@ -386,7 +386,7 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 		db, err := index.Open(req.VaultPath)
 		if err == nil {
 			defer db.Close()
-			objects, err := db.QueryObjects(typeName)
+			objects, err := objectsByType(db, typeName)
 			if err == nil && len(objects) > 0 {
 				missing := make([]string, 0)
 				for _, obj := range objects {
@@ -566,7 +566,7 @@ func RemoveType(req RemoveTypeRequest) (*RemoveResult, error) {
 	warnings := make([]Warning, 0)
 	if db, err := index.Open(req.VaultPath); err == nil {
 		defer db.Close()
-		if objects, err := db.QueryObjects(typeName); err == nil && len(objects) > 0 {
+		if objects, err := objectsByType(db, typeName); err == nil && len(objects) > 0 {
 			warnings = append(warnings, Warning{
 				Code:    codes.WarnOrphanedFiles,
 				Message: fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
@@ -632,7 +632,7 @@ func RemoveTrait(req RemoveTraitRequest) (*RemoveResult, error) {
 	warnings := make([]Warning, 0)
 	if db, err := index.Open(req.VaultPath); err == nil {
 		defer db.Close()
-		if instances, err := db.QueryTraits(traitName, nil); err == nil && len(instances) > 0 {
+		if instances, err := traitsByType(db, traitName); err == nil && len(instances) > 0 {
 			warnings = append(warnings, Warning{
 				Code:    codes.WarnOrphanedTraits,
 				Message: fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
@@ -706,7 +706,7 @@ func RemoveField(req RemoveFieldRequest) (*RemoveResult, error) {
 	if fieldDef != nil && fieldDef.Required {
 		if db, err := index.Open(req.VaultPath); err == nil {
 			defer db.Close()
-			if objects, err := db.QueryObjects(typeName); err == nil && len(objects) > 0 {
+			if objects, err := objectsByType(db, typeName); err == nil && len(objects) > 0 {
 				return nil, newError(
 					ErrorDataIntegrity,
 					fmt.Sprintf("cannot remove required field '%s': %d objects have this field", fieldName, len(objects)),
