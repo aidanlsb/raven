@@ -93,7 +93,7 @@ var nonInvokableCommandIDs = map[string]struct{}{
 // are either absent (PreviewModeNone) or use PreviewModeBulkPreviewDefault,
 // which previews only when a bulk input (stdin/object_ids/trait_ids) is
 // present. High-blast-radius operations (bulk writes, query --apply, schema
-// rename, check fixes, skill sync/remove) preview by default and require
+// rename, check fixes, skill install/sync/remove) preview by default and require
 // `confirm` to apply.
 var previewModeByCommandID = map[string]PreviewMode{
 	"add":    PreviewModeBulkPreviewDefault,
@@ -107,6 +107,7 @@ var previewModeByCommandID = map[string]PreviewMode{
 	"query":                PreviewModePreviewDefault,
 	"schema_rename_field":  PreviewModePreviewDefault,
 	"schema_rename_type":   PreviewModePreviewDefault,
+	"skill_install":        PreviewModePreviewDefault,
 	"skill_remove":         PreviewModePreviewDefault,
 	"skill_sync":           PreviewModePreviewDefault,
 }

@@ -50,6 +50,37 @@ func HandleSkillSync(_ context.Context, req commandexec.Request) commandexec.Res
 	return commandexec.Success(data, nil)
 }
 
+// HandleSkillInstall executes the canonical `skill install` command, which
+// installs shipped Raven skills in one shot (the full catalog by default, or a
+// narrowed set when names are given). Preview by default; applies on confirm.
+func HandleSkillInstall(_ context.Context, req commandexec.Request) commandexec.Result {
+	result, err := skillsvc.Install(skillsvc.InstallRequest{
+		Names:   stringSliceArg(req.Args["names"]),
+		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
+		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
+		Confirm: req.Confirm,
+	})
+	if err != nil {
+		return mapSkillSvcFailure(err)
+	}
+
+	data := map[string]interface{}{
+		"mode":          result.Mode,
+		"scope":         result.Scope,
+		"root":          result.Root,
+		"needs_confirm": result.NeedsConfirm,
+		"requested":     result.Requested,
+		"skills":        result.Skills,
+		"installed":     result.Installed,
+		"updated":       result.Updated,
+		"skipped":       result.Skipped,
+	}
+	if result.ActionsApplied > 0 {
+		data["actions_applied"] = result.ActionsApplied
+	}
+	return commandexec.Success(data, nil)
+}
+
 // HandleSkillRemove executes the canonical `skill remove` command.
 func HandleSkillRemove(_ context.Context, req commandexec.Request) commandexec.Result {
 	name := strings.TrimSpace(stringArg(req.Args, "name"))

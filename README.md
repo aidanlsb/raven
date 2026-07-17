@@ -48,13 +48,21 @@ explicitly with `rvn vault use` / `rvn vault pin`. See
 ## Agent Setup
 
 Raven ships reusable [Agent Skills](https://agentskills.io/) that teach coding
-agents how to work with your vault. Start with onboarding and core:
+agents how to work with your vault. The fastest way to get started is to
+install the shipped skills:
 
 ```bash
-rvn skill list
-rvn skill sync raven-onboarding --confirm
-rvn skill sync raven-core --confirm
+rvn skill install          # interactive: prints the plan and prompts [y/N]
+rvn skill install --yes    # agents / CI: apply without prompting
 ```
+
+In an interactive terminal, `rvn skill install` prints what will be installed
+and prompts before writing. In non-interactive or `--json` runs it does not
+prompt: pass `--yes` to apply, otherwise it returns a preview and reports that
+confirmation is required.
+
+By default it installs all shipped skills; pass skill names to narrow it, e.g.
+`rvn skill install raven-core raven-query`.
 
 Skills install to `~/.agents/skills` by default. Use `--scope project` for
 `.agents/skills` in the current project, or `--dest` to choose another
@@ -70,9 +78,11 @@ location.
 | `raven-templates` | Template files and schema-template bindings |
 | `raven-vault-admin` | Vault setup, selection, and configuration |
 
-The packaged skills teach CLI workflows and do not require MCP. Running
-`rvn skill sync` without a skill name updates existing Raven-managed skills;
-it reports but does not install missing skills.
+The packaged skills teach CLI workflows and do not require MCP. Use
+`rvn skill install` for first-time installation. `rvn skill sync` is for
+updating already-installed Raven-managed skills: without a skill name it only
+updates/realigns existing ones and reports (but does not install) missing
+skills.
 
 ### MCP Setup
 
@@ -96,24 +106,8 @@ rvn mcp show --client cursor
 
 ### Agent Onboarding
 
-You don't need to run `rvn init` before involving an agent. The onboarding
-skill sets up Raven from scratch:
-
-1. Install the CLI (above).
-2. Sync the skills (`rvn skill sync raven-onboarding --confirm` and
-   `rvn skill sync raven-core --confirm`).
-3. Ask your agent to onboard you.
-
-The agent detects whether you already have a vault, creates your first one with
-`rvn init` if you don't, and then walks you through creating, querying, and
-checking content. A good first prompt:
-
-> Use the raven-onboarding skill to set up Raven from scratch. If I don't have a
-> vault yet, help me create one, then walk me through one create flow, one
-> query, and one check.
-
-Prefer to set up the vault yourself first? The DIY `rvn init ~/notes` flow above
-still works — the agent will detect the existing vault and skip creation.
+After installing the onboarding skill, ask your agent to use it to introduce
+Raven in the context of your vault.
 
 See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 

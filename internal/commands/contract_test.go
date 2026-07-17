@@ -171,6 +171,7 @@ func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
 		"query",
 		"schema_rename_field",
 		"schema_rename_type",
+		"skill_install",
 		"skill_remove",
 		"skill_sync",
 	} {
