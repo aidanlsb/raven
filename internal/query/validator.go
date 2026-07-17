@@ -23,17 +23,32 @@ func (e *ValidationError) Error() string {
 }
 
 // Validator validates queries against a schema.
+//
+// Validation has two layers:
+//
+//   - Structural validation is always performed, even when no schema is
+//     available: the root/predicate legality matrix (capabilities.go), trait
+//     ".value" restrictions, section/asset built-in field names, regex
+//     validity, and empty content terms. These depend only on the query shape.
+//   - Schema-dependent validation (unknown types/traits, unknown or wrongly
+//     typed object/trait fields) only runs when a schema is present.
+//
+// This split lets callers enforce structural legality even before a schema is
+// loaded, while still surfacing rich schema diagnostics when one is available.
 type Validator struct {
 	schema *schema.Schema
 }
 
-// NewValidator creates a new query validator.
+// NewValidator creates a new query validator. A nil schema is permitted; in
+// that case only structural validation is performed.
 func NewValidator(sch *schema.Schema) *Validator {
 	return &Validator{schema: sch}
 }
 
-// Validate checks a parsed query against the schema.
-// Returns a ValidationError if the query references undefined types, traits, or fields.
+func (v *Validator) hasSchema() bool { return v.schema != nil }
+
+// Validate checks a parsed query. Structural rules always run; schema-dependent
+// rules run only when the validator has a schema.
 func (v *Validator) Validate(q *Query) error {
 	return v.validateQuery(q)
 }
@@ -56,61 +71,111 @@ func (v *Validator) validateQuery(q *Query) error {
 }
 
 func (v *Validator) validateObjectQuery(q *Query) error {
-	// Check that the type exists in schema
-	typeDef, exists := v.schema.Types[q.TypeName]
-	if !exists {
-		available := v.availableTypes()
-		return &ValidationError{
-			Message:    fmt.Sprintf("unknown type '%s'", q.TypeName),
-			Suggestion: fmt.Sprintf("Available types: %s", strings.Join(available, ", ")),
+	var typeDef *schema.TypeDefinition
+	if v.hasSchema() {
+		td, exists := v.schema.Types[q.TypeName]
+		if !exists {
+			available := v.availableTypes()
+			return &ValidationError{
+				Message:    fmt.Sprintf("unknown type '%s'", q.TypeName),
+				Suggestion: fmt.Sprintf("Available types: %s", strings.Join(available, ", ")),
+			}
 		}
+		typeDef = td
 	}
 
-	// Validate predicate
-	if q.Predicate != nil {
-		if err := v.validateObjectPredicate(q.Predicate, q.TypeName, typeDef); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return v.validatePredicate(QueryTypeObject, q.TypeName, typeDef, q.Predicate)
 }
 
 func (v *Validator) validateTraitQuery(q *Query) error {
-	// Check that the trait exists in schema
-	if _, exists := v.schema.Traits[q.TypeName]; !exists {
-		available := v.availableTraits()
-		return &ValidationError{
-			Message:    fmt.Sprintf("unknown trait '%s'", q.TypeName),
-			Suggestion: fmt.Sprintf("Available traits: %s", strings.Join(available, ", ")),
+	if v.hasSchema() {
+		if _, exists := v.schema.Traits[q.TypeName]; !exists {
+			available := v.availableTraits()
+			return &ValidationError{
+				Message:    fmt.Sprintf("unknown trait '%s'", q.TypeName),
+				Suggestion: fmt.Sprintf("Available traits: %s", strings.Join(available, ", ")),
+			}
 		}
 	}
 
-	// Validate predicate
-	if q.Predicate != nil {
-		if err := v.validateTraitPredicate(q.Predicate, q.TypeName); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return v.validatePredicate(QueryTypeTrait, q.TypeName, nil, q.Predicate)
 }
 
 func (v *Validator) validateAssetQuery(q *Query) error {
-	if q.Predicate == nil {
-		return nil
-	}
-	return v.validateAssetPredicate(q.Predicate)
+	return v.validatePredicate(QueryTypeAsset, "", nil, q.Predicate)
 }
 
 func (v *Validator) validateSectionQuery(q *Query) error {
-	if q.Predicate == nil {
-		return nil
-	}
-	return v.validateSectionPredicate(q.Predicate)
+	return v.validatePredicate(QueryTypeSection, "", nil, q.Predicate)
 }
 
-func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typeDef *schema.TypeDefinition) error {
+// validatePredicate is the single validation entry point for predicate nodes.
+// It handles boolean composition, then the shared legality matrix, then the
+// per-root fine-grained checks.
+func (v *Validator) validatePredicate(root QueryType, typeName string, typeDef *schema.TypeDefinition, pred Predicate) error {
+	if pred == nil {
+		return nil
+	}
+
+	switch p := pred.(type) {
+	case *OrPredicate:
+		for _, subPred := range p.Predicates {
+			if err := v.validatePredicate(root, typeName, typeDef, subPred); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *NotPredicate:
+		return v.validatePredicate(root, typeName, typeDef, p.Inner)
+	case *GroupPredicate:
+		for _, subPred := range p.Predicates {
+			if err := v.validatePredicate(root, typeName, typeDef, subPred); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Coarse legality: shared with the executor via the capability matrix.
+	if verr := predicateAllowedAtRoot(root, pred); verr != nil {
+		return verr
+	}
+
+	// Fine-grained checks for the (now known-legal) predicate kind at this root.
+	switch root {
+	case QueryTypeObject:
+		return v.validateLegalObjectPredicate(typeName, typeDef, pred)
+	case QueryTypeTrait:
+		return v.validateLegalTraitPredicate(typeName, pred)
+	case QueryTypeAsset:
+		return v.validateLegalAssetPredicate(pred)
+	case QueryTypeSection:
+		return v.validateLegalSectionPredicate(pred)
+	default:
+		return nil
+	}
+}
+
+// validateSubquery validates a nested query (its own root re-enters the
+// structural/schema split independently).
+func (v *Validator) validateSubquery(sub *Query) error {
+	if sub == nil {
+		return nil
+	}
+	return v.validateQuery(sub)
+}
+
+func validateContentTerm(p *ContentPredicate) error {
+	if p.SearchTerm == "" {
+		return &ValidationError{
+			Message:    "content search term cannot be empty",
+			Suggestion: `Provide a search term: content("search terms")`,
+		}
+	}
+	return nil
+}
+
+func (v *Validator) validateLegalObjectPredicate(typeName string, typeDef *schema.TypeDefinition, pred Predicate) error {
 	switch p := pred.(type) {
 	case *FieldPredicate:
 		return v.validateFieldPredicate(p, typeName, typeDef)
@@ -119,73 +184,32 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 	case *ArrayQuantifierPredicate:
 		return v.validateArrayQuantifierPredicate(p, typeName, typeDef)
 	case *HasPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *ContainsPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *RefsPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
-	case *ContentPredicate:
-		// Content predicate just needs a non-empty search term
-		if p.SearchTerm == "" {
-			return &ValidationError{
-				Message:    "content search term cannot be empty",
-				Suggestion: `Provide a search term: content("search terms")`,
-			}
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *RefdPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
-	case *ValuePredicate:
-		// ValuePredicate is deprecated; the parser now uses FieldPredicate with Field="value"
-		return &ValidationError{
-			Message:    "value predicate is only valid for trait queries",
-			Suggestion: "Use .value==X in trait queries, or use .field==X for type fields",
-		}
-	case *InPredicate:
-		return &ValidationError{
-			Message:    "in() predicate is only valid for trait and section queries",
-			Suggestion: "Use in(type:...) or in(section ...) on traits or sections",
-		}
-	case *WithinPredicate:
-		return &ValidationError{
-			Message:    "within() predicate is only valid for trait and section queries",
-			Suggestion: "Use within(type:...) or within(section ...) on traits or sections",
-		}
-	case *AtPredicate:
-		// at: is only valid for trait queries
-		return &ValidationError{
-			Message:    "at() predicate is only valid for trait queries",
-			Suggestion: "Use at(trait:...) to find traits co-located with other traits",
-		}
-	case *OrPredicate:
-		for _, subPred := range p.Predicates {
-			if err := v.validateObjectPredicate(subPred, typeName, typeDef); err != nil {
-				return err
-			}
-		}
-	case *NotPredicate:
-		return v.validateObjectPredicate(p.Inner, typeName, typeDef)
-	case *GroupPredicate:
-		for _, subPred := range p.Predicates {
-			if err := v.validateObjectPredicate(subPred, typeName, typeDef); err != nil {
-				return err
-			}
-		}
+		return v.validateSubquery(p.SubQuery)
+	case *ContentPredicate:
+		return validateContentTerm(p)
 	}
 	return nil
 }
 
-func (v *Validator) validateTraitPredicate(pred Predicate, traitName string) error {
+func (v *Validator) validateLegalTraitPredicate(traitName string, pred Predicate) error {
 	switch p := pred.(type) {
 	case *ValuePredicate:
 		return nil
+	case *FieldPredicate:
+		// Allow .value for traits (the trait's value field).
+		if p.Field == "value" {
+			return nil
+		}
+		return &ValidationError{
+			Message:    "field predicates other than .value are only valid for type queries",
+			Suggestion: "Use .value==X for trait values, or .field==X in type queries",
+		}
 	case *StringFuncPredicate:
 		if p.IsElementRef || p.Field != "value" {
 			fieldLabel := "." + p.Field
@@ -197,33 +221,18 @@ func (v *Validator) validateTraitPredicate(pred Predicate, traitName string) err
 				Suggestion: `Use includes(.value, "..."), startswith(.value, "..."), endswith(.value, "..."), or matches(.value, "..."). Use content("...") to search trait line content.`,
 			}
 		}
-		if err := validateRegexPattern(p); err != nil {
-			return err
-		}
-		return nil
+		return validateRegexPattern(p)
+	case *ArrayQuantifierPredicate:
+		return v.validateTraitArrayQuantifierPredicate(p, traitName)
 	case *InPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
-		// Target-based predicate doesn't need schema validation
+		return v.validateSubquery(p.SubQuery)
 	case *WithinPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *RefsPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *ContentPredicate:
-		// Content predicate just needs a non-empty search term
-		if p.SearchTerm == "" {
-			return &ValidationError{
-				Message:    "content search term cannot be empty",
-				Suggestion: `Provide a search term: content("search terms")`,
-			}
-		}
+		return validateContentTerm(p)
 	case *AtPredicate:
-		// at: is only valid for trait queries (which we're in)
 		if p.SubQuery != nil {
 			if p.SubQuery.Type != QueryTypeTrait {
 				return &ValidationError{
@@ -233,143 +242,23 @@ func (v *Validator) validateTraitPredicate(pred Predicate, traitName string) err
 			}
 			return v.validateQuery(p.SubQuery)
 		}
-	case *RefdPredicate:
-		return &ValidationError{
-			Message:    "refd() predicate is only valid for type queries",
-			Suggestion: "Use refd(...) with type queries, or use refs(...) in trait queries",
-		}
-	case *FieldPredicate:
-		// Allow .value for traits (the trait's value field)
-		if p.Field == "value" {
-			return nil
-		}
-		return &ValidationError{
-			Message:    "field predicates other than .value are only valid for type queries",
-			Suggestion: "Use .value==X for trait values, or .field==X in type queries",
-		}
-	case *ArrayQuantifierPredicate:
-		return v.validateTraitArrayQuantifierPredicate(p, traitName)
-	case *HasPredicate:
-		return &ValidationError{
-			Message:    "has() predicate is only valid for type and section queries",
-			Suggestion: "Use has(trait:...) or has(section ...) in type and section queries",
-		}
-	case *ContainsPredicate:
-		return &ValidationError{
-			Message:    "contains() predicate is only valid for type and section queries",
-			Suggestion: "Use contains(trait:...) or contains(section ...) in type and section queries",
-		}
-	case *OrPredicate:
-		for _, subPred := range p.Predicates {
-			if err := v.validateTraitPredicate(subPred, traitName); err != nil {
-				return err
-			}
-		}
-	case *NotPredicate:
-		return v.validateTraitPredicate(p.Inner, traitName)
-	case *GroupPredicate:
-		for _, subPred := range p.Predicates {
-			if err := v.validateTraitPredicate(subPred, traitName); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }
 
-func (v *Validator) validateTraitArrayQuantifierPredicate(p *ArrayQuantifierPredicate, traitName string) error {
-	if p.Field != "value" {
-		return &ValidationError{
-			Message:    fmt.Sprintf("array predicates on trait queries only support .value, got .%s", p.Field),
-			Suggestion: "Use any(.value, ...), all(.value, ...), or none(.value, ...) for array-valued traits",
-		}
-	}
-	traitDef := v.schema.Traits[traitName]
-	if traitDef == nil {
-		return &ValidationError{
-			Message:    fmt.Sprintf("unknown trait '%s'", traitName),
-			Suggestion: fmt.Sprintf("Available traits: %s", strings.Join(v.availableTraits(), ", ")),
-		}
-	}
-	elemType, ok := arrayElementType(traitDef.Type)
-	if !ok {
-		return &ValidationError{
-			Message:    fmt.Sprintf("array predicates any()/all()/none() require an array-valued trait, but trait '%s' is %s", traitName, traitDef.Type),
-			Suggestion: "Use any()/all()/none() only with [] trait types, or use .value predicates on scalar traits",
-		}
-	}
-	return v.validateArrayElementPredicate(p.ElementPred, elemType)
-}
-
-func (v *Validator) validateAssetPredicate(pred Predicate) error {
+func (v *Validator) validateLegalAssetPredicate(pred Predicate) error {
 	switch p := pred.(type) {
 	case *FieldPredicate:
 		return v.validateAssetFieldPredicate(p)
 	case *StringFuncPredicate:
 		return v.validateAssetStringFuncPredicate(p)
 	case *RefdPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
-	case *RefsPredicate:
-		return &ValidationError{
-			Message:    "refs() predicate is not valid for asset queries",
-			Suggestion: "Assets do not have outbound references; use asset refd(...) to find assets referenced by objects or traits",
-		}
-	case *ArrayQuantifierPredicate:
-		return &ValidationError{
-			Message:    "array predicates are not valid for asset queries",
-			Suggestion: "Asset fields are scalar metadata fields",
-		}
-	case *ContentPredicate:
-		return &ValidationError{
-			Message:    "content() predicate is not valid for asset queries",
-			Suggestion: "Filter assets by derived metadata fields such as .filename, .extension, .media_type, or .size_bytes",
-		}
-	case *HasPredicate:
-		return &ValidationError{
-			Message:    "has() predicate is not valid for asset queries",
-			Suggestion: "Assets do not have traits; use asset refd(...) to filter by referencing objects or traits",
-		}
-	case *ContainsPredicate:
-		return &ValidationError{
-			Message:    "contains() predicate is not valid for asset queries",
-			Suggestion: "Assets do not contain Raven sections or traits",
-		}
-	case *InPredicate, *WithinPredicate:
-		return &ValidationError{
-			Message:    "scope predicates are not valid for asset queries",
-			Suggestion: "Assets are path-backed resources, not markdown scopes",
-		}
-	case *AtPredicate:
-		return &ValidationError{
-			Message:    "trait-location predicates are not valid for asset queries",
-			Suggestion: "Use asset refd(trait:...) to find assets referenced by matching trait lines",
-		}
-	case *ValuePredicate:
-		return &ValidationError{
-			Message:    "value predicates are not valid for asset queries",
-			Suggestion: "Use asset fields such as .filename, .extension, .media_type, or .size_bytes",
-		}
-	case *OrPredicate:
-		for _, subPred := range p.Predicates {
-			if err := v.validateAssetPredicate(subPred); err != nil {
-				return err
-			}
-		}
-	case *NotPredicate:
-		return v.validateAssetPredicate(p.Inner)
-	case *GroupPredicate:
-		for _, subPred := range p.Predicates {
-			if err := v.validateAssetPredicate(subPred); err != nil {
-				return err
-			}
-		}
+		return v.validateSubquery(p.SubQuery)
 	}
 	return nil
 }
 
-func (v *Validator) validateSectionPredicate(pred Predicate) error {
+func (v *Validator) validateLegalSectionPredicate(pred Predicate) error {
 	switch p := pred.(type) {
 	case *FieldPredicate:
 		if _, ok := sectionFieldColumn("s", p.Field); !ok {
@@ -399,71 +288,55 @@ func (v *Validator) validateSectionPredicate(pred Predicate) error {
 		}
 		return validateRegexPattern(p)
 	case *InPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *WithinPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *HasPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *ContainsPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *RefsPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *RefdPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
+		return v.validateSubquery(p.SubQuery)
 	case *ContentPredicate:
-		if p.SearchTerm == "" {
-			return &ValidationError{
-				Message:    "content search term cannot be empty",
-				Suggestion: `Provide a search term: content("search terms")`,
-			}
-		}
-	case *ArrayQuantifierPredicate:
-		return &ValidationError{
-			Message:    "array predicates are not valid for section queries",
-			Suggestion: "Sections only expose scalar built-in fields",
-		}
-	case *ValuePredicate:
-		return &ValidationError{
-			Message:    "value predicates are not valid for section queries",
-			Suggestion: "Use section fields such as .title, .slug, or .level",
-		}
-	case *AtPredicate:
-		return &ValidationError{
-			Message:    "at() predicate is only valid for trait queries",
-			Suggestion: "Use at(trait:...) to find traits co-located with other traits",
-		}
-	case *OrPredicate:
-		for _, subPred := range p.Predicates {
-			if err := v.validateSectionPredicate(subPred); err != nil {
-				return err
-			}
-		}
-	case *NotPredicate:
-		return v.validateSectionPredicate(p.Inner)
-	case *GroupPredicate:
-		for _, subPred := range p.Predicates {
-			if err := v.validateSectionPredicate(subPred); err != nil {
-				return err
-			}
-		}
+		return validateContentTerm(p)
 	}
 	return nil
 }
 
+func (v *Validator) validateTraitArrayQuantifierPredicate(p *ArrayQuantifierPredicate, traitName string) error {
+	if p.Field != "value" {
+		return &ValidationError{
+			Message:    fmt.Sprintf("array predicates on trait queries only support .value, got .%s", p.Field),
+			Suggestion: "Use any(.value, ...), all(.value, ...), or none(.value, ...) for array-valued traits",
+		}
+	}
+	if !v.hasSchema() {
+		return nil
+	}
+	traitDef := v.schema.Traits[traitName]
+	if traitDef == nil {
+		return &ValidationError{
+			Message:    fmt.Sprintf("unknown trait '%s'", traitName),
+			Suggestion: fmt.Sprintf("Available traits: %s", strings.Join(v.availableTraits(), ", ")),
+		}
+	}
+	elemType, ok := arrayElementType(traitDef.Type)
+	if !ok {
+		return &ValidationError{
+			Message:    fmt.Sprintf("array predicates any()/all()/none() require an array-valued trait, but trait '%s' is %s", traitName, traitDef.Type),
+			Suggestion: "Use any()/all()/none() only with [] trait types, or use .value predicates on scalar traits",
+		}
+	}
+	return v.validateArrayElementPredicate(p.ElementPred, elemType)
+}
+
 func (v *Validator) validateFieldPredicate(p *FieldPredicate, typeName string, typeDef *schema.TypeDefinition) error {
 	if isDateVirtualField(typeName, p.Field) {
+		return nil
+	}
+	if !v.hasSchema() {
 		return nil
 	}
 	_, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
@@ -511,33 +384,34 @@ func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, ty
 		}
 	}
 
-	fieldDef, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
-	if err != nil {
-		return err
-	}
+	if v.hasSchema() {
+		fieldDef, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
+		if err != nil {
+			return err
+		}
 
-	if isArrayFieldType(fieldDef.Type) {
-		return &ValidationError{
-			Message:    fmt.Sprintf("string function predicates require a scalar field, but '.%s' is %s", p.Field, fieldDef.Type),
-			Suggestion: fmt.Sprintf(`Use any(.%s, includes(_, "...")) for array fields`, p.Field),
+		if isArrayFieldType(fieldDef.Type) {
+			return &ValidationError{
+				Message:    fmt.Sprintf("string function predicates require a scalar field, but '.%s' is %s", p.Field, fieldDef.Type),
+				Suggestion: fmt.Sprintf(`Use any(.%s, includes(_, "...")) for array fields`, p.Field),
+			}
+		}
+
+		if !isStringLikeFieldType(fieldDef.Type) {
+			return &ValidationError{
+				Message:    fmt.Sprintf("string function predicates are not valid for field '.%s' of type %s", p.Field, fieldDef.Type),
+				Suggestion: "Use comparison predicates (.field==value, .field!=value, .field<value, etc.) for non-string fields",
+			}
 		}
 	}
 
-	if !isStringLikeFieldType(fieldDef.Type) {
-		return &ValidationError{
-			Message:    fmt.Sprintf("string function predicates are not valid for field '.%s' of type %s", p.Field, fieldDef.Type),
-			Suggestion: "Use comparison predicates (.field==value, .field!=value, .field<value, etc.) for non-string fields",
-		}
-	}
-
-	if err := validateRegexPattern(p); err != nil {
-		return err
-	}
-
-	return nil
+	return validateRegexPattern(p)
 }
 
 func (v *Validator) validateArrayQuantifierPredicate(p *ArrayQuantifierPredicate, typeName string, typeDef *schema.TypeDefinition) error {
+	if !v.hasSchema() {
+		return nil
+	}
 	fieldDef, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
 	if err != nil {
 		return err
