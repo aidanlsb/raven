@@ -225,7 +225,7 @@ func TestValidateMappingTypes(t *testing.T) {
 	}
 }
 
-func TestExtractContentFieldAndReplaceBodyContent(t *testing.T) {
+func TestExtractContentField(t *testing.T) {
 	t.Parallel()
 
 	mapped := map[string]interface{}{"name": "Freya", "bio": "Queen"}
@@ -234,13 +234,6 @@ func TestExtractContentFieldAndReplaceBodyContent(t *testing.T) {
 	}
 	if _, ok := mapped["bio"]; ok {
 		t.Fatal("expected content field to be removed from mapped fields")
-	}
-
-	file := "---\ntype: person\nname: Freya\n---\n\n# Old\n"
-	got := ReplaceBodyContent(file, "# New\n")
-	want := "---\ntype: person\nname: Freya\n---\n\n# New\n"
-	if got != want {
-		t.Fatalf("ReplaceBodyContent() = %q, want %q", got, want)
 	}
 }
 

@@ -101,6 +101,14 @@ echo '[{"name": "Freya", "bio": "Project lead and architect."}]' \
 
 The `bio` value becomes the page body content below the frontmatter.
 
+## Protected and excluded paths
+
+Like every Raven write command, `rvn import` refuses to create or modify objects
+in protected prefixes (for example `templates/`, `.raven/`, or any
+`protected_prefixes` you configure) or in excluded paths. Any item that resolves
+to such a path is reported as a per-item error, and the rest of the import
+continues.
+
 ## Preview and apply
 
 Imports apply immediately unless you pass `--dry-run`:
