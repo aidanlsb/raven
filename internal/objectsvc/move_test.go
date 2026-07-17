@@ -342,6 +342,114 @@ func TestMoveFileUpdatesSelfRefsAfterRename(t *testing.T) {
 	}
 }
 
+func TestMoveFileSkipsRefsInsideInlineCode(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		WithFile("notes/ref.md", "Real [[people/freya]] and code `[[people/freya]]`.\n").
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
+
+	if _, err := MoveFile(MoveFileRequest{
+		VaultPath:         v.Path,
+		VaultConfig:       &config.VaultConfig{},
+		Schema:            sch,
+		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
+		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
+		SourceObjectID:    "people/freya",
+		DestinationObject: "archive/freya",
+		UpdateRefs:        true,
+	}); err != nil {
+		t.Fatalf("MoveFile() error = %v", err)
+	}
+
+	content := v.ReadFile("notes/ref.md")
+	if !strings.Contains(content, "Real [[archive/freya]]") {
+		t.Fatalf("real backlink not updated, content:\n%s", content)
+	}
+	if !strings.Contains(content, "`[[people/freya]]`") {
+		t.Fatalf("code-span ref must not be rewritten, content:\n%s", content)
+	}
+	if got := strings.Count(content, "archive/freya"); got != 1 {
+		t.Fatalf("expected exactly one rewritten ref, got %d, content:\n%s", got, content)
+	}
+}
+
+func TestMoveFilePreservesFragmentAndDisplayText(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n\n## Bio\n\nDetails.\n").
+		WithFile("notes/ref.md", "See [[people/freya#bio|Freya]] for details.\n").
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
+
+	result, err := MoveFile(MoveFileRequest{
+		VaultPath:         v.Path,
+		VaultConfig:       &config.VaultConfig{},
+		Schema:            sch,
+		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
+		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
+		SourceObjectID:    "people/freya",
+		DestinationObject: "archive/freya",
+		UpdateRefs:        true,
+	})
+	if err != nil {
+		t.Fatalf("MoveFile() error = %v", err)
+	}
+	if len(result.UpdatedRefs) != 1 || result.UpdatedRefs[0] != "notes/ref" {
+		t.Fatalf("UpdatedRefs = %#v, want [notes/ref]", result.UpdatedRefs)
+	}
+
+	content := v.ReadFile("notes/ref.md")
+	if !strings.Contains(content, "[[archive/freya#bio|Freya]]") {
+		t.Fatalf("fragment/display not preserved, content:\n%s", content)
+	}
+}
+
+func TestMoveFileUpdatesFrontmatterBareRef(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		WithFile("projects/site.md", "---\ntype: project\ntitle: Site\nowner: people/freya\n---\n").
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "people/freya.md", "projects/site.md")
+	resolveVaultRefs(t, v.Path, sch)
+
+	result, err := MoveFile(MoveFileRequest{
+		VaultPath:         v.Path,
+		VaultConfig:       &config.VaultConfig{},
+		Schema:            sch,
+		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
+		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
+		SourceObjectID:    "people/freya",
+		DestinationObject: "archive/freya",
+		UpdateRefs:        true,
+	})
+	if err != nil {
+		t.Fatalf("MoveFile() error = %v", err)
+	}
+	if len(result.UpdatedRefs) != 1 || result.UpdatedRefs[0] != "projects/site" {
+		t.Fatalf("UpdatedRefs = %#v, want [projects/site]", result.UpdatedRefs)
+	}
+
+	content := v.ReadFile("projects/site.md")
+	if !strings.Contains(content, "owner: archive/freya") {
+		t.Fatalf("frontmatter ref not updated, content:\n%s", content)
+	}
+}
+
 func indexVaultFiles(t *testing.T, vaultPath string, sch *schema.Schema, relPaths ...string) {
 	t.Helper()
 
