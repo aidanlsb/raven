@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -41,20 +42,7 @@ func newTestServerWithVault(t *testing.T) *Server {
 
 func callResourcesList(t *testing.T, s *Server) []Resource {
 	t.Helper()
-
-	buf := &bytes.Buffer{}
-	s.out = buf
-	s.handleResourcesList(&Request{JSONRPC: "2.0", ID: 1, Method: "resources/list"})
-
-	var resp struct {
-		Result struct {
-			Resources []Resource `json:"resources"`
-		} `json:"result"`
-		Error *RPCError `json:"error,omitempty"`
-	}
-	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &resp); err != nil {
-		t.Fatalf("parse resources/list response: %v", err)
-	}
+	resp := callResourcesListResponse(t, s, nil)
 	if resp.Error != nil {
 		t.Fatalf("resources/list error: %s", resp.Error.Message)
 	}
@@ -62,6 +50,42 @@ func callResourcesList(t *testing.T, s *Server) []Resource {
 		t.Fatal("resources/list returned no resources")
 	}
 	return resp.Result.Resources
+}
+
+func callResourcesListResponse(t *testing.T, s *Server, params map[string]interface{}) struct {
+	Result struct {
+		Resources    []Resource                `json:"resources"`
+		VaultContext *commandexec.VaultContext `json:"vault_context"`
+	} `json:"result"`
+	Error *RPCError `json:"error,omitempty"`
+} {
+	t.Helper()
+
+	buf := &bytes.Buffer{}
+	s.out = buf
+
+	req := &Request{JSONRPC: "2.0", ID: 1, Method: "resources/list"}
+	if params != nil {
+		paramsBytes, err := json.Marshal(params)
+		if err != nil {
+			t.Fatalf("marshal resources/list params: %v", err)
+		}
+		raw := json.RawMessage(paramsBytes)
+		req.Params = &raw
+	}
+	s.handleResourcesList(req)
+
+	var resp struct {
+		Result struct {
+			Resources    []Resource                `json:"resources"`
+			VaultContext *commandexec.VaultContext `json:"vault_context"`
+		} `json:"result"`
+		Error *RPCError `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &resp); err != nil {
+		t.Fatalf("parse resources/list response: %v", err)
+	}
+	return resp
 }
 
 func callResourcesRead(t *testing.T, s *Server, uri string) ResourceContent {
@@ -381,6 +405,155 @@ func TestResourcesReadRejectsVaultAndVaultPathTogether(t *testing.T) {
 	}
 }
 
+func TestResourcesListIncludesVaultContext(t *testing.T) {
+	t.Parallel()
+	s := newTestServerWithVault(t)
+	resp := callResourcesListResponse(t, s, nil)
+	if resp.Error != nil {
+		t.Fatalf("resources/list error: %s", resp.Error.Message)
+	}
+	if resp.Result.VaultContext == nil {
+		t.Fatal("expected vault_context in resources/list result")
+	}
+	if resp.Result.VaultContext.Path != s.vaultPath {
+		t.Fatalf("vault_context.path = %q, want %q", resp.Result.VaultContext.Path, s.vaultPath)
+	}
+	if resp.Result.VaultContext.Source != "pinned" {
+		t.Fatalf("vault_context.source = %q, want %q", resp.Result.VaultContext.Source, "pinned")
+	}
+}
+
+func TestResourcesListAcceptsVaultPathOverride(t *testing.T) {
+	t.Parallel()
+
+	pinnedVault := t.TempDir()
+	overrideVault := t.TempDir()
+	if err := os.WriteFile(filepath.Join(pinnedVault, "schema.yaml"), []byte("types: {}\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write pinned schema: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(overrideVault, "schema.yaml"), []byte("types: {}\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write override schema: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(overrideVault, "AGENTS.md"), []byte("# Override Rules\n"), 0o644); err != nil {
+		t.Fatalf("write override AGENTS.md: %v", err)
+	}
+
+	s := &Server{vaultPath: pinnedVault}
+	resp := callResourcesListResponse(t, s, map[string]interface{}{"vault_path": overrideVault})
+	if resp.Error != nil {
+		t.Fatalf("resources/list error: %s", resp.Error.Message)
+	}
+	if resp.Result.VaultContext == nil || resp.Result.VaultContext.Path != overrideVault {
+		t.Fatalf("expected vault_context path %q, got %#v", overrideVault, resp.Result.VaultContext)
+	}
+	if !hasResourceURI(resp.Result.Resources, vaultAgentInstructionsResourceURI) {
+		t.Fatalf("expected agent instructions listed from override vault")
+	}
+}
+
+func TestResourcesListRejectsVaultAndVaultPathTogether(t *testing.T) {
+	t.Parallel()
+	s := newTestServerWithVault(t)
+	resp := callResourcesListResponse(t, s, map[string]interface{}{
+		"vault":      "work",
+		"vault_path": s.vaultPath,
+	})
+	if resp.Error == nil {
+		t.Fatal("expected invalid params error")
+	}
+	if resp.Error.Code != -32602 {
+		t.Fatalf("expected error code -32602, got %d", resp.Error.Code)
+	}
+}
+
+func TestResourcesReadSchemaIncludesVaultContext(t *testing.T) {
+	t.Parallel()
+	s := newTestServerWithVault(t)
+	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
+		"uri": "raven://schema/current",
+	})
+	if resp.Error != nil {
+		t.Fatalf("resources/read error: %s", resp.Error.Message)
+	}
+	var full struct {
+		Result struct {
+			VaultContext *commandexec.VaultContext `json:"vault_context"`
+		} `json:"result"`
+	}
+	// Re-run to capture vault_context, which callResourcesReadResponseWithParams drops.
+	buf := &bytes.Buffer{}
+	s.out = buf
+	raw := json.RawMessage([]byte(`{"uri":"raven://schema/current"}`))
+	s.handleResourcesRead(&Request{JSONRPC: "2.0", ID: 1, Method: "resources/read", Params: &raw})
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &full); err != nil {
+		t.Fatalf("parse response: %v", err)
+	}
+	if full.Result.VaultContext == nil {
+		t.Fatal("expected vault_context in schema resources/read result")
+	}
+	if full.Result.VaultContext.Path != s.vaultPath {
+		t.Fatalf("vault_context.path = %q, want %q", full.Result.VaultContext.Path, s.vaultPath)
+	}
+}
+
+func TestResourcesReadStrictModeRejectsAmbientFallback(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	vaultPath := filepath.Join(tmp, "work-vault")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("types: {}\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+	configPath := filepath.Join(tmp, "config.toml")
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("default_vault = \"work\"\n[vaults]\nwork = %q\n", vaultPath)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	s := &Server{
+		baseArgs:    []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+		strictVault: true,
+	}
+	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
+		"uri": "raven://schema/current",
+	})
+	if resp.Error == nil {
+		t.Fatal("expected strict mode to reject ambient resource read")
+	}
+	data, ok := resp.Error.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("error data type = %T, want map", resp.Error.Data)
+	}
+	if data["code"] != "VAULT_AMBIGUOUS" {
+		t.Fatalf("error code = %v, want VAULT_AMBIGUOUS", data["code"])
+	}
+}
+
+func TestResourcesReadStrictModeAllowsExplicitVaultPath(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	vaultPath := filepath.Join(tmp, "work-vault")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("types:\n  work:\n    default_path: work/\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+
+	s := &Server{strictVault: true}
+	content := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
+		"uri":        "raven://schema/current",
+		"vault_path": vaultPath,
+	})
+	if content.Error != nil {
+		t.Fatalf("resources/read error: %s", content.Error.Message)
+	}
+	if len(content.Result.Contents) != 1 || !strings.Contains(content.Result.Contents[0].Text, "work:") {
+		t.Fatalf("unexpected schema content: %#v", content.Result.Contents)
+	}
+}
+
 func TestResourcesReadUnknownGuide(t *testing.T) {
 	t.Parallel()
 	s := newTestServerWithVault(t)
@@ -514,6 +687,15 @@ func TestStartupModeMessage(t *testing.T) {
 		s := &Server{}
 		msg := s.startupModeMessage()
 		want := "[raven-mcp] Server starting with dynamic vault resolution"
+		if msg != want {
+			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
+		}
+	})
+
+	t.Run("annotates strict vault mode", func(t *testing.T) {
+		s := &Server{vaultPath: "/tmp/explicit", strictVault: true}
+		msg := s.startupModeMessage()
+		want := "[raven-mcp] Server starting with pinned vault: /tmp/explicit (strict vault mode)"
 		if msg != want {
 			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
 		}
@@ -743,6 +925,70 @@ func TestResolveVaultForInvocationBaseArgsVaultPathSource(t *testing.T) {
 	}
 	if res.source != "base_args" {
 		t.Fatalf("source = %q, want %q", res.source, "base_args")
+	}
+}
+
+func TestResolveVaultForInvocationStrictModeRejectsAmbientFallback(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	vaultPath := filepath.Join(tmp, "work-vault")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	configPath := filepath.Join(tmp, "config.toml")
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("default_vault = \"work\"\n[vaults]\nwork = %q\n", vaultPath)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	s := &Server{
+		baseArgs:    []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+		strictVault: true,
+	}
+
+	_, err := s.resolveVaultForInvocation("", "")
+	if err == nil {
+		t.Fatal("expected strict mode to reject ambient fallback")
+	}
+	var vErr *vaultResolutionError
+	if !errors.As(err, &vErr) {
+		t.Fatalf("expected vaultResolutionError, got %T: %v", err, err)
+	}
+	if vErr.code != "VAULT_AMBIGUOUS" {
+		t.Fatalf("code = %q, want VAULT_AMBIGUOUS", vErr.code)
+	}
+}
+
+func TestResolveVaultForInvocationStrictModeAllowsExplicitVaultPath(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	s := &Server{strictVault: true}
+
+	res, err := s.resolveVaultForInvocation("", tmp)
+	if err != nil {
+		t.Fatalf("resolveVaultForInvocation error: %v", err)
+	}
+	if res.path != tmp {
+		t.Fatalf("path = %q, want %q", res.path, tmp)
+	}
+	if res.source != "vault_path" {
+		t.Fatalf("source = %q, want %q", res.source, "vault_path")
+	}
+}
+
+func TestResolveVaultForInvocationStrictModeAllowsPinnedVault(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	s := &Server{vaultPath: tmp, strictVault: true}
+
+	res, err := s.resolveVaultForInvocation("", "")
+	if err != nil {
+		t.Fatalf("resolveVaultForInvocation error: %v", err)
+	}
+	if res.path != tmp {
+		t.Fatalf("path = %q, want %q", res.path, tmp)
+	}
+	if res.source != "pinned" {
+		t.Fatalf("source = %q, want %q", res.source, "pinned")
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/maintsvc"
@@ -22,12 +24,13 @@ import (
 
 // Server is an MCP server that wraps Raven CLI commands.
 type Server struct {
-	vaultPath  string
-	baseArgs   []string
-	in         io.Reader
-	out        io.Writer
-	executable string // Path to the rvn executable
-	invoker    *commandexec.Invoker
+	vaultPath   string
+	baseArgs    []string
+	in          io.Reader
+	out         io.Writer
+	executable  string // Path to the rvn executable
+	strictVault bool   // Require an explicit vault for vault-scoped operations
+	invoker     *commandexec.Invoker
 
 	sendMu     sync.Mutex
 	inFlightMu sync.Mutex
@@ -184,6 +187,14 @@ func (s *Server) SetIO(in io.Reader, out io.Writer) {
 	s.out = out
 }
 
+// SetStrictVault toggles strict vault mode. In strict mode, vault-scoped
+// operations that lack an explicit vault (per-call vault/vault_path or a
+// server-pinned vault) fail with VAULT_AMBIGUOUS instead of falling back to the
+// ambient active/default vault.
+func (s *Server) SetStrictVault(strict bool) {
+	s.strictVault = strict
+}
+
 // HandleRequest processes a single MCP request.
 // This is exported for testing purposes.
 func (s *Server) HandleRequest(req *Request) {
@@ -234,6 +245,14 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) startupModeMessage() string {
+	base := s.startupVaultModeMessage()
+	if s.strictVault {
+		return base + " (strict vault mode)"
+	}
+	return base
+}
+
+func (s *Server) startupVaultModeMessage() string {
 	if vaultPath := strings.TrimSpace(s.vaultPath); vaultPath != "" {
 		return fmt.Sprintf("[raven-mcp] Server starting with pinned vault: %s", vaultPath)
 	}
@@ -457,6 +476,18 @@ func (p resourceReadParams) validate() error {
 }
 
 func (s *Server) handleResourcesList(req *Request) {
+	var params resourceReadParams
+	if req.Params != nil {
+		if err := json.Unmarshal(*req.Params, &params); err != nil {
+			s.sendError(req.ID, -32602, "Invalid params", err.Error())
+			return
+		}
+	}
+	if err := params.validate(); err != nil {
+		s.sendError(req.ID, -32602, "Invalid params", err.Error())
+		return
+	}
+
 	resources := append([]Resource{}, listAgentGuideResources()...)
 	resources = append(resources, Resource{
 		URI:         "raven://schema/current",
@@ -470,10 +501,24 @@ func (s *Server) handleResourcesList(req *Request) {
 		Description: "Saved queries defined in raven.yaml.",
 		MimeType:    "application/json",
 	})
-	if agentInstructions, ok := s.agentInstructionsResource(); ok {
-		resources = append(resources, agentInstructions)
+
+	// Resolve the vault the list reflects so callers can see which vault the
+	// vault-scoped resources map to. This mirrors resources/read, which accepts
+	// the same vault/vault_path params. Resolution is best-effort: when it fails
+	// (e.g. strict mode without an explicit vault), the vault-independent guide
+	// resources are still returned.
+	res, resErr := s.resolveVaultForInvocation(params.Vault, params.VaultPath)
+	if resErr == nil {
+		if agentInstructions, ok := s.agentInstructionsResourceAt(res.path); ok {
+			resources = append(resources, agentInstructions)
+		}
 	}
-	s.sendResult(req.ID, map[string]interface{}{"resources": resources})
+
+	result := map[string]interface{}{"resources": resources}
+	if resErr == nil {
+		result["vault_context"] = vaultContextFromResolution(res)
+	}
+	s.sendResult(req.ID, result)
 }
 
 func (s *Server) handleResourcesRead(req *Request) {
@@ -491,6 +536,7 @@ func (s *Server) handleResourcesRead(req *Request) {
 	}
 
 	var content ResourceContent
+	var vaultCtx *commandexec.VaultContext
 	switch params.URI {
 	case "raven://guide/index":
 		indexContent, ok := getAgentGuideIndex()
@@ -504,29 +550,46 @@ func (s *Server) handleResourcesRead(req *Request) {
 			Text:     indexContent,
 		}
 	case "raven://schema/current":
-		schemaContent, err := s.readSchemaFile(params.Vault, params.VaultPath)
+		res, err := s.resolveVaultForInvocation(params.Vault, params.VaultPath)
+		if err != nil {
+			s.sendResourceVaultError(req.ID, "Failed to read schema", err)
+			return
+		}
+		schemaContent, err := s.readSchemaFileAt(res.path)
 		if err != nil {
 			s.sendError(req.ID, -32603, "Failed to read schema", err.Error())
 			return
 		}
+		vaultCtx = vaultContextFromResolution(res)
 		content = ResourceContent{
 			URI:      params.URI,
 			MimeType: "text/yaml",
 			Text:     schemaContent,
 		}
 	case "raven://queries/saved":
-		queriesContent, err := s.readSavedQueriesResource(params.Vault, params.VaultPath)
+		res, err := s.resolveVaultForInvocation(params.Vault, params.VaultPath)
+		if err != nil {
+			s.sendResourceVaultError(req.ID, "Failed to read saved queries", err)
+			return
+		}
+		queriesContent, err := s.readSavedQueriesResourceAt(res.path)
 		if err != nil {
 			s.sendError(req.ID, -32603, "Failed to read saved queries", err.Error())
 			return
 		}
+		vaultCtx = vaultContextFromResolution(res)
 		content = ResourceContent{
 			URI:      params.URI,
 			MimeType: "application/json",
 			Text:     queriesContent,
 		}
 	case vaultAgentInstructionsResourceURI:
-		agentInstructions, err := s.readAgentInstructionsResource(params.Vault, params.VaultPath)
+		res, err := s.resolveVaultForInvocation(params.Vault, params.VaultPath)
+		if err != nil {
+			s.sendResourceVaultError(req.ID, "Failed to read agent instructions", err)
+			return
+		}
+		agentInstructions, err := s.readAgentInstructionsResourceAt(res.path)
 		if err != nil {
 			if os.IsNotExist(err) {
 				s.sendError(req.ID, -32602, "Resource not found", params.URI)
@@ -535,6 +598,7 @@ func (s *Server) handleResourcesRead(req *Request) {
 			s.sendError(req.ID, -32603, "Failed to read agent instructions", err.Error())
 			return
 		}
+		vaultCtx = vaultContextFromResolution(res)
 		content = ResourceContent{
 			URI:      params.URI,
 			MimeType: "text/markdown",
@@ -563,17 +627,51 @@ func (s *Server) handleResourcesRead(req *Request) {
 		return
 	}
 
-	s.sendResult(req.ID, map[string]interface{}{
+	result := map[string]interface{}{
 		"contents": []ResourceContent{content},
-	})
+	}
+	if vaultCtx != nil {
+		result["vault_context"] = vaultCtx
+	}
+	s.sendResult(req.ID, result)
 }
 
-func (s *Server) agentInstructionsResource() (Resource, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return Resource{}, false
+// vaultContextFromResolution converts an internal vaultResolution into the
+// transport-neutral VaultContext used across Raven responses.
+func vaultContextFromResolution(res vaultResolution) *commandexec.VaultContext {
+	return &commandexec.VaultContext{
+		Name:   res.name,
+		Path:   res.path,
+		Source: res.source,
 	}
+}
 
+// sendResourceVaultError surfaces a vault resolution failure for a resource
+// read. When the error carries a stable Raven code (e.g. VAULT_AMBIGUOUS from
+// strict mode), the code is included in the RPC error data.
+func (s *Server) sendResourceVaultError(id interface{}, context string, err error) {
+	var vErr *vaultResolutionError
+	if errors.As(err, &vErr) {
+		resp := Response{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error: &RPCError{
+				Code:    -32602,
+				Message: context,
+				Data: map[string]interface{}{
+					"code":       vErr.code,
+					"message":    vErr.message,
+					"suggestion": vErr.suggestion,
+				},
+			},
+		}
+		s.send(resp)
+		return
+	}
+	s.sendError(id, -32603, context, err.Error())
+}
+
+func (s *Server) agentInstructionsResourceAt(vaultPath string) (Resource, bool) {
 	agentInstructionsPath := paths.AgentInstructionsPath(vaultPath)
 	info, err := os.Stat(agentInstructionsPath)
 	if err != nil || info.IsDir() {
@@ -588,12 +686,7 @@ func (s *Server) agentInstructionsResource() (Resource, bool) {
 	}, true
 }
 
-func (s *Server) readAgentInstructionsResource(vaultName, vaultPath string) (string, error) {
-	vaultPath, err := s.resolveVaultPathForInvocation(vaultName, vaultPath)
-	if err != nil {
-		return "", err
-	}
-
+func (s *Server) readAgentInstructionsResourceAt(vaultPath string) (string, error) {
 	data, err := os.ReadFile(paths.AgentInstructionsPath(vaultPath))
 	if err != nil {
 		return "", err
@@ -602,12 +695,7 @@ func (s *Server) readAgentInstructionsResource(vaultName, vaultPath string) (str
 	return string(data), nil
 }
 
-func (s *Server) readSchemaFile(vaultName, vaultPath string) (string, error) {
-	vaultPath, err := s.resolveVaultPathForInvocation(vaultName, vaultPath)
-	if err != nil {
-		return "", err
-	}
-
+func (s *Server) readSchemaFileAt(vaultPath string) (string, error) {
 	schemaPath := paths.SchemaPath(vaultPath)
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
@@ -715,6 +803,33 @@ type vaultResolution struct {
 	name   string
 }
 
+// vaultResolutionError carries a stable Raven error code for vault resolution
+// failures so callers can surface it in the JSON envelope instead of a generic
+// resolution error.
+type vaultResolutionError struct {
+	code       string
+	message    string
+	suggestion string
+}
+
+func (e *vaultResolutionError) Error() string {
+	return e.message
+}
+
+// ambientVaultSources are the resolution sources that come from mutable global
+// state rather than an explicit per-call or server-pinned vault. Resolving via
+// one of these is the "silent wrong-vault" risk that strict mode blocks.
+var ambientVaultSources = map[string]struct{}{
+	"active_vault":           {},
+	"default_vault":          {},
+	"default_vault_fallback": {},
+}
+
+func isAmbientVaultSource(source string) bool {
+	_, ok := ambientVaultSources[source]
+	return ok
+}
+
 func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultResolution, error) {
 	if resolved := strings.TrimSpace(vaultPath); resolved != "" {
 		p, err := s.validateResolvedVaultPath(resolved)
@@ -754,6 +869,16 @@ func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultRe
 		}
 		return vaultResolution{path: p, source: "base_args", name: vn}, nil
 	}
+	// No explicit per-call or server-pinned vault. Any resolution from here uses
+	// ambient global state (active/default vault). In strict mode we refuse to
+	// guess to prevent silent wrong-vault operations.
+	if s.strictVault {
+		return vaultResolution{}, &vaultResolutionError{
+			code:       string(codes.ErrVaultAmbiguous),
+			message:    "strict vault mode requires an explicit vault; pass vault or vault_path (or pin one when starting the server)",
+			suggestion: "Pass vault (a configured vault name) or vault_path (an absolute vault directory) with this call.",
+		}
+	}
 	return s.currentVaultResolution()
 }
 
@@ -771,6 +896,16 @@ func (s *Server) currentVaultResolution() (vaultResolution, error) {
 		source: result.Current.Source,
 		name:   result.Current.Name,
 	}, nil
+}
+
+// configuredVaultCount returns the number of vaults configured for this server.
+// It is best-effort: on any load error it returns 0.
+func (s *Server) configuredVaultCount() int {
+	ctx, err := configsvc.LoadVaultContext(s.directConfigContextOptions())
+	if err != nil {
+		return 0
+	}
+	return len(ctx.Cfg.ListVaults())
 }
 
 // lookupVaultName attempts a best-effort reverse lookup of vault name from path.

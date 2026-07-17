@@ -6,8 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/mcp"
 )
+
+var serveStrictVault bool
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
@@ -21,6 +24,7 @@ The server communicates over stdin/stdout using JSON-RPC 2.0.
 Examples:
   rvn serve                    # Run MCP server using normal CLI vault resolution
   rvn serve --vault personal   # Force named vault for this server process
+  rvn serve --strict-vault     # Require an explicit vault on every vault-scoped call
 
 For use with Claude Desktop, add to your config:
   {
@@ -49,6 +53,7 @@ For use with Claude Desktop, add to your config:
 		// (but we can log to stderr if needed)
 
 		server := mcp.NewServerWithBaseArgs(baseArgs)
+		server.SetStrictVault(resolveStrictVault(cmd))
 		if err := server.Run(); err != nil {
 			return fmt.Errorf("MCP server error: %w", err)
 		}
@@ -57,7 +62,22 @@ For use with Claude Desktop, add to your config:
 	},
 }
 
+// resolveStrictVault determines the effective strict-vault setting for the MCP
+// server. An explicit --strict-vault flag always wins; otherwise the value is
+// taken from the global config ([mcp] strict_vault).
+func resolveStrictVault(cmd *cobra.Command) bool {
+	if cmd.Flags().Changed("strict-vault") {
+		return serveStrictVault
+	}
+	ctx, err := configsvc.ShowContext(configsvc.ContextOptions{ConfigPathOverride: configPath})
+	if err != nil || ctx == nil || ctx.Cfg == nil {
+		return false
+	}
+	return ctx.Cfg.MCP.StrictVault
+}
+
 func init() {
 	markLocalLeaf(serveCmd)
+	serveCmd.Flags().BoolVar(&serveStrictVault, "strict-vault", false, "Require an explicit vault (vault/vault_path or a pinned vault) for vault-scoped calls; fall back is rejected with VAULT_AMBIGUOUS")
 	rootCmd.AddCommand(serveCmd)
 }

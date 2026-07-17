@@ -34,6 +34,17 @@ type Config struct {
 
 	// UI controls optional CLI theming preferences.
 	UI UIConfig `toml:"ui"`
+
+	// MCP controls MCP server behavior.
+	MCP MCPConfig `toml:"mcp"`
+}
+
+// MCPConfig represents optional MCP server behavior settings.
+type MCPConfig struct {
+	// StrictVault, when true, makes the MCP server require an explicit vault for
+	// vault-scoped operations. Calls that would otherwise fall back to ambient
+	// global state (active/default vault) fail with VAULT_AMBIGUOUS instead.
+	StrictVault bool `toml:"strict_vault"`
 }
 
 // UIConfig represents optional CLI theming preferences.
@@ -206,6 +217,14 @@ func CreateDefaultAt(path string) (string, error) {
 # accent = "39"
 # code_theme = "monokai"
 # markdown_style = "auto"
+#
+# MCP server behavior.
+# When strict_vault is true, vault-scoped MCP calls must specify a vault
+# explicitly (per-call vault/vault_path or a server-pinned vault); otherwise
+# they fail with VAULT_AMBIGUOUS instead of silently falling back to the
+# active/default vault.
+# [mcp]
+# strict_vault = true
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {

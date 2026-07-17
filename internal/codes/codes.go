@@ -12,6 +12,7 @@ const (
 	ErrVaultNotFound     ErrorCode = "VAULT_NOT_FOUND"
 	ErrVaultNotSpecified ErrorCode = "VAULT_NOT_SPECIFIED"
 	ErrVaultResolution   ErrorCode = "VAULT_RESOLUTION_FAILED"
+	ErrVaultAmbiguous    ErrorCode = "VAULT_AMBIGUOUS"
 	ErrConfigInvalid     ErrorCode = "CONFIG_INVALID"
 
 	// Schema errors.
@@ -104,10 +105,11 @@ const (
 	WarnOrphanedTraits     WarningCode = "ORPHANED_TRAITS"
 	WarnCheckIncomplete    WarningCode = "CHECK_APPLY_INCOMPLETE"
 	WarnCheckRunIncomplete WarningCode = "CHECK_INCOMPLETE"
+	WarnVaultFallback      WarningCode = "VAULT_FALLBACK"
 )
 
 var knownErrorCodes = map[ErrorCode]struct{}{
-	ErrVaultNotFound: {}, ErrVaultNotSpecified: {}, ErrVaultResolution: {}, ErrConfigInvalid: {},
+	ErrVaultNotFound: {}, ErrVaultNotSpecified: {}, ErrVaultResolution: {}, ErrVaultAmbiguous: {}, ErrConfigInvalid: {},
 	ErrSchemaNotFound: {}, ErrSchemaInvalid: {}, ErrSchemaMismatch: {}, ErrTypeNotFound: {}, ErrTraitNotFound: {}, ErrFieldNotFound: {}, ErrDataIntegrityBlock: {}, ErrConfirmationRequired: {},
 	ErrObjectNotFound: {}, ErrObjectExists: {}, ErrObjectInvalid: {}, ErrRefNotFound: {}, ErrRefInvalid: {}, ErrRefAmbiguous: {},
 	ErrFileNotFound: {}, ErrFileExists: {}, ErrFileRead: {}, ErrFileWrite: {}, ErrFileOutsideVault: {}, ErrDatabase: {}, ErrDatabaseVersion: {},
@@ -121,7 +123,7 @@ var knownErrorCodes = map[ErrorCode]struct{}{
 var knownWarningCodes = map[WarningCode]struct{}{
 	WarnRefNotFound: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnDocsFetchFailed: {},
 	WarnWrongCommand: {}, WarnMissingField: {}, WarnBacklinks: {}, WarnSectionSkipped: {}, WarnUnknownField: {}, WarnTypeMismatch: {},
-	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {}, WarnCheckRunIncomplete: {},
+	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {}, WarnCheckRunIncomplete: {}, WarnVaultFallback: {},
 }
 
 // IsErrorCode reports whether code is part of Raven's stable error contract.
