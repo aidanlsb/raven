@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -15,37 +16,27 @@ import (
 
 // renderCanonicalQueryHuman renders a successful canonical query response as
 // human-readable output (tables, IDs, counts, or an interactive picker). The
+// canonical handler emits a typed commandpayload result, so this dispatcher
+// type-asserts the payload rather than rehydrating a generic map envelope. The
 // canonical handler already loaded and validated the schema; the schema.Load
 // calls here are best-effort display enrichment.
-func renderCanonicalQueryHuman(queryStr string, data map[string]interface{}, browse bool) error {
-	if rawQueries, ok := data["queries"]; ok {
-		return listSavedQueries(savedQueriesFromResult(rawQueries))
-	}
-
-	if total, ok := data["total"]; ok {
-		if _, hasItems := data["items"]; !hasItems {
-			if _, hasIDs := data["ids"]; !hasIDs {
-				fmt.Println(intFromAny(total))
-				return nil
-			}
-		}
-	}
-
-	if rawIDs, ok := data["ids"]; ok {
-		for _, id := range stringSliceFromAny(rawIDs) {
+func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) error {
+	switch payload := data.(type) {
+	case commandpayload.QueryCountResult:
+		fmt.Println(payload.Total)
+		return nil
+	case commandpayload.QueryIDsResult:
+		for _, id := range payload.IDs {
 			fmt.Println(id)
 		}
 		return nil
-	}
-
-	queryKind, _ := data["query_kind"].(string)
-	switch queryKind {
-	case "type", "object":
-		objects := objectResultsFromAny(data["items"])
+	case commandpayload.QueryObjectResult:
+		objects := objectsFromItems(payload.Items)
+		label := queryLabelOrParse(payload.Type, queryStr)
 		if browse {
 			if len(objects) == 0 {
 				sch, _ := schema.Load(getVaultPath())
-				printQueryObjectResults(queryStr, queryLabelFromData(data, queryStr), objects, sch)
+				printQueryObjectResults(queryStr, label, objects, sch)
 				return nil
 			}
 			sch, _ := schema.Load(getVaultPath())
@@ -56,13 +47,14 @@ func renderCanonicalQueryHuman(queryStr string, data map[string]interface{}, bro
 			return nil
 		}
 		sch, _ := schema.Load(getVaultPath())
-		printQueryObjectResults(queryStr, queryLabelFromData(data, queryStr), objects, sch)
+		printQueryObjectResults(queryStr, label, objects, sch)
 		return nil
-	case "trait":
-		traits := traitResultsFromAny(data["items"])
+	case commandpayload.QueryTraitResult:
+		traits := traitsFromItems(payload.Items)
+		label := queryLabelOrParse(payload.Trait, queryStr)
 		if browse {
 			if len(traits) == 0 {
-				printQueryTraitResults(queryStr, queryLabelFromData(data, queryStr), traits)
+				printQueryTraitResults(queryStr, label, traits)
 				return nil
 			}
 			return browseQueryResults(browseItemsForTraitResults(traits), traitBrowseHeaders(), ui.TraitLayout())
@@ -71,10 +63,10 @@ func renderCanonicalQueryHuman(queryStr string, data map[string]interface{}, bro
 			WritePipeableList(os.Stdout, pipeItemsForTraitResults(traits))
 			return nil
 		}
-		printQueryTraitResults(queryStr, queryLabelFromData(data, queryStr), traits)
+		printQueryTraitResults(queryStr, label, traits)
 		return nil
-	case "asset":
-		assets := assetResultsFromAny(data["items"])
+	case commandpayload.QueryAssetResult:
+		assets := assetsFromItems(payload.Items)
 		if browse {
 			if len(assets) == 0 {
 				printQueryAssetResults(queryStr, assets)
@@ -88,8 +80,8 @@ func renderCanonicalQueryHuman(queryStr string, data map[string]interface{}, bro
 		}
 		printQueryAssetResults(queryStr, assets)
 		return nil
-	case "section":
-		sections := sectionResultsFromAny(data["items"])
+	case commandpayload.QuerySectionResult:
+		sections := sectionsFromItems(payload.Items)
 		if browse {
 			if len(sections) == 0 {
 				printQuerySectionResults(queryStr, sections)
@@ -238,17 +230,12 @@ func shortenRefIfNeeded(s string) string {
 	return name
 }
 
-func queryLabelFromData(data map[string]interface{}, queryStr string) string {
-	if stringValue(data["query_kind"]) == "asset" {
-		return "asset"
-	}
-	if stringValue(data["query_kind"]) == "section" {
-		return "section"
-	}
-	if label := stringValue(data["type"]); label != "" {
-		return label
-	}
-	if label := stringValue(data["trait"]); label != "" {
+// queryLabelOrParse returns the explicit type/trait label from the typed
+// payload when present, falling back to the parsed query root otherwise. Saved
+// queries carry no type/trait discriminator, so the label is recovered from the
+// resolved query string.
+func queryLabelOrParse(label, queryStr string) string {
+	if label != "" {
 		return label
 	}
 	parsed, err := query.Parse(queryStr)
@@ -314,173 +301,70 @@ func savedQueriesFromResult(raw interface{}) []SavedQueryInfo {
 	return queries
 }
 
-func objectResultsFromAny(raw interface{}) []model.Object {
-	if rows, ok := raw.([]map[string]interface{}); ok {
-		results := make([]model.Object, 0, len(rows))
-		for _, entry := range rows {
-			results = append(results, model.Object{
-				ID:        stringValue(entry["id"]),
-				Type:      stringValue(entry["type"]),
-				Fields:    fieldsFromAny(entry["fields"]),
-				FilePath:  stringValue(entry["file_path"]),
-				LineStart: intFromAny(entry["line"]),
-			})
-		}
-		return results
-	}
-
-	rows, ok := raw.([]interface{})
-	if !ok {
-		return nil
-	}
-
-	results := make([]model.Object, 0, len(rows))
-	for _, row := range rows {
-		entry, ok := row.(map[string]interface{})
-		if !ok {
-			continue
-		}
+// objectsFromItems adapts the typed query payload items into the model rows the
+// shared retrieval renderers consume. It is a thin field copy with no map
+// decoding: the canonical handler emits typed commandpayload items in-process.
+func objectsFromItems(items []commandpayload.ObjectItem) []model.Object {
+	results := make([]model.Object, 0, len(items))
+	for _, item := range items {
 		results = append(results, model.Object{
-			ID:        stringValue(entry["id"]),
-			Type:      stringValue(entry["type"]),
-			Fields:    fieldsFromAny(entry["fields"]),
-			FilePath:  stringValue(entry["file_path"]),
-			LineStart: intFromAny(entry["line"]),
+			ID:        item.ID,
+			Type:      item.Type,
+			Fields:    item.Fields,
+			FilePath:  item.FilePath,
+			LineStart: item.Line,
 		})
 	}
 	return results
 }
 
-func fieldsFromAny(raw interface{}) map[string]schema.FieldValue {
-	m := mapValue(raw)
-	if len(m) == 0 {
-		return nil
-	}
-	fields := make(map[string]schema.FieldValue, len(m))
-	for key, value := range m {
-		fields[key] = schema.FieldValueFromRaw(value)
-	}
-	return fields
-}
-
-func traitResultsFromAny(raw interface{}) []model.Trait {
-	if rows, ok := raw.([]map[string]interface{}); ok {
-		results := make([]model.Trait, 0, len(rows))
-		for _, entry := range rows {
-			trait := model.Trait{
-				ID:             stringValue(entry["id"]),
-				TraitType:      stringValue(entry["trait_type"]),
-				Content:        stringValue(entry["content"]),
-				FilePath:       stringValue(entry["file_path"]),
-				Line:           intFromAny(entry["line"]),
-				ParentObjectID: stringValue(entry["object_id"]),
-			}
-			trait.SetIndexValueString(stringPointer(entry["value"]))
-			results = append(results, trait)
-		}
-		return results
-	}
-
-	rows, ok := raw.([]interface{})
-	if !ok {
-		return nil
-	}
-
-	results := make([]model.Trait, 0, len(rows))
-	for _, row := range rows {
-		entry, ok := row.(map[string]interface{})
-		if !ok {
-			continue
-		}
+func traitsFromItems(items []commandpayload.TraitItem) []model.Trait {
+	results := make([]model.Trait, 0, len(items))
+	for _, item := range items {
 		trait := model.Trait{
-			ID:             stringValue(entry["id"]),
-			TraitType:      stringValue(entry["trait_type"]),
-			Content:        stringValue(entry["content"]),
-			FilePath:       stringValue(entry["file_path"]),
-			Line:           intFromAny(entry["line"]),
-			ParentObjectID: stringValue(entry["object_id"]),
+			ID:             item.ID,
+			TraitType:      item.TraitType,
+			Content:        item.Content,
+			FilePath:       item.FilePath,
+			Line:           item.Line,
+			ParentObjectID: item.ObjectID,
 		}
-		trait.SetIndexValueString(stringPointer(entry["value"]))
+		trait.SetIndexValueString(item.Value)
 		results = append(results, trait)
 	}
 	return results
 }
 
-func assetResultsFromAny(raw interface{}) []model.Asset {
-	if rows, ok := raw.([]map[string]interface{}); ok {
-		results := make([]model.Asset, 0, len(rows))
-		for _, entry := range rows {
-			results = append(results, model.Asset{
-				ID:        stringValue(entry["id"]),
-				FilePath:  stringValue(entry["file_path"]),
-				Filename:  stringValue(entry["filename"]),
-				Extension: stringValue(entry["extension"]),
-				MediaType: stringValue(entry["media_type"]),
-				SizeBytes: int64FromAny(entry["size_bytes"]),
-			})
-		}
-		return results
-	}
-
-	rows, ok := raw.([]interface{})
-	if !ok {
-		return nil
-	}
-
-	results := make([]model.Asset, 0, len(rows))
-	for _, row := range rows {
-		entry, ok := row.(map[string]interface{})
-		if !ok {
-			continue
-		}
+func assetsFromItems(items []commandpayload.AssetItem) []model.Asset {
+	results := make([]model.Asset, 0, len(items))
+	for _, item := range items {
 		results = append(results, model.Asset{
-			ID:        stringValue(entry["id"]),
-			FilePath:  stringValue(entry["file_path"]),
-			Filename:  stringValue(entry["filename"]),
-			Extension: stringValue(entry["extension"]),
-			MediaType: stringValue(entry["media_type"]),
-			SizeBytes: int64FromAny(entry["size_bytes"]),
+			ID:        item.ID,
+			FilePath:  item.FilePath,
+			Filename:  item.Filename,
+			Extension: item.Extension,
+			MediaType: item.MediaType,
+			SizeBytes: item.SizeBytes,
 		})
 	}
 	return results
 }
 
-func sectionResultsFromAny(raw interface{}) []model.Section {
-	if rows, ok := raw.([]map[string]interface{}); ok {
-		results := make([]model.Section, 0, len(rows))
-		for _, entry := range rows {
-			results = append(results, sectionFromResultMap(entry))
-		}
-		return results
-	}
-
-	rows, ok := raw.([]interface{})
-	if !ok {
-		return nil
-	}
-
-	results := make([]model.Section, 0, len(rows))
-	for _, row := range rows {
-		entry, ok := row.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		results = append(results, sectionFromResultMap(entry))
+func sectionsFromItems(items []commandpayload.SectionItem) []model.Section {
+	results := make([]model.Section, 0, len(items))
+	for _, item := range items {
+		results = append(results, model.Section{
+			ID:              item.ID,
+			FileObjectID:    item.FileObjectID,
+			FilePath:        item.FilePath,
+			Slug:            item.Slug,
+			Title:           item.Title,
+			Level:           item.Level,
+			LineStart:       item.LineStart,
+			LineEnd:         item.LineEnd,
+			SubtreeLineEnd:  item.SubtreeLineEnd,
+			ParentSectionID: item.ParentSectionID,
+		})
 	}
 	return results
-}
-
-func sectionFromResultMap(entry map[string]interface{}) model.Section {
-	return model.Section{
-		ID:              stringValue(entry["id"]),
-		FileObjectID:    stringValue(entry["file_object_id"]),
-		FilePath:        stringValue(entry["file_path"]),
-		Slug:            stringValue(entry["slug"]),
-		Title:           stringValue(entry["title"]),
-		Level:           intFromAny(entry["level"]),
-		LineStart:       intFromAny(entry["line_start"]),
-		LineEnd:         intPointerFromAny(entry["line_end"]),
-		SubtreeLineEnd:  intPointerFromAny(entry["subtree_line_end"]),
-		ParentSectionID: stringPointer(entry["parent_section_id"]),
-	}
 }

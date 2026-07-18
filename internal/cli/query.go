@@ -164,7 +164,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 		return outputJSON(result)
 	}
 
-	return renderCanonicalQueryHuman(queryStr, canonicalDataMap(result), boolValue(args["browse"]))
+	return renderCanonicalQueryHuman(queryStr, result.Data, boolValue(args["browse"]))
 }
 
 func executeCanonicalQuery(args map[string]interface{}) commandexec.Result {
