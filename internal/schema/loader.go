@@ -22,6 +22,24 @@ type LoadResult struct {
 	Warnings []SchemaWarning
 }
 
+// ReadRawSchema returns the raw contents of a vault's schema.yaml file. It is
+// the single owner of schema-file reads for surfaces that need the verbatim
+// document (e.g. the MCP raven://schema/current resource), keeping that I/O
+// consistent with Load/LoadWithWarnings instead of ad-hoc os.ReadFile calls.
+// A missing schema.yaml returns ("", false, nil); other read failures return a
+// non-nil error.
+func ReadRawSchema(vaultPath string) (string, bool, error) {
+	schemaPath := paths.SchemaPath(vaultPath)
+	data, err := os.ReadFile(schemaPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to read schema file %s: %w", schemaPath, err)
+	}
+	return string(data), true, nil
+}
+
 // Load loads the schema from a vault's schema.yaml file.
 // Returns a default schema if the file doesn't exist.
 func Load(vaultPath string) (*Schema, error) {
