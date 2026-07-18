@@ -19,7 +19,7 @@ import (
 	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/rvnexec"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // Server is an MCP server that wraps Raven CLI commands.
@@ -555,9 +555,13 @@ func (s *Server) handleResourcesRead(req *Request) {
 			s.sendResourceVaultError(req.ID, "Failed to read schema", err)
 			return
 		}
-		schemaContent, err := s.readSchemaFileAt(res.path)
+		schemaContent, exists, err := schema.ReadRawSchema(res.path)
 		if err != nil {
 			s.sendError(req.ID, -32603, "Failed to read schema", err.Error())
+			return
+		}
+		if !exists {
+			s.sendError(req.ID, -32602, "Resource not found", params.URI)
 			return
 		}
 		vaultCtx = vaultContextFromResolution(res)
@@ -695,15 +699,6 @@ func (s *Server) readAgentInstructionsResourceAt(vaultPath string) (string, erro
 	return string(data), nil
 }
 
-func (s *Server) readSchemaFileAt(vaultPath string) (string, error) {
-	schemaPath := paths.SchemaPath(vaultPath)
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
 func (s *Server) callToolWithContext(ctx context.Context, name string, args map[string]interface{}) (string, bool) {
 	if out, isErr, handled := s.callCompactToolWithContext(ctx, name, args); handled {
 		return out, isErr
@@ -715,73 +710,6 @@ func (s *Server) callToolWithContext(ctx context.Context, name string, args map[
 		fmt.Sprintf("Call %s to list available tools", compactToolDiscover),
 		map[string]interface{}{"tool": name},
 	), true
-}
-
-func (s *Server) executeRvn(args []string) (string, bool) {
-	if strings.TrimSpace(s.executable) == "" {
-		wrapped := map[string]interface{}{
-			"ok": false,
-			"error": map[string]interface{}{
-				"code":    "EXECUTION_ERROR",
-				"message": "failed to resolve current executable path",
-			},
-		}
-		b, _ := json.Marshal(wrapped)
-		return string(b), true
-	}
-
-	args = s.withBaseArgs(args)
-
-	// Log to stderr for debugging
-	fmt.Fprintf(os.Stderr, "[raven-mcp] Executing: %s %v\n", s.executable, args)
-
-	result, err := rvnexec.Run(s.executable, args)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[raven-mcp] Command error: %v, output: %s\n", err, result.OutputString())
-
-		// If the CLI returned structured JSON, pass it through unchanged.
-		if result.HasEnvelope && result.OK != nil {
-			return result.OutputString(), true
-		}
-
-		// Otherwise, wrap the error but KEEP the CLI output so users can see what failed.
-		wrapped := map[string]interface{}{
-			"ok": false,
-			"error": map[string]interface{}{
-				"code":    "EXECUTION_ERROR",
-				"message": err.Error(),
-				"details": map[string]interface{}{
-					"output": result.TrimmedOutput(),
-				},
-			},
-		}
-		b, mErr := json.Marshal(wrapped)
-		if mErr != nil {
-			// Last resort: escape quotes
-			errMsg := strings.ReplaceAll(err.Error(), `"`, `\"`)
-			return fmt.Sprintf(`{"ok":false,"error":{"code":"EXECUTION_ERROR","message":"%s"}}`, errMsg), true
-		}
-		return string(b), true
-	}
-
-	fmt.Fprintf(os.Stderr, "[raven-mcp] Command succeeded, output length: %d\n", len(result.Output))
-
-	// If the CLI returned a standard Raven JSON envelope with ok:false, surface it as an MCP tool error.
-	// This matters because some Raven commands intentionally exit 0 in --json mode to avoid Cobra printing,
-	// and rely on the JSON envelope for error signaling.
-	if result.OK != nil && !*result.OK {
-		return result.OutputString(), true
-	}
-
-	return result.OutputString(), false
-}
-
-func (s *Server) withBaseArgs(args []string) []string {
-	out := make([]string, 0, len(s.baseArgs)+len(args))
-	out = append(out, s.baseArgs...)
-	out = append(out, args...)
-	return out
 }
 
 func (s *Server) resolveVaultPath() (string, error) {

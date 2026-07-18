@@ -3,6 +3,8 @@ package mcp
 
 import (
 	"fmt"
+
+	"github.com/aidanlsb/raven/internal/commands"
 )
 
 const (
@@ -11,65 +13,38 @@ const (
 	compactToolInvoke   = "raven_invoke"
 )
 
-// GenerateToolSchemas returns the compact MCP surface.
+// GenerateToolSchemas returns the compact MCP surface. Each tool's input schema
+// is generated from the same registry-backed parameter specs that drive strict
+// argument validation (see surface.go), so the advertised schema and the
+// enforced contract cannot drift apart.
 func GenerateToolSchemas() []Tool {
 	return []Tool{
 		{
 			Name:        compactToolDiscover,
 			Description: "List all discoverable Raven commands with compact metadata.",
-			InputSchema: InputSchema{
-				Type:       "object",
-				Properties: map[string]interface{}{},
-			},
+			InputSchema: inputSchemaFromParamSpecs(discoverParamOrder, discoverParamSpec()),
 		},
 		{
 			Name:        compactToolDescribe,
 			Description: "Fetch the compact invocation contract for one Raven command.",
-			InputSchema: InputSchema{
-				Type: "object",
-				Properties: map[string]interface{}{
-					"command": map[string]interface{}{
-						"type":        "string",
-						"description": "Command identifier (e.g. query or schema add type)",
-					},
-				},
-				Required: []string{"command"},
-			},
+			InputSchema: inputSchemaFromParamSpecs(describeParamOrder, describeParamSpec()),
 		},
 		{
 			Name:        compactToolInvoke,
 			Description: "Invoke any registry command with strict typed validation and policy checks (command args must be nested inside args).",
-			InputSchema: InputSchema{
-				Type: "object",
-				Properties: map[string]interface{}{
-					"command": map[string]interface{}{
-						"type":        "string",
-						"description": "Command identifier (e.g. query or schema add type)",
-					},
-					"args": map[string]interface{}{
-						"type":        "object",
-						"description": "Command-specific arguments. Put parameters from raven_describe here.",
-					},
-					"vault": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional configured vault name to use for this invocation only.",
-					},
-					"vault_path": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional absolute vault path to use for this invocation only.",
-					},
-					"schema_hash": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional schema hash returned by raven_describe",
-					},
-					"strict_schema": map[string]interface{}{
-						"type":        "boolean",
-						"description": "When true (default), reject invocation if provided schema_hash is stale",
-					},
-				},
-				Required: []string{"command"},
-			},
+			InputSchema: inputSchemaFromParamSpecs(invokeWrapperParamOrder, invokeWrapperParamSpec()),
 		},
+	}
+}
+
+// inputSchemaFromParamSpecs builds an MCP tool InputSchema from an ordered set
+// of parameter specs, reusing the shared commands helpers so the JSON schema
+// matches the validation contract exactly.
+func inputSchemaFromParamSpecs(order []string, specs map[string]parameterSpec) InputSchema {
+	return InputSchema{
+		Type:       "object",
+		Properties: commands.ParameterProperties(order, specs),
+		Required:   commands.RequiredParameterNames(order, specs),
 	}
 }
 

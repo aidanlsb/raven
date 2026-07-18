@@ -44,7 +44,7 @@ func (s *Server) callCompactToolWithContext(ctx context.Context, name string, ar
 }
 
 func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool) {
-	_, issues := validateArgumentsStrict(map[string]parameterSpec{}, args)
+	_, issues := validateArgumentsStrict(discoverParamSpec(), args)
 	if len(issues) > 0 {
 		return validationErrorEnvelope("raven_discover", issues), true
 	}
@@ -85,14 +85,7 @@ func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool)
 }
 
 func (s *Server) callCompactDescribe(args map[string]interface{}) (string, bool) {
-	spec := map[string]parameterSpec{
-		"command": {
-			Name:     "command",
-			Type:     paramTypeString,
-			Required: true,
-		},
-	}
-	validated, issues := validateArgumentsStrict(spec, args)
+	validated, issues := validateArgumentsStrict(describeParamSpec(), args)
 	if len(issues) > 0 {
 		return validationErrorEnvelope("raven_describe", issues), true
 	}
@@ -270,53 +263,79 @@ func buildInvokeParamSpec(contract commandContract) map[string]parameterSpec {
 	return commands.BuildInvokeParamSpec(contract)
 }
 
+// Compact-tool parameter specs are the single source of truth for both the
+// tool input schemas (GenerateToolSchemas) and strict argument validation. The
+// JSON-schema surfaces are derived from these specs via the shared
+// commands.ParameterProperties helper, so tool discovery and validation cannot
+// drift apart.
+
+// discoverParamOrder / discoverParamSpec describe raven_discover, which takes no
+// arguments.
+var discoverParamOrder = []string{}
+
+func discoverParamSpec() map[string]parameterSpec {
+	return map[string]parameterSpec{}
+}
+
+// describeParamOrder / describeParamSpec describe raven_describe.
+var describeParamOrder = []string{"command"}
+
+func describeParamSpec() map[string]parameterSpec {
+	return map[string]parameterSpec{
+		"command": {
+			Name:        "command",
+			Type:        paramTypeString,
+			Required:    true,
+			Description: "Command identifier (e.g. query or schema_add_type)",
+		},
+	}
+}
+
+// invokeWrapperParamOrder / invokeWrapperParamSpec describe the raven_invoke
+// wrapper. Command-specific parameters live under args and are validated
+// separately against the target command's contract.
+var invokeWrapperParamOrder = []string{"command", "args", "vault", "vault_path", "schema_hash", "strict_schema"}
+
 func invokeWrapperParamSpec() map[string]parameterSpec {
 	return map[string]parameterSpec{
 		"command": {
 			Name:        "command",
 			Type:        paramTypeString,
 			Required:    true,
-			Description: "Command identifier to invoke",
+			Description: "Command identifier to invoke (e.g. query or schema_add_type). Discover IDs with raven_discover.",
 		},
 		"args": {
 			Name:        "args",
 			Type:        paramTypeObject,
-			Description: "Command-specific parameters nested under args",
+			Description: "Command-specific parameters nested under args. Use the args_schema from raven_describe.",
 		},
 		"vault": {
 			Name:        "vault",
 			Type:        paramTypeString,
-			Description: "Configured vault name to use for this invocation",
+			Description: "Optional configured vault name to use for this invocation only.",
 		},
 		"vault_path": {
 			Name:        "vault_path",
 			Type:        paramTypeString,
-			Description: "Absolute vault path to use for this invocation",
+			Description: "Optional absolute vault path to use for this invocation only.",
 		},
 		"schema_hash": {
 			Name:        "schema_hash",
 			Type:        paramTypeString,
-			Description: "Schema hash returned by raven_describe",
+			Description: "Optional schema hash returned by raven_describe.",
 		},
 		"strict_schema": {
 			Name:        "strict_schema",
 			Type:        paramTypeBool,
-			Description: "Reject invocation when the provided schema_hash is stale",
+			Description: "When true (default), reject the invocation if the provided schema_hash is stale.",
 		},
 	}
 }
 
 func compactInvokeWrapperSchema() map[string]interface{} {
 	return map[string]interface{}{
-		"required": []string{"command"},
-		"properties": map[string]interface{}{
-			"command":       map[string]interface{}{"type": "string", "description": "Command identifier to invoke"},
-			"args":          map[string]interface{}{"type": "object", "description": "Command-specific parameters nested under args"},
-			"vault":         map[string]interface{}{"type": "string", "description": "Configured vault name to use for this invocation"},
-			"vault_path":    map[string]interface{}{"type": "string", "description": "Absolute vault path to use for this invocation"},
-			"schema_hash":   map[string]interface{}{"type": "string", "description": "Schema hash returned by raven_describe"},
-			"strict_schema": map[string]interface{}{"type": "boolean", "description": "Reject invocation when the provided schema_hash is stale"},
-		},
+		"required":   commands.RequiredParameterNames(invokeWrapperParamOrder, invokeWrapperParamSpec()),
+		"properties": commands.ParameterProperties(invokeWrapperParamOrder, invokeWrapperParamSpec()),
 	}
 }
 

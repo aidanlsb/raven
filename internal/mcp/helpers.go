@@ -7,14 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/configsvc"
 )
-
-type directWarning struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Ref     string `json:"ref,omitempty"`
-}
 
 func (s *Server) directConfigContextOptions() configsvc.ContextOptions {
 	opts := configsvc.ContextOptions{}
@@ -36,44 +32,55 @@ func (s *Server) directConfigContextOptions() configsvc.ContextOptions {
 	return opts
 }
 
-func successEnvelope(data map[string]interface{}, warnings []directWarning) string {
-	payload := map[string]interface{}{
-		"ok":   true,
-		"data": data,
-	}
-	if len(warnings) > 0 {
-		payload["warnings"] = warnings
-	}
-	b, err := json.Marshal(payload)
+// marshalResultEnvelope is the single adapter that turns a commandexec.Result
+// into the wire JSON returned by every MCP tool call. The compact tools
+// (raven_discover, raven_describe) and raven_invoke all funnel through this, so
+// the server emits exactly one envelope shape regardless of which tool produced
+// it. It returns the encoded envelope plus whether the result is an error, for
+// the MCP tool-result isError flag.
+func marshalResultEnvelope(result commandexec.Result) (string, bool) {
+	b, err := json.Marshal(result)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mcp: failed to marshal success envelope: %v\n", err)
-		return fallbackEnvelopeJSON("INTERNAL_ERROR", "failed to marshal success response", "", nil)
+		fmt.Fprintf(os.Stderr, "mcp: failed to marshal response envelope: %v\n", err)
+		code := string(codes.ErrInternal)
+		message := "failed to marshal response"
+		suggestion := ""
+		if !result.OK && result.Error != nil {
+			code = string(result.Error.Code)
+			message = result.Error.Message
+			suggestion = result.Error.Suggestion
+		}
+		return fallbackEnvelopeJSON(code, message, suggestion, nil), true
 	}
-	return string(b)
+	return string(b), !result.OK
 }
 
-func errorEnvelope(code, message, suggestion string, details map[string]interface{}) string {
-	errPayload := map[string]interface{}{
-		"code":    code,
-		"message": message,
+// successEnvelope builds a success envelope from a data payload. It wraps the
+// data in a commandexec.Result and routes it through the shared adapter so
+// compact-tool responses share the invoke path's envelope shape.
+func successEnvelope(data map[string]interface{}, warnings []commandexec.Warning) string {
+	result := commandexec.Result{OK: true, Data: data}
+	if len(warnings) > 0 {
+		result.Warnings = warnings
 	}
-	if suggestion != "" {
-		errPayload["suggestion"] = suggestion
+	out, _ := marshalResultEnvelope(result)
+	return out
+}
+
+// errorEnvelope builds an error envelope from a stable code, message, and
+// optional suggestion/details. It routes through the shared commandexec.Result
+// adapter so error responses match the invoke path's shape.
+func errorEnvelope(code, message, suggestion string, details map[string]interface{}) string {
+	errInfo := &commandexec.ErrorInfo{
+		Code:       codes.ErrorCode(code),
+		Message:    message,
+		Suggestion: suggestion,
 	}
 	if len(details) > 0 {
-		errPayload["details"] = details
+		errInfo.Details = details
 	}
-
-	payload := map[string]interface{}{
-		"ok":    false,
-		"error": errPayload,
-	}
-	b, err := json.Marshal(payload)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mcp: failed to marshal error envelope: %v\n", err)
-		return fallbackEnvelopeJSON(code, message, suggestion, nil)
-	}
-	return string(b)
+	out, _ := marshalResultEnvelope(commandexec.Result{Error: errInfo})
+	return out
 }
 
 func fallbackEnvelopeJSON(code, message, suggestion string, details map[string]interface{}) string {
