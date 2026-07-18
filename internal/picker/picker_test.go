@@ -662,15 +662,40 @@ func TestRenderTableListIncludesHeadersColumnsAndDividers(t *testing.T) {
 	}
 }
 
+// TestRenderTableListUsesSharedRowFormatter locks the interactive picker's
+// table rows to the same shared FormatTableRow helper the printed result tables
+// use, so their column/row/header styling cannot drift apart.
+func TestRenderTableListUsesSharedRowFormatter(t *testing.T) {
+	columns := ui.ObjectLayout([]string{"status"})
+	headers := []string{"#", "title", "status", "location"}
+	m := newModel([]Item{
+		{ID: "issue/one", Columns: []string{"Issue One", "open", "type/issue/one.md:1"}},
+	}, Options{Headers: headers, Columns: columns})
+	m.height = 30
+
+	width := 100
+	widths := ui.FitColumnWidths(m.desiredWidths, columns, width)
+	wantHeader := ui.FormatTableRow(m.rendererOrDefault(), m.tableHeaders(columns), widths, columns, ui.TableRowStyle{Header: true})
+	wantDivider := ui.TableHeaderDivider(m.rendererOrDefault(), width)
+
+	lines := strings.Split(m.renderList(width), "\n")
+	if lines[0] != wantHeader {
+		t.Fatalf("picker header not built from shared formatter:\nwant %q\ngot  %q", wantHeader, lines[0])
+	}
+	if lines[1] != wantDivider {
+		t.Fatalf("picker divider not built from shared helper:\nwant %q\ngot  %q", wantDivider, lines[1])
+	}
+}
+
 func TestFormatTableRowBoldsSelectedContentCells(t *testing.T) {
 	columns := fallbackTableColumns(2)
-	if !tableCellStyle(20, columns, 1, false, true).GetBold() {
+	if !ui.TableCellStyle(nil, 20, columns, 1, ui.TableRowStyle{Selected: true}).GetBold() {
 		t.Fatalf("selected content cell should be bold")
 	}
-	if tableCellStyle(20, columns, 1, false, false).GetBold() {
+	if ui.TableCellStyle(nil, 20, columns, 1, ui.TableRowStyle{}).GetBold() {
 		t.Fatalf("unselected content cell should not be bold")
 	}
-	if !tableCellStyle(20, columns, 1, true, false).GetBold() {
+	if !ui.TableCellStyle(nil, 20, columns, 1, ui.TableRowStyle{Header: true}).GetBold() {
 		t.Fatalf("header content cell should remain bold")
 	}
 }
