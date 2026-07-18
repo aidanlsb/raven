@@ -17,6 +17,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/docsync"
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 const docsIndexPath = "index.yaml"
@@ -420,7 +421,7 @@ func resolveDocsTopicPath(sectionPath, rawPath string) (string, string, error) {
 	if cleanPath == "." || cleanPath == "/" {
 		return "", "", fmt.Errorf("invalid topic path %q", relPath)
 	}
-	if strings.HasPrefix(cleanPath, "/") || cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
+	if !paths.IsCleanRelSubpath(cleanPath) {
 		return "", "", fmt.Errorf("topic path %q must be relative to the section directory", relPath)
 	}
 	if strings.ToLower(filepath.Ext(cleanPath)) != ".md" {

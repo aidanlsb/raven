@@ -809,7 +809,7 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 					newContent := strings.ReplaceAll(string(tmplContent), tokenOld, tokenNew)
 					if newContent != string(tmplContent) {
 						plan.TemplateFiles[absTmpl] = []byte(newContent)
-						rel, _ := filepath.Rel(vaultPath, absTmpl)
+						rel, _ := paths.RelFromVault(vaultPath, absTmpl)
 						plan.Changes = append(plan.Changes, FieldRenameChange{
 							FilePath:    rel,
 							ChangeType:  "template_file",
@@ -1033,7 +1033,7 @@ func planTypeDirectoryMove(relPath, newName string, plan *typeDefaultPathRenameP
 	if plan == nil || vaultCfg == nil {
 		return typeDirectoryMove{}, false
 	}
-	sourceRel := filepath.ToSlash(strings.TrimPrefix(relPath, "./"))
+	sourceRel := paths.NormalizeVaultRelPath(relPath)
 	sourceID := vaultCfg.FilePathToObjectID(sourceRel)
 	if !strings.HasPrefix(sourceID, plan.OldDefaultPath) {
 		return typeDirectoryMove{}, false

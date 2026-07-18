@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 func validateObjectTitle(title string) error {
@@ -26,8 +28,7 @@ func validateObjectTargetPath(targetPath string) error {
 		return fmt.Errorf("path must include a filename, not just a directory")
 	}
 
-	base := strings.TrimSuffix(filepath.Base(normalized), ".md")
-	base = strings.TrimSpace(base)
+	base := strings.TrimSpace(paths.TrimMDExtension(filepath.Base(normalized)))
 	if base == "" || base == "." || base == ".." {
 		return fmt.Errorf("path must include a valid filename")
 	}
