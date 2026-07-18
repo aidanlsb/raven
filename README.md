@@ -125,6 +125,8 @@ rvn mcp install --client codex
 rvn mcp status
 ```
 
+**Claude Cowork** reads the same `claude_desktop_config.json` as Claude Desktop, so `rvn mcp install --client claude-desktop` also makes Raven available in Cowork.
+
 Or print a manual config snippet:
 
 ```bash
