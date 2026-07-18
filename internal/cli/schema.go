@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 )
 
@@ -30,53 +30,86 @@ Examples:
   rvn schema template list --json
   rvn schema template list --type interview --json
   rvn schema template list --core date --json`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		start := time.Now()
-
-		// If no subcommand, return full schema
-		if len(args) == 0 {
-			return dumpFullSchema(vaultPath, start)
-		}
-
-		switch args[0] {
-		case "types":
-			return listSchemaTypes(vaultPath, start)
-		case "traits":
-			return listSchemaTraits(vaultPath, start)
-		case "core":
-			if len(args) == 1 {
-				return listSchemaCore(vaultPath, start)
-			}
-			if len(args) > 2 {
-				return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema core subcommand: %s", args[2]), "Use: schema core [name]")
-			}
-			return getSchemaCore(vaultPath, args[1], start)
-		case "type":
-			if len(args) < 2 {
-				return handleErrorMsg(ErrMissingArgument, "specify a type name", "Usage: rvn schema type <name>")
-			}
-			return getSchemaType(vaultPath, args[1], start)
-		case "trait":
-			if len(args) < 2 {
-				return handleErrorMsg(ErrMissingArgument, "specify a trait name", "Usage: rvn schema trait <name>")
-			}
-			return getSchemaTrait(vaultPath, args[1], start)
-		default:
-			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema subcommand: %s", args[0]), "Use: types, traits, type <name>, trait <name>, core [name], or template ...")
-		}
+	Args: cobra.NoArgs,
+	RunE: func(_ *cobra.Command, _ []string) error {
+		return runSchemaIntrospection(nil, renderFullSchema)
 	},
 }
 
-func dumpFullSchema(vaultPath string, start time.Time) error {
-	result := executeCanonicalCommand("schema", vaultPath, nil)
+var schemaTypesCmd = &cobra.Command{
+	Use:   "types",
+	Short: "List all types",
+	Args:  cobra.NoArgs,
+	RunE: func(_ *cobra.Command, _ []string) error {
+		return runSchemaIntrospection(map[string]interface{}{"subcommand": "types"}, renderSchemaTypes)
+	},
+}
+
+var schemaTraitsCmd = &cobra.Command{
+	Use:   "traits",
+	Short: "List all traits",
+	Args:  cobra.NoArgs,
+	RunE: func(_ *cobra.Command, _ []string) error {
+		return runSchemaIntrospection(map[string]interface{}{"subcommand": "traits"}, renderSchemaTraits)
+	},
+}
+
+var schemaTypeCmd = &cobra.Command{
+	Use:   "type <name>",
+	Short: "Show details for a type",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		name := args[0]
+		return runSchemaIntrospection(
+			map[string]interface{}{"subcommand": "type", "name": name},
+			func(result commandexec.Result) error { return renderSchemaType(name, result) },
+		)
+	},
+}
+
+var schemaTraitCmd = &cobra.Command{
+	Use:   "trait <name>",
+	Short: "Show details for a trait",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		name := args[0]
+		return runSchemaIntrospection(
+			map[string]interface{}{"subcommand": "trait", "name": name},
+			func(result commandexec.Result) error { return renderSchemaTrait(name, result) },
+		)
+	},
+}
+
+var schemaCoreCmd = &cobra.Command{
+	Use:   "core [name]",
+	Short: "Show core type configuration",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return runSchemaIntrospection(map[string]interface{}{"subcommand": "core"}, renderSchemaCoreList)
+		}
+		name := args[0]
+		return runSchemaIntrospection(
+			map[string]interface{}{"subcommand": "core", "name": name},
+			func(result commandexec.Result) error { return renderSchemaCore(name, result) },
+		)
+	},
+}
+
+// runSchemaIntrospection delegates a read-only schema query to the canonical
+// `schema` command and renders human output via render when not in JSON mode.
+func runSchemaIntrospection(args map[string]interface{}, render func(commandexec.Result) error) error {
+	result := executeCanonicalCommand("schema", getVaultPath(), args)
 	if isJSONOutput() {
 		return outputCanonicalResultJSON(result)
 	}
 	if err := handleCanonicalFailure(result); err != nil {
 		return err
 	}
+	return render(result)
+}
 
+func renderFullSchema(result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	version, _ := data["version"].(int)
 	types, err := decodeSchemaValue[map[string]schemasvc.TypeSchema](data["types"])
@@ -90,7 +123,6 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 	}
 	queries, _ := decodeSchemaValue[map[string]schemasvc.SavedQueryInfo](data["queries"])
 
-	// Human-readable output
 	fmt.Printf("Schema (version %d)\n\n", version)
 
 	fmt.Println("Types:")
@@ -149,21 +181,13 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func listSchemaTypes(vaultPath string, start time.Time) error {
-	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "types"})
-	if isJSONOutput() {
-		return outputCanonicalResultJSON(result)
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaTypes(result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	types, err := decodeSchemaValue[map[string]schemasvc.TypeSchema](data["types"])
 	if err != nil {
 		return err
 	}
 
-	// Human-readable output
 	fmt.Println("Types:")
 	var names []string
 	for name := range types {
@@ -182,21 +206,13 @@ func listSchemaTypes(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func listSchemaTraits(vaultPath string, start time.Time) error {
-	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "traits"})
-	if isJSONOutput() {
-		return outputCanonicalResultJSON(result)
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaTraits(result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	traits, err := decodeSchemaValue[map[string]schemasvc.TraitSchema](data["traits"])
 	if err != nil {
 		return err
 	}
 
-	// Human-readable output
 	fmt.Println("Traits:")
 	var names []string
 	for name := range traits {
@@ -215,14 +231,7 @@ func listSchemaTraits(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func listSchemaCore(vaultPath string, start time.Time) error {
-	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "core"})
-	if isJSONOutput() {
-		return outputCanonicalResultJSON(result)
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaCoreList(result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	core, err := decodeSchemaValue[map[string]schemasvc.CoreTypeSchema](data["core"])
 	if err != nil {
@@ -253,14 +262,7 @@ func listSchemaCore(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
-	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "core", "name": coreTypeName})
-	if isJSONOutput() {
-		return outputCanonicalResultJSON(result)
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaCore(coreTypeName string, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	coreJSON, err := decodeSchemaValue[schemasvc.CoreTypeSchema](data["core"])
 	if err != nil {
@@ -282,21 +284,13 @@ func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
 	return nil
 }
 
-func getSchemaType(vaultPath, typeName string, start time.Time) error {
-	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "type", "name": typeName})
-	if isJSONOutput() {
-		return outputCanonicalResultJSON(result)
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaType(typeName string, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	typeJSON, err := decodeSchemaValue[schemasvc.TypeSchema](data["type"])
 	if err != nil {
 		return err
 	}
 
-	// Human-readable output
 	fmt.Printf("Type: %s\n", typeName)
 	if typeJSON.Builtin {
 		fmt.Printf("  Built-in: true\n")
@@ -361,21 +355,13 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 	return nil
 }
 
-func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
-	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "trait", "name": traitName})
-	if isJSONOutput() {
-		return outputCanonicalResultJSON(result)
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaTrait(traitName string, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	traitJSON, err := decodeSchemaValue[schemasvc.TraitSchema](data["trait"])
 	if err != nil {
 		return err
 	}
 
-	// Human-readable output
 	fmt.Printf("Trait: %s\n", traitName)
 	if traitJSON.Type != "" {
 		fmt.Printf("  Type: %s\n", traitJSON.Type)
@@ -391,6 +377,19 @@ func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
 }
 
 func init() {
+	// Introspection subcommands are thin, human-rendering presentations that all
+	// delegate to the single canonical `schema` command, so they have no
+	// per-subcommand registry metadata and are marked as local leaves.
+	for _, cmd := range []*cobra.Command{
+		schemaTypesCmd,
+		schemaTraitsCmd,
+		schemaTypeCmd,
+		schemaTraitCmd,
+		schemaCoreCmd,
+	} {
+		markLocalLeaf(cmd)
+		schemaCmd.AddCommand(cmd)
+	}
 	rootCmd.AddCommand(schemaCmd)
 }
 
