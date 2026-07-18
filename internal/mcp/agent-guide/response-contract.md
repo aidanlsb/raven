@@ -40,16 +40,51 @@ For `resources/read`, the vault-scoped Raven URIs `raven://schema/current`, `rav
 3. Prefer `error.details.retry_with` when present.
 4. Ask before retrying with assumptions.
 
+## Mutation phase (applied vs preview)
+
+Every mutating command reports whether it wrote to the vault in a single, uniform
+field:
+
+```json
+{
+  "ok": true,
+  "meta": { "mutation": { "phase": "applied" } }
+}
+```
+
+- `meta.mutation.phase = "applied"` — the change was written to the vault.
+- `meta.mutation.phase = "preview"` — nothing was written; the response describes
+  what a subsequent apply would do.
+
+Read this field to decide whether a write happened. Do **not** infer it from
+heterogeneous `data` fields (`data.status`, `data.preview`, `data.needs_confirm`,
+etc.), which vary by command and remain only for backward compatibility. The
+phase is consistent across every mutating command (`new`, `upsert`, `add`, `set`,
+`unset`, `delete`, `move`, `reclassify`, `update`, `edit`, `import`, `check fix`,
+`check create-missing`, `schema` writes/renames, `template` writes, saved-query
+writes, and skill installs) and across the CLI and MCP surfaces.
+
+`meta.mutation` is present only on mutating commands. Read-only commands (`query`
+without `apply`, `read`, `search`, `schema`, etc.) omit it. A failed mutation
+(`ok=false`) also omits it, because nothing was previewed or applied.
+
+`query` with `apply` carries the phase of the write it delegates to. When a
+mutation is blocked pending confirmation (for example a `move` into a mismatched
+type directory, or a `reclassify` that would drop fields without `force`), the
+phase is `"preview"` because nothing was written.
+
 ## Preview and apply semantics
 
 There are two mutation classes with different defaults:
 
-1. Single-object writes apply immediately: `set`, `add`, `update`, `edit`, and
-   single-object `delete`/`move`. Pass `dry-run=true` to get a preview (the
-   response carries `preview=true` or `status="preview"`) without writing.
-2. High-blast-radius operations are preview-first and require `confirm=true` to
-   apply: any bulk write (`stdin=true`), `query` with `apply`, `schema rename`,
-   and the `check fix` / `check create-missing` repair subcommands.
+1. Single-object writes apply immediately (`meta.mutation.phase = "applied"`):
+   `set`, `add`, `update`, `edit`, and single-object `delete`/`move`. Pass
+   `dry-run=true` to get a preview (`meta.mutation.phase = "preview"`) without
+   writing.
+2. High-blast-radius operations are preview-first (`meta.mutation.phase =
+   "preview"`) and require `confirm=true` to apply: any bulk write (`stdin=true`),
+   `query` with `apply`, `schema rename`, and the `check fix` /
+   `check create-missing` repair subcommands.
 
 Examples:
 
