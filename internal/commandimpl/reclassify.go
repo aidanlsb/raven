@@ -84,5 +84,11 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		)
 	}
 
-	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	res := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	if result.NeedsConfirm {
+		// Field-dropping reclassify is blocked pending --force; nothing was
+		// written, so report a preview phase.
+		res = res.WithMutationPhase(commandexec.MutationPhasePreview)
+	}
+	return res
 }

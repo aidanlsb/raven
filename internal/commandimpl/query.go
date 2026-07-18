@@ -275,12 +275,18 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, result *read
 	}
 	ids = dedupeQueryApplyIDs(ids)
 	if len(ids) == 0 {
+		// No matches: nothing is delegated to a nested command, so set the
+		// phase here to keep query --apply responses uniform.
+		phase := commandexec.MutationPhaseApplied
+		if !req.Confirm {
+			phase = commandexec.MutationPhasePreview
+		}
 		return commandexec.Success(map[string]interface{}{
 			"preview": !req.Confirm,
 			"action":  rawApply.Command,
 			"items":   []interface{}{},
 			"total":   0,
-		}, &commandexec.Meta{Count: 0, QueryTimeMs: queryTimeMs})
+		}, &commandexec.Meta{Count: 0, QueryTimeMs: queryTimeMs}).WithMutationPhase(phase)
 	}
 
 	plan, err := bulkops.PlanObjectApply(rawApply, ids)
