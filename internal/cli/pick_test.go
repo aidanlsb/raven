@@ -42,11 +42,11 @@ func TestReadPickItemsParsesPipeableRows(t *testing.T) {
 }
 
 func TestPickCommandRunESelectsItemFromPipeInput(t *testing.T) {
-	prevRun := pickRun
+	prevRun := ravenRunPicker
 	prevOpenTTY := pickOpenTTY
 	prevStdin := os.Stdin
 	t.Cleanup(func() {
-		pickRun = prevRun
+		ravenRunPicker = prevRun
 		pickOpenTTY = prevOpenTTY
 		os.Stdin = prevStdin
 		_ = pickCmd.Flags().Set("multi", "false")
@@ -72,7 +72,7 @@ func TestPickCommandRunESelectsItemFromPipeInput(t *testing.T) {
 	pickOpenTTY = func() (*os.File, error) {
 		return os.OpenFile(ttyPath, os.O_RDWR, 0)
 	}
-	pickRun = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+	ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
 		if len(items) != 1 {
 			t.Fatalf("items = %#v", items)
 		}
@@ -96,13 +96,13 @@ func TestPickCommandRunESelectsItemFromPipeInput(t *testing.T) {
 }
 
 func TestPickCommandRunEReturnsCancelSentinel(t *testing.T) {
-	prevRun := pickRun
+	prevRun := ravenRunPicker
 	prevOpenTTY := pickOpenTTY
 	prevStdin := os.Stdin
 	prevSilenceErrors := pickCmd.SilenceErrors
 	prevSilenceUsage := pickCmd.SilenceUsage
 	t.Cleanup(func() {
-		pickRun = prevRun
+		ravenRunPicker = prevRun
 		pickOpenTTY = prevOpenTTY
 		os.Stdin = prevStdin
 		pickCmd.SilenceErrors = prevSilenceErrors
@@ -129,7 +129,7 @@ func TestPickCommandRunEReturnsCancelSentinel(t *testing.T) {
 	pickOpenTTY = func() (*os.File, error) {
 		return os.OpenFile(ttyPath, os.O_RDWR, 0)
 	}
-	pickRun = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+	ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
 		return picker.Selection{}, false, nil
 	}
 

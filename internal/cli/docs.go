@@ -18,7 +18,6 @@ const (
 )
 
 var (
-	docsRunPicker      = picker.Run
 	docsDisplayContext = ui.NewDisplayContext
 	docsMarkdownRender = ui.RenderMarkdown
 )
@@ -350,20 +349,7 @@ func pickDocsSection(sections []docsSectionView) (docsSectionView, bool, error) 
 		items = append(items, docsNavigationItem(section.ID, section.Title, "", []string{section.ID, section.Title, topicCount}))
 	}
 
-	selected, ok, err := docsRunPicker(items, picker.Options{
-		Title:        "Select a docs section",
-		Prompt:       "docs/section",
-		Headers:      []string{"#", "section", "title", "topics"},
-		Columns:      ui.SearchLayout(),
-		AllowForward: true,
-		Shortcuts: []picker.ShortcutTip{
-			{Key: "j/k", Description: "move"},
-			{Key: "l", Description: "topics"},
-			{Key: "enter", Description: "topics"},
-			{Key: "/ or i", Description: "filter"},
-			{Key: "q", Description: "cancel"},
-		},
-	})
+	selected, ok, err := cliSelector.docsSection(items)
 	if err != nil {
 		return docsSectionView{}, false, err
 	}
@@ -385,23 +371,9 @@ func pickDocsTopic(section docsSectionView, topics []docsTopicRecord) (docsTopic
 		items = append(items, docsNavigationItem(topic.ID, topic.Title, topic.Path, []string{topic.ID, topic.Title, topic.Path}))
 	}
 
-	prompt := fmt.Sprintf("docs/%s> ", section.ID)
-	selected, ok, err := docsRunPicker(items, picker.Options{
-		Title:        fmt.Sprintf("Select a topic in %s [%s]", section.Title, section.ID),
-		Prompt:       strings.TrimSuffix(prompt, "> "),
-		Headers:      []string{"#", "topic", "title", "path"},
-		Columns:      ui.SearchLayout(),
-		AllowForward: true,
-		AllowBack:    true,
-		Shortcuts: []picker.ShortcutTip{
-			{Key: "j/k", Description: "move"},
-			{Key: "h", Description: "sections"},
-			{Key: "l", Description: "open"},
-			{Key: "enter", Description: "open"},
-			{Key: "/ or i", Description: "filter"},
-			{Key: "q", Description: "cancel"},
-		},
-	})
+	title := fmt.Sprintf("Select a topic in %s [%s]", section.Title, section.ID)
+	prompt := fmt.Sprintf("docs/%s", section.ID)
+	selected, ok, err := cliSelector.docsTopic(items, title, prompt)
 	if err != nil {
 		return docsTopicRecord{}, "", false, err
 	}

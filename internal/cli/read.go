@@ -36,7 +36,7 @@ func prepareReadArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 	}
 
 	if canUseRavenInteractive() {
-		selectedPath, selected, err := pickVaultFile(vaultPath, vaultCfg, "read> ", "Select a file to read")
+		selectedPath, selected, err := cliSelector.vaultFile(vaultPath, vaultCfg, "read> ", "Select a file to read")
 		if err != nil {
 			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
 		}

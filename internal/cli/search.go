@@ -35,7 +35,7 @@ func prepareSearchArgs(_ *cobra.Command, args []string) ([]string, bool, error) 
 		if err != nil {
 			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		selectedPath, selected, err := pickVaultFile(vaultPath, vaultCfg, "search> ", "Search indexed files")
+		selectedPath, selected, err := cliSelector.vaultFile(vaultPath, vaultCfg, "search> ", "Search indexed files")
 		if err != nil {
 			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
 		}

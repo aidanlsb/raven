@@ -61,14 +61,14 @@ func TestPickAmbiguousReference(t *testing.T) {
 		return picker.Selection{Item: items[1]}, true, nil
 	}
 
-	selected, ok, err := pickAmbiguousReference(
+	selected, ok, err := cliSelector.ambiguousReference(
 		"freya",
 		[]string{"person/freya", "animal/freya"},
 		map[string]string{"person/freya": "short_name", "animal/freya": "name_field"},
 		"open/ref> ",
 	)
 	if err != nil {
-		t.Fatalf("pickAmbiguousReference() error = %v", err)
+		t.Fatalf("ambiguousReference() error = %v", err)
 	}
 	if !ok {
 		t.Fatalf("expected selection")
@@ -88,9 +88,9 @@ func TestPickAmbiguousReferenceCancelled(t *testing.T) {
 		return picker.Selection{}, false, nil
 	}
 
-	selected, ok, err := pickAmbiguousReference("freya", []string{"person/freya"}, nil, "open/ref> ")
+	selected, ok, err := cliSelector.ambiguousReference("freya", []string{"person/freya"}, nil, "open/ref> ")
 	if err != nil {
-		t.Fatalf("pickAmbiguousReference() error = %v", err)
+		t.Fatalf("ambiguousReference() error = %v", err)
 	}
 	if ok || selected != "" {
 		t.Fatalf("expected cancelled selection, got selected=%q ok=%v", selected, ok)

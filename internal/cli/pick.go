@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/picker"
-	"github.com/aidanlsb/raven/internal/ui"
 )
 
 // ErrPickCancelled reports that the user cancelled an interactive pick
@@ -21,13 +20,9 @@ import (
 // "selected nothing".
 var ErrPickCancelled = errors.New("pick cancelled")
 
-var (
-	pickRun      = picker.Run
-	pickRunMulti = picker.RunMulti
-	pickOpenTTY  = func() (*os.File, error) {
-		return os.OpenFile("/dev/tty", os.O_RDWR, 0)
-	}
-)
+var pickOpenTTY = func() (*os.File, error) {
+	return os.OpenFile("/dev/tty", os.O_RDWR, 0)
+}
 
 var pickCmd = &cobra.Command{
 	Use:   "pick",
@@ -61,37 +56,16 @@ stdout for downstream commands.`,
 		defer tty.Close()
 
 		multi, _ := cmd.Flags().GetBool("multi")
-		opts := picker.Options{
-			Title:   "Pick items",
-			Prompt:  "filter",
-			Headers: []string{"#", "content", "id", "location"},
-			Columns: ui.SearchLayout(),
-			Preview: vaultFilePreview(getVaultPath()),
-			Input:   tty,
-			Output:  tty,
-		}
-		if multi {
-			selections, ok, err := pickRunMulti(items, opts)
-			if err != nil {
-				return handleError(ErrInternal, err, "")
-			}
-			if !ok {
-				return pickCancelled(cmd)
-			}
-			for _, selection := range selections {
-				fmt.Println(selection.Item.ID)
-			}
-			return nil
-		}
-
-		selection, ok, err := pickRun(items, opts)
+		selections, ok, err := cliSelector.pipeItems(items, multi, tty)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 		if !ok {
 			return pickCancelled(cmd)
 		}
-		fmt.Println(selection.Item.ID)
+		for _, selection := range selections {
+			fmt.Println(selection.Item.ID)
+		}
 		return nil
 	},
 }

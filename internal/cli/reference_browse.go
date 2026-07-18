@@ -32,14 +32,6 @@ func validateInteractiveBrowse(enabled bool) (bool, error) {
 	return false, nil
 }
 
-type browsePickerOptions struct {
-	Title                  string
-	Items                  []picker.Item
-	Headers                []string
-	Columns                []ui.ColumnDef
-	MissingFilePathMessage string
-}
-
 func browseItemsForReferenceResults(links []model.Reference, displayText func(model.Reference) string) []picker.Item {
 	items := make([]picker.Item, 0, len(links))
 	for i, link := range links {
@@ -68,7 +60,7 @@ func browseItemsForReferenceResults(links []model.Reference, displayText func(mo
 }
 
 func browseReferences(title string, items []picker.Item) (picker.Item, bool, error) {
-	return runBrowsePicker(browsePickerOptions{
+	return cliSelector.browse(browsePickerOptions{
 		Title:                  title,
 		Items:                  items,
 		Headers:                []string{"#", "content", "location"},
@@ -119,46 +111,13 @@ func addReferenceBrowseGroupContext(group string, items []picker.Item) {
 }
 
 func browseAndOpenReferences(title string, items []picker.Item) error {
-	return browseAndOpenPickerSelection(browsePickerOptions{
+	return cliSelector.browseAndOpen(browsePickerOptions{
 		Title:                  title,
 		Items:                  items,
 		Headers:                []string{"#", "content", "location"},
 		Columns:                ui.BacklinksLayout(),
 		MissingFilePathMessage: "selected reference has no file path",
 	})
-}
-
-func browseAndOpenPickerSelection(opts browsePickerOptions) error {
-	item, ok, err := runBrowsePicker(opts)
-	if err != nil || !ok {
-		return err
-	}
-	openPickerItemInEditor(item)
-	return nil
-}
-
-func runBrowsePicker(opts browsePickerOptions) (picker.Item, bool, error) {
-	selected, ok, err := ravenRunPicker(opts.Items, picker.Options{
-		Title:   opts.Title,
-		Prompt:  "filter",
-		Headers: opts.Headers,
-		Columns: opts.Columns,
-		Preview: vaultFilePreview(getVaultPath()),
-	})
-	if err != nil {
-		return picker.Item{}, false, handleError(ErrInternal, err, "")
-	}
-	if !ok {
-		return picker.Item{}, false, nil
-	}
-	if selected.Item.FilePath == "" {
-		message := strings.TrimSpace(opts.MissingFilePathMessage)
-		if message == "" {
-			message = "selected item has no file path"
-		}
-		return picker.Item{}, false, handleErrorMsg(ErrInternal, message, "")
-	}
-	return selected.Item, true, nil
 }
 
 func openPickerItemInEditor(item picker.Item) {

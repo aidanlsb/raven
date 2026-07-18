@@ -32,7 +32,7 @@ func handleAmbiguousReferenceRetry(cmd *cobra.Command, result commandexec.Result
 		return fallback(result)
 	}
 
-	selected, ok, err := pickAmbiguousReference(reference, matches, matchSources, opts.Prompt)
+	selected, ok, err := cliSelector.ambiguousReference(reference, matches, matchSources, opts.Prompt)
 	if err != nil {
 		return fallback(result)
 	}
