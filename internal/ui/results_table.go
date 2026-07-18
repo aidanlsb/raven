@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -438,81 +437,22 @@ func (t *ResultsTable) Render() string {
 	}
 	widths := CalculateColumnWidthsForRows(t.columns, t.headers, rowCells, t.display.TermWidth)
 
-	tableRows := make([][]string, 0, len(t.rows)+1)
+	// Render through the shared table-formatting helpers so printed result
+	// tables and the interactive picker cannot diverge on column widths,
+	// alignment, per-column styles, or header/selection emphasis.
+	renderer := lipgloss.DefaultRenderer()
+	lines := make([]string, 0, len(rowCells)+2)
 	if len(t.headers) > 0 {
-		headerRow := make([]string, len(t.columns))
-		for i := range t.columns {
-			if i < len(t.headers) {
-				headerRow[i] = truncateCell(t.headers[i], widths[i])
-			}
-		}
-		tableRows = append(tableRows, headerRow)
+		lines = append(lines,
+			FormatTableRow(renderer, t.headers, widths, t.columns, TableRowStyle{Header: true}),
+			TableHeaderDivider(renderer, TableRowWidth(widths)),
+		)
 	}
 	for _, row := range rowCells {
-		tableRow := make([]string, len(t.columns))
-		for j := range t.columns {
-			tableRow[j] = truncateCell(row[j], widths[j])
-		}
-		tableRows = append(tableRows, tableRow)
+		lines = append(lines, FormatTableRow(renderer, row, widths, t.columns, TableRowStyle{}))
 	}
 
-	// Create lipgloss table with minimal border style
-	tbl := table.New().
-		Border(lipgloss.Border{
-			Top:    "─",
-			Bottom: "─",
-			Left:   "",
-			Right:  "",
-			Middle: "─",
-		}).
-		BorderTop(false).
-		BorderBottom(false).
-		BorderLeft(false).
-		BorderRight(false).
-		BorderRow(true).
-		BorderColumn(false).
-		BorderStyle(Muted).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if col >= len(t.columns) {
-				return lipgloss.NewStyle()
-			}
-
-			colDef := t.columns[col]
-			style := lipgloss.NewStyle()
-			if len(t.headers) > 0 && row == 0 {
-				style = Muted.Bold(true)
-			} else if colDef.HasStyle {
-				style = colDef.Style
-			}
-
-			// Set width. Column widths represent usable content width; inter-column
-			// padding is accounted for separately in CalculateColumnWidths.
-			styleWidth := widths[col]
-			if col < len(t.columns)-1 {
-				styleWidth += 2
-			}
-			style = style.Width(styleWidth)
-
-			// Set alignment
-			switch colDef.Align {
-			case AlignRight:
-				style = style.Align(lipgloss.Right)
-			case AlignCenter:
-				style = style.Align(lipgloss.Center)
-			default:
-				style = style.Align(lipgloss.Left)
-			}
-
-			// Add right padding except for last column
-			if col < len(t.columns)-1 {
-				style = style.PaddingRight(2)
-			}
-
-			return style
-		}).
-		Rows(tableRows...)
-
-	return tbl.Render()
+	return strings.Join(lines, "\n")
 }
 
 func truncateCell(s string, width int) string {

@@ -137,3 +137,30 @@ func TestResultsTableTreatsColumnWidthsAsContentWidths(t *testing.T) {
 		t.Fatalf("expected full category header, got:\n%s", out)
 	}
 }
+
+// TestResultsTableRendersThroughSharedRowFormatter locks the printed result
+// table to the shared FormatTableRow/TableHeaderDivider helpers so its column,
+// row, and header styling cannot silently drift from the interactive picker.
+func TestResultsTableRendersThroughSharedRowFormatter(t *testing.T) {
+	t.Parallel()
+
+	columns := SearchLayout()
+	headers := []string{"#", "content", "meta", "file"}
+	dataCells := []string{" 1", "hello world", "meta value", "file.md:1"}
+
+	table := NewResultsTable(&DisplayContext{TermWidth: 120}, columns)
+	table.SetHeaders(headers)
+	table.AddRow(ResultRow{Num: 1, Cells: dataCells})
+
+	widths := CalculateColumnWidthsForRows(columns, headers, [][]string{dataCells}, 120)
+	wantHeader := FormatTableRow(nil, headers, widths, columns, TableRowStyle{Header: true})
+	wantDivider := TableHeaderDivider(nil, TableRowWidth(widths))
+	wantRow := FormatTableRow(nil, dataCells, widths, columns, TableRowStyle{})
+
+	out := table.Render()
+	for _, want := range []string{wantHeader, wantDivider, wantRow} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("results table output should be built from the shared formatter.\nwant line: %q\ngot:\n%s", want, out)
+		}
+	}
+}
