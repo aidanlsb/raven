@@ -15,10 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var schemaAddCmd = &cobra.Command{
-	Use:   "add",
-	Short: "Add a type, trait, or field to the schema",
-	Long: `Add new definitions to schema.yaml.
+const schemaAddLong = `Add new definitions to schema.yaml.
 
 Subcommands:
   type <name>              Add a new type
@@ -28,23 +25,28 @@ Subcommands:
 Examples:
   rvn schema add type event --default-path event/
   rvn schema add trait priority --type enum --values high,medium,low
-  rvn schema add field person email --type string --required`,
-}
+  rvn schema add field person email --type string --required`
 
-var schemaAddTypeCmd = newCanonicalLeafCommand("schema_add_type", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	BuildArgs:   buildSchemaAddTypeArgs,
-	RenderHuman: renderSchemaAddType,
-})
-
-var schemaAddTraitCmd = newCanonicalLeafCommand("schema_add_trait", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaAddTrait,
-})
-
-var schemaAddFieldCmd = newCanonicalLeafCommand("schema_add_field", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaAddField,
+// schemaAddCmd is the "schema add" subtree, generated from registry metadata
+// (CLIPath) via buildRegistrySubtree. Leaf render/build hooks are wired through
+// the spec below; adding a new schema_add_* entry needs no new Cobra vars.
+var schemaAddCmd = buildRegistrySubtree(registrySubtreeSpec{
+	Prefix:    []string{"schema", "add"},
+	VaultPath: getVaultPath,
+	Root: registryGroup{
+		Use:        "add",
+		Short:      "Add a type, trait, or field to the schema",
+		Long:       schemaAddLong,
+		ParentOnly: true,
+	},
+	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+		"schema_add_type":  renderSchemaAddType,
+		"schema_add_trait": renderSchemaAddTrait,
+		"schema_add_field": renderSchemaAddField,
+	},
+	Leaves: map[string]canonicalLeafOptions{
+		"schema_add_type": {BuildArgs: buildSchemaAddTypeArgs},
+	},
 })
 
 func buildSchemaArgs(commandID string, cmd *cobra.Command, args []string) (map[string]interface{}, error) {
@@ -162,10 +164,7 @@ func renderSchemaValidate(_ *cobra.Command, result commandexec.Result) error {
 // UPDATE COMMANDS
 // =============================================================================
 
-var schemaUpdateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update a type, trait, or field in the schema",
-	Long: `Update existing definitions in schema.yaml.
+const schemaUpdateLong = `Update existing definitions in schema.yaml.
 
 Subcommands:
   type <name>              Update an existing type
@@ -176,22 +175,24 @@ Examples:
   rvn schema update type person --default-path person/
   rvn schema update trait priority --values critical,high,medium,low
   rvn schema update field person email --required=true
-  rvn schema update type meeting --add-trait due`,
-}
+  rvn schema update type meeting --add-trait due`
 
-var schemaUpdateTypeCmd = newCanonicalLeafCommand("schema_update_type", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaUpdateType,
-})
-
-var schemaUpdateTraitCmd = newCanonicalLeafCommand("schema_update_trait", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaUpdateTrait,
-})
-
-var schemaUpdateFieldCmd = newCanonicalLeafCommand("schema_update_field", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaUpdateField,
+// schemaUpdateCmd is the "schema update" subtree, generated from registry
+// metadata via buildRegistrySubtree.
+var schemaUpdateCmd = buildRegistrySubtree(registrySubtreeSpec{
+	Prefix:    []string{"schema", "update"},
+	VaultPath: getVaultPath,
+	Root: registryGroup{
+		Use:        "update",
+		Short:      "Update a type, trait, or field in the schema",
+		Long:       schemaUpdateLong,
+		ParentOnly: true,
+	},
+	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+		"schema_update_type":  renderSchemaUpdateType,
+		"schema_update_trait": renderSchemaUpdateTrait,
+		"schema_update_field": renderSchemaUpdateField,
+	},
 })
 
 func renderSchemaUpdateType(_ *cobra.Command, result commandexec.Result) error {
@@ -228,10 +229,7 @@ func renderSchemaUpdateField(_ *cobra.Command, result commandexec.Result) error 
 // REMOVE COMMANDS
 // =============================================================================
 
-var schemaRemoveCmd = &cobra.Command{
-	Use:   "remove",
-	Short: "Remove a type, trait, or field from the schema",
-	Long: `Remove definitions from schema.yaml.
+const schemaRemoveLong = `Remove definitions from schema.yaml.
 
 Subcommands:
   type <name>              Remove a type (objects become 'page' type)
@@ -243,24 +241,29 @@ By default, warns about affected files. Use --force to skip warnings.
 Examples:
   rvn schema remove type event
   rvn schema remove trait priority --force
-  rvn schema remove field person nickname`,
-}
+  rvn schema remove field person nickname`
 
-var schemaRemoveTypeCmd = newCanonicalLeafCommand("schema_remove_type", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	Invoke:      invokeSchemaRemoveType,
-	RenderHuman: renderSchemaRemoveType,
-})
-
-var schemaRemoveTraitCmd = newCanonicalLeafCommand("schema_remove_trait", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	Invoke:      invokeSchemaRemoveTrait,
-	RenderHuman: renderSchemaRemoveTrait,
-})
-
-var schemaRemoveFieldCmd = newCanonicalLeafCommand("schema_remove_field", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaRemoveField,
+// schemaRemoveCmd is the "schema remove" subtree, generated from registry
+// metadata via buildRegistrySubtree. The type/trait leaves keep their
+// interactive confirm flows via per-leaf Invoke hooks.
+var schemaRemoveCmd = buildRegistrySubtree(registrySubtreeSpec{
+	Prefix:    []string{"schema", "remove"},
+	VaultPath: getVaultPath,
+	Root: registryGroup{
+		Use:        "remove",
+		Short:      "Remove a type, trait, or field from the schema",
+		Long:       schemaRemoveLong,
+		ParentOnly: true,
+	},
+	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+		"schema_remove_type":  renderSchemaRemoveType,
+		"schema_remove_trait": renderSchemaRemoveTrait,
+		"schema_remove_field": renderSchemaRemoveField,
+	},
+	Leaves: map[string]canonicalLeafOptions{
+		"schema_remove_type":  {Invoke: invokeSchemaRemoveType},
+		"schema_remove_trait": {Invoke: invokeSchemaRemoveTrait},
+	},
 })
 
 func invokeSchemaRemoveType(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
@@ -391,10 +394,7 @@ func decodeSchemaCount(raw interface{}) (int, error) {
 // RENAME COMMANDS
 // =============================================================================
 
-var schemaRenameCmd = &cobra.Command{
-	Use:   "rename",
-	Short: "Rename a type or field and update references",
-	Long: `Rename a type or a field in the schema and update downstream usages.
+const schemaRenameLong = `Rename a type or a field in the schema and update downstream usages.
 
 Subcommands:
   type  <old_name> <new_name>
@@ -421,18 +421,27 @@ Examples:
   rvn schema rename type event meeting --confirm
 
   rvn schema rename field person email email_address
-  rvn schema rename field person email email_address --confirm`,
-}
+  rvn schema rename field person email email_address --confirm`
 
-var schemaRenameTypeCmd = newCanonicalLeafCommand("schema_rename_type", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	Invoke:      invokeSchemaRenameType,
-	RenderHuman: renderSchemaRenameType,
-})
-
-var schemaRenameFieldCmd = newCanonicalLeafCommand("schema_rename_field", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaRenameField,
+// schemaRenameCmd is the "schema rename" subtree, generated from registry
+// metadata via buildRegistrySubtree. The type leaf keeps its interactive
+// default-path confirm flow via a per-leaf Invoke hook.
+var schemaRenameCmd = buildRegistrySubtree(registrySubtreeSpec{
+	Prefix:    []string{"schema", "rename"},
+	VaultPath: getVaultPath,
+	Root: registryGroup{
+		Use:        "rename",
+		Short:      "Rename a type or field and update references",
+		Long:       schemaRenameLong,
+		ParentOnly: true,
+	},
+	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+		"schema_rename_type":  renderSchemaRenameType,
+		"schema_rename_field": renderSchemaRenameField,
+	},
+	Leaves: map[string]canonicalLeafOptions{
+		"schema_rename_type": {Invoke: invokeSchemaRenameType},
+	},
 })
 
 func invokeSchemaRenameType(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
@@ -627,18 +636,9 @@ func printTypeRenameChanges(changes []schemasvc.TypeRenameChange) {
 }
 
 func init() {
-	schemaAddCmd.AddCommand(schemaAddTypeCmd)
-	schemaAddCmd.AddCommand(schemaAddTraitCmd)
-	schemaAddCmd.AddCommand(schemaAddFieldCmd)
-	schemaUpdateCmd.AddCommand(schemaUpdateTypeCmd)
-	schemaUpdateCmd.AddCommand(schemaUpdateTraitCmd)
-	schemaUpdateCmd.AddCommand(schemaUpdateFieldCmd)
-	schemaRemoveCmd.AddCommand(schemaRemoveTypeCmd)
-	schemaRemoveCmd.AddCommand(schemaRemoveTraitCmd)
-	schemaRemoveCmd.AddCommand(schemaRemoveFieldCmd)
-	schemaRenameCmd.AddCommand(schemaRenameTypeCmd)
-	schemaRenameCmd.AddCommand(schemaRenameFieldCmd)
-
+	// schemaAddCmd/schemaUpdateCmd/schemaRemoveCmd/schemaRenameCmd are
+	// registry-generated subtrees (see buildRegistrySubtree specs above).
+	// schema_validate remains a hand-wired direct leaf of schemaCmd.
 	schemaCmd.AddCommand(schemaAddCmd)
 	schemaCmd.AddCommand(schemaUpdateCmd)
 	schemaCmd.AddCommand(schemaRemoveCmd)

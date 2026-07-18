@@ -17,53 +17,38 @@ type schemaTemplateTarget struct {
 	name string
 }
 
-var schemaTemplateCmd = &cobra.Command{
-	Use:   "template",
-	Short: "Manage schema templates and bindings",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmd.Help()
-	},
+// schemaTemplateCmd is the "schema template" subtree. Its command hierarchy is
+// generated from registry metadata (CLIPath) via buildRegistrySubtree, so
+// adding a new schema_template_* registry entry only requires registering its
+// human RenderHuman hook (and any custom BuildArgs) below — no new hand-written
+// Cobra vars or AddCommand wiring.
+var schemaTemplateCmd = buildSchemaTemplateCommand()
+
+func buildSchemaTemplateCommand() *cobra.Command {
+	return buildRegistrySubtree(registrySubtreeSpec{
+		Prefix:    []string{"schema", "template"},
+		VaultPath: getVaultPath,
+		Root: registryGroup{
+			Use:   "template",
+			Short: "Manage schema templates and bindings",
+		},
+		Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+			"schema_template_list":    renderSchemaTemplateList,
+			"schema_template_get":     renderSchemaTemplateGet,
+			"schema_template_set":     renderSchemaTemplateSet,
+			"schema_template_remove":  renderSchemaTemplateRemove,
+			"schema_template_bind":    renderSchemaTemplateBind,
+			"schema_template_unbind":  renderSchemaTemplateUnbind,
+			"schema_template_default": renderSchemaTemplateDefault,
+		},
+		Leaves: map[string]canonicalLeafOptions{
+			"schema_template_list":    {BuildArgs: buildSchemaTemplateListArgs},
+			"schema_template_bind":    {BuildArgs: buildSchemaTemplateBindArgs},
+			"schema_template_unbind":  {BuildArgs: buildSchemaTemplateUnbindArgs},
+			"schema_template_default": {BuildArgs: buildSchemaTemplateDefaultArgs},
+		},
+	})
 }
-
-var schemaTemplateListCmd = newCanonicalLeafCommand("schema_template_list", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	BuildArgs:   buildSchemaTemplateListArgs,
-	RenderHuman: renderSchemaTemplateList,
-})
-
-var schemaTemplateGetCmd = newCanonicalLeafCommand("schema_template_get", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaTemplateGet,
-})
-
-var schemaTemplateSetCmd = newCanonicalLeafCommand("schema_template_set", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaTemplateSet,
-})
-
-var schemaTemplateRemoveCmd = newCanonicalLeafCommand("schema_template_remove", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderSchemaTemplateRemove,
-})
-
-var schemaTemplateBindCmd = newCanonicalLeafCommand("schema_template_bind", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	BuildArgs:   buildSchemaTemplateBindArgs,
-	RenderHuman: renderSchemaTemplateBind,
-})
-
-var schemaTemplateUnbindCmd = newCanonicalLeafCommand("schema_template_unbind", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	BuildArgs:   buildSchemaTemplateUnbindArgs,
-	RenderHuman: renderSchemaTemplateUnbind,
-})
-
-var schemaTemplateDefaultCmd = newCanonicalLeafCommand("schema_template_default", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	BuildArgs:   buildSchemaTemplateDefaultArgs,
-	RenderHuman: renderSchemaTemplateDefault,
-})
 
 func resolveSchemaTemplateTarget(cmd *cobra.Command, required bool) (*schemaTemplateTarget, error) {
 	typeName, _ := cmd.Flags().GetString("type")
@@ -286,12 +271,5 @@ func schemaTemplateResultTarget(data map[string]interface{}) (kind string, name 
 }
 
 func init() {
-	schemaTemplateCmd.AddCommand(schemaTemplateListCmd)
-	schemaTemplateCmd.AddCommand(schemaTemplateGetCmd)
-	schemaTemplateCmd.AddCommand(schemaTemplateSetCmd)
-	schemaTemplateCmd.AddCommand(schemaTemplateRemoveCmd)
-	schemaTemplateCmd.AddCommand(schemaTemplateBindCmd)
-	schemaTemplateCmd.AddCommand(schemaTemplateUnbindCmd)
-	schemaTemplateCmd.AddCommand(schemaTemplateDefaultCmd)
 	schemaCmd.AddCommand(schemaTemplateCmd)
 }
