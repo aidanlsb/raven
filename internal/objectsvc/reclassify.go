@@ -3,6 +3,7 @@ package objectsvc
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -222,19 +223,22 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	moveDestRelPath := ""
 	moveDestAbsPath := ""
 	if !req.NoMove && newTypeDef != nil && strings.TrimSpace(newTypeDef.DefaultPath) != "" {
-		defaultDir := strings.TrimSuffix(newTypeDef.DefaultPath, "/")
-		currentDir := filepath.Dir(relPath)
+		// default_path is an object-ID-space directory (relative to the objects
+		// root). Normalize it once through the canonical dir-root helper instead
+		// of ad-hoc TrimSuffix.
+		defaultDir := strings.TrimSuffix(paths.NormalizeDirRoot(newTypeDef.DefaultPath), "/")
 
-		currentObjDir := req.VaultConfig.FilePathToObjectID(currentDir)
-		if currentObjDir == "" {
-			currentObjDir = currentDir
+		// The directory the object currently lives in, in object-ID space.
+		currentDir := path.Dir(req.ObjectID)
+		if currentDir == "." {
+			currentDir = ""
 		}
 
-		if currentObjDir != defaultDir {
-			filename := filepath.Base(relPath)
-			destRelPath := req.VaultConfig.ResolveReferenceToFilePath(
-				strings.TrimSuffix(filepath.Join(defaultDir, strings.TrimSuffix(filename, ".md")), ".md"),
-			)
+		if currentDir != defaultDir {
+			// Build the destination object ID, then let the canonical helper
+			// apply the correct root/type rules for the new type.
+			newID := path.Join(defaultDir, paths.ShortNameFromID(req.ObjectID))
+			destRelPath := req.VaultConfig.ObjectIDToFilePath(newID, req.NewTypeName)
 			moveDestRelPath = paths.EnsureMDExtension(destRelPath)
 			moveDestAbsPath = filepath.Join(req.VaultPath, moveDestRelPath)
 			if _, err := os.Stat(moveDestAbsPath); err == nil {

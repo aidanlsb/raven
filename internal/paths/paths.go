@@ -169,6 +169,50 @@ func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot string) strin
 	return EnsureMDExtension(id)
 }
 
+// ReferenceToFilePath resolves a bare reference (object ID) to a vault-relative
+// markdown file path when no type context is available.
+//
+// Unlike ObjectIDToFilePath, which uses an explicit typeName to pick the root,
+// this applies a purely structural heuristic:
+//   - already rooted (objectsRoot/pagesRoot prefix) -> kept as-is
+//   - contains a slash -> treated as a typed object (objectsRoot)
+//   - bare name         -> treated as an untyped page (pagesRoot)
+//
+// When the type of the reference is known, prefer ObjectIDToFilePath so the
+// canonical root/type rules apply instead of this heuristic.
+func ReferenceToFilePath(ref, objectsRoot, pagesRoot string) string {
+	ref = normalizeRelPath(ref)
+	ref = TrimMDExtension(ref)
+
+	objectsRoot = NormalizeDirRoot(objectsRoot)
+	pagesRoot = NormalizeDirRoot(pagesRoot)
+
+	// If the caller already provided a rooted path-like ID, keep it.
+	if objectsRoot != "" && strings.HasPrefix(ref, objectsRoot) {
+		return EnsureMDExtension(ref)
+	}
+	if pagesRoot != "" && strings.HasPrefix(ref, pagesRoot) {
+		return EnsureMDExtension(ref)
+	}
+
+	// A slash implies a typed item path (e.g. "person/freya").
+	if strings.Contains(ref, "/") {
+		if objectsRoot != "" {
+			return EnsureMDExtension(objectsRoot + ref)
+		}
+		return EnsureMDExtension(ref)
+	}
+
+	// A bare name is treated as an untyped page.
+	if pagesRoot != "" {
+		return EnsureMDExtension(pagesRoot + ref)
+	}
+	if objectsRoot != "" {
+		return EnsureMDExtension(objectsRoot + ref)
+	}
+	return EnsureMDExtension(ref)
+}
+
 // ParseSectionID parses an object ID that may contain a section fragment.
 // For IDs like "file#section", it returns (fileID, fragment, true).
 // For IDs without a fragment, it returns (id, "", false).
