@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 type MoveFileRequest struct {
@@ -310,10 +311,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, sourceS
 }
 
 func planRewriteForSource(vaultPath string, vaultCfg *config.VaultConfig, refPlan refUpdatePlan) (*fileRewrite, error) {
-	fileSourceID := refPlan.applySourceID
-	if idx := strings.Index(fileSourceID, "#"); idx >= 0 {
-		fileSourceID = fileSourceID[:idx]
-	}
+	fileSourceID, _, _ := paths.ParseSectionID(refPlan.applySourceID)
 
 	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
 	if err != nil {
@@ -454,12 +452,7 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 
 	plans := make([]refUpdatePlan, 0, len(backlinks))
 	for _, bl := range backlinks {
-		oldRaw := strings.TrimSpace(bl.TargetRaw)
-		oldRaw = strings.TrimPrefix(strings.TrimSuffix(oldRaw, "]]"), "[[")
-		base := oldRaw
-		if i := strings.Index(base, "#"); i >= 0 {
-			base = base[:i]
-		}
+		base := refBaseFromTargetRaw(bl.TargetRaw)
 		if base == "" {
 			continue
 		}
@@ -480,6 +473,18 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 	}
 
 	return plans, warnings
+}
+
+// refBaseFromTargetRaw extracts the base target (without any section fragment)
+// from a backlink's raw target. The stored target is normally a bare target,
+// but a wikilink literal is tolerated for robustness.
+func refBaseFromTargetRaw(targetRaw string) string {
+	raw := strings.TrimSpace(targetRaw)
+	if target, _, ok := wikilink.ParseExact(raw); ok {
+		raw = target
+	}
+	base, _, _ := paths.ParseSectionID(raw)
+	return strings.TrimSpace(base)
 }
 
 func remapMovedSourceID(sourceID, oldID, newID string) string {

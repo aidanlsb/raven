@@ -197,6 +197,17 @@ func markdownImageRef(image *ast.Image, content []byte, lineStarts []int, startL
 	}, true
 }
 
+// NormalizeMarkdownDestination normalizes a markdown link/image destination to a
+// vault-relative asset path. It returns ok=false for destinations that are not
+// asset references (external URLs, mailto:, pure fragments, protocol-relative
+// URLs, markdown targets, or extensionless paths).
+//
+// This is the canonical normalization shared by ref extraction and ref
+// rewriting so both agree on which markdown destinations are asset references.
+func NormalizeMarkdownDestination(raw string) (string, bool) {
+	return normalizeMarkdownAssetDestination(raw)
+}
+
 func normalizeMarkdownAssetDestination(raw string) (string, bool) {
 	target := strings.TrimSpace(raw)
 	target = strings.TrimPrefix(target, "<")
