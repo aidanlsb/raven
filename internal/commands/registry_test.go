@@ -21,6 +21,54 @@ func TestRegistryHasRequiredCommands(t *testing.T) {
 	}
 }
 
+// TestCLIPathSegments verifies the explicit CLIPath hierarchy field is used
+// when present and falls back to the human-facing Name otherwise.
+func TestCLIPathSegments(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		meta Meta
+		want []string
+	}{
+		{
+			name: "explicit CLIPath wins",
+			meta: Meta{Name: "vault config show", CLIPath: []string{"vault", "config", "show"}},
+			want: []string{"vault", "config", "show"},
+		},
+		{
+			name: "falls back to Name when CLIPath empty",
+			meta: Meta{Name: "vault config auto-reindex set"},
+			want: []string{"vault", "config", "auto-reindex", "set"},
+		},
+		{
+			name: "single segment name",
+			meta: Meta{Name: "new"},
+			want: []string{"new"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := tc.meta.CLIPathSegments()
+			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
+				t.Fatalf("CLIPathSegments() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	// Explicit CLIPath must match the underscore command ID mapping used by the
+	// migrated vault config subtree.
+	meta, ok := Registry["vault_config_protected_prefixes_add"]
+	if !ok {
+		t.Fatal("vault_config_protected_prefixes_add missing from registry")
+	}
+	if got := strings.Join(meta.CLIPathSegments(), " "); got != "vault config protected-prefixes add" {
+		t.Fatalf("unexpected CLI path for protected-prefixes add: %q", got)
+	}
+}
+
 // TestRegistryMetadataComplete verifies all commands have required metadata.
 func TestRegistryMetadataComplete(t *testing.T) {
 	t.Parallel()
