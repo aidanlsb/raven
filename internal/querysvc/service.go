@@ -69,6 +69,23 @@ type SavedQueryInfo struct {
 	Options     *config.QueryOptions
 }
 
+// Payload returns the transport-neutral JSON representation of a saved query. It
+// is the single shaping shared by the query_saved_list / query_saved_get
+// commands and the raven://queries/saved MCP resource, so the CLI, MCP tool, and
+// resource views of saved queries stay identical.
+func (q SavedQueryInfo) Payload() map[string]interface{} {
+	data := map[string]interface{}{
+		"name":        q.Name,
+		"query":       q.Query,
+		"args":        q.Args,
+		"description": q.Description,
+	}
+	if !q.Options.IsEmpty() {
+		data["options"] = q.Options
+	}
+	return data
+}
+
 type ListRequest struct {
 	VaultPath string
 }
