@@ -10,9 +10,9 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
-	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/slugs"
 )
 
 // WalkResult contains the result of processing a markdown file.
@@ -209,7 +209,7 @@ func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot string)
 		}
 
 		// Slugified match
-		if pages.SlugifyPath(relID) == pages.SlugifyPath(wantID) {
+		if slugs.PathSlug(relID) == slugs.PathSlug(wantID) {
 			foundPath = path
 			return filepath.SkipAll
 		}

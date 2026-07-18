@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemasvc"
+	"github.com/aidanlsb/raven/internal/slugs"
 )
 
 type MissingRefGroups struct {
@@ -48,7 +49,7 @@ func GroupMissingRefsForInteractive(refs []*check.MissingRef) MissingRefGroups {
 
 func ResolveAndSlugifyTargetPath(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot, dailyDir string) string {
 	resolvedPath := ResolveTargetPath(targetPath, typeName, sch, objectsRoot, pagesRoot, dailyDir)
-	return pages.SlugifyPath(resolvedPath)
+	return slugs.PathSlug(resolvedPath)
 }
 
 func ResolveTargetPath(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot, dailyDir string) string {

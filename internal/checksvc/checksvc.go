@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -547,7 +548,7 @@ func CreateMissingRefsNonInteractive(
 		}
 
 		resolvedPath := ResolveTargetPath(ref.TargetPath, typeName, sch, objectsRoot, pagesRoot, dailyDir)
-		slugPath := pages.SlugifyPath(resolvedPath)
+		slugPath := slugs.PathSlug(resolvedPath)
 		if _, alreadyHandled := seen[slugPath]; alreadyHandled {
 			continue
 		}

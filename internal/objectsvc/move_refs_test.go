@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/resolver"
+	"github.com/aidanlsb/raven/internal/slugs"
 )
 
 func TestReplaceAllRefVariants(t *testing.T) {
@@ -189,7 +189,7 @@ func TestChooseReplacementRefBase(t *testing.T) {
 		aliases := map[string]string{"goddess": "projects/website"}
 		res := resolver.New(ids, resolver.Options{Aliases: aliases})
 		aliasSlugToID := map[string]string{
-			pages.SlugifyPath("goddess"): "projects/website",
+			slugs.PathSlug("goddess"): "projects/website",
 		}
 		got := ChooseReplacementRefBase("goddess", "projects/website", "projects/new-site", aliasSlugToID, res)
 		if got != "goddess" {

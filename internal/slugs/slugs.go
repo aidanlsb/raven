@@ -45,8 +45,6 @@ func HeadingSlug(text string) string {
 }
 
 // ComponentSlug converts a string to a URL-safe slug appropriate for file/path components.
-//
-// This preserves existing behavior previously implemented in pages.Slugify.
 func ComponentSlug(s string) string {
 	s = strings.TrimSuffix(s, ".md")
 	slugged := goslug.Make(s)
@@ -58,7 +56,6 @@ func ComponentSlug(s string) string {
 
 // PathSlug slugifies each component of a path.
 //
-// This preserves existing behavior previously implemented in pages.SlugifyPath:
 // - Strips a trailing ".md"
 // - Slugifies each "/"-separated component using ComponentSlug
 // - For section IDs, slugifies both sides of "#": "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"

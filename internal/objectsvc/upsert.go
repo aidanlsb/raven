@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/slugs"
 )
 
 type ErrorCode = codes.ErrorCode
@@ -98,7 +99,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 
 	fieldValues := normalizedCreateFieldValues(req.FieldValues, typeDef, req.Title)
 
-	slugified := pages.SlugifyPath(
+	slugified := slugs.PathSlug(
 		pages.ResolveTargetPathWithRoots(req.TargetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot),
 	)
 	if !strings.HasSuffix(slugified, ".md") {
