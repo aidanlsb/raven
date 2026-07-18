@@ -548,7 +548,11 @@ func (m model) renderTableList(width int) string {
 	columns := m.tableColumns()
 	headers := m.tableHeaders(columns)
 	widths := ui.FitColumnWidths(m.desiredWidths, columns, width)
-	lines := []string{m.formatTableRow(headers, widths, columns, true, false), m.rowDivider(width)}
+	renderer := m.rendererOrDefault()
+	lines := []string{
+		ui.FormatTableRow(renderer, headers, widths, columns, ui.TableRowStyle{Header: true}),
+		m.rowDivider(width),
+	}
 
 	for visibleIndex, filteredIndex := range m.filtered[m.offset:end] {
 		item := m.items[filteredIndex]
@@ -568,7 +572,7 @@ func (m model) renderTableList(width int) string {
 			row = row[:len(columns)]
 		}
 
-		rendered := m.formatTableRow(row, widths, columns, false, m.offset+visibleIndex == m.cursor)
+		rendered := ui.FormatTableRow(renderer, row, widths, columns, ui.TableRowStyle{Selected: m.offset+visibleIndex == m.cursor})
 		lines = append(lines, rendered)
 	}
 	return strings.Join(lines, "\n")
@@ -871,54 +875,6 @@ func fallbackTableColumns(count int) []ui.ColumnDef {
 	return columns
 }
 
-func (m model) formatTableRow(cells []string, widths []int, columns []ui.ColumnDef, header bool, selected bool) string {
-	return formatTableRowWithRenderer(m.rendererOrDefault(), cells, widths, columns, header, selected)
-}
-
-func formatTableRowWithRenderer(renderer *lipgloss.Renderer, cells []string, widths []int, columns []ui.ColumnDef, header bool, selected bool) string {
-	parts := make([]string, 0, len(widths))
-	for i, width := range widths {
-		cell := ""
-		if i < len(cells) {
-			cell = cells[i]
-		}
-		cell = truncate(cell, width)
-		style := tableCellStyleWithRenderer(renderer, width, columns, i, header, selected)
-		parts = append(parts, style.Render(cell))
-	}
-	return strings.Join(parts, "  ")
-}
-
-func tableCellStyle(width int, columns []ui.ColumnDef, index int, header bool, selected bool) lipgloss.Style {
-	return tableCellStyleWithRenderer(lipgloss.DefaultRenderer(), width, columns, index, header, selected)
-}
-
-func tableCellStyleWithRenderer(renderer *lipgloss.Renderer, width int, columns []ui.ColumnDef, index int, header bool, selected bool) lipgloss.Style {
-	if renderer == nil {
-		renderer = lipgloss.DefaultRenderer()
-	}
-	style := renderer.NewStyle().Width(width)
-	if index < len(columns) {
-		switch columns[index].Align {
-		case ui.AlignRight:
-			style = style.Align(lipgloss.Right)
-		case ui.AlignCenter:
-			style = style.Align(lipgloss.Center)
-		default:
-			style = style.Align(lipgloss.Left)
-		}
-		if header {
-			style = mutedStyleForRenderer(renderer).Bold(true).Width(width)
-		} else if columns[index].HasStyle {
-			style = columns[index].Style.Renderer(renderer).Width(width)
-		}
-	}
-	if selected && !header {
-		style = style.Bold(true)
-	}
-	return style
-}
-
 // truncate shortens a string to the given display width in terminal cells,
 // accounting for wide characters (CJK, emoji) so table columns stay aligned.
 func truncate(s string, width int) string {
@@ -994,10 +950,7 @@ func previewTitle(item Item) string {
 }
 
 func (m model) rowDivider(width int) string {
-	if width < 1 {
-		width = 1
-	}
-	return m.mutedStyle().Render(strings.Repeat("─", width))
+	return ui.TableHeaderDivider(m.rendererOrDefault(), width)
 }
 
 func (m model) rendererOrDefault() *lipgloss.Renderer {
