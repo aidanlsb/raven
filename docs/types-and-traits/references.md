@@ -178,7 +178,10 @@ When this happens, Raven surfaces the missing target instead of silently leaving
 - In the interactive CLI (`rvn new`, `rvn upsert`, `rvn set`, `rvn add`, `rvn edit`),
   it prompts to create the missing page(s) right after the write.
 - With `--json` (and over MCP), the successful response adds `missing_refs`,
-  `missing_ref_items`, and a `REF_NOT_FOUND` warning per missing target.
+  `missing_ref_items`, and a `REF_TARGET_MISSING` warning per missing target. Each
+  warning also carries a structured `create_invoke` (`{command, args}`) alongside the
+  `create_command` string so agents can remediate without shell-parsing. This warning
+  is distinct from the fatal `REF_NOT_FOUND` error returned when a read/resolve fails.
 
 Create the missing pages later with:
 

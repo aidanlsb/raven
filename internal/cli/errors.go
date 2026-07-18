@@ -79,7 +79,7 @@ const (
 
 // Warning codes for non-fatal issues.
 const (
-	WarnRefNotFound        = codes.WarnRefNotFound
+	WarnRefTargetMissing   = codes.WarnRefTargetMissing
 	WarnDeprecated         = codes.WarnDeprecated
 	WarnSchemaOutdated     = codes.WarnSchemaOutdated
 	WarnSchemaLoadFailed   = codes.WarnSchemaLoadFailed

@@ -134,10 +134,14 @@ active. To be certain which vault a write hits, pass `vault` or `vault_path`.
 - Warnings are action items, not noise.
 - Surface warnings that affect correctness or safety.
 - If warnings indicate stale state, run corrective steps such as `reindex` before continuing.
-- `REF_NOT_FOUND` on a successful write means the object was created/modified but a reference
-  points at a target that does not exist yet. The response also includes `data.missing_refs`
-  and `data.missing_ref_items` (with an inferred `type` when known). Create the missing
-  targets with `check create-missing` or the suggested `create_command` when appropriate.
+- `REF_TARGET_MISSING` on a successful write means the object was created/modified but a
+  reference points at a target that does not exist yet. This benign write-time warning is
+  intentionally distinct from the fatal `REF_NOT_FOUND` error (returned when a read/resolve
+  cannot find a target), so you can branch on the code alone. The response also includes
+  `data.missing_refs` and `data.missing_ref_items` (with an inferred `type` when known).
+  Each warning carries a structured `create_invoke` (`{command, args}`) — pass it directly
+  to `raven_invoke` — alongside the equivalent `create_command` string. Create the missing
+  targets with `check create-missing` or the suggested `create_invoke` when appropriate.
 
 ## Related topics
 

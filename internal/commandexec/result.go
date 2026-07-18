@@ -26,6 +26,16 @@ type Warning struct {
 	Ref           string            `json:"ref,omitempty"`
 	SuggestedType string            `json:"suggested_type,omitempty"`
 	CreateCommand string            `json:"create_command,omitempty"`
+	// CreateInvoke is the structured, transport-neutral form of CreateCommand so
+	// agents can act on remediation without shell-parsing the CLI string.
+	CreateInvoke *Invoke `json:"create_invoke,omitempty"`
+}
+
+// Invoke is a structured command invocation matching Raven's JSON/MCP call
+// shape: a command ID plus its named arguments (as passed to raven_invoke).
+type Invoke struct {
+	Command string                 `json:"command"`
+	Args    map[string]interface{} `json:"args,omitempty"`
 }
 
 // VaultContext identifies which vault was used and how it was resolved.

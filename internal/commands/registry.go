@@ -125,7 +125,7 @@ to understand which fields are auto-populated.
 
 Permissive writes: if a ref field points at a target that does not exist yet, the
 object is still created. The successful response adds data.missing_refs,
-data.missing_ref_items, and a REF_NOT_FOUND warning per missing target. Interactive
+data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target. Interactive
 CLI offers to create the missing pages; agents can run 'rvn check create-missing'.`,
 		Args: []ArgMeta{
 			{Name: "type", Description: "Object type (e.g., person, project)", Required: true, DynamicComp: "types"},
@@ -192,7 +192,7 @@ slugs and section IDs cannot be used to create headings.
 
 Permissive writes: if appended text contains a [[ref]] whose target does not exist
 yet, the write still succeeds. The response adds data.missing_refs,
-data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.
+data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.
 
 If text starts with a dash, put it after -- so it is not parsed as a flag:
   rvn add --to today -- "- Review the rollout"`,
@@ -252,7 +252,7 @@ providing arrays/nulls explicitly.
 
 Permissive writes: if a ref field or body [[ref]] points at a target that does not
 exist yet, the write still succeeds. The response adds data.missing_refs,
-data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
+data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 		Args: []ArgMeta{
 			{Name: "type", Description: "Object type (e.g., brief, report)", Required: true, DynamicComp: "types"},
 			{Name: "title", Description: "Title/name for the object (stable identity key)", Required: true},
@@ -1720,7 +1720,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 
 Permissive writes: if a ref field is set to a target that does not exist yet, the
 update still succeeds. The response adds data.missing_refs, data.missing_ref_items,
-and a REF_NOT_FOUND warning per missing target.`,
+and a REF_TARGET_MISSING warning per missing target.`,
 		Args: []ArgMeta{
 			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: false},
 		},
@@ -1846,7 +1846,7 @@ Supports two input modes:
 
 Permissive writes: if an applied edit introduces a [[ref]] whose target does not
 exist yet, the edit still succeeds. The response adds data.missing_refs,
-data.missing_ref_items, and a REF_NOT_FOUND warning per missing target.`,
+data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "File path, object reference, or section reference relative to vault root", Required: true},
 			{Name: "old_str", Description: "String to replace (must be unique in target scope, single-edit mode)", Required: false},
