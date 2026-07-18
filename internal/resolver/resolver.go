@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
-	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/slugs"
 )
 
 // Resolver resolves short references to full object IDs.
@@ -73,7 +73,7 @@ func New(objectIDs []string, opts Options) *Resolver {
 		}
 
 		// Build slugified map for fuzzy matching
-		sluggedID := pages.SlugifyPath(id)
+		sluggedID := slugs.PathSlug(id)
 		r.slugMap[sluggedID] = id
 
 		indexResolverSuffixes(r.suffixMap, id)
@@ -100,7 +100,7 @@ func New(objectIDs []string, opts Options) *Resolver {
 		if nameValue == "" {
 			continue
 		}
-		sluggedName := pages.Slugify(nameValue)
+		sluggedName := slugs.ComponentSlug(nameValue)
 		lowerName := strings.ToLower(nameValue)
 		for _, objectID := range objectIDs {
 			if objectID == "" {
@@ -158,7 +158,7 @@ func addAssetShortNames(shortMap map[string][]string, id, shortName string) {
 		return
 	}
 	addShortMapEntry(shortMap, base, id)
-	slugged := pages.Slugify(base)
+	slugged := slugs.ComponentSlug(base)
 	if slugged != "" && slugged != base {
 		addShortMapEntry(shortMap, slugged, id)
 	}
@@ -206,9 +206,9 @@ type ResolveResult struct {
 func (r *Resolver) Resolve(ref string) ResolveResult {
 	ref = strings.TrimSpace(ref)
 	normalizedRef := normalizeRefForResolution(ref)
-	sluggedRef := pages.Slugify(ref)
+	sluggedRef := slugs.ComponentSlug(ref)
 	lowerRef := strings.ToLower(ref)
-	normalizedSluggedRef := pages.Slugify(normalizedRef)
+	normalizedSluggedRef := slugs.ComponentSlug(normalizedRef)
 	normalizedLowerRef := strings.ToLower(normalizedRef)
 
 	c := newMatchCollector()
@@ -340,7 +340,7 @@ func addPathMatches(r *Resolver, c *matchCollector, ref string) {
 	}
 
 	// Try slugified match: "people/Sif" -> "people/sif"
-	sluggedRefPath := pages.SlugifyPath(ref)
+	sluggedRefPath := slugs.PathSlug(ref)
 	if originalID, ok := r.slugMap[sluggedRefPath]; ok {
 		c.add(originalID, "object_id")
 	}
@@ -378,7 +378,7 @@ func addPathLeafCanonicalMatches(r *Resolver, c *matchCollector, ref string) {
 	}
 
 	leafCollector := newMatchCollector()
-	sluggedLeaf := pages.Slugify(leaf)
+	sluggedLeaf := slugs.ComponentSlug(leaf)
 	lowerLeaf := strings.ToLower(leaf)
 	addAliasMatches(r, leafCollector, leaf, sluggedLeaf)
 	addNameFieldMatches(r, leafCollector, leaf, sluggedLeaf, lowerLeaf)
@@ -452,7 +452,7 @@ func indexResolverSuffixes(suffixMap map[string][]string, id string) {
 		}
 		remaining = remaining[slash+1:]
 		addResolverSuffixEntry(suffixMap, "/"+remaining, id)
-		sluggedSuffix := "/" + pages.SlugifyPath(remaining)
+		sluggedSuffix := "/" + slugs.PathSlug(remaining)
 		if sluggedSuffix != "/"+remaining {
 			addResolverSuffixEntry(suffixMap, sluggedSuffix, id)
 		}
@@ -674,7 +674,7 @@ func addAliasTarget(aliasMap map[string][]string, alias, targetID string) {
 	}
 	aliasMap[alias] = appendUnique(aliasMap[alias], targetID)
 
-	sluggedAlias := pages.Slugify(alias)
+	sluggedAlias := slugs.ComponentSlug(alias)
 	if sluggedAlias != "" && sluggedAlias != alias {
 		aliasMap[sluggedAlias] = appendUnique(aliasMap[sluggedAlias], targetID)
 	}

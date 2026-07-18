@@ -11,10 +11,10 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
@@ -447,7 +447,7 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 
 	aliasSlugToID := make(map[string]string, len(aliases))
 	for alias, oid := range aliases {
-		aliasSlugToID[pages.SlugifyPath(alias)] = oid
+		aliasSlugToID[slugs.PathSlug(alias)] = oid
 	}
 
 	plans := make([]refUpdatePlan, 0, len(backlinks))

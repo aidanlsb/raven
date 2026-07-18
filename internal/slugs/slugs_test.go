@@ -34,6 +34,7 @@ func TestComponentSlug(t *testing.T) {
 		want string
 	}{
 		{"Freya", "freya"},
+		{"Sif", "sif"},
 		{"My Awesome Project", "my-awesome-project"},
 		{"UPPER CASE", "upper-case"},
 		{"test.md", "test"},
@@ -57,6 +58,7 @@ func TestPathSlug(t *testing.T) {
 		want string
 	}{
 		{"people/Freya", "people/freya"},
+		{"people/Sif", "people/sif"},
 		{"projects/My Project/docs", "projects/my-project/docs"},
 		{"file.md", "file"},
 		{"path/to/file.md", "path/to/file"},

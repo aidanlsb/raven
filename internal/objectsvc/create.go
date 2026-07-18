@@ -7,6 +7,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/slugs"
 )
 
 type CreateRequest struct {
@@ -81,7 +82,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	}
 
 	resolvedTargetPath := pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot)
-	resolvedSlugPath := pages.SlugifyPath(resolvedTargetPath)
+	resolvedSlugPath := slugs.PathSlug(resolvedTargetPath)
 	plannedRelPath := resolvedSlugPath
 	if !strings.HasSuffix(plannedRelPath, ".md") {
 		plannedRelPath += ".md"

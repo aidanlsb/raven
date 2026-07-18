@@ -100,7 +100,7 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	targetPath := resolveDefaultPathWithRoots(opts.TargetPath, opts.TypeName, opts.Schema, opts.ObjectsRoot, opts.PagesRoot)
 
 	// Slugify the path for the filename
-	slugifiedPath := SlugifyPath(targetPath)
+	slugifiedPath := slugs.PathSlug(targetPath)
 
 	// Build the file path with slugified name
 	filePath := filepath.Join(opts.VaultPath, slugifiedPath)
@@ -266,25 +266,13 @@ func ResolveTargetPathWithRoots(targetPath, typeName string, sch *schema.Schema,
 // Note: This does NOT apply default_path resolution. Pass the already-resolved path
 // or use ExistsWithSchema for type-aware checking.
 func Exists(vaultPath, targetPath string) bool {
-	slugifiedPath := SlugifyPath(targetPath)
+	slugifiedPath := slugs.PathSlug(targetPath)
 	filePath := filepath.Join(vaultPath, slugifiedPath)
 	if !strings.HasSuffix(filePath, ".md") {
 		filePath += ".md"
 	}
 	_, err := os.Stat(filePath)
 	return err == nil
-}
-
-// SlugifyPath slugifies each component of a path.
-// "people/Sif" -> "people/sif"
-// Also handles section IDs: "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"
-func SlugifyPath(path string) string {
-	return slugs.PathSlug(path)
-}
-
-// Slugify converts a string to a URL-safe slug.
-func Slugify(s string) string {
-	return slugs.ComponentSlug(s)
 }
 
 // CreateDailyNoteWithSchema creates a daily note using schema-driven template resolution.

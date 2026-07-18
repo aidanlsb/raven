@@ -3,10 +3,10 @@ package objectsvc
 import (
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/refs"
 	"github.com/aidanlsb/raven/internal/resolver"
+	"github.com/aidanlsb/raven/internal/slugs"
 )
 
 // ReplaceAllRefVariants rewrites every reference to the moved object across the
@@ -69,7 +69,7 @@ func ChooseReplacementRefBase(oldBase, sourceID, destID string, aliasSlugToID ma
 	}
 
 	if aliasSlugToID != nil {
-		if aliasSlugToID[pages.SlugifyPath(oldBase)] == sourceID {
+		if aliasSlugToID[slugs.PathSlug(oldBase)] == sourceID {
 			return oldBase
 		}
 	}

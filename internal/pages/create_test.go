@@ -10,55 +10,6 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-func TestSlugify(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"Freya", "freya"},
-		{"Sif", "sif"},
-		{"My Awesome Project", "my-awesome-project"},
-		{"UPPER CASE", "upper-case"},
-		{"test.md", "test"},
-		{"file-name", "file-name"},
-		{"Special: Characters!", "special-characters"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := Slugify(tt.input)
-			if result != tt.expected {
-				t.Errorf("Slugify(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestSlugifyPath(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"people/Freya", "people/freya"},
-		{"people/Sif", "people/sif"},
-		{"projects/My Project/docs", "projects/my-project/docs"},
-		{"file.md", "file"},
-		{"path/to/file.md", "path/to/file"},
-		{`game-notes\Competitions`, "game-notes/competitions"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := SlugifyPath(tt.input)
-			if result != tt.expected {
-				t.Errorf("SlugifyPath(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestResolveDefaultPathWithRoots(t *testing.T) {
 	t.Parallel()
 	sch := &schema.Schema{

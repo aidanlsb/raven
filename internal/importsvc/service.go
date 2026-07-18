@@ -18,6 +18,7 @@ import (
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/slugs"
 )
 
 type Code = codes.ErrorCode
@@ -425,7 +426,7 @@ func Run(req RunRequest) (*RunResult, error) {
 			result.Results = append(result.Results, ResultItem{
 				ID:     targetPath,
 				Action: action,
-				File:   pages.SlugifyPath(targetPath) + ".md",
+				File:   slugs.PathSlug(targetPath) + ".md",
 			})
 			continue
 		}
@@ -455,7 +456,7 @@ func Run(req RunRequest) (*RunResult, error) {
 }
 
 func importTargetName(matchValue string) string {
-	return pages.Slugify(matchValue)
+	return slugs.ComponentSlug(matchValue)
 }
 
 type applyObjectRequest struct {
