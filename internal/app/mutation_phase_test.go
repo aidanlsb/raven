@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -245,12 +246,14 @@ func TestMutationPhaseUpdateTrait(t *testing.T) {
 	if !ids.OK {
 		t.Fatalf("query ids failed: %#v", ids.Error)
 	}
-	data, _ := ids.Data.(map[string]interface{})
-	traitIDs, _ := data["ids"].([]string)
-	if len(traitIDs) == 0 {
-		t.Fatalf("expected a priority trait id, got %#v", data["ids"])
+	payload, ok := ids.Data.(commandpayload.QueryIDsResult)
+	if !ok {
+		t.Fatalf("expected QueryIDsResult, got %#v", ids.Data)
 	}
-	traitID := traitIDs[0]
+	if len(payload.IDs) == 0 {
+		t.Fatalf("expected a priority trait id, got %#v", payload.IDs)
+	}
+	traitID := payload.IDs[0]
 
 	preview := runInvoked(t, v.Path, "update", map[string]any{"trait_id": traitID, "value": "high"}, withDryRun)
 	requirePhase(t, preview, commandexec.MutationPhasePreview)
