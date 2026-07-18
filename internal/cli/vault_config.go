@@ -9,182 +9,80 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var vaultConfigCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Manage vault-level raven.yaml settings",
-	Long: `Manage vault-level raven.yaml settings.
+// vaultConfigCmd is the "vault config" subtree. Its command hierarchy is
+// generated from registry metadata (CLIPath) via buildRegistrySubtree, so
+// adding a new vault_config_* registry entry only requires registering its
+// human RenderHuman hook below — no new hand-written Cobra vars or AddCommand
+// wiring.
+var vaultConfigCmd = buildVaultConfigCommand()
+
+const vaultConfigLong = `Manage vault-level raven.yaml settings.
 
 Use this command group for structured vault configuration instead of editing
-raven.yaml directly.`,
-	Args: cobra.NoArgs,
-	RunE: canonicalGroupDefaultRunE("vault_config_show", getVaultPath, renderVaultConfigShow),
-}
+raven.yaml directly.`
 
-var vaultConfigShowCmd = newCanonicalLeafCommand("vault_config_show", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigShow,
-})
-
-var vaultConfigAutoReindexCmd = &cobra.Command{
-	Use:   "auto-reindex",
-	Short: "Manage auto_reindex in raven.yaml",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmd.Help()
-	},
-}
-
-var vaultConfigAutoReindexSetCmd = newCanonicalLeafCommand("vault_config_auto_reindex_set", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigAutoReindexSet,
-})
-
-var vaultConfigAutoReindexUnsetCmd = newCanonicalLeafCommand("vault_config_auto_reindex_unset", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigAutoReindexUnset,
-})
-
-var vaultConfigProtectedPrefixesCmd = &cobra.Command{
-	Use:   "protected-prefixes",
-	Short: "Manage protected_prefixes in raven.yaml",
-	Args:  cobra.NoArgs,
-	RunE:  canonicalGroupDefaultRunE("vault_config_protected_prefixes_list", getVaultPath, renderVaultConfigProtectedPrefixesList),
-}
-
-var vaultConfigProtectedPrefixesListCmd = newCanonicalLeafCommand("vault_config_protected_prefixes_list", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigProtectedPrefixesList,
-})
-
-var vaultConfigProtectedPrefixesAddCmd = newCanonicalLeafCommand("vault_config_protected_prefixes_add", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigProtectedPrefixesAdd,
-})
-
-var vaultConfigProtectedPrefixesRemoveCmd = newCanonicalLeafCommand("vault_config_protected_prefixes_remove", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigProtectedPrefixesRemove,
-})
-
-var vaultConfigExcludeCmd = &cobra.Command{
-	Use:   "exclude",
-	Short: "Manage exclude patterns in raven.yaml",
-	Args:  cobra.NoArgs,
-	RunE:  canonicalGroupDefaultRunE("vault_config_exclude_list", getVaultPath, renderVaultConfigExcludeList),
-}
-
-var vaultConfigExcludeListCmd = newCanonicalLeafCommand("vault_config_exclude_list", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigExcludeList,
-})
-
-var vaultConfigExcludeAddCmd = newCanonicalLeafCommand("vault_config_exclude_add", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigExcludeAdd,
-})
-
-var vaultConfigExcludeRemoveCmd = newCanonicalLeafCommand("vault_config_exclude_remove", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigExcludeRemove,
-})
-
-var vaultConfigDirectoriesCmd = &cobra.Command{
-	Use:   "directories",
-	Short: "Manage directories config in raven.yaml",
-	Args:  cobra.NoArgs,
-	RunE:  canonicalGroupDefaultRunE("vault_config_directories_get", getVaultPath, renderVaultConfigDirectoriesGet),
-}
-
-var vaultConfigDirectoriesGetCmd = newCanonicalLeafCommand("vault_config_directories_get", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigDirectoriesGet,
-})
-
-var vaultConfigDirectoriesSetCmd = newCanonicalLeafCommand("vault_config_directories_set", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigDirectoriesSet,
-})
-
-var vaultConfigDirectoriesUnsetCmd = newCanonicalLeafCommand("vault_config_directories_unset", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigDirectoriesUnset,
-})
-
-var vaultConfigCaptureCmd = &cobra.Command{
-	Use:   "capture",
-	Short: "Manage capture config in raven.yaml",
-	Args:  cobra.NoArgs,
-	RunE:  canonicalGroupDefaultRunE("vault_config_capture_get", getVaultPath, renderVaultConfigCaptureGet),
-}
-
-var vaultConfigCaptureGetCmd = newCanonicalLeafCommand("vault_config_capture_get", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigCaptureGet,
-})
-
-var vaultConfigCaptureSetCmd = newCanonicalLeafCommand("vault_config_capture_set", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigCaptureSet,
-})
-
-var vaultConfigCaptureUnsetCmd = newCanonicalLeafCommand("vault_config_capture_unset", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigCaptureUnset,
-})
-
-var vaultConfigDeletionCmd = &cobra.Command{
-	Use:   "deletion",
-	Short: "Manage deletion config in raven.yaml",
-	Args:  cobra.NoArgs,
-	RunE:  canonicalGroupDefaultRunE("vault_config_deletion_get", getVaultPath, renderVaultConfigDeletionGet),
-}
-
-var vaultConfigDeletionGetCmd = newCanonicalLeafCommand("vault_config_deletion_get", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigDeletionGet,
-})
-
-var vaultConfigDeletionSetCmd = newCanonicalLeafCommand("vault_config_deletion_set", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigDeletionSet,
-})
-
-var vaultConfigDeletionUnsetCmd = newCanonicalLeafCommand("vault_config_deletion_unset", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	RenderHuman: renderVaultConfigDeletionUnset,
-})
-
-func init() {
-	vaultConfigAutoReindexCmd.AddCommand(vaultConfigAutoReindexSetCmd)
-	vaultConfigAutoReindexCmd.AddCommand(vaultConfigAutoReindexUnsetCmd)
-
-	vaultConfigProtectedPrefixesCmd.AddCommand(vaultConfigProtectedPrefixesListCmd)
-	vaultConfigProtectedPrefixesCmd.AddCommand(vaultConfigProtectedPrefixesAddCmd)
-	vaultConfigProtectedPrefixesCmd.AddCommand(vaultConfigProtectedPrefixesRemoveCmd)
-
-	vaultConfigExcludeCmd.AddCommand(vaultConfigExcludeListCmd)
-	vaultConfigExcludeCmd.AddCommand(vaultConfigExcludeAddCmd)
-	vaultConfigExcludeCmd.AddCommand(vaultConfigExcludeRemoveCmd)
-
-	vaultConfigDirectoriesCmd.AddCommand(vaultConfigDirectoriesGetCmd)
-	vaultConfigDirectoriesCmd.AddCommand(vaultConfigDirectoriesSetCmd)
-	vaultConfigDirectoriesCmd.AddCommand(vaultConfigDirectoriesUnsetCmd)
-
-	vaultConfigCaptureCmd.AddCommand(vaultConfigCaptureGetCmd)
-	vaultConfigCaptureCmd.AddCommand(vaultConfigCaptureSetCmd)
-	vaultConfigCaptureCmd.AddCommand(vaultConfigCaptureUnsetCmd)
-
-	vaultConfigDeletionCmd.AddCommand(vaultConfigDeletionGetCmd)
-	vaultConfigDeletionCmd.AddCommand(vaultConfigDeletionSetCmd)
-	vaultConfigDeletionCmd.AddCommand(vaultConfigDeletionUnsetCmd)
-
-	vaultConfigCmd.AddCommand(vaultConfigShowCmd)
-	vaultConfigCmd.AddCommand(vaultConfigAutoReindexCmd)
-	vaultConfigCmd.AddCommand(vaultConfigProtectedPrefixesCmd)
-	vaultConfigCmd.AddCommand(vaultConfigExcludeCmd)
-	vaultConfigCmd.AddCommand(vaultConfigDirectoriesCmd)
-	vaultConfigCmd.AddCommand(vaultConfigCaptureCmd)
-	vaultConfigCmd.AddCommand(vaultConfigDeletionCmd)
+func buildVaultConfigCommand() *cobra.Command {
+	return buildRegistrySubtree(registrySubtreeSpec{
+		Prefix:    []string{"vault", "config"},
+		VaultPath: getVaultPath,
+		Root: registryGroup{
+			Use:           "config",
+			Short:         "Manage vault-level raven.yaml settings",
+			Long:          vaultConfigLong,
+			DefaultLeafID: "vault_config_show",
+			DefaultRender: renderVaultConfigShow,
+		},
+		Groups: map[string]registryGroup{
+			"vault config auto-reindex": {
+				Short: "Manage auto_reindex in raven.yaml",
+			},
+			"vault config protected-prefixes": {
+				Short:         "Manage protected_prefixes in raven.yaml",
+				DefaultLeafID: "vault_config_protected_prefixes_list",
+				DefaultRender: renderVaultConfigProtectedPrefixesList,
+			},
+			"vault config exclude": {
+				Short:         "Manage exclude patterns in raven.yaml",
+				DefaultLeafID: "vault_config_exclude_list",
+				DefaultRender: renderVaultConfigExcludeList,
+			},
+			"vault config directories": {
+				Short:         "Manage directories config in raven.yaml",
+				DefaultLeafID: "vault_config_directories_get",
+				DefaultRender: renderVaultConfigDirectoriesGet,
+			},
+			"vault config capture": {
+				Short:         "Manage capture config in raven.yaml",
+				DefaultLeafID: "vault_config_capture_get",
+				DefaultRender: renderVaultConfigCaptureGet,
+			},
+			"vault config deletion": {
+				Short:         "Manage deletion config in raven.yaml",
+				DefaultLeafID: "vault_config_deletion_get",
+				DefaultRender: renderVaultConfigDeletionGet,
+			},
+		},
+		Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+			"vault_config_show":                      renderVaultConfigShow,
+			"vault_config_auto_reindex_set":          renderVaultConfigAutoReindexSet,
+			"vault_config_auto_reindex_unset":        renderVaultConfigAutoReindexUnset,
+			"vault_config_protected_prefixes_list":   renderVaultConfigProtectedPrefixesList,
+			"vault_config_protected_prefixes_add":    renderVaultConfigProtectedPrefixesAdd,
+			"vault_config_protected_prefixes_remove": renderVaultConfigProtectedPrefixesRemove,
+			"vault_config_exclude_list":              renderVaultConfigExcludeList,
+			"vault_config_exclude_add":               renderVaultConfigExcludeAdd,
+			"vault_config_exclude_remove":            renderVaultConfigExcludeRemove,
+			"vault_config_directories_get":           renderVaultConfigDirectoriesGet,
+			"vault_config_directories_set":           renderVaultConfigDirectoriesSet,
+			"vault_config_directories_unset":         renderVaultConfigDirectoriesUnset,
+			"vault_config_capture_get":               renderVaultConfigCaptureGet,
+			"vault_config_capture_set":               renderVaultConfigCaptureSet,
+			"vault_config_capture_unset":             renderVaultConfigCaptureUnset,
+			"vault_config_deletion_get":              renderVaultConfigDeletionGet,
+			"vault_config_deletion_set":              renderVaultConfigDeletionSet,
+			"vault_config_deletion_unset":            renderVaultConfigDeletionUnset,
+		},
+	})
 }
 
 func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {

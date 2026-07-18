@@ -7,6 +7,7 @@ package commands
 // generate both Cobra commands and MCP tool schemas.
 type Meta struct {
 	Name                string     // Command name (e.g., "trait", "add", "new")
+	CLIPath             []string   // Optional explicit CLI invocation path segments (e.g., ["vault", "config", "show"]); falls back to Name when empty
 	Use                 string     // Cobra-style usage string for this command (local, not full invocation)
 	Description         string     // Short description
 	LongDesc            string     // Long description (for --help)
@@ -2184,6 +2185,7 @@ Safety checks:
 	},
 	"vault_config_show": {
 		Name:        "vault config show",
+		CLIPath:     []string{"vault", "config", "show"},
 		Description: "Show current raven.yaml values",
 		LongDesc: `Show current effective raven.yaml values.
 
@@ -2198,6 +2200,7 @@ deletion, auto_reindex, protected_prefixes, and exclude patterns.`,
 	},
 	"vault_config_auto_reindex_set": {
 		Name:        "vault config auto-reindex set",
+		CLIPath:     []string{"vault", "config", "auto-reindex", "set"},
 		Description: "Set an explicit auto_reindex value in raven.yaml",
 		LongDesc: `Set the vault's auto_reindex behavior explicitly.
 
@@ -2213,6 +2216,7 @@ Without --value, this command sets auto_reindex=true explicitly.`,
 	},
 	"vault_config_auto_reindex_unset": {
 		Name:        "vault config auto-reindex unset",
+		CLIPath:     []string{"vault", "config", "auto-reindex", "unset"},
 		Description: "Clear the explicit auto_reindex field from raven.yaml",
 		LongDesc: `Remove the explicit auto_reindex field and fall back to Raven's default behavior.
 
@@ -2223,6 +2227,7 @@ The effective default is auto_reindex=true.`,
 	},
 	"vault_config_protected_prefixes_list": {
 		Name:        "vault config protected-prefixes list",
+		CLIPath:     []string{"vault", "config", "protected-prefixes", "list"},
 		Description: "List configured protected_prefixes from raven.yaml",
 		Examples: []string{
 			"rvn vault config protected-prefixes list --json",
@@ -2230,6 +2235,7 @@ The effective default is auto_reindex=true.`,
 	},
 	"vault_config_protected_prefixes_add": {
 		Name:        "vault config protected-prefixes add",
+		CLIPath:     []string{"vault", "config", "protected-prefixes", "add"},
 		Description: "Add one protected prefix to raven.yaml",
 		LongDesc: `Add a vault-relative directory prefix to protected_prefixes.
 
@@ -2244,6 +2250,7 @@ Prefixes are normalized with a trailing slash.`,
 	},
 	"vault_config_protected_prefixes_remove": {
 		Name:        "vault config protected-prefixes remove",
+		CLIPath:     []string{"vault", "config", "protected-prefixes", "remove"},
 		Description: "Remove one protected prefix from raven.yaml",
 		Args: []ArgMeta{
 			{Name: "prefix", Description: "Configured protected prefix to remove", Required: true},
@@ -2254,6 +2261,7 @@ Prefixes are normalized with a trailing slash.`,
 	},
 	"vault_config_exclude_list": {
 		Name:        "vault config exclude list",
+		CLIPath:     []string{"vault", "config", "exclude", "list"},
 		Description: "List configured exclude patterns from raven.yaml",
 		Examples: []string{
 			"rvn vault config exclude list --json",
@@ -2261,6 +2269,7 @@ Prefixes are normalized with a trailing slash.`,
 	},
 	"vault_config_exclude_add": {
 		Name:        "vault config exclude add",
+		CLIPath:     []string{"vault", "config", "exclude", "add"},
 		Description: "Add one exclude pattern to raven.yaml",
 		LongDesc: `Add a gitignore-style pattern to the top-level exclude list.
 
@@ -2277,6 +2286,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_exclude_remove": {
 		Name:        "vault config exclude remove",
+		CLIPath:     []string{"vault", "config", "exclude", "remove"},
 		Description: "Remove one exclude pattern from raven.yaml",
 		Args: []ArgMeta{
 			{Name: "pattern", Description: "Configured exclude pattern to remove", Required: true},
@@ -2287,6 +2297,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_directories_get": {
 		Name:        "vault config directories get",
+		CLIPath:     []string{"vault", "config", "directories", "get"},
 		Description: "Show current directories config from raven.yaml",
 		Examples: []string{
 			"rvn vault config directories get --json",
@@ -2294,6 +2305,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_directories_set": {
 		Name:        "vault config directories set",
+		CLIPath:     []string{"vault", "config", "directories", "set"},
 		Description: "Set one or more directories fields in raven.yaml",
 		Flags: []FlagMeta{
 			{Name: "daily", Description: "Set directories.daily", Type: FlagTypeString},
@@ -2310,6 +2322,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_directories_unset": {
 		Name:        "vault config directories unset",
+		CLIPath:     []string{"vault", "config", "directories", "unset"},
 		Description: "Clear one or more directories fields from raven.yaml",
 		Flags: []FlagMeta{
 			{Name: "daily", Description: "Clear directories.daily", Type: FlagTypeBool},
@@ -2325,6 +2338,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_capture_get": {
 		Name:        "vault config capture get",
+		CLIPath:     []string{"vault", "config", "capture", "get"},
 		Description: "Show current capture config from raven.yaml",
 		Examples: []string{
 			"rvn vault config capture get --json",
@@ -2332,6 +2346,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_capture_set": {
 		Name:        "vault config capture set",
+		CLIPath:     []string{"vault", "config", "capture", "set"},
 		Description: "Set one or more capture fields in raven.yaml",
 		Flags: []FlagMeta{
 			{Name: "destination", Description: "Set capture.destination", Type: FlagTypeString},
@@ -2344,6 +2359,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_capture_unset": {
 		Name:        "vault config capture unset",
+		CLIPath:     []string{"vault", "config", "capture", "unset"},
 		Description: "Clear one or more capture fields from raven.yaml",
 		Flags: []FlagMeta{
 			{Name: "destination", Description: "Clear capture.destination", Type: FlagTypeBool},
@@ -2356,6 +2372,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_deletion_get": {
 		Name:        "vault config deletion get",
+		CLIPath:     []string{"vault", "config", "deletion", "get"},
 		Description: "Show current deletion config from raven.yaml",
 		Examples: []string{
 			"rvn vault config deletion get --json",
@@ -2363,6 +2380,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_deletion_set": {
 		Name:        "vault config deletion set",
+		CLIPath:     []string{"vault", "config", "deletion", "set"},
 		Description: "Set one or more deletion fields in raven.yaml",
 		Flags: []FlagMeta{
 			{Name: "behavior", Description: "Set deletion.behavior (trash|permanent)", Type: FlagTypeString, Examples: []string{"trash", "permanent"}},
@@ -2375,6 +2393,7 @@ mutation commands ignore or reject matching paths.`,
 	},
 	"vault_config_deletion_unset": {
 		Name:        "vault config deletion unset",
+		CLIPath:     []string{"vault", "config", "deletion", "unset"},
 		Description: "Clear one or more deletion fields from raven.yaml",
 		Flags: []FlagMeta{
 			{Name: "behavior", Description: "Clear deletion.behavior", Type: FlagTypeBool},

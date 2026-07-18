@@ -24,6 +24,19 @@ func normalizeRegistryMetadata() {
 	}
 }
 
+// CLIPathSegments returns the CLI invocation path for the command as ordered
+// segments. It prefers the explicit CLIPath hierarchy field and falls back to
+// splitting the human-facing Name so existing entries keep working without
+// requiring the field to be populated.
+func (m Meta) CLIPathSegments() []string {
+	if len(m.CLIPath) > 0 {
+		out := make([]string, len(m.CLIPath))
+		copy(out, m.CLIPath)
+		return out
+	}
+	return strings.Fields(m.Name)
+}
+
 func EffectiveMeta(commandID string) (Meta, bool) {
 	meta, ok := Registry[commandID]
 	if !ok {
