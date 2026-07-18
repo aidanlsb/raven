@@ -1,4 +1,4 @@
-package cli
+package commandimpl
 
 import (
 	"fmt"
@@ -13,7 +13,12 @@ func isSingleToken(s string) bool {
 	return s != "" && !strings.ContainsAny(s, " \t\r\n")
 }
 
-func buildUnknownQuerySuggestion(db *index.Database, queryStr string, dailyDir string, sch *schema.Schema) string {
+// buildUnknownQuerySuggestion produces a helpful suggestion for a query string
+// that is neither a concrete query root nor a saved query. The database and
+// schema are used only to enrich the hint (recognizing a type name or a
+// resolvable reference); a nil database or schema degrades to the base message
+// rather than changing behavior.
+func buildUnknownQuerySuggestion(db *index.Database, queryStr, dailyDir string, sch *schema.Schema) string {
 	base := "Queries must start with 'type:', 'trait:', 'section', or 'asset', or be a saved query name. Run 'rvn query saved list' to see saved queries."
 
 	q := strings.TrimSpace(queryStr)
@@ -24,6 +29,10 @@ func buildUnknownQuerySuggestion(db *index.Database, queryStr string, dailyDir s
 		if _, ok := sch.Types[q]; ok {
 			return base + fmt.Sprintf(" Did you mean to query type %q? Try: %s", q, "rvn query type:"+q)
 		}
+	}
+
+	if db == nil {
+		return base
 	}
 
 	// Try to resolve the token as a reference to give a better hint. This does NOT

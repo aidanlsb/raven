@@ -44,7 +44,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 		return mapQuerySvcFailure(err)
 	}
 
-	if isSavedQuery && !isFullQueryString(resolvedQuery) {
+	if isSavedQuery && !querysvc.IsFullQueryRoot(resolvedQuery) {
 		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', 'section', or 'asset'", queryName), nil, "")
 	}
 
@@ -58,6 +58,15 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 	}
 	defer db.Close()
 	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+
+	// A non-saved string that is not a concrete query root is an unknown query.
+	// Return a rich, resolver-aware hint here (rather than letting execution fail
+	// with a generic parse error) so both CLI and MCP callers get the same help.
+	if !isSavedQuery && !querysvc.IsFullQueryRoot(resolvedQuery) {
+		suggestion := buildUnknownQuerySuggestion(db, resolvedQuery, vaultCfg.GetDailyDirectory(), sch)
+		return commandexec.Failure(codes.ErrQueryInvalid, "unknown query: "+resolvedQuery, nil, suggestion)
+	}
+
 	compatible, err := db.SchemaCompatible()
 	if err != nil {
 		return commandexec.Failure(codes.ErrDatabase, "failed to read index schema version", nil, "Run 'rvn reindex --full' to rebuild the index")
@@ -395,35 +404,12 @@ func dedupeQueryApplyIDs(ids []string) []string {
 }
 
 func resolveQueryString(queryString string, rawInputs interface{}, vaultCfg *config.VaultConfig) (resolved, queryName string, isSaved bool, err error) {
-	if vaultCfg == nil || len(vaultCfg.Queries) == 0 {
+	name, saved, inputTokens, matched := querysvc.MatchInvocation(vaultCfg, queryString)
+	if !matched {
 		return queryString, "", false, nil
 	}
 
-	trimmed := strings.TrimSpace(queryString)
-	if isAssetQueryString(trimmed) || isSectionQueryString(trimmed) {
-		return queryString, "", false, nil
-	}
-	var tokens []string
-	if strings.ContainsAny(trimmed, " \t\r\n") {
-		if parts, ok := querysvc.SplitInlineInvocation(trimmed); ok {
-			tokens = parts
-		} else {
-			tokens = strings.Fields(trimmed)
-		}
-	} else if trimmed != "" {
-		tokens = []string{trimmed}
-	}
-	if len(tokens) == 0 {
-		return "", "", false, fmt.Errorf("empty query string")
-	}
-
-	name := tokens[0]
-	saved, ok := vaultCfg.Queries[name]
-	if !ok {
-		return queryString, "", false, nil
-	}
-
-	resolvedQuery, err := querysvc.ResolveSavedQuery(name, saved, tokens[1:], keyValuePairs(rawInputs))
+	resolvedQuery, err := querysvc.ResolveSavedQuery(name, saved, inputTokens, keyValuePairs(rawInputs))
 	if err != nil {
 		return "", "", true, err
 	}
@@ -554,21 +540,6 @@ func mapQuerySvcFailure(err error) commandexec.Result {
 	default:
 		return commandexec.Failure("INTERNAL_ERROR", svcErr.Message, nil, svcErr.Suggestion)
 	}
-}
-
-func isFullQueryString(queryString string) bool {
-	trimmed := strings.TrimSpace(queryString)
-	return strings.HasPrefix(trimmed, "type:") || strings.HasPrefix(trimmed, "trait:") || isAssetQueryString(trimmed) || isSectionQueryString(trimmed)
-}
-
-func isAssetQueryString(queryString string) bool {
-	trimmed := strings.TrimSpace(queryString)
-	return trimmed == "asset" || strings.HasPrefix(trimmed, "asset ")
-}
-
-func isSectionQueryString(queryString string) bool {
-	trimmed := strings.TrimSpace(queryString)
-	return trimmed == "section" || strings.HasPrefix(trimmed, "section ")
 }
 
 // HandleQuerySavedList executes the canonical `query_saved_list` command.
