@@ -508,16 +508,27 @@ func mapExecuteQueryFailure(queryString string, err error) commandexec.Result {
 }
 
 func queryParseSuggestion(queryString string) string {
+	if hint, ok := querySyntaxHint(queryString); ok {
+		return hint
+	}
+	return "Run 'rvn docs querying query-language' for RQL syntax and examples"
+}
+
+// querySyntaxHint returns a suggestion for a common RQL syntax mistake (single
+// quotes, SQL-style where clauses) or ok=false when no specific hint applies.
+// It is shared by the full-query parse-error path and the unknown-query hint so
+// both give the same guidance for malformed query text.
+func querySyntaxHint(queryString string) (string, bool) {
 	trimmed := strings.TrimSpace(queryString)
 	lower := strings.ToLower(trimmed)
 
 	if strings.Contains(trimmed, "'") {
-		return `RQL strings use double quotes, not single quotes. For example: .status=="open"`
+		return `RQL strings use double quotes, not single quotes. For example: .status=="open"`, true
 	}
 	if strings.Contains(" "+lower+" ", " where ") {
-		return "RQL does not use 'where'. Put predicates directly after the query root, for example: type:issue .status==open"
+		return "RQL does not use 'where'. Put predicates directly after the query root, for example: type:issue .status==open", true
 	}
-	return "Run 'rvn docs querying query-language' for RQL syntax and examples"
+	return "", false
 }
 
 func mapQuerySvcFailure(err error) commandexec.Result {

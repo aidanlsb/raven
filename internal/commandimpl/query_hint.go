@@ -23,6 +23,12 @@ func buildUnknownQuerySuggestion(db *index.Database, queryStr, dailyDir string, 
 
 	q := strings.TrimSpace(queryStr)
 	if !isSingleToken(q) {
+		// Multi-token input looks like a query attempt rather than a bare
+		// reference: prefer a syntax-specific hint (e.g. single quotes, SQL-style
+		// where) when one applies, otherwise fall back to the query-root reminder.
+		if hint, ok := querySyntaxHint(q); ok {
+			return hint
+		}
 		return base
 	}
 	if sch != nil {
