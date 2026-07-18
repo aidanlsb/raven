@@ -80,30 +80,18 @@ explicitly with `rvn vault use` / `rvn vault pin`. See
 
 The starter `schema.yaml` already includes `project` and `person` types, which you can modify or replace.
 
-## Connect an agent
+## Get started with an agent
 
-Raven's agent support is optional — the CLI works on its own — but it's where Raven shines. It ships reusable [Agent Skills](https://agentskills.io/) that teach coding agents how to work with your vault, plus an MCP server for agents that speak MCP.
+The fastest way to learn Raven is to let an agent set up your vault and teach you — this is where Raven shines. It ships reusable [Agent Skills](https://agentskills.io/) that give coding agents everything they need to drive your vault.
 
-### Skills
-
-The fastest way to get started is to install the shipped skills:
+### 1. Install the skills
 
 ```bash
 rvn skill install          # interactive: prints the plan and prompts [y/N]
 rvn skill install --yes    # agents / CI: apply without prompting
 ```
 
-In an interactive terminal, `rvn skill install` prints what will be installed
-and prompts before writing. In non-interactive or `--json` runs it does not
-prompt: pass `--yes` to apply, otherwise it returns a preview and reports that
-confirmation is required.
-
-By default it installs all shipped skills; pass skill names to narrow it, e.g.
-`rvn skill install raven-core raven-query`.
-
-Skills install to `~/.agents/skills` by default. Use `--scope project` for
-`.agents/skills` in the current project, or `--dest` to choose another
-location.
+This installs all shipped skills to `~/.agents/skills` (use `--scope project` for `.agents/skills` in the current project, or `--dest` for another location). Pass skill names to narrow it, e.g. `rvn skill install raven-core raven-query`. In non-interactive or `--json` runs it returns a preview unless you pass `--yes`.
 
 | Skill | Use it for |
 |---|---|
@@ -115,16 +103,19 @@ location.
 | `raven-templates` | Template files and schema-template bindings |
 | `raven-vault-admin` | Vault setup, selection, and configuration |
 
-The packaged skills teach CLI workflows and do not require MCP. Use
-`rvn skill install` for first-time installation. `rvn skill sync` is for
-updating already-installed Raven-managed skills: without a skill name it only
-updates/realigns existing ones and reports (but does not install) missing
-skills.
+### 2. Let the agent onboard you
 
-### MCP server
+Open your coding agent in the vault directory and give it this prompt:
 
-MCP gives compatible agents direct access to Raven commands. Install Raven
-into a supported MCP client:
+> Use the `raven-onboarding` skill to set up my vault and walk me through how Raven works.
+
+The onboarding skill introduces Raven's concepts, helps you shape a schema for what you actually track, and gets you creating and querying notes — all in the context of your own vault. From there you can ask for real work, like:
+
+> Add a meeting note for today's kickoff with Freya on the Midgard security review, capture any decisions and follow-ups, and link it to the project and to Freya.
+
+### Optional: MCP
+
+Skills teach CLI workflows and don't require MCP. To additionally give MCP-native agents direct tool access to Raven's commands, install Raven into a supported client:
 
 ```bash
 rvn mcp install --client claude-code
@@ -141,16 +132,13 @@ rvn mcp show
 rvn mcp show --client cursor
 ```
 
-### Agent onboarding
-
-After installing the onboarding skill, ask your agent to use it to introduce
-Raven in the context of your vault.
+To update already-installed Raven-managed skills later, use `rvn skill sync` (see `rvn skill --help`).
 
 See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 
-## A guided walkthrough
+## Doing it by hand
 
-Let's track projects, meetings, and the people involved, then let an agent answer questions about them.
+Prefer to drive Raven directly, or curious what the agent does under the hood? Here's the same flow — tracking projects, meetings, and the people involved — done manually.
 
 ### 1. Extend the schema
 
