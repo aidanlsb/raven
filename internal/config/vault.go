@@ -492,43 +492,16 @@ func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
 // This handles the logic of checking whether the reference looks like a typed item
 // (has a directory prefix like "person/freya") or an untyped page ("my-note").
 // Returns the relative file path within the vault.
+//
+// This is a thin wrapper over paths.ReferenceToFilePath, which owns the canonical
+// (type-free) reference-resolution heuristic. Prefer ObjectIDToFilePath when the
+// type of the reference is known.
 func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
-		return paths.ObjectIDToFilePath(ref, "", "", "")
+		return paths.ReferenceToFilePath(ref, "", "")
 	}
-
-	ref = filepath.ToSlash(strings.TrimSpace(ref))
-	ref = strings.TrimPrefix(ref, "./")
-	ref = strings.TrimPrefix(ref, "/")
-	ref = strings.TrimSuffix(ref, ".md")
-
-	// If the reference is already rooted, keep it rooted exactly once.
-	if dirs.Object != "" && strings.HasPrefix(ref, dirs.Object) {
-		return ref + ".md"
-	}
-	if dirs.Page != "" && strings.HasPrefix(ref, dirs.Page) {
-		return ref + ".md"
-	}
-
-	// If the reference contains a slash, it's likely a typed item path
-	// e.g., "person/freya" -> "type/person/freya.md"
-	if strings.Contains(ref, "/") {
-		if dirs.Object != "" {
-			return dirs.Object + ref + ".md"
-		}
-		return ref + ".md"
-	}
-
-	// No slash - it's a bare name, treat as an untyped page
-	// e.g., "my-note" -> "page/my-note.md"
-	if dirs.Page != "" {
-		return dirs.Page + ref + ".md"
-	}
-	if dirs.Object != "" {
-		return dirs.Object + ref + ".md"
-	}
-	return ref + ".md"
+	return paths.ReferenceToFilePath(ref, dirs.Object, dirs.Page)
 }
 
 // IsInObjectsRoot checks if a file path is under the object root directory.

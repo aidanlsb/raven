@@ -468,11 +468,55 @@ directories:
 			{"type/person/freya", "type/person/freya.md"},
 			{"page/my-note", "page/my-note.md"},
 			{"type/person/freya.md", "type/person/freya.md"},
+			// Normalization edge cases.
+			{"/person/freya", "type/person/freya.md"},
+			{"./my-note", "page/my-note.md"},
 		}
 
 		for _, tc := range tests {
 			got := cfg.ResolveReferenceToFilePath(tc.ref)
 			if got != tc.expected {
+				t.Errorf("ResolveReferenceToFilePath(%q) = %q, want %q", tc.ref, got, tc.expected)
+			}
+		}
+	})
+
+	t.Run("ResolveReferenceToFilePath page defaults to object root", func(t *testing.T) {
+		// When the page root is omitted, GetDirectoriesConfig defaults it to the
+		// object root, so bare names resolve under the object root too.
+		cfg := &VaultConfig{
+			DailyDirectory: "daily",
+			Directories:    &DirectoriesConfig{Object: "type/"},
+		}
+
+		tests := []struct {
+			ref      string
+			expected string
+		}{
+			{"person/freya", "type/person/freya.md"},
+			{"my-note", "type/my-note.md"},
+			{"type/person/freya", "type/person/freya.md"},
+		}
+		for _, tc := range tests {
+			if got := cfg.ResolveReferenceToFilePath(tc.ref); got != tc.expected {
+				t.Errorf("ResolveReferenceToFilePath(%q) = %q, want %q", tc.ref, got, tc.expected)
+			}
+		}
+	})
+
+	t.Run("ResolveReferenceToFilePath without directories config", func(t *testing.T) {
+		cfg := &VaultConfig{DailyDirectory: "daily"}
+
+		tests := []struct {
+			ref      string
+			expected string
+		}{
+			{"person/freya", "person/freya.md"},
+			{"my-note", "my-note.md"},
+			{"person/freya.md", "person/freya.md"},
+		}
+		for _, tc := range tests {
+			if got := cfg.ResolveReferenceToFilePath(tc.ref); got != tc.expected {
 				t.Errorf("ResolveReferenceToFilePath(%q) = %q, want %q", tc.ref, got, tc.expected)
 			}
 		}

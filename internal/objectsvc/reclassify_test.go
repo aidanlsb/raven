@@ -67,6 +67,78 @@ traits: {}
 	}
 }
 
+func TestReclassifyMovePlansCanonicalDestinationWithDirectories(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  note:
+    default_path: notes/
+    fields: {}
+  book:
+    default_path: books/
+    fields:
+      title:
+        type: string
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	// Directories config: typed items live under "type/", pages under "page/".
+	vaultCfg := &config.VaultConfig{
+		DailyDirectory: "daily",
+		Directories: &config.DirectoriesConfig{
+			Object: "type/",
+			Page:   "page/",
+		},
+	}
+
+	sourcePath := filepath.Join(vaultPath, "type/notes/my-note.md")
+	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(sourcePath, []byte("---\ntype: note\ntitle: My Note\n---\n\nContent.\n"), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	result, err := Reclassify(ReclassifyRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+		Schema:      sch,
+		ObjectID:    "notes/my-note",
+		FilePath:    sourcePath,
+		NewTypeName: "book",
+		Force:       true,
+	})
+	if err != nil {
+		t.Fatalf("Reclassify() error = %v", err)
+	}
+	if !result.Moved {
+		t.Fatalf("expected moved result, got %#v", result)
+	}
+	// Canonical destination applies the object root and the new type's
+	// default_path: type/ + books/ + my-note.md.
+	if result.NewPath != "type/books/my-note.md" {
+		t.Fatalf("unexpected NewPath %q, want type/books/my-note.md", result.NewPath)
+	}
+
+	destPath := filepath.Join(vaultPath, "type/books/my-note.md")
+	content, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("read destination: %v", err)
+	}
+	if !strings.Contains(string(content), "type: book") {
+		t.Fatalf("expected reclassified type in moved file, got:\n%s", string(content))
+	}
+	if _, err := os.Stat(sourcePath); !os.IsNotExist(err) {
+		t.Fatalf("expected source file removed, err=%v", err)
+	}
+	if result.ObjectID != "books/my-note" {
+		t.Fatalf("expected destination object ID 'books/my-note', got %q", result.ObjectID)
+	}
+}
+
 func TestReclassifyMoveFailureLeavesSourceUntouched(t *testing.T) {
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `

@@ -113,6 +113,43 @@ func TestObjectIDToFilePath(t *testing.T) {
 	}
 }
 
+func TestReferenceToFilePath(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		ref         string
+		objectsRoot string
+		pagesRoot   string
+		want        string
+	}{
+		// With both roots configured.
+		{"slash means objects root", "person/freya", "objects/", "pages/", "objects/person/freya.md"},
+		{"bare name means pages root", "my-note", "objects/", "pages/", "pages/my-note.md"},
+		{"already objects-rooted kept as-is", "objects/person/freya", "objects/", "pages/", "objects/person/freya.md"},
+		{"already pages-rooted kept as-is", "pages/my-note", "objects/", "pages/", "pages/my-note.md"},
+		{"trailing .md stripped then re-added", "objects/person/freya.md", "objects/", "pages/", "objects/person/freya.md"},
+
+		// Trailing-slash / normalization edge cases on the roots themselves.
+		{"roots without trailing slash still normalized", "person/freya", "objects", "pages", "objects/person/freya.md"},
+		{"leading slash ref normalized", "/person/freya", "objects/", "pages/", "objects/person/freya.md"},
+		{"dot-slash ref normalized", "./my-note", "objects/", "pages/", "pages/my-note.md"},
+
+		// Pages root missing falls back to objects root for bare names.
+		{"bare name falls back to objects root", "my-note", "objects/", "", "objects/my-note.md"},
+
+		// No roots configured: literal interpretation only.
+		{"no roots, slash", "person/freya", "", "", "person/freya.md"},
+		{"no roots, bare", "my-note", "", "", "my-note.md"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ReferenceToFilePath(tc.ref, tc.objectsRoot, tc.pagesRoot); got != tc.want {
+				t.Fatalf("ReferenceToFilePath(%q, %q, %q) = %q, want %q", tc.ref, tc.objectsRoot, tc.pagesRoot, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCandidateFilePaths(t *testing.T) {
 	t.Parallel()
 	got := CandidateFilePaths("people/freya", "objects/", "pages/")
