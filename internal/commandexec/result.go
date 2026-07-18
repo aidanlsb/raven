@@ -35,11 +35,48 @@ type VaultContext struct {
 	Source string `json:"source"`
 }
 
+// MutationPhase is the standard applied-vs-preview signal carried by every
+// mutating command response. Agents must read this instead of inferring intent
+// from heterogeneous data fields (e.g. data.status, data.preview).
+type MutationPhase string
+
+const (
+	// MutationPhasePreview means no durable change was written; the response
+	// describes what a subsequent apply would do.
+	MutationPhasePreview MutationPhase = "preview"
+	// MutationPhaseApplied means the change was written to the vault.
+	MutationPhaseApplied MutationPhase = "applied"
+)
+
+// MutationMeta is the uniform mutation signal attached to mutating responses.
+type MutationMeta struct {
+	Phase MutationPhase `json:"phase"`
+}
+
 // Meta contains metadata about the response.
 type Meta struct {
 	Count        int           `json:"count,omitempty"`
 	QueryTimeMs  int64         `json:"query_time_ms,omitempty"`
 	VaultContext *VaultContext `json:"vault_context,omitempty"`
+	// Mutation is present on responses from mutating commands and reports
+	// whether the change was applied or only previewed.
+	Mutation *MutationMeta `json:"mutation,omitempty"`
+}
+
+// WithMutationPhase returns the result with meta.mutation.phase set to the given
+// phase, allocating Meta when needed. It is a no-op on failure envelopes (a
+// failed mutation neither previews nor applies). Handlers use this to report a
+// phase explicitly for blocked or no-op states (e.g. a move awaiting
+// confirmation); otherwise the shared pipeline fills in the phase.
+func (r Result) WithMutationPhase(phase MutationPhase) Result {
+	if !r.OK {
+		return r
+	}
+	if r.Meta == nil {
+		r.Meta = &Meta{}
+	}
+	r.Meta.Mutation = &MutationMeta{Phase: phase}
+	return r
 }
 
 // Success builds a successful result envelope.
