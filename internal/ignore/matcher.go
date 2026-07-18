@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // Matcher checks vault-relative paths against Raven exclude patterns.
@@ -77,15 +79,11 @@ func (m *Matcher) Match(relPath string, isDir bool) bool {
 	return matched
 }
 
-// NormalizePath normalizes a path before matching.
-func NormalizePath(path string) string {
-	path = strings.TrimSpace(filepath.ToSlash(path))
-	path = strings.TrimPrefix(path, "./")
-	path = strings.TrimPrefix(path, "/")
-	for strings.Contains(path, "//") {
-		path = strings.ReplaceAll(path, "//", "/")
-	}
-	return path
+// NormalizePath normalizes a vault-relative path before matching. It delegates
+// to paths.NormalizeVaultRelPath so ignore matching shares the canonical
+// vault-relative normalization used elsewhere in Raven.
+func NormalizePath(p string) string {
+	return paths.NormalizeVaultRelPath(p)
 }
 
 func parsePattern(raw string) (pattern, error) {

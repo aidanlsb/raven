@@ -11,6 +11,7 @@ package paths
 import (
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -229,6 +230,79 @@ func CandidateFilePaths(ref, objectsRoot, pagesRoot string) []string {
 	}
 
 	return out
+}
+
+// RelFromVault expresses targetPath relative to vaultPath using forward
+// slashes. It is the canonical way to derive a vault-relative "display" path
+// from an absolute (or vault-rooted) filesystem path, replacing the ad-hoc
+// filepath.Rel + filepath.ToSlash pattern that had been copied across packages.
+//
+// The returned path uses '/' separators regardless of the host OS. If the
+// relationship cannot be computed (see filepath.Rel), the error is returned.
+func RelFromVault(vaultPath, targetPath string) (string, error) {
+	rel, err := filepath.Rel(vaultPath, targetPath)
+	if err != nil {
+		return "", err
+	}
+	return filepath.ToSlash(rel), nil
+}
+
+// JoinDirRoot joins a configured directory root (e.g. "objects/") with a
+// vault-relative path. The root is normalized with NormalizeDirRoot; an empty
+// root returns rel unchanged. The result is a cleaned, forward-slash path.
+//
+// This centralizes the "nest a relative path under a content root" step used
+// when building rooted content paths.
+func JoinDirRoot(root, rel string) string {
+	root = strings.TrimSuffix(NormalizeDirRoot(root), "/")
+	if root == "" {
+		return rel
+	}
+	return path.Join(root, rel)
+}
+
+// SanitizeDefaultPath normalizes a schema-configured default_path into a
+// vault-relative directory path using forward slashes. It returns ok=false when
+// the value is empty or would escape the vault: absolute paths (including
+// Windows drive/volume paths), "." , ".." , a leading "/", or any remaining
+// ".." traversal segment are all rejected.
+//
+// This is the canonical guard for type default_path values; callers should
+// treat a false result as "no usable default_path".
+func SanitizeDefaultPath(defaultPath string) (string, bool) {
+	if strings.TrimSpace(defaultPath) == "" {
+		return "", false
+	}
+	if filepath.IsAbs(defaultPath) {
+		return "", false
+	}
+	clean := strings.ReplaceAll(filepath.ToSlash(filepath.Clean(defaultPath)), "\\", "/")
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "/") || strings.Contains(clean, "..") {
+		return "", false
+	}
+	return clean, true
+}
+
+// IsCleanRelSubpath reports whether cleanPath is a safe relative subpath that
+// stays within its base directory. It assumes cleanPath has already been
+// normalized to forward slashes and cleaned (e.g. via path.Clean); it does not
+// re-normalize. A safe subpath is non-empty, is not "." , is not absolute
+// (no leading "/"), and is not a parent traversal ("..", "../...").
+//
+// Unlike IsValidVaultRelPath (which normalizes and strips a leading slash),
+// this predicate rejects already-absolute inputs, so it is suited to guarding
+// paths resolved relative to a specific base directory.
+func IsCleanRelSubpath(cleanPath string) bool {
+	if cleanPath == "" || cleanPath == "." {
+		return false
+	}
+	if strings.HasPrefix(cleanPath, "/") {
+		return false
+	}
+	if cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
+		return false
+	}
+	return true
 }
 
 // ValidateWithinVault checks that a target path is within the vault directory.

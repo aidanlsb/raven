@@ -132,6 +132,95 @@ func TestCandidateFilePaths(t *testing.T) {
 	}
 }
 
+func TestRelFromVault(t *testing.T) {
+	t.Parallel()
+	vault := filepath.Join("/tmp", "vault")
+	tests := []struct {
+		target string
+		want   string
+	}{
+		{filepath.Join(vault, "objects", "people", "freya.md"), "objects/people/freya.md"},
+		{filepath.Join(vault, "note.md"), "note.md"},
+		{vault, "."},
+	}
+	for _, tc := range tests {
+		got, err := RelFromVault(vault, tc.target)
+		if err != nil {
+			t.Fatalf("RelFromVault(%q, %q) error: %v", vault, tc.target, err)
+		}
+		if got != tc.want {
+			t.Fatalf("RelFromVault(%q, %q) = %q, want %q", vault, tc.target, got, tc.want)
+		}
+	}
+}
+
+func TestJoinDirRoot(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		root string
+		rel  string
+		want string
+	}{
+		{"objects/", "people/freya", "objects/people/freya"},
+		{"objects", "people/freya", "objects/people/freya"},
+		{"/objects/", "people/freya", "objects/people/freya"},
+		{"", "people/freya", "people/freya"},
+		{"objects/", "notes/../people/freya", "objects/people/freya"},
+	}
+	for _, tc := range tests {
+		if got := JoinDirRoot(tc.root, tc.rel); got != tc.want {
+			t.Fatalf("JoinDirRoot(%q, %q) = %q, want %q", tc.root, tc.rel, got, tc.want)
+		}
+	}
+}
+
+func TestSanitizeDefaultPath(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{"notes/", "notes", true},
+		{"notes", "notes", true},
+		{"projects/active", "projects/active", true},
+		{"a/../b", "b", true},
+		{"", "", false},
+		{".", "", false},
+		{"..", "", false},
+		{"../escape", "", false},
+		{"notes/../../escape", "", false},
+		{"/abs", "", false},
+	}
+	for _, tc := range tests {
+		got, ok := SanitizeDefaultPath(tc.in)
+		if got != tc.want || ok != tc.ok {
+			t.Fatalf("SanitizeDefaultPath(%q) = (%q, %v), want (%q, %v)", tc.in, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+func TestIsCleanRelSubpath(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"getting-started/intro.md", true},
+		{"intro.md", true},
+		{"", false},
+		{".", false},
+		{"..", false},
+		{"../outside.md", false},
+		{"/abs.md", false},
+	}
+	for _, tc := range tests {
+		if got := IsCleanRelSubpath(tc.in); got != tc.want {
+			t.Fatalf("IsCleanRelSubpath(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestValidateWithinVault_AllowsInside(t *testing.T) {
 	t.Parallel()
 	vaultDir := t.TempDir()
