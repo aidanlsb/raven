@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/querysvc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 var queryCmd = &cobra.Command{
@@ -306,7 +307,7 @@ func mapQueryCode(code codes.ErrorCode) codes.ErrorCode {
 }
 
 func mapQuerySvcError(err error) error {
-	svcErr, ok := querysvc.AsError(err)
+	svcErr, ok := svcerr.AsError(err)
 	if !ok {
 		return handleError(ErrInternal, err, "")
 	}

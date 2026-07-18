@@ -2,12 +2,12 @@ package editsvc
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 type Code = codes.ErrorCode
@@ -18,44 +18,21 @@ const (
 	CodeMultipleMatches Code = codes.ErrMultipleMatches
 )
 
-type Error struct {
-	Code       Code
-	Message    string
-	Suggestion string
-	Details    map[string]string
-	Err        error
+func newError(code Code, message, suggestion string, details map[string]string, err error) *svcerr.Error {
+	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Details: stringDetails(details), Err: err}
 }
 
-func (e *Error) Error() string {
-	if e == nil {
-		return ""
-	}
-	if e.Message != "" {
-		return e.Message
-	}
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return string(e.Code)
-}
-
-func (e *Error) Unwrap() error {
-	if e == nil {
+// stringDetails widens a string-valued detail map into the shared error's
+// map[string]any shape, preserving nil so empty details stay omitted.
+func stringDetails(details map[string]string) map[string]any {
+	if len(details) == 0 {
 		return nil
 	}
-	return e.Err
-}
-
-func newError(code Code, message, suggestion string, details map[string]string, err error) *Error {
-	return &Error{Code: code, Message: message, Suggestion: suggestion, Details: details, Err: err}
-}
-
-func AsError(err error) (*Error, bool) {
-	var svcErr *Error
-	if errors.As(err, &svcErr) {
-		return svcErr, true
+	out := make(map[string]any, len(details))
+	for key, value := range details {
+		out[key] = value
 	}
-	return nil, false
+	return out
 }
 
 type EditSpec struct {

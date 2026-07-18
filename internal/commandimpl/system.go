@@ -34,11 +34,7 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 		CLIVersion: version,
 	})
 	if err != nil {
-		svcErr, ok := initsvc.AsError(err)
-		if !ok {
-			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-		}
-		return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
+		return commandexec.FromServiceError(err)
 	}
 
 	postInit, setupWarnings := setupInitVault(result.Path, req.ConfigPath, req.StatePath)
@@ -78,11 +74,7 @@ func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Res
 		Context:   ctx,
 	})
 	if err != nil {
-		svcErr, ok := reindexsvc.AsError(err)
-		if !ok {
-			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-		}
-		return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
+		return commandexec.FromServiceError(err)
 	}
 
 	warnings := make([]commandexec.Warning, 0, len(result.WarningMessages))
@@ -174,12 +166,7 @@ func HandleVersion(_ context.Context, req commandexec.Request) commandexec.Resul
 }
 
 func mapDateServiceError(err error) commandexec.Result {
-	svcErr, ok := datesvc.AsError(err)
-	if !ok {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-	}
-
-	return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
+	return commandexec.FromServiceError(err)
 }
 
 // initPostInitState is the resolved outcome of the first-run vault policy, used

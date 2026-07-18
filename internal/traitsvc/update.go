@@ -1,7 +1,6 @@
 package traitsvc
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 type Code = codes.ErrorCode
@@ -29,44 +29,8 @@ const (
 	CodeInternalError  Code = codes.ErrInternal
 )
 
-type Error struct {
-	Code       Code
-	Message    string
-	Suggestion string
-	Details    map[string]interface{}
-	Err        error
-}
-
-func (e *Error) Error() string {
-	if e == nil {
-		return ""
-	}
-	if e.Message != "" {
-		return e.Message
-	}
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return string(e.Code)
-}
-
-func (e *Error) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
-}
-
-func newError(code Code, message, suggestion string, details map[string]interface{}, err error) *Error {
-	return &Error{Code: code, Message: message, Suggestion: suggestion, Details: details, Err: err}
-}
-
-func AsError(err error) (*Error, bool) {
-	var svcErr *Error
-	if errors.As(err, &svcErr) {
-		return svcErr, true
-	}
-	return nil, false
+func newError(code Code, message, suggestion string, details map[string]interface{}, err error) *svcerr.Error {
+	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Details: details, Err: err}
 }
 
 type ValueValidationError struct {

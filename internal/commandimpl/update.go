@@ -130,8 +130,5 @@ func mapTraitMutationError(err error) commandexec.Result {
 	if errors.As(err, &validationErr) {
 		return commandexec.Failure("VALIDATION_FAILED", validationErr.Error(), nil, validationErr.Suggestion())
 	}
-	if svcErr, ok := traitsvc.AsError(err); ok {
-		return commandexec.Failure(svcErr.Code, svcErr.Message, svcErr.Details, svcErr.Suggestion)
-	}
-	return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+	return commandexec.FromServiceError(err)
 }

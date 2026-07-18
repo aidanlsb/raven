@@ -517,25 +517,7 @@ func querySyntaxHint(queryString string) (string, bool) {
 }
 
 func mapQuerySvcFailure(err error) commandexec.Result {
-	svcErr, ok := querysvc.AsError(err)
-	if !ok {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-	}
-
-	switch svcErr.Code {
-	case querysvc.CodeInvalidInput:
-		return commandexec.Failure("INVALID_INPUT", svcErr.Message, nil, svcErr.Suggestion)
-	case querysvc.CodeQueryInvalid:
-		return commandexec.Failure("QUERY_INVALID", svcErr.Message, nil, svcErr.Suggestion)
-	case querysvc.CodeQueryNotFound:
-		return commandexec.Failure("QUERY_NOT_FOUND", svcErr.Message, nil, svcErr.Suggestion)
-	case querysvc.CodeConfigInvalid:
-		return commandexec.Failure("CONFIG_INVALID", svcErr.Message, nil, svcErr.Suggestion)
-	case querysvc.CodeFileWriteError:
-		return commandexec.Failure("FILE_WRITE_ERROR", svcErr.Message, nil, svcErr.Suggestion)
-	default:
-		return commandexec.Failure("INTERNAL_ERROR", svcErr.Message, nil, svcErr.Suggestion)
-	}
+	return commandexec.FromServiceError(err)
 }
 
 // HandleQuerySavedList executes the canonical `query_saved_list` command.

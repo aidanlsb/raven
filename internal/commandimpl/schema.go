@@ -590,11 +590,7 @@ func mapSchemaFailure(err error) commandexec.Result {
 }
 
 func mapTemplateFailure(err error) commandexec.Result {
-	svcErr, ok := templatesvc.AsError(err)
-	if !ok {
-		return commandexec.Failure(codes.ErrInternal, err.Error(), nil, "")
-	}
-	return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
+	return commandexec.FromServiceError(err)
 }
 
 func canonicalSchemaWarnings(serviceWarnings []schemasvc.Warning) []commandexec.Warning {

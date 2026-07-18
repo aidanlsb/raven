@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/buildinfo"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func assertCode(t *testing.T, err error, want Code) {
@@ -13,7 +14,7 @@ func assertCode(t *testing.T, err error, want Code) {
 	if err == nil {
 		t.Fatalf("expected error code %q, got nil", want)
 	}
-	svcErr, ok := AsError(err)
+	svcErr, ok := svcerr.AsError(err)
 	if !ok {
 		t.Fatalf("expected maintsvc error, got %T: %v", err, err)
 	}
