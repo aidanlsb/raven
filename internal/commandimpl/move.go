@@ -69,6 +69,8 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	if serviceResult.NeedsConfirm && serviceResult.TypeMismatch != nil {
 		mismatch := serviceResult.TypeMismatch
+		// Nothing was written: the move is blocked pending confirmation, so
+		// report a preview phase regardless of the normalized apply resolution.
 		return commandexec.SuccessWithWarnings(map[string]interface{}{
 			"source":        serviceResult.SourceID,
 			"destination":   serviceResult.DestinationID,
@@ -80,7 +82,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 			Message: fmt.Sprintf("Moving to '%s/' which is the default directory for type '%s', but file has type '%s'",
 				mismatch.DestinationDir, mismatch.ExpectedType, mismatch.ActualType),
 			Ref: fmt.Sprintf("Use --skip-type-check to proceed, or change the file's type to '%s'", mismatch.ExpectedType),
-		}}, nil)
+		}}, nil).WithMutationPhase(commandexec.MutationPhasePreview)
 	}
 
 	warnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, indexUpdateFailedWarningCode)

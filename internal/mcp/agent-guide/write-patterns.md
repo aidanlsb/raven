@@ -90,6 +90,10 @@ immediately. Only call them after clear user approval or an unambiguous request,
 and use `dry-run=true` when you want to confirm the effect first. Bulk operations
 (`stdin=true`) stay preview-first and require `confirm=true`.
 
+Regardless of command or flags, read `meta.mutation.phase` to confirm what
+happened: `"applied"` means the change was written, `"preview"` means nothing was
+written yet. See `raven://guide/response-contract` for the full contract.
+
 ## Missing reference targets
 
 Writes are permissive: `new`, `upsert`, `set`, `add`, and `edit` succeed even when a

@@ -488,13 +488,33 @@ Because single-object writes apply on the first call, only invoke them when the
 user's intent is clear. For `delete`/`move`, check backlinks or read the object
 first—or pass `dry-run`—when the impact is not already obvious.
 
+### Confirming a write happened
+
+Every mutating command reports a uniform phase in `meta.mutation.phase`:
+
+```json
+{
+  "ok": true,
+  "meta": { "mutation": { "phase": "applied" } }
+}
+```
+
+- `applied` — the change was written to the vault.
+- `preview` — nothing was written yet (a dry run, an unconfirmed high-blast-radius
+  operation, or a write blocked pending confirmation).
+
+Branch on this field instead of command-specific `data` fields (`data.status`,
+`data.preview`, …). It is present on every mutating command and omitted on
+read-only commands and on failures. `query` with `apply` reports the phase of the
+write it delegates to.
+
 ## Best Practices
 
 1. Check the schema before creating or mutating typed items.
 2. Prefer `query` over `search` when the structure is known.
 3. Use raw `read` ranges before building string replacements for `edit`.
 4. Use `edit` only for content markdown files; use dedicated commands for `raven.yaml`, `schema.yaml`, and templates.
-5. Single-object writes apply immediately (`dry-run` to preview); bulk and query-driven mutations stay preview-first and need `confirm`.
+5. Single-object writes apply immediately (`dry-run` to preview); bulk and query-driven mutations stay preview-first and need `confirm`. Read `meta.mutation.phase` (`applied`/`preview`) to confirm whether a write happened.
 6. Use `move` for asset relocation so references and the asset index stay correct.
 7. Reindex after schema-level structural changes or out-of-band asset file changes when required.
 8. Treat `raven_describe` as the authority for argument shape.

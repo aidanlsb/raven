@@ -19,9 +19,34 @@ func CommandInvoker() *commandexec.Invoker {
 	commandInvokerOnce.Do(func() {
 		registry := commandexec.NewHandlerRegistry()
 		commandimpl.RegisterAll(registry)
-		commandInvoker = commandexec.NewInvoker(registry, validateRequest)
+		commandInvoker = commandexec.NewInvoker(registry, validateRequest).
+			WithResultAnnotator(annotateMutationPhase)
 	})
 	return commandInvoker
+}
+
+// annotateMutationPhase attaches the standard meta.mutation.phase signal to
+// successful responses from mutating commands. It derives the phase from the
+// normalized request's preview/apply resolution, so the signal stays consistent
+// regardless of command class, flag vocabulary, or caller (CLI/MCP).
+//
+// A handler may set the phase explicitly for blocked or no-op states (e.g. a
+// move awaiting confirmation writes nothing); that explicit phase is preserved.
+func annotateMutationPhase(_ context.Context, req commandexec.Request, result commandexec.Result) commandexec.Result {
+	if !result.OK {
+		return result
+	}
+	if result.Meta != nil && result.Meta.Mutation != nil {
+		return result
+	}
+	if !commands.EmitsMutationPhase(req.CommandID) {
+		return result
+	}
+	phase := commandexec.MutationPhaseApplied
+	if req.Preview {
+		phase = commandexec.MutationPhasePreview
+	}
+	return result.WithMutationPhase(phase)
 }
 
 func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Request, commandexec.Result, bool) {

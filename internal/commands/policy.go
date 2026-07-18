@@ -112,6 +112,77 @@ var previewModeByCommandID = map[string]PreviewMode{
 	"skill_sync":           PreviewModePreviewDefault,
 }
 
+// mutationPhaseCommandIDs enumerates canonical commands that write durable
+// vault data (markdown content, schema.yaml, raven.yaml saved queries, or
+// template files) and therefore report a standard meta.mutation.phase signal.
+//
+// The set intentionally excludes:
+//   - read-only and discovery commands,
+//   - derived-cache maintenance (reindex),
+//   - vault bootstrap (init),
+//   - global config (config_*) and the vault registry (vault_*), which mutate
+//     ambient client state rather than vault content.
+//
+// Plain `query` is excluded here even though `query ... apply=...` mutates: the
+// apply path delegates to a nested command (set/delete/add/move/update), whose
+// result already carries the phase. See HandleQuery.
+var mutationPhaseCommandIDs = map[string]struct{}{
+	// Content writes.
+	"new":        {},
+	"upsert":     {},
+	"add":        {},
+	"set":        {},
+	"unset":      {},
+	"delete":     {},
+	"move":       {},
+	"reclassify": {},
+	"update":     {},
+	"edit":       {},
+	"import":     {},
+
+	// Check repairs.
+	"check_fix":            {},
+	"check create-missing": {},
+
+	// Saved queries (raven.yaml).
+	"query_saved_set":    {},
+	"query_saved_remove": {},
+
+	// Schema (schema.yaml) writes.
+	"schema_add_type":         {},
+	"schema_add_trait":        {},
+	"schema_add_field":        {},
+	"schema_update_type":      {},
+	"schema_update_trait":     {},
+	"schema_update_field":     {},
+	"schema_remove_type":      {},
+	"schema_remove_trait":     {},
+	"schema_remove_field":     {},
+	"schema_rename_type":      {},
+	"schema_rename_field":     {},
+	"schema_template_set":     {},
+	"schema_template_remove":  {},
+	"schema_template_bind":    {},
+	"schema_template_unbind":  {},
+	"schema_template_default": {},
+
+	// Template files.
+	"template_write":  {},
+	"template_delete": {},
+
+	// Managed skill files.
+	"skill_install": {},
+	"skill_sync":    {},
+	"skill_remove":  {},
+}
+
+// EmitsMutationPhase reports whether a command carries the standard
+// meta.mutation.phase signal on successful responses.
+func EmitsMutationPhase(commandID string) bool {
+	_, ok := mutationPhaseCommandIDs[commandID]
+	return ok
+}
+
 func hasBulkPreviewInput(args map[string]interface{}) bool {
 	if args == nil {
 		return false
