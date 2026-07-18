@@ -170,9 +170,9 @@ func TestShouldUseDocsPickerNavigator(t *testing.T) {
 }
 
 func TestPickDocsSection(t *testing.T) {
-	prevRun := docsRunPicker
+	prevRun := ravenRunPicker
 	t.Cleanup(func() {
-		docsRunPicker = prevRun
+		ravenRunPicker = prevRun
 	})
 
 	sections := []docsSectionView{
@@ -180,7 +180,7 @@ func TestPickDocsSection(t *testing.T) {
 		{ID: "reference", Title: "Reference", TopicCount: 9},
 	}
 
-	docsRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+	ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
 		if opts.Prompt != "docs/section" {
 			t.Fatalf("prompt = %q, want docs/section", opts.Prompt)
 		}
@@ -212,9 +212,9 @@ func TestPickDocsSection(t *testing.T) {
 }
 
 func TestPickDocsTopicCancelled(t *testing.T) {
-	prevRun := docsRunPicker
+	prevRun := ravenRunPicker
 	t.Cleanup(func() {
-		docsRunPicker = prevRun
+		ravenRunPicker = prevRun
 	})
 
 	section := docsSectionView{ID: "reference", Title: "Reference", TopicCount: 1}
@@ -222,7 +222,7 @@ func TestPickDocsTopicCancelled(t *testing.T) {
 		{Section: "reference", ID: "query-language", Title: "Query Language"},
 	}
 
-	docsRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+	ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
 		if len(items) != 1 {
 			t.Fatalf("expected 1 topic item, got %d", len(items))
 		}
@@ -242,9 +242,9 @@ func TestPickDocsTopicCancelled(t *testing.T) {
 }
 
 func TestPickDocsTopicBackAction(t *testing.T) {
-	prevRun := docsRunPicker
+	prevRun := ravenRunPicker
 	t.Cleanup(func() {
-		docsRunPicker = prevRun
+		ravenRunPicker = prevRun
 	})
 
 	section := docsSectionView{ID: "reference", Title: "Reference", TopicCount: 1}
@@ -252,7 +252,7 @@ func TestPickDocsTopicBackAction(t *testing.T) {
 		{Section: "reference", ID: "query-language", Title: "Query Language"},
 	}
 
-	docsRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+	ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
 		if !opts.AllowBack || !opts.AllowForward {
 			t.Fatalf("expected topic picker to allow back and forward navigation")
 		}
@@ -284,12 +284,12 @@ func hasShortcutTip(shortcuts []picker.ShortcutTip, key, description string) boo
 }
 
 func TestRunDocsPickerNavigatorCanGoBackToSections(t *testing.T) {
-	prevRun := docsRunPicker
+	prevRun := ravenRunPicker
 	prevJSON := jsonOutput
 	prevDisplay := docsDisplayContext
 	prevRender := docsMarkdownRender
 	t.Cleanup(func() {
-		docsRunPicker = prevRun
+		ravenRunPicker = prevRun
 		jsonOutput = prevJSON
 		docsDisplayContext = prevDisplay
 		docsMarkdownRender = prevRender
@@ -307,7 +307,7 @@ func TestRunDocsPickerNavigatorCanGoBackToSections(t *testing.T) {
 	}
 
 	step := 0
-	docsRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+	ravenRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
 		step++
 		switch step {
 		case 1:

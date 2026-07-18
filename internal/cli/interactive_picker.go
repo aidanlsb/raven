@@ -7,81 +7,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/x/term"
-
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/picker"
-	"github.com/aidanlsb/raven/internal/ui"
-)
-
-var (
-	interactiveStdinIsTerminal  = func() bool { return term.IsTerminal(os.Stdin.Fd()) }
-	interactiveStdoutIsTerminal = func() bool { return term.IsTerminal(os.Stdout.Fd()) }
-	ravenRunPicker              = picker.Run
 )
 
 type interactiveReferencePickerOptions struct {
 	IncludeAssets bool
-}
-
-func canUseRavenInteractive() bool {
-	if isJSONOutput() {
-		return false
-	}
-	return canUseInteractiveTerminal()
-}
-
-func canUseInteractiveTerminal() bool {
-	return interactiveStdinIsTerminal() && interactiveStdoutIsTerminal()
-}
-
-func pickVaultFile(vaultPath string, vaultCfg *config.VaultConfig, prompt, title string) (string, bool, error) {
-	paths, err := indexedVaultFilePaths(vaultPath, vaultCfg)
-	if err != nil {
-		return "", false, err
-	}
-	if len(paths) == 0 {
-		return "", false, fmt.Errorf("no indexed files available (run 'rvn reindex')")
-	}
-
-	items := make([]picker.Item, 0, len(paths))
-	for _, relPath := range paths {
-		items = append(items, fileSelectionItem(relPath))
-	}
-
-	selected, ok, err := ravenRunPicker(items, picker.Options{
-		Title:             title,
-		Prompt:            strings.TrimSuffix(prompt, "> "),
-		StartInInsertMode: true,
-	})
-	if err != nil || !ok {
-		return "", ok, err
-	}
-	return strings.TrimSpace(selected.Item.ID), true, nil
-}
-
-func pickReferenceTarget(vaultPath string, vaultCfg *config.VaultConfig, prompt, title string, opts interactiveReferencePickerOptions) (string, bool, error) {
-	items, err := indexedReferenceTargetItems(vaultPath, vaultCfg, opts)
-	if err != nil {
-		return "", false, err
-	}
-	if len(items) == 0 {
-		return "", false, fmt.Errorf("no indexed references available (run 'rvn reindex')")
-	}
-
-	selected, ok, err := ravenRunPicker(items, picker.Options{
-		Title:             title,
-		Prompt:            strings.TrimSuffix(prompt, "> "),
-		Headers:           []string{"#", "reference", "kind", "location"},
-		Columns:           ui.SearchLayout(),
-		StartInInsertMode: true,
-		Preview:           vaultFilePreview(vaultPath),
-	})
-	if err != nil || !ok {
-		return "", ok, err
-	}
-	return strings.TrimSpace(selected.Item.ID), true, nil
 }
 
 func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt, header string, opts interactiveReferencePickerOptions) ([]string, bool, error) {
@@ -95,7 +27,7 @@ func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt
 		if err != nil {
 			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		selectedRef, selected, err := pickReferenceTarget(vaultPath, vaultCfg, prompt, header, opts)
+		selectedRef, selected, err := cliSelector.referenceCandidate(vaultPath, vaultCfg, prompt, header, opts)
 		if err != nil {
 			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed references")
 		}
@@ -287,36 +219,6 @@ func objectReferenceFieldSearchText(obj model.Object) string {
 func fileNameWithoutMarkdown(relPath string) string {
 	base := filepath.Base(relPath)
 	return strings.TrimSuffix(base, filepath.Ext(base))
-}
-
-func pickAmbiguousReference(reference string, matches []string, matchSources map[string]string, prompt string) (string, bool, error) {
-	items := make([]picker.Item, 0, len(matches))
-	for _, match := range matches {
-		match = strings.TrimSpace(match)
-		if match == "" {
-			continue
-		}
-		items = append(items, ambiguousReferenceItem(match, strings.TrimSpace(matchSources[match])))
-	}
-	if len(items) == 0 {
-		return "", false, nil
-	}
-
-	selected, ok, err := ravenRunPicker(items, picker.Options{
-		Title:   fmt.Sprintf("Reference %q is ambiguous", reference),
-		Prompt:  strings.TrimSuffix(prompt, "> "),
-		Headers: []string{"#", "target", "matched via"},
-		Columns: ui.BacklinksLayout(),
-	})
-	if err != nil || !ok {
-		return "", ok, err
-	}
-
-	target := strings.TrimSpace(selected.Item.ID)
-	if target == "" {
-		return "", false, nil
-	}
-	return target, true, nil
 }
 
 // ambiguousReferenceItem builds a picker item for one candidate of an

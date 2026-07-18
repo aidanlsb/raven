@@ -25,7 +25,7 @@ func effectiveQueryBrowse(browse, explicit bool) bool {
 }
 
 func browseQueryResults(items []picker.Item, headers []string, columns []ui.ColumnDef) error {
-	return browseAndOpenPickerSelection(browsePickerOptions{
+	return cliSelector.browseAndOpen(browsePickerOptions{
 		Title:                  "Query results",
 		Items:                  items,
 		Headers:                headers,
