@@ -12,20 +12,9 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-)
-
-var (
-	checkStrict     bool
-	checkByFile     bool
-	checkVerbose    bool
-	checkType       string
-	checkTrait      string
-	checkIssues     string
-	checkExclude    string
-	checkErrorsOnly bool
-	checkConfirm    bool
 )
 
 type CheckIssueJSON = checksvc.CheckIssueJSON
@@ -33,115 +22,78 @@ type CheckSummaryJSON = checksvc.CheckSummaryJSON
 type CheckScopeJSON = checksvc.CheckScopeJSON
 type CheckResultJSON = checksvc.CheckResultJSON
 
-var checkCmd = &cobra.Command{
-	Use:   "check [path]",
-	Short: "Validate the vault",
-	Long:  `Checks all files for errors and warnings (type mismatches, broken references, etc.)`,
-	Args:  cobra.MaximumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runCheckCommand(args)
-	},
-}
+// checkCmd is the validate-only parent. Repairs live in the `fix` and
+// `create-missing` subcommands (see #91). All three are thin canonical leaves
+// that delegate execution to commandimpl/checksvc; the CLI only builds args,
+// prompts, and renders.
+var checkCmd = newCanonicalLeafCommand("check", canonicalLeafOptions{
+	VaultPath:    getVaultPath,
+	BuildArgs:    buildCheckValidateArgs,
+	HandleError:  handleCheckLeafFailure,
+	HandleResult: handleCheckValidateResult,
+})
 
 var checkFixCmd = newCanonicalLeafCommand("check_fix", canonicalLeafOptions{
-	VaultPath:       getVaultPath,
-	BuildArgs:       buildCheckFixArgs,
-	Invoke:          invokeCheckLeaf,
-	HandleError:     handleCheckLeafFailure,
-	HandleResult:    handleCheckFixResult,
-	SkipFlagBinding: true,
+	VaultPath:    getVaultPath,
+	BuildArgs:    buildCheckFixArgs,
+	Invoke:       invokeCheckMutation,
+	HandleError:  handleCheckLeafFailure,
+	HandleResult: handleCheckFixResult,
 })
 
 var checkCreateMissingCmd = newCanonicalLeafCommand("check create-missing", canonicalLeafOptions{
-	VaultPath:       getVaultPath,
-	BuildArgs:       buildCheckCreateMissingArgs,
-	Invoke:          invokeCheckLeaf,
-	HandleError:     handleCheckLeafFailure,
-	HandleResult:    handleCheckCreateMissingResult,
-	SkipFlagBinding: true,
+	VaultPath:    getVaultPath,
+	BuildArgs:    buildCheckCreateMissingArgs,
+	Invoke:       invokeCheckMutation,
+	HandleError:  handleCheckLeafFailure,
+	HandleResult: handleCheckCreateMissingResult,
 })
 
-func runCheckCommand(args []string) error {
-	vaultPath := getVaultPath()
-	argsMap := map[string]interface{}{
-		"strict":      checkStrict,
-		"type":        checkType,
-		"trait":       checkTrait,
-		"issues":      checkIssues,
-		"exclude":     checkExclude,
-		"errors-only": checkErrorsOnly,
-		"by-file":     checkByFile,
-		"verbose":     checkVerbose,
-	}
+// checkScopeArgs collects the canonical scope arguments shared by `check` and
+// `check fix` from a command's own flag set, so no state is shared between the
+// parent and its subcommands.
+func checkScopeArgs(cmd *cobra.Command, args []string) map[string]interface{} {
+	argsMap := map[string]interface{}{}
 	if len(args) > 0 {
 		argsMap["path"] = args[0]
 	}
-
-	result := executeCanonicalRequest(commandexec.Request{
-		CommandID: "check",
-		VaultPath: vaultPath,
-		Args:      argsMap,
-	})
-	if !result.OK {
-		if result.Error == nil {
-			return handleErrorMsg(ErrInternal, "check failed", "")
-		}
-		if result.Error.Details != nil {
-			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-		}
-		return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
+	if value, _ := cmd.Flags().GetString("type"); value != "" {
+		argsMap["type"] = value
 	}
-
-	if jsonOutput {
-		if err := outputJSON(result); err != nil {
-			return err
-		}
-		if checkShouldExit(result) {
-			os.Exit(1)
-		}
-		return nil
+	if value, _ := cmd.Flags().GetString("trait"); value != "" {
+		argsMap["trait"] = value
 	}
-
-	printCheckScopeHeader(vaultPath, checkScopeFromResult(result))
-	renderCanonicalCheckValidate(result)
-
-	if checkShouldExit(result) {
-		os.Exit(1)
+	if value, _ := cmd.Flags().GetString("issues"); value != "" {
+		argsMap["issues"] = value
 	}
-
-	return nil
+	if value, _ := cmd.Flags().GetString("exclude"); value != "" {
+		argsMap["exclude"] = value
+	}
+	if value, _ := cmd.Flags().GetBool("errors-only"); value {
+		argsMap["errors-only"] = true
+	}
+	return argsMap
 }
 
-func buildCheckFixArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
-	argsMap := map[string]interface{}{
-		"strict":      checkStrict,
-		"type":        checkType,
-		"trait":       checkTrait,
-		"issues":      checkIssues,
-		"exclude":     checkExclude,
-		"errors-only": checkErrorsOnly,
-		"confirm":     checkConfirm,
-	}
-	if len(args) > 0 {
-		argsMap["path"] = args[0]
-	}
-	return argsMap, nil
+func buildCheckValidateArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	return checkScopeArgs(cmd, args), nil
+}
+
+func buildCheckFixArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	return checkScopeArgs(cmd, args), nil
 }
 
 func buildCheckCreateMissingArgs(_ *cobra.Command, _ []string) (map[string]interface{}, error) {
-	confirm := checkConfirm
-	if !jsonOutput {
-		confirm = false
-	}
-	return map[string]interface{}{
-		"strict":  checkStrict,
-		"confirm": confirm,
-	}, nil
+	return map[string]interface{}{}, nil
 }
 
-func invokeCheckLeaf(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	confirm := checkConfirm
-	if commandID == "check create-missing" && !jsonOutput {
+// invokeCheckMutation drives the mutating check subcommands. `check fix` honors
+// --confirm directly. `check create-missing` in interactive (non-JSON) mode
+// always runs a preview and then applies via the prompt flow, so --confirm is
+// only meaningful for the non-interactive JSON path.
+func invokeCheckMutation(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	confirm, _ := cmd.Flags().GetBool("confirm")
+	if commandID == "check create-missing" && !isJSONOutput() {
 		confirm = false
 	}
 	return executeCanonicalRequest(commandexec.Request{
@@ -162,30 +114,56 @@ func handleCheckLeafFailure(result commandexec.Result) error {
 	return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
 }
 
-func handleCheckFixResult(_ *cobra.Command, result commandexec.Result) error {
+func handleCheckValidateResult(cmd *cobra.Command, result commandexec.Result) error {
+	strict, _ := cmd.Flags().GetBool("strict")
 	if jsonOutput {
 		if err := outputJSON(result); err != nil {
 			return err
 		}
-		if checkShouldExit(result) {
+		if checkShouldExit(result, strict) {
+			os.Exit(1)
+		}
+		return nil
+	}
+
+	byFile, _ := cmd.Flags().GetBool("by-file")
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	printCheckScopeHeader(getVaultPath(), checkScopeFromResult(result))
+	renderCanonicalCheckValidate(result, byFile, verbose)
+
+	if checkShouldExit(result, strict) {
+		os.Exit(1)
+	}
+
+	return nil
+}
+
+func handleCheckFixResult(cmd *cobra.Command, result commandexec.Result) error {
+	strict, _ := cmd.Flags().GetBool("strict")
+	if jsonOutput {
+		if err := outputJSON(result); err != nil {
+			return err
+		}
+		if checkShouldExit(result, strict) {
 			os.Exit(1)
 		}
 		return nil
 	}
 	printCheckScopeHeader(getVaultPath(), checkScopeFromResult(result))
 	renderCanonicalCheckFix(result)
-	if checkShouldExit(result) {
+	if checkShouldExit(result, strict) {
 		os.Exit(1)
 	}
 	return nil
 }
 
-func handleCheckCreateMissingResult(_ *cobra.Command, result commandexec.Result) error {
+func handleCheckCreateMissingResult(cmd *cobra.Command, result commandexec.Result) error {
+	strict, _ := cmd.Flags().GetBool("strict")
 	if jsonOutput {
 		if err := outputJSON(result); err != nil {
 			return err
 		}
-		if checkShouldExit(result) {
+		if checkShouldExit(result, strict) {
 			os.Exit(1)
 		}
 		return nil
@@ -194,7 +172,7 @@ func handleCheckCreateMissingResult(_ *cobra.Command, result commandexec.Result)
 	if err := renderCanonicalCheckCreateMissing(getVaultPath(), result); err != nil {
 		return err
 	}
-	if checkShouldExit(result) {
+	if checkShouldExit(result, strict) {
 		os.Exit(1)
 	}
 	return nil
@@ -232,7 +210,7 @@ func checkScopeFromResult(result commandexec.Result) checksvc.Scope {
 	return checksvc.Scope{Type: "full"}
 }
 
-func checkShouldExit(result commandexec.Result) bool {
+func checkShouldExit(result commandexec.Result, strict bool) bool {
 	data := canonicalDataMap(result)
 	errorCount := intValue(data["error_count"])
 	warningCount := intValue(data["warning_count"])
@@ -242,7 +220,7 @@ func checkShouldExit(result commandexec.Result) bool {
 			warningCount = decoded.WarnCount
 		}
 	}
-	return errorCount > 0 || (checkStrict && warningCount > 0)
+	return errorCount > 0 || (strict && warningCount > 0)
 }
 
 func decodeCanonicalCheckJSON(result commandexec.Result) (CheckResultJSON, bool) {
@@ -261,14 +239,14 @@ func decodeCanonicalCheckJSON(result commandexec.Result) (CheckResultJSON, bool)
 	return decoded, true
 }
 
-func renderCanonicalCheckValidate(result commandexec.Result) {
+func renderCanonicalCheckValidate(result commandexec.Result, byFile, verbose bool) {
 	decoded, ok := decodeCanonicalCheckJSON(result)
 	if !ok {
 		fmt.Println(ui.Warning("failed to decode check results"))
 		return
 	}
 
-	if checkByFile {
+	if byFile {
 		printIssuesByFileFromJSON(decoded.Issues)
 		fmt.Println()
 		if decoded.ErrorCount == 0 && decoded.WarnCount == 0 {
@@ -279,7 +257,7 @@ func renderCanonicalCheckValidate(result commandexec.Result) {
 		return
 	}
 
-	if checkVerbose {
+	if verbose {
 		printIssuesVerboseFromJSON(decoded.Issues)
 		fmt.Println()
 		if decoded.ErrorCount == 0 && decoded.WarnCount == 0 {
@@ -352,6 +330,10 @@ func renderCanonicalCheckFix(result commandexec.Result) {
 	}
 }
 
+// renderCanonicalCheckCreateMissing runs the interactive create-missing flow in
+// non-JSON mode. Prompts stay here in the CLI; all schema/file mutations are
+// delegated to checksvc appliers via collectMissingRefDecisions +
+// checksvc.ApplyMissingRefResolutions (and the trait equivalents).
 func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	missingRefs := decodeMissingRefs(data["missing_ref_items"])
@@ -371,13 +353,13 @@ func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Resu
 
 	if len(missingRefs) > 0 {
 		interaction := newCheckInteraction(os.Stdin, os.Stdout)
-		created := handleMissingRefsInteractive(vaultPath, s, missingRefs, interaction, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetDailyDirectory(), vaultCfg.GetTemplateDirectory(), vaultCfg.ProtectedPrefixes)
+		created := runMissingRefsInteractive(vaultPath, s, missingRefs, interaction, vaultCfg)
 		if created > 0 {
 			fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 		}
 		added := 0
 		if len(undefinedTraits) > 0 {
-			added = handleUndefinedTraitsInteractive(vaultPath, s, undefinedTraits, interaction)
+			added = runUndefinedTraitsInteractive(vaultPath, s, undefinedTraits, interaction)
 		}
 		if added > 0 {
 			fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
@@ -386,7 +368,7 @@ func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Resu
 	}
 	if len(undefinedTraits) > 0 {
 		interaction := newCheckInteraction(os.Stdin, os.Stdout)
-		added := handleUndefinedTraitsInteractive(vaultPath, s, undefinedTraits, interaction)
+		added := runUndefinedTraitsInteractive(vaultPath, s, undefinedTraits, interaction)
 		if added > 0 {
 			fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
 		}
@@ -419,7 +401,7 @@ func promptCreateMissingRefsFromResult(vaultPath string, result commandexec.Resu
 	}
 
 	interaction := newCheckInteraction(os.Stdin, os.Stdout)
-	created := handleMissingRefsInteractive(vaultPath, s, missingRefs, interaction, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetDailyDirectory(), vaultCfg.GetTemplateDirectory(), vaultCfg.ProtectedPrefixes)
+	created := runMissingRefsInteractive(vaultPath, s, missingRefs, interaction, vaultCfg)
 	if created > 0 {
 		fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 	}
@@ -580,14 +562,39 @@ func looksLikeWarningIssue(issueType string) bool {
 	}
 }
 
-func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, interaction checkInteraction, objectsRoot, pagesRoot, dailyDir, templateDir string, protectedPrefixes []string) int {
+// runMissingRefsInteractive prompts for missing-reference creation decisions and
+// delegates the resulting schema/file mutations to checksvc. It returns the
+// number of pages created.
+func runMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, interaction checkInteraction, vaultCfg *config.VaultConfig) int {
+	newTypes, resolutions := collectMissingRefDecisions(s, refs, interaction, vaultCfg)
+	if len(newTypes) == 0 && len(resolutions) == 0 {
+		return 0
+	}
+	applied := checksvc.ApplyMissingRefResolutions(vaultPath, s, newTypes, resolutions, vaultCfg)
+	return renderMissingRefOutcomes(interaction, applied)
+}
+
+// collectMissingRefDecisions runs the interactive missing-reference prompts and
+// returns the user's resolved decisions. It performs no mutations: new types
+// the user asks to create are returned as NewTypeResolutions, and pages to
+// create are returned as MissingRefResolutions.
+func collectMissingRefDecisions(s *schema.Schema, refs []*check.MissingRef, interaction checkInteraction, vaultCfg *config.VaultConfig) ([]checksvc.NewTypeResolution, []checksvc.MissingRefResolution) {
 	groups := checksvc.GroupMissingRefsForInteractive(refs)
 
 	interaction.Printf("\n%s\n", ui.SectionHeader("Missing References"))
-	created := 0
+
+	objectsRoot := vaultCfg.GetObjectsRoot()
+	pagesRoot := vaultCfg.GetPagesRoot()
+	dailyDir := vaultCfg.GetDailyDirectory()
 	resolvePath := func(targetPath, typeName string) string {
 		return checksvc.ResolveAndSlugifyTargetPath(targetPath, typeName, s, objectsRoot, pagesRoot, dailyDir)
 	}
+
+	var newTypes []checksvc.NewTypeResolution
+	var resolutions []checksvc.MissingRefResolution
+	// pendingTypes lets a second unknown ref reuse a type the user already
+	// chose to create in this session (mirrors the old in-place schema update).
+	pendingTypes := map[string]struct{}{}
 
 	// Handle certain refs (from typed fields)
 	if len(groups.Certain) > 0 {
@@ -609,13 +616,7 @@ func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*ch
 		response := readTrimmedLowerLine(interaction)
 		if response == "" || response == "y" || response == "yes" {
 			for _, ref := range groups.Certain {
-				resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
-				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, dailyDir, templateDir, protectedPrefixes); err != nil {
-					interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
-				} else {
-					interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
-					created++
-				}
+				resolutions = append(resolutions, checksvc.MissingRefResolution{TargetPath: ref.TargetPath, TypeName: ref.InferredType})
 			}
 		}
 	}
@@ -637,12 +638,7 @@ func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*ch
 			interaction.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Bold.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
 			response := readTrimmedLowerLine(interaction)
 			if response == "y" || response == "yes" {
-				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, dailyDir, templateDir, protectedPrefixes); err != nil {
-					interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
-				} else {
-					interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
-					created++
-				}
+				resolutions = append(resolutions, checksvc.MissingRefResolution{TargetPath: ref.TargetPath, TypeName: ref.InferredType})
 			}
 		}
 	}
@@ -669,30 +665,69 @@ func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*ch
 				continue
 			}
 
-			// Validate type exists, offer to create if not
-			if _, exists := s.Types[response]; !exists {
-				created += handleNewTypeCreationInteractive(vaultPath, s, ref, response, interaction, objectsRoot, pagesRoot, dailyDir, templateDir, protectedPrefixes)
-				continue
+			// Offer to create the type when it is neither defined, built-in,
+			// nor already queued for creation in this session.
+			_, definedInSchema := s.Types[response]
+			_, queued := pendingTypes[response]
+			if !definedInSchema && !queued && !schema.IsBuiltinType(response) {
+				create, defaultPath := promptNewTypeCreation(response, ref, interaction)
+				if !create {
+					continue
+				}
+				newTypes = append(newTypes, checksvc.NewTypeResolution{TypeName: response, DefaultPath: defaultPath})
+				pendingTypes[response] = struct{}{}
 			}
 
-			resolvedPath := resolvePath(ref.TargetPath, response)
-			if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, response, objectsRoot, pagesRoot, dailyDir, templateDir, protectedPrefixes); err != nil {
-				interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
-			} else {
-				interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, response))
-				created++
-			}
+			resolutions = append(resolutions, checksvc.MissingRefResolution{TargetPath: ref.TargetPath, TypeName: response})
 		}
 	}
 
+	return newTypes, resolutions
+}
+
+// renderMissingRefOutcomes prints the results of applying missing-ref decisions
+// and returns the number of pages created.
+func renderMissingRefOutcomes(interaction checkInteraction, applied checksvc.MissingRefApplyResult) int {
+	for _, typeOutcome := range applied.Types {
+		if typeOutcome.Err != nil {
+			interaction.Printf("  %s\n", ui.Errorf("Failed to create type '%s': %v", typeOutcome.TypeName, typeOutcome.Err))
+			continue
+		}
+		interaction.Printf("  %s\n", ui.Checkf("Created type '%s' in schema.yaml", typeOutcome.TypeName))
+		if typeOutcome.DefaultPath != "" {
+			interaction.Printf("    %s\n", ui.Muted.Render("default_path: "+typeOutcome.DefaultPath))
+		}
+	}
+
+	created := 0
+	for _, page := range applied.Pages {
+		if page.Err != nil {
+			interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", page.ResolvedPath, page.Err))
+			continue
+		}
+		interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", page.ResolvedPath, page.TypeName))
+		created++
+	}
 	return created
 }
 
-// handleUndefinedTraits prompts the user to add undefined traits to the schema.
-// Returns the number of traits added.
-func handleUndefinedTraitsInteractive(vaultPath string, s *schema.Schema, traits []*check.UndefinedTrait, interaction checkInteraction) int {
-	if len(traits) == 0 {
+// runUndefinedTraitsInteractive prompts for undefined-trait decisions and
+// delegates the schema mutations to checksvc. It returns the number of traits
+// added.
+func runUndefinedTraitsInteractive(vaultPath string, s *schema.Schema, traits []*check.UndefinedTrait, interaction checkInteraction) int {
+	resolutions := collectTraitDecisions(traits, interaction)
+	if len(resolutions) == 0 {
 		return 0
+	}
+	outcomes := checksvc.ApplyTraitResolutions(vaultPath, s, resolutions)
+	return renderTraitOutcomes(interaction, outcomes)
+}
+
+// collectTraitDecisions prompts the user about undefined traits and returns the
+// resolved decisions. It performs no mutations.
+func collectTraitDecisions(traits []*check.UndefinedTrait, interaction checkInteraction) []checksvc.TraitResolution {
+	if len(traits) == 0 {
+		return nil
 	}
 
 	// Sort by usage count (most used first)
@@ -716,10 +751,9 @@ func handleUndefinedTraitsInteractive(vaultPath string, s *schema.Schema, traits
 		}
 	}
 
-	added := 0
-
 	interaction.Println("\nWould you like to add these traits to the schema?")
 
+	var resolutions []checksvc.TraitResolution
 	for _, trait := range traits {
 		interaction.Printf("\nAdd %s to schema? %s ", ui.Bold.Render("@"+trait.TraitName), ui.Muted.Render("[y/N]"))
 		response := readTrimmedLowerLine(interaction)
@@ -756,16 +790,29 @@ func handleUndefinedTraitsInteractive(vaultPath string, s *schema.Schema, traits
 			defaultValue = readTrimmedLine(interaction)
 		}
 
-		// Create the trait
-		if err := checksvc.AddTrait(vaultPath, s, trait.TraitName, traitType, enumValues, defaultValue); err != nil {
-			interaction.Printf("  %s\n", ui.Errorf("Failed to add @%s: %v", trait.TraitName, err))
-			continue
-		}
-
-		interaction.Printf("  %s\n", ui.Checkf("Added trait '@%s' (type: %s) to schema.yaml", trait.TraitName, traitType))
-		added++
+		resolutions = append(resolutions, checksvc.TraitResolution{
+			TraitName:    trait.TraitName,
+			TraitType:    traitType,
+			EnumValues:   enumValues,
+			DefaultValue: defaultValue,
+		})
 	}
 
+	return resolutions
+}
+
+// renderTraitOutcomes prints the results of applying trait decisions and returns
+// the number of traits added.
+func renderTraitOutcomes(interaction checkInteraction, outcomes []checksvc.TraitOutcome) int {
+	added := 0
+	for _, outcome := range outcomes {
+		if outcome.Err != nil {
+			interaction.Printf("  %s\n", ui.Errorf("Failed to add @%s: %v", outcome.TraitName, outcome.Err))
+			continue
+		}
+		interaction.Printf("  %s\n", ui.Checkf("Added trait '@%s' (type: %s) to schema.yaml", outcome.TraitName, outcome.TraitType))
+		added++
+	}
 	return added
 }
 
@@ -811,9 +858,11 @@ func promptTraitType(trait *check.UndefinedTrait, interaction checkInteraction) 
 	return response
 }
 
-// handleNewTypeCreation prompts the user to create a new type when they enter a type that doesn't exist.
-// Returns the number of pages created (0 or 1).
-func handleNewTypeCreationInteractive(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, interaction checkInteraction, objectsRoot, pagesRoot, dailyDir, templateDir string, protectedPrefixes []string) int {
+// promptNewTypeCreation asks the user whether to create a type that does not yet
+// exist and, if so, for its default path. It performs no mutations; the caller
+// records the decision and checksvc applies it. Returns create=false when the
+// user declines (the referencing page is then skipped).
+func promptNewTypeCreation(typeName string, ref *check.MissingRef, interaction checkInteraction) (create bool, defaultPath string) {
 	interaction.Printf("\n  Type %s doesn't exist. Would you like to create it? %s ",
 		ui.Bold.Render("'"+typeName+"'"),
 		ui.Muted.Render("[y/N]"))
@@ -821,31 +870,13 @@ func handleNewTypeCreationInteractive(vaultPath string, s *schema.Schema, ref *c
 
 	if response != "y" && response != "yes" {
 		interaction.Printf("  %s\n", ui.Muted.Render("Skipped "+ref.TargetPath))
-		return 0
+		return false, ""
 	}
 
 	// Prompt for default_path (optional)
 	interaction.Printf("  Default path for '%s' files %s: ", typeName, ui.Muted.Render(fmt.Sprintf("(e.g., '%s/', or leave empty)", typeName+"s")))
-	defaultPath := readTrimmedLine(interaction)
-
-	// Create the type
-	if err := checksvc.AddType(vaultPath, s, typeName, defaultPath); err != nil {
-		interaction.Printf("  %s\n", ui.Errorf("Failed to create type '%s': %v", typeName, err))
-		return 0
-	}
-	interaction.Printf("  %s\n", ui.Checkf("Created type '%s' in schema.yaml", typeName))
-	if defaultPath != "" {
-		interaction.Printf("    %s\n", ui.Muted.Render("default_path: "+defaultPath))
-	}
-
-	// Now create the page with the new type (resolving path with new default_path)
-	resolvedPath := checksvc.ResolveAndSlugifyTargetPath(ref.TargetPath, typeName, s, objectsRoot, pagesRoot, dailyDir)
-	if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, dailyDir, templateDir, protectedPrefixes); err != nil {
-		interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
-		return 0
-	}
-	interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, typeName))
-	return 1
+	defaultPath = readTrimmedLine(interaction)
+	return true, defaultPath
 }
 
 // pluralize returns "es" for counts != 1
@@ -857,27 +888,6 @@ func pluralize(n int) string {
 }
 
 func init() {
-	bindCheckScopeFlags := func(cmd *cobra.Command) {
-		cmd.Flags().StringVarP(&checkType, "type", "t", "", "Check only objects of this type")
-		cmd.Flags().StringVar(&checkTrait, "trait", "", "Check only usages of this trait")
-		cmd.Flags().StringVar(&checkIssues, "issues", "", "Only check these issue types (comma-separated)")
-		cmd.Flags().StringVar(&checkExclude, "exclude", "", "Exclude these issue types (comma-separated)")
-		cmd.Flags().BoolVar(&checkErrorsOnly, "errors-only", false, "Only report errors, skip warnings")
-	}
-
-	bindCheckScopeFlags(checkCmd)
-	bindCheckScopeFlags(checkFixCmd)
-
-	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
-	checkCmd.Flags().BoolVar(&checkByFile, "by-file", false, "Group issues by file path")
-	checkCmd.Flags().BoolVarP(&checkVerbose, "verbose", "V", false, "Show all issues with full details")
-
-	checkFixCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
-	checkFixCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply fixes (without this flag, shows preview only)")
-
-	checkCreateMissingCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
-	checkCreateMissingCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply create-missing changes in non-interactive mode (without this flag, shows preview only)")
-
 	checkCmd.AddCommand(checkFixCmd)
 	checkCmd.AddCommand(checkCreateMissingCmd)
 	rootCmd.AddCommand(checkCmd)
