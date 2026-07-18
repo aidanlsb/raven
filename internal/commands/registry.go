@@ -1276,6 +1276,7 @@ JSON mode previews by default. Add --confirm to create only deterministic typed 
 	},
 	"schema_add_type": {
 		Name:        "schema add type",
+		CLIPath:     []string{"schema", "add", "type"},
 		Description: "Add a new type to the schema",
 		LongDesc: `Add a new type definition to schema.yaml.
 
@@ -1311,6 +1312,7 @@ display name. Common choices are 'name' (for people, companies) or 'title'
 	},
 	"schema_add_trait": {
 		Name:        "schema add trait",
+		CLIPath:     []string{"schema", "add", "trait"},
 		Description: "Add a new trait to the schema",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name of the new trait", Required: true},
@@ -1326,6 +1328,7 @@ display name. Common choices are 'name' (for people, companies) or 'title'
 	},
 	"schema_add_field": {
 		Name:        "schema add field",
+		CLIPath:     []string{"schema", "add", "field"},
 		Description: "Add a field to an existing type",
 		LongDesc: `Add a field to an existing type definition.
 
@@ -1401,6 +1404,7 @@ The command validates inputs and provides helpful suggestions if the syntax is i
 	},
 	"schema_update_type": {
 		Name:        "schema update type",
+		CLIPath:     []string{"schema", "update", "type"},
 		Description: "Update an existing type in the schema",
 		LongDesc: `Update an existing type definition in schema.yaml.
 
@@ -1428,6 +1432,7 @@ Use --name-field="-" to remove the name_field setting.`,
 	},
 	"schema_update_trait": {
 		Name:        "schema update trait",
+		CLIPath:     []string{"schema", "update", "trait"},
 		Description: "Update an existing trait in the schema",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name of the trait to update", Required: true},
@@ -1443,6 +1448,7 @@ Use --name-field="-" to remove the name_field setting.`,
 	},
 	"schema_update_field": {
 		Name:        "schema update field",
+		CLIPath:     []string{"schema", "update", "field"},
 		Description: "Update a field on an existing type",
 		LongDesc: `Update an existing field's properties.
 
@@ -1471,6 +1477,7 @@ Use --description="-" to remove an existing description.`,
 	},
 	"schema_remove_type": {
 		Name:        "schema remove type",
+		CLIPath:     []string{"schema", "remove", "type"},
 		Description: "Remove a type from the schema",
 		LongDesc: `Remove a type definition from schema.yaml.
 
@@ -1489,6 +1496,7 @@ Use --force to skip confirmation prompt.`,
 	},
 	"schema_remove_trait": {
 		Name:        "schema remove trait",
+		CLIPath:     []string{"schema", "remove", "trait"},
 		Description: "Remove a trait from the schema",
 		LongDesc: `Remove a trait definition from schema.yaml.
 
@@ -1506,6 +1514,7 @@ Use --force to skip confirmation prompt.`,
 	},
 	"schema_remove_field": {
 		Name:        "schema remove field",
+		CLIPath:     []string{"schema", "remove", "field"},
 		Description: "Remove a field from a type",
 		LongDesc: `Remove a field from a type definition.
 
@@ -1521,6 +1530,7 @@ Existing field values will remain in files but no longer be validated.`,
 	},
 	"schema_rename_type": {
 		Name:        "schema rename type",
+		CLIPath:     []string{"schema", "rename", "type"},
 		Description: "Rename a type and update all references",
 		LongDesc: `Rename a type in schema.yaml and update all files that use it.
 
@@ -1557,6 +1567,7 @@ For agents: After renaming, run 'rvn reindex --full --json' to update the index.
 	},
 	"schema_rename_field": {
 		Name:        "schema rename field",
+		CLIPath:     []string{"schema", "rename", "field"},
 		Description: "Rename a field on a type and update all downstream uses",
 		LongDesc: `Rename a field on a specific type and update all downstream places that use that field.
 
@@ -1590,6 +1601,7 @@ For agents: After renaming, run 'rvn reindex --full --json' to update the index.
 	},
 	"schema_template_list": {
 		Name:        "schema template list",
+		CLIPath:     []string{"schema", "template", "list"},
 		Description: "List schema templates or target bindings",
 		LongDesc: `List schema template definitions, or list template bindings for one target.
 
@@ -1607,6 +1619,7 @@ With --type or --core, lists the bound template IDs and default template for tha
 	},
 	"schema_template_get": {
 		Name:        "schema template get",
+		CLIPath:     []string{"schema", "template", "get"},
 		Description: "Show a schema template definition",
 		Args: []ArgMeta{
 			{Name: "template_id", Description: "Schema template ID", Required: true},
@@ -1617,6 +1630,7 @@ With --type or --core, lists the bound template IDs and default template for tha
 	},
 	"schema_template_set": {
 		Name:        "schema template set",
+		CLIPath:     []string{"schema", "template", "set"},
 		Description: "Create or update a schema template definition",
 		LongDesc: `Create or update a schema template definition.
 
@@ -1637,6 +1651,7 @@ Raven writes object frontmatter separately when applying templates.`,
 	},
 	"schema_template_remove": {
 		Name:        "schema template remove",
+		CLIPath:     []string{"schema", "template", "remove"},
 		Description: "Remove a schema template definition",
 		Args: []ArgMeta{
 			{Name: "template_id", Description: "Schema template ID", Required: true},
@@ -1647,6 +1662,7 @@ Raven writes object frontmatter separately when applying templates.`,
 	},
 	"schema_template_bind": {
 		Name:        "schema template bind",
+		CLIPath:     []string{"schema", "template", "bind"},
 		Description: "Bind a schema template ID to a type or core type",
 		Args: []ArgMeta{
 			{Name: "template_id", Description: "Schema template ID", Required: true},
@@ -1664,6 +1680,7 @@ Raven writes object frontmatter separately when applying templates.`,
 	},
 	"schema_template_unbind": {
 		Name:        "schema template unbind",
+		CLIPath:     []string{"schema", "template", "unbind"},
 		Description: "Unbind a schema template ID from a type or core type",
 		Args: []ArgMeta{
 			{Name: "template_id", Description: "Schema template ID", Required: true},
@@ -1680,6 +1697,7 @@ Raven writes object frontmatter separately when applying templates.`,
 	},
 	"schema_template_default": {
 		Name:        "schema template default",
+		CLIPath:     []string{"schema", "template", "default"},
 		Description: "Set or clear the default template for a type or core type",
 		Args: []ArgMeta{
 			{Name: "template_id", Description: "Schema template ID (omit with --clear)", Required: false},
