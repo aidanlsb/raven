@@ -2,37 +2,24 @@ package mcp
 
 import (
 	"encoding/json"
-	"sort"
 
-	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/querysvc"
 )
 
-type savedQueryResource struct {
-	Name        string `json:"name"`
-	Query       string `json:"query"`
-	Description string `json:"description,omitempty"`
-}
-
+// readSavedQueriesResourceAt renders the raven://queries/saved resource. It
+// delegates to querysvc.List (the same service behind the query_saved_list
+// command) and reuses the shared SavedQueryInfo.Payload shaping, so the resource
+// content stays identical to the command's --json data.
 func (s *Server) readSavedQueriesResourceAt(vaultPath string) (string, error) {
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	result, err := querysvc.List(querysvc.ListRequest{VaultPath: vaultPath})
 	if err != nil {
 		return "", err
 	}
 
-	queries := make([]savedQueryResource, 0, len(vaultCfg.Queries))
-	for name, q := range vaultCfg.Queries {
-		if q == nil {
-			continue
-		}
-		queries = append(queries, savedQueryResource{
-			Name:        name,
-			Query:       q.Query,
-			Description: q.Description,
-		})
+	queries := make([]map[string]interface{}, 0, len(result.Queries))
+	for _, q := range result.Queries {
+		queries = append(queries, q.Payload())
 	}
-	sort.Slice(queries, func(i, j int) bool {
-		return queries[i].Name < queries[j].Name
-	})
 
 	payload := map[string]interface{}{
 		"queries": queries,

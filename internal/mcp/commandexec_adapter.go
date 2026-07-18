@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"github.com/aidanlsb/raven/internal/app"
@@ -102,11 +101,8 @@ func (s *Server) commandInvoker() *commandexec.Invoker {
 }
 
 func marshalCanonicalResult(result commandexec.Result) (string, bool, bool) {
-	b, err := json.Marshal(result)
-	if err != nil {
-		return errorEnvelope("INTERNAL_ERROR", "failed to marshal command result", "", nil), true, true
-	}
-	return string(b), !result.OK, true
+	out, isErr := marshalResultEnvelope(result)
+	return out, isErr, true
 }
 
 func normalizeCanonicalArgs(commandID string, args map[string]interface{}) map[string]interface{} {

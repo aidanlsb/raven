@@ -155,33 +155,63 @@ func BuildCommandContract(commandID string) (CommandContract, bool) {
 }
 
 func ContractParameterSchema(contract CommandContract) map[string]interface{} {
-	out := make(map[string]interface{}, len(contract.Parameters))
-	for _, name := range contract.ParameterOrder {
-		spec := contract.Parameters[name]
-		property := map[string]interface{}{
-			"description": spec.Description,
+	return ParameterProperties(contract.ParameterOrder, contract.Parameters)
+}
+
+// ParameterProperties builds JSON-schema property definitions for an ordered set
+// of parameters. It is the shared primitive behind command argument schemas and
+// the MCP invoke-wrapper schema, so every JSON-schema surface stays in lockstep
+// with the registry-derived parameter specs.
+func ParameterProperties(order []string, specs map[string]ParameterSpec) map[string]interface{} {
+	out := make(map[string]interface{}, len(order))
+	for _, name := range order {
+		spec, ok := specs[name]
+		if !ok {
+			continue
 		}
-		switch spec.Type {
-		case ParameterTypeString:
-			property["type"] = "string"
-		case ParameterTypeBool:
-			property["type"] = "boolean"
-		case ParameterTypeInteger:
-			property["type"] = "integer"
-		case ParameterTypeObject:
-			property["type"] = "object"
-		case ParameterTypeStringArray:
-			property["type"] = "array"
-			property["items"] = map[string]interface{}{"type": "string"}
-		default:
-			property["type"] = "string"
-		}
-		if len(spec.Examples) > 0 {
-			property["examples"] = append([]string{}, spec.Examples...)
-		}
-		out[name] = property
+		out[name] = ParameterProperty(spec)
 	}
 	return out
+}
+
+// ParameterProperty renders a single parameter spec into its JSON-schema
+// property definition.
+func ParameterProperty(spec ParameterSpec) map[string]interface{} {
+	property := map[string]interface{}{
+		"description": spec.Description,
+	}
+	switch spec.Type {
+	case ParameterTypeString:
+		property["type"] = "string"
+	case ParameterTypeBool:
+		property["type"] = "boolean"
+	case ParameterTypeInteger:
+		property["type"] = "integer"
+	case ParameterTypeObject:
+		property["type"] = "object"
+	case ParameterTypeStringArray:
+		property["type"] = "array"
+		property["items"] = map[string]interface{}{"type": "string"}
+	default:
+		property["type"] = "string"
+	}
+	if len(spec.Examples) > 0 {
+		property["examples"] = append([]string{}, spec.Examples...)
+	}
+	return property
+}
+
+// RequiredParameterNames returns the required parameter names in the given order.
+// It lets callers derive a JSON-schema "required" list from the same parameter
+// specs that drive validation.
+func RequiredParameterNames(order []string, specs map[string]ParameterSpec) []string {
+	required := make([]string, 0, len(order))
+	for _, name := range order {
+		if spec, ok := specs[name]; ok && spec.Required {
+			required = append(required, name)
+		}
+	}
+	return required
 }
 
 func CompactArgsSchema(contract CommandContract) map[string]interface{} {

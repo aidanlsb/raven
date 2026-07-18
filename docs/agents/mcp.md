@@ -89,11 +89,13 @@ Raven exposes MCP resources that agents can fetch:
 | URI | Name | Description |
 |-----|------|-------------|
 | `raven://guide/index` | Agent Guide Index | Overview of available agent guide topics |
-| `raven://schema/current` | Current Schema | The vault's `schema.yaml` defining types and traits |
-| `raven://queries/saved` | Saved Queries | Saved queries from `raven.yaml` |
+| `raven://schema/current` | Current Schema | The vault's verbatim `schema.yaml` defining types and traits |
+| `raven://queries/saved` | Saved Queries | Saved queries from `raven.yaml`, same shape as the `query_saved_list` command's `data` |
 | `raven://vault/agent-instructions` | Agent Instructions | Vault-root `AGENTS.md` when present |
 
 Additional topic resources are available under `raven://guide/<topic>`.
+
+Vault-scoped resource content is produced by the same shared services that back the equivalent commands, so a resource read never drifts from the command output: `raven://queries/saved` mirrors `query_saved_list` (each entry carries `name`, `query`, `args`, `description`, and `options` when set), and `raven://schema/current` returns the raw on-disk `schema.yaml`.
 
 Vault-scoped resources use stable URIs. On `resources/read`, `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional `vault` or `vault_path` params to target a different vault for that read. Do not pass both. `resources/list` accepts the same optional `vault`/`vault_path` params, so list and read stay consistent — the list reflects (and reports) the same vault a read with identical params would target.
 

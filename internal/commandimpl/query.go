@@ -638,16 +638,7 @@ func HandleQuerySavedRemove(_ context.Context, req commandexec.Request) commande
 }
 
 func savedQueryData(q querysvc.SavedQueryInfo) map[string]interface{} {
-	data := map[string]interface{}{
-		"name":        q.Name,
-		"query":       q.Query,
-		"args":        q.Args,
-		"description": q.Description,
-	}
-	if !q.Options.IsEmpty() {
-		data["options"] = q.Options
-	}
-	return data
+	return q.Payload()
 }
 
 func savedQueryOptionsFromArgs(args map[string]interface{}) *config.QueryOptions {
