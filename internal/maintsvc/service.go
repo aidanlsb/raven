@@ -2,7 +2,6 @@ package maintsvc
 
 import (
 	stdbuildinfo "debug/buildinfo"
-	"errors"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/buildinfo"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 type Code = codes.ErrorCode
@@ -19,43 +19,8 @@ const (
 	CodeDatabaseError Code = codes.ErrDatabase
 )
 
-type Error struct {
-	Code       Code
-	Message    string
-	Suggestion string
-	Err        error
-}
-
-func (e *Error) Error() string {
-	if e == nil {
-		return ""
-	}
-	if e.Message != "" {
-		return e.Message
-	}
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return string(e.Code)
-}
-
-func (e *Error) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
-}
-
-func newError(code Code, message, suggestion string, err error) *Error {
-	return &Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
-func AsError(err error) (*Error, bool) {
-	var svcErr *Error
-	if errors.As(err, &svcErr) {
-		return svcErr, true
-	}
-	return nil, false
+func newError(code Code, message, suggestion string, err error) *svcerr.Error {
+	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
 }
 
 type StatsResult struct {

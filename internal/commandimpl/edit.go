@@ -15,6 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 // HandleEdit executes the canonical `edit` command.
@@ -172,11 +173,11 @@ func parseCanonicalEditInput(args map[string]any) ([]editsvc.EditSpec, bool, err
 		default:
 			encoded, err := json.Marshal(v)
 			if err != nil {
-				return nil, false, &editsvc.Error{
+				return nil, false, &svcerr.Error{
 					Code:       editsvc.CodeInvalidInput,
 					Message:    "invalid --edits-json payload",
 					Suggestion: `Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`,
-					Details:    map[string]string{"error": err.Error()},
+					Details:    map[string]any{"error": err.Error()},
 					Err:        err,
 				}
 			}
@@ -193,7 +194,7 @@ func parseCanonicalEditInput(args map[string]any) ([]editsvc.EditSpec, bool, err
 	oldStr := stringArg(args, "old_str")
 	newStr, hasNew := args["new_str"]
 	if oldStr == "" || !hasNew {
-		return nil, false, &editsvc.Error{
+		return nil, false, &svcerr.Error{
 			Code:       editsvc.CodeInvalidInput,
 			Message:    "requires old_str and new_str when --edits-json is not provided",
 			Suggestion: "Usage: rvn edit <reference> <old_str> <new_str> or --edits-json",
@@ -207,17 +208,7 @@ func parseCanonicalEditInput(args map[string]any) ([]editsvc.EditSpec, bool, err
 }
 
 func mapEditFailure(err error) commandexec.Result {
-	if svcErr, ok := editsvc.AsError(err); ok {
-		var details map[string]interface{}
-		if len(svcErr.Details) > 0 {
-			details = make(map[string]interface{}, len(svcErr.Details))
-			for key, value := range svcErr.Details {
-				details[key] = value
-			}
-		}
-		return commandexec.Failure(svcErr.Code, svcErr.Message, details, svcErr.Suggestion)
-	}
-	return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+	return commandexec.FromServiceError(err)
 }
 
 func toAnyString(value any) string {

@@ -125,10 +125,5 @@ func HandleSkillDoctor(_ context.Context, req commandexec.Request) commandexec.R
 }
 
 func mapSkillSvcFailure(err error) commandexec.Result {
-	svcErr, ok := skillsvc.AsError(err)
-	if !ok {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-	}
-
-	return commandexec.Failure(svcErr.Code, svcErr.Message, svcErr.Details, svcErr.Suggestion)
+	return commandexec.FromServiceError(err)
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/skills"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestListInstalledUsesResolvedRootWithoutTarget(t *testing.T) {
@@ -157,7 +158,7 @@ func TestInstallUnknownSkillReturnsNotFound(t *testing.T) {
 
 	root := t.TempDir()
 	_, err := Install(InstallRequest{Names: []string{"nope"}, Scope: "project", Dest: root})
-	svcErr, ok := AsError(err)
+	svcErr, ok := svcerr.AsError(err)
 	if !ok {
 		t.Fatalf("Install() error = %v, want skillsvc error", err)
 	}

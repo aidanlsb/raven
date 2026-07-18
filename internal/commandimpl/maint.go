@@ -14,11 +14,7 @@ func HandleVaultStats(_ context.Context, req commandexec.Request) commandexec.Re
 
 	stats, err := maintsvc.Stats(req.VaultPath)
 	if err != nil {
-		svcErr, ok := maintsvc.AsError(err)
-		if !ok {
-			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-		}
-		return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
+		return commandexec.FromServiceError(err)
 	}
 
 	return commandexec.Success(map[string]interface{}{

@@ -5,14 +5,16 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-func assertServiceCode(t *testing.T, err error, want Code) *Error {
+func assertServiceCode(t *testing.T, err error, want Code) *svcerr.Error {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected error code %q, got nil", want)
 	}
-	svcErr, ok := AsError(err)
+	svcErr, ok := svcerr.AsError(err)
 	if !ok {
 		t.Fatalf("expected editsvc error, got %T: %v", err, err)
 	}
@@ -94,10 +96,10 @@ func TestAsErrorWithWrappedError(t *testing.T) {
 	base := newError(CodeInvalidInput, "bad input", "", nil, nil)
 	wrapped := fmt.Errorf("outer: %w", base)
 
-	if got, ok := AsError(base); !ok || got.Code != CodeInvalidInput {
+	if got, ok := svcerr.AsError(base); !ok || got.Code != CodeInvalidInput {
 		t.Fatalf("expected AsError to recover editsvc error, got %#v ok=%v", got, ok)
 	}
-	if got, ok := AsError(wrapped); !ok || got.Code != CodeInvalidInput {
+	if got, ok := svcerr.AsError(wrapped); !ok || got.Code != CodeInvalidInput {
 		t.Fatalf("expected AsError to recover wrapped editsvc error, got %#v ok=%v", got, ok)
 	}
 }

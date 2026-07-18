@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/shellquote"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/templatesvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -142,7 +143,7 @@ func runBlockingEditor(editor, filePath string) error {
 }
 
 func handleTemplateCLIError(err error) error {
-	svcErr, ok := templatesvc.AsError(err)
+	svcErr, ok := svcerr.AsError(err)
 	if !ok {
 		return handleError(ErrInternal, err, "")
 	}
