@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -73,59 +74,35 @@ func handleCanonicalSearchFailure(result commandexec.Result) error {
 }
 
 func renderSearch(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	resultQuery, _ := data["query"].(string)
-	printSearchResults(resultQuery, searchMatchesFromResult(data["results"]))
+	payload, ok := result.Data.(commandpayload.SearchResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "unexpected search result shape", "")
+	}
+	printSearchResults(payload.Query, searchMatchesFromItems(payload.Results))
 	return nil
 }
 
-func searchMatchesFromResult(raw interface{}) []model.SearchMatch {
-	rows, ok := raw.([]map[string]interface{})
-	if ok {
-		matches := make([]model.SearchMatch, 0, len(rows))
-		for _, row := range rows {
-			matches = append(matches, searchMatchFromMap(row))
-		}
-		return matches
-	}
-
-	genericRows, ok := raw.([]interface{})
-	if !ok {
-		return nil
-	}
-
-	matches := make([]model.SearchMatch, 0, len(genericRows))
-	for _, row := range genericRows {
-		rowMap, ok := row.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		matches = append(matches, searchMatchFromMap(rowMap))
+// searchMatchesFromItems adapts the typed search payload items into the model
+// rows the shared retrieval renderer consumes. It is a thin field copy with no
+// map decoding: the canonical handler emits typed commandpayload items
+// in-process.
+func searchMatchesFromItems(items []commandpayload.SearchMatchItem) []model.SearchMatch {
+	matches := make([]model.SearchMatch, 0, len(items))
+	for _, item := range items {
+		matches = append(matches, model.SearchMatch{
+			ObjectID:       item.ObjectID,
+			Title:          item.Title,
+			FilePath:       item.FilePath,
+			Snippet:        item.Snippet,
+			Rank:           item.Rank,
+			IsSection:      item.IsSection,
+			FileObjectID:   item.FileObjectID,
+			LineStart:      item.LineStart,
+			LineEnd:        item.LineEnd,
+			SubtreeLineEnd: item.SubtreeLineEnd,
+		})
 	}
 	return matches
-}
-
-func searchMatchFromMap(row map[string]interface{}) model.SearchMatch {
-	match := model.SearchMatch{}
-	if row == nil {
-		return match
-	}
-	match.ObjectID, _ = row["object_id"].(string)
-	match.Title, _ = row["title"].(string)
-	match.FilePath, _ = row["file_path"].(string)
-	match.Snippet, _ = row["snippet"].(string)
-	match.IsSection, _ = row["is_section"].(bool)
-	match.FileObjectID, _ = row["file_object_id"].(string)
-	match.LineStart = intFromAny(row["line_start"])
-	match.LineEnd = intPointerFromAny(row["line_end"])
-	match.SubtreeLineEnd = intPointerFromAny(row["subtree_line_end"])
-	switch rank := row["rank"].(type) {
-	case float64:
-		match.Rank = rank
-	case float32:
-		match.Rank = float64(rank)
-	}
-	return match
 }
 
 func mapSearchCode(code codes.ErrorCode) codes.ErrorCode {

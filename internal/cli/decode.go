@@ -25,20 +25,3 @@ func intFromAny(raw interface{}) int {
 		return 0
 	}
 }
-
-func intPointerFromAny(raw interface{}) *int {
-	switch value := raw.(type) {
-	case nil:
-		return nil
-	case int:
-		return &value
-	case int64:
-		v := int(value)
-		return &v
-	case float64:
-		v := int(value)
-		return &v
-	default:
-		return nil
-	}
-}
