@@ -11,6 +11,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/readsvc"
@@ -41,9 +42,9 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 		return mapSearchFailure(err)
 	}
 
-	return commandexec.Success(map[string]interface{}{
-		"query":   query,
-		"results": formatSearchResults(results),
+	return commandexec.Success(commandpayload.SearchResult{
+		Query:   query,
+		Results: searchMatchItems(results),
 	}, &commandexec.Meta{Count: len(results), QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
@@ -341,10 +342,10 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 		if err != nil {
 			return mapReadFailure(err)
 		}
-		return withSchemaLoadWarning(rt, commandexec.Success(map[string]interface{}{
-			"object_id": outline.ObjectID,
-			"path":      outline.Path,
-			"sections":  formatSectionOutline(outline.Sections),
+		return withSchemaLoadWarning(rt, commandexec.Success(commandpayload.ReadSectionsResult{
+			ObjectID: outline.ObjectID,
+			Path:     outline.Path,
+			Sections: sectionOutlineItems(outline.Sections),
 		}, &commandexec.Meta{Count: len(outline.Sections), QueryTimeMs: time.Since(start).Milliseconds()}))
 	}
 
@@ -359,30 +360,34 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 		return mapReadFailure(err)
 	}
 
-	data := map[string]interface{}{
-		"object_id":  result.ObjectID,
-		"path":       result.Path,
-		"content":    result.Content,
-		"line_count": result.LineCount,
-	}
-	if result.StartLine > 0 {
-		data["start_line"] = result.StartLine
-		data["end_line"] = result.EndLine
-	}
-
 	rawMode := raw || lines || startLine > 0 || endLine > 0
 	meta := &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}
 	if rawMode {
-		if len(result.Lines) > 0 {
-			data["lines"] = result.Lines
+		payload := commandpayload.ReadRawResult{
+			ObjectID:  result.ObjectID,
+			Path:      result.Path,
+			Content:   result.Content,
+			LineCount: result.LineCount,
 		}
-		return withSchemaLoadWarning(rt, commandexec.Success(data, meta))
+		if result.StartLine > 0 {
+			payload.StartLine = result.StartLine
+			payload.EndLine = result.EndLine
+		}
+		if len(result.Lines) > 0 {
+			payload.Lines = result.Lines
+		}
+		return withSchemaLoadWarning(rt, commandexec.Success(payload, meta))
 	}
 
-	data["references"] = result.References
-	data["backlinks"] = result.Backlinks
 	meta.Count = result.BacklinksCount
-	return withSchemaLoadWarning(rt, commandexec.Success(data, meta))
+	return withSchemaLoadWarning(rt, commandexec.Success(commandpayload.ReadContentResult{
+		ObjectID:   result.ObjectID,
+		Path:       result.Path,
+		Content:    result.Content,
+		LineCount:  result.LineCount,
+		References: result.References,
+		Backlinks:  result.Backlinks,
+	}, meta))
 }
 
 // withSchemaLoadWarning appends a stable SCHEMA_LOAD_FAILED warning to a
@@ -400,26 +405,19 @@ func withSchemaLoadWarning(rt *readsvc.Runtime, result commandexec.Result) comma
 	return result
 }
 
-func formatSectionOutline(sections []model.Section) []map[string]interface{} {
-	out := make([]map[string]interface{}, 0, len(sections))
+func sectionOutlineItems(sections []model.Section) []commandpayload.ReadSectionItem {
+	out := make([]commandpayload.ReadSectionItem, 0, len(sections))
 	for _, section := range sections {
-		entry := map[string]interface{}{
-			"id":         section.ID,
-			"slug":       section.Slug,
-			"title":      section.Title,
-			"level":      section.Level,
-			"line_start": section.LineStart,
-		}
-		if section.LineEnd != nil {
-			entry["line_end"] = *section.LineEnd
-		}
-		if section.SubtreeLineEnd != nil {
-			entry["subtree_line_end"] = *section.SubtreeLineEnd
-		}
-		if section.ParentSectionID != nil {
-			entry["parent_section_id"] = *section.ParentSectionID
-		}
-		out = append(out, entry)
+		out = append(out, commandpayload.ReadSectionItem{
+			ID:              section.ID,
+			Slug:            section.Slug,
+			Title:           section.Title,
+			Level:           section.Level,
+			LineStart:       section.LineStart,
+			LineEnd:         section.LineEnd,
+			SubtreeLineEnd:  section.SubtreeLineEnd,
+			ParentSectionID: section.ParentSectionID,
+		})
 	}
 	return out
 }
@@ -592,24 +590,24 @@ func isReadRuntimeConfigError(message string) bool {
 	return strings.Contains(message, "vault config") || strings.Contains(message, "raven.yaml")
 }
 
-func formatSearchResults(results []model.SearchMatch) []map[string]interface{} {
-	formatted := make([]map[string]interface{}, len(results))
+func searchMatchItems(results []model.SearchMatch) []commandpayload.SearchMatchItem {
+	items := make([]commandpayload.SearchMatchItem, len(results))
 	for i, r := range results {
-		formatted[i] = map[string]interface{}{
-			"object_id": r.ObjectID,
-			"title":     r.Title,
-			"file_path": r.FilePath,
-			"snippet":   r.Snippet,
-			"rank":      r.Rank,
+		items[i] = commandpayload.SearchMatchItem{
+			ObjectID:  r.ObjectID,
+			Title:     r.Title,
+			FilePath:  r.FilePath,
+			Snippet:   r.Snippet,
+			Rank:      r.Rank,
+			IsSection: r.IsSection,
 		}
 		if r.IsSection {
-			formatted[i]["is_section"] = true
-			formatted[i]["file_object_id"] = r.FileObjectID
-			formatted[i]["line_start"] = r.LineStart
-			formatted[i]["line_end"] = r.LineEnd
-			formatted[i]["direct_line_end"] = r.LineEnd
-			formatted[i]["subtree_line_end"] = r.SubtreeLineEnd
+			items[i].FileObjectID = r.FileObjectID
+			items[i].LineStart = r.LineStart
+			items[i].LineEnd = r.LineEnd
+			items[i].DirectLineEnd = r.LineEnd
+			items[i].SubtreeLineEnd = r.SubtreeLineEnd
 		}
 	}
-	return formatted
+	return items
 }

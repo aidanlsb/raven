@@ -8,7 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -93,63 +93,51 @@ func handleCanonicalReadFailureCmd(cmd *cobra.Command, result commandexec.Result
 }
 
 func renderRead(cmd *cobra.Command, result commandexec.Result) error {
-	raw, _ := cmd.Flags().GetBool("raw")
-	lines, _ := cmd.Flags().GetBool("lines")
-	startLine, _ := cmd.Flags().GetInt("start-line")
-	endLine, _ := cmd.Flags().GetInt("end-line")
 	sections, _ := cmd.Flags().GetBool("sections")
-	rawMode := raw || lines || startLine > 0 || endLine > 0
-
-	data := canonicalDataMap(result)
 	if sections {
-		renderReadSections(data)
-		return nil
-	}
-	if rawMode {
-		content, _ := data["content"].(string)
-		fmt.Print(content)
+		payload, ok := result.Data.(commandpayload.ReadSectionsResult)
+		if !ok {
+			return handleErrorMsg(ErrInternal, "unexpected read result shape", "")
+		}
+		renderReadSections(payload)
 		return nil
 	}
 
+	if payload, ok := result.Data.(commandpayload.ReadRawResult); ok {
+		fmt.Print(payload.Content)
+		return nil
+	}
+
+	payload, ok := result.Data.(commandpayload.ReadContentResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "unexpected read result shape", "")
+	}
 	return readEnriched(readEnrichedOptions{
-		fileRelPath:    stringFromMap(data, "path"),
-		content:        stringFromMap(data, "content"),
-		lineCount:      intFromMap(data, "line_count"),
+		fileRelPath:    payload.Path,
+		content:        payload.Content,
+		lineCount:      payload.LineCount,
 		elapsedMs:      queryTimeMs(result.Meta),
-		references:     readReferencesFromMap(data["references"]),
-		backlinks:      readBacklinksFromMap(data["backlinks"]),
+		references:     payload.References,
+		backlinks:      payload.Backlinks,
 		backlinksCount: metaCount(result.Meta),
 	})
 }
 
-func renderReadSections(data map[string]interface{}) {
-	path := stringFromMap(data, "path")
-	if path != "" {
-		fmt.Println(ui.FilePath(path))
+func renderReadSections(payload commandpayload.ReadSectionsResult) {
+	if payload.Path != "" {
+		fmt.Println(ui.FilePath(payload.Path))
 	}
-	rows, _ := data["sections"].([]map[string]interface{})
-	if rows == nil {
-		if generic, ok := data["sections"].([]interface{}); ok {
-			for _, item := range generic {
-				if entry, ok := item.(map[string]interface{}); ok {
-					rows = append(rows, entry)
-				}
-			}
-		}
-	}
-	if len(rows) == 0 {
+	if len(payload.Sections) == 0 {
 		fmt.Println(ui.Hint("No sections found."))
 		return
 	}
-	for _, entry := range rows {
-		level := intFromMap(entry, "level")
+	for _, entry := range payload.Sections {
+		level := entry.Level
 		if level < 1 {
 			level = 1
 		}
-		title, _ := entry["title"].(string)
-		id, _ := entry["id"].(string)
 		indent := strings.Repeat("  ", level-1)
-		fmt.Printf("%s%s %s\n", indent, title, ui.Hint(fmt.Sprintf("(%s, line %d)", id, intFromMap(entry, "line_start"))))
+		fmt.Printf("%s%s %s\n", indent, entry.Title, ui.Hint(fmt.Sprintf("(%s, line %d)", entry.ID, entry.LineStart)))
 	}
 }
 
@@ -219,58 +207,6 @@ func queryTimeMs(meta *commandexec.Meta) int64 {
 		return 0
 	}
 	return meta.QueryTimeMs
-}
-
-func readReferencesFromMap(raw interface{}) []readsvc.ReadReference {
-	refs, ok := raw.([]readsvc.ReadReference)
-	if ok {
-		return refs
-	}
-
-	rows, ok := raw.([]interface{})
-	if !ok {
-		return nil
-	}
-
-	refs = make([]readsvc.ReadReference, 0, len(rows))
-	for _, row := range rows {
-		entry, ok := row.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		ref := readsvc.ReadReference{}
-		ref.Text, _ = entry["text"].(string)
-		if path, ok := entry["path"].(string); ok {
-			ref.Path = &path
-		}
-		refs = append(refs, ref)
-	}
-	return refs
-}
-
-func readBacklinksFromMap(raw interface{}) []readsvc.ReadBacklinkGroup {
-	backlinks, ok := raw.([]readsvc.ReadBacklinkGroup)
-	if ok {
-		return backlinks
-	}
-
-	rows, ok := raw.([]interface{})
-	if !ok {
-		return nil
-	}
-
-	backlinks = make([]readsvc.ReadBacklinkGroup, 0, len(rows))
-	for _, row := range rows {
-		entry, ok := row.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		group := readsvc.ReadBacklinkGroup{}
-		group.Source, _ = entry["source"].(string)
-		group.Lines = stringSliceFromAny(entry["lines"])
-		backlinks = append(backlinks, group)
-	}
-	return backlinks
 }
 
 func stringSliceFromAny(raw interface{}) []string {
