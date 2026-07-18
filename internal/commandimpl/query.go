@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/bulkops"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
@@ -137,118 +138,102 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 	meta := &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}
 	if countOnly {
 		meta.Count = result.Total
-		key := "type"
-		if result.QueryKind == "trait" {
-			key = "trait"
-		} else if result.QueryKind == "asset" || result.QueryKind == "section" {
-			return commandexec.Success(map[string]interface{}{
-				"query_kind": result.QueryKind,
-				"total":      result.Total,
-			}, meta)
+		payload := commandpayload.QueryCountResult{
+			QueryKind: result.QueryKind,
+			Total:     result.Total,
 		}
-		return commandexec.Success(map[string]interface{}{
-			"query_kind": result.QueryKind,
-			key:          result.TypeName,
-			"total":      result.Total,
-		}, meta)
+		switch result.QueryKind {
+		case "trait":
+			payload.Trait = result.TypeName
+		case "asset", "section":
+			// Asset and section counts carry no type/trait discriminator.
+		default:
+			payload.Type = result.TypeName
+		}
+		return commandexec.Success(payload, meta)
 	}
 
 	if idsOnly {
 		meta.Count = result.Returned
-		data := map[string]interface{}{
-			"ids":      result.IDs,
-			"total":    result.Total,
-			"returned": result.Returned,
-			"offset":   result.Offset,
-			"limit":    result.Limit,
-		}
-		addQueryPagingFields(data, result)
-		return commandexec.Success(data, meta)
+		return commandexec.Success(commandpayload.QueryIDsResult{
+			IDs:        result.IDs,
+			Pagination: queryPagination(result),
+		}, meta)
 	}
 
 	if result.QueryKind == "type" {
 		meta.Count = result.Returned
-		data := map[string]interface{}{
-			"query_kind": "type",
-			"items":      objectQueryItems(result),
-			"total":      result.Total,
-			"returned":   result.Returned,
-			"offset":     result.Offset,
-			"limit":      result.Limit,
+		payload := commandpayload.QueryObjectResult{
+			QueryKind:  "type",
+			Items:      objectQueryItems(result),
+			Pagination: queryPagination(result),
 		}
-		addQueryPagingFields(data, result)
 		if isSavedQuery && queryName != "" {
-			data["saved_query"] = queryName
+			payload.SavedQuery = queryName
 		} else {
-			data["type"] = result.TypeName
+			payload.Type = result.TypeName
 		}
-		return commandexec.Success(data, meta)
+		return commandexec.Success(payload, meta)
 	}
 
 	if result.QueryKind == "asset" {
 		meta.Count = result.Returned
-		data := map[string]interface{}{
-			"query_kind": "asset",
-			"items":      assetQueryItems(result),
-			"total":      result.Total,
-			"returned":   result.Returned,
-			"offset":     result.Offset,
-			"limit":      result.Limit,
+		payload := commandpayload.QueryAssetResult{
+			QueryKind:  "asset",
+			Items:      assetQueryItems(result),
+			Pagination: queryPagination(result),
 		}
-		addQueryPagingFields(data, result)
 		if isSavedQuery && queryName != "" {
-			data["saved_query"] = queryName
+			payload.SavedQuery = queryName
 		}
-		return commandexec.Success(data, meta)
+		return commandexec.Success(payload, meta)
 	}
 
 	if result.QueryKind == "section" {
 		meta.Count = result.Returned
-		data := map[string]interface{}{
-			"query_kind": "section",
-			"items":      sectionQueryItems(result),
-			"total":      result.Total,
-			"returned":   result.Returned,
-			"offset":     result.Offset,
-			"limit":      result.Limit,
+		payload := commandpayload.QuerySectionResult{
+			QueryKind:  "section",
+			Items:      sectionQueryItems(result),
+			Pagination: queryPagination(result),
 		}
-		addQueryPagingFields(data, result)
 		if isSavedQuery && queryName != "" {
-			data["saved_query"] = queryName
+			payload.SavedQuery = queryName
 		}
-		return commandexec.Success(data, meta)
+		return commandexec.Success(payload, meta)
 	}
 
 	meta.Count = result.Returned
-	data := map[string]interface{}{
-		"query_kind": "trait",
-		"items":      traitQueryItems(result),
-		"total":      result.Total,
-		"returned":   result.Returned,
-		"offset":     result.Offset,
-		"limit":      result.Limit,
+	payload := commandpayload.QueryTraitResult{
+		QueryKind:  "trait",
+		Items:      traitQueryItems(result),
+		Pagination: queryPagination(result),
 	}
-	addQueryPagingFields(data, result)
 	if isSavedQuery && queryName != "" {
-		data["saved_query"] = queryName
+		payload.SavedQuery = queryName
 	} else {
-		data["trait"] = result.TypeName
+		payload.Trait = result.TypeName
 	}
-	return commandexec.Success(data, meta)
+	return commandexec.Success(payload, meta)
 }
 
-// addQueryPagingFields adds agent-friendly paging affordances to a query
-// response. `has_more` is always present alongside the existing total/returned/
-// offset/limit fields so agents can loop without guessing. `next_offset` is a
-// forward cursor included only when more results remain. For unlimited queries
-// (the default) total equals returned, so has_more is false and no next_offset
-// is emitted.
-func addQueryPagingFields(data map[string]interface{}, result *readsvc.ExecuteQueryResult) {
-	hasMore := result.HasMore()
-	data["has_more"] = hasMore
-	if hasMore {
-		data["next_offset"] = result.NextOffset()
+// queryPagination builds the shared paging affordances for a query response.
+// `has_more` is always present alongside total/returned/offset/limit so agents
+// can loop without guessing. `next_offset` is a forward cursor included only
+// when more results remain. For unlimited queries (the default) total equals
+// returned, so has_more is false and no next_offset is emitted.
+func queryPagination(result *readsvc.ExecuteQueryResult) commandpayload.Pagination {
+	paging := commandpayload.Pagination{
+		Total:    result.Total,
+		Returned: result.Returned,
+		Offset:   result.Offset,
+		Limit:    result.Limit,
+		HasMore:  result.HasMore(),
 	}
+	if paging.HasMore {
+		next := result.NextOffset()
+		paging.NextOffset = &next
+	}
+	return paging
 }
 
 func handleQueryApply(ctx context.Context, req commandexec.Request, result *readsvc.ExecuteQueryResult, applyArgs []string, queryTimeMs int64) commandexec.Result {
@@ -416,70 +401,70 @@ func resolveQueryString(queryString string, rawInputs interface{}, vaultCfg *con
 	return resolvedQuery, name, true, nil
 }
 
-func objectQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interface{} {
-	items := make([]map[string]interface{}, len(result.Objects))
+func objectQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.ObjectItem {
+	items := make([]commandpayload.ObjectItem, len(result.Objects))
 	for i, row := range result.Objects {
-		items[i] = map[string]interface{}{
-			"num":       result.Offset + i + 1,
-			"id":        row.ID,
-			"type":      row.Type,
-			"fields":    row.Fields,
-			"file_path": row.FilePath,
-			"line":      row.LineStart,
+		items[i] = commandpayload.ObjectItem{
+			Num:      result.Offset + i + 1,
+			ID:       row.ID,
+			Type:     row.Type,
+			Fields:   row.Fields,
+			FilePath: row.FilePath,
+			Line:     row.LineStart,
 		}
 	}
 	return items
 }
 
-func traitQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interface{} {
-	items := make([]map[string]interface{}, len(result.Traits))
+func traitQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.TraitItem {
+	items := make([]commandpayload.TraitItem, len(result.Traits))
 	for i, row := range result.Traits {
-		items[i] = map[string]interface{}{
-			"num":        result.Offset + i + 1,
-			"id":         row.ID,
-			"trait_type": row.TraitType,
-			"value":      row.IndexValueString(),
-			"content":    row.Content,
-			"file_path":  row.FilePath,
-			"line":       row.Line,
-			"object_id":  row.ParentObjectID,
+		items[i] = commandpayload.TraitItem{
+			Num:       result.Offset + i + 1,
+			ID:        row.ID,
+			TraitType: row.TraitType,
+			Value:     row.IndexValueString(),
+			Content:   row.Content,
+			FilePath:  row.FilePath,
+			Line:      row.Line,
+			ObjectID:  row.ParentObjectID,
 		}
 	}
 	return items
 }
 
-func assetQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interface{} {
-	items := make([]map[string]interface{}, len(result.Assets))
+func assetQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.AssetItem {
+	items := make([]commandpayload.AssetItem, len(result.Assets))
 	for i, row := range result.Assets {
-		items[i] = map[string]interface{}{
-			"num":        result.Offset + i + 1,
-			"id":         row.ID,
-			"file_path":  row.FilePath,
-			"filename":   row.Filename,
-			"extension":  row.Extension,
-			"media_type": row.MediaType,
-			"size_bytes": row.SizeBytes,
+		items[i] = commandpayload.AssetItem{
+			Num:       result.Offset + i + 1,
+			ID:        row.ID,
+			FilePath:  row.FilePath,
+			Filename:  row.Filename,
+			Extension: row.Extension,
+			MediaType: row.MediaType,
+			SizeBytes: row.SizeBytes,
 		}
 	}
 	return items
 }
 
-func sectionQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interface{} {
-	items := make([]map[string]interface{}, len(result.Sections))
+func sectionQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.SectionItem {
+	items := make([]commandpayload.SectionItem, len(result.Sections))
 	for i, row := range result.Sections {
-		items[i] = map[string]interface{}{
-			"num":               result.Offset + i + 1,
-			"id":                row.ID,
-			"file_object_id":    row.FileObjectID,
-			"file_path":         row.FilePath,
-			"slug":              row.Slug,
-			"title":             row.Title,
-			"level":             row.Level,
-			"line_start":        row.LineStart,
-			"line_end":          row.LineEnd,
-			"direct_line_end":   row.LineEnd,
-			"subtree_line_end":  row.SubtreeLineEnd,
-			"parent_section_id": row.ParentSectionID,
+		items[i] = commandpayload.SectionItem{
+			Num:             result.Offset + i + 1,
+			ID:              row.ID,
+			FileObjectID:    row.FileObjectID,
+			FilePath:        row.FilePath,
+			Slug:            row.Slug,
+			Title:           row.Title,
+			Level:           row.Level,
+			LineStart:       row.LineStart,
+			LineEnd:         row.LineEnd,
+			DirectLineEnd:   row.LineEnd,
+			SubtreeLineEnd:  row.SubtreeLineEnd,
+			ParentSectionID: row.ParentSectionID,
 		}
 	}
 	return items
