@@ -49,3 +49,25 @@ func TestOutputJSONPropagatesWriteErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestOutputJSONReturnsErrorAfterWritingFailureEnvelope(t *testing.T) {
+	var outputErr error
+	out := captureStdout(t, func() {
+		outputErr = outputJSON(commandexec.Failure(ErrInvalidInput, "invalid input", nil, "try again"))
+	})
+
+	if !errors.Is(outputErr, errJSONResponseFailure) {
+		t.Fatalf("outputJSON() error = %v, want errJSONResponseFailure", outputErr)
+	}
+
+	var resp Response
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("unmarshal failure envelope: %v\noutput=%s", err, out)
+	}
+	if resp.OK {
+		t.Fatalf("expected ok=false\noutput=%s", out)
+	}
+	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+		t.Fatalf("error = %#v, want code %s\noutput=%s", resp.Error, ErrInvalidInput, out)
+	}
+}
