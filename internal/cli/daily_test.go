@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
@@ -79,6 +81,7 @@ func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
 				OK   bool `json:"ok"`
 				Data struct {
 					File    string `json:"file"`
+					ID      string `json:"id"`
 					Date    string `json:"date"`
 					Created bool   `json:"created"`
 					Opened  bool   `json:"opened"`
@@ -97,6 +100,11 @@ func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
 			}
 			if resp.Data.Date != date {
 				t.Fatalf("date = %q, want %q", resp.Data.Date, date)
+			}
+			// The canonical link ID for a daily note is the bare ISO date,
+			// distinct from the on-disk file path.
+			if resp.Data.ID != date {
+				t.Fatalf("id = %q, want %q", resp.Data.ID, date)
 			}
 			if resp.Data.Created != tt.wantCreated {
 				t.Fatalf("created = %v, want %v", resp.Data.Created, tt.wantCreated)
@@ -228,6 +236,47 @@ func TestDailyHumanModeOpensEditorByDefault(t *testing.T) {
 	}
 	if _, err := os.Stat(absPath); err != nil {
 		t.Fatalf("daily note does not exist at %s: %v", absPath, err)
+	}
+}
+
+func TestDailyHumanOutputShowsLinkAs(t *testing.T) {
+	vaultPath := t.TempDir()
+	const date = "2026-02-18"
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevCfg := cfg
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		cfg = prevCfg
+		if err := dailyCmd.Flags().Set("edit", "false"); err != nil {
+			t.Fatalf("reset daily --edit: %v", err)
+		}
+		if err := dailyCmd.Flags().Set("template", ""); err != nil {
+			t.Fatalf("reset daily --template: %v", err)
+		}
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = false
+	// No editor configured, so the created note is not opened.
+	cfg = &config.Config{}
+	if err := dailyCmd.Flags().Set("edit", "false"); err != nil {
+		t.Fatalf("set daily --edit: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := dailyCmd.RunE(dailyCmd, []string{date}); err != nil {
+			t.Fatalf("dailyCmd.RunE: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "link as") {
+		t.Fatalf("expected 'link as' hint in human output, got:\n%s", out)
+	}
+	if !strings.Contains(out, ui.LinkAs(date)) {
+		t.Fatalf("expected link-as line for %q in human output, got:\n%s", date, out)
 	}
 }
 
