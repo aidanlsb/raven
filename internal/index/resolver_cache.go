@@ -50,10 +50,15 @@ func resolverSchemaKey(sch *schema.Schema) string {
 	var key strings.Builder
 	key.WriteString("schema")
 	for _, typeName := range typeNames {
-		key.WriteByte('\x00')
+		key.WriteByte(':')
+		key.WriteString(strconv.Itoa(len(typeName)))
+		key.WriteByte(':')
 		key.WriteString(typeName)
-		key.WriteByte('=')
-		key.WriteString(nameFields[typeName])
+		nameField := nameFields[typeName]
+		key.WriteByte(':')
+		key.WriteString(strconv.Itoa(len(nameField)))
+		key.WriteByte(':')
+		key.WriteString(nameField)
 	}
 	return key.String()
 }

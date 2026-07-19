@@ -540,6 +540,56 @@ func (d *Database) initialize(isNewDB bool) error {
 			file_mtime INTEGER,
 			indexed_at INTEGER
 		);
+
+		-- Keep resolver caches on other database handles/processes coherent,
+		-- including when callers mutate resolver inputs through DB().Exec.
+		CREATE TRIGGER IF NOT EXISTS trg_objects_resolver_generation_insert
+		AFTER INSERT ON objects BEGIN
+			INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
+			ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
+		END;
+		CREATE TRIGGER IF NOT EXISTS trg_objects_resolver_generation_update
+		AFTER UPDATE ON objects BEGIN
+			INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
+			ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
+		END;
+		CREATE TRIGGER IF NOT EXISTS trg_objects_resolver_generation_delete
+		AFTER DELETE ON objects BEGIN
+			INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
+			ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
+		END;
+
+		CREATE TRIGGER IF NOT EXISTS trg_sections_resolver_generation_insert
+		AFTER INSERT ON sections BEGIN
+			INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
+			ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
+		END;
+		CREATE TRIGGER IF NOT EXISTS trg_sections_resolver_generation_update
+		AFTER UPDATE ON sections BEGIN
+			INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
+			ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
+		END;
+		CREATE TRIGGER IF NOT EXISTS trg_sections_resolver_generation_delete
+		AFTER DELETE ON sections BEGIN
+			INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
+			ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
+		END;
+
+		CREATE TRIGGER IF NOT EXISTS trg_assets_resolver_generation_insert
+		AFTER INSERT ON assets BEGIN
+			INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
+			ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
+		END;
+		CREATE TRIGGER IF NOT EXISTS trg_assets_resolver_generation_update
+		AFTER UPDATE ON assets BEGIN
+			INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
+			ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
+		END;
+		CREATE TRIGGER IF NOT EXISTS trg_assets_resolver_generation_delete
+		AFTER DELETE ON assets BEGIN
+			INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
+			ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
+		END;
 		
 		-- Indexes for fast queries
 		CREATE INDEX IF NOT EXISTS idx_objects_file ON objects(file_path);

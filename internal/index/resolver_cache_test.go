@@ -203,6 +203,21 @@ func TestReferenceResolverCacheInvalidatesAcrossDatabaseHandles(t *testing.T) {
 	if first.referenceResolverBuilds != 2 {
 		t.Fatalf("resolver builds after external write = %d, want 2", first.referenceResolverBuilds)
 	}
+
+	if _, err := second.DB().Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start)
+		VALUES ('people/thor', 'people/thor.md', 'page', '{}', 1)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	source.Refs[0].TargetRaw = "thor"
+	if err := first.IndexDocument(source, sch); err != nil {
+		t.Fatal(err)
+	}
+	assertIndexedRefTarget(t, first, source.FilePath, "thor", "people/thor")
+	if first.referenceResolverBuilds != 3 {
+		t.Fatalf("resolver builds after raw external write = %d, want 3", first.referenceResolverBuilds)
+	}
 }
 
 func TestAutoResolveDisabledKeepsResolverColdUntilFinalPass(t *testing.T) {
@@ -235,6 +250,75 @@ func TestAutoResolveDisabledKeepsResolverColdUntilFinalPass(t *testing.T) {
 	assertIndexedRefTarget(t, db, source.FilePath, "freya", "people/freya")
 	if db.referenceResolverBuilds != 1 {
 		t.Fatalf("resolver builds after final pass = %d, want 1", db.referenceResolverBuilds)
+	}
+}
+
+func TestIncrementalResolverTracksSectionsAndAssets(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	sch := schema.New()
+	person := resolverTestDocument("people/freya.md", "people/freya")
+	if err := db.IndexDocument(person, sch); err != nil {
+		t.Fatal(err)
+	}
+	source := resolverTestDocument("notes/source.md", "notes/source")
+	source.Refs = []*model.Reference{{SourceID: "notes/source", TargetRaw: "freya", Line: model.IntPtr(1)}}
+	if err := db.IndexDocument(source, sch); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.IndexAsset(&model.Asset{
+		ID:        "assets/paper.pdf",
+		FilePath:  "assets/paper.pdf",
+		Extension: ".pdf",
+		Filename:  "paper.pdf",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	source.Refs[0].TargetRaw = "paper"
+	if err := db.IndexDocument(source, sch); err != nil {
+		t.Fatal(err)
+	}
+	assertIndexedRefTarget(t, db, source.FilePath, "paper", "assets/paper.pdf")
+
+	person.Sections = []*model.Section{{
+		ID:           "people/freya#bio",
+		FileObjectID: "people/freya",
+		FilePath:     "people/freya.md",
+		Slug:         "bio",
+		Title:        "Bio",
+		Level:        2,
+		LineStart:    2,
+	}}
+	if err := db.IndexDocument(person, sch); err != nil {
+		t.Fatal(err)
+	}
+	source.Refs[0].TargetRaw = "people/freya#bio"
+	if err := db.IndexDocument(source, sch); err != nil {
+		t.Fatal(err)
+	}
+	assertIndexedRefTarget(t, db, source.FilePath, "people/freya#bio", "people/freya#bio")
+	if db.referenceResolverBuilds != 1 {
+		t.Fatalf("resolver builds across asset/section updates = %d, want 1", db.referenceResolverBuilds)
+	}
+}
+
+func TestResolverSchemaKeyIsUnambiguous(t *testing.T) {
+	t.Parallel()
+
+	first := schema.New()
+	first.Types["a"] = &schema.TypeDefinition{NameField: "b=c"}
+	second := schema.New()
+	second.Types["a=b"] = &schema.TypeDefinition{NameField: "c"}
+
+	if resolverSchemaKey(first) == resolverSchemaKey(second) {
+		t.Fatal("resolver schema keys collide")
 	}
 }
 
