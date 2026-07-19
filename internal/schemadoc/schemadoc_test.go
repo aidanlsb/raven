@@ -4,8 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -53,8 +54,15 @@ traits:
 	if err != nil {
 		t.Fatalf("read edited schema: %v", err)
 	}
-	if !strings.Contains(string(output), "traits:\n        - reviewed") {
-		t.Fatalf("raw type traits were not preserved:\n%s", output)
+	var root map[string]interface{}
+	if err := yaml.Unmarshal(output, &root); err != nil {
+		t.Fatalf("decode edited schema: %v", err)
+	}
+	types := root["types"].(map[string]interface{})
+	person := types["person"].(map[string]interface{})
+	traits, ok := person["traits"].([]interface{})
+	if !ok || len(traits) != 1 || traits[0] != "reviewed" {
+		t.Fatalf("raw type traits = %#v, want [reviewed]", person["traits"])
 	}
 }
 
