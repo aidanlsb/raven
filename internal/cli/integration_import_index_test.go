@@ -89,13 +89,13 @@ func TestIntegration_ImportUnknownFieldReturnsStructuredItemError(t *testing.T) 
 		t.Fatalf("expected errors=1, got: %#v", result.Data["errors"])
 	}
 
-	results := result.DataList("results")
-	if len(results) != 1 {
-		t.Fatalf("expected exactly 1 import result item, got %d", len(results))
+	items := result.DataList("items")
+	if len(items) != 1 {
+		t.Fatalf("expected exactly 1 import result item, got %d", len(items))
 	}
-	item, ok := results[0].(map[string]interface{})
+	item, ok := items[0].(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected import result object, got: %#v", results[0])
+		t.Fatalf("expected import result object, got: %#v", items[0])
 	}
 	if item["action"] != "error" {
 		t.Fatalf("expected import action=error, got: %#v", item["action"])
@@ -136,13 +136,13 @@ func TestIntegration_ImportRespectsProtectedPathsOnUpdate(t *testing.T) {
 		t.Fatalf("expected errors=1, got: %#v", result.Data["errors"])
 	}
 
-	results := result.DataList("results")
-	if len(results) != 1 {
-		t.Fatalf("expected exactly 1 import result item, got %d", len(results))
+	items := result.DataList("items")
+	if len(items) != 1 {
+		t.Fatalf("expected exactly 1 import result item, got %d", len(items))
 	}
-	item, ok := results[0].(map[string]interface{})
+	item, ok := items[0].(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected import result object, got: %#v", results[0])
+		t.Fatalf("expected import result object, got: %#v", items[0])
 	}
 	if item["action"] != "error" {
 		t.Fatalf("expected import action=error, got: %#v", item["action"])

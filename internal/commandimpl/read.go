@@ -44,8 +44,8 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 	}
 
 	return commandexec.Success(commandpayload.SearchResult{
-		Query:   query,
-		Results: searchMatchItems(results),
+		Query: query,
+		Items: searchMatchItems(results),
 	}, &commandexec.Meta{Count: len(results), QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
@@ -106,7 +106,7 @@ func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Res
 
 	return commandexec.Success(map[string]interface{}{
 		"target": resolved.ObjectID,
-		"items":  links,
+		"items":  referenceItems(links),
 	}, &commandexec.Meta{Count: len(links), QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
@@ -140,7 +140,7 @@ func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Resu
 
 	return commandexec.Success(map[string]interface{}{
 		"source": resolved.ObjectID,
-		"items":  links,
+		"items":  referenceItems(links),
 	}, &commandexec.Meta{Count: len(links), QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
@@ -167,7 +167,7 @@ func handleBacklinksStdin(rt *readsvc.Runtime, req commandexec.Request, start ti
 		groups = append(groups, model.BacklinksGroup{
 			Input:  target,
 			Target: resolved.ObjectID,
-			Items:  links,
+			Items:  referenceItems(links),
 			Count:  len(links),
 		})
 		total += len(links)
@@ -209,7 +209,7 @@ func handleOutlinksStdin(rt *readsvc.Runtime, req commandexec.Request, start tim
 		groups = append(groups, model.OutlinksGroup{
 			Input:  source,
 			Source: resolved.ObjectID,
-			Items:  links,
+			Items:  referenceItems(links),
 			Count:  len(links),
 		})
 		total += len(links)
@@ -274,7 +274,7 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 			"resolved":  false,
 			"ambiguous": true,
 			"reference": reference,
-			"matches":   matches,
+			"items":     matches,
 		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	}
 
@@ -648,5 +648,11 @@ func searchMatchItems(results []model.SearchMatch) []commandpayload.SearchMatchI
 			items[i].SubtreeLineEnd = r.SubtreeLineEnd
 		}
 	}
+	return items
+}
+
+func referenceItems(references []model.Reference) []model.Reference {
+	items := make([]model.Reference, len(references))
+	copy(items, references)
 	return items
 }

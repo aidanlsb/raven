@@ -266,8 +266,8 @@ func normalizeArgs(args map[string]interface{}) map[string]interface{} {
 	}
 
 	if v, ok := normalized["field"]; ok && isObjectArg(v) {
-		if _, exists := normalized["field-json"]; !exists {
-			normalized["field-json"] = v
+		if _, exists := normalized["fields-json"]; !exists {
+			normalized["fields-json"] = v
 		}
 	}
 	if v, ok := normalized["fields"]; ok && isObjectArg(v) {

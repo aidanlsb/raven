@@ -76,7 +76,7 @@ func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool)
 	sort.Strings(sortedCategories)
 
 	return successEnvelope(map[string]interface{}{
-		"matches":      out,
+		"items":        out,
 		"total":        len(out),
 		"returned":     len(out),
 		"categories":   sortedCategories,

@@ -128,26 +128,37 @@ types:
 
 	// JSON-typed flag provided as JSON string is rejected.
 	upsertInvalid := server.callTool("upsert", map[string]interface{}{
-		"type":       "project",
-		"title":      "MCP Compat Project",
-		"field-json": `{"status":"active"}`,
+		"type":        "project",
+		"title":       "MCP Compat Project",
+		"fields-json": `{"status":"active"}`,
 	})
 	upsertInvalidEnv := parseMCPEnvelope(t, upsertInvalid.Text)
 	if !upsertInvalid.IsError || upsertInvalidEnv.OK {
-		t.Fatalf("expected upsert field-json string to fail, got: %s", upsertInvalid.Text)
+		t.Fatalf("expected upsert fields-json string to fail, got: %s", upsertInvalid.Text)
 	}
 	if upsertInvalidEnv.Error == nil || upsertInvalidEnv.Error.Code != "INVALID_ARGS" {
-		t.Fatalf("expected INVALID_ARGS for upsert field-json string, got: %s", upsertInvalid.Text)
+		t.Fatalf("expected INVALID_ARGS for upsert fields-json string, got: %s", upsertInvalid.Text)
 	}
 
-	// JSON-typed flag provided as an object succeeds.
-	upsertValid := server.callTool("upsert", map[string]interface{}{
+	// The removed singular flag name is not accepted as an MCP argument alias.
+	upsertRemoved := server.callTool("upsert", map[string]interface{}{
 		"type":       "project",
 		"title":      "MCP Compat Project",
 		"field-json": map[string]interface{}{"status": "active"},
 	})
+	upsertRemovedEnv := parseMCPEnvelope(t, upsertRemoved.Text)
+	if !upsertRemoved.IsError || upsertRemovedEnv.OK || upsertRemovedEnv.Error == nil || upsertRemovedEnv.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("expected removed upsert field-json argument to fail with INVALID_ARGS, got: %s", upsertRemoved.Text)
+	}
+
+	// JSON-typed flag provided as an object succeeds.
+	upsertValid := server.callTool("upsert", map[string]interface{}{
+		"type":        "project",
+		"title":       "MCP Compat Project",
+		"fields-json": map[string]interface{}{"status": "active"},
+	})
 	if upsertValid.IsError {
-		t.Fatalf("upsert with field-json object failed: %s", upsertValid.Text)
+		t.Fatalf("upsert with fields-json object failed: %s", upsertValid.Text)
 	}
 	v.AssertFileContains("projects/mcp-compat-project.md", "status: active")
 

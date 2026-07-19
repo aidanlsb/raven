@@ -196,14 +196,14 @@ Create an object if it does not exist, or update it if it does. Useful for idemp
 ```bash
 rvn upsert project "Website Redesign" --field status=active
 rvn upsert person "Freya" --field email=freya@example.com --content "# Freya\n\nProject lead."
-rvn upsert person "Freya" --field-json '{"email":"true"}'
+rvn upsert person "Freya" --fields-json '{"email":"true"}'
 ```
 
-Use `--field` for shell-friendly literal values. Use `--field-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
+Use `--field` for shell-friendly literal values. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
 
 Key flags:
 - `--field` — set field values
-- `--field-json` — set fields as a JSON object
+- `--fields-json` — set fields as a JSON object
 - `--content` — set the markdown body
 - `--path` — explicit file path (defaults to slugified title)
 
@@ -241,13 +241,13 @@ Change an object's type. Raven updates frontmatter, applies defaults for the new
 
 ```bash
 rvn reclassify inbox/meeting-notes meeting --field name="Q1 Planning"
-rvn reclassify person/freya company --field-json '{"legal_name":"false"}'
+rvn reclassify person/freya company --fields-json '{"legal_name":"false"}'
 rvn reclassify page/scratch note --field title="Research Notes" --no-move
 ```
 
 Key flags:
 - `--field` — supply field values for the new type using Raven field literals
-- `--field-json` — supply exact typed field values as JSON
+- `--fields-json` — supply exact typed field values as JSON
 - `--no-move` — keep the file in its current location
 - `--update-refs` — update references if the file moves (default: true)
 - `--force` — skip confirmation for dropped fields

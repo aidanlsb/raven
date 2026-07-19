@@ -57,7 +57,7 @@ raven_invoke(command="edit", args={
 raven_invoke(command="move", args={"source":"person/loki", "destination":"person/loki-archived"})
 raven_invoke(command="move", args={"source":"assets/downloads/paper.pdf", "destination":"assets/pdfs/paper.pdf"})
 raven_invoke(command="reclassify", args={"object":"pages/draft", "new-type":"project"})
-raven_invoke(command="reclassify", args={"object":"person/freya", "new-type":"company", "field-json":{"legal_name":"false"}})
+raven_invoke(command="reclassify", args={"object":"person/freya", "new-type":"company", "fields-json":{"legal_name":"false"}})
 ```
 
 Deletion flow:

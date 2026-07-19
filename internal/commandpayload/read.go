@@ -49,8 +49,8 @@ func (m SearchMatchItem) MarshalJSON() ([]byte, error) {
 
 // SearchResult is the success payload for the `search` command.
 type SearchResult struct {
-	Query   string            `json:"query"`
-	Results []SearchMatchItem `json:"results"`
+	Query string            `json:"query"`
+	Items []SearchMatchItem `json:"items"`
 }
 
 // ReadContentResult is the success payload for an enriched (non-raw) `read`.

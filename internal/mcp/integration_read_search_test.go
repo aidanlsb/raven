@@ -78,15 +78,15 @@ Discussed the product roadmap and timeline.
 	var resp struct {
 		OK   bool `json:"ok"`
 		Data struct {
-			Results []interface{} `json:"results"`
+			Items []interface{} `json:"items"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 
-	if len(resp.Data.Results) < 1 {
-		t.Errorf("expected at least 1 search result, got %d", len(resp.Data.Results))
+	if len(resp.Data.Items) < 1 {
+		t.Errorf("expected at least 1 search result, got %d", len(resp.Data.Items))
 	}
 }
 

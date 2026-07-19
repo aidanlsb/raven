@@ -162,7 +162,7 @@ func buildDocsSearchArgs(cmd *cobra.Command, args []string) (map[string]interfac
 
 func renderDocsSearch(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	matches := docsSearchMatchesFromCanonical(data["matches"])
+	matches := docsSearchMatchesFromCanonical(data["items"])
 	if len(matches) == 0 {
 		fmt.Println(ui.Starf("No docs matched %q.", stringValue(data["query"])))
 		return nil

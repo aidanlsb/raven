@@ -56,7 +56,7 @@ func renderCanonicalBulkResult(result commandexec.Result) error {
 
 	summary := &BulkSummary{
 		Action:   action,
-		Results:  decodeBulkResults(data["results"]),
+		Results:  decodeBulkResults(data["items"]),
 		Total:    intFromAny(data["total"]),
 		Modified: intFromAny(data["modified"]),
 		Deleted:  intFromAny(data["deleted"]),

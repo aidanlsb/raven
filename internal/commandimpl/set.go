@@ -244,7 +244,7 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 	data := map[string]interface{}{
 		"ok":       summary.Errors == 0,
 		"action":   summary.Action,
-		"results":  canonicalSetResults(summary.Results),
+		"items":    canonicalSetResults(summary.Results),
 		"total":    summary.Total,
 		"skipped":  summary.Skipped,
 		"errors":   summary.Errors,

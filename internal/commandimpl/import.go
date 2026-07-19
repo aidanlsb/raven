@@ -85,7 +85,7 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 			"updated": updated,
 			"skipped": skipped,
 			"errors":  errored,
-			"results": serviceResult.Results,
+			"items":   serviceResult.Results,
 		}, appendCommandWarnings(serviceWarnings, reindexWarnings), nil)
 	}
 
@@ -95,7 +95,7 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		"updated": updated,
 		"skipped": skipped,
 		"errors":  errored,
-		"results": serviceResult.Results,
+		"items":   serviceResult.Results,
 	}, warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField), nil)
 }
 

@@ -33,9 +33,9 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 	if err != nil {
 		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Use --field key=value")
 	}
-	typedFieldValues, err := parseTypedFieldValues(req.Args["field-json"])
+	typedFieldValues, err := parseTypedFieldValues(req.Args["fields-json"])
 	if err != nil {
-		return commandexec.Failure("INVALID_INPUT", "invalid --field-json payload", nil, "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+		return commandexec.Failure("INVALID_INPUT", "invalid --fields-json payload", nil, "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
 	}
 	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 

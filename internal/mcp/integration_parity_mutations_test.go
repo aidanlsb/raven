@@ -192,7 +192,7 @@ old task
 		})
 		cliResult := vCLI.RunCLIWithStdin("people/add-apply-one\npeople/add-apply-two\n", "add", "--stdin", "--confirm", "bulk add apply")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "added", "content"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "items", "total", "skipped", "errors", "added", "content"})
 	})
 
 	t.Run("set", func(t *testing.T) {
@@ -263,7 +263,7 @@ old task
 		})
 		cliResult := vCLI.RunCLIWithStdin("people/set-apply-one\npeople/set-apply-two\n", "set", "--stdin", "--confirm", "email=apply@example.com")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "modified", "fields"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "items", "total", "skipped", "errors", "modified", "fields"})
 	})
 
 	t.Run("update_bulk_preview", func(t *testing.T) {
@@ -332,7 +332,7 @@ type: page
 		})
 		cliResult := vCLI.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "--confirm", "high")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"action", "results", "total", "skipped", "errors", "modified"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"action", "items", "total", "skipped", "errors", "modified"})
 	})
 
 	t.Run("update_bulk_explicit_trait_ids", func(t *testing.T) {
@@ -483,7 +483,7 @@ type: page
 		})
 		cliResult := vCLI.RunCLIWithStdin("people/delete-apply-one\npeople/delete-apply-two\n", "delete", "--stdin", "--confirm")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "deleted", "behavior"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "items", "total", "skipped", "errors", "deleted", "behavior"})
 	})
 
 	t.Run("move", func(t *testing.T) {
@@ -558,6 +558,6 @@ type: page
 		})
 		cliResult := vCLI.RunCLIWithStdin("people/bulk-apply-one\npeople/bulk-apply-two\n", "move", "--stdin", "--confirm", "archive/")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "moved", "destination"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "items", "total", "skipped", "errors", "moved", "destination"})
 	})
 }

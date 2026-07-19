@@ -74,7 +74,7 @@ func runMCPParityMetaTests(t *testing.T, binary string) {
 		})
 		cliResult := runCLIWithConfig(t, binary, configPath, "docs", "search", "query", "--section", "querying")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query", "count", "returned", "limit", "offset", "has_more", "matches"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query", "count", "returned", "limit", "offset", "has_more", "items"})
 
 		mcpPage := server.callTool("docs_search", map[string]interface{}{
 			"query":   "query",
@@ -84,7 +84,7 @@ func runMCPParityMetaTests(t *testing.T, binary string) {
 		})
 		cliPage := runCLIWithConfig(t, binary, configPath, "docs", "search", "query", "--section", "querying", "--limit", "2", "--offset", "2")
 
-		assertEnvelopeParity(t, mcpPage, cliPage, []string{"query", "count", "returned", "limit", "offset", "has_more", "matches"})
+		assertEnvelopeParity(t, mcpPage, cliPage, []string{"query", "count", "returned", "limit", "offset", "has_more", "items"})
 	})
 
 	t.Run("docs_fetch", func(t *testing.T) {

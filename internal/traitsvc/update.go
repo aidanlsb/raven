@@ -75,7 +75,7 @@ type BulkPreview struct {
 
 type BulkSummary struct {
 	Action           string       `json:"action"`
-	Results          []BulkResult `json:"results"`
+	Results          []BulkResult `json:"items"`
 	Total            int          `json:"total"`
 	Modified         int          `json:"modified"`
 	Skipped          int          `json:"skipped"`

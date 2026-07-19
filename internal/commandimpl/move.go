@@ -147,7 +147,7 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"ok":          summary.Errors == 0,
 		"action":      summary.Action,
-		"results":     canonicalMoveResults(summary.Results),
+		"items":       canonicalMoveResults(summary.Results),
 		"total":       summary.Total,
 		"skipped":     summary.Skipped,
 		"errors":      summary.Errors,

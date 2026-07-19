@@ -76,13 +76,13 @@ func TestHandleSearchTypedResult(t *testing.T) {
 	if payload.Query != "roadmap" {
 		t.Fatalf("query = %q, want roadmap", payload.Query)
 	}
-	if len(payload.Results) == 0 {
-		t.Fatalf("results = %#v, want at least one match", payload.Results)
+	if len(payload.Items) == 0 {
+		t.Fatalf("items = %#v, want at least one match", payload.Items)
 	}
 
 	wire := marshalToMap(t, payload)
-	assertKeys(t, wire, []string{"query", "results"})
-	item := wire["results"].([]interface{})[0].(map[string]interface{})
+	assertKeys(t, wire, []string{"query", "items"})
+	item := wire["items"].([]interface{})[0].(map[string]interface{})
 	// Object matches carry only the core columns; section-only fields are absent.
 	assertKeys(t, item, []string{"object_id", "title", "file_path", "snippet", "rank"})
 }

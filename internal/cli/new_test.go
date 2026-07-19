@@ -329,7 +329,7 @@ types:
 	}
 }
 
-func TestNewFieldJSONPreservesStringType(t *testing.T) {
+func TestNewFieldsJSONPreservesStringType(t *testing.T) {
 	vaultPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
@@ -371,11 +371,11 @@ types:
 	newPathFlag = ""
 	newCmd.Flags().Lookup("path").Changed = false
 
-	if err := newCmd.RunE(newCmd, []string{"person", "Field Json User"}); err != nil {
+	if err := newCmd.RunE(newCmd, []string{"person", "Fields Json User"}); err != nil {
 		t.Fatalf("newCmd.RunE: %v", err)
 	}
 
-	created := filepath.Join(vaultPath, "people", "field-json-user.md")
+	created := filepath.Join(vaultPath, "people", "fields-json-user.md")
 	b, err := os.ReadFile(created)
 	if err != nil {
 		t.Fatalf("read created file: %v", err)
@@ -951,5 +951,25 @@ types:
 	content := string(contentBytes)
 	if strings.Contains(content, "## Screening Template") {
 		t.Fatalf("did not expect template content when default_template is unset, got:\n%s", content)
+	}
+}
+
+func TestFieldJSONFlagsUseCanonicalPluralName(t *testing.T) {
+	checks := map[string]struct {
+		hasCanonical bool
+		hasRemoved   bool
+	}{
+		"new":        {newCmd.Flags().Lookup("fields-json") != nil, newCmd.Flags().Lookup("field-json") != nil},
+		"upsert":     {upsertCmd.Flags().Lookup("fields-json") != nil, upsertCmd.Flags().Lookup("field-json") != nil},
+		"reclassify": {reclassifyCmd.Flags().Lookup("fields-json") != nil, reclassifyCmd.Flags().Lookup("field-json") != nil},
+		"set":        {setCmd.Flags().Lookup("fields-json") != nil, setCmd.Flags().Lookup("field-json") != nil},
+	}
+	for name, check := range checks {
+		if !check.hasCanonical {
+			t.Errorf("%s is missing --fields-json", name)
+		}
+		if check.hasRemoved {
+			t.Errorf("%s still exposes removed --field-json", name)
+		}
 	}
 }

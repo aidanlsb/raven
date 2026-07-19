@@ -44,9 +44,9 @@ type: page
 	// Should find both files (may return more than 2 results because section
 	// objects are also indexed — e.g. "# Team Meeting Notes" produces both a
 	// page-level and a section-level FTS entry).
-	results := result.DataList("results")
-	if len(results) < 2 {
-		t.Errorf("expected at least 2 search results, got %d", len(results))
+	items := result.DataList("items")
+	if len(items) < 2 {
+		t.Errorf("expected at least 2 search results, got %d", len(items))
 	}
 }
 
