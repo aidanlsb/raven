@@ -204,10 +204,18 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 
 	filePath, err := vault.ResolveObjectToFileWithConfig(op.rt.VaultPath, result.FileObjectID, op.rt.VaultCfg)
 	if err != nil {
-		dailyDir := op.dailyDirectory()
-		if allowMissing && strings.HasPrefix(result.FileObjectID, dailyDir+"/") {
-			result.FilePath = filepath.Join(op.rt.VaultPath, result.FileObjectID+".md")
-			return result, nil
+		if allowMissing {
+			// Daily notes have a bare-date object ID but live under the configured
+			// daily directory; compute the on-disk path for the not-yet-created note.
+			if dates.IsValidDate(result.FileObjectID) {
+				result.FilePath = op.rt.VaultCfg.DailyNotePath(op.rt.VaultPath, result.FileObjectID)
+				return result, nil
+			}
+			// Legacy compatibility: a daily-directory-prefixed object ID.
+			if dailyDir := op.dailyDirectory(); strings.HasPrefix(result.FileObjectID, dailyDir+"/") {
+				result.FilePath = filepath.Join(op.rt.VaultPath, result.FileObjectID+".md")
+				return result, nil
+			}
 		}
 		return nil, &RefNotFoundError{
 			Reference: ref,

@@ -76,12 +76,13 @@ func TestRefFieldQueryRelativeDateKeywordsResolveToDailyRefs(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
+	// Daily notes have a bare-date object ID; the file lives under daily/.
 	_, err := db.Exec(`
 		INSERT INTO objects (id, file_path, type, fields, line_start)
 		VALUES
-			('daily/2026-04-04', 'daily/2026-04-04.md', 'date', '{}', 1),
-			('daily/2026-04-05', 'daily/2026-04-05.md', 'date', '{}', 1),
-			('daily/2026-04-06', 'daily/2026-04-06.md', 'date', '{}', 1),
+			('2026-04-04', 'daily/2026-04-04.md', 'date', '{}', 1),
+			('2026-04-05', 'daily/2026-04-05.md', 'date', '{}', 1),
+			('2026-04-06', 'daily/2026-04-06.md', 'date', '{}', 1),
 			('brief/yesterday', 'brief/yesterday.md', 'brief', '{"date":"2026-04-04"}', 1),
 			('brief/today', 'brief/today.md', 'brief', '{"date":"2026-04-05"}', 1),
 			('brief/tomorrow', 'brief/tomorrow.md', 'brief', '{"date":"2026-04-06"}', 1)
@@ -93,9 +94,9 @@ func TestRefFieldQueryRelativeDateKeywordsResolveToDailyRefs(t *testing.T) {
 	_, err = db.Exec(`
 		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
 		VALUES
-			('brief/yesterday', 'date', 'daily/2026-04-04', '2026-04-04', 'resolved', 'brief/yesterday.md', 1),
-			('brief/today', 'date', 'daily/2026-04-05', '2026-04-05', 'resolved', 'brief/today.md', 1),
-			('brief/tomorrow', 'date', 'daily/2026-04-06', '2026-04-06', 'resolved', 'brief/tomorrow.md', 1)
+			('brief/yesterday', 'date', '2026-04-04', '2026-04-04', 'resolved', 'brief/yesterday.md', 1),
+			('brief/today', 'date', '2026-04-05', '2026-04-05', 'resolved', 'brief/today.md', 1),
+			('brief/tomorrow', 'date', '2026-04-06', '2026-04-06', 'resolved', 'brief/tomorrow.md', 1)
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert field_refs: %v", err)
@@ -117,7 +118,8 @@ func TestRefFieldQueryRelativeDateKeywordsResolveToDailyRefs(t *testing.T) {
 		{name: "tomorrow", query: "type:brief .date==tomorrow", wantID: "brief/tomorrow"},
 		{name: "wikilink keyword", query: "type:brief .date==[[today]]", wantID: "brief/today"},
 		{name: "explicit date", query: "type:brief .date==2026-04-05", wantID: "brief/today"},
-		{name: "explicit daily id", query: "type:brief .date==daily/2026-04-05", wantID: "brief/today"},
+		{name: "explicit bare date id", query: "type:brief .date==2026-04-05", wantID: "brief/today"},
+		{name: "legacy daily id compat", query: "type:brief .date==daily/2026-04-05", wantID: "brief/today"},
 	}
 
 	for _, tt := range tests {
@@ -145,7 +147,7 @@ func TestRefFieldQueryRelativeDateKeywordUsesSingleExecutionTimestamp(t *testing
 	_, err := db.Exec(`
 		INSERT INTO objects (id, file_path, type, fields, line_start)
 		VALUES
-			('daily/2026-04-05', 'daily/2026-04-05.md', 'date', '{}', 1),
+			('2026-04-05', 'daily/2026-04-05.md', 'date', '{}', 1),
 			('brief/today', 'brief/today.md', 'brief', '{"date":"2026-04-05"}', 1)
 	`)
 	if err != nil {
@@ -154,7 +156,7 @@ func TestRefFieldQueryRelativeDateKeywordUsesSingleExecutionTimestamp(t *testing
 
 	_, err = db.Exec(`
 		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
-		VALUES ('brief/today', 'date', 'daily/2026-04-05', '2026-04-05', 'resolved', 'brief/today.md', 1)
+		VALUES ('brief/today', 'date', '2026-04-05', '2026-04-05', 'resolved', 'brief/today.md', 1)
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert field_refs: %v", err)

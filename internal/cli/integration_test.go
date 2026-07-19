@@ -2268,24 +2268,36 @@ meeting: "[[meeting/all-hands]]"
 	v.AssertFileNotExists("meeting/all-hands.md")
 }
 
-func TestIntegration_CheckCreateMissingInfersDateFromDailyDirectory(t *testing.T) {
+func TestIntegration_PrefixedDailyRefResolvesAndDailyCreatesUnderDailyDir(t *testing.T) {
 	t.Parallel()
+	// A legacy daily-directory-prefixed reference resolves to the bare-date object
+	// ID as a compatibility alias, so it is never reported as a missing reference.
+	// The canonical way to materialize a daily note remains `rvn daily`, which
+	// creates the file under the configured daily directory.
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML(`directories:
   type: objects/
   daily: journal/
 `).
-		WithFile("notes/mention.md", `See [[journal/2026-06-30]] for details.
+		WithFile("notes/mention.md", `See [[journal/2026-06-30]] and [[2026-06-30]] for details.
 `).
 		Build()
 
 	v.RunCLI("reindex").MustSucceed(t)
 
-	binary := testutil.BuildCLI(t)
-	cmd := exec.Command(binary, "--vault-path", v.Path, "--json", "check", "create-missing", "--confirm")
-	_, _ = cmd.CombinedOutput() // check may exit non-zero due validation issues; side effects are what we validate.
+	// Both the prefixed compat form and the bare form resolve to the bare-date ID.
+	for _, ref := range []string{"journal/2026-06-30", "2026-06-30"} {
+		resolve := v.RunCLI("resolve", ref)
+		resolve.MustSucceed(t)
+		if got := resolve.DataString("object_id"); got != "2026-06-30" {
+			t.Fatalf("resolve %q object_id = %q, want %q", ref, got, "2026-06-30")
+		}
+	}
 
+	// Creating the daily note places the file under the configured daily directory
+	// while its object ID stays the bare date.
+	v.RunCLI("daily", "2026-06-30").MustSucceed(t)
 	v.AssertFileExists("journal/2026-06-30.md")
 	v.AssertFileNotExists("objects/journal/2026-06-30.md")
 	v.AssertFileContains("journal/2026-06-30.md", "type: date")
@@ -2907,8 +2919,8 @@ Current note
 
 	resolveResult := v.RunCLI("resolve", "today")
 	resolveResult.MustSucceed(t)
-	if resolveResult.DataString("object_id") != "daily/"+today {
-		t.Fatalf("resolve object_id = %q, want %q", resolveResult.DataString("object_id"), "daily/"+today)
+	if resolveResult.DataString("object_id") != today {
+		t.Fatalf("resolve object_id = %q, want %q", resolveResult.DataString("object_id"), today)
 	}
 
 	addResult := v.RunCLI("add", "New task for today", "--to", "today")
@@ -3065,20 +3077,16 @@ Second line
 	}
 }
 
-func TestIntegration_ISODateRefsAreAmbiguousOnCollision(t *testing.T) {
+func TestIntegration_ISODateRefsResolveToDailyIdentity(t *testing.T) {
 	t.Parallel()
 
+	// A bare ISO date is unambiguous date identity: it always resolves to the
+	// canonical bare-date object ID of the daily note, which lives under the
+	// configured daily directory. Legacy daily-directory-prefixed references
+	// resolve to the same object as a compatibility alias.
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
-		WithFile("2025-02-01.md", `---
-type: page
----
-# Literal ISO Note
-`).
-		WithFile("daily/2025-02-01.md", `---
-type: page
----
-# Daily ISO Note
+		WithFile("daily/2025-02-01.md", `# Daily ISO Note
 `).
 		Build()
 
@@ -3086,35 +3094,25 @@ type: page
 
 	resolve := v.RunCLI("resolve", "2025-02-01")
 	resolve.MustSucceed(t)
-	if resolve.Data["resolved"] != false {
-		t.Fatalf("expected resolved=false for ambiguous ISO date, got %#v", resolve.Data["resolved"])
+	if resolve.Data["ambiguous"] == true {
+		t.Fatalf("expected bare ISO date to resolve unambiguously, got %#v", resolve.Data)
 	}
-	if resolve.Data["ambiguous"] != true {
-		t.Fatalf("expected ambiguous=true for ambiguous ISO date, got %#v", resolve.Data["ambiguous"])
+	if got := resolve.DataString("object_id"); got != "2025-02-01" {
+		t.Fatalf("resolve object_id = %q, want %q", got, "2025-02-01")
 	}
-	matches := resolve.DataList("matches")
-	if len(matches) != 2 {
-		t.Fatalf("expected 2 matches, got %#v", matches)
-	}
-	matchIDs := make(map[string]bool, len(matches))
-	for _, raw := range matches {
-		match, ok := raw.(map[string]interface{})
-		if !ok {
-			t.Fatalf("expected match object, got %#v", raw)
-		}
-		id, _ := match["object_id"].(string)
-		matchIDs[id] = true
-	}
-	if !matchIDs["2025-02-01"] || !matchIDs["daily/2025-02-01"] {
-		t.Fatalf("expected ISO collision matches for literal and daily notes, got %#v", matches)
+
+	// The legacy prefixed form is a compatibility alias for the same object.
+	legacy := v.RunCLI("resolve", "daily/2025-02-01")
+	legacy.MustSucceed(t)
+	if got := legacy.DataString("object_id"); got != "2025-02-01" {
+		t.Fatalf("legacy resolve object_id = %q, want %q", got, "2025-02-01")
 	}
 
 	read := v.RunCLI("read", "2025-02-01")
-	read.MustFail(t, "REF_AMBIGUOUS")
-
-	query := v.RunCLI("query", "type:page refs([[2025-02-01]])")
-	query.MustFail(t, "QUERY_INVALID")
-	query.MustFailWithMessage(t, "ambiguous reference '2025-02-01'")
+	read.MustSucceed(t)
+	if !strings.Contains(read.DataString("content"), "# Daily ISO Note") {
+		t.Fatalf("expected read to return the daily note, got:\n%s", read.DataString("content"))
+	}
 }
 
 func TestIntegration_ReadWithoutArgSuggestsUsage(t *testing.T) {
@@ -3501,8 +3499,8 @@ Met with [[people/alice]] today.
 		result = v.RunCLI("backlinks", "today")
 		result.MustSucceed(t)
 
-		if result.DataString("target") != "daily/"+today {
-			t.Errorf("expected target 'daily/%s', got %q", today, result.DataString("target"))
+		if result.DataString("target") != today {
+			t.Errorf("expected target %q, got %q", today, result.DataString("target"))
 		}
 	})
 
@@ -3510,8 +3508,8 @@ Met with [[people/alice]] today.
 		result := v.RunCLI("outlinks", "today")
 		result.MustSucceed(t)
 
-		if result.DataString("source") != "daily/"+today {
-			t.Errorf("expected source 'daily/%s', got %q", today, result.DataString("source"))
+		if result.DataString("source") != today {
+			t.Errorf("expected source %q, got %q", today, result.DataString("source"))
 		}
 		result.AssertResultCount(t, "items", 1)
 	})

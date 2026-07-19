@@ -71,20 +71,28 @@ func TestFilePathToObjectID(t *testing.T) {
 		filePath    string
 		objectsRoot string
 		pagesRoot   string
+		dailyRoot   string
 		want        string
 	}{
-		{"people/freya.md", "", "", "people/freya"},
-		{"./people/freya.md", "", "", "people/freya"},
-		{"/people/freya.md", "", "", "people/freya"},
-		{"objects/people/freya.md", "objects/", "pages/", "people/freya"},
-		{"pages/my-note.md", "objects/", "pages/", "my-note"},
-		{"daily/2025-01-01.md", "objects/", "pages/", "daily/2025-01-01"},
+		{"people/freya.md", "", "", "", "people/freya"},
+		{"./people/freya.md", "", "", "", "people/freya"},
+		{"/people/freya.md", "", "", "", "people/freya"},
+		{"objects/people/freya.md", "objects/", "pages/", "daily/", "people/freya"},
+		{"pages/my-note.md", "objects/", "pages/", "daily/", "my-note"},
+		// Daily notes map to a bare ISO date regardless of the daily directory.
+		{"daily/2025-01-01.md", "objects/", "pages/", "daily/", "2025-01-01"},
+		{"journal/2025-01-01.md", "objects/", "pages/", "journal/", "2025-01-01"},
+		{"journal/daily/2025-01-01.md", "objects/", "pages/", "journal/daily/", "2025-01-01"},
+		// A non-date file under the daily directory is not stripped.
+		{"daily/notes.md", "objects/", "pages/", "daily/", "daily/notes"},
+		// Without a daily root, the prefix is preserved.
+		{"daily/2025-01-01.md", "objects/", "pages/", "", "daily/2025-01-01"},
 		// If a root isn't configured, it should not be stripped.
-		{"objects/people/freya.md", "", "pages/", "objects/people/freya"},
+		{"objects/people/freya.md", "", "pages/", "", "objects/people/freya"},
 	}
 	for _, tc := range tests {
-		if got := FilePathToObjectID(tc.filePath, tc.objectsRoot, tc.pagesRoot); got != tc.want {
-			t.Fatalf("FilePathToObjectID(%q, %q, %q) = %q, want %q", tc.filePath, tc.objectsRoot, tc.pagesRoot, got, tc.want)
+		if got := FilePathToObjectID(tc.filePath, tc.objectsRoot, tc.pagesRoot, tc.dailyRoot); got != tc.want {
+			t.Fatalf("FilePathToObjectID(%q, %q, %q, %q) = %q, want %q", tc.filePath, tc.objectsRoot, tc.pagesRoot, tc.dailyRoot, got, tc.want)
 		}
 	}
 }
@@ -96,19 +104,26 @@ func TestObjectIDToFilePath(t *testing.T) {
 		typeName    string
 		objectsRoot string
 		pagesRoot   string
+		dailyRoot   string
 		want        string
 	}{
-		{"people/freya", "person", "objects/", "pages/", "objects/people/freya.md"},
-		{"my-note", "page", "objects/", "pages/", "pages/my-note.md"},
-		{"random-note", "", "objects/", "pages/", "pages/random-note.md"},
+		{"people/freya", "person", "objects/", "pages/", "daily/", "objects/people/freya.md"},
+		{"my-note", "page", "objects/", "pages/", "daily/", "pages/my-note.md"},
+		{"random-note", "", "objects/", "pages/", "daily/", "pages/random-note.md"},
 		// pages root missing falls back to objects root for pages.
-		{"my-note", "page", "objects/", "", "objects/my-note.md"},
+		{"my-note", "page", "objects/", "", "daily/", "objects/my-note.md"},
 		// Already-rooted input should not be double-prefixed.
-		{"objects/people/freya", "person", "objects/", "pages/", "objects/people/freya.md"},
+		{"objects/people/freya", "person", "objects/", "pages/", "daily/", "objects/people/freya.md"},
+		// Daily notes (type "date"/bare-date IDs) map under the daily directory.
+		{"2025-01-01", "date", "objects/", "pages/", "daily/", "daily/2025-01-01.md"},
+		{"2025-01-01", "date", "objects/", "pages/", "journal/", "journal/2025-01-01.md"},
+		{"2025-01-01", "", "objects/", "pages/", "daily/", "daily/2025-01-01.md"},
+		// Already daily-rooted input is kept as-is.
+		{"daily/2025-01-01", "date", "objects/", "pages/", "daily/", "daily/2025-01-01.md"},
 	}
 	for _, tc := range tests {
-		if got := ObjectIDToFilePath(tc.id, tc.typeName, tc.objectsRoot, tc.pagesRoot); got != tc.want {
-			t.Fatalf("ObjectIDToFilePath(%q, %q, %q, %q) = %q, want %q", tc.id, tc.typeName, tc.objectsRoot, tc.pagesRoot, got, tc.want)
+		if got := ObjectIDToFilePath(tc.id, tc.typeName, tc.objectsRoot, tc.pagesRoot, tc.dailyRoot); got != tc.want {
+			t.Fatalf("ObjectIDToFilePath(%q, %q, %q, %q, %q) = %q, want %q", tc.id, tc.typeName, tc.objectsRoot, tc.pagesRoot, tc.dailyRoot, got, tc.want)
 		}
 	}
 }
@@ -120,31 +135,37 @@ func TestReferenceToFilePath(t *testing.T) {
 		ref         string
 		objectsRoot string
 		pagesRoot   string
+		dailyRoot   string
 		want        string
 	}{
 		// With both roots configured.
-		{"slash means objects root", "person/freya", "objects/", "pages/", "objects/person/freya.md"},
-		{"bare name means pages root", "my-note", "objects/", "pages/", "pages/my-note.md"},
-		{"already objects-rooted kept as-is", "objects/person/freya", "objects/", "pages/", "objects/person/freya.md"},
-		{"already pages-rooted kept as-is", "pages/my-note", "objects/", "pages/", "pages/my-note.md"},
-		{"trailing .md stripped then re-added", "objects/person/freya.md", "objects/", "pages/", "objects/person/freya.md"},
+		{"slash means objects root", "person/freya", "objects/", "pages/", "daily/", "objects/person/freya.md"},
+		{"bare name means pages root", "my-note", "objects/", "pages/", "daily/", "pages/my-note.md"},
+		{"already objects-rooted kept as-is", "objects/person/freya", "objects/", "pages/", "daily/", "objects/person/freya.md"},
+		{"already pages-rooted kept as-is", "pages/my-note", "objects/", "pages/", "daily/", "pages/my-note.md"},
+		{"trailing .md stripped then re-added", "objects/person/freya.md", "objects/", "pages/", "daily/", "objects/person/freya.md"},
+
+		// Daily notes: bare dates and prefixed compat forms.
+		{"bare date means daily root", "2025-01-01", "objects/", "pages/", "daily/", "daily/2025-01-01.md"},
+		{"bare date custom daily root", "2025-01-01", "objects/", "pages/", "journal/", "journal/2025-01-01.md"},
+		{"prefixed daily ref kept as-is", "daily/2025-01-01", "objects/", "pages/", "daily/", "daily/2025-01-01.md"},
 
 		// Trailing-slash / normalization edge cases on the roots themselves.
-		{"roots without trailing slash still normalized", "person/freya", "objects", "pages", "objects/person/freya.md"},
-		{"leading slash ref normalized", "/person/freya", "objects/", "pages/", "objects/person/freya.md"},
-		{"dot-slash ref normalized", "./my-note", "objects/", "pages/", "pages/my-note.md"},
+		{"roots without trailing slash still normalized", "person/freya", "objects", "pages", "daily", "objects/person/freya.md"},
+		{"leading slash ref normalized", "/person/freya", "objects/", "pages/", "daily/", "objects/person/freya.md"},
+		{"dot-slash ref normalized", "./my-note", "objects/", "pages/", "daily/", "pages/my-note.md"},
 
 		// Pages root missing falls back to objects root for bare names.
-		{"bare name falls back to objects root", "my-note", "objects/", "", "objects/my-note.md"},
+		{"bare name falls back to objects root", "my-note", "objects/", "", "daily/", "objects/my-note.md"},
 
 		// No roots configured: literal interpretation only.
-		{"no roots, slash", "person/freya", "", "", "person/freya.md"},
-		{"no roots, bare", "my-note", "", "", "my-note.md"},
+		{"no roots, slash", "person/freya", "", "", "", "person/freya.md"},
+		{"no roots, bare", "my-note", "", "", "", "my-note.md"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := ReferenceToFilePath(tc.ref, tc.objectsRoot, tc.pagesRoot); got != tc.want {
-				t.Fatalf("ReferenceToFilePath(%q, %q, %q) = %q, want %q", tc.ref, tc.objectsRoot, tc.pagesRoot, got, tc.want)
+			if got := ReferenceToFilePath(tc.ref, tc.objectsRoot, tc.pagesRoot, tc.dailyRoot); got != tc.want {
+				t.Fatalf("ReferenceToFilePath(%q, %q, %q, %q) = %q, want %q", tc.ref, tc.objectsRoot, tc.pagesRoot, tc.dailyRoot, got, tc.want)
 			}
 		})
 	}
@@ -152,7 +173,7 @@ func TestReferenceToFilePath(t *testing.T) {
 
 func TestCandidateFilePaths(t *testing.T) {
 	t.Parallel()
-	got := CandidateFilePaths("people/freya", "objects/", "pages/")
+	got := CandidateFilePaths("people/freya", "objects/", "pages/", "daily/")
 	// Always includes literal, objects-rooted, pages-rooted.
 	want := map[string]struct{}{
 		"people/freya.md":         {},
@@ -166,6 +187,18 @@ func TestCandidateFilePaths(t *testing.T) {
 		if _, ok := want[p]; !ok {
 			t.Fatalf("unexpected candidate %q (got=%#v)", p, got)
 		}
+	}
+
+	// A bare ISO date yields a daily-directory candidate.
+	gotDate := CandidateFilePaths("2025-01-01", "objects/", "pages/", "journal/")
+	foundDaily := false
+	for _, p := range gotDate {
+		if p == "journal/2025-01-01.md" {
+			foundDaily = true
+		}
+	}
+	if !foundDaily {
+		t.Fatalf("expected daily candidate journal/2025-01-01.md, got=%#v", gotDate)
 	}
 }
 

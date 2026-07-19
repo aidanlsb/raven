@@ -569,6 +569,7 @@ func validateRefTargets(
 		parseOpts = &parser.ParseOptions{
 			ObjectsRoot: refCtx.VaultConfig.GetObjectsRoot(),
 			PagesRoot:   refCtx.VaultConfig.GetPagesRoot(),
+			DailyRoot:   refCtx.VaultConfig.GetDailyDirectory(),
 		}
 	}
 

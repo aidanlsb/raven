@@ -174,13 +174,17 @@ func (ws *workspace) newValidator() *check.Validator {
 // parseOptions returns parser options matching the vault's directory config.
 func (ws *workspace) parseOptions() *parser.ParseOptions {
 	vaultCfg := ws.vaultConfig()
-	if vaultCfg == nil || !vaultCfg.HasDirectoriesConfig() {
+	if vaultCfg == nil {
 		return nil
 	}
-	return &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
+	opts := &parser.ParseOptions{
+		DailyRoot: vaultCfg.GetDailyDirectory(),
 	}
+	if vaultCfg.HasDirectoriesConfig() {
+		opts.ObjectsRoot = vaultCfg.GetObjectsRoot()
+		opts.PagesRoot = vaultCfg.GetPagesRoot()
+	}
+	return opts
 }
 
 // parseBuffer parses in-memory buffer content as the document at absPath.

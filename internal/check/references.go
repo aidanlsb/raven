@@ -61,14 +61,17 @@ func (v *Validator) inferTypeFromPath(targetPath string) (typeName string, confi
 }
 
 func (v *Validator) isDailyNotePath(targetPath string) bool {
-	dailyRoot := paths.NormalizeDirRoot(v.dailyDir)
-	if dailyRoot == "" {
-		return false
-	}
-
 	baseID, _, _ := paths.ParseSectionID(paths.NormalizeVaultRelPath(targetPath))
 	baseID = paths.TrimMDExtension(baseID)
-	if !strings.HasPrefix(baseID, dailyRoot) {
+
+	// Canonical daily-note references are bare ISO dates.
+	if dates.IsValidDate(baseID) {
+		return true
+	}
+
+	// Legacy compatibility: daily-directory-prefixed references.
+	dailyRoot := paths.NormalizeDirRoot(v.dailyDir)
+	if dailyRoot == "" || !strings.HasPrefix(baseID, dailyRoot) {
 		return false
 	}
 

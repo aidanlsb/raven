@@ -702,8 +702,8 @@ func TestDatabase(t *testing.T) {
 		}
 
 		dateResolved := res.Resolve("2025-02-01")
-		if dateResolved.Ambiguous || dateResolved.TargetID != "journal/2025-02-01" {
-			t.Fatalf("expected date shorthand to resolve to journal/2025-02-01, got %+v", dateResolved)
+		if dateResolved.Ambiguous || dateResolved.TargetID != "2025-02-01" {
+			t.Fatalf("expected date shorthand to resolve to bare date 2025-02-01, got %+v", dateResolved)
 		}
 	})
 

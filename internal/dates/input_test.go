@@ -101,14 +101,15 @@ func TestDailyObjectIDForInput(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.April, 5, 12, 0, 0, 0, time.UTC)
-	got, ok, err := DailyObjectIDForInput("today", "journal/", now)
+	got, ok, err := DailyObjectIDForInput("today", now)
 	if err != nil {
 		t.Fatalf("DailyObjectIDForInput returned error: %v", err)
 	}
 	if !ok {
 		t.Fatal("expected date input to resolve")
 	}
-	if got != "journal/2026-04-05" {
-		t.Fatalf("DailyObjectIDForInput = %q, want journal/2026-04-05", got)
+	// The canonical daily-note object ID is a bare ISO date.
+	if got != "2026-04-05" {
+		t.Fatalf("DailyObjectIDForInput = %q, want 2026-04-05", got)
 	}
 }

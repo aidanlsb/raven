@@ -63,15 +63,20 @@ When a short name uniquely identifies one object or asset, you can use it withou
 ```markdown
 [[freya]]       → person/freya (if only one "freya" exists)
 [[website]]     → project/website
-[[2026-03-15]]  → daily/2026-03-15
+[[2026-03-15]]  → 2026-03-15 (the daily note's bare-date object ID)
 [[paper]]       → assets/pdfs/paper.pdf
 ```
 
+A daily note's canonical object ID is the bare ISO date (`2026-03-15`); the
+`directories.daily` setting only controls where the file is stored, not the ID.
+Legacy references that include the daily directory (`[[daily/2026-03-15]]`) still
+resolve to the same daily note as compatibility aliases.
+
 Fields declared as `ref` with `target: date` can store the calendar date
-literal (`2026-03-15`) while Raven resolves that value to the configured daily
-note object (`daily/2026-03-15`) in indexes and queries. Relative inputs such as
-`today`, `tomorrow`, and `yesterday` are normalized to `YYYY-MM-DD` when written
-through Raven commands.
+literal (`2026-03-15`), which Raven resolves to the daily note's bare-date object
+ID (`2026-03-15`) in indexes and queries. Relative inputs such as `today`,
+`tomorrow`, and `yesterday` are normalized to `YYYY-MM-DD` when written through
+Raven commands.
 
 When short names collide (e.g., `project/notes` and `meeting/notes`, or `paper.pdf` and `paper.png`), use the full path to disambiguate:
 

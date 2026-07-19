@@ -38,7 +38,7 @@ For file-level objects, the ID is derived from the file path (relative to vault 
 | `person/freya.md` | `person/freya` |
 | `project/website.md` | `project/website` |
 | `random-note.md` | `random-note` |
-| `daily/2026-01-10.md` | `daily/2026-01-10` |
+| `daily/2026-01-10.md` | `2026-01-10` |
 
 **With directory organization** (configured in `raven.yaml` via `directories.type` and `directories.page`):
 
@@ -49,6 +49,12 @@ For file-level objects, the ID is derived from the file path (relative to vault 
 | `page/random-note.md` | `random-note` |
 
 The directory prefix (`type/`, `page/`) is stripped from IDs.
+
+**Daily notes** are a special case: the `directories.daily` prefix is always
+stripped so the object ID is the bare ISO date, regardless of the configured
+daily directory. A file at `daily/2026-01-10.md` (or `journal/2026-01-10.md` with
+`directories.daily: journal/`) has the object ID `2026-01-10`. The daily directory
+is filesystem layout only and is never part of the daily note's identity.
 
 ### Asset IDs
 

@@ -132,13 +132,14 @@ func TestResolveReferences_DateShorthand(t *testing.T) {
 
 	sch := schema.New()
 
-	// Index a daily note
+	// Index a daily note. The file lives under the daily directory, but its
+	// canonical object ID is the bare ISO date.
 	doc1 := &parser.ParsedDocument{
 		FilePath:   "daily/2025-02-01.md",
 		RawContent: "# Feb 1",
 		Objects: []*model.Object{
 			{
-				ID:        "daily/2025-02-01",
+				ID:        "2025-02-01",
 				Type:      "date",
 				Fields:    map[string]schema.FieldValue{},
 				LineStart: 1,
@@ -189,8 +190,8 @@ func TestResolveReferences_DateShorthand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query refs: %v", err)
 	}
-	if targetID != "daily/2025-02-01" {
-		t.Errorf("expected target_id 'daily/2025-02-01', got '%s'", targetID)
+	if targetID != "2025-02-01" {
+		t.Errorf("expected target_id '2025-02-01', got '%s'", targetID)
 	}
 }
 

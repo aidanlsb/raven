@@ -495,8 +495,10 @@ func TestResolverPrefersParentOverSection(t *testing.T) {
 
 func TestResolverDateShorthand(t *testing.T) {
 	t.Parallel()
+	// Daily notes have a bare ISO date as their canonical object ID.
 	objectIDs := []string{
-		"daily/2025-02-01",
+		"2025-02-01",
+		"2025-02-01#standup",
 		"people/freya",
 	}
 
@@ -504,52 +506,53 @@ func TestResolverDateShorthand(t *testing.T) {
 
 	t.Run("date reference to existing daily note", func(t *testing.T) {
 		result := r.Resolve("2025-02-01")
-		if result.TargetID != "daily/2025-02-01" {
-			t.Errorf("got %q, want %q", result.TargetID, "daily/2025-02-01")
+		if result.TargetID != "2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "2025-02-01")
 		}
 	})
 
 	t.Run("date reference with .md suffix", func(t *testing.T) {
 		result := r.Resolve("2025-02-01.md")
-		if result.TargetID != "daily/2025-02-01" {
-			t.Errorf("got %q, want %q", result.TargetID, "daily/2025-02-01")
+		if result.TargetID != "2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "2025-02-01")
 		}
 	})
 
 	t.Run("date reference to non-existent daily note", func(t *testing.T) {
 		// Date references should resolve even if the daily note doesn't exist
 		result := r.Resolve("2025-03-15")
-		if result.TargetID != "daily/2025-03-15" {
-			t.Errorf("got %q, want %q", result.TargetID, "daily/2025-03-15")
+		if result.TargetID != "2025-03-15" {
+			t.Errorf("got %q, want %q", result.TargetID, "2025-03-15")
 		}
 	})
 
-	t.Run("date shorthand is ambiguous with colliding object ID", func(t *testing.T) {
-		r2 := New([]string{
-			"daily/2025-02-01",
-			"2025-02-01",
-		}, Options{})
-
-		result := r2.Resolve("2025-02-01")
-		if !result.Ambiguous {
-			t.Fatalf("expected ambiguous result, got %+v", result)
-		}
-		if len(result.Matches) != 2 {
-			t.Fatalf("expected 2 matches, got %d (%v)", len(result.Matches), result.Matches)
-		}
-		if !resolverMatchesContain(result.Matches, "daily/2025-02-01") {
-			t.Fatalf("expected daily match in %v", result.Matches)
-		}
-		if !resolverMatchesContain(result.Matches, "2025-02-01") {
-			t.Fatalf("expected literal object match in %v", result.Matches)
+	t.Run("legacy prefixed daily reference resolves to bare date", func(t *testing.T) {
+		result := r.Resolve("daily/2025-02-01")
+		if result.TargetID != "2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "2025-02-01")
 		}
 	})
 
-	t.Run("custom daily directory", func(t *testing.T) {
-		r2 := New([]string{"journal/2025-02-01"}, Options{DailyDirectory: "journal"})
-		result := r2.Resolve("2025-02-01")
-		if result.TargetID != "journal/2025-02-01" {
-			t.Errorf("got %q, want %q", result.TargetID, "journal/2025-02-01")
+	t.Run("legacy prefixed daily section reference resolves to bare date", func(t *testing.T) {
+		result := r.Resolve("daily/2025-02-01#standup")
+		if result.TargetID != "2025-02-01#standup" {
+			t.Errorf("got %q, want %q", result.TargetID, "2025-02-01#standup")
+		}
+	})
+
+	t.Run("custom daily directory prefix compat", func(t *testing.T) {
+		r2 := New([]string{"2025-02-01"}, Options{DailyDirectory: "journal"})
+		// Bare date resolves to the bare-date object ID.
+		if result := r2.Resolve("2025-02-01"); result.TargetID != "2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "2025-02-01")
+		}
+		// The configured daily-directory prefix is accepted as a compat alias.
+		if result := r2.Resolve("journal/2025-02-01"); result.TargetID != "2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "2025-02-01")
+		}
+		// The built-in "daily" prefix also remains a compat alias.
+		if result := r2.Resolve("daily/2025-02-01"); result.TargetID != "2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "2025-02-01")
 		}
 	})
 
@@ -559,15 +562,6 @@ func TestResolverDateShorthand(t *testing.T) {
 			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
 		}
 	})
-}
-
-func resolverMatchesContain(matches []string, want string) bool {
-	for _, match := range matches {
-		if match == want {
-			return true
-		}
-	}
-	return false
 }
 
 func TestResolverSlugifiedMatching(t *testing.T) {
@@ -709,15 +703,17 @@ func TestResolverWithOptions(t *testing.T) {
 	})
 
 	t.Run("daily directory from config", func(t *testing.T) {
+		// Date shorthand resolves to the bare-date object ID regardless of the
+		// configured daily directory.
 		result := r.Resolve("2025-02-01")
-		if result.TargetID != "journal/2025-02-01" {
-			t.Errorf("got %q, want %q", result.TargetID, "journal/2025-02-01")
+		if result.TargetID != "2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "2025-02-01")
 		}
 	})
 
 	t.Run("invalid date does not resolve as date shorthand", func(t *testing.T) {
 		result := r.Resolve("2025-13-45")
-		if result.TargetID == "journal/2025-13-45" {
+		if result.TargetID == "2025-13-45" {
 			t.Errorf("expected invalid date not to be treated as date shorthand, got %q", result.TargetID)
 		}
 	})

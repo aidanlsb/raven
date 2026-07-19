@@ -1305,7 +1305,7 @@ type ResolverOptions struct {
 // - Object IDs (full path + short name resolution)
 // - Aliases (e.g., [[The Queen]] → people/freya)
 // - Name field values (e.g., [[The Prose Edda]] → books/the-prose-edda) - when Schema provided
-// - Date shorthand (e.g., [[2025-02-01]] → daily/2025-02-01)
+// - Date shorthand (e.g., [[2025-02-01]] → 2025-02-01)
 // - Extra IDs for hypothetical resolution
 //
 // Use this method for all resolver creation to ensure consistent behavior.

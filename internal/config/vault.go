@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -461,31 +460,39 @@ func (vc *VaultConfig) DailyNotePath(vaultPath, date string) string {
 }
 
 // DailyNoteID returns the object ID for a daily note given a date string.
+//
+// The canonical daily-note object ID is the bare ISO date (YYYY-MM-DD). The
+// configured daily directory is filesystem layout only and is not part of the
+// link/object identity.
 func (vc *VaultConfig) DailyNoteID(date string) string {
-	return path.Join(vc.GetDailyDirectory(), date)
+	return date
 }
 
 // FilePathToObjectID converts a file path (relative to vault) to an object ID.
 // If directories are configured, the appropriate root prefix is stripped.
 // For example, with type: "type/", the path "type/person/freya.md" becomes "person/freya".
+// Daily notes under the configured daily directory map to their bare-date ID.
 func (vc *VaultConfig) FilePathToObjectID(filePath string) string {
-	dirs := vc.GetDirectoriesConfig()
-	if dirs == nil {
-		return paths.FilePathToObjectID(filePath, "", "")
+	objectsRoot, pagesRoot := "", ""
+	if dirs := vc.GetDirectoriesConfig(); dirs != nil {
+		objectsRoot = dirs.Object
+		pagesRoot = dirs.Page
 	}
-	return paths.FilePathToObjectID(filePath, dirs.Object, dirs.Page)
+	return paths.FilePathToObjectID(filePath, objectsRoot, pagesRoot, vc.GetDailyDirectory())
 }
 
 // ObjectIDToFilePath converts an object ID to a file path (relative to vault).
 // If directories are configured, the appropriate root prefix is added.
 // The typeName helps determine which root to use (type vs page).
 // If typeName is empty or "page", uses the page root; otherwise uses the type root.
+// Daily notes (type "date"/bare-date IDs) map under the configured daily directory.
 func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
-	dirs := vc.GetDirectoriesConfig()
-	if dirs == nil {
-		return paths.ObjectIDToFilePath(objectID, typeName, "", "")
+	objectsRoot, pagesRoot := "", ""
+	if dirs := vc.GetDirectoriesConfig(); dirs != nil {
+		objectsRoot = dirs.Object
+		pagesRoot = dirs.Page
 	}
-	return paths.ObjectIDToFilePath(objectID, typeName, dirs.Object, dirs.Page)
+	return paths.ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot, vc.GetDailyDirectory())
 }
 
 // ResolveReferenceToFilePath resolves a reference (object ID) to a file path.
@@ -497,11 +504,12 @@ func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
 // (type-free) reference-resolution heuristic. Prefer ObjectIDToFilePath when the
 // type of the reference is known.
 func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
-	dirs := vc.GetDirectoriesConfig()
-	if dirs == nil {
-		return paths.ReferenceToFilePath(ref, "", "")
+	objectsRoot, pagesRoot := "", ""
+	if dirs := vc.GetDirectoriesConfig(); dirs != nil {
+		objectsRoot = dirs.Object
+		pagesRoot = dirs.Page
 	}
-	return paths.ReferenceToFilePath(ref, dirs.Object, dirs.Page)
+	return paths.ReferenceToFilePath(ref, objectsRoot, pagesRoot, vc.GetDailyDirectory())
 }
 
 // IsInObjectsRoot checks if a file path is under the object root directory.

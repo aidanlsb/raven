@@ -2,7 +2,6 @@ package config
 
 import (
 	"os"
-	"path"
 	"path/filepath"
 	"testing"
 
@@ -215,17 +214,19 @@ func TestVaultConfigPaths(t *testing.T) {
 	})
 
 	t.Run("DailyNoteID", func(t *testing.T) {
+		// The canonical daily-note object ID is a bare ISO date.
 		id := cfg.DailyNoteID("2025-02-01")
-		expected := path.Join("daily", "2025-02-01")
+		expected := "2025-02-01"
 		if id != expected {
 			t.Errorf("got %q, want %q", id, expected)
 		}
 	})
 
 	t.Run("custom directory", func(t *testing.T) {
+		// The daily directory is layout only and never appears in the object ID.
 		cfg2 := &VaultConfig{DailyDirectory: "journal/daily"}
 		id := cfg2.DailyNoteID("2025-02-01")
-		expected := path.Join("journal/daily", "2025-02-01")
+		expected := "2025-02-01"
 		if id != expected {
 			t.Errorf("got %q, want %q", id, expected)
 		}
@@ -410,7 +411,7 @@ directories:
 			{"type/person/freya.md", "person/freya"},
 			{"type/project/website.md", "project/website"},
 			{"page/my-note.md", "my-note"},
-			{"daily/2025-01-01.md", "daily/2025-01-01"}, // Not in type or page
+			{"daily/2025-01-01.md", "2025-01-01"}, // Daily notes map to a bare ISO date
 		}
 
 		for _, tc := range tests {

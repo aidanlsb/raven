@@ -201,7 +201,7 @@ func (e *Executor) resolveRefValue(value string) (resolved string, fallback stri
 
 func (e *Executor) resolveRefFieldValue(typeName, fieldName, value string) (resolved string, fallback string, err error) {
 	if e.isDateTargetRefField(typeName, fieldName) {
-		resolved, ok, err := dates.DailyObjectIDForInput(value, e.dailyDirectory, e.queryNow())
+		resolved, ok, err := dates.DailyObjectIDForInput(value, e.queryNow())
 		if err != nil {
 			return "", "", err
 		}
