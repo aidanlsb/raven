@@ -238,46 +238,60 @@ func TestAutoResolveDisabledKeepsResolverColdUntilFinalPass(t *testing.T) {
 	}
 }
 
-func BenchmarkIndexDocumentWithWarmResolver(b *testing.B) {
-	db, err := OpenInMemory()
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer db.Close()
+func BenchmarkIndexDocumentReferenceResolution(b *testing.B) {
+	for _, tc := range []struct {
+		name      string
+		forceCold bool
+	}{
+		{name: "warm-cache"},
+		{name: "forced-cold", forceCold: true},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			db, err := OpenInMemory()
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer db.Close()
 
-	sch := schema.New()
-	targets := resolverTestDocument("targets.md", "targets/root")
-	for i := 0; i < 5000; i++ {
-		targets.Objects = append(targets.Objects, &model.Object{
-			ID:        fmt.Sprintf("people/person-%05d", i),
-			Type:      "person",
-			Fields:    map[string]schema.FieldValue{},
-			LineStart: i + 2,
+			sch := schema.New()
+			targets := resolverTestDocument("targets.md", "targets/root")
+			for i := 0; i < 5000; i++ {
+				targets.Objects = append(targets.Objects, &model.Object{
+					ID:        fmt.Sprintf("people/person-%05d", i),
+					Type:      "person",
+					Fields:    map[string]schema.FieldValue{},
+					LineStart: i + 2,
+				})
+			}
+			if err := db.IndexDocument(targets, sch); err != nil {
+				b.Fatal(err)
+			}
+
+			source := resolverTestDocument("notes/source.md", "notes/source")
+			source.Refs = []*model.Reference{{
+				SourceID:  "notes/source",
+				TargetRaw: "person-04999",
+				Line:      model.IntPtr(1),
+			}}
+			if err := db.IndexDocument(source, sch); err != nil {
+				b.Fatal(err)
+			}
+
+			buildsBefore := db.referenceResolverBuilds
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if tc.forceCold {
+					db.referenceResolverCache = nil
+				}
+				if err := db.IndexDocument(source, sch); err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.StopTimer()
+			builds := db.referenceResolverBuilds - buildsBefore
+			b.ReportMetric(float64(builds)/float64(b.N), "full-resolver-builds/op")
 		})
 	}
-	if err := db.IndexDocument(targets, sch); err != nil {
-		b.Fatal(err)
-	}
-
-	source := resolverTestDocument("notes/source.md", "notes/source")
-	source.Refs = []*model.Reference{{
-		SourceID:  "notes/source",
-		TargetRaw: "person-04999",
-		Line:      model.IntPtr(1),
-	}}
-	if err := db.IndexDocument(source, sch); err != nil {
-		b.Fatal(err)
-	}
-
-	buildsBefore := db.referenceResolverBuilds
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := db.IndexDocument(source, sch); err != nil {
-			b.Fatal(err)
-		}
-	}
-	b.StopTimer()
-	b.ReportMetric(float64(db.referenceResolverBuilds-buildsBefore), "full-resolver-builds")
 }
 
 func resolverTestDocument(filePath, objectID string) *parser.ParsedDocument {
