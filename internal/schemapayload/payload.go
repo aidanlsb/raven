@@ -2,6 +2,7 @@ package schemapayload
 
 import (
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/schemamigrate"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 )
 
@@ -85,7 +86,7 @@ func Remove(kind, name, typeName, fieldName string) map[string]interface{} {
 	return data
 }
 
-func RenameField(result *schemasvc.RenameFieldResult) map[string]interface{} {
+func RenameField(result *schemamigrate.RenameFieldResult) map[string]interface{} {
 	if result.Preview {
 		return map[string]interface{}{
 			"preview":       true,
@@ -107,7 +108,7 @@ func RenameField(result *schemasvc.RenameFieldResult) map[string]interface{} {
 	}
 }
 
-func RenameType(result *schemasvc.RenameTypeResult) map[string]interface{} {
+func RenameType(result *schemamigrate.RenameTypeResult) map[string]interface{} {
 	if result.Preview {
 		data := map[string]interface{}{
 			"preview":       true,

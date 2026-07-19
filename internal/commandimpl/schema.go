@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/schemamigrate"
 	"github.com/aidanlsb/raven/internal/schemapayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/templatesvc"
@@ -276,7 +277,7 @@ func HandleSchemaRemoveField(_ context.Context, req commandexec.Request) command
 // HandleSchemaRenameType executes the canonical `schema_rename_type` command.
 func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemasvc.RenameType(schemasvc.RenameTypeRequest{
+	result, err := schemamigrate.RenameType(schemamigrate.RenameTypeRequest{
 		VaultPath:         req.VaultPath,
 		OldName:           stringArg(req.Args, "old_name"),
 		NewName:           stringArg(req.Args, "new_name"),
@@ -293,7 +294,7 @@ func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commande
 // HandleSchemaRenameField executes the canonical `schema_rename_field` command.
 func HandleSchemaRenameField(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemasvc.RenameField(schemasvc.RenameFieldRequest{
+	result, err := schemamigrate.RenameField(schemamigrate.RenameFieldRequest{
 		VaultPath: req.VaultPath,
 		TypeName:  stringArg(req.Args, "type_name"),
 		OldField:  stringArg(req.Args, "old_field"),
