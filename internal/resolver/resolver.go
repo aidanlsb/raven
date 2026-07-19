@@ -3,6 +3,7 @@ package resolver
 
 import (
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
@@ -12,9 +13,12 @@ import (
 
 // Resolver resolves short references to full object IDs.
 type Resolver struct {
-	objectIDs      map[string]struct{} // Set of all known object IDs
+	objectIDs      map[string]struct{} // Set of all known object and asset IDs
+	baseObjectIDs  map[string]struct{} // Set of object and section IDs
+	assetIDs       map[string]struct{} // Set of asset IDs
 	shortMap       map[string][]string // Map from short name to full IDs
 	slugMap        map[string]string   // Map from slugified ID to original ID
+	slugMatches    map[string][]string // All IDs for each slug, used by incremental updates
 	suffixMap      map[string][]string // Map from slash-delimited suffixes to full IDs
 	aliasMap       map[string][]string // Map from alias to object IDs
 	nameFieldMap   map[string][]string // Map from name_field value (slugified) to object IDs
@@ -56,33 +60,31 @@ func New(objectIDs []string, opts Options) *Resolver {
 
 	r := &Resolver{
 		objectIDs:      make(map[string]struct{}, len(allIDs)),
+		baseObjectIDs:  make(map[string]struct{}, len(objectIDs)),
+		assetIDs:       make(map[string]struct{}, len(opts.AssetIDs)),
 		shortMap:       make(map[string][]string, len(allIDs)*2),
 		slugMap:        make(map[string]string, len(allIDs)),
+		slugMatches:    make(map[string][]string, len(allIDs)),
 		suffixMap:      make(map[string][]string, len(allIDs)*2),
+		aliasMap:       make(map[string][]string, len(opts.Aliases)*2+len(opts.AliasMatches)*2),
+		nameFieldMap:   make(map[string][]string, len(opts.NameFieldMap)*3),
 		dailyDirectory: dailyDir,
 	}
 
 	for _, id := range allIDs {
-		r.objectIDs[id] = struct{}{}
-
-		// Build short name map
-		shortName := paths.ShortNameFromID(id)
-		r.shortMap[shortName] = append(r.shortMap[shortName], id)
 		if _, isAsset := assetSet[id]; isAsset {
-			addAssetShortNames(r.shortMap, id, shortName)
+			r.addAssetID(id)
+			continue
 		}
-
-		// Build slugified map for fuzzy matching
-		sluggedID := slugs.PathSlug(id)
-		r.slugMap[sluggedID] = id
-
-		indexResolverSuffixes(r.suffixMap, id)
+		r.addObjectID(id)
+	}
+	for _, id := range objectIDs {
+		if _, isAsset := assetSet[id]; isAsset {
+			r.addObjectID(id)
+		}
 	}
 
 	// Copy aliases (skip empty ones)
-	if len(opts.Aliases) > 0 || len(opts.AliasMatches) > 0 {
-		r.aliasMap = make(map[string][]string, len(opts.Aliases)*2+len(opts.AliasMatches)*2)
-	}
 	for alias, targetID := range opts.Aliases {
 		addAliasTarget(r.aliasMap, alias, targetID)
 	}
@@ -93,28 +95,9 @@ func New(objectIDs []string, opts Options) *Resolver {
 	}
 
 	// Build name_field map (both exact and slugified keys for case-insensitive matching)
-	if len(opts.NameFieldMap) > 0 {
-		r.nameFieldMap = make(map[string][]string, len(opts.NameFieldMap)*3)
-	}
 	for nameValue, objectIDs := range opts.NameFieldMap {
-		if nameValue == "" {
-			continue
-		}
-		sluggedName := slugs.ComponentSlug(nameValue)
-		lowerName := strings.ToLower(nameValue)
 		for _, objectID := range objectIDs {
-			if objectID == "" {
-				continue
-			}
-			// Store both exact and slugified versions
-			r.nameFieldMap[nameValue] = append(r.nameFieldMap[nameValue], objectID)
-			if sluggedName != "" && sluggedName != nameValue {
-				r.nameFieldMap[sluggedName] = append(r.nameFieldMap[sluggedName], objectID)
-			}
-			// Also store lowercase for case-insensitive matching
-			if lowerName != nameValue && lowerName != sluggedName {
-				r.nameFieldMap[lowerName] = append(r.nameFieldMap[lowerName], objectID)
-			}
+			r.addNameFieldTarget(nameValue, objectID)
 		}
 	}
 
@@ -165,12 +148,7 @@ func addAssetShortNames(shortMap map[string][]string, id, shortName string) {
 }
 
 func addShortMapEntry(shortMap map[string][]string, key, id string) {
-	for _, existing := range shortMap[key] {
-		if existing == id {
-			return
-		}
-	}
-	shortMap[key] = append(shortMap[key], id)
+	shortMap[key] = insertSortedUnique(shortMap[key], id)
 }
 
 // ResolveResult represents the result of a reference resolution.
@@ -518,7 +496,7 @@ func addResolverSuffixEntry(suffixMap map[string][]string, key, id string) {
 	if key == "" || id == "" {
 		return
 	}
-	suffixMap[key] = append(suffixMap[key], id)
+	suffixMap[key] = insertSortedUnique(suffixMap[key], id)
 }
 
 func buildResolveResult(matches []string, matchSources map[string]string) ResolveResult {
@@ -727,19 +705,12 @@ func addAliasTarget(aliasMap map[string][]string, alias, targetID string) {
 	if aliasMap == nil || alias == "" || targetID == "" {
 		return
 	}
-	aliasMap[alias] = appendUnique(aliasMap[alias], targetID)
+	aliasMap[alias] = insertSortedUnique(aliasMap[alias], targetID)
 
 	sluggedAlias := slugs.ComponentSlug(alias)
 	if sluggedAlias != "" && sluggedAlias != alias {
-		aliasMap[sluggedAlias] = appendUnique(aliasMap[sluggedAlias], targetID)
+		aliasMap[sluggedAlias] = insertSortedUnique(aliasMap[sluggedAlias], targetID)
 	}
-}
-
-func appendUnique(values []string, candidate string) []string {
-	if containsString(values, candidate) {
-		return values
-	}
-	return append(values, candidate)
 }
 
 func containsString(values []string, candidate string) bool {
@@ -749,4 +720,18 @@ func containsString(values []string, candidate string) bool {
 		}
 	}
 	return false
+}
+
+func insertSortedUnique(values []string, candidate string) []string {
+	if candidate == "" {
+		return values
+	}
+	i := sort.SearchStrings(values, candidate)
+	if i < len(values) && values[i] == candidate {
+		return values
+	}
+	values = append(values, "")
+	copy(values[i+1:], values[i:])
+	values[i] = candidate
+	return values
 }
