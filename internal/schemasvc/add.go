@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemadoc"
 )
 
 type AddTypeRequest struct {
@@ -87,14 +88,6 @@ func AddType(req AddTypeRequest) (*AddTypeResult, error) {
 		return nil, newError(ErrorInvalidInput, "type name cannot be empty", "", nil, nil)
 	}
 
-	sch, err := schema.Load(req.VaultPath)
-	if err != nil {
-		return nil, newError(ErrorSchemaNotFound, err.Error(), "Run 'rvn init' first", nil, err)
-	}
-
-	if _, exists := sch.Types[typeName]; exists {
-		return nil, newError(ErrorObjectExists, fmt.Sprintf("type '%s' already exists", typeName), "", nil, nil)
-	}
 	if schema.IsBuiltinType(typeName) {
 		return nil, newError(ErrorInvalidInput, fmt.Sprintf("'%s' is a built-in type", typeName), "Choose a different name", nil, nil)
 	}
@@ -104,35 +97,35 @@ func AddType(req AddTypeRequest) (*AddTypeResult, error) {
 		defaultPath = normalizeDirRoot(typeName)
 	}
 
-	schemaDoc, err := readSchemaDoc(req.VaultPath)
-	if err != nil {
-		return nil, err
-	}
-
-	typesNode := ensureMapNode(schemaDoc, "types")
-	newType := make(map[string]interface{})
-	newType["default_path"] = defaultPath
-
 	description := strings.TrimSpace(req.Description)
-	if description != "" {
-		newType["description"] = description
-	}
-
 	nameField := strings.TrimSpace(req.NameField)
 	autoCreatedField := ""
-	if nameField != "" {
-		newType["name_field"] = nameField
-		fields := make(map[string]interface{})
-		fields[nameField] = map[string]interface{}{
-			"type":     "string",
-			"required": true,
+	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+		if _, exists := doc.Schema().Types[typeName]; exists {
+			return newError(ErrorObjectExists, fmt.Sprintf("type '%s' already exists", typeName), "", nil, nil)
 		}
-		newType["fields"] = fields
-		autoCreatedField = nameField
-	}
 
-	typesNode[typeName] = newType
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
+		typesNode := schemadoc.EnsureMap(doc.Root(), "types")
+		newType := map[string]interface{}{
+			"default_path": defaultPath,
+		}
+		if description != "" {
+			newType["description"] = description
+		}
+		if nameField != "" {
+			newType["name_field"] = nameField
+			newType["fields"] = map[string]interface{}{
+				nameField: map[string]interface{}{
+					"type":     "string",
+					"required": true,
+				},
+			}
+			autoCreatedField = nameField
+		}
+		typesNode[typeName] = newType
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -151,34 +144,28 @@ func AddTrait(req AddTraitRequest) (*AddTraitResult, error) {
 		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
 	}
 
-	sch, err := schema.Load(req.VaultPath)
-	if err != nil {
-		return nil, newError(ErrorSchemaNotFound, err.Error(), "Run 'rvn init' first", nil, err)
-	}
-	if _, exists := sch.Traits[traitName]; exists {
-		return nil, newError(ErrorObjectExists, fmt.Sprintf("trait '%s' already exists", traitName), "", nil, nil)
-	}
-
 	traitType := normalizeTraitTypeInput(req.TraitType)
 	trimmedValues := splitCommaValues(req.Values)
 
-	schemaDoc, err := readSchemaDoc(req.VaultPath)
+	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+		if _, exists := doc.Schema().Traits[traitName]; exists {
+			return newError(ErrorObjectExists, fmt.Sprintf("trait '%s' already exists", traitName), "", nil, nil)
+		}
+
+		traitsNode := schemadoc.EnsureMap(doc.Root(), "traits")
+		newTrait := map[string]interface{}{
+			"type": traitType,
+		}
+		if len(trimmedValues) > 0 {
+			newTrait["values"] = trimmedValues
+		}
+		if normalizedDefault, ok := normalizeTraitDefaultValue(traitType, req.Default); ok {
+			newTrait["default"] = normalizedDefault
+		}
+		traitsNode[traitName] = newTrait
+		return nil
+	})
 	if err != nil {
-		return nil, err
-	}
-
-	traitsNode := ensureMapNode(schemaDoc, "traits")
-	newTrait := make(map[string]interface{})
-	newTrait["type"] = traitType
-	if len(trimmedValues) > 0 {
-		newTrait["values"] = trimmedValues
-	}
-	if normalizedDefault, ok := normalizeTraitDefaultValue(traitType, req.Default); ok {
-		newTrait["default"] = normalizedDefault
-	}
-	traitsNode[traitName] = newTrait
-
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
 		return nil, err
 	}
 
@@ -197,21 +184,6 @@ func AddField(req AddFieldRequest) (*AddFieldResult, error) {
 		return nil, newError(ErrorInvalidInput, "type and field names are required", "", nil, nil)
 	}
 
-	sch, err := schema.Load(req.VaultPath)
-	if err != nil {
-		return nil, newError(ErrorSchemaNotFound, err.Error(), "Run 'rvn init' first", nil, err)
-	}
-
-	typeDef, exists := sch.Types[typeName]
-	if !exists {
-		return nil, newError(
-			ErrorTypeNotFound,
-			fmt.Sprintf("type '%s' not found", typeName),
-			"Add the type first with 'rvn schema add type'",
-			nil,
-			nil,
-		)
-	}
 	if schema.IsBuiltinType(typeName) {
 		return nil, newError(
 			ErrorInvalidInput,
@@ -221,64 +193,80 @@ func AddField(req AddFieldRequest) (*AddFieldResult, error) {
 			nil,
 		)
 	}
-	if typeDef.Fields != nil {
-		if _, exists := typeDef.Fields[fieldName]; exists {
-			return nil, newError(ErrorObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", fieldName, typeName), "", nil, nil)
-		}
-	}
-
 	trimmedTarget := strings.TrimSpace(req.Target)
 	trimmedValues := splitCommaValues(req.Values)
-	validation := ValidateFieldTypeSpec(req.FieldType, trimmedTarget, strings.Join(trimmedValues, ","), sch)
-	if !validation.Valid {
-		details := map[string]interface{}{
-			"field_type":  req.FieldType,
-			"valid_types": validation.ValidTypes,
+	fieldType := ""
+	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+		sch := doc.Schema()
+		typeDef, exists := sch.Types[typeName]
+		if !exists {
+			return newError(
+				ErrorTypeNotFound,
+				fmt.Sprintf("type '%s' not found", typeName),
+				"Add the type first with 'rvn schema add type'",
+				nil,
+				nil,
+			)
 		}
-		if len(validation.Examples) > 0 {
-			details["examples"] = validation.Examples
+		if typeDef.Fields != nil {
+			if _, exists := typeDef.Fields[fieldName]; exists {
+				return newError(ErrorObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", fieldName, typeName), "", nil, nil)
+			}
 		}
-		if validation.TargetHint != "" {
-			details["target_hint"] = validation.TargetHint
-		}
-		return nil, newError(ErrorInvalidInput, validation.Error, validation.Suggestion, details, nil)
-	}
 
-	fieldType := validation.BaseType
-	if fieldType == "" {
-		fieldType = "string"
-	}
-	if validation.IsArray {
-		fieldType += "[]"
-	}
+		validation := ValidateFieldTypeSpec(req.FieldType, trimmedTarget, strings.Join(trimmedValues, ","), sch)
+		if !validation.Valid {
+			details := map[string]interface{}{
+				"field_type":  req.FieldType,
+				"valid_types": validation.ValidTypes,
+			}
+			if len(validation.Examples) > 0 {
+				details["examples"] = validation.Examples
+			}
+			if validation.TargetHint != "" {
+				details["target_hint"] = validation.TargetHint
+			}
+			return newError(ErrorInvalidInput, validation.Error, validation.Suggestion, details, nil)
+		}
 
-	schemaDoc, typesNode, err := readSchemaDocWithTypes(req.VaultPath)
+		fieldType = validation.BaseType
+		if fieldType == "" {
+			fieldType = "string"
+		}
+		if validation.IsArray {
+			fieldType += "[]"
+		}
+
+		typesNode, ok := doc.Root()["types"].(map[string]interface{})
+		if !ok {
+			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+		}
+		typeNode := schemadoc.EnsureMap(typesNode, typeName)
+		fieldsNode := schemadoc.EnsureMap(typeNode, "fields")
+
+		newField := map[string]interface{}{
+			"type": fieldType,
+		}
+		if req.Required {
+			newField["required"] = true
+		}
+		if strings.TrimSpace(req.Default) != "" {
+			newField["default"] = req.Default
+		}
+		if len(trimmedValues) > 0 {
+			newField["values"] = trimmedValues
+		}
+		if trimmedTarget != "" {
+			newField["target"] = trimmedTarget
+		}
+		if strings.TrimSpace(req.Description) != "" {
+			newField["description"] = req.Description
+		}
+		fieldsNode[fieldName] = newField
+		return nil
+	})
+
 	if err != nil {
-		return nil, err
-	}
-	typeNode := ensureMapNode(typesNode, typeName)
-	fieldsNode := ensureMapNode(typeNode, "fields")
-
-	newField := make(map[string]interface{})
-	newField["type"] = fieldType
-	if req.Required {
-		newField["required"] = true
-	}
-	if strings.TrimSpace(req.Default) != "" {
-		newField["default"] = req.Default
-	}
-	if len(trimmedValues) > 0 {
-		newField["values"] = trimmedValues
-	}
-	if trimmedTarget != "" {
-		newField["target"] = trimmedTarget
-	}
-	if strings.TrimSpace(req.Description) != "" {
-		newField["description"] = req.Description
-	}
-	fieldsNode[fieldName] = newField
-
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
 		return nil, err
 	}
 

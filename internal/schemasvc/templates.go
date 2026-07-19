@@ -7,12 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
-	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/template"
 )
 
@@ -20,16 +18,6 @@ type TemplateDefinition struct {
 	ID          string `json:"id"`
 	File        string `json:"file"`
 	Description string `json:"description,omitempty"`
-}
-
-type TemplateBindingState struct {
-	Templates       []string
-	DefaultTemplate string
-}
-
-type AddTemplateBindingResult struct {
-	AlreadySet   bool
-	DefaultMatch bool
 }
 
 type SetTemplateRequest struct {
@@ -132,23 +120,21 @@ func SetTemplate(req SetTemplateRequest) (*TemplateDefinition, error) {
 		return nil, newError(ErrorValidation, err.Error(), "Template files should contain only body Markdown; Raven writes object frontmatter separately", nil, err)
 	}
 
-	schemaDoc, err := readSchemaDoc(req.VaultPath)
-	if err != nil {
-		return nil, err
-	}
-	templatesNode := ensureMapNode(schemaDoc, "templates")
-	templateNode := ensureMapNode(templatesNode, templateID)
-	templateNode["file"] = fileRef
-
 	description := strings.TrimSpace(req.Description)
-	if req.Description == "-" {
-		delete(templateNode, "description")
-		description = ""
-	} else if description != "" {
-		templateNode["description"] = description
-	}
+	err = editSchemaWithLoadError(req.VaultPath, "", ErrorSchemaInvalid, func(doc *schemadoc.Document) error {
+		templatesNode := schemadoc.EnsureMap(doc.Root(), "templates")
+		templateNode := schemadoc.EnsureMap(templatesNode, templateID)
+		templateNode["file"] = fileRef
 
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
+		if req.Description == "-" {
+			delete(templateNode, "description")
+			description = ""
+		} else if description != "" {
+			templateNode["description"] = description
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -165,419 +151,33 @@ func RemoveTemplate(vaultPath, templateID string) error {
 		return newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
 	}
 
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
-	if err != nil {
-		return err
-	}
-	if _, ok := sch.Templates[templateID]; !ok {
-		return newError(ErrorInvalidInput, fmt.Sprintf("template '%s' not found", templateID), "Nothing to remove", nil, nil)
-	}
+	return editSchema(vaultPath, "Run 'rvn init' to create a schema", func(doc *schemadoc.Document) error {
+		sch := doc.Schema()
+		if _, ok := sch.Templates[templateID]; !ok {
+			return newError(ErrorInvalidInput, fmt.Sprintf("template '%s' not found", templateID), "Nothing to remove", nil, nil)
+		}
 
-	refs := templateRefs(sch, templateID)
-	if len(refs) > 0 {
-		return newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("template '%s' is still referenced by: %s", templateID, strings.Join(refs, ", ")),
-			"Remove those bindings first with `rvn schema template unbind <template_id> --type <type>` or `rvn schema template unbind <template_id> --core <core>`",
-			nil,
-			nil,
-		)
-	}
-
-	schemaDoc, err := readSchemaDoc(vaultPath)
-	if err != nil {
-		return err
-	}
-	templatesNode, ok := schemaDoc["templates"].(map[string]interface{})
-	if !ok {
-		return newError(ErrorInvalidInput, "schema has no templates section", "Nothing to remove", nil, nil)
-	}
-	delete(templatesNode, templateID)
-	if len(templatesNode) == 0 {
-		delete(schemaDoc, "templates")
-	}
-
-	return writeSchemaDoc(vaultPath, schemaDoc)
-}
-
-func ListTypeTemplates(vaultPath, typeName string) (*TemplateBindingState, error) {
-	_, typeDef, err := loadTypeForTemplateConfig(vaultPath, typeName)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TemplateBindingState{
-		Templates:       sortedTemplateIDs(typeDef.Templates),
-		DefaultTemplate: typeDef.DefaultTemplate,
-	}, nil
-}
-
-func AddTypeTemplate(vaultPath, typeName, templateID string) (*AddTemplateBindingResult, error) {
-	templateID = strings.TrimSpace(templateID)
-	if templateID == "" {
-		return nil, newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
-	}
-
-	sch, typeDef, err := loadTypeForTemplateConfig(vaultPath, typeName)
-	if err != nil {
-		return nil, err
-	}
-	if _, exists := sch.Templates[templateID]; !exists {
-		return nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("unknown template '%s'", templateID),
-			"Use `rvn schema template list` to see available template IDs",
-			nil,
-			nil,
-		)
-	}
-	if containsTemplateID(typeDef.Templates, templateID) {
-		return &AddTemplateBindingResult{
-			AlreadySet:   true,
-			DefaultMatch: typeDef.DefaultTemplate == templateID,
-		}, nil
-	}
-
-	newTemplateIDs := append(append([]string(nil), typeDef.Templates...), templateID)
-	schemaDoc, typesNode, err := readSchemaDocWithTypes(vaultPath)
-	if err != nil {
-		return nil, err
-	}
-	typeNode := ensureMapNode(typesNode, typeName)
-	typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
-	if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
-		return nil, err
-	}
-
-	return &AddTemplateBindingResult{}, nil
-}
-
-func RemoveTypeTemplate(vaultPath, typeName, templateID string, clearDefault bool) error {
-	templateID = strings.TrimSpace(templateID)
-	if templateID == "" {
-		return newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
-	}
-
-	_, typeDef, err := loadTypeForTemplateConfig(vaultPath, typeName)
-	if err != nil {
-		return err
-	}
-	if !containsTemplateID(typeDef.Templates, templateID) {
-		return newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("type '%s' does not include template '%s'", typeName, templateID),
-			"Nothing to remove",
-			nil,
-			nil,
-		)
-	}
-
-	newTemplateIDs := removeTemplateID(typeDef.Templates, templateID)
-	schemaDoc, typesNode, err := readSchemaDocWithTypes(vaultPath)
-	if err != nil {
-		return err
-	}
-	typeNode := ensureMapNode(typesNode, typeName)
-	if len(newTemplateIDs) == 0 {
-		delete(typeNode, "templates")
-	} else {
-		typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
-	}
-	if currentDefault, ok := typeNode["default_template"].(string); ok && currentDefault == templateID {
-		if !clearDefault {
+		refs := templateRefs(sch, templateID)
+		if len(refs) > 0 {
 			return newError(
 				ErrorInvalidInput,
-				fmt.Sprintf("template '%s' is the default for type '%s'", templateID, typeName),
-				"Re-run with --clear-default, or change the default first with `rvn schema template default <template_id> --type "+typeName+"`",
+				fmt.Sprintf("template '%s' is still referenced by: %s", templateID, strings.Join(refs, ", ")),
+				"Remove those bindings first with `rvn schema template unbind <template_id> --type <type>` or `rvn schema template unbind <template_id> --core <core>`",
 				nil,
 				nil,
 			)
 		}
-		delete(typeNode, "default_template")
-	}
 
-	return writeSchemaDoc(vaultPath, schemaDoc)
-}
-
-func SetTypeDefaultTemplate(vaultPath, typeName, templateID string, clearDefault bool) (string, error) {
-	typeName = strings.TrimSpace(typeName)
-	templateID = strings.TrimSpace(templateID)
-	if typeName == "" {
-		return "", newError(ErrorInvalidInput, "type_name cannot be empty", "", nil, nil)
-	}
-
-	_, typeDef, err := loadTypeForTemplateConfig(vaultPath, typeName)
-	if err != nil {
-		return "", err
-	}
-
-	if clearDefault {
-		schemaDoc, typesNode, err := readSchemaDocWithTypes(vaultPath)
-		if err != nil {
-			return "", err
+		templatesNode, ok := doc.Root()["templates"].(map[string]interface{})
+		if !ok {
+			return newError(ErrorInvalidInput, "schema has no templates section", "Nothing to remove", nil, nil)
 		}
-		typeNode := ensureMapNode(typesNode, typeName)
-		delete(typeNode, "default_template")
-		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
-			return "", err
+		delete(templatesNode, templateID)
+		if len(templatesNode) == 0 {
+			delete(doc.Root(), "templates")
 		}
-		return "", nil
-	}
-
-	if templateID == "" {
-		return "", newError(
-			ErrorInvalidInput,
-			"default requires template_id or --clear",
-			"Use: rvn schema template default <template_id> --type "+typeName+" OR --clear",
-			nil,
-			nil,
-		)
-	}
-	if !containsTemplateID(typeDef.Templates, templateID) {
-		return "", newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("type '%s' does not include template '%s'", typeName, templateID),
-			"Use `rvn schema template list --type "+typeName+"` to see available template IDs",
-			nil,
-			nil,
-		)
-	}
-
-	schemaDoc, typesNode, err := readSchemaDocWithTypes(vaultPath)
-	if err != nil {
-		return "", err
-	}
-	typeNode := ensureMapNode(typesNode, typeName)
-	typeNode["default_template"] = templateID
-	if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
-		return "", err
-	}
-
-	return templateID, nil
-}
-
-func ListCoreTemplates(vaultPath, coreTypeName string) (*TemplateBindingState, error) {
-	coreDef, err := loadCoreTypeForTemplateConfig(vaultPath, coreTypeName)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TemplateBindingState{
-		Templates:       sortedTemplateIDs(coreDef.Templates),
-		DefaultTemplate: coreDef.DefaultTemplate,
-	}, nil
-}
-
-func AddCoreTemplate(vaultPath, coreTypeName, templateID string) (*AddTemplateBindingResult, error) {
-	templateID = strings.TrimSpace(templateID)
-	if templateID == "" {
-		return nil, newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
-	}
-
-	sch, coreDef, err := loadSchemaAndCoreType(vaultPath, coreTypeName)
-	if err != nil {
-		return nil, err
-	}
-	if _, exists := sch.Templates[templateID]; !exists {
-		return nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("unknown template '%s'", templateID),
-			"Use `rvn schema template list` to see available template IDs",
-			nil,
-			nil,
-		)
-	}
-	if containsTemplateID(coreDef.Templates, templateID) {
-		return &AddTemplateBindingResult{
-			AlreadySet:   true,
-			DefaultMatch: coreDef.DefaultTemplate == templateID,
-		}, nil
-	}
-
-	newTemplateIDs := append(append([]string(nil), coreDef.Templates...), templateID)
-	schemaDoc, err := readSchemaDoc(vaultPath)
-	if err != nil {
-		return nil, err
-	}
-	coreNode := ensureMapNode(schemaDoc, "core")
-	typeNode := ensureMapNode(coreNode, coreTypeName)
-	typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
-	if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
-		return nil, err
-	}
-
-	return &AddTemplateBindingResult{}, nil
-}
-
-func RemoveCoreTemplate(vaultPath, coreTypeName, templateID string, clearDefault bool) error {
-	templateID = strings.TrimSpace(templateID)
-	if templateID == "" {
-		return newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
-	}
-
-	_, coreDef, err := loadSchemaAndCoreType(vaultPath, coreTypeName)
-	if err != nil {
-		return err
-	}
-	if !containsTemplateID(coreDef.Templates, templateID) {
-		return newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("core type '%s' does not include template '%s'", coreTypeName, templateID),
-			"Nothing to remove",
-			nil,
-			nil,
-		)
-	}
-
-	newTemplateIDs := removeTemplateID(coreDef.Templates, templateID)
-	schemaDoc, err := readSchemaDoc(vaultPath)
-	if err != nil {
-		return err
-	}
-	coreNode := ensureMapNode(schemaDoc, "core")
-	typeNode := ensureMapNode(coreNode, coreTypeName)
-	if len(newTemplateIDs) == 0 {
-		delete(typeNode, "templates")
-	} else {
-		typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
-	}
-	if currentDefault, ok := typeNode["default_template"].(string); ok && currentDefault == templateID {
-		if !clearDefault {
-			return newError(
-				ErrorInvalidInput,
-				fmt.Sprintf("template '%s' is the default for core type '%s'", templateID, coreTypeName),
-				"Re-run with --clear-default, or change the default first with `rvn schema template default <template_id> --core "+coreTypeName+"`",
-				nil,
-				nil,
-			)
-		}
-		delete(typeNode, "default_template")
-	}
-	return writeSchemaDoc(vaultPath, schemaDoc)
-}
-
-func SetCoreDefaultTemplate(vaultPath, coreTypeName, templateID string, clearDefault bool) (string, error) {
-	templateID = strings.TrimSpace(templateID)
-	_, coreDef, err := loadSchemaAndCoreType(vaultPath, coreTypeName)
-	if err != nil {
-		return "", err
-	}
-
-	if clearDefault {
-		schemaDoc, err := readSchemaDoc(vaultPath)
-		if err != nil {
-			return "", err
-		}
-		coreNode := ensureMapNode(schemaDoc, "core")
-		typeNode := ensureMapNode(coreNode, coreTypeName)
-		delete(typeNode, "default_template")
-		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
-			return "", err
-		}
-		return "", nil
-	}
-
-	if templateID == "" {
-		return "", newError(
-			ErrorInvalidInput,
-			"default requires template_id or --clear",
-			"Use: rvn schema template default <template_id> --core "+coreTypeName+" OR --clear",
-			nil,
-			nil,
-		)
-	}
-	if !containsTemplateID(coreDef.Templates, templateID) {
-		return "", newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("core type '%s' does not include template '%s'", coreTypeName, templateID),
-			"Use `rvn schema template list --core "+coreTypeName+"` to see available template IDs",
-			nil,
-			nil,
-		)
-	}
-
-	schemaDoc, err := readSchemaDoc(vaultPath)
-	if err != nil {
-		return "", err
-	}
-	coreNode := ensureMapNode(schemaDoc, "core")
-	typeNode := ensureMapNode(coreNode, coreTypeName)
-	typeNode["default_template"] = templateID
-	if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
-		return "", err
-	}
-
-	return templateID, nil
-}
-
-func loadTypeForTemplateConfig(vaultPath, typeName string) (*schema.Schema, *schema.TypeDefinition, error) {
-	typeName = strings.TrimSpace(typeName)
-	if typeName == "" {
-		return nil, nil, newError(ErrorInvalidInput, "type_name cannot be empty", "", nil, nil)
-	}
-
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' first")
-	if err != nil {
-		return nil, nil, err
-	}
-	if schema.IsBuiltinType(typeName) {
-		return nil, nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("'%s' is a core type; configure templates with `rvn schema template ... --core %s`", typeName, typeName),
-			"",
-			nil,
-			nil,
-		)
-	}
-
-	typeDef, ok := sch.Types[typeName]
-	if !ok || typeDef == nil {
-		return nil, nil, newError(
-			ErrorTypeNotFound,
-			fmt.Sprintf("type '%s' not found", typeName),
-			"Run 'rvn schema types' to see available types",
-			nil,
-			nil,
-		)
-	}
-	return sch, typeDef, nil
-}
-
-func loadCoreTypeForTemplateConfig(vaultPath, coreTypeName string) (*schema.CoreTypeDefinition, error) {
-	_, coreDef, err := loadSchemaAndCoreType(vaultPath, coreTypeName)
-	if err != nil {
-		return nil, err
-	}
-	return coreDef, nil
-}
-
-func loadSchemaAndCoreType(vaultPath, coreTypeName string) (*schema.Schema, *schema.CoreTypeDefinition, error) {
-	coreTypeName = strings.TrimSpace(coreTypeName)
-	if coreTypeName == "" {
-		return nil, nil, newError(ErrorInvalidInput, "core_type cannot be empty", "", nil, nil)
-	}
-	if !schema.IsBuiltinType(coreTypeName) {
-		return nil, nil, newError(
-			ErrorTypeNotFound,
-			fmt.Sprintf("core type '%s' not found", coreTypeName),
-			"Available core types: date, page, section",
-			nil,
-			nil,
-		)
-	}
-	if coreTypeName == "section" {
-		return nil, nil, newError(ErrorInvalidInput, "core type 'section' does not support template configuration", "", nil, nil)
-	}
-
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' first")
-	if err != nil {
-		return nil, nil, err
-	}
-	coreDef := sch.Core[coreTypeName]
-	if coreDef == nil {
-		coreDef = &schema.CoreTypeDefinition{}
-	}
-	return sch, coreDef, nil
+		return nil
+	})
 }
 
 func loadSchema(vaultPath, suggestion string) (*schema.Schema, error) {
@@ -612,86 +212,4 @@ func templateRefs(sch *schema.Schema, templateID string) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func readSchemaDoc(vaultPath string) (map[string]interface{}, error) {
-	schemaPath := paths.SchemaPath(vaultPath)
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return nil, newError(ErrorFileRead, err.Error(), "", nil, err)
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return nil, newError(ErrorSchemaInvalid, err.Error(), "", nil, err)
-	}
-	return schemaDoc, nil
-}
-
-func readSchemaDocWithTypes(vaultPath string) (map[string]interface{}, map[string]interface{}, error) {
-	schemaDoc, err := readSchemaDoc(vaultPath)
-	if err != nil {
-		return nil, nil, err
-	}
-	typesNode, ok := schemaDoc["types"].(map[string]interface{})
-	if !ok {
-		return nil, nil, newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
-	}
-	return schemaDoc, typesNode, nil
-}
-
-func writeSchemaDoc(vaultPath string, schemaDoc map[string]interface{}) error {
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return newError(ErrorInternal, err.Error(), "", nil, err)
-	}
-	schemaPath := paths.SchemaPath(vaultPath)
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return newError(ErrorFileWrite, err.Error(), "", nil, err)
-	}
-	return nil
-}
-
-func containsTemplateID(templateIDs []string, templateID string) bool {
-	for _, id := range templateIDs {
-		if id == templateID {
-			return true
-		}
-	}
-	return false
-}
-
-func removeTemplateID(templateIDs []string, templateID string) []string {
-	out := make([]string, 0, len(templateIDs))
-	for _, id := range templateIDs {
-		if id == templateID {
-			continue
-		}
-		out = append(out, id)
-	}
-	return out
-}
-
-func sortedTemplateIDs(templateIDs []string) []string {
-	out := append([]string(nil), templateIDs...)
-	sort.Strings(out)
-	return out
-}
-
-func toInterfaceSlice(items []string) []interface{} {
-	out := make([]interface{}, 0, len(items))
-	for _, item := range items {
-		out = append(out, item)
-	}
-	return out
-}
-
-func ensureMapNode(parent map[string]interface{}, key string) map[string]interface{} {
-	node, ok := parent[key].(map[string]interface{})
-	if ok {
-		return node
-	}
-	node = make(map[string]interface{})
-	parent[key] = node
-	return node
 }

@@ -5,9 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/schemadoc"
 )
 
 type TypeRenameChange struct {
@@ -28,7 +27,7 @@ type FieldRenameChange struct {
 // transform a type definition. Vault scanning and file migration are handled
 // by schemamigrate.
 type TypeRenamePlanRequest struct {
-	SchemaYAML     []byte
+	SchemaDoc      *schemadoc.Document
 	OldName        string
 	NewName        string
 	Description    string
@@ -52,10 +51,10 @@ type TypeRenamePlan struct {
 // FieldRenamePlanRequest contains only the schema-document inputs needed to
 // transform a field definition.
 type FieldRenamePlanRequest struct {
-	SchemaYAML []byte
-	TypeName   string
-	OldField   string
-	NewField   string
+	SchemaDoc *schemadoc.Document
+	TypeName  string
+	OldField  string
+	NewField  string
 }
 
 // FieldRenamePlan stages the schema.yaml update for a field rename. TemplateSpec
@@ -77,11 +76,10 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 		OptionalChanges: make([]TypeRenameChange, 0),
 	}
 
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(req.SchemaYAML, &schemaDoc); err != nil {
-		return nil, newError(ErrorSchemaInvalid, err.Error(), "", nil, err)
+	if req.SchemaDoc == nil {
+		return nil, newError(ErrorInternal, "schema document is required", "", nil, nil)
 	}
-	typesNode, ok := schemaDoc["types"].(map[string]interface{})
+	typesNode, ok := req.SchemaDoc.Root()["types"].(map[string]interface{})
 	if !ok {
 		return nil, newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
 	}
@@ -147,9 +145,9 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 		}
 	}
 
-	coreSchema, err := yaml.Marshal(schemaDoc)
+	coreSchema, err := req.SchemaDoc.Marshal()
 	if err != nil {
-		return nil, newError(ErrorInternal, err.Error(), "", nil, err)
+		return nil, MapSchemaDocError(err, "", ErrorSchemaNotFound)
 	}
 	plan.SchemaYAML = coreSchema
 
@@ -166,9 +164,9 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 			typeDefMap["default_path"] = plan.DefaultPathNew
 			plan.DefaultPathMutation = true
 		}
-		withDefaultPath, err := yaml.Marshal(schemaDoc)
+		withDefaultPath, err := req.SchemaDoc.Marshal()
 		if err != nil {
-			return nil, newError(ErrorInternal, err.Error(), "", nil, err)
+			return nil, MapSchemaDocError(err, "", ErrorSchemaNotFound)
 		}
 		plan.SchemaYAMLWithDefaultPath = withDefaultPath
 	}
@@ -181,12 +179,11 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 func BuildFieldRenamePlan(req FieldRenamePlanRequest) (*FieldRenamePlan, error) {
 	plan := &FieldRenamePlan{Changes: make([]FieldRenameChange, 0)}
 
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(req.SchemaYAML, &schemaDoc); err != nil {
-		return nil, newError(ErrorSchemaInvalid, err.Error(), "", nil, err)
+	if req.SchemaDoc == nil {
+		return nil, newError(ErrorInternal, "schema document is required", "", nil, nil)
 	}
 
-	types, ok := schemaDoc["types"].(map[string]interface{})
+	types, ok := req.SchemaDoc.Root()["types"].(map[string]interface{})
 	if !ok {
 		return nil, newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
 	}
@@ -249,9 +246,9 @@ func BuildFieldRenamePlan(req FieldRenamePlanRequest) (*FieldRenamePlan, error) 
 	}
 
 	plan.TemplateSpec, _ = typeNode["template"].(string)
-	schemaOut, err := yaml.Marshal(schemaDoc)
+	schemaOut, err := req.SchemaDoc.Marshal()
 	if err != nil {
-		return nil, newError(ErrorInternal, err.Error(), "", nil, err)
+		return nil, MapSchemaDocError(err, "", ErrorSchemaNotFound)
 	}
 	plan.SchemaYAML = schemaOut
 	return plan, nil

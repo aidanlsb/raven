@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemadoc"
 )
 
 type UpdateTypeRequest struct {
@@ -94,127 +95,125 @@ func UpdateType(req UpdateTypeRequest) (*UpdateResult, error) {
 		)
 	}
 
-	sch, err := loadSchema(req.VaultPath, "Run 'rvn init' first")
-	if err != nil {
-		return nil, err
-	}
-
-	typeDef, exists := sch.Types[typeName]
-	if !exists {
-		return nil, newError(
-			ErrorTypeNotFound,
-			fmt.Sprintf("type '%s' not found", typeName),
-			"Use 'rvn schema add type' to create it",
-			nil,
-			nil,
-		)
-	}
-
-	schemaDoc, typesNode, err := readSchemaDocWithTypes(req.VaultPath)
-	if err != nil {
-		return nil, err
-	}
-	typeNode := ensureMapNode(typesNode, typeName)
-
 	changes := make([]string, 0)
-
-	if strings.TrimSpace(req.DefaultPath) != "" {
-		defaultPath := normalizeDirRoot(req.DefaultPath)
-		typeNode["default_path"] = defaultPath
-		changes = append(changes, fmt.Sprintf("default_path=%s", defaultPath))
-	}
-
-	if strings.TrimSpace(req.Description) != "" {
-		if isClearSentinel(req.Description) {
-			delete(typeNode, "description")
-			changes = append(changes, "removed description")
-		} else {
-			typeNode["description"] = req.Description
-			changes = append(changes, fmt.Sprintf("description=%s", req.Description))
-		}
-	}
-
-	if strings.TrimSpace(req.NameField) != "" {
-		if isClearSentinel(req.NameField) {
-			delete(typeNode, "name_field")
-			changes = append(changes, "removed name_field")
-		} else {
-			fieldExists := false
-			if typeDef != nil && typeDef.Fields != nil {
-				if fieldDef, ok := typeDef.Fields[req.NameField]; ok {
-					fieldExists = true
-					if fieldDef.Type != schema.FieldTypeString {
-						return nil, newError(
-							ErrorInvalidInput,
-							fmt.Sprintf("name_field must reference a string field, '%s' is type '%s'", req.NameField, fieldDef.Type),
-							"Choose a string field or create a new one",
-							nil,
-							nil,
-						)
-					}
-				}
-			}
-
-			typeNode["name_field"] = req.NameField
-
-			if !fieldExists {
-				fieldsNode := ensureMapNode(typeNode, "fields")
-				fieldsNode[req.NameField] = map[string]interface{}{
-					"type":     "string",
-					"required": true,
-				}
-				changes = append(changes, fmt.Sprintf("name_field=%s (auto-created as required string)", req.NameField))
-			} else {
-				changes = append(changes, fmt.Sprintf("name_field=%s", req.NameField))
-			}
-		}
-	}
-
-	if strings.TrimSpace(req.AddTrait) != "" {
-		if _, exists := sch.Traits[req.AddTrait]; !exists {
-			return nil, newError(
-				ErrorTraitNotFound,
-				fmt.Sprintf("trait '%s' not found", req.AddTrait),
-				"Add it first with 'rvn schema add trait'",
+	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+		sch := doc.Schema()
+		typeDef, exists := sch.Types[typeName]
+		if !exists {
+			return newError(
+				ErrorTypeNotFound,
+				fmt.Sprintf("type '%s' not found", typeName),
+				"Use 'rvn schema add type' to create it",
 				nil,
 				nil,
 			)
 		}
 
-		currentTraits := interfaceSlice(typeNode["traits"])
-		if !containsString(currentTraits, req.AddTrait) {
-			currentTraits = append(currentTraits, req.AddTrait)
-			typeNode["traits"] = currentTraits
-			changes = append(changes, fmt.Sprintf("added trait %s", req.AddTrait))
+		typesNode, ok := doc.Root()["types"].(map[string]interface{})
+		if !ok {
+			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
 		}
-	}
+		typeNode := schemadoc.EnsureMap(typesNode, typeName)
 
-	if strings.TrimSpace(req.RemoveTrait) != "" {
-		currentTraits := interfaceSlice(typeNode["traits"])
-		if len(currentTraits) > 0 {
-			filtered := make([]interface{}, 0, len(currentTraits))
-			for _, traitValue := range currentTraits {
-				if toStringSafe(traitValue) == req.RemoveTrait {
-					continue
-				}
-				filtered = append(filtered, traitValue)
+		if strings.TrimSpace(req.DefaultPath) != "" {
+			defaultPath := normalizeDirRoot(req.DefaultPath)
+			typeNode["default_path"] = defaultPath
+			changes = append(changes, fmt.Sprintf("default_path=%s", defaultPath))
+		}
+
+		if strings.TrimSpace(req.Description) != "" {
+			if isClearSentinel(req.Description) {
+				delete(typeNode, "description")
+				changes = append(changes, "removed description")
+			} else {
+				typeNode["description"] = req.Description
+				changes = append(changes, fmt.Sprintf("description=%s", req.Description))
 			}
-			typeNode["traits"] = filtered
-			changes = append(changes, fmt.Sprintf("removed trait %s", req.RemoveTrait))
 		}
-	}
 
-	if len(changes) == 0 {
-		return nil, newError(
-			ErrorInvalidInput,
-			"no changes specified",
-			"Use flags like --default-path, --description, --name-field, --add-trait, --remove-trait",
-			nil,
-			nil,
-		)
-	}
+		if strings.TrimSpace(req.NameField) != "" {
+			if isClearSentinel(req.NameField) {
+				delete(typeNode, "name_field")
+				changes = append(changes, "removed name_field")
+			} else {
+				fieldExists := false
+				if typeDef != nil && typeDef.Fields != nil {
+					if fieldDef, ok := typeDef.Fields[req.NameField]; ok {
+						fieldExists = true
+						if fieldDef.Type != schema.FieldTypeString {
+							return newError(
+								ErrorInvalidInput,
+								fmt.Sprintf("name_field must reference a string field, '%s' is type '%s'", req.NameField, fieldDef.Type),
+								"Choose a string field or create a new one",
+								nil,
+								nil,
+							)
+						}
+					}
+				}
 
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
+				typeNode["name_field"] = req.NameField
+
+				if !fieldExists {
+					fieldsNode := schemadoc.EnsureMap(typeNode, "fields")
+					fieldsNode[req.NameField] = map[string]interface{}{
+						"type":     "string",
+						"required": true,
+					}
+					changes = append(changes, fmt.Sprintf("name_field=%s (auto-created as required string)", req.NameField))
+				} else {
+					changes = append(changes, fmt.Sprintf("name_field=%s", req.NameField))
+				}
+			}
+		}
+
+		if strings.TrimSpace(req.AddTrait) != "" {
+			if _, exists := sch.Traits[req.AddTrait]; !exists {
+				return newError(
+					ErrorTraitNotFound,
+					fmt.Sprintf("trait '%s' not found", req.AddTrait),
+					"Add it first with 'rvn schema add trait'",
+					nil,
+					nil,
+				)
+			}
+
+			currentTraits := interfaceSlice(typeNode["traits"])
+			if !containsString(currentTraits, req.AddTrait) {
+				currentTraits = append(currentTraits, req.AddTrait)
+				typeNode["traits"] = currentTraits
+				changes = append(changes, fmt.Sprintf("added trait %s", req.AddTrait))
+			}
+		}
+
+		if strings.TrimSpace(req.RemoveTrait) != "" {
+			currentTraits := interfaceSlice(typeNode["traits"])
+			if len(currentTraits) > 0 {
+				filtered := make([]interface{}, 0, len(currentTraits))
+				for _, traitValue := range currentTraits {
+					if toStringSafe(traitValue) == req.RemoveTrait {
+						continue
+					}
+					filtered = append(filtered, traitValue)
+				}
+				typeNode["traits"] = filtered
+				changes = append(changes, fmt.Sprintf("removed trait %s", req.RemoveTrait))
+			}
+		}
+
+		if len(changes) == 0 {
+			return newError(
+				ErrorInvalidInput,
+				"no changes specified",
+				"Use flags like --default-path, --description, --name-field, --add-trait, --remove-trait",
+				nil,
+				nil,
+			)
+		}
+
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -230,65 +229,59 @@ func UpdateTrait(req UpdateTraitRequest) (*UpdateResult, error) {
 		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
 	}
 
-	sch, err := loadSchema(req.VaultPath, "Run 'rvn init' first")
-	if err != nil {
-		return nil, err
-	}
-	traitDef, exists := sch.Traits[traitName]
-	if !exists {
-		return nil, newError(
-			ErrorTraitNotFound,
-			fmt.Sprintf("trait '%s' not found", traitName),
-			"Use 'rvn schema add trait' to create it",
-			nil,
-			nil,
-		)
-	}
-
-	schemaDoc, err := readSchemaDoc(req.VaultPath)
-	if err != nil {
-		return nil, err
-	}
-	traitsNode := ensureMapNode(schemaDoc, "traits")
-	traitNode := ensureMapNode(traitsNode, traitName)
-
 	changes := make([]string, 0)
-	if strings.TrimSpace(req.TraitType) != "" {
-		traitType := normalizeTraitTypeInput(req.TraitType)
-		traitNode["type"] = traitType
-		changes = append(changes, fmt.Sprintf("type=%s", traitType))
-	}
-	if strings.TrimSpace(req.Values) != "" {
-		values := splitCommaValues(req.Values)
-		if len(values) > 0 {
-			traitNode["values"] = values
-		} else {
-			delete(traitNode, "values")
+	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+		traitDef, exists := doc.Schema().Traits[traitName]
+		if !exists {
+			return newError(
+				ErrorTraitNotFound,
+				fmt.Sprintf("trait '%s' not found", traitName),
+				"Use 'rvn schema add trait' to create it",
+				nil,
+				nil,
+			)
 		}
-		changes = append(changes, fmt.Sprintf("values=%s", strings.Join(values, ",")))
-	}
-	if strings.TrimSpace(req.Default) != "" {
-		effectiveType := currentTraitType(traitDef)
+
+		traitsNode := schemadoc.EnsureMap(doc.Root(), "traits")
+		traitNode := schemadoc.EnsureMap(traitsNode, traitName)
+
 		if strings.TrimSpace(req.TraitType) != "" {
-			effectiveType = normalizeTraitTypeInput(req.TraitType)
+			traitType := normalizeTraitTypeInput(req.TraitType)
+			traitNode["type"] = traitType
+			changes = append(changes, fmt.Sprintf("type=%s", traitType))
 		}
-		if normalizedDefault, ok := normalizeTraitDefaultValue(effectiveType, req.Default); ok {
-			traitNode["default"] = normalizedDefault
-			changes = append(changes, fmt.Sprintf("default=%v", normalizedDefault))
+		if strings.TrimSpace(req.Values) != "" {
+			values := splitCommaValues(req.Values)
+			if len(values) > 0 {
+				traitNode["values"] = values
+			} else {
+				delete(traitNode, "values")
+			}
+			changes = append(changes, fmt.Sprintf("values=%s", strings.Join(values, ",")))
 		}
-	}
+		if strings.TrimSpace(req.Default) != "" {
+			effectiveType := currentTraitType(traitDef)
+			if strings.TrimSpace(req.TraitType) != "" {
+				effectiveType = normalizeTraitTypeInput(req.TraitType)
+			}
+			if normalizedDefault, ok := normalizeTraitDefaultValue(effectiveType, req.Default); ok {
+				traitNode["default"] = normalizedDefault
+				changes = append(changes, fmt.Sprintf("default=%v", normalizedDefault))
+			}
+		}
 
-	if len(changes) == 0 {
-		return nil, newError(
-			ErrorInvalidInput,
-			"no changes specified",
-			"Use flags like --type, --values, --default",
-			nil,
-			nil,
-		)
-	}
-
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
+		if len(changes) == 0 {
+			return newError(
+				ErrorInvalidInput,
+				"no changes specified",
+				"Use flags like --type, --values, --default",
+				nil,
+				nil,
+			)
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -305,218 +298,217 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 		return nil, newError(ErrorInvalidInput, "type and field names are required", "", nil, nil)
 	}
 
-	sch, err := loadSchema(req.VaultPath, "Run 'rvn init' first")
-	if err != nil {
-		return nil, err
-	}
-
-	typeDef, exists := sch.Types[typeName]
-	if !exists {
-		return nil, newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
-	}
-	if schema.IsBuiltinType(typeName) {
-		return nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("cannot modify fields on built-in type '%s'", typeName),
-			"Built-in types (page, section, date) have fixed definitions.",
-			nil,
-			nil,
-		)
-	}
-	if typeDef == nil || typeDef.Fields == nil {
-		return nil, newError(
-			ErrorFieldNotFound,
-			fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName),
-			"Use 'rvn schema add field' to create it",
-			nil,
-			nil,
-		)
-	}
-	currentFieldDef, ok := typeDef.Fields[fieldName]
-	if !ok {
-		return nil, newError(
-			ErrorFieldNotFound,
-			fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName),
-			"Use 'rvn schema add field' to create it",
-			nil,
-			nil,
-		)
-	}
-	requestedBaseType := ""
-	if strings.TrimSpace(req.FieldType) != "" {
-		requestedBaseType = normalizeFieldTypeAlias(strings.TrimSuffix(strings.TrimSpace(req.FieldType), "[]"))
-	}
-	effectiveFieldType := currentFieldType(currentFieldDef)
-	if strings.TrimSpace(req.FieldType) != "" {
-		effectiveFieldType = strings.TrimSpace(req.FieldType)
-	}
-	effectiveTarget := ""
-	if currentFieldDef != nil {
-		effectiveTarget = strings.TrimSpace(currentFieldDef.Target)
-	}
-	if requestedBaseType != "" && requestedBaseType != "ref" && strings.TrimSpace(req.Target) == "" {
-		effectiveTarget = ""
-	} else if strings.TrimSpace(req.Target) != "" {
-		effectiveTarget = strings.TrimSpace(req.Target)
-	}
-	effectiveValues := ""
-	if currentFieldDef != nil {
-		effectiveValues = strings.Join(currentFieldDef.Values, ",")
-	}
-	if requestedBaseType != "" && requestedBaseType != "enum" && strings.TrimSpace(req.Values) == "" {
-		effectiveValues = ""
-	} else if strings.TrimSpace(req.Values) != "" {
-		effectiveValues = strings.Join(splitCommaValues(req.Values), ",")
-	}
-	validation := ValidateFieldTypeSpec(effectiveFieldType, effectiveTarget, effectiveValues, sch)
-	if !validation.Valid {
-		details := map[string]interface{}{
-			"field_type":  effectiveFieldType,
-			"valid_types": validation.ValidTypes,
-		}
-		if len(validation.Examples) > 0 {
-			details["examples"] = validation.Examples
-		}
-		if validation.TargetHint != "" {
-			details["target_hint"] = validation.TargetHint
-		}
-		return nil, newError(ErrorInvalidInput, validation.Error, validation.Suggestion, details, nil)
-	}
-
-	if req.Required == "true" {
-		db, err := index.Open(req.VaultPath)
-		if errors.Is(err, index.ErrIndexRebuildRequired) {
-			return nil, indexRebuildRequiredError(err)
-		}
-		if err == nil {
-			defer db.Close()
-			objects, err := objectsByType(db, typeName)
-			if err == nil && len(objects) > 0 {
-				missing := make([]string, 0)
-				for _, obj := range objects {
-					fields := obj.Fields
-					if fields == nil {
-						fields = map[string]schema.FieldValue{}
-					}
-					if _, hasField := fields[fieldName]; !hasField {
-						missing = append(missing, obj.ID)
-					}
-				}
-				if len(missing) > 0 {
-					details := map[string]interface{}{
-						"missing_field":    fieldName,
-						"affected_count":   len(missing),
-						"affected_objects": missing,
-					}
-					if len(missing) > 5 {
-						details["affected_objects"] = append(missing[:5], "... and more")
-					}
-					return nil, newError(
-						ErrorDataIntegrity,
-						fmt.Sprintf("%d objects of type '%s' lack field '%s'", len(missing), typeName, fieldName),
-						"Add the field to these files, then retry",
-						details,
-						nil,
-					)
-				}
-			}
-		}
-	}
-
-	schemaDoc, typesNode, err := readSchemaDocWithTypes(req.VaultPath)
-	if err != nil {
-		return nil, err
-	}
-	typeNode, ok := typesNode[typeName].(map[string]interface{})
-	if !ok {
-		return nil, newError(
-			ErrorSchemaInvalid,
-			fmt.Sprintf("type '%s' has invalid schema definition", typeName),
-			"",
-			nil,
-			nil,
-		)
-	}
-
-	fieldsNode, ok := typeNode["fields"].(map[string]interface{})
-	if !ok {
-		return nil, newError(
-			ErrorSchemaInvalid,
-			fmt.Sprintf("type '%s' has invalid fields definition", typeName),
-			"",
-			nil,
-			nil,
-		)
-	}
-	fieldNode := ensureMapNode(fieldsNode, fieldName)
-
 	changes := make([]string, 0)
-	if strings.TrimSpace(req.FieldType) != "" {
-		fieldType := validation.BaseType
-		if fieldType == "" {
-			fieldType = "string"
+	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+		sch := doc.Schema()
+		typeDef, exists := sch.Types[typeName]
+		if !exists {
+			return newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
 		}
-		if validation.IsArray {
-			fieldType += "[]"
+		if schema.IsBuiltinType(typeName) {
+			return newError(
+				ErrorInvalidInput,
+				fmt.Sprintf("cannot modify fields on built-in type '%s'", typeName),
+				"Built-in types (page, section, date) have fixed definitions.",
+				nil,
+				nil,
+			)
 		}
-		fieldNode["type"] = fieldType
-		changes = append(changes, fmt.Sprintf("type=%s", fieldType))
-		if validation.BaseType != "ref" && strings.TrimSpace(req.Target) == "" {
-			if _, exists := fieldNode["target"]; exists {
-				delete(fieldNode, "target")
-				changes = append(changes, "removed target")
+		if typeDef == nil || typeDef.Fields == nil {
+			return newError(
+				ErrorFieldNotFound,
+				fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName),
+				"Use 'rvn schema add field' to create it",
+				nil,
+				nil,
+			)
+		}
+		currentFieldDef, ok := typeDef.Fields[fieldName]
+		if !ok {
+			return newError(
+				ErrorFieldNotFound,
+				fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName),
+				"Use 'rvn schema add field' to create it",
+				nil,
+				nil,
+			)
+		}
+
+		requestedBaseType := ""
+		if strings.TrimSpace(req.FieldType) != "" {
+			requestedBaseType = normalizeFieldTypeAlias(strings.TrimSuffix(strings.TrimSpace(req.FieldType), "[]"))
+		}
+		effectiveFieldType := currentFieldType(currentFieldDef)
+		if strings.TrimSpace(req.FieldType) != "" {
+			effectiveFieldType = strings.TrimSpace(req.FieldType)
+		}
+		effectiveTarget := ""
+		if currentFieldDef != nil {
+			effectiveTarget = strings.TrimSpace(currentFieldDef.Target)
+		}
+		if requestedBaseType != "" && requestedBaseType != "ref" && strings.TrimSpace(req.Target) == "" {
+			effectiveTarget = ""
+		} else if strings.TrimSpace(req.Target) != "" {
+			effectiveTarget = strings.TrimSpace(req.Target)
+		}
+		effectiveValues := ""
+		if currentFieldDef != nil {
+			effectiveValues = strings.Join(currentFieldDef.Values, ",")
+		}
+		if requestedBaseType != "" && requestedBaseType != "enum" && strings.TrimSpace(req.Values) == "" {
+			effectiveValues = ""
+		} else if strings.TrimSpace(req.Values) != "" {
+			effectiveValues = strings.Join(splitCommaValues(req.Values), ",")
+		}
+		validation := ValidateFieldTypeSpec(effectiveFieldType, effectiveTarget, effectiveValues, sch)
+		if !validation.Valid {
+			details := map[string]interface{}{
+				"field_type":  effectiveFieldType,
+				"valid_types": validation.ValidTypes,
+			}
+			if len(validation.Examples) > 0 {
+				details["examples"] = validation.Examples
+			}
+			if validation.TargetHint != "" {
+				details["target_hint"] = validation.TargetHint
+			}
+			return newError(ErrorInvalidInput, validation.Error, validation.Suggestion, details, nil)
+		}
+
+		if req.Required == "true" {
+			db, openErr := index.Open(req.VaultPath)
+			if errors.Is(openErr, index.ErrIndexRebuildRequired) {
+				return indexRebuildRequiredError(openErr)
+			}
+			if openErr == nil {
+				defer db.Close()
+				objects, objectsErr := objectsByType(db, typeName)
+				if objectsErr == nil && len(objects) > 0 {
+					missing := make([]string, 0)
+					for _, obj := range objects {
+						fields := obj.Fields
+						if fields == nil {
+							fields = map[string]schema.FieldValue{}
+						}
+						if _, hasField := fields[fieldName]; !hasField {
+							missing = append(missing, obj.ID)
+						}
+					}
+					if len(missing) > 0 {
+						details := map[string]interface{}{
+							"missing_field":    fieldName,
+							"affected_count":   len(missing),
+							"affected_objects": missing,
+						}
+						if len(missing) > 5 {
+							details["affected_objects"] = append(missing[:5], "... and more")
+						}
+						return newError(
+							ErrorDataIntegrity,
+							fmt.Sprintf("%d objects of type '%s' lack field '%s'", len(missing), typeName, fieldName),
+							"Add the field to these files, then retry",
+							details,
+							nil,
+						)
+					}
+				}
 			}
 		}
-		if validation.BaseType != "enum" && strings.TrimSpace(req.Values) == "" {
-			if _, exists := fieldNode["values"]; exists {
+
+		typesNode, ok := doc.Root()["types"].(map[string]interface{})
+		if !ok {
+			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+		}
+		typeNode, ok := typesNode[typeName].(map[string]interface{})
+		if !ok {
+			return newError(
+				ErrorSchemaInvalid,
+				fmt.Sprintf("type '%s' has invalid schema definition", typeName),
+				"",
+				nil,
+				nil,
+			)
+		}
+
+		fieldsNode, ok := typeNode["fields"].(map[string]interface{})
+		if !ok {
+			return newError(
+				ErrorSchemaInvalid,
+				fmt.Sprintf("type '%s' has invalid fields definition", typeName),
+				"",
+				nil,
+				nil,
+			)
+		}
+		fieldNode := schemadoc.EnsureMap(fieldsNode, fieldName)
+
+		if strings.TrimSpace(req.FieldType) != "" {
+			fieldType := validation.BaseType
+			if fieldType == "" {
+				fieldType = "string"
+			}
+			if validation.IsArray {
+				fieldType += "[]"
+			}
+			fieldNode["type"] = fieldType
+			changes = append(changes, fmt.Sprintf("type=%s", fieldType))
+			if validation.BaseType != "ref" && strings.TrimSpace(req.Target) == "" {
+				if _, exists := fieldNode["target"]; exists {
+					delete(fieldNode, "target")
+					changes = append(changes, "removed target")
+				}
+			}
+			if validation.BaseType != "enum" && strings.TrimSpace(req.Values) == "" {
+				if _, exists := fieldNode["values"]; exists {
+					delete(fieldNode, "values")
+					changes = append(changes, "removed values")
+				}
+			}
+		}
+		if strings.TrimSpace(req.Required) != "" {
+			required := req.Required == "true"
+			fieldNode["required"] = required
+			changes = append(changes, fmt.Sprintf("required=%v", required))
+		}
+		if strings.TrimSpace(req.Default) != "" {
+			fieldNode["default"] = req.Default
+			changes = append(changes, fmt.Sprintf("default=%s", req.Default))
+		}
+		if strings.TrimSpace(req.Values) != "" {
+			values := splitCommaValues(req.Values)
+			if len(values) > 0 {
+				fieldNode["values"] = values
+			} else {
 				delete(fieldNode, "values")
-				changes = append(changes, "removed values")
+			}
+			changes = append(changes, fmt.Sprintf("values=%s", strings.Join(values, ",")))
+		}
+		if strings.TrimSpace(req.Target) != "" {
+			fieldNode["target"] = strings.TrimSpace(req.Target)
+			changes = append(changes, fmt.Sprintf("target=%s", strings.TrimSpace(req.Target)))
+		}
+		if strings.TrimSpace(req.Description) != "" {
+			if isClearSentinel(req.Description) {
+				delete(fieldNode, "description")
+				changes = append(changes, "removed description")
+			} else {
+				fieldNode["description"] = req.Description
+				changes = append(changes, fmt.Sprintf("description=%s", req.Description))
 			}
 		}
-	}
-	if strings.TrimSpace(req.Required) != "" {
-		required := req.Required == "true"
-		fieldNode["required"] = required
-		changes = append(changes, fmt.Sprintf("required=%v", required))
-	}
-	if strings.TrimSpace(req.Default) != "" {
-		fieldNode["default"] = req.Default
-		changes = append(changes, fmt.Sprintf("default=%s", req.Default))
-	}
-	if strings.TrimSpace(req.Values) != "" {
-		values := splitCommaValues(req.Values)
-		if len(values) > 0 {
-			fieldNode["values"] = values
-		} else {
-			delete(fieldNode, "values")
-		}
-		changes = append(changes, fmt.Sprintf("values=%s", strings.Join(values, ",")))
-	}
-	if strings.TrimSpace(req.Target) != "" {
-		fieldNode["target"] = strings.TrimSpace(req.Target)
-		changes = append(changes, fmt.Sprintf("target=%s", strings.TrimSpace(req.Target)))
-	}
-	if strings.TrimSpace(req.Description) != "" {
-		if isClearSentinel(req.Description) {
-			delete(fieldNode, "description")
-			changes = append(changes, "removed description")
-		} else {
-			fieldNode["description"] = req.Description
-			changes = append(changes, fmt.Sprintf("description=%s", req.Description))
-		}
-	}
 
-	if len(changes) == 0 {
-		return nil, newError(
-			ErrorInvalidInput,
-			"no changes specified",
-			"Use flags like --type, --required, --default, --values, --target, --description",
-			nil,
-			nil,
-		)
-	}
-
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
+		if len(changes) == 0 {
+			return newError(
+				ErrorInvalidInput,
+				"no changes specified",
+				"Use flags like --type, --required, --default, --values, --target, --description",
+				nil,
+				nil,
+			)
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -559,61 +551,60 @@ func RemoveType(req RemoveTypeRequest) (*RemoveResult, error) {
 		)
 	}
 
-	sch, err := loadSchema(req.VaultPath, "Run 'rvn init' first")
-	if err != nil {
-		return nil, err
-	}
-	if _, exists := sch.Types[typeName]; !exists {
-		return nil, newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
-	}
-
 	warnings := make([]Warning, 0)
-	db, dbErr := index.Open(req.VaultPath)
-	if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
-		return nil, indexRebuildRequiredError(dbErr)
-	}
-	if dbErr == nil {
-		defer db.Close()
-		if objects, err := objectsByType(db, typeName); err == nil && len(objects) > 0 {
-			warnings = append(warnings, Warning{
-				Code:    codes.WarnOrphanedFiles,
-				Message: fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
-			})
-			if req.Interactive && !req.Force {
-				details := map[string]interface{}{
-					"type":           typeName,
-					"affected_count": len(objects),
-				}
-				sample := make([]string, 0, 5)
-				for i, obj := range objects {
-					if i >= 5 {
-						break
+	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+		if _, exists := doc.Schema().Types[typeName]; !exists {
+			return newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
+		}
+
+		db, dbErr := index.Open(req.VaultPath)
+		if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
+			return indexRebuildRequiredError(dbErr)
+		}
+		if dbErr == nil {
+			defer db.Close()
+			if objects, objectsErr := objectsByType(db, typeName); objectsErr == nil && len(objects) > 0 {
+				warnings = append(warnings, Warning{
+					Code:    codes.WarnOrphanedFiles,
+					Message: fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
+				})
+				if req.Interactive && !req.Force {
+					details := map[string]interface{}{
+						"type":           typeName,
+						"affected_count": len(objects),
 					}
-					sample = append(sample, obj.FilePath)
+					sample := make([]string, 0, 5)
+					for i, obj := range objects {
+						if i >= 5 {
+							break
+						}
+						sample = append(sample, obj.FilePath)
+					}
+					if len(sample) > 0 {
+						details["affected_files"] = sample
+					}
+					if len(objects) > len(sample) {
+						details["remaining_count"] = len(objects) - len(sample)
+					}
+					return newError(
+						ErrorConfirmation,
+						fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
+						"Use --force to skip confirmation",
+						details,
+						nil,
+					)
 				}
-				if len(sample) > 0 {
-					details["affected_files"] = sample
-				}
-				if len(objects) > len(sample) {
-					details["remaining_count"] = len(objects) - len(sample)
-				}
-				return nil, newError(
-					ErrorConfirmation,
-					fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
-					"Use --force to skip confirmation",
-					details,
-					nil,
-				)
 			}
 		}
-	}
 
-	schemaDoc, typesNode, err := readSchemaDocWithTypes(req.VaultPath)
+		typesNode, ok := doc.Root()["types"].(map[string]interface{})
+		if !ok {
+			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+		}
+		delete(typesNode, typeName)
+		return nil
+	})
 	if err != nil {
-		return nil, err
-	}
-	delete(typesNode, typeName)
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
 		return nil, err
 	}
 
@@ -629,49 +620,43 @@ func RemoveTrait(req RemoveTraitRequest) (*RemoveResult, error) {
 		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
 	}
 
-	sch, err := loadSchema(req.VaultPath, "Run 'rvn init' first")
-	if err != nil {
-		return nil, err
-	}
-	if _, exists := sch.Traits[traitName]; !exists {
-		return nil, newError(ErrorTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "", nil, nil)
-	}
-
 	warnings := make([]Warning, 0)
-	db, dbErr := index.Open(req.VaultPath)
-	if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
-		return nil, indexRebuildRequiredError(dbErr)
-	}
-	if dbErr == nil {
-		defer db.Close()
-		if instances, err := traitsByType(db, traitName); err == nil && len(instances) > 0 {
-			warnings = append(warnings, Warning{
-				Code:    codes.WarnOrphanedTraits,
-				Message: fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
-			})
-			if req.Interactive && !req.Force {
-				return nil, newError(
-					ErrorConfirmation,
-					fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
-					"Use --force to skip confirmation",
-					map[string]interface{}{
-						"trait":          traitName,
-						"affected_count": len(instances),
-					},
-					nil,
-				)
+	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+		if _, exists := doc.Schema().Traits[traitName]; !exists {
+			return newError(ErrorTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "", nil, nil)
+		}
+
+		db, dbErr := index.Open(req.VaultPath)
+		if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
+			return indexRebuildRequiredError(dbErr)
+		}
+		if dbErr == nil {
+			defer db.Close()
+			if instances, instancesErr := traitsByType(db, traitName); instancesErr == nil && len(instances) > 0 {
+				warnings = append(warnings, Warning{
+					Code:    codes.WarnOrphanedTraits,
+					Message: fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
+				})
+				if req.Interactive && !req.Force {
+					return newError(
+						ErrorConfirmation,
+						fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
+						"Use --force to skip confirmation",
+						map[string]interface{}{
+							"trait":          traitName,
+							"affected_count": len(instances),
+						},
+						nil,
+					)
+				}
 			}
 		}
-	}
 
-	schemaDoc, err := readSchemaDoc(req.VaultPath)
+		traitsNode := schemadoc.EnsureMap(doc.Root(), "traits")
+		delete(traitsNode, traitName)
+		return nil
+	})
 	if err != nil {
-		return nil, err
-	}
-	traitsNode := ensureMapNode(schemaDoc, "traits")
-	delete(traitsNode, traitName)
-
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
 		return nil, err
 	}
 
@@ -688,87 +673,85 @@ func RemoveField(req RemoveFieldRequest) (*RemoveResult, error) {
 		return nil, newError(ErrorInvalidInput, "type and field names are required", "", nil, nil)
 	}
 
-	sch, err := loadSchema(req.VaultPath, "Run 'rvn init' first")
-	if err != nil {
-		return nil, err
-	}
-
-	typeDef, exists := sch.Types[typeName]
-	if !exists {
-		return nil, newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
-	}
-	if schema.IsBuiltinType(typeName) {
-		return nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("cannot remove fields from built-in type '%s'", typeName),
-			"Built-in types (page, section, date) have fixed definitions.",
-			nil,
-			nil,
-		)
-	}
-	if typeDef == nil || typeDef.Fields == nil {
-		return nil, newError(ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "", nil, nil)
-	}
-
-	fieldDef, exists := typeDef.Fields[fieldName]
-	if !exists {
-		return nil, newError(ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "", nil, nil)
-	}
-
-	if fieldDef != nil && fieldDef.Required {
-		db, dbErr := index.Open(req.VaultPath)
-		if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
-			return nil, indexRebuildRequiredError(dbErr)
+	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+		typeDef, exists := doc.Schema().Types[typeName]
+		if !exists {
+			return newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
 		}
-		if dbErr == nil {
-			defer db.Close()
-			if objects, err := objectsByType(db, typeName); err == nil && len(objects) > 0 {
-				return nil, newError(
-					ErrorDataIntegrity,
-					fmt.Sprintf("cannot remove required field '%s': %d objects have this field", fieldName, len(objects)),
-					"First make the field optional with 'rvn schema update field', then remove it",
-					map[string]interface{}{
-						"field":          fieldName,
-						"type":           typeName,
-						"affected_count": len(objects),
-					},
-					nil,
-				)
+		if schema.IsBuiltinType(typeName) {
+			return newError(
+				ErrorInvalidInput,
+				fmt.Sprintf("cannot remove fields from built-in type '%s'", typeName),
+				"Built-in types (page, section, date) have fixed definitions.",
+				nil,
+				nil,
+			)
+		}
+		if typeDef == nil || typeDef.Fields == nil {
+			return newError(ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "", nil, nil)
+		}
+
+		fieldDef, exists := typeDef.Fields[fieldName]
+		if !exists {
+			return newError(ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "", nil, nil)
+		}
+
+		if fieldDef != nil && fieldDef.Required {
+			db, dbErr := index.Open(req.VaultPath)
+			if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
+				return indexRebuildRequiredError(dbErr)
+			}
+			if dbErr == nil {
+				defer db.Close()
+				if objects, objectsErr := objectsByType(db, typeName); objectsErr == nil && len(objects) > 0 {
+					return newError(
+						ErrorDataIntegrity,
+						fmt.Sprintf("cannot remove required field '%s': %d objects have this field", fieldName, len(objects)),
+						"First make the field optional with 'rvn schema update field', then remove it",
+						map[string]interface{}{
+							"field":          fieldName,
+							"type":           typeName,
+							"affected_count": len(objects),
+						},
+						nil,
+					)
+				}
 			}
 		}
-	}
 
-	schemaDoc, typesNode, err := readSchemaDocWithTypes(req.VaultPath)
+		typesNode, ok := doc.Root()["types"].(map[string]interface{})
+		if !ok {
+			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+		}
+		typeNode, ok := typesNode[typeName].(map[string]interface{})
+		if !ok {
+			return newError(
+				ErrorSchemaInvalid,
+				fmt.Sprintf("type '%s' has invalid schema definition", typeName),
+				"",
+				nil,
+				nil,
+			)
+		}
+		fieldsNode, ok := typeNode["fields"].(map[string]interface{})
+		if !ok {
+			return newError(
+				ErrorSchemaInvalid,
+				fmt.Sprintf("type '%s' has invalid fields definition", typeName),
+				"",
+				nil,
+				nil,
+			)
+		}
+
+		delete(fieldsNode, fieldName)
+		if len(fieldsNode) == 0 {
+			delete(typeNode, "fields")
+		}
+		return nil
+	})
+
 	if err != nil {
-		return nil, err
-	}
-	typeNode, ok := typesNode[typeName].(map[string]interface{})
-	if !ok {
-		return nil, newError(
-			ErrorSchemaInvalid,
-			fmt.Sprintf("type '%s' has invalid schema definition", typeName),
-			"",
-			nil,
-			nil,
-		)
-	}
-	fieldsNode, ok := typeNode["fields"].(map[string]interface{})
-	if !ok {
-		return nil, newError(
-			ErrorSchemaInvalid,
-			fmt.Sprintf("type '%s' has invalid fields definition", typeName),
-			"",
-			nil,
-			nil,
-		)
-	}
-
-	delete(fieldsNode, fieldName)
-	if len(fieldsNode) == 0 {
-		delete(typeNode, "fields")
-	}
-
-	if err := writeSchemaDoc(req.VaultPath, schemaDoc); err != nil {
 		return nil, err
 	}
 

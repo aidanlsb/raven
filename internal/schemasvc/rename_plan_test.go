@@ -1,8 +1,12 @@
 package schemasvc
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/schemadoc"
 )
 
 func TestBuildTypeRenamePlanOnlyTransformsSchema(t *testing.T) {
@@ -24,7 +28,7 @@ traits: {}
 `)
 
 	plan, err := BuildTypeRenamePlan(TypeRenamePlanRequest{
-		SchemaYAML:     schemaYAML,
+		SchemaDoc:      loadRenameDocument(t, schemaYAML),
 		OldName:        "event",
 		NewName:        "meeting",
 		Description:    "New",
@@ -68,10 +72,10 @@ traits: {}
 `)
 
 	plan, err := BuildFieldRenamePlan(FieldRenamePlanRequest{
-		SchemaYAML: schemaYAML,
-		TypeName:   "person",
-		OldField:   "name",
-		NewField:   "full_name",
+		SchemaDoc: loadRenameDocument(t, schemaYAML),
+		TypeName:  "person",
+		OldField:  "name",
+		NewField:  "full_name",
 	})
 	if err != nil {
 		t.Fatalf("BuildFieldRenamePlan: %v", err)
@@ -87,4 +91,18 @@ traits: {}
 	if len(plan.Changes) != 2 {
 		t.Fatalf("len(Changes) = %d, want 2", len(plan.Changes))
 	}
+}
+
+func loadRenameDocument(t *testing.T, schemaYAML []byte) *schemadoc.Document {
+	t.Helper()
+
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), schemaYAML, 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+	doc, err := schemadoc.Load(vaultPath)
+	if err != nil {
+		t.Fatalf("load schema document: %v", err)
+	}
+	return doc
 }
