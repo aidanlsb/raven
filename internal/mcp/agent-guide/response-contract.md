@@ -73,6 +73,25 @@ mutation is blocked pending confirmation (for example a `move` into a mismatched
 type directory, or a `reclassify` that would drop fields without `force`), the
 phase is `"preview"` because nothing was written.
 
+## Write identity: file path vs link ID
+
+Object-creating writes (`new`, `upsert`, and `daily`) surface an identity pair in
+`data` so you never have to guess a reference from a file path:
+
+- `data.file` — where the file lives (vault-relative path, includes `.md`).
+- `data.id` — the canonical object ID to use in `[[refs]]` and follow-up commands
+  (`set`, `add`, `edit`, `delete`, …).
+
+These two often differ, and the mapping is config-dependent:
+
+- A typed object file `type/person/freya.md` links as `person/freya`.
+- A daily note file `daily/2026-03-15.md` links as the bare date `2026-03-15`.
+
+Always take the reference ID from `data.id`. Deriving an ID from `data.file`
+(e.g. stripping `.md`) produces non-canonical refs and triggers
+`non_canonical_ref` / `non_canonical_path`. The human CLI prints the same pair as
+a `Created <file>` line followed by a `link as <id>` hint.
+
 ## Preview and apply semantics
 
 There are two mutation classes with different defaults:
