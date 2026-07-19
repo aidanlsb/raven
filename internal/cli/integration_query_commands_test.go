@@ -1,0 +1,375 @@
+//go:build integration
+
+package cli_test
+
+import (
+	"database/sql"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/testutil"
+)
+
+// TestIntegration_QueryByField tests querying objects by field values.
+func TestIntegration_QueryByField(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	// Create multiple projects with different statuses
+	v.RunCLI("new", "project", "Project Alpha", "--field", "status=active").MustSucceed(t)
+	v.RunCLI("new", "project", "Project Beta", "--field", "status=paused").MustSucceed(t)
+	v.RunCLI("new", "project", "Project Gamma", "--field", "status=active").MustSucceed(t)
+
+	// Query for active projects - uses == for equality
+	result := v.RunCLI("query", "type:project .status==active")
+	result.MustSucceed(t)
+	result.AssertResultCount(t, "items", 2)
+
+	// Query for paused projects
+	result = v.RunCLI("query", "type:project .status==paused")
+	result.MustSucceed(t)
+	result.AssertResultCount(t, "items", 1)
+}
+
+// TestIntegration_QueryPaging verifies the agent-friendly paging fields
+// (has_more / next_offset) in the query JSON envelope.
+func TestIntegration_QueryPaging(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "project", "Project Alpha", "--field", "status=active").MustSucceed(t)
+	v.RunCLI("new", "project", "Project Beta", "--field", "status=active").MustSucceed(t)
+	v.RunCLI("new", "project", "Project Gamma", "--field", "status=active").MustSucceed(t)
+
+	// Unlimited (default): full result set, no more pages.
+	unlimited := v.RunCLI("query", "type:project .status==active").MustSucceed(t)
+	unlimited.AssertResultCount(t, "items", 3)
+	if got := unlimited.Data["total"]; got != float64(3) {
+		t.Fatalf("unlimited total = %#v, want 3", got)
+	}
+	if got, ok := unlimited.Data["has_more"]; !ok || got != false {
+		t.Fatalf("unlimited has_more = %#v (present=%v), want false", got, ok)
+	}
+	if _, ok := unlimited.Data["next_offset"]; ok {
+		t.Fatalf("unlimited should not include next_offset, got %#v", unlimited.Data["next_offset"])
+	}
+
+	// First page with more results available.
+	first := v.RunCLI("query", "type:project .status==active", "--limit", "2", "--offset", "0").MustSucceed(t)
+	first.AssertResultCount(t, "items", 2)
+	if got := first.Data["total"]; got != float64(3) {
+		t.Fatalf("first page total = %#v, want 3", got)
+	}
+	if got, ok := first.Data["has_more"]; !ok || got != true {
+		t.Fatalf("first page has_more = %#v (present=%v), want true", got, ok)
+	}
+	if got := first.Data["next_offset"]; got != float64(2) {
+		t.Fatalf("first page next_offset = %#v, want 2", got)
+	}
+
+	// Last page: no more results, next_offset omitted.
+	last := v.RunCLI("query", "type:project .status==active", "--limit", "2", "--offset", "2").MustSucceed(t)
+	last.AssertResultCount(t, "items", 1)
+	if got, ok := last.Data["has_more"]; !ok || got != false {
+		t.Fatalf("last page has_more = %#v (present=%v), want false", got, ok)
+	}
+	if _, ok := last.Data["next_offset"]; ok {
+		t.Fatalf("last page should not include next_offset, got %#v", last.Data["next_offset"])
+	}
+
+	// --ids responses carry the same paging fields.
+	ids := v.RunCLI("query", "type:project .status==active", "--ids", "--limit", "2", "--offset", "0").MustSucceed(t)
+	if got, ok := ids.Data["has_more"]; !ok || got != true {
+		t.Fatalf("ids has_more = %#v (present=%v), want true", got, ok)
+	}
+	if got := ids.Data["next_offset"]; got != float64(2) {
+		t.Fatalf("ids next_offset = %#v, want 2", got)
+	}
+}
+
+func TestIntegration_QueryErrorsSuggestCorrectSyntax(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	t.Run("single quoted strings", func(t *testing.T) {
+		result := v.RunCLI("query", `type:project .status=='active'`)
+		result.MustFail(t, "QUERY_INVALID")
+		if result.Error == nil || !strings.Contains(result.Error.Suggestion, "double quotes") {
+			t.Fatalf("expected double-quote suggestion, got %#v", result.Error)
+		}
+	})
+
+	t.Run("bare schema type", func(t *testing.T) {
+		result := v.RunCLI("query", "project")
+		result.MustFail(t, "QUERY_INVALID")
+		if result.Error == nil || !strings.Contains(result.Error.Suggestion, "rvn query type:project") {
+			t.Fatalf("expected type query suggestion, got %#v", result.Error)
+		}
+		if !strings.Contains(result.Error.Suggestion, "section") {
+			t.Fatalf("expected all query roots in suggestion, got %#v", result.Error)
+		}
+	})
+}
+
+func TestIntegration_AssetQuery(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML(`queries:
+  asset:
+    query: type:project
+`).
+		WithFile("projects/raven.md", `---
+type: project
+title: Raven
+status: active
+---
+# Raven
+
+Reference the paper [[assets/pdfs/paper.pdf]] and diagram [[assets/images/diagram.png]].
+`).
+		WithFile("assets/pdfs/paper.pdf", "%PDF-1.7\nhello").
+		WithFile("assets/images/diagram.png", "png-data").
+		WithFile("assets/raw/data.bin", "raw").
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("query", "asset")
+	result.MustSucceed(t)
+	if got := result.Data["query_kind"]; got != "asset" {
+		t.Fatalf("query_kind = %#v, want asset", got)
+	}
+	result.AssertResultCount(t, "items", 3)
+
+	item, ok := result.DataList("items")[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected asset item map, got %#v", result.DataList("items")[0])
+	}
+	if _, ok := item["file_mtime"]; ok {
+		t.Fatalf("asset query item exposed file_mtime: %#v", item)
+	}
+	if _, ok := item["indexed_at"]; ok {
+		t.Fatalf("asset query item exposed indexed_at: %#v", item)
+	}
+
+	pdfs := v.RunCLI("query", "asset .extension==pdf")
+	pdfs.MustSucceed(t)
+	pdfs.AssertResultCount(t, "items", 1)
+	pdfItem := pdfs.DataList("items")[0].(map[string]interface{})
+	if got := pdfItem["id"]; got != "assets/pdfs/paper.pdf" {
+		t.Fatalf("pdf id = %#v, want assets/pdfs/paper.pdf", got)
+	}
+	if got := pdfItem["media_type"]; got != "application/pdf" {
+		t.Fatalf("pdf media_type = %#v, want application/pdf", got)
+	}
+
+	images := v.RunCLI("query", `asset startswith(.media_type, "image/")`)
+	images.MustSucceed(t)
+	images.AssertResultCount(t, "items", 1)
+
+	refd := v.RunCLI("query", "asset refd(type:project .status==active)")
+	refd.MustSucceed(t)
+	refd.AssertResultCount(t, "items", 2)
+
+	ids := v.RunCLI("query", "asset .extension==pdf", "--ids")
+	ids.MustSucceed(t)
+	gotIDs := ids.DataList("ids")
+	if len(gotIDs) != 1 || gotIDs[0] != "assets/pdfs/paper.pdf" {
+		t.Fatalf("ids = %#v, want assets/pdfs/paper.pdf", gotIDs)
+	}
+
+	count := v.RunCLI("query", "asset", "--count-only")
+	count.MustSucceed(t)
+	if got := count.Data["total"]; got != float64(3) {
+		t.Fatalf("total = %#v, want 3", got)
+	}
+
+	apply := v.RunCLI("query", "asset", "--apply", "move archive/")
+	apply.MustFail(t, "INVALID_INPUT")
+	apply.MustFailWithMessage(t, "--apply is not supported for asset queries")
+
+	invalid := v.RunCLI("query", "asset refs([[projects/raven]])")
+	invalid.MustFail(t, "QUERY_INVALID")
+	invalid.MustFailWithMessage(t, "refs() predicate is not valid for asset queries")
+
+	binary := testutil.BuildCLI(t)
+	humanCmd := exec.Command(binary, "--vault-path", v.Path, "query", "asset .extension==pdf", "--no-pipe")
+	humanOut, err := humanCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("human asset query failed: %v\n%s", err, humanOut)
+	}
+	if !strings.Contains(string(humanOut), "assets/pdfs/paper.pdf") || !strings.Contains(string(humanOut), "application/pdf") {
+		t.Fatalf("human output missing asset path/media type:\n%s", humanOut)
+	}
+
+	pipeCmd := exec.Command(binary, "--vault-path", v.Path, "query", "asset .extension==pdf", "--pipe")
+	pipeOut, err := pipeCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pipe asset query failed: %v\n%s", err, pipeOut)
+	}
+	if !strings.Contains(string(pipeOut), "assets/pdfs/paper.pdf\tapplication/pdf") {
+		t.Fatalf("pipe output missing asset row:\n%s", pipeOut)
+	}
+}
+
+func TestIntegration_QueryRefreshRespectsDirectoryRoots(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  project:
+    default_path: projects/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      status:
+        type: enum
+        values: [active, done]
+`).
+		WithRavenYAML(`directories:
+  type: objects/
+`).
+		WithFile("objects/projects/weekly.md", `---
+type: project
+title: Weekly
+status: active
+---
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	updated := `---
+type: project
+title: Weekly
+status: done
+---
+`
+	filePath := filepath.Join(v.Path, "objects/projects/weekly.md")
+	if err := os.WriteFile(filePath, []byte(updated), 0o644); err != nil {
+		t.Fatalf("failed to update project file: %v", err)
+	}
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(filePath, future, future); err != nil {
+		t.Fatalf("failed to bump project mtime: %v", err)
+	}
+
+	result := v.RunCLI("query", "type:project", "--refresh")
+	result.MustSucceed(t)
+	result.AssertResultCount(t, "items", 1)
+
+	item, ok := result.DataList("items")[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected query item map, got %#v", result.DataList("items")[0])
+	}
+	if got := item["id"]; got != "projects/weekly" {
+		t.Fatalf("expected refreshed project ID projects/weekly, got %#v", got)
+	}
+	fields, ok := item["fields"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected fields map, got %#v", item["fields"])
+	}
+	if got := fields["status"]; got != "done" {
+		t.Fatalf("expected refreshed status done, got %#v", got)
+	}
+}
+
+func TestIntegration_QueryRefreshRemovesDeletedFiles(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+	v.AssertQueryCount("type:person", 1)
+
+	if err := os.Remove(filepath.Join(v.Path, "people/alice.md")); err != nil {
+		t.Fatalf("failed to remove person file: %v", err)
+	}
+
+	result := v.RunCLI("query", "type:person", "--refresh")
+	result.MustSucceed(t)
+	result.AssertResultCount(t, "items", 0)
+}
+
+func TestIntegration_QueryFailsOnSchemaLoadError(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "project", "Schema Query").MustSucceed(t)
+
+	schemaPath := filepath.Join(v.Path, "schema.yaml")
+	if err := os.WriteFile(schemaPath, []byte("version: ["), 0o644); err != nil {
+		t.Fatalf("failed to corrupt schema for test: %v", err)
+	}
+
+	result := v.RunCLI("query", "type:project")
+	result.MustFail(t, "SCHEMA_INVALID")
+	result.MustFailWithMessage(t, "Fix schema.yaml and try again")
+}
+
+func TestIntegration_IndexReadsFailOnStaleIndexSchema(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "project", "Stale Index").MustSucceed(t)
+	v.RunCLI("reindex").MustSucceed(t)
+
+	db, err := sql.Open("sqlite", filepath.Join(v.Path, ".raven", "index.db"))
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE meta SET value = ? WHERE key = 'version'`, strconv.Itoa(index.CurrentDBVersion-1)); err != nil {
+		db.Close()
+		t.Fatalf("downgrade index version: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close index: %v", err)
+	}
+
+	result := v.RunCLI("query", "type:project")
+	result.MustFail(t, "DATABASE_VERSION_MISMATCH")
+	result.MustFailWithMessage(t, "rvn reindex --full")
+
+	searchResult := v.RunCLI("search", "Stale Index")
+	searchResult.MustFail(t, "DATABASE_VERSION_MISMATCH")
+	searchResult.MustFailWithMessage(t, "rvn reindex --full")
+}
+
+func TestIntegration_QueryAmbiguousReferenceReturnsQueryInvalid(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "project", "Alex").MustSucceed(t)
+	v.RunCLI("new", "person", "Alex").MustSucceed(t)
+
+	result := v.RunCLI("query", "type:project refs([[alex]])")
+	result.MustFail(t, "QUERY_INVALID")
+	result.MustFailWithMessage(t, "Use a full object ID/path to disambiguate")
+}
