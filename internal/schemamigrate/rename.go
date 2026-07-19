@@ -490,12 +490,9 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 		}
 
 		frontmatterContent := strings.Join(lines[startLine+1:endLine], "\n")
-		var frontmatter map[string]interface{}
-		if err := yaml.Unmarshal([]byte(frontmatterContent), &frontmatter); err != nil {
+		frontmatter, ok := decodeYAMLMap([]byte(frontmatterContent))
+		if !ok {
 			return nil
-		}
-		if frontmatter == nil {
-			frontmatter = map[string]interface{}{}
 		}
 		if objectType, ok := frontmatter["type"].(string); !ok || objectType != typeName {
 			return nil
@@ -520,8 +517,8 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 
 		frontmatter[newField] = frontmatter[oldField]
 		delete(frontmatter, oldField)
-		newFrontmatter, err := yaml.Marshal(frontmatter)
-		if err != nil {
+		newFrontmatter, ok := marshalYAMLMap(frontmatter)
+		if !ok {
 			return nil
 		}
 
@@ -848,4 +845,20 @@ func sortedStringKeys[V any](values map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func decodeYAMLMap(data []byte) (map[string]interface{}, bool) {
+	var values map[string]interface{}
+	if yaml.Unmarshal(data, &values) != nil {
+		return nil, false
+	}
+	if values == nil {
+		values = make(map[string]interface{})
+	}
+	return values, true
+}
+
+func marshalYAMLMap(values map[string]interface{}) ([]byte, bool) {
+	data, err := yaml.Marshal(values)
+	return data, err == nil
 }
