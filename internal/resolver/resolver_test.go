@@ -106,6 +106,64 @@ func TestResolverAmbiguous(t *testing.T) {
 	}
 }
 
+// TestResolverBareRefNoPageTypedPreference locks the bare-reference resolution
+// policy: a bare (non-date) short reference resolves when it is unambiguous —
+// whether the single match is an untyped page (a bare object ID like "freya")
+// or a typed object (a slashed ID like "person/freya"). When a bare reference
+// matches more than one object it is ambiguous; the resolver never prefers a
+// page over a typed object, or a typed object over a page.
+func TestResolverBareRefNoPageTypedPreference(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unique typed short ref resolves", func(t *testing.T) {
+		r := New([]string{"person/freya"}, Options{})
+		result := r.Resolve("freya")
+		if result.Ambiguous {
+			t.Fatalf("expected non-ambiguous, got matches: %v", result.Matches)
+		}
+		if result.TargetID != "person/freya" {
+			t.Fatalf("got %q, want %q", result.TargetID, "person/freya")
+		}
+	})
+
+	t.Run("unique page short ref resolves", func(t *testing.T) {
+		// An untyped page has a bare object ID (its canonical ID stays short).
+		r := New([]string{"freya"}, Options{})
+		result := r.Resolve("freya")
+		if result.Ambiguous {
+			t.Fatalf("expected non-ambiguous, got matches: %v", result.Matches)
+		}
+		if result.TargetID != "freya" {
+			t.Fatalf("got %q, want %q", result.TargetID, "freya")
+		}
+	})
+
+	t.Run("typed and page with same short name are ambiguous", func(t *testing.T) {
+		r := New([]string{"person/freya", "freya"}, Options{})
+		result := r.Resolve("freya")
+		if !result.Ambiguous {
+			t.Fatalf("expected ambiguous page-vs-typed collision, got %+v", result)
+		}
+		if len(result.Matches) != 2 {
+			t.Fatalf("expected 2 matches, got %v", result.Matches)
+		}
+		if !hasMatch(result.Matches, "person/freya") || !hasMatch(result.Matches, "freya") {
+			t.Fatalf("expected both page and typed matches, got %v", result.Matches)
+		}
+	})
+
+	t.Run("two typed objects with same short name are ambiguous", func(t *testing.T) {
+		r := New([]string{"person/freya", "client/freya"}, Options{})
+		result := r.Resolve("freya")
+		if !result.Ambiguous {
+			t.Fatalf("expected ambiguous typed-vs-typed collision, got %+v", result)
+		}
+		if len(result.Matches) != 2 {
+			t.Fatalf("expected 2 matches, got %v", result.Matches)
+		}
+	})
+}
+
 func TestResolverAssetShortNames(t *testing.T) {
 	t.Parallel()
 

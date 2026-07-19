@@ -285,6 +285,74 @@ func TestResolveReferenceWithDynamicDates_AmbiguousISODateLiteralPath(t *testing
 	}
 }
 
+// TestResolveReferenceLiteralPathCollidesWithTypedObject locks the policy that a
+// file sitting at the literal path (an untyped page at the vault root, e.g.
+// "freya.md") is never silently preferred over a typed object the index
+// resolves the same bare reference to (e.g. "people/freya"). The reference is
+// ambiguous and both candidates are reported.
+func TestResolveReferenceLiteralPathCollidesWithTypedObject(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vaultPath, "people"), 0o755); err != nil {
+		t.Fatalf("create people directory: %v", err)
+	}
+	// Untyped page lives at the vault root; its canonical ID is the bare "freya".
+	if err := os.WriteFile(filepath.Join(vaultPath, "freya.md"), []byte("# Freya page\n"), 0o644); err != nil {
+		t.Fatalf("write root freya.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "people", "freya.md"), []byte("# Freya person\n"), 0o644); err != nil {
+		t.Fatalf("write people/freya.md: %v", err)
+	}
+
+	db, err := index.OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open in-memory db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	if _, err := db.DB().Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields) VALUES
+			('freya', 'freya.md', 'page', 1, '{}'),
+			('people/freya', 'people/freya.md', 'person', 1, '{}')
+	`); err != nil {
+		t.Fatalf("failed to seed objects: %v", err)
+	}
+
+	rt := &Runtime{
+		VaultPath: vaultPath,
+		VaultCfg:  &config.VaultConfig{},
+		DB:        db,
+	}
+
+	_, err = ResolveReference("freya", rt, false)
+	if err == nil {
+		t.Fatal("expected ambiguous page-vs-typed collision, got nil error")
+	}
+	var ambiguous *AmbiguousRefError
+	if !errors.As(err, &ambiguous) {
+		t.Fatalf("expected AmbiguousRefError, got %T: %v", err, err)
+	}
+	if !resolveMatchesContain(ambiguous.Matches, "freya") {
+		t.Fatalf("expected literal page match in %v", ambiguous.Matches)
+	}
+	if !resolveMatchesContain(ambiguous.Matches, "people/freya") {
+		t.Fatalf("expected typed match in %v", ambiguous.Matches)
+	}
+	if got := ambiguous.MatchSources["freya"]; got != "literal_path" {
+		t.Fatalf("literal match source = %q, want %q", got, "literal_path")
+	}
+
+	// The qualified typed reference stays unambiguous.
+	resolved, err := ResolveReference("people/freya", rt, false)
+	if err != nil {
+		t.Fatalf("ResolveReference(people/freya) failed: %v", err)
+	}
+	if resolved.ObjectID != "people/freya" {
+		t.Fatalf("ObjectID = %q, want people/freya", resolved.ObjectID)
+	}
+}
+
 func resolveMatchesContain(matches []string, want string) bool {
 	for _, match := range matches {
 		if match == want {

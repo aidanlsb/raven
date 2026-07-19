@@ -81,6 +81,18 @@ When short names collide (e.g., `project/notes` and `meeting/notes`, or `paper.p
 [[notes]]             → ambiguous (not resolved)
 ```
 
+This applies equally to a bare name that matches **both** an untyped page and a
+typed object. Raven has no page-over-typed (or typed-over-page) preference: if
+`freya` names both an untyped page and `person/freya`, the bare reference is
+ambiguous. Qualify it to resolve — for example `person/freya` for the typed
+object, or the page's own path (`page/freya`) for the page:
+
+```markdown
+[[freya]]         → ambiguous (page "freya" vs person/freya)
+[[person/freya]]  → person/freya (typed object)
+[[page/freya]]    → freya (untyped page)
+```
+
 Use `rvn resolve` to debug resolution and `rvn check` to find ambiguous references across the vault.
 
 ## Backlinks and outlinks

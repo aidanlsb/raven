@@ -142,21 +142,32 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 	if err != nil {
 		return nil, err
 	}
-	if literalPathResult != nil && !dates.IsValidDate(ref) {
-		return literalPathResult, nil
-	}
 
 	res, err := op.getResolver()
 	if err != nil {
+		// When the resolver cannot be built (e.g. the index is unavailable) but a
+		// file exists at the literal path, fall back to it rather than failing.
+		if literalPathResult != nil {
+			return literalPathResult, nil
+		}
 		return nil, err
 	}
 
 	resolved := res.Resolve(ref)
+
+	// A file sitting at the literal path participates as a resolution candidate
+	// alongside the index. We never silently prefer the on-disk file over
+	// indexed objects (or vice versa): if the index resolves the same reference
+	// to a different object, or to multiple objects, the reference is ambiguous.
 	if literalPathResult != nil {
-		if ambiguousErr := isoDateLiteralPathAmbiguity(ref, literalPathResult, resolved); ambiguousErr != nil {
+		if ambiguousErr := literalPathResolverConflict(ref, literalPathResult, resolved); ambiguousErr != nil {
 			return nil, ambiguousErr
 		}
+		// The literal file is the unique target: either the index has no other
+		// match for this reference, or it agrees on the same object.
+		return literalPathResult, nil
 	}
+
 	if resolved.Ambiguous {
 		return nil, &AmbiguousRefError{
 			Reference:    ref,
@@ -165,9 +176,6 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 		}
 	}
 	if resolved.TargetID == "" {
-		if literalPathResult != nil {
-			return literalPathResult, nil
-		}
 		return nil, &RefNotFoundError{Reference: ref}
 	}
 
@@ -259,8 +267,16 @@ func tryResolvedAssetPath(vaultPath, targetID string) (string, bool, error) {
 	return fullPath, true, nil
 }
 
-func isoDateLiteralPathAmbiguity(reference string, literalPathResult *ResolveResult, resolved resolver.ResolveResult) error {
-	if literalPathResult == nil || !dates.IsValidDate(reference) {
+// literalPathResolverConflict reports ambiguity when a file found at the literal
+// path collides with what the index resolves the same reference to. It returns
+// nil when there is no conflict: the index found nothing for this reference, or
+// it agrees on the same object as the literal file.
+//
+// This keeps bare-reference resolution honest — an on-disk page (e.g. a
+// vault-root "freya.md") is never silently preferred over an indexed typed
+// object (e.g. "people/freya"), and neither is preferred over the other.
+func literalPathResolverConflict(reference string, literalPathResult *ResolveResult, resolved resolver.ResolveResult) error {
+	if literalPathResult == nil {
 		return nil
 	}
 
@@ -281,9 +297,6 @@ func isoDateLiteralPathAmbiguity(reference string, literalPathResult *ResolveRes
 	if resolved.TargetID != "" && resolved.TargetID != literalPathResult.ObjectID {
 		matchSources := copyMatchSources(resolved.MatchSources)
 		matchSources[literalPathResult.ObjectID] = literalPathResult.MatchSource
-		if _, ok := matchSources[resolved.TargetID]; !ok {
-			matchSources[resolved.TargetID] = "date"
-		}
 		return &AmbiguousRefError{
 			Reference:    reference,
 			Matches:      []string{literalPathResult.ObjectID, resolved.TargetID},
