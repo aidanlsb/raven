@@ -165,8 +165,12 @@ These keys are always allowed regardless of type:
 | Key | Description |
 |-----|-------------|
 | `type` | Object type (defaults to `page` if omitted) |
-| `id` | Explicit object ID override for the file-backed object |
 | `alias` | Alternative name for reference resolution |
+
+Object IDs are derived from the file path and cannot be overridden in
+frontmatter — there is no `id` key. Use `alias` to give an object an alternate
+name for reference resolution. A stray `id:` key is treated as an undeclared
+field and reported as `unknown_frontmatter_key` by `rvn check`.
 
 ### Field Values
 

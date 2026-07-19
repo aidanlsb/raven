@@ -688,8 +688,14 @@ These frontmatter keys are always allowed regardless of type:
 | Key | Description |
 |-----|-------------|
 | `type` | Object type (defaults to `page` if omitted) |
-| `id` | Explicit object ID override for the file-backed object |
 | `alias` | Alternative name for reference resolution |
+
+> **Object IDs are path-derived and cannot be overridden.** There is no `id`
+> frontmatter key. An object's ID always comes from its file path (see
+> `types-and-traits/file-format.md`). To give an object an alternate name for
+> references, use `alias` instead. A stray `id:` key in frontmatter is treated
+> as an undeclared field and reported as `unknown_frontmatter_key` by
+> `rvn check`.
 
 ### `alias`
 
