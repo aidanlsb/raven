@@ -35,6 +35,7 @@ func TestIntegration_InitFirstVaultAutoRegisters(t *testing.T) {
 	mustPostInitBool(t, postInit, "has_existing_default", false)
 	mustPostInitBool(t, postInit, "is_default", true)
 	mustPostInitBool(t, postInit, "is_active", true)
+	mustPostInitBool(t, postInit, "selection_guard_active", false)
 	mustPostInitBool(t, postInit, "needs_user_choice_for_activate", false)
 	mustPostInitBool(t, postInit, "needs_user_choice_for_default", false)
 
@@ -84,6 +85,7 @@ func TestIntegration_InitSecondVaultRegistersWithoutActivating(t *testing.T) {
 	mustPostInitBool(t, second, "has_existing_default", true)
 	mustPostInitBool(t, second, "is_default", false)
 	mustPostInitBool(t, second, "is_active", false)
+	mustPostInitBool(t, second, "selection_guard_active", true)
 	mustPostInitBool(t, second, "needs_user_choice_for_activate", true)
 	mustPostInitBool(t, second, "needs_user_choice_for_default", true)
 
@@ -101,6 +103,105 @@ func TestIntegration_InitSecondVaultRegistersWithoutActivating(t *testing.T) {
 	current := runVaultCurrent(t, binary, configFile, stateFile)
 	if got := current["name"]; got != "first" {
 		t.Fatalf("vault current name = %#v, want %q (routing must be unchanged)", got, "first")
+	}
+}
+
+func TestIntegration_InitSecondVaultBlocksAmbientWrites(t *testing.T) {
+	t.Parallel()
+	binary := testutil.BuildCLI(t)
+	root := t.TempDir()
+	configFile := filepath.Join(root, "config.toml")
+	stateFile := filepath.Join(root, "state.toml")
+	firstPath := filepath.Join(root, "first")
+	secondPath := filepath.Join(root, "second")
+
+	runInitPostInit(t, binary, configFile, stateFile, firstPath)
+	runInitPostInit(t, binary, configFile, stateFile, secondPath)
+
+	blocked := exec.Command(
+		binary,
+		"--config", configFile,
+		"--state", stateFile,
+		"--json",
+		"schema", "add", "type", "must-not-land", "--name-field", "title",
+	)
+	output, err := blocked.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected handled JSON startup error, got process failure: %v\n%s", err, output)
+	}
+	var blockedResp struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code       string `json:"code"`
+			Message    string `json:"message"`
+			Suggestion string `json:"suggestion"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(output, &blockedResp); err != nil {
+		t.Fatalf("unmarshal blocked response: %v\n%s", err, output)
+	}
+	if blockedResp.OK || blockedResp.Error.Code != "VAULT_AMBIGUOUS" {
+		t.Fatalf("response = %s, want VAULT_AMBIGUOUS", output)
+	}
+	if !strings.Contains(blockedResp.Error.Message, "unqualified command would target") {
+		t.Fatalf("message = %q, want wrong-target explanation", blockedResp.Error.Message)
+	}
+	if !strings.Contains(blockedResp.Error.Suggestion, "rvn vault use") {
+		t.Fatalf("suggestion = %q, want activation guidance", blockedResp.Error.Suggestion)
+	}
+	for _, schemaPath := range []string{
+		filepath.Join(firstPath, "schema.yaml"),
+		filepath.Join(secondPath, "schema.yaml"),
+	} {
+		schema, readErr := os.ReadFile(schemaPath)
+		if readErr != nil {
+			t.Fatalf("read schema: %v", readErr)
+		}
+		if strings.Contains(string(schema), "must-not-land") {
+			t.Fatalf("blocked type was written to %s", schemaPath)
+		}
+	}
+
+	explicit := exec.Command(
+		binary,
+		"--config", configFile,
+		"--state", stateFile,
+		"--vault", "second",
+		"--json",
+		"schema", "add", "type", "explicit-second", "--name-field", "title",
+	)
+	explicitOutput, err := explicit.CombinedOutput()
+	if err != nil {
+		t.Fatalf("explicit second-vault write failed: %v\n%s", err, explicitOutput)
+	}
+	secondSchema, err := os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
+	if err != nil {
+		t.Fatalf("read second schema: %v", err)
+	}
+	if !strings.Contains(string(secondSchema), "explicit-second") {
+		t.Fatalf("explicit write did not reach second vault:\n%s", secondSchema)
+	}
+
+	use := exec.Command(binary, "--config", configFile, "--state", stateFile, "--json", "vault", "use", "second")
+	if useOutput, useErr := use.CombinedOutput(); useErr != nil {
+		t.Fatalf("activate second vault: %v\n%s", useErr, useOutput)
+	}
+	afterUse := exec.Command(
+		binary,
+		"--config", configFile,
+		"--state", stateFile,
+		"--json",
+		"schema", "add", "type", "active-second", "--name-field", "title",
+	)
+	if afterUseOutput, afterUseErr := afterUse.CombinedOutput(); afterUseErr != nil {
+		t.Fatalf("ambient write after activation failed: %v\n%s", afterUseErr, afterUseOutput)
+	}
+	secondSchema, err = os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
+	if err != nil {
+		t.Fatalf("read second schema after activation: %v", err)
+	}
+	if !strings.Contains(string(secondSchema), "active-second") {
+		t.Fatalf("ambient write after activation did not reach second vault:\n%s", secondSchema)
 	}
 }
 

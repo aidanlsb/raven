@@ -192,10 +192,11 @@ active. To be certain which vault a write hits, pass `vault` or `vault_path`.
 - `VAULT_FALLBACK` warning: a write resolved its vault from ambient state while
   more than one vault is configured. Confirm `vault_context` is the vault you
   intended, or re-issue the call with an explicit `vault`/`vault_path`.
-- `VAULT_AMBIGUOUS` error: the server runs in strict vault mode
+- `VAULT_AMBIGUOUS` error: either the server runs in strict vault mode
   (`rvn serve --strict-vault` or `[mcp] strict_vault = true`) and the call lacked
-  an explicit `vault`/`vault_path` with no server-pinned vault. Retry with an
-  explicit vault.
+  an explicit target, or a recent additional-vault `init` left a pending selection
+  and ambient state points to another vault. Retry with an explicit `vault` /
+  `vault_path`; for the post-init case, ask the user before activating the new vault.
 
 ## Warnings
 

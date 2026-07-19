@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -175,6 +176,7 @@ func Set(req SetRequest) (*SetResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	previousStatePath := config.ResolveStatePath("", ctx.ConfigPath, ctx.Cfg)
 
 	changed := make([]string, 0, 6)
 
@@ -248,6 +250,12 @@ func Set(req SetRequest) (*SetResult, error) {
 		return nil, newError(CodeMissingArgument, "no fields provided; set at least one --editor/--editor-mode/--state-file/--default-vault/--ui-accent/--ui-code-theme/--ui-markdown-style", nil)
 	}
 
+	if req.StateFile != nil {
+		nextStatePath := config.ResolveStatePath("", ctx.ConfigPath, ctx.Cfg)
+		if err := syncPendingInitVaultPath(previousStatePath, nextStatePath); err != nil {
+			return nil, err
+		}
+	}
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
@@ -283,6 +291,7 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 	if !ctx.ConfigExists {
 		return nil, newError(CodeFileNotFound, fmt.Sprintf("config file not found: %s", ctx.ConfigPath), nil)
 	}
+	previousStatePath := config.ResolveStatePath("", ctx.ConfigPath, ctx.Cfg)
 
 	changed := make([]string, 0, 6)
 	if req.Editor {
@@ -318,6 +327,12 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 		return nil, newError(CodeMissingArgument, "no fields selected; pass one or more unset flags", nil)
 	}
 
+	if req.StateFile {
+		nextStatePath := config.ResolveStatePath("", ctx.ConfigPath, ctx.Cfg)
+		if err := syncPendingInitVaultPath(previousStatePath, nextStatePath); err != nil {
+			return nil, err
+		}
+	}
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
@@ -326,6 +341,30 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 		Context: ctx,
 		Changed: changed,
 	}, nil
+}
+
+func syncPendingInitVaultPath(sourcePath, destinationPath string) error {
+	if filepath.Clean(sourcePath) == filepath.Clean(destinationPath) {
+		return nil
+	}
+	source, err := config.LoadState(sourcePath)
+	if err != nil {
+		return newError(CodeConfigInvalid, fmt.Sprintf("failed to load current state while changing state_file: %v", err), err)
+	}
+	if strings.TrimSpace(source.PendingInitVaultPath) == "" {
+		if _, err := os.Stat(destinationPath); os.IsNotExist(err) {
+			return nil
+		}
+	}
+	destination, err := config.LoadState(destinationPath)
+	if err != nil {
+		return newError(CodeConfigInvalid, fmt.Sprintf("failed to load destination state while changing state_file: %v", err), err)
+	}
+	destination.PendingInitVaultPath = source.PendingInitVaultPath
+	if err := config.SaveState(destinationPath, destination); err != nil {
+		return newError(CodeFileWriteError, "", err)
+	}
+	return nil
 }
 
 type VaultContext struct {
@@ -347,6 +386,102 @@ type CurrentVaultInfo struct {
 	Path          string `json:"path"`
 	Source        string `json:"source"`
 	ActiveMissing bool   `json:"active_missing"`
+}
+
+// PendingInitVaultConflict describes an unresolved post-init selection whose
+// ambient target differs from the vault that was just initialized.
+type PendingInitVaultConflict struct {
+	PendingName string
+	PendingPath string
+	CurrentName string
+	CurrentPath string
+}
+
+func (c *PendingInitVaultConflict) Message() string {
+	if c == nil {
+		return ""
+	}
+	pending := c.PendingPath
+	if c.PendingName != "" {
+		pending = fmt.Sprintf("%q (%s)", c.PendingName, c.PendingPath)
+	}
+	current := c.CurrentPath
+	if c.CurrentName != "" {
+		current = fmt.Sprintf("%q (%s)", c.CurrentName, c.CurrentPath)
+	}
+	return fmt.Sprintf("vault selection required after initializing %s: an unqualified command would target %s instead", pending, current)
+}
+
+func (c *PendingInitVaultConflict) Suggestion() string {
+	if c == nil {
+		return ""
+	}
+	target := "--vault-path " + strconv.Quote(c.PendingPath)
+	if c.PendingName != "" {
+		target = "--vault " + strconv.Quote(c.PendingName)
+	}
+	activate := ""
+	if c.PendingName != "" {
+		activate = fmt.Sprintf("Run 'rvn vault use %s' to activate the initialized vault, or ", strconv.Quote(c.PendingName))
+	}
+	return activate + "target a vault explicitly for this command (" + target + " in the CLI; vault/vault_path in MCP)."
+}
+
+// PendingInitVaultConflictFor returns a conflict only when ambient resolution
+// would select a different vault from the most recently initialized vault that
+// still needs an explicit selection decision.
+func PendingInitVaultConflictFor(cfg *config.Config, state *config.State, currentName, currentPath string) *PendingInitVaultConflict {
+	if state == nil {
+		return nil
+	}
+	pendingPath := strings.TrimSpace(state.PendingInitVaultPath)
+	currentPath = strings.TrimSpace(currentPath)
+	if pendingPath == "" || currentPath == "" || sameVaultPath(pendingPath, currentPath) {
+		return nil
+	}
+	return &PendingInitVaultConflict{
+		PendingName: configuredVaultNameForPath(cfg, pendingPath),
+		PendingPath: pendingPath,
+		CurrentName: strings.TrimSpace(currentName),
+		CurrentPath: currentPath,
+	}
+}
+
+func configuredVaultNameForPath(cfg *config.Config, path string) string {
+	if cfg == nil {
+		return ""
+	}
+	vaults := cfg.ListVaults()
+	names := make([]string, 0, len(vaults))
+	for name := range vaults {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if sameVaultPath(vaults[name], path) {
+			return name
+		}
+	}
+	return ""
+}
+
+func sameVaultPath(left, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == "" || right == "" {
+		return false
+	}
+	leftAbs, leftErr := filepath.Abs(left)
+	rightAbs, rightErr := filepath.Abs(right)
+	if leftErr == nil && rightErr == nil {
+		leftInfo, leftStatErr := os.Stat(leftAbs)
+		rightInfo, rightStatErr := os.Stat(rightAbs)
+		if leftStatErr == nil && rightStatErr == nil {
+			return os.SameFile(leftInfo, rightInfo)
+		}
+		return filepath.Clean(leftAbs) == filepath.Clean(rightAbs)
+	}
+	return filepath.Clean(left) == filepath.Clean(right)
 }
 
 func LoadVaultContext(opts ContextOptions) (*VaultContext, error) {
@@ -528,6 +663,7 @@ func UseVault(opts ContextOptions, name string) (*VaultUseResult, error) {
 	}
 
 	ctx.State.ActiveVault = name
+	ctx.State.PendingInitVaultPath = ""
 	if err := config.SaveState(ctx.StatePath, ctx.State); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
@@ -537,6 +673,29 @@ func UseVault(opts ContextOptions, name string) (*VaultUseResult, error) {
 		Path:        p,
 		StatePath:   ctx.StatePath,
 	}, nil
+}
+
+// MarkPendingInitVault records a newly initialized vault whose activation is
+// still undecided. Vault-scoped ambient resolution checks this marker and
+// refuses to target another vault silently.
+func MarkPendingInitVault(opts ContextOptions, path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return newError(CodeInvalidInput, "pending init vault path is required", nil)
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return newError(CodeInvalidInput, fmt.Sprintf("failed to resolve pending init vault path: %v", err), err)
+	}
+	ctx, err := LoadVaultContext(opts)
+	if err != nil {
+		return err
+	}
+	ctx.State.PendingInitVaultPath = filepath.Clean(absPath)
+	if err := config.SaveState(ctx.StatePath, ctx.State); err != nil {
+		return newError(CodeFileWriteError, "", err)
+	}
+	return nil
 }
 
 type VaultClearResult struct {
@@ -742,11 +901,15 @@ func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 		ctx.State.ActiveVault = ""
 		activeCleared = true
 	}
+	pendingCleared := sameVaultPath(ctx.State.PendingInitVaultPath, removedPath)
+	if pendingCleared {
+		ctx.State.PendingInitVaultPath = ""
+	}
 
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
-	if activeCleared {
+	if activeCleared || pendingCleared {
 		if err := config.SaveState(ctx.StatePath, ctx.State); err != nil {
 			return nil, newError(CodeFileWriteError, "", err)
 		}

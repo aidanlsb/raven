@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -119,6 +120,7 @@ func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
 	mustToolBool(t, first, "is_first_vault", true)
 	mustToolBool(t, first, "is_default", true)
 	mustToolBool(t, first, "is_active", true)
+	mustToolBool(t, first, "selection_guard_active", false)
 	mustToolBool(t, first, "needs_user_choice_for_activate", false)
 	mustToolBool(t, first, "needs_user_choice_for_default", false)
 	// Fully configured: no pending actions, so the agent can proceed immediately.
@@ -139,8 +141,62 @@ func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
 	mustToolBool(t, second, "has_existing_default", true)
 	mustToolBool(t, second, "is_default", false)
 	mustToolBool(t, second, "is_active", false)
+	mustToolBool(t, second, "selection_guard_active", true)
 	mustToolBool(t, second, "needs_user_choice_for_activate", true)
 	mustToolBool(t, second, "needs_user_choice_for_default", true)
+
+	// An unqualified call must not silently mutate the still-active first vault.
+	blocked := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "schema_add_type",
+		"args": map[string]interface{}{
+			"name": "must-not-land",
+		},
+	})
+	if !blocked.IsError {
+		t.Fatalf("expected post-init ambient call to fail: %s", blocked.Text)
+	}
+	var blockedEnvelope struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(blocked.Text), &blockedEnvelope); err != nil {
+		t.Fatalf("unmarshal blocked call: %v\n%s", err, blocked.Text)
+	}
+	if blockedEnvelope.Error.Code != "VAULT_AMBIGUOUS" {
+		t.Fatalf("error code = %q, want VAULT_AMBIGUOUS; text=%s", blockedEnvelope.Error.Code, blocked.Text)
+	}
+	for _, schemaPath := range []string{
+		filepath.Join(firstPath, "schema.yaml"),
+		filepath.Join(secondPath, "schema.yaml"),
+	} {
+		schema, err := os.ReadFile(schemaPath)
+		if err != nil {
+			t.Fatalf("read schema: %v", err)
+		}
+		if strings.Contains(string(schema), "must-not-land") {
+			t.Fatalf("blocked type was written to %s", schemaPath)
+		}
+	}
+
+	// An explicit per-call target remains available before activation.
+	explicit := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "schema_add_type",
+		"vault":   "second",
+		"args": map[string]interface{}{
+			"name": "explicit-second",
+		},
+	})
+	if explicit.IsError {
+		t.Fatalf("explicit second-vault call failed: %s", explicit.Text)
+	}
+	secondSchema, err := os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
+	if err != nil {
+		t.Fatalf("read second schema: %v", err)
+	}
+	if !strings.Contains(string(secondSchema), "explicit-second") {
+		t.Fatalf("explicit call did not write to second vault:\n%s", secondSchema)
+	}
 }
 
 func mcpInitPostInit(t *testing.T, server *testServer, path string) map[string]interface{} {

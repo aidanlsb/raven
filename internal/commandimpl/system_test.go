@@ -53,7 +53,10 @@ func TestSetupInitVaultFirstVaultRegistersPinsAndActivates(t *testing.T) {
 		t.Fatalf("mkdir vault: %v", err)
 	}
 
-	data, warnings := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
@@ -70,6 +73,7 @@ func TestSetupInitVaultFirstVaultRegistersPinsAndActivates(t *testing.T) {
 	assertPostInitBool(t, data, "has_existing_default", false)
 	assertPostInitBool(t, data, "is_default", true)
 	assertPostInitBool(t, data, "is_active", true)
+	assertPostInitBool(t, data, "selection_guard_active", false)
 	assertPostInitBool(t, data, "needs_user_choice_for_activate", false)
 	assertPostInitBool(t, data, "needs_user_choice_for_default", false)
 
@@ -103,6 +107,9 @@ func TestSetupInitVaultFirstVaultRegistersPinsAndActivates(t *testing.T) {
 	if ctx.State.ActiveVault != "my-notes" {
 		t.Fatalf("active_vault = %q, want %q", ctx.State.ActiveVault, "my-notes")
 	}
+	if ctx.State.PendingInitVaultPath != "" {
+		t.Fatalf("pending_init_vault_path = %q, want empty", ctx.State.PendingInitVaultPath)
+	}
 }
 
 func TestSetupInitVaultWithExistingDefaultRegistersOnly(t *testing.T) {
@@ -131,7 +138,10 @@ func TestSetupInitVaultWithExistingDefaultRegistersOnly(t *testing.T) {
 		t.Fatalf("mkdir vault: %v", err)
 	}
 
-	data, warnings := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
@@ -145,6 +155,7 @@ func TestSetupInitVaultWithExistingDefaultRegistersOnly(t *testing.T) {
 	assertPostInitBool(t, data, "has_existing_default", true)
 	assertPostInitBool(t, data, "is_default", false)
 	assertPostInitBool(t, data, "is_active", false)
+	assertPostInitBool(t, data, "selection_guard_active", true)
 	assertPostInitBool(t, data, "needs_user_choice_for_activate", true)
 	assertPostInitBool(t, data, "needs_user_choice_for_default", true)
 
@@ -158,6 +169,9 @@ func TestSetupInitVaultWithExistingDefaultRegistersOnly(t *testing.T) {
 	}
 	if ctx.State.ActiveVault != "existing" {
 		t.Fatalf("active_vault = %q, want %q", ctx.State.ActiveVault, "existing")
+	}
+	if ctx.State.PendingInitVaultPath != filepath.Clean(vaultPath) {
+		t.Fatalf("pending_init_vault_path = %q, want %q", ctx.State.PendingInitVaultPath, filepath.Clean(vaultPath))
 	}
 	if got := ctx.Cfg.Vaults["notes"]; got != filepath.Clean(vaultPath) {
 		t.Fatalf("notes vault path = %q, want %q", got, filepath.Clean(vaultPath))
@@ -208,7 +222,10 @@ func TestSetupInitVaultResolvesNameCollision(t *testing.T) {
 		t.Fatalf("mkdir vault: %v", err)
 	}
 
-	data, warnings := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
@@ -236,7 +253,10 @@ func TestSetupInitVaultAlreadyRegisteredSoleVaultPinsAndActivates(t *testing.T) 
 		t.Fatalf("save config: %v", err)
 	}
 
-	data, warnings := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}

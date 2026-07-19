@@ -312,10 +312,12 @@ First-run vault policy (applied in both --json and interactive mode):
   - If it is the first vault on the machine (no default, no active, no other registered
     vault), it is also set as the default and active vault, so first-run just works.
   - If another vault already exists, the vault is registered but the default and active
-    vault are left unchanged; changing them requires an explicit user decision.
+    vault are left unchanged; changing them requires an explicit user decision. Until
+    that decision is made, unqualified commands that would resolve to another vault fail
+    with VAULT_AMBIGUOUS. Pass --vault/--vault-path to target a vault explicitly.
 
 The post_init object reports what happened (is_first_vault, has_existing_default, registered,
-is_default, is_active), the choices that still need the user's consent
+is_default, is_active, selection_guard_active), the choices that still need the user's consent
 (needs_user_choice_for_activate, needs_user_choice_for_default), invocable actions, and guidance.
 Agents must ask the user before activating the vault or changing the default when another vault
 already existed. In interactive mode, Raven prompts for those same choices instead.`,
@@ -2152,6 +2154,7 @@ The default vault is stored in config.toml and used as fallback.`,
 		Name:        "vault use",
 		Description: "Set the active vault in state.toml",
 		VaultScope:  VaultScopeNone,
+		LongDesc:    "Set the active vault in state.toml. This also resolves any pending post-init vault selection guard.",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Configured vault name", Required: true},
 		},

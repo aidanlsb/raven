@@ -13,7 +13,7 @@ For schema details, see:
 | File | Scope | Purpose |
 |------|-------|---------|
 | `~/.config/raven/config.toml` | machine | Global defaults and vault registry |
-| `~/.config/raven/state.toml` | machine | Mutable runtime state (`active_vault`) |
+| `~/.config/raven/state.toml` | machine | Mutable runtime state (`active_vault` and post-init selection guard) |
 | `raven.yaml` (vault root) | per vault | Vault behavior and operational config |
 
 Rule of thumb:
@@ -169,6 +169,12 @@ For commands that operate on a vault:
 4. `default_vault` from `config.toml`
 
 If `active_vault` is set but missing from config, Raven falls back to `default_vault` and emits a warning in non-JSON mode.
+
+When an additional `rvn init` leaves another vault selected, `state.toml` also records
+`pending_init_vault_path`. If ambient resolution (steps 3–4) points elsewhere, Raven returns
+`VAULT_AMBIGUOUS` instead of executing against the old vault. An explicit `--vault` /
+`--vault-path` bypasses the ambient choice; `rvn vault use <name>` resolves the pending
+selection and clears the guard.
 
 ### Manage global vault config via CLI
 
@@ -408,7 +414,8 @@ It also creates the default folders.
 Beyond the vault-local files, `rvn init` also registers the new vault in global
 `config.toml`. If it is the first vault on the machine, init sets it as `default_vault`
 and `active_vault` as well; when another vault already exists, init registers the new vault
-but leaves routing unchanged. See
+but leaves routing unchanged and guards against unqualified commands resolving to the old
+vault. See
 [Vault Creation & Management](../getting-started/first-vault.md) for the full first-run policy.
 
 ---

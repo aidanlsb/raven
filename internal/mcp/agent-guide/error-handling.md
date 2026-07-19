@@ -42,9 +42,10 @@ boundary. Excluded files are not Raven-managed; ask whether to change
 
 ## 5. Vault targeting failures
 
-- `VAULT_AMBIGUOUS`: the server runs in strict vault mode and the call did not
-  specify a vault (no `vault`/`vault_path` and no server-pinned vault). Retry with
-  an explicit `vault` (configured name) or `vault_path` (absolute directory).
+- `VAULT_AMBIGUOUS`: the server either runs in strict vault mode without an
+  explicit target, or an additional-vault `init` left a pending selection while
+  ambient state points elsewhere. Retry with an explicit `vault` (configured
+  name) or `vault_path` (absolute directory); ask before changing the active vault.
 - `VAULT_NOT_FOUND` / `VAULT_RESOLUTION_FAILED`: the requested vault could not be
   resolved. Verify the name/path and that the vault exists.
 - `VAULT_FALLBACK` warning (not an error): a write resolved its vault from ambient

@@ -811,18 +811,29 @@ func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultRe
 }
 
 func (s *Server) currentVaultResolution() (vaultResolution, error) {
-	result, err := configsvc.CurrentVault(s.directConfigContextOptions())
+	ctx, err := configsvc.LoadVaultContext(s.directConfigContextOptions())
 	if err != nil {
 		return vaultResolution{}, err
 	}
-	p, err := s.validateResolvedVaultPath(result.Current.Path)
+	current, err := configsvc.ResolveCurrentVault(ctx.Cfg, ctx.State)
+	if err != nil {
+		return vaultResolution{}, err
+	}
+	if conflict := configsvc.PendingInitVaultConflictFor(ctx.Cfg, ctx.State, current.Name, current.Path); conflict != nil {
+		return vaultResolution{}, &vaultResolutionError{
+			code:       string(codes.ErrVaultAmbiguous),
+			message:    conflict.Message(),
+			suggestion: conflict.Suggestion(),
+		}
+	}
+	p, err := s.validateResolvedVaultPath(current.Path)
 	if err != nil {
 		return vaultResolution{}, err
 	}
 	return vaultResolution{
 		path:   p,
-		source: result.Current.Source,
-		name:   result.Current.Name,
+		source: current.Source,
+		name:   current.Name,
 	}, nil
 }
 

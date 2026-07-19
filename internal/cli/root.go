@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -61,6 +62,9 @@ who gathered knowledge from across the world.`,
 			return nil
 		}
 
+		var ambientState *config.State
+		ambientVaultName := ""
+
 		// Resolve vault path: explicit path > named vault > active state > default
 		if vaultPathFlag != "" {
 			// Explicit path takes priority
@@ -80,6 +84,7 @@ who gathered knowledge from across the world.`,
 			if stateErr != nil {
 				return handleStartupError(ErrConfigInvalid, fmt.Sprintf("failed to load state: %v", stateErr), "")
 			}
+			ambientState = state
 
 			activeVaultName := strings.TrimSpace(state.ActiveVault)
 			if activeVaultName != "" {
@@ -96,6 +101,9 @@ who gathered knowledge from across the world.`,
 					if !jsonOutput {
 						fmt.Fprintf(os.Stderr, "warning: active vault '%s' not found in config, falling back to default\n", activeVaultName)
 					}
+					ambientVaultName = configsvc.DefaultVaultName(cfg)
+				} else {
+					ambientVaultName = activeVaultName
 				}
 			} else {
 				// Default vault
@@ -112,7 +120,12 @@ who gathered knowledge from across the world.`,
   5. Run 'rvn init /path/to/new/vault' to create one`,
 					)
 				}
+				ambientVaultName = configsvc.DefaultVaultName(cfg)
 			}
+		}
+
+		if conflict := configsvc.PendingInitVaultConflictFor(cfg, ambientState, ambientVaultName, resolvedVaultPath); conflict != nil {
+			return handleStartupError(codes.ErrVaultAmbiguous, conflict.Message(), conflict.Suggestion())
 		}
 
 		// Verify vault exists

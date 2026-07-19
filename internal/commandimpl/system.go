@@ -37,7 +37,19 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.FromServiceError(err)
 	}
 
-	postInit, setupWarnings := setupInitVault(result.Path, req.ConfigPath, req.StatePath)
+	postInit, setupWarnings, setupErr := setupInitVault(result.Path, req.ConfigPath, req.StatePath)
+	if setupErr != nil {
+		return commandexec.Failure(
+			codes.ErrFileWrite,
+			fmt.Sprintf("vault initialized at %s, but the post-init vault selection guard could not be persisted: %v", result.Path, setupErr),
+			map[string]interface{}{
+				"initialized": true,
+				"path":        result.Path,
+				"post_init":   postInit,
+			},
+			"Fix access to state.toml and rerun init, or pass --vault/--vault-path explicitly on every vault-scoped command.",
+		)
+	}
 
 	warnings := make([]commandexec.Warning, 0, len(result.Warnings)+len(setupWarnings))
 	for _, warning := range result.Warnings {
@@ -181,6 +193,7 @@ type initPostInitState struct {
 	hasExistingDefault bool
 	isDefault          bool
 	isActive           bool
+	selectionGuarded   bool
 	configPath         string
 	statePath          string
 }
@@ -194,14 +207,16 @@ type initPostInitState struct {
 //     vault): additionally set it as the default and active vault.
 //   - Otherwise: register only; the default and active vault are left untouched so a
 //     new vault never silently switches an existing setup. Agents must ask the user
-//     before activating it or changing the default.
+//     before activating it or changing the default. A pending selection marker blocks
+//     ambient commands that would otherwise target another vault.
 //
-// Registration is additive and never fatal: if global config cannot be loaded or
-// written, init still succeeds and the payload degrades to manual suggestions.
-func setupInitVault(path, configPathOverride, statePathOverride string) (map[string]interface{}, []commandexec.Warning) {
+// Registration remains additive: config registration failures return warnings and
+// manual guidance. Once config is readable, failure to persist the safety marker is
+// fatal so init cannot report a safely usable multi-vault setup when it is not.
+func setupInitVault(path, configPathOverride, statePathOverride string) (map[string]interface{}, []commandexec.Warning, error) {
 	cleanPath := strings.TrimSpace(path)
 	if cleanPath == "" {
-		return map[string]interface{}{}, nil
+		return map[string]interface{}{}, nil, nil
 	}
 	if absPath, err := filepath.Abs(cleanPath); err == nil {
 		cleanPath = absPath
@@ -232,7 +247,7 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 			Code:    codes.WarnVaultRegisterFailed,
 			Message: fmt.Sprintf("Could not load global config to register the vault: %v. Register it manually with the commands in post_init.", err),
 		})
-		return buildInitPostInitPayload(state), warnings
+		return buildInitPostInitPayload(state), warnings, nil
 	}
 
 	state.configPath = ctx.ConfigPath
@@ -301,7 +316,16 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 		}
 	}
 
-	return buildInitPostInitPayload(state), warnings
+	// When init intentionally leaves another vault active/default, persist a
+	// guard so later unqualified commands cannot silently operate there.
+	if !state.isActive {
+		if guardErr := configsvc.MarkPendingInitVault(opts, cleanPath); guardErr != nil {
+			return buildInitPostInitPayload(state), warnings, guardErr
+		}
+		state.selectionGuarded = true
+	}
+
+	return buildInitPostInitPayload(state), warnings, nil
 }
 
 // uniqueVaultName returns base if free, otherwise the first free base-N variant.
@@ -376,7 +400,7 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 	guidance := ""
 	switch {
 	case !alreadyRegistered:
-		guidance = "The new vault could not be registered automatically. Register it before use with the commands below."
+		guidance = fmt.Sprintf("The new vault could not be registered automatically. Register it before use with the commands below. Until it is activated, target it explicitly with --vault-path %s; unqualified commands that would target another vault fail with VAULT_AMBIGUOUS.", formatSuggestedCommandPath(s.cleanPath))
 		nextSteps = append(nextSteps, "Register this vault globally: "+commands["register"].(string))
 		nextSteps = append(nextSteps, "Register and set as default: "+commands["register_and_pin"].(string))
 		nextSteps = append(nextSteps, "After registering, make it active: "+commands["activate"].(string))
@@ -385,7 +409,7 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 		// the agent can proceed immediately.
 		guidance = fmt.Sprintf("First vault on this machine: registered as %q and set as the default and active vault. It is ready to use now — no further vault setup is needed, and later commands resolve to it automatically.", s.registeredName)
 	default:
-		guidance = fmt.Sprintf("Another vault is already configured on this machine. The new vault was registered as %q but was NOT activated or set as default. Ask the user before activating it or changing the default vault.", s.registeredName)
+		guidance = fmt.Sprintf("Another vault is already configured on this machine. The new vault was registered as %q but was NOT activated or set as default. Ask the user before activating it or changing the default vault. Until it is activated, unqualified commands that would target another vault fail with VAULT_AMBIGUOUS; target this vault explicitly with --vault %s (CLI) or vault=%q (MCP).", s.registeredName, strconv.Quote(s.registeredName), s.registeredName)
 		if needsDefaultChoice {
 			nextSteps = append(nextSteps, "Ask the user first, then set this vault as default: "+commands["pin"].(string))
 		}
@@ -403,6 +427,7 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 		"has_existing_default":           s.hasExistingDefault,
 		"is_active":                      s.isActive,
 		"is_default":                     s.isDefault,
+		"selection_guard_active":         s.selectionGuarded,
 		"needs_user_choice_for_activate": needsActivateChoice,
 		"needs_user_choice_for_default":  needsDefaultChoice,
 		"config_path":                    s.configPath,
