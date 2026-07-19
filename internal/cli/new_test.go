@@ -569,7 +569,9 @@ types:
 	newCmd.Flags().Lookup("path").Changed = true
 
 	out := captureStdout(t, func() {
-		requireJSONResponseFailure(t, newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}))
+		if err := newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}); err != nil {
+			t.Fatalf("newCmd.RunE: %v", err)
+		}
 	})
 
 	var resp struct {
@@ -622,9 +624,7 @@ types:
 	newCmd.Flags().Lookup("path").Changed = true
 
 	out := captureStdout(t, func() {
-		if err := newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}); err != nil {
-			t.Fatalf("newCmd.RunE: %v", err)
-		}
+		requireJSONResponseFailure(t, newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}))
 	})
 
 	var resp struct {
