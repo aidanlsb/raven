@@ -348,6 +348,12 @@ rvn reindex --full                               # Complete rebuild
 rvn reindex --dry-run                            # Show what would be reindexed
 ```
 
+Index schema upgrades use wipe-and-rebuild because the SQLite database is a
+derived cache. Raven blocks index-backed commands until the replacement full
+reindex completes, so an interrupted upgrade cannot silently serve an empty
+index. Run `rvn reindex --full` again to recover. `--dry-run` reports an
+incompatible index without replacing it.
+
 ---
 
 ## Browsing documentation

@@ -1147,7 +1147,13 @@ resolves Markdown links/images to those assets.
 Paths matched by raven.yaml exclude patterns are skipped and removed from the
 index during incremental reindexing.
 
-Use --full to force a complete rebuild of the entire index.`,
+Use --full to force a complete rebuild of the entire index.
+
+When the on-disk index schema is incompatible with this Raven version, reindex
+replaces the derived database and automatically performs a full rebuild. The
+index remains unavailable until that rebuild completes; if it is interrupted,
+run reindex again. A dry run reports the required rebuild without replacing the
+on-disk index.`,
 		Examples: []string{
 			"rvn reindex",
 			"rvn reindex --dry-run",

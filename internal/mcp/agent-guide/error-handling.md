@@ -61,7 +61,21 @@ A missing `schema.yaml` or `raven.yaml` is not a failure — Raven falls back to
 
 Treat either signal as a prompt to repair `schema.yaml`/`raven.yaml` before relying on validation, missing-reference warnings, or delete safety.
 
-## 7. Recovery loop for check/repair tasks
+## 7. Index rebuild failures
+
+`DATABASE_VERSION_MISMATCH` means the derived SQLite index has an incompatible
+schema or a required full rebuild was interrupted. Raven blocks index-backed
+reads instead of serving partial or empty results. Run:
+
+```text
+raven_invoke(command="reindex", args={"full":true})
+```
+
+Retry the original command only after reindex succeeds. `reindex` uses
+wipe-and-rebuild for index schema upgrades; `dry-run` reports the required work
+without replacing the on-disk index.
+
+## 8. Recovery loop for check/repair tasks
 
 ```text
 raven_invoke(command="check")

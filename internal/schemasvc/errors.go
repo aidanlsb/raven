@@ -20,6 +20,7 @@ const (
 	ErrorFileRead       ErrorCode = codes.ErrFileRead
 	ErrorFileWrite      ErrorCode = codes.ErrFileWrite
 	ErrorFileOutside    ErrorCode = codes.ErrFileOutsideVault
+	ErrorDatabase       ErrorCode = codes.ErrDatabase
 	ErrorInternal       ErrorCode = codes.ErrInternal
 )
 

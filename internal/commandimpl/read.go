@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/configsvc"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -51,6 +52,9 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 func mapSearchFailure(err error) commandexec.Result {
 	if err == nil {
 		return commandexec.Failure("INTERNAL_ERROR", "search failed", nil, "")
+	}
+	if failure, ok := mapIndexRebuildRequired(err); ok {
+		return failure
 	}
 
 	if isSearchSyntaxError(err) {
@@ -518,6 +522,10 @@ func ambiguousRefFailure(ambiguous *readsvc.AmbiguousRefError) commandexec.Resul
 }
 
 func mapResolveFailure(err error, reference string) commandexec.Result {
+	if failure, ok := mapIndexRebuildRequired(err); ok {
+		return failure
+	}
+
 	var ambiguous *readsvc.AmbiguousRefError
 	if errors.As(err, &ambiguous) {
 		return ambiguousRefFailure(ambiguous)
@@ -532,6 +540,10 @@ func mapResolveFailure(err error, reference string) commandexec.Result {
 }
 
 func mapReadFailure(err error) commandexec.Result {
+	if failure, ok := mapIndexRebuildRequired(err); ok {
+		return failure
+	}
+
 	var ambiguous *readsvc.AmbiguousRefError
 	if errors.As(err, &ambiguous) {
 		return ambiguousRefFailure(ambiguous)
@@ -559,6 +571,10 @@ func mapReadFailure(err error) commandexec.Result {
 }
 
 func mapOpenFailure(err error) commandexec.Result {
+	if failure, ok := mapIndexRebuildRequired(err); ok {
+		return failure
+	}
+
 	var ambiguous *readsvc.AmbiguousRefError
 	if errors.As(err, &ambiguous) {
 		return ambiguousRefFailure(ambiguous)
@@ -582,6 +598,9 @@ func mapReadRuntimeSetupFailure(err error) commandexec.Result {
 	if err == nil {
 		return commandexec.Failure("INTERNAL_ERROR", "failed to initialize read runtime", nil, "")
 	}
+	if failure, ok := mapIndexRebuildRequired(err); ok {
+		return failure
+	}
 
 	message := strings.ToLower(strings.TrimSpace(err.Error()))
 	switch {
@@ -592,6 +611,18 @@ func mapReadRuntimeSetupFailure(err error) commandexec.Result {
 	default:
 		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
 	}
+}
+
+func mapIndexRebuildRequired(err error) (commandexec.Result, bool) {
+	if !errors.Is(err, index.ErrIndexRebuildRequired) {
+		return commandexec.Result{}, false
+	}
+	return commandexec.Failure(
+		codes.ErrDatabaseVersion,
+		"index schema is stale or a rebuild was interrupted",
+		nil,
+		"Run 'rvn reindex --full' to rebuild the index",
+	), true
 }
 
 func isReadRuntimeConfigError(message string) bool {

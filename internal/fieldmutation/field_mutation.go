@@ -2,6 +2,7 @@ package fieldmutation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -558,6 +559,12 @@ func validateRefTargets(
 	}
 
 	db, err := index.Open(refCtx.VaultPath)
+	if errors.Is(err, index.ErrIndexRebuildRequired) {
+		return []schema.ValidationError{{
+			Field:   "reference",
+			Message: "index requires a full reindex before validating writes",
+		}}
+	}
 	if err == nil {
 		db.SetDailyDirectory(refCtx.VaultConfig.GetDailyDirectory())
 		rt.DB = db

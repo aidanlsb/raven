@@ -903,7 +903,7 @@ func TestIntegration_QueryFailsOnSchemaLoadError(t *testing.T) {
 	result.MustFailWithMessage(t, "Fix schema.yaml and try again")
 }
 
-func TestIntegration_QueryFailsOnStaleIndexSchema(t *testing.T) {
+func TestIntegration_IndexReadsFailOnStaleIndexSchema(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -927,6 +927,10 @@ func TestIntegration_QueryFailsOnStaleIndexSchema(t *testing.T) {
 	result := v.RunCLI("query", "type:project")
 	result.MustFail(t, "DATABASE_VERSION_MISMATCH")
 	result.MustFailWithMessage(t, "rvn reindex --full")
+
+	searchResult := v.RunCLI("search", "Stale Index")
+	searchResult.MustFail(t, "DATABASE_VERSION_MISMATCH")
+	searchResult.MustFailWithMessage(t, "rvn reindex --full")
 }
 
 func TestIntegration_QueryAmbiguousReferenceReturnsQueryInvalid(t *testing.T) {
