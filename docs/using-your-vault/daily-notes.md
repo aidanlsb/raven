@@ -128,7 +128,13 @@ See yesterday's standup notes: [[2026-03-14]]
 Follow up from [[2026-03-10]]
 ```
 
-These resolve to the corresponding daily note file.
+These resolve to the corresponding daily note. The canonical object ID of a daily
+note is the bare ISO date (`2026-03-15`), so `[[2026-03-15]]` is unambiguous date
+identity regardless of where the file lives on disk.
+
+For backward compatibility, older references that include the daily directory —
+`[[daily/2026-03-15]]` or `[[<your-daily-dir>/2026-03-15]]` — still resolve to the
+same daily note as compatibility aliases. Prefer the bare form in new content.
 
 ## Directory configuration
 
@@ -139,7 +145,12 @@ directories:
   daily: daily/
 ```
 
-This means daily notes are stored as `daily/2026-03-15.md`. With the default directory configuration, the `daily/` prefix is stripped from IDs, so the ID is just `2026-03-15`. Date references like `[[2026-03-15]]` resolve accordingly. If you remove the `directories.daily` setting (flat layout), the file path becomes the full ID (`daily/2026-03-15`).
+`directories.daily` controls **only** where daily-note files are stored on disk
+(default `daily/2026-03-15.md`). It is **not** part of the daily note's object ID:
+the object ID is always the bare date `2026-03-15`, no matter what you set the
+daily directory to (e.g. `journal/`) or whether you configure it at all. Date
+references like `[[2026-03-15]]` therefore resolve the same way across every
+vault layout.
 
 ## Related docs
 

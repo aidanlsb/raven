@@ -238,7 +238,7 @@ Show the reference graph without manual bookkeeping:
 ```bash
 rvn resolve project/<their-project-id> --json
 rvn backlinks project/<their-project-id> --json
-rvn outlinks daily/YYYY-MM-DD --json
+rvn outlinks YYYY-MM-DD --json
 ```
 
 Teach the two write homes concretely by contrast:
