@@ -210,7 +210,6 @@ func frontmatterCompletions(ws *workspace, lines []string, line string, lineIdx,
 	}
 	keys := []key{
 		{name: "type", detail: "object type"},
-		{name: "id", detail: "object ID override"},
 		{name: "alias", detail: "reference alias"},
 	}
 

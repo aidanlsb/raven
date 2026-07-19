@@ -23,9 +23,14 @@ func (e ValidationError) Error() string {
 
 // IsReservedFrontmatterKey reports whether name is a built-in frontmatter key
 // that is never treated as a schema field.
+//
+// Note: `id` is intentionally NOT reserved. Raven object identity is
+// path-derived; alternate names are expressed via `alias`. A frontmatter `id`
+// key is therefore treated as an ordinary (unknown) field so that leftover
+// `id:` values surface honestly as `unknown_frontmatter_key`.
 func IsReservedFrontmatterKey(name string) bool {
 	switch name {
-	case "id", "type", "alias":
+	case "type", "alias":
 		return true
 	default:
 		return false

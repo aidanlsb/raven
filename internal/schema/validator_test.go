@@ -73,7 +73,6 @@ func TestValidateFields(t *testing.T) {
 
 	t.Run("reserved fields skipped", func(t *testing.T) {
 		fields := map[string]FieldValue{
-			"id":    String("test-id"),
 			"type":  String("person"),
 			"alias": String("The Queen"),
 		}
@@ -82,6 +81,25 @@ func TestValidateFields(t *testing.T) {
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Fatalf("expected 0 errors for reserved fields, got %d: %v", len(errors), errors)
+		}
+	})
+
+	t.Run("id is not reserved and is treated as unknown", func(t *testing.T) {
+		if IsReservedFrontmatterKey("id") {
+			t.Fatal("id must not be a reserved frontmatter key")
+		}
+
+		fields := map[string]FieldValue{
+			"id": String("test-id"),
+		}
+		defs := map[string]*FieldDefinition{}
+
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error for unreserved id, got %d: %v", len(errors), errors)
+		}
+		if errors[0].Field != "id" || errors[0].Message != MsgUnknownFrontmatterKey {
+			t.Fatalf("expected unknown_frontmatter_key on id, got %v", errors[0])
 		}
 	})
 
