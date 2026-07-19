@@ -2,11 +2,13 @@ package commandimpl
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/configsvc"
@@ -275,6 +277,47 @@ func TestSetupInitVaultAlreadyRegisteredSoleVaultPinsAndActivates(t *testing.T) 
 	}
 	if ctx.State.ActiveVault != "notes" {
 		t.Fatalf("active_vault = %q, want %q", ctx.State.ActiveVault, "notes")
+	}
+}
+
+func TestSetupInitVaultFailsWhenGlobalStateCannotLoad(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	statePath := filepath.Join(root, "broken-state.toml")
+	vaultPath := filepath.Join(root, "notes")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	if err := config.SaveTo(configPath, &config.Config{StateFile: filepath.Base(statePath)}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte("active_vault = [\n"), 0o644); err != nil {
+		t.Fatalf("write invalid state: %v", err)
+	}
+
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, "")
+	if setupErr == nil {
+		t.Fatal("expected setup failure for invalid state")
+	}
+	var typedErr *initVaultSetupError
+	if !errors.As(setupErr, &typedErr) {
+		t.Fatalf("setup error type = %T, want *initVaultSetupError", setupErr)
+	}
+	if typedErr.code != codes.ErrConfigInvalid {
+		t.Fatalf("setup error code = %q, want %q", typedErr.code, codes.ErrConfigInvalid)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none on fatal setup failure", warnings)
+	}
+	if got := data["selection_guard_active"]; got != false {
+		t.Fatalf("selection_guard_active = %#v, want false", got)
+	}
+	if got := data["state_path"]; got != statePath {
+		t.Fatalf("state_path = %#v, want %q", got, statePath)
+	}
+	if guidance, _ := data["guidance"].(string); !strings.Contains(guidance, "Do not rely on ambient vault selection") {
+		t.Fatalf("guidance = %q, want explicit-target warning", guidance)
 	}
 }
 

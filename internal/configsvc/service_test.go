@@ -116,66 +116,70 @@ func TestUseVaultClearsPendingInitVault(t *testing.T) {
 	}
 }
 
-func TestStateFileChangesPreservePendingInitDecision(t *testing.T) {
+func TestStateFileChangesRequireResolvedInitSelection(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "config.toml")
-	defaultStatePath := filepath.Join(root, "state.toml")
 	oldStatePath := filepath.Join(root, "old-state.toml")
 	newStatePath := filepath.Join(root, "new-state.toml")
 	pendingPath := filepath.Join(root, "new-vault")
-
 	if err := config.SaveTo(configPath, &config.Config{StateFile: filepath.Base(oldStatePath)}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	if err := config.SaveState(oldStatePath, &config.State{
-		ActiveVault:          "first",
-		PendingInitVaultPath: pendingPath,
-	}); err != nil {
+	if err := config.SaveState(oldStatePath, &config.State{PendingInitVaultPath: pendingPath}); err != nil {
 		t.Fatalf("save old state: %v", err)
-	}
-	if err := config.SaveState(newStatePath, &config.State{ActiveVault: "second"}); err != nil {
-		t.Fatalf("save new state: %v", err)
 	}
 
 	newStateFile := filepath.Base(newStatePath)
-	if _, err := Set(SetRequest{
+	_, err := Set(SetRequest{
 		ContextOptions: ContextOptions{ConfigPathOverride: configPath},
 		StateFile:      &newStateFile,
-	}); err != nil {
-		t.Fatalf("set state file: %v", err)
+	})
+	if err == nil {
+		t.Fatal("expected state_file change to fail while init selection is pending")
 	}
-	newState, err := config.LoadState(newStatePath)
+	svcErr, ok := AsError(err)
+	if !ok || svcErr.Code != CodeVaultAmbiguous {
+		t.Fatalf("set state_file error = %#v, want VAULT_AMBIGUOUS", err)
+	}
+	loadedCfg, err := config.LoadFrom(configPath)
 	if err != nil {
-		t.Fatalf("load new state: %v", err)
+		t.Fatalf("reload config: %v", err)
 	}
-	if newState.ActiveVault != "second" {
-		t.Fatalf("new active_vault = %q, want preserved destination value second", newState.ActiveVault)
+	if loadedCfg.StateFile != filepath.Base(oldStatePath) {
+		t.Fatalf("state_file = %q, want unchanged", loadedCfg.StateFile)
 	}
-	if newState.PendingInitVaultPath != pendingPath {
-		t.Fatalf("new pending_init_vault_path = %q, want %q", newState.PendingInitVaultPath, pendingPath)
+	if _, err := os.Stat(newStatePath); !os.IsNotExist(err) {
+		t.Fatalf("destination state should not be created, stat error = %v", err)
 	}
 
-	// Clearing the decision in the configured state and then returning to the
-	// default state path must also clear any stale marker there.
-	newState.PendingInitVaultPath = ""
-	if err := config.SaveState(newStatePath, newState); err != nil {
-		t.Fatalf("clear new pending state: %v", err)
+	if err := config.SaveState(oldStatePath, &config.State{}); err != nil {
+		t.Fatalf("clear pending state: %v", err)
 	}
-	if err := config.SaveState(defaultStatePath, &config.State{PendingInitVaultPath: pendingPath}); err != nil {
-		t.Fatalf("save stale default state: %v", err)
+	result, err := Set(SetRequest{
+		ContextOptions: ContextOptions{ConfigPathOverride: configPath},
+		StateFile:      &newStateFile,
+	})
+	if err != nil {
+		t.Fatalf("set state_file after resolving selection: %v", err)
+	}
+	if result.Context.StatePath != newStatePath {
+		t.Fatalf("result state_path = %q, want %q", result.Context.StatePath, newStatePath)
+	}
+	if err := config.SaveState(newStatePath, &config.State{PendingInitVaultPath: pendingPath}); err != nil {
+		t.Fatalf("save pending new state: %v", err)
 	}
 	if _, err := Unset(UnsetRequest{
 		ContextOptions: ContextOptions{ConfigPathOverride: configPath},
 		StateFile:      true,
-	}); err != nil {
-		t.Fatalf("unset state file: %v", err)
+	}); err == nil {
+		t.Fatal("expected state_file unset to fail while init selection is pending")
 	}
-	defaultState, err := config.LoadState(defaultStatePath)
+	loadedCfg, err = config.LoadFrom(configPath)
 	if err != nil {
-		t.Fatalf("load default state: %v", err)
+		t.Fatalf("reload config after unset rejection: %v", err)
 	}
-	if defaultState.PendingInitVaultPath != "" {
-		t.Fatalf("default pending_init_vault_path = %q, want cleared", defaultState.PendingInitVaultPath)
+	if loadedCfg.StateFile != filepath.Base(newStatePath) {
+		t.Fatalf("state_file = %q, want unchanged after unset rejection", loadedCfg.StateFile)
 	}
 }

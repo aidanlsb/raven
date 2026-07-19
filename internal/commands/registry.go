@@ -315,6 +315,8 @@ First-run vault policy (applied in both --json and interactive mode):
     vault are left unchanged; changing them requires an explicit user decision. Until
     that decision is made, unqualified commands that would resolve to another vault fail
     with VAULT_AMBIGUOUS. Pass --vault/--vault-path to target a vault explicitly.
+  - If global config/state cannot be loaded or the selection guard cannot be persisted,
+    init returns a failure with details.initialized=true and the created vault path.
 
 The post_init object reports what happened (is_first_vault, has_existing_default, registered,
 is_default, is_active, selection_guard_active), the choices that still need the user's consent
@@ -2048,7 +2050,9 @@ If the file already exists, no changes are made.`,
 		LongDesc: `Set one or more explicit global config fields.
 
 Only known fields can be changed with this command.
-Use 'config unset' to clear fields.`,
+Use 'config unset' to clear fields.
+Changing state_file is blocked with VAULT_AMBIGUOUS while a post-init vault
+selection is pending; resolve it with 'vault use' first.`,
 		Flags: []FlagMeta{
 			{Name: "editor", Description: "Set editor command", Type: FlagTypeString},
 			{Name: "editor-mode", Description: "Set editor mode (auto|terminal|gui)", Type: FlagTypeString, Examples: []string{"auto", "terminal", "gui"}},
@@ -2075,6 +2079,7 @@ Use 'config unset' to clear fields.`,
 		Name:        "config unset",
 		Description: "Clear one or more global config.toml fields",
 		VaultScope:  VaultScopeNone,
+		LongDesc:    "Clear one or more explicit global config fields. Clearing state_file is blocked while a post-init vault selection is pending; resolve it with 'vault use' first.",
 		Flags: []FlagMeta{
 			{Name: "editor", Description: "Clear editor", Type: FlagTypeBool},
 			{Name: "editor-mode", Description: "Clear editor_mode", Type: FlagTypeBool},

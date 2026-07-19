@@ -42,6 +42,8 @@ Raven's long-form docs cache is global and lives next to global config, not insi
 
 This is the same in interactive and `--json` mode. In `--json` mode, the `post_init` object reports what happened (`is_first_vault`, `has_existing_default`, `registered`, `is_default`, `is_active`, `selection_guard_active`), whether a choice still needs your input (`needs_user_choice_for_activate`, `needs_user_choice_for_default`), plus invocable actions and guidance. In interactive mode, Raven prompts you for the default/active choices only when another vault already exists.
 
+If Raven cannot load global config/state or persist the selection guard, `init` fails loudly even though the vault-local files were created. JSON error details include `initialized: true`, the path, and `post_init`; fix global config/state access and rerun init before relying on ambient vault selection.
+
 ## Sanity-check the new vault
 
 Run a few basic commands right away:

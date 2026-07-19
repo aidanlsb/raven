@@ -19,6 +19,7 @@ const (
 	CodeConfigInvalid      Code = codes.ErrConfigInvalid
 	CodeVaultNotFound      Code = codes.ErrVaultNotFound
 	CodeVaultNotSpecified  Code = codes.ErrVaultNotSpecified
+	CodeVaultAmbiguous     Code = codes.ErrVaultAmbiguous
 	CodeFileNotFound       Code = codes.ErrFileNotFound
 	CodeFileReadError      Code = codes.ErrFileRead
 	CodeFileWriteError     Code = codes.ErrFileWrite
@@ -176,7 +177,11 @@ func Set(req SetRequest) (*SetResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	previousStatePath := config.ResolveStatePath("", ctx.ConfigPath, ctx.Cfg)
+	if req.StateFile != nil {
+		if err := rejectStateFileChangeWithPendingInit(ctx.ConfigPath, ctx.Cfg); err != nil {
+			return nil, err
+		}
+	}
 
 	changed := make([]string, 0, 6)
 
@@ -250,16 +255,11 @@ func Set(req SetRequest) (*SetResult, error) {
 		return nil, newError(CodeMissingArgument, "no fields provided; set at least one --editor/--editor-mode/--state-file/--default-vault/--ui-accent/--ui-code-theme/--ui-markdown-style", nil)
 	}
 
-	if req.StateFile != nil {
-		nextStatePath := config.ResolveStatePath("", ctx.ConfigPath, ctx.Cfg)
-		if err := syncPendingInitVaultPath(previousStatePath, nextStatePath); err != nil {
-			return nil, err
-		}
-	}
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
 	ctx.ConfigExists = true
+	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath, ctx.Cfg)
 
 	return &SetResult{
 		Context: ctx,
@@ -291,7 +291,11 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 	if !ctx.ConfigExists {
 		return nil, newError(CodeFileNotFound, fmt.Sprintf("config file not found: %s", ctx.ConfigPath), nil)
 	}
-	previousStatePath := config.ResolveStatePath("", ctx.ConfigPath, ctx.Cfg)
+	if req.StateFile {
+		if err := rejectStateFileChangeWithPendingInit(ctx.ConfigPath, ctx.Cfg); err != nil {
+			return nil, err
+		}
+	}
 
 	changed := make([]string, 0, 6)
 	if req.Editor {
@@ -327,15 +331,10 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 		return nil, newError(CodeMissingArgument, "no fields selected; pass one or more unset flags", nil)
 	}
 
-	if req.StateFile {
-		nextStatePath := config.ResolveStatePath("", ctx.ConfigPath, ctx.Cfg)
-		if err := syncPendingInitVaultPath(previousStatePath, nextStatePath); err != nil {
-			return nil, err
-		}
-	}
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
+	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath, ctx.Cfg)
 
 	return &UnsetResult{
 		Context: ctx,
@@ -343,28 +342,21 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 	}, nil
 }
 
-func syncPendingInitVaultPath(sourcePath, destinationPath string) error {
-	if filepath.Clean(sourcePath) == filepath.Clean(destinationPath) {
-		return nil
-	}
-	source, err := config.LoadState(sourcePath)
+func rejectStateFileChangeWithPendingInit(configPath string, cfg *config.Config) error {
+	statePath := config.ResolveStatePath("", configPath, cfg)
+	state, err := config.LoadState(statePath)
 	if err != nil {
 		return newError(CodeConfigInvalid, fmt.Sprintf("failed to load current state while changing state_file: %v", err), err)
 	}
-	if strings.TrimSpace(source.PendingInitVaultPath) == "" {
-		if _, err := os.Stat(destinationPath); os.IsNotExist(err) {
-			return nil
-		}
+	pendingPath := strings.TrimSpace(state.PendingInitVaultPath)
+	if pendingPath == "" {
+		return nil
 	}
-	destination, err := config.LoadState(destinationPath)
-	if err != nil {
-		return newError(CodeConfigInvalid, fmt.Sprintf("failed to load destination state while changing state_file: %v", err), err)
-	}
-	destination.PendingInitVaultPath = source.PendingInitVaultPath
-	if err := config.SaveState(destinationPath, destination); err != nil {
-		return newError(CodeFileWriteError, "", err)
-	}
-	return nil
+	return newError(
+		CodeVaultAmbiguous,
+		fmt.Sprintf("cannot change state_file while a post-init vault selection is pending for %s; activate a vault with 'rvn vault use <name>' first", pendingPath),
+		nil,
+	)
 }
 
 type VaultContext struct {
@@ -436,7 +428,7 @@ func PendingInitVaultConflictFor(cfg *config.Config, state *config.State, curren
 	}
 	pendingPath := strings.TrimSpace(state.PendingInitVaultPath)
 	currentPath = strings.TrimSpace(currentPath)
-	if pendingPath == "" || currentPath == "" || sameVaultPath(pendingPath, currentPath) {
+	if pendingPath == "" || currentPath == "" || SameVaultPath(pendingPath, currentPath) {
 		return nil
 	}
 	return &PendingInitVaultConflict{
@@ -458,14 +450,16 @@ func configuredVaultNameForPath(cfg *config.Config, path string) string {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if sameVaultPath(vaults[name], path) {
+		if SameVaultPath(vaults[name], path) {
 			return name
 		}
 	}
 	return ""
 }
 
-func sameVaultPath(left, right string) bool {
+// SameVaultPath reports whether two path spellings identify the same vault
+// directory, including symlink aliases when both paths exist.
+func SameVaultPath(left, right string) bool {
 	left = strings.TrimSpace(left)
 	right = strings.TrimSpace(right)
 	if left == "" || right == "" {
@@ -496,7 +490,11 @@ func LoadVaultContext(opts ContextOptions) (*VaultContext, error) {
 	resolvedStatePath := config.ResolveStatePath(opts.StatePathOverride, resolvedConfigPath, loadedCfg)
 	state, err := config.LoadState(resolvedStatePath)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, "", err)
+		return &VaultContext{
+			Cfg:        loadedCfg,
+			ConfigPath: resolvedConfigPath,
+			StatePath:  resolvedStatePath,
+		}, newError(CodeConfigInvalid, "", err)
 	}
 
 	return &VaultContext{
@@ -901,7 +899,7 @@ func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 		ctx.State.ActiveVault = ""
 		activeCleared = true
 	}
-	pendingCleared := sameVaultPath(ctx.State.PendingInitVaultPath, removedPath)
+	pendingCleared := SameVaultPath(ctx.State.PendingInitVaultPath, removedPath)
 	if pendingCleared {
 		ctx.State.PendingInitVaultPath = ""
 	}

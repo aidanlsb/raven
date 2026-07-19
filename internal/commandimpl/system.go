@@ -2,6 +2,7 @@ package commandimpl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -39,15 +40,20 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	postInit, setupWarnings, setupErr := setupInitVault(result.Path, req.ConfigPath, req.StatePath)
 	if setupErr != nil {
+		errorCode := codes.ErrInternal
+		var initSetupErr *initVaultSetupError
+		if errors.As(setupErr, &initSetupErr) {
+			errorCode = initSetupErr.code
+		}
 		return commandexec.Failure(
-			codes.ErrFileWrite,
-			fmt.Sprintf("vault initialized at %s, but the post-init vault selection guard could not be persisted: %v", result.Path, setupErr),
+			errorCode,
+			fmt.Sprintf("vault initialized at %s, but safe global vault setup could not be completed: %v", result.Path, setupErr),
 			map[string]interface{}{
 				"initialized": true,
 				"path":        result.Path,
 				"post_init":   postInit,
 			},
-			"Fix access to state.toml and rerun init, or pass --vault/--vault-path explicitly on every vault-scoped command.",
+			"Fix global config/state access and rerun init, or pass --vault/--vault-path explicitly on every vault-scoped command.",
 		)
 	}
 
@@ -198,6 +204,25 @@ type initPostInitState struct {
 	statePath          string
 }
 
+type initVaultSetupError struct {
+	code codes.ErrorCode
+	err  error
+}
+
+func (e *initVaultSetupError) Error() string {
+	if e == nil || e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e *initVaultSetupError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
 // setupInitVault applies Raven's first-run vault policy after a successful init
 // and returns the post_init payload plus any non-fatal warnings.
 //
@@ -210,9 +235,9 @@ type initPostInitState struct {
 //     before activating it or changing the default. A pending selection marker blocks
 //     ambient commands that would otherwise target another vault.
 //
-// Registration remains additive: config registration failures return warnings and
-// manual guidance. Once config is readable, failure to persist the safety marker is
-// fatal so init cannot report a safely usable multi-vault setup when it is not.
+// Registration remains additive: config write failures return warnings and manual
+// guidance. Loading global config/state and persisting the safety marker are fatal,
+// so init cannot report a safely usable multi-vault setup when it is not.
 func setupInitVault(path, configPathOverride, statePathOverride string) (map[string]interface{}, []commandexec.Warning, error) {
 	cleanPath := strings.TrimSpace(path)
 	if cleanPath == "" {
@@ -242,16 +267,16 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 	warnings := make([]commandexec.Warning, 0, 1)
 
 	ctx, err := configsvc.LoadVaultContext(opts)
-	if err != nil {
-		warnings = append(warnings, commandexec.Warning{
-			Code:    codes.WarnVaultRegisterFailed,
-			Message: fmt.Sprintf("Could not load global config to register the vault: %v. Register it manually with the commands in post_init.", err),
-		})
-		return buildInitPostInitPayload(state), warnings, nil
+	if ctx != nil {
+		state.configPath = ctx.ConfigPath
+		state.statePath = ctx.StatePath
 	}
-
-	state.configPath = ctx.ConfigPath
-	state.statePath = ctx.StatePath
+	if err != nil {
+		return buildInitPostInitPayload(state), warnings, &initVaultSetupError{
+			code: codes.ErrConfigInvalid,
+			err:  fmt.Errorf("could not load global config/state: %w", err),
+		}
+	}
 
 	existingVaults := ctx.Cfg.ListVaults()
 	defaultName := configsvc.DefaultVaultName(ctx.Cfg)
@@ -259,7 +284,7 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 
 	otherVaultExists := false
 	for name, vaultPath := range existingVaults {
-		if filepath.Clean(vaultPath) == filepath.Clean(cleanPath) {
+		if configsvc.SameVaultPath(vaultPath, cleanPath) {
 			state.registeredName = name
 		} else {
 			otherVaultExists = true
@@ -320,7 +345,10 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 	// guard so later unqualified commands cannot silently operate there.
 	if !state.isActive {
 		if guardErr := configsvc.MarkPendingInitVault(opts, cleanPath); guardErr != nil {
-			return buildInitPostInitPayload(state), warnings, guardErr
+			return buildInitPostInitPayload(state), warnings, &initVaultSetupError{
+				code: codes.ErrFileWrite,
+				err:  fmt.Errorf("could not persist post-init vault selection guard: %w", guardErr),
+			}
 		}
 		state.selectionGuarded = true
 	}
@@ -398,18 +426,24 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 
 	nextSteps := make([]string, 0, 3)
 	guidance := ""
+	guardGuidance := "Do not rely on ambient vault selection; pass an explicit --vault/--vault-path (CLI) or vault/vault_path (MCP) target."
+	if s.selectionGuarded {
+		guardGuidance = "Unqualified commands that would target another vault fail with VAULT_AMBIGUOUS."
+	}
 	switch {
 	case !alreadyRegistered:
-		guidance = fmt.Sprintf("The new vault could not be registered automatically. Register it before use with the commands below. Until it is activated, target it explicitly with --vault-path %s; unqualified commands that would target another vault fail with VAULT_AMBIGUOUS.", formatSuggestedCommandPath(s.cleanPath))
+		guidance = fmt.Sprintf("The new vault could not be registered automatically. Register it before use with the commands below. Until it is activated, target it explicitly with --vault-path %s. %s", formatSuggestedCommandPath(s.cleanPath), guardGuidance)
 		nextSteps = append(nextSteps, "Register this vault globally: "+commands["register"].(string))
 		nextSteps = append(nextSteps, "Register and set as default: "+commands["register_and_pin"].(string))
 		nextSteps = append(nextSteps, "After registering, make it active: "+commands["activate"].(string))
-	case s.isFirstVault:
+	case s.isFirstVault && s.isActive:
 		// Zero -> first vault: fully configured. No pending actions or next steps;
 		// the agent can proceed immediately.
 		guidance = fmt.Sprintf("First vault on this machine: registered as %q and set as the default and active vault. It is ready to use now — no further vault setup is needed, and later commands resolve to it automatically.", s.registeredName)
+	case s.isFirstVault:
+		guidance = fmt.Sprintf("This is the first vault on this machine and it was registered as %q, but activation did not complete. Target the vault explicitly until global config/state access is repaired and activation succeeds. %s", s.registeredName, guardGuidance)
 	default:
-		guidance = fmt.Sprintf("Another vault is already configured on this machine. The new vault was registered as %q but was NOT activated or set as default. Ask the user before activating it or changing the default vault. Until it is activated, unqualified commands that would target another vault fail with VAULT_AMBIGUOUS; target this vault explicitly with --vault %s (CLI) or vault=%q (MCP).", s.registeredName, strconv.Quote(s.registeredName), s.registeredName)
+		guidance = fmt.Sprintf("Another vault is already configured on this machine. The new vault was registered as %q but was NOT activated or set as default. Ask the user before activating it or changing the default vault. Until it is activated, target this vault explicitly with --vault %s (CLI) or vault=%q (MCP). %s", s.registeredName, strconv.Quote(s.registeredName), s.registeredName, guardGuidance)
 		if needsDefaultChoice {
 			nextSteps = append(nextSteps, "Ask the user first, then set this vault as default: "+commands["pin"].(string))
 		}

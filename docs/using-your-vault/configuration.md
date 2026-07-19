@@ -174,7 +174,8 @@ When an additional `rvn init` leaves another vault selected, `state.toml` also r
 `pending_init_vault_path`. If ambient resolution (steps 3–4) points elsewhere, Raven returns
 `VAULT_AMBIGUOUS` instead of executing against the old vault. An explicit `--vault` /
 `--vault-path` bypasses the ambient choice; `rvn vault use <name>` resolves the pending
-selection and clears the guard.
+selection and clears the guard. `config set/unset --state-file` is blocked while that
+selection is pending so changing state files cannot bypass the guard.
 
 ### Manage global vault config via CLI
 
