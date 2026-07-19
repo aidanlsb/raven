@@ -1,9 +1,10 @@
-package schemasvc
+package schemamigrate
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -30,19 +31,19 @@ types:
 traits: {}
 `
 
-func countTypeChanges(changes []TypeRenameChange, changeType string) int {
-	n := 0
-	for _, c := range changes {
-		if c.ChangeType == changeType {
-			n++
+func countTypeChanges(changes []schemasvc.TypeRenameChange, changeType string) int {
+	count := 0
+	for _, change := range changes {
+		if change.ChangeType == changeType {
+			count++
 		}
 	}
-	return n
+	return count
 }
 
-func hasTypeChangeForFile(changes []TypeRenameChange, changeType, filePath string) bool {
-	for _, c := range changes {
-		if c.ChangeType == changeType && c.FilePath == filePath {
+func hasTypeChangeForFile(changes []schemasvc.TypeRenameChange, changeType, filePath string) bool {
+	for _, change := range changes {
+		if change.ChangeType == changeType && change.FilePath == filePath {
 			return true
 		}
 	}
@@ -50,15 +51,12 @@ func hasTypeChangeForFile(changes []TypeRenameChange, changeType, filePath strin
 }
 
 // TestRenameType_PreviewCountMatchesApplyForQuotedTypes is the core anti-drift
-// regression test. The old apply path used a whole-file regex
-// (`^type:\s*event\s*$`) that silently skipped YAML the parser accepts, such as
-// `type: "event"`. Preview (parser-based) would therefore count files that apply
-// never touched. This test fails on that old behavior and passes once preview
-// and apply share a single plan built with structured frontmatter editing.
+// regression test. Preview and apply must consume the same migration plan,
+// including for quoted YAML type values.
 func TestRenameType_PreviewCountMatchesApplyForQuotedTypes(t *testing.T) {
 	t.Parallel()
 
-	v := testutil.NewTestVault(t).
+	vault := testutil.NewTestVault(t).
 		WithSchema(eventTypeSchema).
 		WithFile("notes/quoted.md", "---\ntype: \"event\"\ntitle: Quoted\n---\n# Quoted\n").
 		WithFile("notes/single.md", "---\ntype: 'event'\ntitle: Single\n---\n# Single\n").
@@ -66,7 +64,7 @@ func TestRenameType_PreviewCountMatchesApplyForQuotedTypes(t *testing.T) {
 		WithFile("notes/other.md", "---\ntype: page\ntitle: Other\n---\n# Other\n").
 		Build()
 
-	preview, err := RenameType(RenameTypeRequest{VaultPath: v.Path, OldName: "event", NewName: "meeting"})
+	preview, err := RenameType(RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
 	if err != nil {
 		t.Fatalf("preview RenameType: %v", err)
 	}
@@ -77,61 +75,47 @@ func TestRenameType_PreviewCountMatchesApplyForQuotedTypes(t *testing.T) {
 		t.Fatalf("expected preview to count 3 frontmatter changes (quoted, single, plain), got %d\n%+v", got, preview.Changes)
 	}
 
-	apply, err := RenameType(RenameTypeRequest{VaultPath: v.Path, OldName: "event", NewName: "meeting", Confirm: true})
+	apply, err := RenameType(RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting", Confirm: true})
 	if err != nil {
 		t.Fatalf("apply RenameType: %v", err)
 	}
-
-	// With no default-path plan, every previewed change maps to exactly one
-	// applied mutation, so the two tallies must be identical.
 	if preview.TotalChanges != apply.ChangesApplied {
 		t.Fatalf("preview total (%d) != apply applied (%d): counts drifted", preview.TotalChanges, apply.ChangesApplied)
 	}
 
-	// Quoted and single-quoted values must be renamed, not silently skipped.
-	for _, f := range []string{"notes/quoted.md", "notes/single.md"} {
-		content := v.ReadFile(f)
+	for _, filePath := range []string{"notes/quoted.md", "notes/single.md"} {
+		content := vault.ReadFile(filePath)
 		if !strings.Contains(content, "type: meeting") {
-			t.Fatalf("expected %s frontmatter to become meeting, got:\n%s", f, content)
+			t.Fatalf("expected %s frontmatter to become meeting, got:\n%s", filePath, content)
 		}
 		if strings.Contains(content, "event") {
-			t.Fatalf("expected %s to no longer mention event, got:\n%s", f, content)
+			t.Fatalf("expected %s to no longer mention event, got:\n%s", filePath, content)
 		}
 	}
 
-	// The plain file's frontmatter is renamed, but a body occurrence of
-	// `type: event` must be left untouched (structured editing only touches the
-	// frontmatter block, unlike the old whole-file regex).
-	plain := v.ReadFile("notes/plain.md")
+	plain := vault.ReadFile("notes/plain.md")
 	if !strings.Contains(plain, "type: meeting") {
 		t.Fatalf("expected plain frontmatter to become meeting, got:\n%s", plain)
 	}
 	if !strings.Contains(plain, "\ntype: event\n") {
 		t.Fatalf("expected plain body occurrence of `type: event` to be preserved, got:\n%s", plain)
 	}
-
-	// A file of a different type is never counted or modified.
-	if got := v.ReadFile("notes/other.md"); !strings.Contains(got, "type: page") {
+	if got := vault.ReadFile("notes/other.md"); !strings.Contains(got, "type: page") {
 		t.Fatalf("expected other.md to stay type page, got:\n%s", got)
 	}
 }
 
-// TestRenameType_PreviewListsReferenceUpdatesFromDirectoryMove verifies that the
-// reference rewrites triggered by a default-path directory move appear in the
-// preview change list (they previously only happened at apply time and were
-// invisible to preview).
 func TestRenameType_PreviewListsReferenceUpdatesFromDirectoryMove(t *testing.T) {
 	t.Parallel()
 
-	v := testutil.NewTestVault(t).
+	vault := testutil.NewTestVault(t).
 		WithSchema(eventProjectSchema).
 		WithFile("events/kickoff.md", "---\ntype: event\ntitle: Kickoff\n---\n# Kickoff\n").
 		WithFile("projects/roadmap.md", "---\ntype: project\nkickoff: events/kickoff\n---\n# Roadmap\n\nKickoff: [[events/kickoff]]\n").
 		Build()
 
-	beforeRoadmap := v.ReadFile("projects/roadmap.md")
-
-	preview, err := RenameType(RenameTypeRequest{VaultPath: v.Path, OldName: "event", NewName: "meeting"})
+	beforeRoadmap := vault.ReadFile("projects/roadmap.md")
+	preview, err := RenameType(RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
 	if err != nil {
 		t.Fatalf("preview RenameType: %v", err)
 	}
@@ -148,28 +132,23 @@ func TestRenameType_PreviewListsReferenceUpdatesFromDirectoryMove(t *testing.T) 
 		t.Fatalf("optional_total_changes (%d) != len(optional_changes) (%d)", preview.OptionalTotalChanges, len(preview.OptionalChanges))
 	}
 
-	// Preview must not touch any files.
-	if got := v.ReadFile("projects/roadmap.md"); got != beforeRoadmap {
+	if got := vault.ReadFile("projects/roadmap.md"); got != beforeRoadmap {
 		t.Fatalf("expected roadmap unchanged during preview")
 	}
-	v.AssertFileExists("events/kickoff.md")
-	v.AssertFileNotExists("meetings/kickoff.md")
+	vault.AssertFileExists("events/kickoff.md")
+	vault.AssertFileNotExists("meetings/kickoff.md")
 }
 
-// TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs exercises the full
-// flow: a file whose frontmatter uses a quoted type is renamed, moved to the new
-// default directory, and references to it are rewritten. The quoted-type file
-// would have been moved with a stale `type: "event"` under the old regex apply.
 func TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs(t *testing.T) {
 	t.Parallel()
 
-	v := testutil.NewTestVault(t).
+	vault := testutil.NewTestVault(t).
 		WithSchema(eventProjectSchema).
 		WithFile("events/kickoff.md", "---\ntype: \"event\"\ntitle: Kickoff\n---\n# Kickoff\n").
 		WithFile("projects/roadmap.md", "---\ntype: project\nkickoff: events/kickoff\n---\n# Roadmap\n\nKickoff: [[events/kickoff]]\n").
 		Build()
 
-	preview, err := RenameType(RenameTypeRequest{VaultPath: v.Path, OldName: "event", NewName: "meeting"})
+	preview, err := RenameType(RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
 	if err != nil {
 		t.Fatalf("preview RenameType: %v", err)
 	}
@@ -180,8 +159,8 @@ func TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs(t *testing.T) {
 		t.Fatalf("expected files_to_move=1, got %d", preview.FilesToMove)
 	}
 
-	res, err := RenameType(RenameTypeRequest{
-		VaultPath:         v.Path,
+	result, err := RenameType(RenameTypeRequest{
+		VaultPath:         vault.Path,
 		OldName:           "event",
 		NewName:           "meeting",
 		Confirm:           true,
@@ -190,21 +169,19 @@ func TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apply RenameType: %v", err)
 	}
-	if !res.DefaultPathRenamed {
+	if !result.DefaultPathRenamed {
 		t.Fatalf("expected default_path_renamed=true")
 	}
-	if res.FilesMoved != 1 {
-		t.Fatalf("expected files_moved=1, got %d", res.FilesMoved)
+	if result.FilesMoved != 1 {
+		t.Fatalf("expected files_moved=1, got %d", result.FilesMoved)
 	}
-	if res.ReferenceFilesUpdated != 1 {
-		t.Fatalf("expected reference_files_updated=1, got %d", res.ReferenceFilesUpdated)
+	if result.ReferenceFilesUpdated != 1 {
+		t.Fatalf("expected reference_files_updated=1, got %d", result.ReferenceFilesUpdated)
 	}
 
-	v.AssertFileExists("meetings/kickoff.md")
-	v.AssertFileNotExists("events/kickoff.md")
-
-	// The moved file carries the renamed type even though it was quoted.
-	moved := v.ReadFile("meetings/kickoff.md")
+	vault.AssertFileExists("meetings/kickoff.md")
+	vault.AssertFileNotExists("events/kickoff.md")
+	moved := vault.ReadFile("meetings/kickoff.md")
 	if !strings.Contains(moved, "type: meeting") {
 		t.Fatalf("expected moved file to have type: meeting, got:\n%s", moved)
 	}
@@ -212,13 +189,10 @@ func TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs(t *testing.T) {
 		t.Fatalf("expected moved file to no longer mention event, got:\n%s", moved)
 	}
 
-	// References to the moved object are rewritten to the new path.
-	v.AssertFileContains("projects/roadmap.md", "kickoff: meetings/kickoff")
-	v.AssertFileContains("projects/roadmap.md", "[[meetings/kickoff]]")
-	v.AssertFileNotContains("projects/roadmap.md", "events/kickoff")
-
-	// schema.yaml reflects the rename plus the default-path move.
-	v.AssertFileContains("schema.yaml", "meeting:")
-	v.AssertFileContains("schema.yaml", "default_path: meetings/")
-	v.AssertFileContains("schema.yaml", "target: meeting")
+	vault.AssertFileContains("projects/roadmap.md", "kickoff: meetings/kickoff")
+	vault.AssertFileContains("projects/roadmap.md", "[[meetings/kickoff]]")
+	vault.AssertFileNotContains("projects/roadmap.md", "events/kickoff")
+	vault.AssertFileContains("schema.yaml", "meeting:")
+	vault.AssertFileContains("schema.yaml", "default_path: meetings/")
+	vault.AssertFileContains("schema.yaml", "target: meeting")
 }
