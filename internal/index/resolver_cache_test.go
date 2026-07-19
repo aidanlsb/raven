@@ -163,6 +163,81 @@ func TestIncrementalResolverMatchesColdResolverAcrossShortNameRemoval(t *testing
 	assertIndexedRefTarget(t, db, source.FilePath, "freya", "people/freya")
 }
 
+func TestReferenceResolverCacheInvalidatesAcrossDatabaseHandles(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	first, err := Open(vaultPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := Open(vaultPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+
+	sch := schema.New()
+	if err := first.IndexDocument(resolverTestDocument("people/freya.md", "people/freya"), sch); err != nil {
+		t.Fatal(err)
+	}
+	source := resolverTestDocument("notes/source.md", "notes/source")
+	source.Refs = []*model.Reference{{SourceID: "notes/source", TargetRaw: "freya", Line: model.IntPtr(1)}}
+	if err := first.IndexDocument(source, sch); err != nil {
+		t.Fatal(err)
+	}
+	if first.referenceResolverBuilds != 1 {
+		t.Fatalf("initial resolver builds = %d, want 1", first.referenceResolverBuilds)
+	}
+
+	if err := second.IndexDocument(resolverTestDocument("people/frigg.md", "people/frigg"), sch); err != nil {
+		t.Fatal(err)
+	}
+	source.Refs[0].TargetRaw = "frigg"
+	if err := first.IndexDocument(source, sch); err != nil {
+		t.Fatal(err)
+	}
+
+	assertIndexedRefTarget(t, first, source.FilePath, "frigg", "people/frigg")
+	if first.referenceResolverBuilds != 2 {
+		t.Fatalf("resolver builds after external write = %d, want 2", first.referenceResolverBuilds)
+	}
+}
+
+func TestAutoResolveDisabledKeepsResolverColdUntilFinalPass(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetAutoResolveRefs(false)
+
+	sch := schema.New()
+	if err := db.IndexDocument(resolverTestDocument("people/freya.md", "people/freya"), sch); err != nil {
+		t.Fatal(err)
+	}
+	source := resolverTestDocument("notes/source.md", "notes/source")
+	source.Refs = []*model.Reference{{SourceID: "notes/source", TargetRaw: "freya", Line: model.IntPtr(1)}}
+	if err := db.IndexDocument(source, sch); err != nil {
+		t.Fatal(err)
+	}
+	if db.referenceResolverBuilds != 0 {
+		t.Fatalf("resolver builds during bulk-style indexing = %d, want 0", db.referenceResolverBuilds)
+	}
+	assertIndexedRefUnresolved(t, db, source.FilePath, "freya")
+
+	if _, err := db.ResolveReferencesWithSchema("daily", sch); err != nil {
+		t.Fatal(err)
+	}
+	assertIndexedRefTarget(t, db, source.FilePath, "freya", "people/freya")
+	if db.referenceResolverBuilds != 1 {
+		t.Fatalf("resolver builds after final pass = %d, want 1", db.referenceResolverBuilds)
+	}
+}
+
 func BenchmarkIndexDocumentWithWarmResolver(b *testing.B) {
 	db, err := OpenInMemory()
 	if err != nil {

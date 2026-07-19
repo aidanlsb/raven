@@ -675,6 +675,9 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	}
 	defer tx.Rollback()
 
+	if err := d.ensureReferenceResolverCacheCurrentLocked(tx); err != nil {
+		return err
+	}
 	oldResolverState, err := d.cachedResolverFileStateLocked(tx, doc.FilePath)
 	if err != nil {
 		return err
@@ -717,12 +720,17 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 		return err
 	}
 
+	resolverGeneration, err := bumpResolverGeneration(tx)
+	if err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 
 	if d.autoResolveRefs && d.dailyDirectory != "" {
 		d.updateReferenceResolverCacheLocked(oldResolverState, newResolverState)
+		d.setReferenceResolverGenerationLocked(resolverGeneration)
 		if _, err := d.resolveReferencesForFileWithSchemaLocked(doc.FilePath, d.dailyDirectory, sch); err != nil {
 			return err
 		}
@@ -757,6 +765,9 @@ func (d *Database) IndexAsset(asset *model.Asset) error {
 	}
 	defer tx.Rollback()
 
+	if err := d.ensureReferenceResolverCacheCurrentLocked(tx); err != nil {
+		return err
+	}
 	oldResolverState, err := d.cachedResolverFileStateLocked(tx, asset.FilePath)
 	if err != nil {
 		return err
@@ -788,11 +799,16 @@ func (d *Database) IndexAsset(asset *model.Asset) error {
 	if err != nil {
 		return err
 	}
+	resolverGeneration, err := bumpResolverGeneration(tx)
+	if err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	if d.autoResolveRefs {
 		d.updateReferenceResolverCacheLocked(oldResolverState, newResolverState)
+		d.setReferenceResolverGenerationLocked(resolverGeneration)
 	} else {
 		d.referenceResolverCache = nil
 	}
@@ -1325,6 +1341,9 @@ func (d *Database) RemoveFiles(filePaths []string) error {
 	}
 	defer tx.Rollback()
 
+	if err := d.ensureReferenceResolverCacheCurrentLocked(tx); err != nil {
+		return err
+	}
 	oldResolverStates := make([]*resolverFileState, 0, len(filePaths))
 	for _, filePath := range filePaths {
 		state, err := d.cachedResolverFileStateLocked(tx, filePath)
@@ -1339,6 +1358,10 @@ func (d *Database) RemoveFiles(filePaths []string) error {
 		}
 	}
 
+	resolverGeneration, err := bumpResolverGeneration(tx)
+	if err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
@@ -1349,6 +1372,7 @@ func (d *Database) RemoveFiles(filePaths []string) error {
 	for _, oldState := range oldResolverStates {
 		d.updateReferenceResolverCacheLocked(oldState, nil)
 	}
+	d.setReferenceResolverGenerationLocked(resolverGeneration)
 	return nil
 }
 
@@ -1379,6 +1403,9 @@ func (d *Database) ClearAllData() error {
 		}
 	}
 
+	if _, err := bumpResolverGeneration(tx); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
@@ -1393,8 +1420,14 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 	d.resolverMu.Lock()
 	defer d.resolverMu.Unlock()
 
+	tx, err := d.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
 	// Count files that will be removed
-	count, err := countDistinctFilesWithPrefix(d.db, pathPrefix)
+	count, err := countDistinctFilesWithPrefix(tx, pathPrefix)
 	if err != nil {
 		return 0, err
 	}
@@ -1404,14 +1437,20 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 	}
 
 	pattern := pathPrefix + "%"
-	if err := deleteByFilePathLike(d.db, pattern); err != nil {
+	if err := deleteByFilePathLike(tx, pattern); err != nil {
+		return 0, err
+	}
+	if _, err := bumpResolverGeneration(tx); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
 	d.referenceResolverCache = nil
 	return count, nil
 }
 
-func countDistinctFilesWithPrefix(db *sql.DB, pathPrefix string) (int, error) {
+func countDistinctFilesWithPrefix(db resolverQuerier, pathPrefix string) (int, error) {
 	var count int
 	err := db.QueryRow(`
 		SELECT COUNT(DISTINCT file_path)
@@ -1497,6 +1536,9 @@ func (d *Database) RemoveDocument(objectID string) error {
 	}
 	defer tx.Rollback()
 
+	if err := d.ensureReferenceResolverCacheCurrentLocked(tx); err != nil {
+		return err
+	}
 	// Prefer the canonical file_path stored in the DB (important when directory
 	// roots are configured and object IDs do not match file paths).
 	var filePath string
@@ -1520,11 +1562,16 @@ func (d *Database) RemoveDocument(objectID string) error {
 	if err := deleteByFilePath(tx, filePath); err != nil {
 		return err
 	}
+	resolverGeneration, err := bumpResolverGeneration(tx)
+	if err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	if d.autoResolveRefs {
 		d.updateReferenceResolverCacheLocked(oldResolverState, nil)
+		d.setReferenceResolverGenerationLocked(resolverGeneration)
 	} else {
 		d.referenceResolverCache = nil
 	}
@@ -1630,6 +1677,37 @@ func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
 // This shared helper allows all subsystems (index/query/check) to use identical
 // resolver semantics without re-implementing object ID and alias loading logic.
 func BuildResolver(db *sql.DB, opts ResolverOptions) (*resolver.Resolver, error) {
+	res, _, err := buildResolverSnapshot(db, opts)
+	return res, err
+}
+
+type resolverQuerier interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func buildResolverSnapshot(db *sql.DB, opts ResolverOptions) (*resolver.Resolver, int64, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, 0, err
+	}
+	defer tx.Rollback()
+
+	generation, err := resolverGeneration(tx)
+	if err != nil {
+		return nil, 0, err
+	}
+	res, err := buildResolver(tx, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, err
+	}
+	return res, generation, nil
+}
+
+func buildResolver(db resolverQuerier, opts ResolverOptions) (*resolver.Resolver, error) {
 	dailyDir := defaultDailyDir(opts.DailyDirectory)
 
 	objectIDs, err := allObjectIDsFromDB(db)
@@ -1708,7 +1786,7 @@ func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string][]string, 
 	return allNameFieldValuesFromDB(d.db, sch)
 }
 
-func allObjectIDsFromDB(db *sql.DB) ([]string, error) {
+func allObjectIDsFromDB(db resolverQuerier) ([]string, error) {
 	query := "SELECT id FROM objects"
 	hasSections, err := objectsTableHasColumn(db, "sections", "id")
 	if err != nil {
@@ -1735,7 +1813,7 @@ func allObjectIDsFromDB(db *sql.DB) ([]string, error) {
 	return ids, rows.Err()
 }
 
-func allAssetIDsFromDB(db *sql.DB) ([]string, error) {
+func allAssetIDsFromDB(db resolverQuerier) ([]string, error) {
 	exists, err := objectsTableHasColumn(db, "assets", "id")
 	if err != nil {
 		return nil, err
@@ -1761,7 +1839,7 @@ func allAssetIDsFromDB(db *sql.DB) ([]string, error) {
 	return ids, rows.Err()
 }
 
-func allAliasesFromDB(db *sql.DB) (map[string]string, error) {
+func allAliasesFromDB(db resolverQuerier) (map[string]string, error) {
 	hasAliasColumn, err := objectsTableHasColumn(db, "objects", "alias")
 	if err != nil {
 		return nil, err
@@ -1791,7 +1869,7 @@ func allAliasesFromDB(db *sql.DB) (map[string]string, error) {
 	return aliases, rows.Err()
 }
 
-func allAliasMatchesFromDB(db *sql.DB) (map[string][]string, error) {
+func allAliasMatchesFromDB(db resolverQuerier) (map[string][]string, error) {
 	hasAliasColumn, err := objectsTableHasColumn(db, "objects", "alias")
 	if err != nil {
 		return nil, err
@@ -1818,7 +1896,7 @@ func allAliasMatchesFromDB(db *sql.DB) (map[string][]string, error) {
 	return aliasMatches, rows.Err()
 }
 
-func objectsTableHasColumn(db *sql.DB, tableName, columnName string) (bool, error) {
+func objectsTableHasColumn(db resolverQuerier, tableName, columnName string) (bool, error) {
 	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
 	if err != nil {
 		return false, err
@@ -1841,7 +1919,7 @@ func objectsTableHasColumn(db *sql.DB, tableName, columnName string) (bool, erro
 	return false, rows.Err()
 }
 
-func allNameFieldValuesFromDB(db *sql.DB, sch *schema.Schema) (map[string][]string, error) {
+func allNameFieldValuesFromDB(db resolverQuerier, sch *schema.Schema) (map[string][]string, error) {
 	nameFieldMap := make(map[string][]string)
 
 	if sch == nil {

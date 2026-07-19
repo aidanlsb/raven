@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/resolver"
@@ -15,6 +16,7 @@ type referenceResolverCache struct {
 	dailyDirectory string
 	schemaKey      string
 	schema         *schema.Schema
+	generation     int64
 }
 
 type resolverFileState struct {
@@ -64,6 +66,27 @@ func (d *Database) prepareReferenceResolverCacheLocked(sch *schema.Schema) {
 	}
 }
 
+func (d *Database) ensureReferenceResolverCacheCurrentLocked(db resolverQuerier) error {
+	if d.referenceResolverCache == nil {
+		return nil
+	}
+	generation, err := resolverGeneration(db)
+	if err != nil {
+		d.referenceResolverCache = nil
+		return err
+	}
+	if d.referenceResolverCache.generation != generation {
+		d.referenceResolverCache = nil
+	}
+	return nil
+}
+
+func (d *Database) setReferenceResolverGenerationLocked(generation int64) {
+	if d.referenceResolverCache != nil {
+		d.referenceResolverCache.generation = generation
+	}
+}
+
 func (d *Database) cachedResolverFileStateLocked(tx *sql.Tx, filePath string) (*resolverFileState, error) {
 	if d.referenceResolverCache == nil {
 		return nil, nil
@@ -90,10 +113,15 @@ func (d *Database) getReferenceResolverLocked(dailyDirectory string, sch *schema
 	if cache := d.referenceResolverCache; cache != nil &&
 		cache.dailyDirectory == dailyDirectory &&
 		cache.schemaKey == schemaKey {
-		return cache.resolver, nil
+		if err := d.ensureReferenceResolverCacheCurrentLocked(d.db); err != nil {
+			return nil, err
+		}
+		if d.referenceResolverCache != nil {
+			return cache.resolver, nil
+		}
 	}
 
-	res, err := BuildResolver(d.db, ResolverOptions{
+	res, generation, err := buildResolverSnapshot(d.db, ResolverOptions{
 		DailyDirectory: dailyDirectory,
 		Schema:         sch,
 	})
@@ -105,9 +133,43 @@ func (d *Database) getReferenceResolverLocked(dailyDirectory string, sch *schema
 		dailyDirectory: dailyDirectory,
 		schemaKey:      schemaKey,
 		schema:         sch,
+		generation:     generation,
 	}
 	d.referenceResolverBuilds++
 	return res, nil
+}
+
+const resolverGenerationMetaKey = "resolver_generation"
+
+func resolverGeneration(db resolverQuerier) (int64, error) {
+	var raw string
+	err := db.QueryRow(`SELECT value FROM meta WHERE key = ?`, resolverGenerationMetaKey).Scan(&raw)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		// BuildResolver also supports the simplified legacy/test databases used
+		// by query callers, which may not include Raven's meta table.
+		if strings.Contains(err.Error(), "no such table: meta") {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read resolver generation: %w", err)
+	}
+	generation, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse resolver generation %q: %w", raw, err)
+	}
+	return generation, nil
+}
+
+func bumpResolverGeneration(tx *sql.Tx) (int64, error) {
+	if _, err := tx.Exec(`
+		INSERT INTO meta (key, value) VALUES (?, '1')
+		ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1
+	`, resolverGenerationMetaKey); err != nil {
+		return 0, fmt.Errorf("bump resolver generation: %w", err)
+	}
+	return resolverGeneration(tx)
 }
 
 func loadResolverFileState(tx *sql.Tx, filePath string, sch *schema.Schema) (*resolverFileState, error) {
