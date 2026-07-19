@@ -99,8 +99,10 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 
 	fieldValues := normalizedCreateFieldValues(req.FieldValues, typeDef, req.Title)
 
+	targetPath := deriveCreateTargetPath(req.TargetPath, req.Title)
+
 	slugified := slugs.PathSlug(
-		pages.ResolveTargetPathWithRoots(req.TargetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot),
+		pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot),
 	)
 	if !strings.HasSuffix(slugified, ".md") {
 		slugified += ".md"
@@ -152,7 +154,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			VaultPath:   req.VaultPath,
 			TypeName:    req.TypeName,
 			Title:       req.Title,
-			TargetPath:  req.TargetPath,
+			TargetPath:  targetPath,
 			Fields:      validatedCreateFields,
 			Schema:      req.Schema,
 			TemplateDir: req.TemplateDir,

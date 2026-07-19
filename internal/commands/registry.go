@@ -111,8 +111,13 @@ Use --field for shell-friendly literal values. Use --field-json when exact type
 control matters, such as preserving the string "true" instead of a boolean or
 providing arrays/nulls explicitly.
 
-Use --path to explicitly control the object path. Titles are treated as display
-names and must not include path separators.
+Titles are treated as display names and are stored verbatim in frontmatter
+(populating name_field when configured). When no --path is given, the title is
+slugified into the filename/path, so titles may contain "/" or other characters
+that are unsafe in paths (e.g. "config.VaultConfig duplicates internal/paths"
+becomes config-vaultconfig-duplicates-internal-paths.md). The object ID stays
+derived from the resulting file path. Use --path to explicitly control the object
+path (its "/" segments map to directories).
 
 If the type has a name_field configured (e.g., name_field: name), the title
 argument automatically populates that field. This means for a person type with

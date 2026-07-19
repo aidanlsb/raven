@@ -12,9 +12,8 @@ func validateObjectTitle(title string) error {
 	if strings.TrimSpace(title) == "" {
 		return fmt.Errorf("title cannot be empty")
 	}
-	if strings.ContainsAny(title, "/\\") {
-		return fmt.Errorf("title cannot contain path separators")
-	}
+	// Titles are display names: path separators are allowed here and are
+	// slugified into the filename/path. Use --path for explicit path control.
 	return nil
 }
 

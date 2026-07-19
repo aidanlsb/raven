@@ -156,10 +156,10 @@ func missingRefWarning(ref *check.MissingRef) commandexec.Warning {
 	return warning
 }
 
-// missingRefTitle derives a plain display title from a reference target path.
-// `new` rejects titles that contain path separators, so we use the final path
-// segment (e.g. "people/ghost" -> "ghost") while the full target is preserved
-// via the invocation's explicit path argument.
+// missingRefTitle derives a concise display title from a reference target path.
+// The missing-ref flow always creates the object at the ref's exact location via
+// the invocation's explicit --path argument, so we only need a readable display
+// title here and use the final path segment (e.g. "people/ghost" -> "ghost").
 func missingRefTitle(targetPath string) string {
 	trimmed := strings.TrimSpace(targetPath)
 	trimmed = strings.TrimRight(trimmed, "/")

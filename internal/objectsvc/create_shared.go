@@ -10,7 +10,24 @@ import (
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/slugs"
 )
+
+// deriveCreateTargetPath computes the path seed used to build a new object's
+// filename/slug and (path-derived) object ID.
+//
+// An explicit target path (from --path) is honored verbatim so its "/" segments
+// map to directories. When no explicit path is given, the title is treated purely
+// as a display name and slugified into a single filename component. This lets
+// titles contain "/" (and other unsafe path characters) without being interpreted
+// as directory separators, while the display title is still persisted unchanged in
+// frontmatter via name_field.
+func deriveCreateTargetPath(targetPath, title string) string {
+	if strings.TrimSpace(targetPath) != "" {
+		return targetPath
+	}
+	return slugs.ComponentSlug(title)
+}
 
 type requiredFieldGap struct {
 	Name   string

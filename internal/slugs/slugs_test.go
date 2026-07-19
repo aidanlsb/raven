@@ -40,6 +40,11 @@ func TestComponentSlug(t *testing.T) {
 		{"test.md", "test"},
 		{"file-name", "file-name"},
 		{"Special: Characters!", "special-characters"},
+		{"internal/paths", "internal-paths"},
+		{"config.VaultConfig duplicates internal/paths", "config-vaultconfig-duplicates-internal-paths"},
+		// Fallback path (goslug cannot slugify): separators, including path
+		// separators, are replaced so the result stays a single component.
+		{"///", "---"},
 	}
 
 	for _, tt := range tests {

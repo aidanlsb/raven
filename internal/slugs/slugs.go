@@ -44,12 +44,20 @@ func HeadingSlug(text string) string {
 	return strings.TrimSuffix(s, "-")
 }
 
-// ComponentSlug converts a string to a URL-safe slug appropriate for file/path components.
+// ComponentSlug converts a string to a URL-safe slug appropriate for a single
+// file/path component.
+//
+// The result never contains path separators, so it is safe to use for turning a
+// free-form display string (e.g. an object title) into one filename segment.
 func ComponentSlug(s string) string {
 	s = strings.TrimSuffix(s, ".md")
 	slugged := goslug.Make(s)
 	if slugged == "" {
-		slugged = strings.ToLower(strings.ReplaceAll(s, " ", "-"))
+		// Fallback for inputs goslug cannot slugify (e.g. only punctuation).
+		// Replace separators—including path separators—so the result stays a
+		// single safe component.
+		replacer := strings.NewReplacer(" ", "-", "/", "-", "\\", "-")
+		slugged = strings.ToLower(replacer.Replace(s))
 	}
 	return slugged
 }

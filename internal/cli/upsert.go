@@ -32,10 +32,12 @@ func buildUpsertArgs(cmd *cobra.Command, args []string) (map[string]interface{},
 	title := args[1]
 
 	if err := validateObjectTitle(title); err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
+		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a non-empty title")
 	}
 
-	targetPath := title
+	// Leave targetPath empty when no explicit --path is given so the service
+	// derives the filename/slug from the title (which may contain "/").
+	targetPath := ""
 	if cmd.Flags().Changed("path") {
 		targetPath = strings.TrimSpace(upsertPathFlag)
 		if err := validateObjectTargetPath(targetPath); err != nil {

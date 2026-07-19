@@ -448,14 +448,19 @@ types:
 	}
 }
 
-func TestNewRejectsTitleWithPathSeparator(t *testing.T) {
+func TestNewSlugifiesTitleWithPathSeparator(t *testing.T) {
 	vaultPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
 types:
-  person:
-    default_path: people/
+  note:
+    default_path: note/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
 `) + "\n"
 
 	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
@@ -481,30 +486,52 @@ types:
 	newPathFlag = ""
 	newCmd.Flags().Lookup("path").Changed = false
 
+	title := "config.VaultConfig duplicates internal/paths"
 	out := captureStdout(t, func() {
-		if err := newCmd.RunE(newCmd, []string{"person", "folder/name"}); err != nil {
+		if err := newCmd.RunE(newCmd, []string{"note", title}); err != nil {
 			t.Fatalf("newCmd.RunE: %v", err)
 		}
 	})
 
 	var resp struct {
-		OK    bool `json:"ok"`
-		Error *struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
+		OK   bool `json:"ok"`
+		Data struct {
+			File  string `json:"file"`
+			ID    string `json:"id"`
+			Title string `json:"title"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &resp); err != nil {
 		t.Fatalf("expected JSON output, got parse error: %v; out=%s", err, out)
 	}
-	if resp.OK {
-		t.Fatalf("expected ok=false; out=%s", out)
+	if !resp.OK {
+		t.Fatalf("expected ok=true; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != string(ErrInvalidInput) {
-		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
+
+	// Title with "/" is slugified into a single filename component (not a directory).
+	wantFile := "note/config-vaultconfig-duplicates-internal-paths.md"
+	if resp.Data.File != wantFile {
+		t.Fatalf("expected file %q, got %q", wantFile, resp.Data.File)
 	}
-	if !strings.Contains(resp.Error.Message, "title cannot contain path separators") {
-		t.Fatalf("expected path separator validation message, got: %q", resp.Error.Message)
+	// Object ID is path-derived (default_path root stripped).
+	wantID := "note/config-vaultconfig-duplicates-internal-paths"
+	if resp.Data.ID != wantID {
+		t.Fatalf("expected id %q, got %q", wantID, resp.Data.ID)
+	}
+	// Response title is preserved verbatim.
+	if resp.Data.Title != title {
+		t.Fatalf("expected response title %q, got %q", title, resp.Data.Title)
+	}
+
+	// Frontmatter title (via name_field) is preserved verbatim, including the "/".
+	created := filepath.Join(vaultPath, "note", "config-vaultconfig-duplicates-internal-paths.md")
+	b, err := os.ReadFile(created)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	got := string(b)
+	if !strings.Contains(got, "title: "+title) {
+		t.Fatalf("expected verbatim title in frontmatter, got:\n%s", got)
 	}
 }
 
