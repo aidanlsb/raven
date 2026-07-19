@@ -22,6 +22,6 @@ steps:
       Conduct a focused code review on the topic: {{inputs.topic}}
 
       ## Relevant Context
-      {{steps.relevant.data.results}}
+      {{steps.relevant.data.items}}
 
       Provide constructive feedback and suggestions for improvement.

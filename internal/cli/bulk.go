@@ -49,7 +49,7 @@ type BulkPreview struct {
 // BulkSummary represents the summary of a completed bulk operation.
 type BulkSummary struct {
 	Action   string       `json:"action"`
-	Results  []BulkResult `json:"results"`
+	Results  []BulkResult `json:"items"`
 	Total    int          `json:"total"`
 	Modified int          `json:"modified,omitempty"`
 	Deleted  int          `json:"deleted,omitempty"`

@@ -97,7 +97,7 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 			"updated": updated,
 			"skipped": skipped,
 			"errors":  errored,
-			"results": results,
+			"items":   results,
 		}
 		if len(warnings) > 0 {
 			return outputSuccessWithWarnings(data, warnings, nil)
@@ -159,7 +159,7 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 func renderCanonicalImportResult(result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	results := make([]importResult, 0)
-	switch rawResults := data["results"].(type) {
+	switch rawResults := data["items"].(type) {
 	case []importResult:
 		results = append(results, rawResults...)
 	case []interface{}:

@@ -139,7 +139,7 @@ func runDeleteBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string,
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"ok":       summary.Errors == 0,
 		"action":   summary.Action,
-		"results":  canonicalDeleteResults(summary.Results),
+		"items":    canonicalDeleteResults(summary.Results),
 		"total":    summary.Total,
 		"skipped":  summary.Skipped,
 		"errors":   summary.Errors,

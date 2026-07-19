@@ -353,12 +353,12 @@ name: Freya
 		if result.Data["ambiguous"] != true {
 			t.Fatalf("expected ambiguous=true, got %#v", result.Data["ambiguous"])
 		}
-		matches := result.DataList("matches")
-		if len(matches) != 2 {
-			t.Fatalf("expected 2 matches, got %#v", matches)
+		items := result.DataList("items")
+		if len(items) != 2 {
+			t.Fatalf("expected 2 matches, got %#v", items)
 		}
-		ids := make(map[string]bool, len(matches))
-		for _, raw := range matches {
+		ids := make(map[string]bool, len(items))
+		for _, raw := range items {
 			match, ok := raw.(map[string]interface{})
 			if !ok {
 				t.Fatalf("expected match object, got %#v", raw)
@@ -367,7 +367,7 @@ name: Freya
 			ids[id] = true
 		}
 		if !ids["freya"] || !ids["people/freya"] {
-			t.Fatalf("expected page and typed matches, got %#v", matches)
+			t.Fatalf("expected page and typed matches, got %#v", items)
 		}
 	})
 

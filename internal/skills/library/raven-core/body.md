@@ -7,6 +7,8 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 ## Operating rules
 
 - Use `rvn` with `--json` for deterministic machine-readable output.
+- Read the primary homogeneous result collection from `data.items`; an empty
+  collection is `[]`, not `null`.
 - Prefer `rvn` commands over direct file writes or shell text manipulation (`echo`, `cat >`, `sed`, `awk`).
 - Choose the smallest mutation primitive that matches the user's intent.
 - Read with `rvn read --raw` before constructing `rvn edit` replacements.
@@ -28,6 +30,8 @@ Key distinctions:
 - `upsert` vs `add`: use `upsert` when reruns should converge to one canonical state. Use `add` when history should accumulate.
 - `set` vs `edit`: use `set` for structured metadata (frontmatter). Use `edit` for body content changes.
 - `set` arguments use `field=value` pairs, for example `rvn set project/raven status=active --json`.
+- Use `--fields-json '{...}'` on `new`, `upsert`, `set`, and `reclassify` when
+  exact JSON typing matters.
 - `new` vs `upsert`: use `new` only when creating a genuinely new object identity. Use `upsert` when the same agent action might run again.
 
 ## Daily notes

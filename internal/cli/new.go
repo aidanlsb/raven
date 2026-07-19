@@ -64,7 +64,7 @@ func buildNewArgs(_ *cobra.Command, args []string) (map[string]interface{}, erro
 	}
 	fieldJSONRaw, err := parseFieldJSONObject(newFieldJSON)
 	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+		return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
 	}
 	if !isJSONOutput() {
 		if reader == nil {
@@ -238,7 +238,7 @@ func buildNewCommandArgs(typeName, title, targetPath, templateID string, fieldVa
 		args["field"] = stringMapToAny(fieldValues)
 	}
 	if len(fieldJSONRaw) > 0 {
-		args["field-json"] = fieldJSONRaw
+		args["fields-json"] = fieldJSONRaw
 	}
 	if strings.TrimSpace(targetPath) != "" {
 		args["path"] = targetPath
@@ -301,7 +301,7 @@ func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]stri
 
 func init() {
 	newCmd.Flags().StringArrayVar(&newFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
-	newCmd.Flags().StringVar(&newFieldJSON, "field-json", "", "Set frontmatter fields via JSON object (typed values)")
+	newCmd.Flags().StringVar(&newFieldJSON, "fields-json", "", "Set frontmatter fields via JSON object (typed values)")
 	newCmd.Flags().StringVar(&newPathFlag, "path", "", "Explicit target path (overrides title-derived path)")
 	newCmd.Flags().StringVar(&newTemplate, "template", "", "Type template ID to use for object creation")
 	newCmd.ValidArgsFunction = completeTypes

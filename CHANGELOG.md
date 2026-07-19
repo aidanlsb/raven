@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `rvn skill install` installs shipped Raven skills in one command — the full catalog by default, or a narrowed set when skill names are given — so first-run setup no longer requires chaining named `rvn skill sync ... --confirm` calls. In an interactive terminal it prints the plan and prompts `Install these skills? [y/N]` before writing. In non-interactive or `--json` runs it does not prompt: pass `--yes` to apply (with `--confirm` accepted as an alias), otherwise it returns a preview with a top-level `needs_confirm` flag and per-skill plan so agents know a confirm is still required.
 
 ### Changed
+- **Breaking:** successful response envelopes now use `data.items` for their primary homogeneous collection across query/search, docs search, ambiguous `resolve`, imports, bulk preview/apply results, link traversal, and `raven_discover`. Empty primary collections serialize as `[]` instead of `null`.
 - Daily notes now have a bare ISO date (`YYYY-MM-DD`) as their canonical object ID, regardless of `directories.daily`. Previously the configured daily directory was woven into the ID (e.g. `daily/2026-03-15`). `directories.daily` is now filesystem layout only: files still live under it (`daily/2026-03-15.md`, `journal/2026-03-15.md`, …), but the link/object identity is the bare date, so `[[2026-03-15]]` is unambiguous date identity across every vault layout. Legacy daily-directory-prefixed references — `[[daily/2026-03-15]]` and `[[<configured-daily-dir>/2026-03-15]]`, including section forms like `[[daily/2026-03-15#standup]]` — still resolve to the same bare-date object as compatibility aliases. Reindexing an existing vault rewrites indexed daily IDs to the bare form automatically.
 - Permissive writes that introduce a reference to a missing target now emit the distinct `REF_TARGET_MISSING` warning code instead of reusing `REF_NOT_FOUND`. `REF_NOT_FOUND` remains the fatal error code for read/resolve failures, so agents can branch on the code alone. Each warning now also carries a structured `create_invoke` (`{command, args}`) alongside the existing `create_command` string, so agents can remediate via `raven_invoke` without shell-parsing.
 - Agent skill commands now use the portable Agent Skills directories (`~/.agents/skills` for user scope and `.agents/skills` for project scope). The runtime-specific `--target` flag has been removed; use `--dest` for a custom install root.
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation and the LSP no longer advertise a frontmatter `id` key as an "object ID override". Object identity is path-derived and cannot be overridden in frontmatter; use `alias` to give an object an alternate name for reference resolution. `id` is no longer a reserved frontmatter key, so a stray `id:` value is now reported as `unknown_frontmatter_key` by `rvn check` instead of being silently accepted.
 
 ### Removed
+- **Breaking:** the singular `--field-json` CLI flag and `field-json` MCP argument have been removed from `new`, `upsert`, and `reclassify`; use `--fields-json` / `fields-json` consistently on all field-writing commands. The former `data.results` and successful `data.matches` collection keys have also been removed; use `data.items`.
 - `rvn check` no longer accepts the `--fix`, `--create-missing`, or `--confirm` flags. Repairs live solely on the subcommands `rvn check fix` and `rvn check create-missing` (and the equivalent `check_fix` / `check create-missing` MCP tools), removing the duplicate entry points and the ambiguity of parent-level `--confirm`. `rvn check` is now a read-only validation command.
 
 ## [v0.0.28] - 2026-07-08
@@ -185,7 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `rvn mcp install`, `rvn mcp show`, and `rvn mcp remove` now support Codex client configuration alongside Claude Code, Claude Desktop, and Cursor.
 
 ### Changed
-- `create` and `reclassify` now share the same typed field pipeline, so frontmatter writes preserve exact value semantics across object mutations. The extra create-then-rewrite pass is removed and `reclassify` gains a matching `--field-json` path.
+- `create` and `reclassify` now share the same typed field pipeline, so frontmatter writes preserve exact value semantics across object mutations. The extra create-then-rewrite pass is removed and `reclassify` gains a matching typed JSON field path.
 - `raven_discover` now always returns the full command catalog; passing filter arguments (category/mode/risk) is an error. The command list is short enough that filtering added confusion without benefit.
 - Query guidance, examples, and MCP error adaptation now steer ambiguous requests toward concrete follow-up queries more consistently.
 

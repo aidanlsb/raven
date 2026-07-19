@@ -117,7 +117,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"action":   summary.Action,
-		"results":  summary.Results,
+		"items":    summary.Results,
 		"total":    summary.Total,
 		"modified": summary.Modified,
 		"skipped":  summary.Skipped,

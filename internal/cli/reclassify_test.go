@@ -293,7 +293,7 @@ types:
 	}
 }
 
-func TestReclassifyFieldJSONPreservesStringType(t *testing.T) {
+func TestReclassifyFieldsJSONPreservesStringType(t *testing.T) {
 	schemaYAML := `version: 2
 types:
   note:

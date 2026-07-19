@@ -159,7 +159,7 @@ Contains roadmap milestones.
 		})
 		cliResult := vCLI.RunCLI("search", "roadmap milestones", "--limit", "5")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query", "results"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query", "items"})
 	})
 
 	t.Run("backlinks", func(t *testing.T) {

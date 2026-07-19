@@ -62,16 +62,17 @@ func TestBuildCommandContractStrictTypes(t *testing.T) {
 	if got := newContract.Parameters["field"].Type; got != paramTypeObject {
 		t.Fatalf("new.field type=%q, want %q", got, paramTypeObject)
 	}
-	if got := newContract.Parameters["field-json"].Type; got != paramTypeObject {
-		t.Fatalf("new.field-json type=%q, want %q", got, paramTypeObject)
-	}
-
-	reclassifyContract, ok := buildCommandContract("reclassify")
-	if !ok {
-		t.Fatal("expected reclassify contract")
-	}
-	if got := reclassifyContract.Parameters["field-json"].Type; got != paramTypeObject {
-		t.Fatalf("reclassify.field-json type=%q, want %q", got, paramTypeObject)
+	for _, commandID := range []string{"new", "upsert", "reclassify", "set"} {
+		contract, found := buildCommandContract(commandID)
+		if !found {
+			t.Fatalf("expected %s contract", commandID)
+		}
+		if got := contract.Parameters["fields-json"].Type; got != paramTypeObject {
+			t.Fatalf("%s.fields-json type=%q, want %q", commandID, got, paramTypeObject)
+		}
+		if _, exists := contract.Parameters["field-json"]; exists {
+			t.Fatalf("did not expect removed %s.field-json parameter", commandID)
+		}
 	}
 
 	importContract, ok := buildCommandContract("import")
@@ -130,9 +131,9 @@ func TestCompactDiscoverReturnsFullCatalogByDefault(t *testing.T) {
 	var resp struct {
 		OK   bool `json:"ok"`
 		Data struct {
-			Matches []struct {
+			Items []struct {
 				Command string `json:"command"`
-			} `json:"matches"`
+			} `json:"items"`
 			Total      int      `json:"total"`
 			Returned   int      `json:"returned"`
 			Categories []string `json:"categories"`
@@ -143,8 +144,8 @@ func TestCompactDiscoverReturnsFullCatalogByDefault(t *testing.T) {
 	}
 
 	contracts := discoverableContracts()
-	if got, want := len(resp.Data.Matches), len(contracts); got != want {
-		t.Fatalf("discover returned %d matches, want %d", got, want)
+	if got, want := len(resp.Data.Items), len(contracts); got != want {
+		t.Fatalf("discover returned %d items, want %d", got, want)
 	}
 	if resp.Data.Total != len(contracts) {
 		t.Fatalf("discover total=%d, want %d", resp.Data.Total, len(contracts))
@@ -153,8 +154,8 @@ func TestCompactDiscoverReturnsFullCatalogByDefault(t *testing.T) {
 		t.Fatalf("discover returned=%d, want %d", resp.Data.Returned, len(contracts))
 	}
 	for i, contract := range contracts {
-		if resp.Data.Matches[i].Command != contract.CommandID {
-			t.Fatalf("discover match %d command=%q, want %q", i, resp.Data.Matches[i].Command, contract.CommandID)
+		if resp.Data.Items[i].Command != contract.CommandID {
+			t.Fatalf("discover item %d command=%q, want %q", i, resp.Data.Items[i].Command, contract.CommandID)
 		}
 	}
 	if len(resp.Data.Categories) == 0 {

@@ -138,7 +138,7 @@ func HandleDocsSearch(_ context.Context, req commandexec.Request) commandexec.Re
 		"limit":    result.Limit,
 		"offset":   result.Offset,
 		"has_more": result.HasMore,
-		"matches":  result.Matches,
+		"items":    result.Matches,
 	}, &commandexec.Meta{Count: result.Returned, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 

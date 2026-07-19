@@ -124,6 +124,14 @@ The MCP surface is intentionally compact:
 - `raven_describe` returns the strict invocation contract for one command.
 - `raven_invoke` executes a registry command with validation and policy checks.
 
+Successful responses put their primary homogeneous collection in `data.items`.
+This includes `raven_discover`, query/search windows, docs search, ambiguous
+`resolve` candidates, import outcomes, and bulk preview/apply rows. Empty
+collections are `[]`, not `null`. Specialized or secondary collections retain
+descriptive keys, such as `ids`, `issues`, `sections`, `items_by_target`, and
+`items_by_source`; ambiguity failures retain candidate IDs in
+`error.details.matches`.
+
 ### Discovery Flow
 
 Use this sequence:

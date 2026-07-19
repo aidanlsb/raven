@@ -35,7 +35,7 @@ type ReclassifyResult = objectsvc.ReclassifyResult
 func buildReclassifyArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
 	fieldJSONRaw, err := parseFieldJSONObject(reclassifyFieldJSON)
 	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+		return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
 	}
 	parsedFieldFlags, err := parseKeyValueArgs("field", reclassifyFieldFlags)
 	if err != nil {
@@ -56,7 +56,7 @@ func buildReclassifyArgs(_ *cobra.Command, args []string) (map[string]interface{
 		"force":       reclassifyForce,
 	}
 	if len(fieldJSONRaw) > 0 {
-		argsMap["field-json"] = fieldJSONRaw
+		argsMap["fields-json"] = fieldJSONRaw
 	}
 	return argsMap, nil
 }
@@ -192,7 +192,7 @@ func promptMissingReclassifyFields(newTypeName string, details map[string]interf
 
 func init() {
 	reclassifyCmd.Flags().StringArrayVar(&reclassifyFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
-	reclassifyCmd.Flags().StringVar(&reclassifyFieldJSON, "field-json", "", "Set/update frontmatter fields as a JSON object")
+	reclassifyCmd.Flags().StringVar(&reclassifyFieldJSON, "fields-json", "", "Set/update frontmatter fields as a JSON object")
 	reclassifyCmd.Flags().BoolVar(&reclassifyNoMove, "no-move", false, "Skip moving file to new type's default_path")
 	reclassifyCmd.Flags().BoolVar(&reclassifyUpdateRefs, "update-refs", true, "Update references when file moves")
 	reclassifyCmd.Flags().BoolVar(&reclassifyForce, "force", false, "Skip confirmation prompts")

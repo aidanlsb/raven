@@ -93,6 +93,18 @@ Owner [[people/alice]] and reviewer [[people/bob]].
 	if errors := outlinks.DataList("errors"); len(errors) != 1 {
 		t.Fatalf("outlink errors = %#v, want 1", errors)
 	}
+
+	emptyBacklinks := v.RunCLI("backlinks", "projects/site")
+	emptyBacklinks.MustSucceed(t)
+	if items, ok := emptyBacklinks.Data["items"].([]interface{}); !ok || len(items) != 0 {
+		t.Fatalf("empty backlinks items = %#v, want []", emptyBacklinks.Data["items"])
+	}
+
+	emptyOutlinks := v.RunCLI("outlinks", "people/alice")
+	emptyOutlinks.MustSucceed(t)
+	if items, ok := emptyOutlinks.Data["items"].([]interface{}); !ok || len(items) != 0 {
+		t.Fatalf("empty outlinks items = %#v, want []", emptyOutlinks.Data["items"])
+	}
 }
 
 // TestIntegration_BacklinksOutlinksDynamicDates tests that backlinks and outlinks

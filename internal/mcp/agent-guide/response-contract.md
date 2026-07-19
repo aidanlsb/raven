@@ -16,6 +16,20 @@ All commands return:
 }
 ```
 
+## Collection keys
+
+The primary homogeneous collection in a successful response is always
+`data.items`, including query/search windows, docs search matches, ambiguous
+`resolve` candidates, import outcomes, bulk previews/applies, and the
+`raven_discover` command catalog. When there are no items, the value is `[]`, not
+`null`.
+
+Semantically distinct or secondary collections keep descriptive keys, such as
+`ids` for `query --ids`, `issues` for `check`, `sections` for read outlines, and
+`items_by_target` / `items_by_source` for grouped link traversal. Ambiguous
+reference failures also keep candidate IDs in `error.details.matches`; that is
+error detail, not a successful result collection.
+
 ## Compact invoke flow
 
 1. `raven_discover` to fetch the authoritative command catalog.

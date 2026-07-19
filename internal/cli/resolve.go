@@ -39,7 +39,7 @@ func renderResolve(_ *cobra.Command, result commandexec.Result) error {
 	if ambiguous, _ := data["ambiguous"].(bool); ambiguous {
 		fmt.Println(ui.Warningf("Reference '%s' is ambiguous.", reference))
 		fmt.Println(ui.Hint("Matches:"))
-		if matches, ok := data["matches"].([]map[string]interface{}); ok {
+		if matches, ok := data["items"].([]map[string]interface{}); ok {
 			for _, match := range matches {
 				src := ""
 				if s, ok := match["match_source"].(string); ok {

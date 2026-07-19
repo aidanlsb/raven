@@ -52,7 +52,7 @@ func buildUpsertArgs(cmd *cobra.Command, args []string) (map[string]interface{},
 
 	fieldJSONRaw, err := parseFieldJSONObject(upsertFieldJSON)
 	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+		return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
 	}
 
 	content := upsertContent
@@ -118,7 +118,7 @@ func buildUpsertCommandArgs(typeName, title, targetPath string, fieldValues map[
 		args["field"] = stringMapToAny(fieldValues)
 	}
 	if len(fieldJSONRaw) > 0 {
-		args["field-json"] = fieldJSONRaw
+		args["fields-json"] = fieldJSONRaw
 	}
 	if strings.TrimSpace(targetPath) != "" {
 		args["path"] = targetPath
@@ -146,7 +146,7 @@ func parseFieldFlags(flags []string) (map[string]string, error) {
 
 func init() {
 	upsertCmd.Flags().StringArrayVar(&upsertFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
-	upsertCmd.Flags().StringVar(&upsertFieldJSON, "field-json", "", "Set/update frontmatter fields as a JSON object")
+	upsertCmd.Flags().StringVar(&upsertFieldJSON, "fields-json", "", "Set/update frontmatter fields as a JSON object")
 	upsertCmd.Flags().StringVar(&upsertContent, "content", "", "Replace body content (idempotent full-body mode)")
 	upsertCmd.Flags().StringVar(&upsertContentFile, "content-file", "", "Read replacement body content from a file, or '-' for stdin")
 	upsertCmd.Flags().StringVar(&upsertPathFlag, "path", "", "Explicit target path (overrides title-derived path)")

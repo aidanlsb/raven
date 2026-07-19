@@ -222,7 +222,7 @@ Notes:
   `data.id` from its JSON response (or `link as <id>` in human output) for the
   follow-up `set`, `read`, and `[[reference]]` examples above. Use
   `--field name=value` for fields you already know.
-- If required fields are missing, read the error details and retry with `--field` or `--field-json`.
+- If required fields are missing, read the error details and retry with `--field` or `--fields-json`.
 - `rvn add` appends to the configured capture destination, which defaults to today's daily note.
 
 ## Teach by doing — against their data

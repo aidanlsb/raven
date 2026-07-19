@@ -173,7 +173,7 @@ type: page
 		})
 		cliResult := vCLI.RunCLI("query", "trait:priority .value==low", "--apply", "update high", "--confirm")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"action", "results", "total", "modified", "skipped", "errors"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"action", "items", "total", "modified", "skipped", "errors"})
 	})
 
 	t.Run("query_saved_list", func(t *testing.T) {

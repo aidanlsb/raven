@@ -105,9 +105,9 @@ command applies templates, validates against the schema, and ensures proper inde
 The type is required. If title is not provided in interactive CLI mode, you will
 be prompted for it. Interactive CLI mode prompts for schema fields; optional
 fields can be skipped with a blank response. Field values can also be provided
-via --field flags or --field-json.
+via --field flags or --fields-json.
 
-Use --field for shell-friendly literal values. Use --field-json when exact type
+Use --field for shell-friendly literal values. Use --fields-json when exact type
 control matters, such as preserving the string "true" instead of a boolean or
 providing arrays/nulls explicitly.
 
@@ -146,7 +146,7 @@ CLI offers to create the missing pages; agents can run 'rvn check create-missing
 		},
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set field value using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
-			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object with exact typed values", Type: FlagTypeJSON},
+			{Name: "fields-json", Description: "Set/update frontmatter fields as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"people/freya-2026", "note/raven-friction"}},
 			{Name: "template", Description: "Type template ID to use for object creation", Type: FlagTypeString, Examples: []string{"interview_technical", "interview_screen"}},
 		},
@@ -156,7 +156,7 @@ CLI offers to create the missing pages; agents can run 'rvn check create-missing
 			"rvn new project \"Website Redesign\" --json",
 			"rvn new interview \"Jane Doe @ Acme\" --template technical --json",
 			"rvn new book \"The Prose Edda\" --field author=people/snorri --json",
-			"rvn new person \"Freya\" --field-json '{\"email\":\"freya@asgard.realm\"}' --json",
+			"rvn new person \"Freya\" --fields-json '{\"email\":\"freya@asgard.realm\"}' --json",
 		},
 		UseCases: []string{
 			"Create a new typed object (NEVER write vault files directly)",
@@ -261,7 +261,7 @@ Boundary with add:
 Use this for generated outputs like briefs/reports/summaries where reruns should
 converge to one current state rather than append history.
 
-Use --field for shell-friendly literal values. Use --field-json when exact type
+Use --field for shell-friendly literal values. Use --fields-json when exact type
 control matters, such as preserving the string "true" instead of a boolean or
 providing arrays/nulls explicitly.
 
@@ -274,7 +274,7 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 		},
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set/update frontmatter fields using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"source": "daily-brief", "status": "ready"}`}},
-			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object with exact typed values", Type: FlagTypeJSON},
+			{Name: "fields-json", Description: "Set/update frontmatter fields as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "content", Description: "Replace body content (full-body idempotent mode)", Type: FlagTypeString},
 			{Name: "content-file", Description: "Read replacement body content from a file, or '-' for stdin (mutually exclusive with --content)", Type: FlagTypeString, Examples: []string{"/tmp/brief.md", "-"}},
 			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"brief/daily-2026-02-14", "note/raven-friction"}},
@@ -728,10 +728,10 @@ for the new type, and optionally moving the file to the new type's default direc
 
 Required fields on the new type:
 - If a required field has a Default value, it is applied automatically
-- Missing required fields can be supplied via --field flags or --field-json
+- Missing required fields can be supplied via --field flags or --fields-json
 - In JSON mode: returns REQUIRED_FIELD_MISSING error with retry_with template
 
-Use --field for shell-friendly Raven field literals. Use --field-json when exact
+Use --field for shell-friendly Raven field literals. Use --fields-json when exact
 type control matters, for example preserving the string "false" instead of a
 boolean false.
 
@@ -748,7 +748,7 @@ References are updated when the file moves (controlled by --update-refs).`,
 		},
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Supply field values using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"author": "[[people/snorri]]", "genre": "mythology"}`}},
-			{Name: "field-json", Description: "Supply field values as a JSON object with exact typed values", Type: FlagTypeJSON},
+			{Name: "fields-json", Description: "Supply field values as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "no-move", Description: "Skip moving file to new type's default_path", Type: FlagTypeBool},
 			{Name: "update-refs", Description: "Update references when file moves (default: true)", Type: FlagTypeBool, Default: "true"},
 			{Name: "force", Description: "Skip confirmation prompts (dropped fields, etc.)", Type: FlagTypeBool},
@@ -756,7 +756,7 @@ References are updated when the file moves (controlled by --update-refs).`,
 		Examples: []string{
 			"rvn reclassify inbox/note book --json",
 			"rvn reclassify people/freya company --field industry=tech --json",
-			`rvn reclassify people/freya company --field-json '{"legal_name":"false"}' --json`,
+			`rvn reclassify people/freya company --fields-json '{"legal_name":"false"}' --json`,
 			"rvn reclassify pages/draft project --no-move --json",
 			"rvn reclassify inbox/note book --force --json",
 		},
