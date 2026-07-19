@@ -17,20 +17,14 @@ func editSchemaWithLoadError(
 	mutate func(*schemadoc.Document) error,
 ) error {
 	if err := schemadoc.Edit(vaultPath, mutate); err != nil {
-		return mapSchemaDocError(err, loadSuggestion, loadErrorCode)
+		return MapSchemaDocError(err, loadSuggestion, loadErrorCode)
 	}
 	return nil
 }
 
-func loadSchemaDocument(vaultPath, loadSuggestion string) (*schemadoc.Document, error) {
-	doc, err := schemadoc.Load(vaultPath)
-	if err != nil {
-		return nil, mapSchemaDocError(err, loadSuggestion, ErrorSchemaNotFound)
-	}
-	return doc, nil
-}
-
-func mapSchemaDocError(err error, loadSuggestion string, loadErrorCode ErrorCode) error {
+// MapSchemaDocError converts schemadoc failures to schemasvc's stable error
+// codes so schema mutation orchestrators share the same response contract.
+func MapSchemaDocError(err error, loadSuggestion string, loadErrorCode ErrorCode) error {
 	if err == nil {
 		return nil
 	}

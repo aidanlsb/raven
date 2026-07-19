@@ -22,6 +22,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -132,10 +133,11 @@ func RenameField(req RenameFieldRequest) (*RenameFieldResult, error) {
 		return nil, newError(schemasvc.ErrorInvalidInput, fmt.Sprintf("cannot rename fields on built-in type '%s'", typeName), "", nil, nil)
 	}
 
-	sch, err := loadSchema(req.VaultPath)
+	schemaDoc, err := loadSchemaDocument(req.VaultPath)
 	if err != nil {
 		return nil, err
 	}
+	sch := schemaDoc.Schema()
 	typeDef, exists := sch.Types[typeName]
 	if !exists {
 		return nil, newError(schemasvc.ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
@@ -150,7 +152,7 @@ func RenameField(req RenameFieldRequest) (*RenameFieldResult, error) {
 		return nil, newError(schemasvc.ErrorObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", newField, typeName), "", nil, nil)
 	}
 
-	plan, err := buildFieldRenamePlan(req.VaultPath, typeName, oldField, newField)
+	plan, err := buildFieldRenamePlan(req.VaultPath, schemaDoc, typeName, oldField, newField)
 	if err != nil {
 		return nil, err
 	}
@@ -213,10 +215,11 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 		return nil, newError(schemasvc.ErrorInvalidInput, fmt.Sprintf("cannot rename to '%s' - it's a built-in type", newName), "", nil, nil)
 	}
 
-	sch, err := loadSchema(req.VaultPath)
+	schemaDoc, err := loadSchemaDocument(req.VaultPath)
 	if err != nil {
 		return nil, err
 	}
+	sch := schemaDoc.Schema()
 	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
 	if err != nil {
 		return nil, newError(schemasvc.ErrorConfigInvalid, "failed to load raven.yaml", "Fix raven.yaml and try again", nil, err)
@@ -229,7 +232,7 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 		return nil, newError(schemasvc.ErrorObjectExists, fmt.Sprintf("type '%s' already exists", newName), "Choose a different name", nil, nil)
 	}
 
-	plan, err := buildTypeRenamePlan(req.VaultPath, req.Description, oldName, newName, oldTypeDef, vaultCfg)
+	plan, err := buildTypeRenamePlan(req.VaultPath, schemaDoc, req.Description, oldName, newName, oldTypeDef, vaultCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -291,21 +294,18 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 }
 
 func buildTypeRenamePlan(
-	vaultPath, description, oldName, newName string,
+	vaultPath string,
+	schemaDoc *schemadoc.Document,
+	description, oldName, newName string,
 	oldTypeDef *schema.TypeDefinition,
 	vaultCfg *config.VaultConfig,
 ) (*typeRenamePlan, error) {
-	schemaData, err := os.ReadFile(paths.SchemaPath(vaultPath))
-	if err != nil {
-		return nil, newError(schemasvc.ErrorFileRead, err.Error(), "", nil, err)
-	}
-
 	oldDefaultPath := ""
 	if oldTypeDef != nil {
 		oldDefaultPath = oldTypeDef.DefaultPath
 	}
 	schemaPlan, err := schemasvc.BuildTypeRenamePlan(schemasvc.TypeRenamePlanRequest{
-		SchemaYAML:     schemaData,
+		SchemaDoc:      schemaDoc,
 		OldName:        oldName,
 		NewName:        newName,
 		Description:    description,
@@ -386,19 +386,19 @@ func buildTypeRenamePlan(
 	return plan, nil
 }
 
-func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fieldRenamePlan, error) {
+func buildFieldRenamePlan(
+	vaultPath string,
+	schemaDoc *schemadoc.Document,
+	typeName, oldField, newField string,
+) (*fieldRenamePlan, error) {
 	tokenOld := "{{field." + oldField + "}}"
 	tokenNew := "{{field." + newField + "}}"
 
-	schemaData, err := os.ReadFile(paths.SchemaPath(vaultPath))
-	if err != nil {
-		return nil, newError(schemasvc.ErrorFileRead, err.Error(), "", nil, err)
-	}
 	schemaPlan, err := schemasvc.BuildFieldRenamePlan(schemasvc.FieldRenamePlanRequest{
-		SchemaYAML: schemaData,
-		TypeName:   typeName,
-		OldField:   oldField,
-		NewField:   newField,
+		SchemaDoc: schemaDoc,
+		TypeName:  typeName,
+		OldField:  oldField,
+		NewField:  newField,
 	})
 	if err != nil {
 		return nil, err
@@ -550,8 +550,8 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 func applyFieldRenamePlan(vaultPath string, plan *fieldRenamePlan) (int, error) {
 	appliedChanges := 0
 	if len(plan.SchemaYAML) > 0 {
-		if err := atomicfile.WriteFile(paths.SchemaPath(vaultPath), plan.SchemaYAML, 0o644); err != nil {
-			return 0, newError(schemasvc.ErrorFileWrite, err.Error(), "", nil, err)
+		if err := schemadoc.Write(vaultPath, plan.SchemaYAML); err != nil {
+			return 0, schemasvc.MapSchemaDocError(err, "", schemasvc.ErrorSchemaNotFound)
 		}
 		appliedChanges++
 	}
@@ -586,8 +586,8 @@ func applyTypeRenamePlan(vaultPath string, plan *typeRenamePlan, applyDefaultPat
 			appliedChanges++
 		}
 	}
-	if err := atomicfile.WriteFile(paths.SchemaPath(vaultPath), schemaBytes, 0o644); err != nil {
-		return 0, 0, 0, newError(schemasvc.ErrorFileWrite, err.Error(), "", nil, err)
+	if err := schemadoc.Write(vaultPath, schemaBytes); err != nil {
+		return 0, 0, 0, schemasvc.MapSchemaDocError(err, "", schemasvc.ErrorSchemaNotFound)
 	}
 	for _, path := range sortedStringKeys(plan.MarkdownFiles) {
 		if err := atomicfile.WriteFile(path, plan.MarkdownFiles[path], 0o644); err != nil {
@@ -815,12 +815,12 @@ func defaultPathValue(plan *typeDefaultPathRenamePlan, old bool) string {
 	return plan.NewDefaultPath
 }
 
-func loadSchema(vaultPath string) (*schema.Schema, error) {
-	sch, err := schema.Load(vaultPath)
+func loadSchemaDocument(vaultPath string) (*schemadoc.Document, error) {
+	doc, err := schemadoc.Load(vaultPath)
 	if err != nil {
-		return nil, newError(schemasvc.ErrorSchemaNotFound, err.Error(), "Run 'rvn init' first", nil, err)
+		return nil, schemasvc.MapSchemaDocError(err, "Run 'rvn init' first", schemasvc.ErrorSchemaNotFound)
 	}
-	return sch, nil
+	return doc, nil
 }
 
 func newError(
