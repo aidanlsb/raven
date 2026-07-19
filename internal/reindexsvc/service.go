@@ -115,11 +115,14 @@ func Run(req RunRequest) (*RunResult, error) {
 		vaultCfg = &config.VaultConfig{}
 	}
 
-	db, wasRebuilt, err := index.OpenWithRebuild(vaultPath)
+	rebuildSession, err := index.OpenWithRebuild(vaultPath, index.RebuildOptions{DryRun: req.DryRun})
 	if err != nil {
 		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to open database: %v", err), "Run 'rvn reindex' to rebuild the database", err)
 	}
-	defer db.Close()
+	defer rebuildSession.Close()
+
+	db := rebuildSession.Database()
+	wasRebuilt := rebuildSession.SchemaRebuilt()
 
 	incremental := !req.Full
 	if wasRebuilt {
@@ -127,6 +130,9 @@ func Run(req RunRequest) (*RunResult, error) {
 	}
 
 	if !incremental && !req.DryRun {
+		if err := rebuildSession.BeginFullRebuild(); err != nil {
+			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to mark index for full reindex: %v", err), "", err)
+		}
 		if err := db.ClearAllData(); err != nil {
 			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to clear database for full reindex: %v", err), "", err)
 		}
@@ -349,6 +355,10 @@ func Run(req RunRequest) (*RunResult, error) {
 	result.Traits = stats.TraitCount
 	result.References = stats.RefCount
 	result.Assets = stats.AssetCount
+
+	if err := rebuildSession.Complete(); err != nil {
+		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to complete index rebuild: %v", err), "Run 'rvn reindex --full' to rebuild the database", err)
+	}
 
 	return result, nil
 }

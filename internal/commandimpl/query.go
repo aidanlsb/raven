@@ -55,6 +55,9 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 	}
 	db, err := index.Open(vaultPath)
 	if err != nil {
+		if failure, ok := mapIndexRebuildRequired(err); ok {
+			return failure
+		}
 		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
 	}
 	defer db.Close()

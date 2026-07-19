@@ -34,7 +34,12 @@ var (
 	ErrObjectNotFound = errors.New("object not found in index")
 	// ErrIndexLocked indicates another process is rebuilding the index.
 	ErrIndexLocked = errors.New("index is locked for rebuild")
+	// ErrIndexRebuildRequired indicates the index cannot be used until a full
+	// reindex completes.
+	ErrIndexRebuildRequired = errors.New("index requires a full reindex")
 )
+
+const rebuildRequiredFilename = "reindex-required"
 
 // DB returns the underlying sql.DB for advanced queries.
 func (d *Database) DB() *sql.DB {
@@ -48,6 +53,19 @@ func Open(vaultPath string) (*Database, error) {
 		return nil, fmt.Errorf("failed to create .raven directory: %w", err)
 	}
 
+	rebuildRequired, err := hasRebuildRequiredMarker(dbDir)
+	if err != nil {
+		return nil, err
+	}
+	if rebuildRequired {
+		return nil, ErrIndexRebuildRequired
+	}
+
+	return openDatabase(vaultPath, false)
+}
+
+func openDatabase(vaultPath string, allowIncompatible bool) (*Database, error) {
+	dbDir := filepath.Join(vaultPath, ".raven")
 	dbPath := filepath.Join(dbDir, "index.db")
 	isNewDB, err := isNewDatabaseFile(dbPath)
 	if err != nil {
@@ -56,6 +74,11 @@ func Open(vaultPath string) (*Database, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	if !isNewDB && !allowIncompatible && !isSchemaCompatible(db) {
+		_ = db.Close()
+		return nil, ErrIndexRebuildRequired
 	}
 
 	d := &Database{db: db, dailyDirectory: "daily", autoResolveRefs: true}
@@ -67,39 +90,151 @@ func Open(vaultPath string) (*Database, error) {
 	return d, nil
 }
 
-// OpenWithRebuild opens the database, rebuilding if schema is incompatible.
-// Returns (database, wasRebuilt, error).
-func OpenWithRebuild(vaultPath string) (*Database, bool, error) {
+// RebuildOptions configures an index rebuild session.
+type RebuildOptions struct {
+	// DryRun prevents the session from changing the on-disk index. An
+	// incompatible index is represented by a temporary in-memory database.
+	DryRun bool
+}
+
+// RebuildSession is the only path allowed to use an index while a rebuild is
+// required. A schema wipe or full rebuild leaves a durable marker in place
+// until Complete is called, so ordinary Open calls cannot observe partial data.
+type RebuildSession struct {
+	db            *Database
+	lock          *indexLock
+	markerPath    string
+	schemaRebuilt bool
+	markerPending bool
+	dryRun        bool
+	closed        bool
+}
+
+// OpenWithRebuild opens an index for reindexing. Incompatible or interrupted
+// indexes are wiped and opened only inside a RebuildSession. The session must
+// complete successfully before ordinary callers can open the rebuilt index.
+func OpenWithRebuild(vaultPath string, opts RebuildOptions) (*RebuildSession, error) {
 	dbDir := filepath.Join(vaultPath, ".raven")
 	dbPath := filepath.Join(dbDir, "index.db")
 
 	lock, err := acquireIndexLock(dbDir)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	defer lock.Release()
+	releaseLock := true
+	defer func() {
+		if releaseLock {
+			_ = lock.Release()
+		}
+	}()
 
-	// Try to open and check schema compatibility
-	if _, err := os.Stat(dbPath); err == nil {
-		db, err := sql.Open("sqlite", dbPath)
-		if err == nil {
-			if !isSchemaCompatible(db) {
-				db.Close()
-				// Schema incompatible - delete and recreate
-				if err := removeDatabaseFiles(dbPath); err != nil {
-					return nil, false, err
-				}
-				// Open fresh
-				freshDB, err := Open(vaultPath)
-				return freshDB, true, err
-			}
-			db.Close()
+	markerPath := filepath.Join(dbDir, rebuildRequiredFilename)
+	markerExists, err := hasRebuildRequiredMarker(dbDir)
+	if err != nil {
+		return nil, err
+	}
+	incompatible, err := databaseNeedsRebuild(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	rebuildRequired := markerExists || incompatible
+
+	if rebuildRequired && opts.DryRun {
+		db, err := OpenInMemory()
+		if err != nil {
+			return nil, err
+		}
+		releaseLock = false
+		return &RebuildSession{
+			db:            db,
+			lock:          lock,
+			markerPath:    markerPath,
+			schemaRebuilt: true,
+			dryRun:        true,
+		}, nil
+	}
+
+	if rebuildRequired {
+		if err := writeRebuildRequiredMarker(markerPath); err != nil {
+			return nil, err
+		}
+		if err := removeDatabaseFiles(dbPath); err != nil {
+			return nil, err
 		}
 	}
 
-	// Open normally
-	db, err := Open(vaultPath)
-	return db, false, err
+	db, err := openDatabase(vaultPath, true)
+	if err != nil {
+		return nil, err
+	}
+
+	releaseLock = false
+	return &RebuildSession{
+		db:            db,
+		lock:          lock,
+		markerPath:    markerPath,
+		schemaRebuilt: rebuildRequired,
+		markerPending: rebuildRequired,
+		dryRun:        opts.DryRun,
+	}, nil
+}
+
+// Database returns the database reserved for this rebuild session.
+func (s *RebuildSession) Database() *Database {
+	if s == nil {
+		return nil
+	}
+	return s.db
+}
+
+// SchemaRebuilt reports whether opening this session had to replace an
+// incompatible or interrupted index.
+func (s *RebuildSession) SchemaRebuilt() bool {
+	return s != nil && s.schemaRebuilt
+}
+
+// BeginFullRebuild marks the index unavailable before its existing data is
+// cleared. The marker remains if the rebuild exits before Complete.
+func (s *RebuildSession) BeginFullRebuild() error {
+	if s == nil || s.dryRun || s.markerPending {
+		return nil
+	}
+	if err := writeRebuildRequiredMarker(s.markerPath); err != nil {
+		return err
+	}
+	s.markerPending = true
+	return nil
+}
+
+// Complete makes a successfully rebuilt index available to ordinary callers.
+func (s *RebuildSession) Complete() error {
+	if s == nil || s.dryRun || !s.markerPending {
+		return nil
+	}
+	if err := os.Remove(s.markerPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to clear index rebuild marker: %w", err)
+	}
+	s.markerPending = false
+	return nil
+}
+
+// Close closes the database and releases the rebuild lock. It intentionally
+// leaves any pending rebuild marker in place.
+func (s *RebuildSession) Close() error {
+	if s == nil || s.closed {
+		return nil
+	}
+	s.closed = true
+
+	var dbErr error
+	if s.db != nil {
+		dbErr = s.db.Close()
+	}
+	var lockErr error
+	if s.lock != nil {
+		lockErr = s.lock.Release()
+	}
+	return errors.Join(dbErr, lockErr)
 }
 
 type indexLock struct {
@@ -148,6 +283,42 @@ func removeDatabaseFiles(dbPath string) error {
 		}
 	}
 	return nil
+}
+
+func hasRebuildRequiredMarker(dbDir string) (bool, error) {
+	_, err := os.Stat(filepath.Join(dbDir, rebuildRequiredFilename))
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to inspect index rebuild marker: %w", err)
+}
+
+func writeRebuildRequiredMarker(markerPath string) error {
+	content := fmt.Sprintf("full reindex required for database version %d\n", CurrentDBVersion)
+	if err := os.WriteFile(markerPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write index rebuild marker: %w", err)
+	}
+	return nil
+}
+
+func databaseNeedsRebuild(dbPath string) (bool, error) {
+	isNewDB, err := isNewDatabaseFile(dbPath)
+	if err != nil {
+		return false, err
+	}
+	if isNewDB {
+		return false, nil
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to open database for schema check: %w", err)
+	}
+	defer db.Close()
+	return !isSchemaCompatible(db), nil
 }
 
 // isSchemaCompatible checks if the database schema matches expected structure.
@@ -211,6 +382,8 @@ func (d *Database) Analyze() error {
 }
 
 // CurrentDBVersion is the current database schema version.
+// Bump this only when the SQLite schema shape changes. Rebuild coordination
+// uses a marker outside the database and does not require a version bump.
 // v7: Added composite indexes for trait refs matching and performance PRAGMAs
 // v8: Added alias column to objects table for reference aliasing
 // v9: Added field_refs table for ref-typed fields

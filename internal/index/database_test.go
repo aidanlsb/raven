@@ -1865,7 +1865,7 @@ func TestOpenWithRebuildLock(t *testing.T) {
 	}
 	defer filelock.Unlock(lockFile)
 
-	if _, _, err := OpenWithRebuild(vaultDir); !errors.Is(err, ErrIndexLocked) {
+	if _, err := OpenWithRebuild(vaultDir, RebuildOptions{}); !errors.Is(err, ErrIndexLocked) {
 		t.Fatalf("expected ErrIndexLocked, got %v", err)
 	}
 }
@@ -1934,68 +1934,82 @@ func TestIsSchemaCompatibleUsesMetaVersion(t *testing.T) {
 	}
 }
 
-func TestOpenWithRebuildRebuildsStaleVersionAfterPlainOpen(t *testing.T) {
+func TestOpenRejectsIncompatibleSchema(t *testing.T) {
 	t.Parallel()
 
-	vaultDir := t.TempDir()
-	legacyVersion := strconv.Itoa(CurrentDBVersion - 1)
-	seedLegacyIndexVersion(t, vaultDir, legacyVersion)
-
-	db, err := Open(vaultDir)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	version, ok, err := storedDatabaseVersion(db.db)
-	if err != nil {
-		t.Fatalf("storedDatabaseVersion after Open: %v", err)
-	}
-	if !ok || version != CurrentDBVersion-1 {
-		t.Fatalf("expected Open to preserve legacy version %d, got ok=%v version=%d", CurrentDBVersion-1, ok, version)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close db: %v", err)
+	tests := []struct {
+		name    string
+		version string
+	}{
+		{name: "stale version", version: strconv.Itoa(CurrentDBVersion - 1)},
+		{name: "missing version"},
 	}
 
-	rebuiltDB, rebuilt, err := OpenWithRebuild(vaultDir)
-	if err != nil {
-		t.Fatalf("OpenWithRebuild: %v", err)
-	}
-	defer rebuiltDB.Close()
-	if !rebuilt {
-		t.Fatal("expected stale version to trigger rebuild")
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			vaultDir := t.TempDir()
+			seedLegacyIndexVersion(t, vaultDir, tt.version)
 
-	currentVersion, ok, err := storedDatabaseVersion(rebuiltDB.db)
-	if err != nil {
-		t.Fatalf("storedDatabaseVersion after rebuild: %v", err)
-	}
-	if !ok || currentVersion != CurrentDBVersion {
-		t.Fatalf("expected rebuilt DB version %d, got ok=%v version=%d", CurrentDBVersion, ok, currentVersion)
+			if _, err := Open(vaultDir); !errors.Is(err, ErrIndexRebuildRequired) {
+				t.Fatalf("Open error = %v, want ErrIndexRebuildRequired", err)
+			}
+		})
 	}
 }
 
-func TestOpenWithRebuildRebuildsWhenVersionMissing(t *testing.T) {
+func TestRebuildSessionKeepsWipedIndexUnavailableUntilComplete(t *testing.T) {
 	t.Parallel()
 
 	vaultDir := t.TempDir()
-	seedLegacyIndexVersion(t, vaultDir, "")
+	seedLegacyIndexVersion(t, vaultDir, strconv.Itoa(CurrentDBVersion-1))
 
-	db, rebuilt, err := OpenWithRebuild(vaultDir)
+	session, err := OpenWithRebuild(vaultDir, RebuildOptions{})
 	if err != nil {
 		t.Fatalf("OpenWithRebuild: %v", err)
 	}
-	defer db.Close()
-	if !rebuilt {
-		t.Fatal("expected missing version to trigger rebuild")
+	if !session.SchemaRebuilt() {
+		t.Fatal("expected stale version to rebuild the schema")
 	}
 
-	currentVersion, ok, err := storedDatabaseVersion(db.db)
+	currentVersion, ok, err := storedDatabaseVersion(session.Database().db)
 	if err != nil {
 		t.Fatalf("storedDatabaseVersion after rebuild: %v", err)
 	}
 	if !ok || currentVersion != CurrentDBVersion {
 		t.Fatalf("expected rebuilt DB version %d, got ok=%v version=%d", CurrentDBVersion, ok, currentVersion)
 	}
+
+	if _, err := Open(vaultDir); !errors.Is(err, ErrIndexRebuildRequired) {
+		t.Fatalf("Open during rebuild error = %v, want ErrIndexRebuildRequired", err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("close incomplete rebuild session: %v", err)
+	}
+	if _, err := Open(vaultDir); !errors.Is(err, ErrIndexRebuildRequired) {
+		t.Fatalf("Open after interrupted rebuild error = %v, want ErrIndexRebuildRequired", err)
+	}
+
+	retry, err := OpenWithRebuild(vaultDir, RebuildOptions{})
+	if err != nil {
+		t.Fatalf("retry OpenWithRebuild: %v", err)
+	}
+	defer retry.Close()
+	if !retry.SchemaRebuilt() {
+		t.Fatal("expected interrupted rebuild to require another schema rebuild")
+	}
+	if err := retry.Complete(); err != nil {
+		t.Fatalf("complete retry: %v", err)
+	}
+	if err := retry.Close(); err != nil {
+		t.Fatalf("close completed rebuild session: %v", err)
+	}
+
+	db, err := Open(vaultDir)
+	if err != nil {
+		t.Fatalf("Open after completed rebuild: %v", err)
+	}
+	defer db.Close()
 }
 
 func seedLegacyIndexVersion(t *testing.T, vaultDir string, version string) {

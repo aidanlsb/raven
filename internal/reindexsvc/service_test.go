@@ -1,8 +1,11 @@
 package reindexsvc
 
 import (
+	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -146,6 +149,77 @@ traits:
 	}
 	if refs, ok := data["references"].(int); !ok || refs != 1 {
 		t.Fatalf("result data has unexpected references: %#v", data["references"])
+	}
+}
+
+func TestRunVersionMismatchCompletesFullReindexBeforeReopening(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "note.md", "# Rebuild me\n")
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial Run returned error: %v", err)
+	}
+	downgradeIndexVersion(t, vaultPath)
+
+	result, err := Run(RunRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("Run after version mismatch returned error: %v", err)
+	}
+	if !result.SchemaRebuilt || result.Incremental {
+		t.Fatalf("expected schema rebuild in full mode, got %#v", result)
+	}
+	if result.FilesIndexed != 1 || result.Objects != 1 {
+		t.Fatalf("expected rebuilt note in index, got %#v", result)
+	}
+
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("Open after completed rebuild: %v", err)
+	}
+	defer db.Close()
+	stats, err := db.Stats()
+	if err != nil {
+		t.Fatalf("Stats after completed rebuild: %v", err)
+	}
+	if stats.ObjectCount != 1 {
+		t.Fatalf("object count after completed rebuild = %d, want 1", stats.ObjectCount)
+	}
+}
+
+func TestRunDryRunDoesNotPublishVersionMismatchWipe(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "note.md", "# Keep the old index\n")
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial Run returned error: %v", err)
+	}
+	downgradeIndexVersion(t, vaultPath)
+
+	result, err := Run(RunRequest{VaultPath: vaultPath, DryRun: true})
+	if err != nil {
+		t.Fatalf("dry-run after version mismatch returned error: %v", err)
+	}
+	if !result.SchemaRebuilt || result.Incremental {
+		t.Fatalf("expected dry-run to plan a full schema rebuild, got %#v", result)
+	}
+
+	if _, err := index.Open(vaultPath); !errors.Is(err, index.ErrIndexRebuildRequired) {
+		t.Fatalf("Open after dry-run error = %v, want ErrIndexRebuildRequired", err)
+	}
+
+	rawDB, err := sql.Open("sqlite", filepath.Join(vaultPath, ".raven", "index.db"))
+	if err != nil {
+		t.Fatalf("open raw index after dry-run: %v", err)
+	}
+	defer rawDB.Close()
+	var version string
+	if err := rawDB.QueryRow(`SELECT value FROM meta WHERE key = 'version'`).Scan(&version); err != nil {
+		t.Fatalf("read raw index version after dry-run: %v", err)
+	}
+	if version != strconv.Itoa(index.CurrentDBVersion-1) {
+		t.Fatalf("index version after dry-run = %q, want stale version %d", version, index.CurrentDBVersion-1)
 	}
 }
 
@@ -401,4 +475,23 @@ func containsString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func downgradeIndexVersion(t *testing.T, vaultPath string) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", filepath.Join(vaultPath, ".raven", "index.db"))
+	if err != nil {
+		t.Fatalf("open index to downgrade version: %v", err)
+	}
+	if _, err := db.Exec(
+		`UPDATE meta SET value = ? WHERE key = 'version'`,
+		strconv.Itoa(index.CurrentDBVersion-1),
+	); err != nil {
+		_ = db.Close()
+		t.Fatalf("downgrade index version: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close downgraded index: %v", err)
+	}
 }
