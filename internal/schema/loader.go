@@ -53,11 +53,12 @@ func Load(vaultPath string) (*Schema, error) {
 // LoadWithWarnings loads the schema and returns any migration warnings.
 func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 	schemaPath := paths.SchemaPath(vaultPath)
-	result := &LoadResult{Warnings: []SchemaWarning{}}
 
 	if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
-		result.Schema = New()
-		return result, nil
+		return &LoadResult{
+			Schema:   New(),
+			Warnings: []SchemaWarning{},
+		}, nil
 	}
 
 	data, err := os.ReadFile(schemaPath)
@@ -65,9 +66,17 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 		return nil, fmt.Errorf("failed to read schema file %s: %w", schemaPath, err)
 	}
 
+	return Parse(data, schemaPath)
+}
+
+// Parse loads and validates a schema from YAML bytes. Source is included in
+// parse errors and should identify where the bytes came from.
+func Parse(data []byte, source string) (*LoadResult, error) {
+	result := &LoadResult{Warnings: []SchemaWarning{}}
+
 	var schema Schema
 	if err := yaml.Unmarshal(data, &schema); err != nil {
-		return nil, fmt.Errorf("failed to parse schema file %s: %w", schemaPath, err)
+		return nil, fmt.Errorf("failed to parse schema file %s: %w", source, err)
 	}
 
 	// Check schema version
