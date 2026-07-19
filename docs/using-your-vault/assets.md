@@ -19,10 +19,13 @@ You can also use Raven wikilinks for semantic references:
 
 ```markdown
 See [[assets/pdfs/paper.pdf]] for the original source.
-See [[paper]] for the original source.
 ```
 
-Short asset references resolve when they are unambiguous. `[[paper]]` can resolve to `assets/pdfs/paper.pdf` if no object or other asset claims the same short name. If both `paper.pdf` and `paper.png` exist, use the full path or extension-bearing filename.
+Prefer the full vault-relative asset path when authoring Markdown links and
+wikilinks. Bare forms such as `[[paper]]` remain supported as resolution sugar
+when no object or other asset claims the same short name, but they can become
+ambiguous as the vault grows. For example, `paper.pdf` and `paper.png` cannot
+both be addressed as `paper`.
 
 Raven only indexes vault-local asset references. External URLs, anchors, mail links, and Markdown links to `.md` files are not asset references.
 
@@ -59,5 +62,5 @@ Use `rvn move` instead of shell `mv` for assets. It preserves vault safety check
 ```bash
 rvn move assets/downloads/paper.pdf assets/pdfs/paper.pdf
 rvn backlinks assets/pdfs/paper.pdf
-rvn resolve paper
+rvn resolve assets/pdfs/paper.pdf
 ```

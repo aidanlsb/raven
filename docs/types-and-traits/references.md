@@ -56,18 +56,30 @@ When Raven encounters a reference, it resolves it to a canonical object or asset
 
 If multiple candidates match, the reference is ambiguous and is not resolved automatically.
 
-### Short references
+### Canonical references
 
-When a short name uniquely identifies one object or asset, you can use it without the full path:
+Prefer canonical object IDs and full asset paths when authoring references:
 
 ```markdown
-[[freya]]       → person/freya (if only one "freya" exists)
-[[website]]     → project/website
-[[2026-03-15]]  → 2026-03-15 (the daily note's bare-date object ID)
-[[paper]]       → assets/pdfs/paper.pdf
+[[person/freya]]
+[[project/website]]
+[[assets/pdfs/paper.pdf]]
 ```
 
-A daily note's canonical object ID is the bare ISO date (`2026-03-15`); the
+Object-creating commands (`rvn new`, `rvn upsert`, and `rvn daily`) return the
+canonical ID as `data.id` in JSON output. Use that value in `[[...]]` links and
+`ref` fields. The human CLI prints the same value as `link as <id>`. Do not
+derive an ID from the file path: configured directory roots can make the two
+different.
+
+Short forms remain supported as resolution sugar for existing content and
+interactive input. A bare name such as `[[freya]]` or `[[paper]]` resolves only
+when it uniquely identifies one target. It is not the preferred authoring form,
+and `rvn check` reports `short_ref_could_be_full_path` when it can replace a
+short reference with the canonical ID.
+
+A daily note's canonical object ID is the bare ISO date (`2026-03-15`), so
+`[[2026-03-15]]` is already canonical. The
 `directories.daily` setting only controls where the file is stored, not the ID.
 Legacy references that include the daily directory (`[[daily/2026-03-15]]`) still
 resolve to the same daily note as compatibility aliases.
@@ -78,7 +90,9 @@ ID (`2026-03-15`) in indexes and queries. Relative inputs such as `today`,
 `tomorrow`, and `yesterday` are normalized to `YYYY-MM-DD` when written through
 Raven commands.
 
-When short names collide (e.g., `project/notes` and `meeting/notes`, or `paper.pdf` and `paper.png`), use the full path to disambiguate:
+Because short forms depend on uniqueness, they become ambiguous when names
+collide (e.g., `project/notes` and `meeting/notes`, or `paper.pdf` and
+`paper.png`). Canonical IDs and full asset paths remain explicit:
 
 ```markdown
 [[project/notes]]    → unambiguous
@@ -158,7 +172,10 @@ rvn query 'trait:todo refs([[person/freya]])'
 | `refs(...)` | Item/trait references a target or query match |
 | `refd(...)` | Item is referenced by a source or query match (type queries only) |
 
-`refs()` accepts nested queries, wiki-links, or bare target shorthand. See `querying/query-language.md` for the full syntax.
+`refs()` accepts nested queries, wiki-links, or bare target shorthand. Prefer
+canonical IDs in direct targets, especially in saved queries; bare shorthand is
+resolution sugar and can become ambiguous as the vault grows. See
+`querying/query-language.md` for the full syntax.
 
 ## Reference maintenance
 
@@ -210,10 +227,10 @@ rvn check create-missing --confirm --json   # non-interactive / agents
 ### Debugging resolution
 
 ```bash
-rvn resolve "freya" --json           # See match source and target
+rvn resolve "person/freya" --json    # Confirm a canonical object ID
 rvn resolve "The Queen" --json       # Alias resolution
 rvn resolve "2026-03-15" --json      # Date resolution
-rvn resolve "paper" --json           # Short asset name when unambiguous
+rvn resolve "paper" --json           # Inspect short-form resolution
 ```
 
 ## Common patterns

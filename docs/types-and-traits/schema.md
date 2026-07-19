@@ -665,10 +665,11 @@ Validates managed vault files against the schema. Paths matched by `raven.yaml` 
 | `undefined_trait` | Trait not in schema | Add trait to schema |
 | `missing_reference` | Link to non-existent object or section | Create the target or update the link |
 | `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset or update the reference |
-| `ambiguous_reference` | Reference matches multiple objects or assets | Use full path (e.g., `[[person/freya]]`) |
-| `id_collision` | Same short name maps to multiple object IDs | Use full paths or rename objects |
+| `ambiguous_reference` | Reference matches multiple objects or assets | Use a canonical object ID or full asset path (e.g., `[[person/freya]]`) |
+| `short_ref_could_be_full_path` | Short ref can be written with its canonical object ID or full asset path | Run `rvn check fix --confirm` to rewrite it |
+| `id_collision` | Same short name maps to multiple object IDs | Use canonical object IDs or rename objects |
 | `duplicate_alias` | Multiple objects use the same alias | Make aliases unique |
-| `alias_collision` | Alias conflicts with object ID or short name | Rename alias or use full path |
+| `alias_collision` | Alias conflicts with object ID or short name | Rename alias or use the canonical object ID |
 | `non_canonical_path` | File lives outside the configured directory root for its type | Run `rvn check fix --confirm` to move the file |
 | `directory_type_mismatch` | File lives in a directory that implies a different type | Reclassify the object to the expected type |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix | Run `rvn check fix --confirm` to strip the prefix |

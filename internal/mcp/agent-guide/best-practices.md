@@ -17,8 +17,9 @@
 - High-blast-radius operations (bulk writes, `query` apply, `schema rename`, `check` fixes) preview first; show the preview, ask for approval, then apply with `confirm=true`.
 - Because single-object writes apply on the first call, only invoke them when intent is clear.
 
-5. Surface ambiguity instead of guessing.
-- For ambiguous refs, short asset names, or unclear destructive intent, ask a focused clarifying question.
+5. Author canonical references and surface ambiguity.
+- Use canonical object IDs and full asset paths in generated references. Take new object IDs from `data.id` (the human CLI's `link as <id>` value); do not generate short forms.
+- If user-supplied or existing reference sugar is ambiguous, or destructive intent is unclear, ask a focused clarifying question.
 
 6. Prefer one strong query over many weak queries.
 - Compose with predicates and relationships (`within`, `has`, `refs`, `ancestor`).

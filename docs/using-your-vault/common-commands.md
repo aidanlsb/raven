@@ -296,7 +296,7 @@ rvn check create-missing --confirm               # Create them
 
 `rvn check fix` handles these unambiguous fixes:
 
-- **`short_ref_could_be_full_path`** — replace short refs with their canonical full path
+- **`short_ref_could_be_full_path`** — replace short refs with canonical object IDs or full asset paths
 - **`invalid_enum_value`** — remove unnecessary quotes around enum trait values when the unquoted value is valid
 - **`non_canonical_ref`** — strip the configured root prefix from wikilink targets (e.g. `[[type/person/freya]]` → `[[person/freya]]`)
 - **`non_canonical_path`** — move files into the configured directory root for their type and rewrite all references that point at them
@@ -319,14 +319,18 @@ Repairs are separate subcommands, not flags on `rvn check`:
 Debug reference resolution. Shows how Raven resolves a reference string to an object or asset ID.
 
 ```bash
-rvn resolve freya                                # Short name
+rvn resolve person/freya                         # Canonical object ID
 rvn resolve "The Queen"                          # Alias
 rvn resolve 2026-03-15                           # Date reference
 rvn resolve project/website#tasks               # Section reference
-rvn resolve paper                                # Short asset name if unambiguous
+rvn resolve assets/pdfs/paper.pdf                # Full asset path
+rvn resolve freya                                # Inspect short-form resolution
 ```
 
-Returns whether the reference resolved, the target ID, and the match source (alias, name_field, object_id, short_name, asset path, etc.).
+Returns whether the reference resolved, the canonical target ID, and the match
+source (alias, name_field, object_id, short_name, asset path, etc.). Use the
+returned ID when authoring references. Short forms remain accepted as resolution
+sugar but are not the preferred authoring form.
 
 ---
 

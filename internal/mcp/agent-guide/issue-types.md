@@ -17,7 +17,7 @@ check failures.
 | `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset under the configured asset root or update/remove the reference |
 | `local_fragment_ref` | Wikilink uses unsupported source-relative fragment syntax like `[[#tasks]]` | Rewrite it as a global section ref like `[[object#tasks]]` |
 | `stale_fragment` | Link points to an existing object but a missing section fragment | Update the fragment to match an existing heading, or remove the fragment. Prevent this by renaming headings with `raven_move` (source `file#section`, destination new heading text), which rewrites inbound refs |
-| `ambiguous_reference` | Link matches multiple objects, aliases, or short names | Rewrite the link with a more specific object path or rename the conflicting alias/short name |
+| `ambiguous_reference` | Link matches multiple objects, aliases, or short names | Rewrite the link with a canonical object ID or full asset path, or rename the conflicting alias/short name |
 | `unknown_frontmatter_key` | Field is not defined for object type | Add schema field or remove invalid key |
 | `duplicate_object_id` | A file defines the same object ID more than once | Rename one of the duplicate objects |
 | `missing_required_field` | Required type field missing | Set required field value(s) |
@@ -29,7 +29,7 @@ check failures.
 | `parse_error` | File could not be parsed as valid Raven markdown/frontmatter | Fix the YAML frontmatter or markdown syntax |
 | `missing_target_type` | Schema ref field targets a type that does not exist | Add the target type or change the field target |
 | `duplicate_alias` | Multiple objects define the same alias | Rename one of the conflicting aliases |
-| `alias_collision` | Alias conflicts with an object ID or short name | Rename the alias or use full paths in references |
+| `alias_collision` | Alias conflicts with an object ID or short name | Rename the alias or use canonical object IDs in references |
 | `non_canonical_path` | File lives outside the configured directory root for its type | Run `check fix --confirm` to move file to canonical location |
 | `directory_type_mismatch` | File lives in a directory that implies a different type | Reclassify the object to the expected type, usually with the issue's `fix_command` |
 
@@ -50,8 +50,8 @@ check failures.
 | `check_incomplete` | An index-backed check subsystem failed, so reported health may be incomplete | Fix the named subsystem (often `rvn reindex`) and re-run check |
 | `unknown_field_type` | Schema field has an unrecognized field type | Change the schema field to a supported type |
 | `self_referential_required` | Required ref field points to the same type, making the first object hard to create | Make the field optional or add a default value |
-| `id_collision` | Short name matches multiple objects and that short name is used in a reference | Use full paths in references to avoid ambiguity |
-| `short_ref_could_be_full_path` | Short ref could be clearer | Run `check fix --confirm` to rewrite to explicit full-path refs |
+| `id_collision` | Short name matches multiple objects and that short name is used in a reference | Use canonical object IDs in references to avoid ambiguity |
+| `short_ref_could_be_full_path` | Short ref is not the preferred canonical authoring form | Run `check fix --confirm` to rewrite it with the canonical object ID or full asset path |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix (e.g. `[[type/person/jane]]`) | Run `check fix --confirm` to rewrite to canonical form (`[[person/jane]]`) |
 | `orphaned_asset` | Indexed asset has no incoming references | Link it from a note or remove it if unused |
 

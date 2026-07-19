@@ -9,7 +9,8 @@
 ## Reading content
 
 - Inspect exact file text before editing: `rvn read <path-or-ref> --raw --json`
-- Resolve a short reference to full object ID: `rvn resolve <reference> --json`
+- Resolve any accepted reference input to its canonical object ID:
+  `rvn resolve <reference> --json`. Use the returned ID when authoring links.
 
 ## Updating content
 

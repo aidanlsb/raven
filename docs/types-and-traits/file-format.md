@@ -271,7 +271,11 @@ Vault-relative Markdown links and images to non-Markdown files are indexed as as
 ![Diagram](assets/photos/diagram.png)
 ```
 
-Raven resolves references to canonical IDs through alias, name field, date, path, asset path, and short name matching. Short references like `[[freya]]` or `[[paper]]` work when unambiguous.
+Raven resolves references to canonical IDs through alias, name field, date,
+path, asset path, and short name matching. Author references with canonical
+object IDs (for example, `[[person/freya]]`) or full asset paths (for example,
+`[[assets/pdfs/paper.pdf]]`). Bare short forms still resolve when unambiguous,
+but they are resolution sugar rather than the preferred authoring form.
 
 For the full resolution model, ambiguity handling, frontmatter ref syntax, and maintenance commands, see `types-and-traits/references.md`.
 

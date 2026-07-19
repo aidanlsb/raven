@@ -11,6 +11,9 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Always pass `--json` so output is deterministic and parseable.
 - Use single-quoted query strings in shell invocations to avoid shell expansion.
 - Decide early whether the result should be objects (`type:<type>`), traits (`trait:<name>`), or assets (`asset`).
+- Use canonical object IDs and full asset paths in direct reference targets such
+  as `refs([[project/raven]])`; short forms are resolution sugar and can become
+  ambiguous.
 - Scope predicates are root-dependent and traits attach to the nearest section: prefer the forgiving forms `contains(...)`/`within(...)` over `has(...)`/`in(...)` for inline traits under headings. `type:project has(trait:todo)` usually returns nothing; use `type:project contains(trait:todo .value==todo)`.
 - Count or sample before pulling large result sets into context.
 - For `--apply`, always preview first, then add `--confirm` only when the user approves.

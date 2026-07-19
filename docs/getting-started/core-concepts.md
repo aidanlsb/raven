@@ -95,7 +95,12 @@ Read [the paper](assets/pdfs/paper.pdf).
 ![Diagram](assets/photos/system.png)
 ```
 
-Raven resolves references to canonical IDs. Short references like `[[freya]]` and `[[paper]]` work when unambiguous. Use `rvn backlinks` to see what links to an item:
+Author references with canonical object IDs and full asset paths, as in the
+examples above. After `rvn new`, `rvn upsert`, or `rvn daily`, use the returned
+`data.id` in JSON output (or the human CLI's `link as <id>` hint). Bare short
+forms still resolve when unambiguous, but they are resolution sugar and can
+become ambiguous as the vault grows. Use `rvn backlinks` to see what links to an
+item:
 
 ```bash
 rvn backlinks person/freya
@@ -170,7 +175,7 @@ Raven Query Language (RQL) lets you retrieve objects and traits by structure, no
 rvn query 'type:project .status==active'
 
 # Todos linked to a specific project
-rvn query 'trait:todo within(type:meeting refs(midgard-security-review))'
+rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review]]))'
 
 # Overdue items
 rvn query 'trait:due .value<today'
