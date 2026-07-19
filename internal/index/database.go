@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -24,10 +25,13 @@ import (
 
 // Database is the SQLite database handle.
 type Database struct {
-	db              *sql.DB
-	dailyDirectory  string
-	autoResolveRefs bool
-	lock            *indexLock
+	db                      *sql.DB
+	dailyDirectory          string
+	autoResolveRefs         bool
+	lock                    *indexLock
+	resolverMu              sync.Mutex
+	referenceResolverCache  *referenceResolverCache
+	referenceResolverBuilds int
 }
 
 var (
@@ -400,15 +404,26 @@ func (d *Database) Close() error {
 
 // SetDailyDirectory configures the daily notes directory for reference resolution.
 func (d *Database) SetDailyDirectory(dailyDir string) {
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
+
 	if dailyDir == "" {
-		d.dailyDirectory = "daily"
-		return
+		dailyDir = "daily"
+	}
+	if d.dailyDirectory != dailyDir {
+		d.referenceResolverCache = nil
 	}
 	d.dailyDirectory = dailyDir
 }
 
 // SetAutoResolveRefs toggles resolve-on-write behavior.
 func (d *Database) SetAutoResolveRefs(enabled bool) {
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
+
+	if d.autoResolveRefs != enabled {
+		d.referenceResolverCache = nil
+	}
 	d.autoResolveRefs = enabled
 }
 
@@ -649,11 +664,21 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 // fileMtime should be the file's modification time as Unix timestamp (seconds).
 // Pass 0 if mtime is unknown (will use current time as fallback).
 func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schema.Schema, fileMtime int64) error {
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
+
+	d.prepareReferenceResolverCacheLocked(sch)
+
 	tx, err := d.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+
+	oldResolverState, err := d.cachedResolverFileStateLocked(tx, doc.FilePath)
+	if err != nil {
+		return err
+	}
 
 	// Delete existing data for this file
 	if err := deleteByFilePath(tx, doc.FilePath); err != nil {
@@ -687,14 +712,24 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 		return err
 	}
 
+	newResolverState, err := d.cachedResolverFileStateLocked(tx, doc.FilePath)
+	if err != nil {
+		return err
+	}
+
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 
 	if d.autoResolveRefs && d.dailyDirectory != "" {
-		if _, err := d.ResolveReferencesForFileWithSchema(doc.FilePath, d.dailyDirectory, sch); err != nil {
+		d.updateReferenceResolverCacheLocked(oldResolverState, newResolverState)
+		if _, err := d.resolveReferencesForFileWithSchemaLocked(doc.FilePath, d.dailyDirectory, sch); err != nil {
 			return err
 		}
+	} else {
+		// Bulk indexing deliberately keeps the cache cold and builds one resolver
+		// from the completed index during the final resolution pass.
+		d.referenceResolverCache = nil
 	}
 
 	return nil
@@ -713,11 +748,19 @@ func (d *Database) IndexAsset(asset *model.Asset) error {
 	if asset == nil {
 		return nil
 	}
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
+
 	tx, err := d.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+
+	oldResolverState, err := d.cachedResolverFileStateLocked(tx, asset.FilePath)
+	if err != nil {
+		return err
+	}
 
 	if err := deleteByFilePath(tx, asset.FilePath); err != nil {
 		return err
@@ -741,7 +784,19 @@ func (d *Database) IndexAsset(asset *model.Asset) error {
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	newResolverState, err := d.cachedResolverFileStateLocked(tx, asset.FilePath)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if d.autoResolveRefs {
+		d.updateReferenceResolverCacheLocked(oldResolverState, newResolverState)
+	} else {
+		d.referenceResolverCache = nil
+	}
+	return nil
 }
 
 func nullableString(value string) interface{} {
@@ -1261,6 +1316,8 @@ func (d *Database) RemoveFiles(filePaths []string) error {
 	if len(filePaths) == 0 {
 		return nil
 	}
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
 
 	tx, err := d.db.Begin()
 	if err != nil {
@@ -1268,18 +1325,39 @@ func (d *Database) RemoveFiles(filePaths []string) error {
 	}
 	defer tx.Rollback()
 
+	oldResolverStates := make([]*resolverFileState, 0, len(filePaths))
+	for _, filePath := range filePaths {
+		state, err := d.cachedResolverFileStateLocked(tx, filePath)
+		if err != nil {
+			return err
+		}
+		oldResolverStates = append(oldResolverStates, state)
+	}
 	for _, filePath := range filePaths {
 		if err := deleteByFilePath(tx, filePath); err != nil {
 			return err
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if !d.autoResolveRefs {
+		d.referenceResolverCache = nil
+		return nil
+	}
+	for _, oldState := range oldResolverStates {
+		d.updateReferenceResolverCacheLocked(oldState, nil)
+	}
+	return nil
 }
 
 // ClearAllData removes all indexed data from the database.
 // This is used for full reindex to ensure a clean slate.
 func (d *Database) ClearAllData() error {
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
+
 	tx, err := d.db.Begin()
 	if err != nil {
 		return err
@@ -1301,13 +1379,20 @@ func (d *Database) ClearAllData() error {
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	d.referenceResolverCache = nil
+	return nil
 }
 
 // RemoveFilesWithPrefix removes all data for files whose paths start with a given prefix.
 // This is used to clean up files in excluded directories like .trash/.
 // Returns the number of files removed.
 func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
+
 	// Count files that will be removed
 	count, err := countDistinctFilesWithPrefix(d.db, pathPrefix)
 	if err != nil {
@@ -1322,6 +1407,7 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 	if err := deleteByFilePathLike(d.db, pattern); err != nil {
 		return 0, err
 	}
+	d.referenceResolverCache = nil
 	return count, nil
 }
 
@@ -1394,6 +1480,9 @@ func fileMissing(fullPath string) bool {
 
 // RemoveDocument removes a document and all related data by its object ID.
 func (d *Database) RemoveDocument(objectID string) error {
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
+
 	// Objects can have IDs like "people/freya" or "daily/2025-02-01#meeting".
 	// This method removes the *entire file/document* from the index.
 	//
@@ -1424,10 +1513,22 @@ func (d *Database) RemoveDocument(objectID string) error {
 		}
 	}
 
+	oldResolverState, err := d.cachedResolverFileStateLocked(tx, filePath)
+	if err != nil {
+		return err
+	}
 	if err := deleteByFilePath(tx, filePath); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if d.autoResolveRefs {
+		d.updateReferenceResolverCacheLocked(oldResolverState, nil)
+	} else {
+		d.referenceResolverCache = nil
+	}
+	return nil
 }
 
 func baseDocumentID(objectID string) string {
@@ -2021,43 +2122,45 @@ func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutio
 // ResolveReferencesWithSchema resolves all unresolved references in the refs table
 // using schema-aware name_field matching when schema is provided.
 func (d *Database) ResolveReferencesWithSchema(dailyDirectory string, sch *schema.Schema) (*ReferenceResolutionResult, error) {
-	result := &ReferenceResolutionResult{}
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
 
-	res, err := d.Resolver(ResolverOptions{
-		DailyDirectory: dailyDirectory,
-		Schema:         sch,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if err := d.resolveReferencesInBatches(res, nil, result); err != nil {
-		return nil, err
-	}
-	if err := d.resolveFieldRefsInBatches(res, nil, result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return d.resolveReferencesWithSchemaLocked(nil, dailyDirectory, sch)
 }
 
 // ResolveReferencesForFileWithSchema resolves unresolved references for a single file
 // using schema-aware name_field matching when schema is provided.
 func (d *Database) ResolveReferencesForFileWithSchema(filePath, dailyDirectory string, sch *schema.Schema) (*ReferenceResolutionResult, error) {
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
+
+	return d.resolveReferencesForFileWithSchemaLocked(filePath, dailyDirectory, sch)
+}
+
+func (d *Database) resolveReferencesForFileWithSchemaLocked(filePath, dailyDirectory string, sch *schema.Schema) (*ReferenceResolutionResult, error) {
+	return d.resolveReferencesWithSchemaLocked(&filePath, dailyDirectory, sch)
+}
+
+func (d *Database) resolveReferencesWithSchemaLocked(filePath *string, dailyDirectory string, sch *schema.Schema) (*ReferenceResolutionResult, error) {
 	result := &ReferenceResolutionResult{}
 
-	res, err := d.Resolver(ResolverOptions{
-		DailyDirectory: dailyDirectory,
-		Schema:         sch,
-	})
+	hasUnresolved, err := d.hasUnresolvedReferencesLocked(filePath)
+	if err != nil {
+		return nil, err
+	}
+	if !hasUnresolved {
+		return result, nil
+	}
+
+	res, err := d.getReferenceResolverLocked(dailyDirectory, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := d.resolveReferencesInBatches(res, &filePath, result); err != nil {
+	if err := d.resolveReferencesInBatches(res, filePath, result); err != nil {
 		return nil, err
 	}
-	if err := d.resolveFieldRefsInBatches(res, &filePath, result); err != nil {
+	if err := d.resolveFieldRefsInBatches(res, filePath, result); err != nil {
 		return nil, err
 	}
 
