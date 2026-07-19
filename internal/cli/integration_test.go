@@ -1323,6 +1323,46 @@ types:
 	v.AssertFileNotExists("objects/note/raven-friction.md")
 }
 
+func TestIntegration_NewSlugifiesTitleWithPathSeparator(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  note:
+    default_path: note/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+`).
+		WithRavenYAML(`directories:
+  type: objects/
+`).
+		Build()
+
+	title := "config.VaultConfig duplicates internal/paths"
+	result := v.RunCLI("new", "note", title)
+	result.MustSucceed(t)
+
+	// The "/" in the title is slugified into a single filename component rather
+	// than creating a nested directory.
+	relFile := "objects/note/config-vaultconfig-duplicates-internal-paths.md"
+	v.AssertFileExists(relFile)
+	v.AssertFileNotExists("objects/note/internal/paths.md")
+
+	// The display title is persisted verbatim in frontmatter.
+	v.AssertFileContains(relFile, "title: "+title)
+
+	// The object ID is path-derived from the slugified path (roots stripped).
+	if got := result.DataString("id"); got != "note/config-vaultconfig-duplicates-internal-paths" {
+		t.Fatalf("unexpected object id: %q", got)
+	}
+	if got := result.DataString("file"); got != relFile {
+		t.Fatalf("unexpected file path: %q", got)
+	}
+}
+
 // TestIntegration_SchemaValidationErrors tests that schema validation errors are properly reported.
 func TestIntegration_SchemaValidationErrors(t *testing.T) {
 	t.Parallel()

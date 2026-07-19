@@ -185,7 +185,7 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	}
 }
 
-func TestUpsertRejectsTitleWithPathSeparator(t *testing.T) {
+func TestUpsertSlugifiesTitleWithPathSeparator(t *testing.T) {
 	vaultPath := t.TempDir()
 	writeUpsertTestSchema(t, vaultPath)
 
@@ -214,30 +214,50 @@ func TestUpsertRejectsTitleWithPathSeparator(t *testing.T) {
 	upsertContent = ""
 	upsertCmd.Flags().Lookup("content").Changed = false
 
+	title := "config.VaultConfig duplicates internal/paths"
 	out := captureStdout(t, func() {
-		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "folder/name"}); err != nil {
+		if err := upsertCmd.RunE(upsertCmd, []string{"brief", title}); err != nil {
 			t.Fatalf("upsertCmd.RunE: %v", err)
 		}
 	})
 
 	var resp struct {
-		OK    bool `json:"ok"`
-		Error *struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
+		OK   bool `json:"ok"`
+		Data struct {
+			Status string `json:"status"`
+			File   string `json:"file"`
+			ID     string `json:"id"`
+			Title  string `json:"title"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &resp); err != nil {
 		t.Fatalf("failed to parse JSON response: %v; out=%s", err, out)
 	}
-	if resp.OK {
-		t.Fatalf("expected ok=false, got true; out=%s", out)
+	if !resp.OK {
+		t.Fatalf("expected ok=true, got false; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != string(ErrInvalidInput) {
-		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
+	if resp.Data.Status != "created" {
+		t.Fatalf("expected status=created, got %q", resp.Data.Status)
 	}
-	if !strings.Contains(resp.Error.Message, "title cannot contain path separators") {
-		t.Fatalf("expected path separator validation message, got: %q", resp.Error.Message)
+	wantFile := "brief/config-vaultconfig-duplicates-internal-paths.md"
+	if resp.Data.File != wantFile {
+		t.Fatalf("expected file %q, got %q", wantFile, resp.Data.File)
+	}
+	wantID := "brief/config-vaultconfig-duplicates-internal-paths"
+	if resp.Data.ID != wantID {
+		t.Fatalf("expected id %q, got %q", wantID, resp.Data.ID)
+	}
+	if resp.Data.Title != title {
+		t.Fatalf("expected response title %q, got %q", title, resp.Data.Title)
+	}
+
+	created := filepath.Join(vaultPath, "brief", "config-vaultconfig-duplicates-internal-paths.md")
+	b, err := os.ReadFile(created)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	if got := string(b); !strings.Contains(got, "title: "+title) {
+		t.Fatalf("expected verbatim title in frontmatter, got:\n%s", got)
 	}
 }
 

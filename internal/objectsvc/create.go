@@ -39,19 +39,13 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	if strings.TrimSpace(req.Title) == "" {
 		return nil, newError(ErrorInvalidInput, "title is required", "Usage: rvn new <type> <title> --json", nil, nil)
 	}
-	if strings.ContainsAny(req.Title, `/\`) {
-		return nil, newError(ErrorInvalidInput, "title cannot contain path separators", "Provide a plain title without path separators", nil, nil)
-	}
 
 	typeDef, err := lookupTypeDefinitionForCreate(req.Schema, req.TypeName)
 	if err != nil {
 		return nil, err
 	}
 
-	targetPath := req.TargetPath
-	if strings.TrimSpace(targetPath) == "" {
-		targetPath = req.Title
-	}
+	targetPath := deriveCreateTargetPath(req.TargetPath, req.Title)
 
 	fieldValues := normalizedCreateFieldValues(req.FieldValues, typeDef, req.Title)
 	missingFields := requiredFieldGaps(typeDef, fieldValues)

@@ -116,13 +116,21 @@ When multiple headings would produce the same slug, a numeric suffix is added:
 
 ### Path Slugs (for Filenames)
 
-When creating files with `rvn new`, titles are slugified:
+When creating files with `rvn new`, the title is a display name (stored verbatim
+in frontmatter) and is slugified into the filename. Path separators and other
+characters that are unsafe in paths are handled automatically, so a prose title
+never needs a manual `--path`:
 
 | Title | Filename |
 |-------|----------|
 | `Website Redesign` | `website-redesign.md` |
 | `Über Café` | `uber-cafe.md` (normalized) |
 | `Q1 2026` | `q1-2026.md` |
+| `config.VaultConfig duplicates internal/paths` | `config-vaultconfig-duplicates-internal-paths.md` |
+
+The `/` is slugified into the single filename component rather than treated as a
+directory separator. Use `--path` when you want to control the directory and file
+name explicitly (there `/` segments do map to directories).
 
 ---
 

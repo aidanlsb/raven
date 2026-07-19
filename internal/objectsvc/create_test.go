@@ -46,6 +46,77 @@ traits: {}
 	}
 }
 
+func TestCreateSlugifiesTitleWhenNoExplicitPath(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		title      string
+		wantRel    string
+		wantFMLine string
+	}{
+		{
+			name:       "path separator in title",
+			title:      "config.VaultConfig duplicates internal/paths",
+			wantRel:    "notes/config-vaultconfig-duplicates-internal-paths.md",
+			wantFMLine: "name: config.VaultConfig duplicates internal/paths",
+		},
+		{
+			name:       "spaces in title",
+			title:      "Raven Move Friction",
+			wantRel:    "notes/raven-move-friction.md",
+			wantFMLine: "name: Raven Move Friction",
+		},
+		{
+			name:       "unicode in title",
+			title:      "Über Café",
+			wantRel:    "notes/uber-cafe.md",
+			wantFMLine: "name: Über Café",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			vaultPath := t.TempDir()
+			writeTestSchema(t, vaultPath, `
+types:
+  note:
+    default_path: notes/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+traits: {}
+`)
+			sch := loadTestSchema(t, vaultPath)
+
+			// No TargetPath: the path/slug is derived from the title.
+			result, err := Create(CreateRequest{
+				VaultPath: vaultPath,
+				TypeName:  "note",
+				Title:     tc.title,
+				Schema:    sch,
+			})
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+			if result.RelativePath != tc.wantRel {
+				t.Fatalf("expected relative path %q, got %q", tc.wantRel, result.RelativePath)
+			}
+
+			created, err := os.ReadFile(result.FilePath)
+			if err != nil {
+				t.Fatalf("read created file: %v", err)
+			}
+			if !strings.Contains(string(created), tc.wantFMLine) {
+				t.Fatalf("expected verbatim title line %q in frontmatter, got:\n%s", tc.wantFMLine, string(created))
+			}
+		})
+	}
+}
+
 func TestCreateMissingRequiredField(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()

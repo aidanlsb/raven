@@ -56,7 +56,7 @@ func buildNewArgs(_ *cobra.Command, args []string) (map[string]interface{}, erro
 	}
 
 	if err := validateObjectTitle(title); err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
+		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a non-empty title")
 	}
 	fieldValues, err := parseFieldFlags(newFieldFlags)
 	if err != nil {
