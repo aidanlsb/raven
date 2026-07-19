@@ -2,6 +2,7 @@ package index
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -144,7 +145,7 @@ const resolverGenerationMetaKey = "resolver_generation"
 func resolverGeneration(db resolverQuerier) (int64, error) {
 	var raw string
 	err := db.QueryRow(`SELECT value FROM meta WHERE key = ?`, resolverGenerationMetaKey).Scan(&raw)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	if err != nil {
