@@ -129,6 +129,12 @@ For agents: If required fields are missing, returns error with details including
 a retry_with template. Check if the type has name_field set (via raven_schema type <name>)
 to understand which fields are auto-populated.
 
+Identity in the response: on success the file path (data.file, where the file
+lives, vault-relative) and the canonical object ID (data.id, the value to use in
+references) are surfaced as a pair. These often differ (e.g. file type/person/freya.md
+links as person/freya), so use data.id for [[refs]] and follow-up commands rather
+than deriving an ID from the path — that avoids non_canonical_ref / non_canonical_path.
+
 Permissive writes: if a ref field points at a target that does not exist yet, the
 object is still created. The successful response adds data.missing_refs,
 data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target. Interactive
@@ -244,6 +250,9 @@ Semantics:
 - If --content is provided, the body is fully replaced (idempotent reruns)
 - Use --content-file to read the replacement body from a file, or '-' for stdin
 - Returns status: created, updated, or unchanged
+- Surfaces the identity pair on success: data.file (vault-relative path) and
+  data.id (canonical object ID). Use data.id for [[refs]] and follow-up commands;
+  it often differs from the path, so do not derive an ID from data.file.
 
 Boundary with add:
 - add: append-only capture/logging, intentionally non-idempotent
@@ -1955,7 +1964,11 @@ indexed files. Non-interactive use still requires a query string.` + barePickerI
 		Description: "Resolve or create a daily note",
 		LongDesc: `Resolve or create a daily note for a given date.
 
-If no date is provided, resolves today's note. Creates the file if it doesn't exist.`,
+If no date is provided, resolves today's note. Creates the file if it doesn't exist.
+
+The response surfaces the identity pair: data.file is the vault-relative path
+(e.g. daily/2026-03-15.md) and data.id is the canonical object ID, which is the
+bare ISO date (2026-03-15). Use data.id for [[refs]], not the file path.`,
 		Args: []ArgMeta{
 			{Name: "date", Description: "Date (today, yesterday, tomorrow, YYYY-MM-DD)", Required: false},
 		},

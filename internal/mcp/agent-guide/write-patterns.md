@@ -38,6 +38,12 @@ create = raven_invoke(command="new", args={"type":"project", "title":"Website Re
 raven_invoke(command="add", args={"text":"## Notes\n- Kickoff next week", "to":create.data.file})
 ```
 
+`new`, `upsert`, and `daily` return an identity pair: `data.file` (vault-relative
+path) and `data.id` (the canonical object ID). Use `data.id` for `[[refs]]` and for
+follow-up commands like `set`/`edit`/`delete`; never derive an ID from `data.file`,
+since the two often differ (`type/person/freya.md` links as `person/freya`; a daily
+note links as the bare date). See `raven://guide/response-contract`.
+
 Idempotent generated artifact:
 
 ```text

@@ -10,6 +10,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var captureStdoutMu sync.Mutex
@@ -769,6 +772,125 @@ types:
 	content := string(contentBytes)
 	if !strings.Contains(content, "## Technical Interview") {
 		t.Fatalf("expected selected template content in created file, got:\n%s", content)
+	}
+}
+
+func TestNewSurfacesIdentityPairJSON(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  person:
+    default_path: people/
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	ravenYAML := strings.TrimSpace(`
+directories:
+  type: type/
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "raven.yaml"), []byte(ravenYAML), 0o644); err != nil {
+		t.Fatalf("write raven.yaml: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	newFieldFlags = nil
+	newPathFlag = ""
+	newCmd.Flags().Lookup("path").Changed = false
+
+	out := captureStdout(t, func() {
+		if err := newCmd.RunE(newCmd, []string{"person", "Freya"}); err != nil {
+			t.Fatalf("newCmd.RunE: %v", err)
+		}
+	})
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			File string `json:"file"`
+			ID   string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("expected JSON output, got parse error: %v; out=%s", err, out)
+	}
+	if !resp.OK {
+		t.Fatalf("expected ok=true; out=%s", out)
+	}
+	// The file lives under the configured type root, while the canonical
+	// link ID strips that root — the two must differ and both be present.
+	if resp.Data.File != "type/people/freya.md" {
+		t.Fatalf("file = %q, want %q", resp.Data.File, "type/people/freya.md")
+	}
+	if resp.Data.ID != "people/freya" {
+		t.Fatalf("id = %q, want %q", resp.Data.ID, "people/freya")
+	}
+}
+
+func TestNewHumanOutputShowsLinkAs(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  person:
+    default_path: people/
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevCfg := cfg
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		cfg = prevCfg
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = false
+	newFieldFlags = nil
+	newPathFlag = ""
+	newCmd.Flags().Lookup("path").Changed = false
+	// No editor configured, so rendering prints the path instead of opening.
+	cfg = &config.Config{}
+
+	out := captureStdout(t, func() {
+		if err := newCmd.RunE(newCmd, []string{"person", "Freya"}); err != nil {
+			t.Fatalf("newCmd.RunE: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "link as") {
+		t.Fatalf("expected 'link as' hint in human output, got:\n%s", out)
+	}
+	if !strings.Contains(out, ui.LinkAs("people/freya")) {
+		t.Fatalf("expected link-as line for %q in human output, got:\n%s", "people/freya", out)
 	}
 }
 

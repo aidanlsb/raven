@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 func TestUpsertCreateUpdateUnchanged(t *testing.T) {
@@ -366,6 +369,52 @@ func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
 	}
 	if resp.Error == nil || resp.Error.Code != string(ErrInvalidInput) {
 		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
+	}
+}
+
+func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeUpsertTestSchema(t, vaultPath)
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := upsertFieldFlags
+	prevContent := upsertContent
+	prevPath := upsertPathFlag
+	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
+	prevCfg := cfg
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		upsertFieldFlags = prevFields
+		upsertContent = prevContent
+		upsertPathFlag = prevPath
+		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
+		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
+		cfg = prevCfg
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = false
+	upsertFieldFlags = nil
+	upsertPathFlag = ""
+	upsertCmd.Flags().Lookup("path").Changed = false
+	upsertContent = "# Brief"
+	upsertCmd.Flags().Lookup("content").Changed = true
+	cfg = &config.Config{}
+
+	out := captureStdout(t, func() {
+		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief 2026-02-14"}); err != nil {
+			t.Fatalf("upsertCmd.RunE: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "link as") {
+		t.Fatalf("expected 'link as' hint in human output, got:\n%s", out)
+	}
+	if !strings.Contains(out, ui.LinkAs("brief/daily-brief-2026-02-14")) {
+		t.Fatalf("expected link-as line for %q in human output, got:\n%s", "brief/daily-brief-2026-02-14", out)
 	}
 }
 

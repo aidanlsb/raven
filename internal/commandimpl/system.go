@@ -110,6 +110,7 @@ func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result 
 
 	return commandexec.Success(map[string]interface{}{
 		"file":    result.RelativePath,
+		"id":      result.Date,
 		"date":    result.Date,
 		"created": result.Created,
 		"opened":  false,
