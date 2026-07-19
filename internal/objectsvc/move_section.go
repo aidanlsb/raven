@@ -1,6 +1,7 @@
 package objectsvc
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -145,7 +146,7 @@ func renameSectionByReference(req MoveByReferenceRequest, resolved *readsvc.Reso
 	var db *index.Database
 	db, err = index.Open(req.VaultPath)
 	if err != nil {
-		if req.FailOnIndexErr {
+		if req.FailOnIndexErr || errors.Is(err, index.ErrIndexRebuildRequired) {
 			return nil, newError(ErrorValidationFailed, "failed to open index database for section rename", "Run 'rvn reindex' to rebuild the database", nil, err)
 		}
 		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for section rename: %v", err))

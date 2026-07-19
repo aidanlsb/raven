@@ -16,6 +16,10 @@ func TryLockExclusive(file *os.File) error {
 	return syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 }
 
+func TryLockShared(file *os.File) error {
+	return syscall.Flock(int(file.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+}
+
 func Unlock(file *os.File) error {
 	return syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
 }

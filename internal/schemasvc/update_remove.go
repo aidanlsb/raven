@@ -1,6 +1,7 @@
 package schemasvc
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -384,6 +385,9 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 
 	if req.Required == "true" {
 		db, err := index.Open(req.VaultPath)
+		if errors.Is(err, index.ErrIndexRebuildRequired) {
+			return nil, indexRebuildRequiredError(err)
+		}
 		if err == nil {
 			defer db.Close()
 			objects, err := objectsByType(db, typeName)
@@ -564,7 +568,11 @@ func RemoveType(req RemoveTypeRequest) (*RemoveResult, error) {
 	}
 
 	warnings := make([]Warning, 0)
-	if db, err := index.Open(req.VaultPath); err == nil {
+	db, dbErr := index.Open(req.VaultPath)
+	if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
+		return nil, indexRebuildRequiredError(dbErr)
+	}
+	if dbErr == nil {
 		defer db.Close()
 		if objects, err := objectsByType(db, typeName); err == nil && len(objects) > 0 {
 			warnings = append(warnings, Warning{
@@ -630,7 +638,11 @@ func RemoveTrait(req RemoveTraitRequest) (*RemoveResult, error) {
 	}
 
 	warnings := make([]Warning, 0)
-	if db, err := index.Open(req.VaultPath); err == nil {
+	db, dbErr := index.Open(req.VaultPath)
+	if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
+		return nil, indexRebuildRequiredError(dbErr)
+	}
+	if dbErr == nil {
 		defer db.Close()
 		if instances, err := traitsByType(db, traitName); err == nil && len(instances) > 0 {
 			warnings = append(warnings, Warning{
@@ -704,7 +716,11 @@ func RemoveField(req RemoveFieldRequest) (*RemoveResult, error) {
 	}
 
 	if fieldDef != nil && fieldDef.Required {
-		if db, err := index.Open(req.VaultPath); err == nil {
+		db, dbErr := index.Open(req.VaultPath)
+		if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
+			return nil, indexRebuildRequiredError(dbErr)
+		}
+		if dbErr == nil {
 			defer db.Close()
 			if objects, err := objectsByType(db, typeName); err == nil && len(objects) > 0 {
 				return nil, newError(
@@ -760,6 +776,16 @@ func RemoveField(req RemoveFieldRequest) (*RemoveResult, error) {
 		Type:  typeName,
 		Field: fieldName,
 	}, nil
+}
+
+func indexRebuildRequiredError(err error) *Error {
+	return newError(
+		ErrorDatabase,
+		"index requires a full reindex",
+		"Run 'rvn reindex --full' and retry",
+		nil,
+		err,
+	)
 }
 
 func isClearSentinel(value string) bool {

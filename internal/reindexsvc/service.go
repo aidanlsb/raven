@@ -180,12 +180,14 @@ func Run(req RunRequest) (*RunResult, error) {
 	dryRunAssetFiles := make(map[string]struct{})
 	dryRunStats := index.IndexStats{}
 
-	trashRemoved, err := db.RemoveFilesWithPrefix(".trash/")
-	if err != nil {
-		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clean up trash files from index: %v", err))
-	}
-	if trashRemoved > 0 {
-		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Cleaned up %d files from .trash/ in index", trashRemoved))
+	if !req.DryRun {
+		trashRemoved, err := db.RemoveFilesWithPrefix(".trash/")
+		if err != nil {
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clean up trash files from index: %v", err))
+		}
+		if trashRemoved > 0 {
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Cleaned up %d files from .trash/ in index", trashRemoved))
+		}
 	}
 
 	if incremental {
@@ -307,6 +309,16 @@ func Run(req RunRequest) (*RunResult, error) {
 	})
 	if assetWalkErr != nil {
 		return nil, newError(CodeFileReadError, fmt.Sprintf("error walking asset files: %v", assetWalkErr), "", assetWalkErr)
+	}
+
+	if !req.DryRun && !incremental && len(result.Errors) > 0 {
+		err := fmt.Errorf("%d file(s) failed during full reindex; first failure: %s", len(result.Errors), result.Errors[0])
+		return nil, newError(
+			CodeFileReadError,
+			err.Error(),
+			"Fix invalid or unreadable vault files and run 'rvn reindex --full' again",
+			err,
+		)
 	}
 
 	if req.DryRun {

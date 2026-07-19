@@ -96,7 +96,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	var err error
 	db, err = index.Open(req.VaultPath)
 	if err != nil {
-		if req.FailOnIndexError {
+		if req.FailOnIndexError || errors.Is(err, index.ErrIndexRebuildRequired) {
 			return nil, newError(ErrorValidationFailed, "failed to open index database for move", "Run 'rvn reindex' to rebuild the database", nil, err)
 		}
 		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for move update: %v", err))

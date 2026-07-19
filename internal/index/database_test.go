@@ -1870,6 +1870,36 @@ func TestOpenWithRebuildLock(t *testing.T) {
 	}
 }
 
+func TestOpenWithRebuildBlocksOrdinaryOpenForSessionLifetime(t *testing.T) {
+	t.Parallel()
+
+	vaultDir := t.TempDir()
+	db, err := Open(vaultDir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close initial database: %v", err)
+	}
+
+	session, err := OpenWithRebuild(vaultDir, RebuildOptions{})
+	if err != nil {
+		t.Fatalf("OpenWithRebuild: %v", err)
+	}
+	if _, err := Open(vaultDir); !errors.Is(err, ErrIndexLocked) {
+		t.Fatalf("Open during rebuild error = %v, want ErrIndexLocked", err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("close rebuild session: %v", err)
+	}
+
+	reopened, err := Open(vaultDir)
+	if err != nil {
+		t.Fatalf("Open after rebuild session closed: %v", err)
+	}
+	defer reopened.Close()
+}
+
 func TestIsSchemaCompatibleUsesMetaVersion(t *testing.T) {
 	t.Parallel()
 
@@ -1980,8 +2010,8 @@ func TestRebuildSessionKeepsWipedIndexUnavailableUntilComplete(t *testing.T) {
 		t.Fatalf("expected rebuilt DB version %d, got ok=%v version=%d", CurrentDBVersion, ok, currentVersion)
 	}
 
-	if _, err := Open(vaultDir); !errors.Is(err, ErrIndexRebuildRequired) {
-		t.Fatalf("Open during rebuild error = %v, want ErrIndexRebuildRequired", err)
+	if _, err := Open(vaultDir); !errors.Is(err, ErrIndexLocked) {
+		t.Fatalf("Open during rebuild error = %v, want ErrIndexLocked", err)
 	}
 	if err := session.Close(); err != nil {
 		t.Fatalf("close incomplete rebuild session: %v", err)
@@ -1998,6 +2028,18 @@ func TestRebuildSessionKeepsWipedIndexUnavailableUntilComplete(t *testing.T) {
 	if !retry.SchemaRebuilt() {
 		t.Fatal("expected interrupted rebuild to require another schema rebuild")
 	}
+	doc := &parser.ParsedDocument{
+		FilePath: "rebuilt.md",
+		Objects: []*model.Object{{
+			ID:        "rebuilt",
+			Type:      "page",
+			Fields:    map[string]schema.FieldValue{},
+			LineStart: 1,
+		}},
+	}
+	if err := retry.Database().IndexDocument(doc, schema.New()); err != nil {
+		t.Fatalf("index rebuilt document: %v", err)
+	}
 	if err := retry.Complete(); err != nil {
 		t.Fatalf("complete retry: %v", err)
 	}
@@ -2010,6 +2052,13 @@ func TestRebuildSessionKeepsWipedIndexUnavailableUntilComplete(t *testing.T) {
 		t.Fatalf("Open after completed rebuild: %v", err)
 	}
 	defer db.Close()
+	stats, err := db.Stats()
+	if err != nil {
+		t.Fatalf("Stats after completed rebuild: %v", err)
+	}
+	if stats.ObjectCount != 1 {
+		t.Fatalf("object count after completed rebuild = %d, want 1", stats.ObjectCount)
+	}
 }
 
 func seedLegacyIndexVersion(t *testing.T, vaultDir string, version string) {

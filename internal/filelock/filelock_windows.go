@@ -35,6 +35,18 @@ func TryLockExclusive(file *os.File) error {
 	)
 }
 
+func TryLockShared(file *os.File) error {
+	var overlapped windows.Overlapped
+	return windows.LockFileEx(
+		windows.Handle(file.Fd()),
+		windows.LOCKFILE_FAIL_IMMEDIATELY,
+		0,
+		lockRegionSize,
+		0,
+		&overlapped,
+	)
+}
+
 func Unlock(file *os.File) error {
 	var overlapped windows.Overlapped
 	return windows.UnlockFileEx(

@@ -152,6 +152,48 @@ traits:
 	}
 }
 
+func TestRunDryRunDoesNotCleanTrashRows(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "note.md", "# Note\n")
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial Run returned error: %v", err)
+	}
+
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, err := db.DB().Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start)
+		VALUES ('trash/old', '.trash/old.md', 'page', '{}', 1)
+	`); err != nil {
+		_ = db.Close()
+		t.Fatalf("seed trash row: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close seeded index: %v", err)
+	}
+
+	if _, err := Run(RunRequest{VaultPath: vaultPath, DryRun: true}); err != nil {
+		t.Fatalf("dry-run returned error: %v", err)
+	}
+
+	db, err = index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("reopen index: %v", err)
+	}
+	defer db.Close()
+	var count int
+	if err := db.DB().QueryRow(`SELECT COUNT(*) FROM objects WHERE file_path = '.trash/old.md'`).Scan(&count); err != nil {
+		t.Fatalf("count trash rows: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("trash row count after dry-run = %d, want 1", count)
+	}
+}
+
 func TestRunVersionMismatchCompletesFullReindexBeforeReopening(t *testing.T) {
 	t.Parallel()
 
@@ -184,6 +226,36 @@ func TestRunVersionMismatchCompletesFullReindexBeforeReopening(t *testing.T) {
 	}
 	if stats.ObjectCount != 1 {
 		t.Fatalf("object count after completed rebuild = %d, want 1", stats.ObjectCount)
+	}
+}
+
+func TestRunVersionMismatchFailureLeavesIndexUnavailable(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "note.md", "# Initially valid\n")
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial Run returned error: %v", err)
+	}
+	writeTestFile(t, vaultPath, "note.md", "---\ntype: [\n---\n")
+	downgradeIndexVersion(t, vaultPath)
+
+	if _, err := Run(RunRequest{VaultPath: vaultPath}); err == nil {
+		t.Fatal("expected failed full rebuild")
+	} else {
+		assertReindexCode(t, err, CodeFileReadError)
+	}
+	if _, err := index.Open(vaultPath); !errors.Is(err, index.ErrIndexRebuildRequired) {
+		t.Fatalf("Open after failed rebuild error = %v, want ErrIndexRebuildRequired", err)
+	}
+
+	writeTestFile(t, vaultPath, "note.md", "# Repaired\n")
+	result, err := Run(RunRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("retry Run returned error: %v", err)
+	}
+	if !result.SchemaRebuilt || result.Objects != 1 {
+		t.Fatalf("unexpected retry result: %#v", result)
 	}
 }
 

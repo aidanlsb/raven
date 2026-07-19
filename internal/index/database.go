@@ -27,6 +27,7 @@ type Database struct {
 	db              *sql.DB
 	dailyDirectory  string
 	autoResolveRefs bool
+	lock            *indexLock
 }
 
 var (
@@ -53,6 +54,17 @@ func Open(vaultPath string) (*Database, error) {
 		return nil, fmt.Errorf("failed to create .raven directory: %w", err)
 	}
 
+	lock, err := acquireIndexReadLock(dbDir)
+	if err != nil {
+		return nil, err
+	}
+	releaseLock := true
+	defer func() {
+		if releaseLock {
+			_ = lock.Release()
+		}
+	}()
+
 	rebuildRequired, err := hasRebuildRequiredMarker(dbDir)
 	if err != nil {
 		return nil, err
@@ -61,7 +73,13 @@ func Open(vaultPath string) (*Database, error) {
 		return nil, ErrIndexRebuildRequired
 	}
 
-	return openDatabase(vaultPath, false)
+	db, err := openDatabase(vaultPath, false)
+	if err != nil {
+		return nil, err
+	}
+	db.lock = lock
+	releaseLock = false
+	return db, nil
 }
 
 func openDatabase(vaultPath string, allowIncompatible bool) (*Database, error) {
@@ -242,6 +260,14 @@ type indexLock struct {
 }
 
 func acquireIndexLock(dbDir string) (*indexLock, error) {
+	return acquireIndexFileLock(dbDir, filelock.TryLockExclusive)
+}
+
+func acquireIndexReadLock(dbDir string) (*indexLock, error) {
+	return acquireIndexFileLock(dbDir, filelock.TryLockShared)
+}
+
+func acquireIndexFileLock(dbDir string, tryLock func(*os.File) error) (*indexLock, error) {
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create .raven directory: %w", err)
 	}
@@ -252,7 +278,7 @@ func acquireIndexLock(dbDir string) (*indexLock, error) {
 		return nil, fmt.Errorf("failed to open index lock: %w", err)
 	}
 
-	if err := filelock.TryLockExclusive(lockFile); err != nil {
+	if err := tryLock(lockFile); err != nil {
 		lockFile.Close()
 		if filelock.IsWouldBlock(err) {
 			return nil, ErrIndexLocked
@@ -357,7 +383,19 @@ func OpenInMemory() (*Database, error) {
 
 // Close closes the database.
 func (d *Database) Close() error {
-	return d.db.Close()
+	if d == nil {
+		return nil
+	}
+	var dbErr error
+	if d.db != nil {
+		dbErr = d.db.Close()
+	}
+	var lockErr error
+	if d.lock != nil {
+		lockErr = d.lock.Release()
+		d.lock = nil
+	}
+	return errors.Join(dbErr, lockErr)
 }
 
 // SetDailyDirectory configures the daily notes directory for reference resolution.
