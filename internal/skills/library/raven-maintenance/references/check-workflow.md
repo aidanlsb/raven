@@ -12,6 +12,7 @@
 | `undefined_trait` | `@trait` not in schema | `rvn schema add trait` or remove from file |
 | `missing_required_field` | Required field is absent | `rvn set <id> field=value` |
 | `invalid_field_value` | Value doesn't match field type/enum | `rvn set <id> field=correct_value` |
+| `short_ref_could_be_full_path` | Short ref can use its canonical object ID or full asset path | `rvn check fix --confirm` |
 | `non_canonical_path` | File is outside the configured directory root for its type | `rvn check fix --confirm` |
 | `non_canonical_ref` | Wikilink includes a configured root prefix | `rvn check fix --confirm` |
 

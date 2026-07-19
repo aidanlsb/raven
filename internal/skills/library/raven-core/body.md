@@ -10,6 +10,9 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Prefer `rvn` commands over direct file writes or shell text manipulation (`echo`, `cat >`, `sed`, `awk`).
 - Choose the smallest mutation primitive that matches the user's intent.
 - Read with `rvn read --raw` before constructing `rvn edit` replacements.
+- Author `[[references]]` and `ref` fields with canonical object IDs. After
+  `new`/`upsert`/`daily`, use the returned `data.id` (the human CLI's
+  `link as <id>` value); do not generate bare short forms.
 - Single-object writes (`rvn set`/`add`/`update`/`edit` and single `rvn move`/`rvn delete`) apply immediately; pass `--dry-run` to preview without writing. Bulk operations (`--stdin`), `query --apply`, `schema rename`, and `check` fixes stay preview-first and require `--confirm`.
 
 ## Choose the right write command

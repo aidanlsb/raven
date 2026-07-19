@@ -33,7 +33,11 @@ Pick a type from the schema that has a `name_field` — this is the most natural
 raven_invoke(command="new", args={"type":"<type>", "title":"<relevant title>"})
 ```
 
-**Tell the user:** Explain what just happened — Raven created a markdown file, populated the frontmatter from the schema (including any defaults), and indexed it. Point out the file path and the object ID.
+**Tell the user:** Explain what just happened — Raven created a markdown file,
+populated the frontmatter from the schema (including any defaults), and indexed
+it. Point out `data.file` and the canonical object ID in `data.id`. Use
+`data.id` for any `[[reference]]` or `ref` field demonstrated later; the human
+CLI presents the same value as `link as <id>`.
 
 #### Add body content with a trait
 

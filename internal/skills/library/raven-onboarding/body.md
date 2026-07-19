@@ -115,7 +115,10 @@ Teach these once, clearly, while proposing the model — not as an abstract lect
 - Everything durable lives in plain Markdown the user owns; `schema.yaml` only tells Raven which parts to treat as structured, queryable data, and `.raven/` is a rebuildable cache.
 - Types describe whole objects/files (projects, people, meetings, notes, books, issues). Fields are their frontmatter properties.
 - Traits are inline annotations in body text — tasks, decisions, priorities, highlights — one line at a time.
-- References are `[[id]]` links to objects or sections; use exact resolved IDs when automation depends on them.
+- References are `[[id]]` links to objects or sections. Author them with
+  canonical IDs: use `data.id` returned by `new`/`upsert`/`daily` (the human
+  CLI's `link as <id>` value). Short forms may resolve when unambiguous, but
+  they are not the preferred authoring form.
 - Daily notes are a built-in capture workflow, not a replacement for typed project or meeting objects.
 
 ## Cross-references

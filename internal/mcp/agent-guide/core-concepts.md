@@ -28,4 +28,13 @@ raven_invoke(command="schema", args={"subcommand":"type", "name":"project"})
 
 Type and field descriptions in `schema.yaml` are part of the user's terminology. Read them before making assumptions.
 
-Assets are scanned from `directories.assets` in `raven.yaml`, not modeled in `schema.yaml`. When adding images, PDFs, or other non-Markdown files, place them under the configured asset root and link with normal Markdown paths such as `[PDF](assets/pdfs/file.pdf)`. Use `[[assets/pdfs/file.pdf]]` for a semantic-only graph reference, and only use short asset refs such as `[[file]]` when unambiguous.
+Author wikilinks and `ref` fields with canonical object IDs. After `new`,
+`upsert`, or `daily`, take the ID from `data.id`; the human CLI presents the
+same value as `link as <id>`. Short forms may resolve when unambiguous, but they
+are resolution sugar and agents should not generate them.
+
+Assets are scanned from `directories.assets` in `raven.yaml`, not modeled in
+`schema.yaml`. When adding images, PDFs, or other non-Markdown files, place them
+under the configured asset root and link with full Markdown paths such as
+`[PDF](assets/pdfs/file.pdf)`. Use `[[assets/pdfs/file.pdf]]` for a semantic-only
+graph reference.

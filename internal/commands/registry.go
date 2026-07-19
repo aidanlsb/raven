@@ -743,7 +743,7 @@ The file is automatically moved to the new type's default_path unless
 --no-move is specified or no default_path is defined for the new type.
 References are updated when the file moves (controlled by --update-refs).`,
 		Args: []ArgMeta{
-			{Name: "object", Description: "Object reference (short name, path, or ID)", Required: true},
+			{Name: "object", Description: "Object reference (prefer canonical ID; other resolvable forms are accepted)", Required: true},
 			{Name: "new-type", Description: "Target type name", Required: true, DynamicComp: "types"},
 		},
 		Flags: []FlagMeta{
@@ -789,8 +789,8 @@ Choose the right retrieval tool:
   (Equivalent query: refd(...); read also appends backlinks.)
 - outlinks <id> — all outgoing references from one specific object.
 - read <ref> — full file content after you already identified the object.
-- resolve <ref> — turn a shorthand/alias/date into its target object ID without
-  reading content.
+- resolve <ref> — turn an accepted reference input into its canonical target ID
+  without reading content; use that ID when authoring references.
 - date <date> / daily <date> — everything for one date. In queries, use
   type:date .date==<date> for daily-note objects, or trait:due .value==<date>
   for due items on that date.
@@ -814,6 +814,8 @@ Common predicates:
 - refs([[target]]) — References target (refs([[people/freya]]))
 - refs(type:...) — References items matching subquery (refs(type:project .status==active))
 - refd(type:...) — Asset is referenced by matching source items (asset refd(type:note))
+- Prefer canonical object IDs and full asset paths in direct reference targets;
+  bare short forms are resolution sugar and can become ambiguous.
 - .value==X — Trait value equals X (.value==today, .value==high)
 - oneof(.field, [a,b]) — Field/value is one of a set (this is set membership, NOT
   the scope predicate in(...); see below)
@@ -1060,8 +1062,9 @@ Non-interactive use requires either a source or --stdin input.` + barePickerInse
 		Description: "Read a file (raw or enriched)",
 		LongDesc: `Read and output a file from the vault.
 
-The reference can be a short reference (freya), partial path (people/freya),
-or full path (people/freya.md).
+Prefer the canonical object ID (for example, people/freya). File paths, aliases,
+and unambiguous short forms are also accepted as resolution inputs, but short
+forms are not the preferred input for automation.
 
 By default, this command returns enriched output (rendered wikilinks + backlinks).
 Use --raw to output only the raw file content (recommended for agents preparing precise edits).
@@ -1080,7 +1083,7 @@ When an interactive read reference is ambiguous, Raven prompts you to choose the
 For long files, you can request a specific range with --start-line/--end-line, and/or
 ask for structured line output with --lines for copy-paste-safe anchors.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
-			{Name: "path", Description: "Reference to read (short ref, partial path, or full path)", Required: true, CLIOptional: true},
+			{Name: "path", Description: "Canonical object ID or other accepted reference input", Required: true, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "raw", Description: "Output only raw file content (no backlinks, no rendered links)", Type: FlagTypeBool},
@@ -1091,7 +1094,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.` + bare
 			{Name: "sections", Description: "Return the section outline (headings with ids, levels, line ranges) instead of content", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn read daily/2025-02-01.md --json",
+			"rvn read 2025-02-01 --json",
 			"rvn read people/freya.md --json",
 			"rvn read people/freya --raw --json",
 			"rvn read people/freya --raw --start-line 10 --end-line 40 --json",
@@ -1207,7 +1210,7 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			"rvn check --json",
 			"rvn check people/freya.md --json",
 			"rvn check projects/ --json",
-			"rvn check freya --json",
+			"rvn check people/freya --json",
 			"rvn check --type project --json",
 			"rvn check --trait due --json",
 			"rvn check --issues missing_reference,unknown_type --json",
@@ -1231,7 +1234,8 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 Preview is default; use --confirm to apply.
 
 Auto-fixable issue types include:
-- short_ref_could_be_full_path: rewrite short refs to canonical full paths
+- short_ref_could_be_full_path: rewrite short refs to canonical object IDs or
+  full asset paths
 - invalid_enum_value: remove unnecessary quotes around enum trait values
 - non_canonical_ref: strip configured root prefix from wikilink targets
 - non_canonical_path: move file under the configured directory root for its type
@@ -1255,7 +1259,7 @@ Auto-fixable issue types include:
 		},
 		UseCases: []string{
 			"Preview deterministic auto-fixes before applying",
-			"Apply short-reference, quoted-enum, and canonical-layout fixes safely",
+			"Apply canonical-reference, quoted-enum, and canonical-layout fixes safely",
 		},
 	},
 	"check create-missing": {
@@ -1739,9 +1743,10 @@ Raven writes object frontmatter separately when applying templates.`,
 		Description: "Set frontmatter fields on an object",
 		LongDesc: `Set one or more frontmatter fields on an existing object.
 
-The object ID can be a full path (e.g., "people/freya") or a short reference
-that uniquely identifies an object. Field values are validated against the
-schema if the object has a known type. Unknown fields are rejected.
+Use the canonical object ID (e.g., "people/freya"). Other accepted reference
+forms can also resolve an object, but short forms are not preferred for
+automation. Field values are validated against the schema if the object has a
+known type. Unknown fields are rejected.
 
 Use this to update existing objects' metadata without manually editing files.
 
@@ -1790,9 +1795,10 @@ and a REF_TARGET_MISSING warning per missing target.`,
 		Description: "Remove frontmatter fields from an object",
 		LongDesc: `Remove one or more frontmatter fields from an existing file-level object.
 
-The object ID can be a full path (e.g., "people/freya") or a short reference
-that uniquely identifies an object. Fields are removed from the YAML frontmatter
-entirely; they are not set to null.
+Use the canonical object ID (e.g., "people/freya"). Other accepted reference
+forms can also resolve an object, but short forms are not preferred for
+automation. Fields are removed from the YAML frontmatter entirely; they are not
+set to null.
 
 Unset can remove optional schema fields and unknown frontmatter keys. This makes
 it useful after schema migrations where removed fields still exist on older
@@ -1896,7 +1902,7 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 			{Name: "edits-json", Description: "JSON object with ordered edits, e.g. '{\"edits\":[{\"old_str\":\"from\",\"new_str\":\"to\"}]}'", Type: FlagTypeJSON},
 		},
 		Examples: []string{
-			`rvn edit "daily/2025-12-27.md" "- Churn analysis" "- [[churn-analysis|Churn analysis]]" --json`,
+			`rvn edit "daily/2025-12-27.md" "- Churn analysis" "- [[project/churn-analysis|Churn analysis]]" --json`,
 			`rvn edit "pages/notes.md" "reccommendation" "recommendation" --dry-run --json`,
 			`rvn edit "project/raven#working-docs" "old link" "new link" --json`,
 			`rvn edit "daily/2026-01-02.md" "- old task" "" --json`,
@@ -1931,7 +1937,7 @@ When to use which:
 - search — you only have a text fragment ("find files mentioning pricing").
 - query ... content("term") — text match scoped to a type/section/trait root.
 - backlinks <id> / query ... refd(...) — what references a specific object/asset.
-- resolve <ref> — map a shorthand/alias/date to its object ID.
+- resolve <ref> — map an accepted reference input to its canonical object ID.
 
 Uses full-text search with relevance ranking. Supports:
   - Simple words: "meeting notes" (finds pages containing both words)
@@ -2452,8 +2458,9 @@ mutation commands ignore or reject matching paths.`,
 		Description: "Open a file in your editor",
 		LongDesc: `Opens a file in your configured editor.
 
-The reference can be a short reference (cursor), a partial path (companies/cursor),
-or a full path (objects/companies/cursor.md).
+Prefer the canonical object ID (for example, companies/cursor). File paths,
+aliases, and unambiguous short forms are also accepted as resolution inputs,
+but short forms are not the preferred input for automation.
 
 The editor is determined by the 'editor' setting in config.toml or $EDITOR.
 
@@ -2467,21 +2474,19 @@ candidate matches.
 Use --stdin to read object IDs from stdin (one per line) and open them all.
 This is useful for piping query results to open multiple files at once.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
-			{Name: "reference", Description: "Reference to the file (short name, partial path, or full path)", Required: false},
+			{Name: "reference", Description: "Canonical object ID or other accepted reference input", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk open", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn open cursor --json",
 			"rvn open companies/cursor --json",
 			"rvn query 'type:project .status==active' --ids | rvn open --stdin --json",
 		},
 		UseCases: []string{
-			"Quickly open a file by its short name",
+			"Open a file by its canonical object ID",
 			"Interactively pick a file to open in Raven's picker",
 			"Interactively disambiguate open references in Raven's picker",
-			"Open files using references without knowing full paths",
 			"Open multiple files from query results",
 		},
 	},
@@ -2629,8 +2634,8 @@ Preview is returned by default. Use --confirm to apply removal.`,
 		Name:        "resolve",
 		Use:         "resolve [reference]",
 		Description: "Resolve a reference to its target object",
-		LongDesc: `Resolve a reference (short name, alias, path, date, etc.) and return
-information about the target object.
+		LongDesc: `Resolve any accepted reference input and return information about
+the canonical target object.
 
 This is a pure query — it does not modify anything. The result always returns
 "resolved": true/false to indicate whether the reference was successfully resolved.
@@ -2640,29 +2645,33 @@ over indexed object, section, and asset references.
 Non-interactive use still requires a reference.
 
 Supports all reference formats:
-- Short names: "freya" → people/freya
-- Full paths: "people/freya" or "people/freya.md"
+- Canonical object IDs: "people/freya"
+- File paths: "people/freya.md"
 - Aliases: "The Queen" → people/freya
 - Name field values: "The Prose Edda" → books/the-prose-edda
-- Date references: "2025-02-01" → daily/2025-02-01
+- Date references: "2025-02-01" → 2025-02-01
 - Dynamic dates: "today", "yesterday", "tomorrow"
 - Section references: "projects/website#tasks"
+- Unambiguous short names: "freya" → people/freya
 
 If the reference is ambiguous (matches multiple objects), returns all matches
-with their match sources.` + barePickerInsertModeHelp,
+with their match sources. Use the returned canonical ID when authoring
+references. Short forms are supported as resolution sugar, not as the preferred
+authoring form.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
-			{Name: "reference", Description: "Reference to resolve (short name, path, alias, date, etc.)", Required: true, CLIOptional: true},
+			{Name: "reference", Description: "Canonical object ID or other accepted reference input to resolve", Required: true, CLIOptional: true},
 		},
 		Examples: []string{
-			"rvn resolve freya --json",
 			"rvn resolve people/freya --json",
 			"rvn resolve today --json",
 			"rvn resolve \"The Prose Edda\" --json",
+			"rvn resolve freya --json",
 		},
 		UseCases: []string{
 			"Check if a reference resolves before using it",
 			"Interactively pick a reference in Raven's picker",
-			"Discover the full object ID and type for a short name",
+			"Normalize an accepted reference input to its canonical object ID",
+			"Inspect how an alias or legacy short form resolves",
 			"Disambiguate references that might match multiple objects",
 			"Validate references without side effects",
 		},

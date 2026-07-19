@@ -148,6 +148,9 @@ Before adding any `ref` field, say in one sentence what points at what. For exam
 
 - Use `ref` / `ref[]` fields for **structural** relationships you will query (meeting → project, project → owner).
 - Use plain `[[wikilinks]]` in prose for **incidental** mentions.
+- Author both structural fields and prose wikilinks with canonical object IDs. Use `data.id` returned by
+  `new`/`upsert`/`daily`; in human output, copy the `link as <id>` value. Do not
+  generate bare short forms, even though they may resolve when unambiguous.
 - Prefer a few meaningful links over wiring everything to everything — ref spaghetti is hard to reason about and query later.
 - `ref` and `ref[]` fields must specify a `--target` type.
 
@@ -215,7 +218,10 @@ rvn add "@due(2026-02-01) <a real deadline they mentioned>" --json
 ```
 
 Notes:
-- `rvn new` auto-populates the type's name field from the title. Use `--field name=value` for fields you already know.
+- `rvn new` auto-populates the type's name field from the title. Use
+  `data.id` from its JSON response (or `link as <id>` in human output) for the
+  follow-up `set`, `read`, and `[[reference]]` examples above. Use
+  `--field name=value` for fields you already know.
 - If required fields are missing, read the error details and retry with `--field` or `--field-json`.
 - `rvn add` appends to the configured capture destination, which defaults to today's daily note.
 

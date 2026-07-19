@@ -10,7 +10,8 @@
 ## Ambiguous references
 
 - Resolve the target first: `rvn resolve <ref> --json`.
-- Use full object IDs in `[[...]]` when ambiguity exists.
+- Use the returned canonical object ID in `[[...]]`; canonical targets avoid
+  ambiguity and are the preferred authoring form.
 
 ## Unexpectedly broad results
 

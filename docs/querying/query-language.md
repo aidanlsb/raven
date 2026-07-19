@@ -14,7 +14,7 @@
 | `rvn backlinks` | All incoming references to one specific object or asset |
 | `rvn outlinks` | All outgoing references from one specific target |
 | `rvn read` | Full file content after you already identified relevant objects |
-| `rvn resolve` | Map a shorthand/alias/date to its target object ID (no content) |
+| `rvn resolve` | Map an accepted reference input to its canonical target ID (no content) |
 | `rvn date` / `rvn daily` | Everything for one date / open or create a daily note |
 
 Retrieval commands overlap. When several could work, this table picks the sharpest tool for each intent:
@@ -25,7 +25,7 @@ Retrieval commands overlap. When several could work, this table picks the sharpe
 | Find **real** todo/due traits (not prose) | `rvn query 'trait:todo'` | `rvn search "@todo"` matches the literal text `@todo` and cannot tell a real trait from a mention |
 | What links here (incoming refs) | `rvn backlinks <id>` | `rvn query '... refd(...)'` for structured/bulk use; `rvn read <id>` appends backlinks after content |
 | What does this link to (outgoing) | `rvn outlinks <id>` | `rvn query '... refs(...)'` when you need structured filtering |
-| Resolve a shorthand/alias/date | `rvn resolve <ref>` | `rvn read <ref>` also resolves, but returns full content |
+| Resolve an alias, date, or other reference input | `rvn resolve <ref>` | Use the returned canonical ID when authoring references; `rvn read <ref>` also resolves, but returns full content |
 | Everything on a date | `rvn date <date>` / `rvn daily <date>` | `rvn query 'type:date .date==<date>'` for the daily-note object; `rvn query 'trait:due .value==<date>'` for items due that date |
 
 ### Choose Query Type
@@ -198,7 +198,10 @@ type:project oneof(.status, [active,paused])
 type:date .date>=2026-05-01 .date<=2026-05-31
 ```
 
-For `ref` and `ref[]` fields (from `schema.yaml`), comparison values are resolved as reference targets, including unbracketed shorthand such as `.company==cursor`.
+For `ref` and `ref[]` fields (from `schema.yaml`), comparison values are resolved
+as reference targets. Prefer canonical object IDs, such as
+`.company==company/cursor`. Unbracketed short forms such as `.company==cursor`
+are accepted as resolution sugar but can become ambiguous.
 
 The built-in `date` type has a generated `.date` field derived from the daily note's canonical `YYYY-MM-DD` object ID. It is queryable but not authored in frontmatter.
 
@@ -255,7 +258,12 @@ type:meeting refs(type:project .status==active)
 type:project refd(type:meeting)
 ```
 
-For assets, `refs(...)` can target a full asset path or an unambiguous short asset name. Standard Markdown links and images to vault-local non-Markdown files are indexed as references, so `rvn backlinks assets/pdfs/paper.pdf` and `refd(...)` queries can find Markdown files that link to the asset.
+For assets, prefer a full asset path in `refs(...)`. An unambiguous short asset
+name is accepted as resolution sugar, but a full path remains stable as the
+vault grows. Standard Markdown links and images to vault-local non-Markdown
+files are indexed as references, so
+`rvn backlinks assets/pdfs/paper.pdf` and `refd(...)` queries can find Markdown
+files that link to the asset.
 
 ## Asset Query Predicates
 
