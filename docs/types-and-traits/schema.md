@@ -37,7 +37,6 @@ types:
       title: { type: string, required: true }
       status: { type: enum, values: [active, paused, done, archived], default: active }
       priority: { type: number, min: 1, max: 5 }
-      due: { type: date }
       owner: { type: ref, target: person }
 
   meeting:
