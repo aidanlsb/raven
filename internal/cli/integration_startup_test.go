@@ -4,6 +4,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -168,8 +169,12 @@ func TestIntegration_JSONPreRunMissingVaultReturnsEnvelope(t *testing.T) {
 
 	cmd := exec.Command(binary, "--vault-path", missingVault, "--json", "query", "type:project")
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("expected JSON envelope without process failure: %v\n%s", err, output)
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("expected JSON failure to exit nonzero, got %v\n%s", err, output)
+	}
+	if got := exitErr.ExitCode(); got != 1 {
+		t.Fatalf("exit code=%d, want 1\n%s", got, output)
 	}
 
 	var resp struct {
@@ -209,8 +214,12 @@ func TestIntegration_JSONPreRunConfigFailureReturnsEnvelope(t *testing.T) {
 
 	cmd := exec.Command(binary, "--config", configFile, "--json", "version")
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("expected JSON envelope without process failure: %v\n%s", err, output)
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("expected JSON failure to exit nonzero, got %v\n%s", err, output)
+	}
+	if got := exitErr.ExitCode(); got != 1 {
+		t.Fatalf("exit code=%d, want 1\n%s", got, output)
 	}
 
 	var resp struct {
@@ -231,5 +240,31 @@ func TestIntegration_JSONPreRunConfigFailureReturnsEnvelope(t *testing.T) {
 	}
 	if !strings.Contains(resp.Error.Message, "failed to load config") {
 		t.Fatalf("message=%q, want config failure", resp.Error.Message)
+	}
+}
+
+func TestIntegration_JSONSuccessReturnsZeroExit(t *testing.T) {
+	t.Parallel()
+
+	binary := testutil.BuildCLI(t)
+	configFile := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configFile, nil, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cmd := exec.Command(binary, "--config", configFile, "--json", "version")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected JSON success to exit zero: %v\n%s", err, output)
+	}
+
+	var resp struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.Unmarshal(output, &resp); err != nil {
+		t.Fatalf("unmarshal version response: %v\n%s", err, output)
+	}
+	if !resp.OK {
+		t.Fatalf("expected success envelope: %s", output)
 	}
 }

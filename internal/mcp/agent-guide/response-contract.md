@@ -54,6 +54,17 @@ For `resources/read`, the vault-scoped Raven URIs `raven://schema/current`, `rav
 3. Prefer `error.details.retry_with` when present.
 4. Ask before retrying with assumptions.
 
+## CLI process exit status
+
+When invoking the `rvn` binary with `--json`, a response with `ok=false` exits
+with status 1, including startup and load failures such as invalid config,
+unresolved vaults, and fatal schema errors. Successful commands exit 0.
+
+`rvn check` is a lint-style exception: it can return `ok=true` and exit 1 when
+issues are found (or warnings are found with `--strict`). Cancelling `rvn pick`
+exits 130. MCP tool calls do not expose a shell process status; use the envelope
+and tool error signal there.
+
 ## Mutation phase (applied vs preview)
 
 Every mutating command reports whether it wrote to the vault in a single, uniform

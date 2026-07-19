@@ -277,6 +277,9 @@ func (r *CLIResult) MustFailWithMessage(t *testing.T, msgSubstr string) *CLIResu
 	if r.OK {
 		t.Fatalf("expected command to fail, but it succeeded\nRaw output: %s", r.RawJSON)
 	}
+	if r.ExitCode != 1 {
+		t.Fatalf("expected failed command to exit with code 1, got %d\nRaw output: %s", r.ExitCode, r.RawJSON)
+	}
 	if msgSubstr != "" && r.Error != nil {
 		if !strings.Contains(r.Error.Message, msgSubstr) && !strings.Contains(r.Error.Suggestion, msgSubstr) {
 			t.Errorf("expected error to contain %q, got: %s (suggestion: %s)", msgSubstr, r.Error.Message, r.Error.Suggestion)
@@ -296,6 +299,9 @@ func (r *CLIResult) MustFail(t *testing.T, expectedCode string) *CLIResult {
 	}
 	if r.Error.Code != expectedCode {
 		t.Fatalf("expected error code %s, got %s: %s\nRaw output: %s", expectedCode, r.Error.Code, r.Error.Message, r.RawJSON)
+	}
+	if r.ExitCode != 1 {
+		t.Fatalf("expected failed command to exit with code 1, got %d\nRaw output: %s", r.ExitCode, r.RawJSON)
 	}
 	return r
 }

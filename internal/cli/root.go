@@ -16,8 +16,6 @@ import (
 )
 
 var (
-	errJSONStartupHandled = errors.New("json startup error already handled")
-
 	// Global flags
 	vaultName     string // Named vault from config
 	vaultPathFlag string // Explicit path (rare)
@@ -145,11 +143,7 @@ func Execute() error {
 		rootCmd.SilenceUsage = prevSilenceUsage
 	}()
 
-	err := rootCmd.Execute()
-	if errors.Is(err, errJSONStartupHandled) {
-		return nil
-	}
-	return err
+	return rootCmd.Execute()
 }
 
 // ExitCode maps an error returned by Execute to the process exit code.
@@ -251,10 +245,7 @@ func loadGlobalConfigWithPath() (*config.Config, string, error) {
 
 func handleStartupError(code codes.ErrorCode, message, suggestion string) error {
 	if jsonOutput {
-		if err := outputError(code, message, nil, suggestion); err != nil {
-			return err
-		}
-		return errJSONStartupHandled
+		return outputError(code, message, nil, suggestion)
 	}
 	if suggestion != "" {
 		return fmt.Errorf("%s\n\n%s", message, suggestion)

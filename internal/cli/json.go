@@ -3,6 +3,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -12,6 +13,8 @@ import (
 
 // Global JSON output flag
 var jsonOutput bool
+
+var errJSONResponseFailure = errors.New("json failure response written")
 
 // Response is the standard JSON envelope for all CLI output.
 type Response = commandexec.Result
@@ -31,6 +34,9 @@ func outputJSON(resp Response) error {
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(resp); err != nil {
 		return fmt.Errorf("failed to write JSON output: %w", err)
+	}
+	if !resp.OK {
+		return errJSONResponseFailure
 	}
 	return nil
 }
