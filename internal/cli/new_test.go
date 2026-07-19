@@ -427,11 +427,9 @@ types:
 		}
 	})
 
-	// Second run should emit a structured JSON error (and return nil error in JSON mode).
+	// Second run should emit a structured JSON error and signal process failure.
 	out := captureStdout(t, func() {
-		if err := newCmd.RunE(newCmd, []string{"person", "Freya"}); err != nil {
-			t.Fatalf("newCmd.RunE (second): %v", err)
-		}
+		requireJSONResponseFailure(t, newCmd.RunE(newCmd, []string{"person", "Freya"}))
 	})
 
 	var resp struct {
@@ -571,9 +569,7 @@ types:
 	newCmd.Flags().Lookup("path").Changed = true
 
 	out := captureStdout(t, func() {
-		if err := newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}); err != nil {
-			t.Fatalf("newCmd.RunE: %v", err)
-		}
+		requireJSONResponseFailure(t, newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}))
 	})
 
 	var resp struct {

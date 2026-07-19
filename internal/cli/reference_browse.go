@@ -22,8 +22,7 @@ func validateInteractiveBrowse(enabled bool) (bool, error) {
 		return false, nil
 	}
 	if isJSONOutput() {
-		err := handleErrorMsg(ErrInvalidInput, "--browse cannot be used with --json", "Remove --browse or --json")
-		return err == nil, err
+		return true, handleErrorMsg(ErrInvalidInput, "--browse cannot be used with --json", "Remove --browse or --json")
 	}
 	if !canUseInteractiveTerminal() {
 		err := handleErrorMsg(ErrInvalidInput, "interactive browse requires an interactive terminal", "Run without --browse in non-interactive contexts")

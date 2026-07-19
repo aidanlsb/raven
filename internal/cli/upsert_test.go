@@ -294,9 +294,7 @@ func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
 	upsertCmd.Flags().Lookup("content").Changed = true
 
 	out := captureStdout(t, func() {
-		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief"}); err != nil {
-			t.Fatalf("upsertCmd.RunE: %v", err)
-		}
+		requireJSONResponseFailure(t, upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief"}))
 	})
 
 	var resp struct {

@@ -67,7 +67,7 @@ func runReclassifyCommand(t *testing.T, args ...string) string {
 			t.Fatalf("reclassifyCmd.Args: %v", err)
 		}
 		if err := reclassifyCmd.RunE(reclassifyCmd, args); err != nil {
-			t.Fatalf("reclassifyCmd.RunE: %v", err)
+			requireJSONResponseFailure(t, err)
 		}
 	})
 }
