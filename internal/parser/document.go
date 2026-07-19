@@ -31,6 +31,11 @@ type ParseOptions struct {
 	// PagesRoot is the root directory for untyped pages (e.g., "pages/").
 	// If set, this prefix is stripped from file paths when computing object IDs.
 	PagesRoot string
+
+	// DailyRoot is the daily notes directory (e.g., "daily/"). Daily notes have a
+	// bare ISO date (YYYY-MM-DD) as their object ID; this prefix is stripped from
+	// file paths under the daily directory when computing object IDs.
+	DailyRoot string
 }
 
 // ParseDocument parses a markdown document.
@@ -189,11 +194,13 @@ func filePathToID(relativePath string, opts *ParseOptions) string {
 	// This is the canonical path->ID mapping, including directory roots.
 	objectsRoot := ""
 	pagesRoot := ""
+	dailyRoot := ""
 	if opts != nil {
 		objectsRoot = opts.ObjectsRoot
 		pagesRoot = opts.PagesRoot
+		dailyRoot = opts.DailyRoot
 	}
-	return paths.FilePathToObjectID(relativePath, objectsRoot, pagesRoot)
+	return paths.FilePathToObjectID(relativePath, objectsRoot, pagesRoot, dailyRoot)
 }
 
 func frontmatterBody(content string, frontmatter *Frontmatter) (contentStartLine int, bodyContent string) {

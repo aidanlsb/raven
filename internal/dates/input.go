@@ -1,7 +1,6 @@
 package dates
 
 import (
-	"path"
 	"strings"
 	"time"
 )
@@ -92,21 +91,21 @@ func CalendarDateForInput(raw string, now time.Time) (string, bool, error) {
 	return input.CalendarDate, true, nil
 }
 
-// DailyObjectID returns the object ID for a calendar date in the daily directory.
-func DailyObjectID(dailyDir, calendarDate string) string {
-	if dailyDir == "" {
-		dailyDir = "daily"
-	}
-	return path.Join(strings.TrimSuffix(dailyDir, "/"), calendarDate)
+// DailyObjectID returns the object ID for a calendar date.
+//
+// The canonical daily-note object ID is the bare ISO date (YYYY-MM-DD). The
+// daily directory is filesystem layout only and is not part of the identity.
+func DailyObjectID(calendarDate string) string {
+	return calendarDate
 }
 
 // DailyObjectIDForInput resolves a date input and returns its daily-note object ID.
-func DailyObjectIDForInput(raw, dailyDir string, now time.Time) (string, bool, error) {
+func DailyObjectIDForInput(raw string, now time.Time) (string, bool, error) {
 	calendarDate, ok, err := CalendarDateForInput(raw, now)
 	if err != nil || !ok {
 		return "", ok, err
 	}
-	return DailyObjectID(dailyDir, calendarDate), true, nil
+	return DailyObjectID(calendarDate), true, nil
 }
 
 // LooksLikeDateLiteral reports whether value has the YYYY-MM-DD shape.

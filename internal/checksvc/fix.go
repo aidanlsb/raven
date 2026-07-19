@@ -283,6 +283,7 @@ func parserOptionsFor(vaultCfg *config.VaultConfig) *parser.ParseOptions {
 	return &parser.ParseOptions{
 		ObjectsRoot: vaultCfg.GetObjectsRoot(),
 		PagesRoot:   vaultCfg.GetPagesRoot(),
+		DailyRoot:   vaultCfg.GetDailyDirectory(),
 	}
 }
 

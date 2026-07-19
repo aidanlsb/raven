@@ -10,8 +10,9 @@ import (
 
 // SetDailyDirectory sets the daily directory used when building a fallback resolver.
 //
-// This matters for date shorthand references like [[2026-01-01]], which resolve to
-// <dailyDirectory>/2026-01-01.
+// Date shorthand references like [[2026-01-01]] resolve to the bare-date object ID
+// (2026-01-01). The daily directory is retained so legacy prefixed references
+// (e.g. [[daily/2026-01-01]]) still resolve to the same bare-date object.
 func (e *Executor) SetDailyDirectory(dir string) {
 	if dir == "" {
 		dir = "daily"

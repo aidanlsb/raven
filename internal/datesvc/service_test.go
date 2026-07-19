@@ -24,7 +24,7 @@ func TestDateHub_BacklinksUseDailyNoteObjectID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DateHub returned error: %v", err)
 	}
-	if got, want := result.DailyNoteID, "daily/2026-02-01"; got != want {
+	if got, want := result.DailyNoteID, "2026-02-01"; got != want {
 		t.Fatalf("daily note id = %q, want %q", got, want)
 	}
 	if len(result.Backlinks) != 1 {

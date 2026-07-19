@@ -20,7 +20,28 @@ func TestResolveObjectToFileWithRoots_DirectCandidates(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	got, err := ResolveObjectToFileWithRoots(vaultDir, "people/freya", "", "")
+	got, err := ResolveObjectToFileWithRoots(vaultDir, "people/freya", "", "", "")
+	if err != nil {
+		t.Fatalf("ResolveObjectToFileWithRoots error: %v", err)
+	}
+	if got != target {
+		t.Fatalf("got %q, want %q", got, target)
+	}
+}
+
+func TestResolveObjectToFileWithRoots_BareDateDaily(t *testing.T) {
+	t.Parallel()
+	vaultDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vaultDir, "journal"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	target := filepath.Join(vaultDir, "journal", "2026-03-15.md")
+	if err := os.WriteFile(target, []byte("# Daily\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// A bare-date object ID resolves to the file under the daily directory.
+	got, err := ResolveObjectToFileWithRoots(vaultDir, "2026-03-15", "objects/", "pages/", "journal/")
 	if err != nil {
 		t.Fatalf("ResolveObjectToFileWithRoots error: %v", err)
 	}
@@ -48,7 +69,7 @@ func TestResolveObjectToFileWithRoots_WithDirectoryRoots(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	gotObj, err := ResolveObjectToFileWithRoots(vaultDir, "people/freya", "objects/", "pages/")
+	gotObj, err := ResolveObjectToFileWithRoots(vaultDir, "people/freya", "objects/", "pages/", "daily/")
 	if err != nil {
 		t.Fatalf("ResolveObjectToFileWithRoots object error: %v", err)
 	}
@@ -56,7 +77,7 @@ func TestResolveObjectToFileWithRoots_WithDirectoryRoots(t *testing.T) {
 		t.Fatalf("got %q, want %q", gotObj, objPath)
 	}
 
-	gotPage, err := ResolveObjectToFileWithRoots(vaultDir, "my-note", "objects/", "pages/")
+	gotPage, err := ResolveObjectToFileWithRoots(vaultDir, "my-note", "objects/", "pages/", "daily/")
 	if err != nil {
 		t.Fatalf("ResolveObjectToFileWithRoots page error: %v", err)
 	}
@@ -78,7 +99,7 @@ func TestResolveObjectToFileWithRoots_SlugifiedFallback(t *testing.T) {
 	}
 
 	// Use mixed case ref so direct candidates are less likely to match on case-sensitive FS.
-	got, err := ResolveObjectToFileWithRoots(vaultDir, "people/Sif", "objects/", "pages/")
+	got, err := ResolveObjectToFileWithRoots(vaultDir, "people/Sif", "objects/", "pages/", "daily/")
 	if err != nil {
 		t.Fatalf("ResolveObjectToFileWithRoots error: %v", err)
 	}
@@ -122,7 +143,7 @@ func TestResolveObjectToFileWithConfig_NormalizesRoots(t *testing.T) {
 func TestResolveObjectToFileWithRoots_NotFound(t *testing.T) {
 	t.Parallel()
 	vaultDir := t.TempDir()
-	_, err := ResolveObjectToFileWithRoots(vaultDir, "people/missing.md", "objects/", "pages/")
+	_, err := ResolveObjectToFileWithRoots(vaultDir, "people/missing.md", "objects/", "pages/", "daily/")
 	if err == nil || !strings.Contains(err.Error(), "object not found") {
 		t.Fatalf("expected not found error, got %v", err)
 	}

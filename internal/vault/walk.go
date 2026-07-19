@@ -159,27 +159,31 @@ func CollectDocuments(vaultPath string) ([]*parser.ParsedDocument, []WalkResult,
 func ResolveObjectToFileWithConfig(vaultPath, ref string, vaultCfg *config.VaultConfig) (string, error) {
 	objectsRoot := ""
 	pagesRoot := ""
-	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
-		if dirs := vaultCfg.GetDirectoriesConfig(); dirs != nil {
-			objectsRoot = dirs.Object
-			pagesRoot = dirs.Page
+	dailyRoot := ""
+	if vaultCfg != nil {
+		if vaultCfg.HasDirectoriesConfig() {
+			if dirs := vaultCfg.GetDirectoriesConfig(); dirs != nil {
+				objectsRoot = dirs.Object
+				pagesRoot = dirs.Page
+			}
 		}
+		dailyRoot = vaultCfg.GetDailyDirectory()
 	}
-	return ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot)
+	return ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot, dailyRoot)
 }
 
 // ResolveObjectToFileWithRoots resolves a reference/object ID to an absolute file path,
-// using the provided objects/pages roots for both direct candidate paths and fuzzy matching.
-func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot string) (string, error) {
+// using the provided objects/pages/daily roots for both direct candidate paths and fuzzy matching.
+func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot, dailyRoot string) (string, error) {
 	// Try direct candidates first (literal + rooted).
-	for _, rel := range paths.CandidateFilePaths(ref, objectsRoot, pagesRoot) {
+	for _, rel := range paths.CandidateFilePaths(ref, objectsRoot, pagesRoot, dailyRoot) {
 		filePath := filepath.Join(vaultPath, rel)
 		if _, err := os.Stat(filePath); err == nil {
 			return filePath, nil
 		}
 	}
 
-	wantID := paths.FilePathToObjectID(ref, objectsRoot, pagesRoot)
+	wantID := paths.FilePathToObjectID(ref, objectsRoot, pagesRoot, dailyRoot)
 
 	// Fall back to walking the vault and using exact/slugified matching.
 	var foundPath string
@@ -200,7 +204,7 @@ func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot string)
 		}
 
 		relPath, _ := filepath.Rel(vaultPath, path)
-		relID := paths.FilePathToObjectID(relPath, objectsRoot, pagesRoot)
+		relID := paths.FilePathToObjectID(relPath, objectsRoot, pagesRoot, dailyRoot)
 
 		// Exact match
 		if relID == wantID {

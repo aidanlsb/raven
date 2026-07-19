@@ -3,7 +3,6 @@ package readsvc
 import (
 	"errors"
 	"os"
-	"path"
 	"path/filepath"
 	"testing"
 
@@ -124,7 +123,9 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 			t.Fatalf("ParseDateArg failed: %v", err)
 		}
 		dateStr := vault.FormatDateISO(parsed)
-		expectedID := path.Join(vaultCfg.DailyDirectory, dateStr)
+		// The canonical daily-note object ID is the bare date; the file still lives
+		// under the configured daily directory.
+		expectedID := dateStr
 		expectedPath := filepath.Join(vaultPath, vaultCfg.DailyDirectory, dateStr+".md")
 
 		if result.ObjectID != expectedID || result.FileObjectID != expectedID || result.FilePath != expectedPath || result.IsSection {
@@ -148,7 +149,7 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ParseDateArg failed: %v", err)
 		}
-		expectedBaseID := path.Join(vaultCfg.DailyDirectory, vault.FormatDateISO(parsed))
+		expectedBaseID := vault.FormatDateISO(parsed)
 		if !result.IsSection || result.ObjectID != expectedBaseID+"#notes" || result.FileObjectID != expectedBaseID {
 			t.Fatalf("result = %#v, want section under %s", result, expectedBaseID)
 		}

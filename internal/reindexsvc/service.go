@@ -463,11 +463,15 @@ func fileIndexStats(db *index.Database, filePath string) (index.IndexStats, erro
 }
 
 func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {
-	if vaultCfg == nil || !vaultCfg.HasDirectoriesConfig() {
+	if vaultCfg == nil {
 		return nil
 	}
-	return &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
+	opts := &parser.ParseOptions{
+		DailyRoot: vaultCfg.GetDailyDirectory(),
 	}
+	if vaultCfg.HasDirectoriesConfig() {
+		opts.ObjectsRoot = vaultCfg.GetObjectsRoot()
+		opts.PagesRoot = vaultCfg.GetPagesRoot()
+	}
+	return opts
 }

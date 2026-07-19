@@ -224,6 +224,12 @@ func isDailyNoteObjectID(objectID string, vaultCfg *config.VaultConfig) bool {
 		baseID = parts[0]
 	}
 
+	// Canonical daily-note object IDs are bare ISO dates.
+	if dates.IsValidDate(baseID) {
+		return true
+	}
+
+	// Legacy compatibility: daily-directory-prefixed object IDs.
 	dailyDir := "daily"
 	if vaultCfg != nil && vaultCfg.GetDailyDirectory() != "" {
 		dailyDir = vaultCfg.GetDailyDirectory()

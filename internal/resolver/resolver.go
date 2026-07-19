@@ -310,12 +310,67 @@ func addNameFieldMatches(r *Resolver, c *matchCollector, ref, sluggedRef, lowerR
 	}
 }
 
+// addDateRefMatch resolves date references to the canonical bare-date object ID.
+//
+// The canonical daily-note object ID is a bare ISO date (YYYY-MM-DD), so
+// [[2026-03-15]] resolves to "2026-03-15". For backward compatibility, prefixed
+// daily references written against the old scheme — [[daily/2026-03-15]] or
+// [[<configuredDailyDir>/2026-03-15]] — resolve to the same bare-date object.
+//
+// A bare-date reference always adds the bare-date candidate (even when no daily
+// note exists yet) so links to not-yet-created dailies point at the canonical
+// ID. Prefixed section references (e.g. [[daily/2026-03-15#standup]]) only match
+// when the corresponding bare-date section object exists.
 func addDateRefMatch(r *Resolver, c *matchCollector, ref string) {
-	if !dates.IsValidDate(ref) {
+	baseRef, fragment, isSection := paths.ParseSectionID(ref)
+	baseRef = paths.TrimMDExtension(baseRef)
+
+	date, ok := r.bareDateFromRef(baseRef)
+	if !ok {
 		return
 	}
 
-	c.add(path.Join(r.dailyDirectory, ref), "date")
+	if isSection {
+		fullID := date + "#" + fragment
+		if _, exists := r.objectIDs[fullID]; exists {
+			c.add(fullID, "date")
+		}
+		return
+	}
+
+	c.add(date, "date")
+}
+
+// bareDateFromRef returns the canonical bare ISO date for a date reference. It
+// accepts a bare date (e.g. "2026-03-15") or a legacy daily-directory-prefixed
+// form (e.g. "daily/2026-03-15" or "<configuredDailyDir>/2026-03-15").
+func (r *Resolver) bareDateFromRef(ref string) (string, bool) {
+	if dates.IsValidDate(ref) {
+		return ref, true
+	}
+	for _, dir := range r.dateRefPrefixes() {
+		prefix := dir + "/"
+		if strings.HasPrefix(ref, prefix) {
+			if rest := strings.TrimPrefix(ref, prefix); dates.IsValidDate(rest) {
+				return rest, true
+			}
+		}
+	}
+	return "", false
+}
+
+// dateRefPrefixes returns the daily-directory prefixes accepted as legacy
+// compatibility aliases for date references: the configured daily directory and
+// the built-in default "daily".
+func (r *Resolver) dateRefPrefixes() []string {
+	prefixes := make([]string, 0, 2)
+	if r.dailyDirectory != "" {
+		prefixes = append(prefixes, r.dailyDirectory)
+	}
+	if r.dailyDirectory != "daily" {
+		prefixes = append(prefixes, "daily")
+	}
+	return prefixes
 }
 
 func isPathLikeRef(ref string) bool {

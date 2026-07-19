@@ -204,6 +204,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 		ParseOptions: &parser.ParseOptions{
 			ObjectsRoot: vaultCfg.GetObjectsRoot(),
 			PagesRoot:   vaultCfg.GetPagesRoot(),
+			DailyRoot:   vaultCfg.GetDailyDirectory(),
 		},
 		ExcludeMatcher: excludeMatcher,
 	}

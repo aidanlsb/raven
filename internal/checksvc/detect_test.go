@@ -111,13 +111,16 @@ func TestDetectMissingRefs_InferredFromPath(t *testing.T) {
 	}
 }
 
-func TestDetectMissingRefs_InferredDateFromDailyDirectory(t *testing.T) {
+func TestDetectMissingRefs_PrefixedDailyRefResolvesAsAlias(t *testing.T) {
 	t.Parallel()
 
+	// A legacy daily-directory-prefixed reference is a compatibility alias for the
+	// bare-date object ID, which always resolves (the daily note is materialized on
+	// demand). It is therefore never reported as a missing reference.
 	vault := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML("directories:\n  daily: journal/\n").
-		WithFile("notes/mention.md", "See [[journal/2026-06-30]] for details.\n").
+		WithFile("notes/mention.md", "See [[journal/2026-06-30]] and [[2026-06-30]] for details.\n").
 		Build()
 	reindexForTest(t, vault.Path)
 
@@ -126,18 +129,8 @@ func TestDetectMissingRefs_InferredDateFromDailyDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
-	if len(refs) != 1 {
-		t.Fatalf("refs = %#v, want exactly one missing ref", refs)
-	}
-	got := refs[0]
-	if got.TargetPath != "journal/2026-06-30" {
-		t.Fatalf("target_path = %q, want journal/2026-06-30", got.TargetPath)
-	}
-	if got.InferredType != "date" {
-		t.Fatalf("inferred_type = %q, want date", got.InferredType)
-	}
-	if got.Confidence != check.ConfidenceInferred {
-		t.Fatalf("confidence = %v, want inferred", got.Confidence)
+	if len(refs) != 0 {
+		t.Fatalf("refs = %#v, want no missing refs (date refs resolve as canonical daily identity)", refs)
 	}
 }
 

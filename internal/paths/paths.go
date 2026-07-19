@@ -14,6 +14,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/dates"
 )
 
 // ErrPathOutsideVault is returned when a path is outside the vault.
@@ -112,13 +114,27 @@ func normalizeRelPath(p string) string {
 // It:
 // - strips a trailing ".md"
 // - normalizes path separators
+// - maps daily notes ("<dailyRoot>YYYY-MM-DD.md") to their bare-date object ID
 // - strips the configured objects/pages root prefixes (objects first, then pages)
-func FilePathToObjectID(filePath, objectsRoot, pagesRoot string) string {
+//
+// Daily notes have a bare ISO date (YYYY-MM-DD) as their canonical object ID.
+// The daily directory is layout-only and is not part of the link/object identity,
+// so a file at "<dailyRoot>2026-03-15.md" indexes and links as "2026-03-15".
+func FilePathToObjectID(filePath, objectsRoot, pagesRoot, dailyRoot string) string {
 	id := normalizeRelPath(filePath)
 	id = TrimMDExtension(id)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
 	pagesRoot = NormalizeDirRoot(pagesRoot)
+	dailyRoot = NormalizeDirRoot(dailyRoot)
+
+	// Daily notes: strip the daily directory when the remaining segment is a bare
+	// ISO date, yielding the canonical bare-date object ID.
+	if dailyRoot != "" && strings.HasPrefix(id, dailyRoot) {
+		if tail := strings.TrimPrefix(id, dailyRoot); dates.IsValidDate(tail) {
+			return tail
+		}
+	}
 
 	// Prefer stripping objects root first (typed objects tend to be more specific).
 	if objectsRoot != "" && strings.HasPrefix(id, objectsRoot) {
@@ -139,12 +155,27 @@ func FilePathToObjectID(filePath, objectsRoot, pagesRoot string) string {
 //
 // If the objectID already includes a configured root prefix, this function will
 // not add another prefix.
-func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot string) string {
+//
+// Daily notes (type "date", identified by a bare ISO date object ID) live under
+// the configured daily directory even though their object ID is a bare date, so
+// a "date" object "2026-03-15" maps to "<dailyRoot>2026-03-15.md".
+func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot, dailyRoot string) string {
 	id := normalizeRelPath(objectID)
 	id = TrimMDExtension(id)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
 	pagesRoot = NormalizeDirRoot(pagesRoot)
+	dailyRoot = NormalizeDirRoot(dailyRoot)
+
+	// Daily notes: place "date" objects (bare-date IDs) under the daily directory.
+	if dailyRoot != "" && (typeName == "date" || dates.IsValidDate(id)) {
+		if strings.HasPrefix(id, dailyRoot) {
+			return EnsureMDExtension(id)
+		}
+		if dates.IsValidDate(id) {
+			return EnsureMDExtension(dailyRoot + id)
+		}
+	}
 
 	// If the caller already provided a rooted path-like ID, keep it.
 	if objectsRoot != "" && strings.HasPrefix(id, objectsRoot) {
@@ -181,12 +212,27 @@ func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot string) strin
 //
 // When the type of the reference is known, prefer ObjectIDToFilePath so the
 // canonical root/type rules apply instead of this heuristic.
-func ReferenceToFilePath(ref, objectsRoot, pagesRoot string) string {
+//
+// A bare ISO date reference (e.g. "2026-03-15") is treated as a daily note and
+// resolves to "<dailyRoot>2026-03-15.md".
+func ReferenceToFilePath(ref, objectsRoot, pagesRoot, dailyRoot string) string {
 	ref = normalizeRelPath(ref)
 	ref = TrimMDExtension(ref)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
 	pagesRoot = NormalizeDirRoot(pagesRoot)
+	dailyRoot = NormalizeDirRoot(dailyRoot)
+
+	// Daily notes: bare-date references live under the daily directory. A prefixed
+	// daily reference (compat) is kept as its literal path.
+	if dailyRoot != "" {
+		if dates.IsValidDate(ref) {
+			return EnsureMDExtension(dailyRoot + ref)
+		}
+		if strings.HasPrefix(ref, dailyRoot) && dates.IsValidDate(strings.TrimPrefix(ref, dailyRoot)) {
+			return EnsureMDExtension(ref)
+		}
+	}
 
 	// If the caller already provided a rooted path-like ID, keep it.
 	if objectsRoot != "" && strings.HasPrefix(ref, objectsRoot) {
@@ -243,13 +289,15 @@ func ShortNameFromID(id string) string {
 // CandidateFilePaths returns vault-relative markdown paths to try for a reference.
 //
 // It always includes the "literal" interpretation (ref + ".md" after stripping any
-// ".md" suffix), plus rooted interpretations if roots are configured.
-func CandidateFilePaths(ref, objectsRoot, pagesRoot string) []string {
+// ".md" suffix), plus rooted interpretations if roots are configured. A bare ISO
+// date reference also yields a daily-directory candidate ("<dailyRoot>ref.md").
+func CandidateFilePaths(ref, objectsRoot, pagesRoot, dailyRoot string) []string {
 	ref = normalizeRelPath(ref)
 	ref = TrimMDExtension(ref)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
 	pagesRoot = NormalizeDirRoot(pagesRoot)
+	dailyRoot = NormalizeDirRoot(dailyRoot)
 
 	seen := make(map[string]struct{}, 4)
 	add := func(p string, out *[]string) {
@@ -271,6 +319,11 @@ func CandidateFilePaths(ref, objectsRoot, pagesRoot string) []string {
 	}
 	if pagesRoot != "" && !strings.HasPrefix(ref, pagesRoot) {
 		add(EnsureMDExtension(pagesRoot+ref), &out)
+	}
+
+	// 3) Daily notes: a bare ISO date lives under the daily directory.
+	if dailyRoot != "" && !strings.HasPrefix(ref, dailyRoot) && dates.IsValidDate(ref) {
+		add(EnsureMDExtension(dailyRoot+ref), &out)
 	}
 
 	return out

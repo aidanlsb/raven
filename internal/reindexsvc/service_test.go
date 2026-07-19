@@ -360,8 +360,12 @@ func TestBuildParseOptions(t *testing.T) {
 		t.Fatalf("expected nil parse options for nil config, got %#v", got)
 	}
 
-	if got := buildParseOptions(&config.VaultConfig{}); got != nil {
-		t.Fatalf("expected nil parse options without directories, got %#v", got)
+	// Without directories config, parse options still carry the daily root so
+	// daily notes derive bare-date object IDs.
+	if got := buildParseOptions(&config.VaultConfig{}); got == nil {
+		t.Fatal("expected parse options with daily root even without directories")
+	} else if got.ObjectsRoot != "" || got.PagesRoot != "" || got.DailyRoot != "daily" {
+		t.Fatalf("unexpected parse options without directories: %#v", got)
 	}
 
 	cfg := &config.VaultConfig{
@@ -374,7 +378,7 @@ func TestBuildParseOptions(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected parse options when directories are configured")
 	}
-	if got.ObjectsRoot != "objects/" || got.PagesRoot != "pages/" {
+	if got.ObjectsRoot != "objects/" || got.PagesRoot != "pages/" || got.DailyRoot != "daily" {
 		t.Fatalf("unexpected parse options roots: %#v", got)
 	}
 }
