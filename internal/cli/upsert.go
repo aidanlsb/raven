@@ -86,6 +86,7 @@ func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
 	data, _ := result.Data.(map[string]interface{})
 	status, _ := data["status"].(string)
 	relativePath, _ := data["file"].(string)
+	objectID, _ := data["id"].(string)
 	switch status {
 	case "created":
 		fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
@@ -93,6 +94,9 @@ func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
 		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
 	default:
 		fmt.Println(ui.Checkf("Unchanged %s", ui.FilePath(relativePath)))
+	}
+	if objectID != "" {
+		fmt.Println(ui.LinkAs(objectID))
 	}
 	for _, warning := range result.Warnings {
 		fmt.Println(ui.Warning(warning.Message))

@@ -19,6 +19,7 @@ var dailyCmd = newCanonicalLeafCommand("daily", canonicalLeafOptions{
 func handleDailyResult(cmd *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	relativePath, _ := data["file"].(string)
+	objectID, _ := data["id"].(string)
 	created, _ := data["created"].(bool)
 	filePath := relativePath
 	if relativePath != "" {
@@ -27,6 +28,9 @@ func handleDailyResult(cmd *cobra.Command, result commandexec.Result) error {
 
 	if !isJSONOutput() && created {
 		fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
+		if objectID != "" {
+			fmt.Println(ui.LinkAs(objectID))
+		}
 	}
 
 	edit, _ := cmd.Flags().GetBool("edit")
