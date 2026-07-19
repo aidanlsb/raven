@@ -502,10 +502,25 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 	return commandexec.Success(data, nil)
 }
 
+// ambiguousRefFailure builds a REF_AMBIGUOUS failure that carries the candidate
+// matches (and their sources) in the error details. Surfacing the candidates is
+// what lets the CLI offer interactive disambiguation and lets agents see every
+// colliding object rather than a message alone.
+func ambiguousRefFailure(ambiguous *readsvc.AmbiguousRefError) commandexec.Result {
+	details := map[string]interface{}{
+		"reference": ambiguous.Reference,
+		"matches":   ambiguous.Matches,
+	}
+	if len(ambiguous.MatchSources) > 0 {
+		details["match_sources"] = ambiguous.MatchSources
+	}
+	return commandexec.Failure("REF_AMBIGUOUS", ambiguous.Error(), details, "Use a full object ID/path to disambiguate")
+}
+
 func mapResolveFailure(err error, reference string) commandexec.Result {
 	var ambiguous *readsvc.AmbiguousRefError
 	if errors.As(err, &ambiguous) {
-		return commandexec.Failure("REF_AMBIGUOUS", ambiguous.Error(), nil, "Use a full object ID/path to disambiguate")
+		return ambiguousRefFailure(ambiguous)
 	}
 
 	var notFound *readsvc.RefNotFoundError
@@ -519,7 +534,7 @@ func mapResolveFailure(err error, reference string) commandexec.Result {
 func mapReadFailure(err error) commandexec.Result {
 	var ambiguous *readsvc.AmbiguousRefError
 	if errors.As(err, &ambiguous) {
-		return commandexec.Failure("REF_AMBIGUOUS", ambiguous.Error(), nil, "Use a full object ID/path to disambiguate")
+		return ambiguousRefFailure(ambiguous)
 	}
 
 	var notFound *readsvc.RefNotFoundError
@@ -546,14 +561,7 @@ func mapReadFailure(err error) commandexec.Result {
 func mapOpenFailure(err error) commandexec.Result {
 	var ambiguous *readsvc.AmbiguousRefError
 	if errors.As(err, &ambiguous) {
-		details := map[string]interface{}{
-			"reference": ambiguous.Reference,
-			"matches":   ambiguous.Matches,
-		}
-		if len(ambiguous.MatchSources) > 0 {
-			details["match_sources"] = ambiguous.MatchSources
-		}
-		return commandexec.Failure("REF_AMBIGUOUS", ambiguous.Error(), details, "Use a full object ID/path to disambiguate")
+		return ambiguousRefFailure(ambiguous)
 	}
 	var notFound *readsvc.RefNotFoundError
 	if errors.As(err, &notFound) {

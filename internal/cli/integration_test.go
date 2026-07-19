@@ -3247,6 +3247,81 @@ name: Thor
 	})
 }
 
+// TestIntegration_BareRefPageVsTypedIsAmbiguous locks the bare-reference resolve
+// policy at the CLI surface: a bare name that matches both an untyped page (a
+// vault-root file with a bare object ID) and a typed object is ambiguous — the
+// on-disk page is never silently preferred over the typed object. The candidate
+// matches are surfaced in the error details so the interactive picker can offer
+// disambiguation.
+func TestIntegration_BareRefPageVsTypedIsAmbiguous(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("freya.md", `---
+type: page
+---
+# Freya (untyped page)
+`).
+		WithFile("people/freya.md", `---
+type: person
+name: Freya
+---
+# Freya (person)
+`).
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	t.Run("resolve reports ambiguity without a winner", func(t *testing.T) {
+		result := v.RunCLI("resolve", "freya")
+		result.MustSucceed(t)
+		if result.Data["resolved"] != false {
+			t.Fatalf("expected resolved=false, got %#v", result.Data["resolved"])
+		}
+		if result.Data["ambiguous"] != true {
+			t.Fatalf("expected ambiguous=true, got %#v", result.Data["ambiguous"])
+		}
+		matches := result.DataList("matches")
+		if len(matches) != 2 {
+			t.Fatalf("expected 2 matches, got %#v", matches)
+		}
+		ids := make(map[string]bool, len(matches))
+		for _, raw := range matches {
+			match, ok := raw.(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected match object, got %#v", raw)
+			}
+			id, _ := match["object_id"].(string)
+			ids[id] = true
+		}
+		if !ids["freya"] || !ids["people/freya"] {
+			t.Fatalf("expected page and typed matches, got %#v", matches)
+		}
+	})
+
+	t.Run("read surfaces matches for the disambiguation picker", func(t *testing.T) {
+		result := v.RunCLI("read", "freya")
+		result.MustFail(t, "REF_AMBIGUOUS")
+		matches, ok := result.Error.Details["matches"].([]interface{})
+		if !ok {
+			t.Fatalf("expected match details, got %#v", result.Error.Details["matches"])
+		}
+		if len(matches) != 2 {
+			t.Fatalf("expected 2 ambiguous matches, got %#v", matches)
+		}
+	})
+
+	t.Run("qualified typed reference stays unambiguous", func(t *testing.T) {
+		result := v.RunCLI("resolve", "people/freya")
+		result.MustSucceed(t)
+		if result.Data["resolved"] != true {
+			t.Fatalf("expected resolved=true, got %#v", result.Data["resolved"])
+		}
+		if result.DataString("object_id") != "people/freya" {
+			t.Fatalf("expected object_id 'people/freya', got %q", result.DataString("object_id"))
+		}
+	})
+}
+
 // TestIntegration_SchemaTemplateLifecycle tests schema template lifecycle commands.
 func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 	t.Parallel()
