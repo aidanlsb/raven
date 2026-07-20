@@ -233,7 +233,6 @@ func runInitFollowUp(info *initPostInitInfo) {
 			info.NeedsDefaultChoice = false
 		}
 	}
-
 }
 
 // runInitManualRegister is the interactive fallback used when auto-registration
