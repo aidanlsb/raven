@@ -1,6 +1,7 @@
 package commandimpl
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -16,11 +17,54 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 const indexUpdateFailedWarningCode = codes.WarnIndexUpdateFailed
 
 const indexUpdateFailedWarningRef = "The write succeeded, but the derived index may be stale. Run 'rvn reindex' to refresh it."
+
+func newRequiredCommandVaultRuntime(vaultPath string, openDB bool) (*vaultruntime.Runtime, commandexec.Result) {
+	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{OpenDB: openDB, RequireSchema: true})
+}
+
+func newConfigCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
+	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{})
+}
+
+func newCommandVaultRuntime(vaultPath string, opts vaultruntime.Options) (*vaultruntime.Runtime, commandexec.Result) {
+	rt, err := vaultruntime.New(strings.TrimSpace(vaultPath), opts)
+	if err == nil {
+		return rt, commandexec.Result{}
+	}
+	return nil, mapVaultRuntimeSetupFailure(err)
+}
+
+func openCommandRuntimeDB(rt *vaultruntime.Runtime) commandexec.Result {
+	if err := rt.OpenDB(); err != nil {
+		return mapVaultRuntimeSetupFailure(err)
+	}
+	return commandexec.Result{}
+}
+
+func mapVaultRuntimeSetupFailure(err error) commandexec.Result {
+	var setupErr *vaultruntime.SetupError
+	if errors.As(err, &setupErr) {
+		switch setupErr.Stage {
+		case vaultruntime.StageConfig:
+			return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+		case vaultruntime.StageSchema:
+			return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
+		case vaultruntime.StageDatabase:
+			if failure, ok := mapIndexRebuildRequired(err); ok {
+				return failure
+			}
+			return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
+		}
+	}
+
+	return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
+}
 
 func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {
 	if vaultCfg == nil {

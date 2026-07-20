@@ -12,12 +12,10 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/readsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // HandleQuery executes the canonical `query` command path.
@@ -28,10 +26,12 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
 	}
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
 
 	queryString := strings.TrimSpace(stringArg(req.Args, "query_string"))
 	if queryString == "" {
@@ -49,19 +49,14 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', 'section', or 'asset'", queryName), nil, "")
 	}
 
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
+	if rt.SchemaLoadErr != nil {
 		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
 	}
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		if failure, ok := mapIndexRebuildRequired(err); ok {
-			return failure
-		}
-		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
+	sch := rt.Schema
+	if failure := openCommandRuntimeDB(rt); failure.Error != nil {
+		return failure
 	}
-	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	db := rt.DB
 
 	// A non-saved string that is not a concrete query root is an unknown query.
 	// Return a rich, resolver-aware hint here (rather than letting execution fail
@@ -77,13 +72,6 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 	}
 	if !compatible {
 		return commandexec.Failure(codes.ErrDatabaseVersion, "index schema is stale or incompatible", nil, "Run 'rvn reindex --full' to rebuild the index")
-	}
-
-	rt := &readsvc.Runtime{
-		VaultPath: vaultPath,
-		VaultCfg:  vaultCfg,
-		Schema:    sch,
-		DB:        db,
 	}
 
 	var refreshWarnings []commandexec.Warning

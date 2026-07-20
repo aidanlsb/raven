@@ -6,11 +6,8 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/traitsvc"
 )
 
@@ -54,22 +51,14 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("MISSING_ARGUMENT", message, nil, suggestion)
 	}
 
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
+	rt, failure := newRequiredCommandVaultRuntime(vaultPath, true)
+	if failure.Error != nil {
+		return failure
 	}
-
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
-	}
-
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		return commandexec.Failure("DATABASE_ERROR", err.Error(), nil, "Run 'rvn reindex' to rebuild the database")
-	}
-	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	defer rt.Close()
+	sch := rt.Schema
+	vaultCfg := rt.VaultCfg
+	db := rt.DB
 
 	traits, skipped, err := traitsvc.ResolveTraitIDs(db, traitIDs)
 	if err != nil {

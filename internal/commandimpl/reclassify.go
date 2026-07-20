@@ -6,9 +6,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // HandleReclassify executes the canonical `reclassify` command.
@@ -19,15 +17,16 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
 	}
-
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
+	if rt.SchemaLoadErr != nil {
 		return commandexec.Failure("SCHEMA_NOT_FOUND", "failed to load schema", nil, "Run 'rvn init' to create a schema")
 	}
+	sch := rt.Schema
 
 	fieldValues, err := parseKeyValueArgs(req.Args["field"])
 	if err != nil {

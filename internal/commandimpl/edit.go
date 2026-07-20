@@ -14,7 +14,6 @@ import (
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -25,19 +24,15 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
-	}
-
 	// Edit resolves the target reference (schema-aware) before mutating and
-	// then reports missing-reference warnings, both of which rely on schema.
-	// Treat a schema load failure as fatal so a corrupt schema cannot silently
-	// misresolve the edit target or drop reference validation.
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
+	// then reports missing-reference warnings, so require a valid schema.
+	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	if failure.Error != nil {
+		return failure
 	}
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
+	sch := rt.Schema
 
 	reference := strings.TrimSpace(stringArg(req.Args, "path"))
 	if reference == "" {
@@ -52,11 +47,6 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return mapEditFailure(err)
 	}
 
-	rt := &readsvc.Runtime{
-		VaultPath: vaultPath,
-		VaultCfg:  vaultCfg,
-		Schema:    sch,
-	}
 	resolved, err := readsvc.ResolveReference(reference, rt, false)
 	if err != nil {
 		return mapResolveFailure(err, reference)

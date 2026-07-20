@@ -26,15 +26,13 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 		return commandexec.Failure("INVALID_INPUT", "cannot combine --fix with --create-missing", nil, "Use one action at a time")
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	if failure.Error != nil {
+		return failure
 	}
-
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
-	}
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
+	sch := rt.Schema
 
 	result, err := checksvc.Run(vaultPath, vaultCfg, sch, checksvc.Options{
 		PathArg:     strings.TrimSpace(stringArg(req.Args, "path")),
