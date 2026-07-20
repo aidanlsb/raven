@@ -36,7 +36,7 @@ func TestIntegration_InitFirstVaultAutoRegisters(t *testing.T) {
 	mustPostInitBool(t, postInit, "has_existing_default", false)
 	mustPostInitBool(t, postInit, "is_default", true)
 	mustPostInitBool(t, postInit, "is_active", true)
-	mustPostInitBool(t, postInit, "selection_guard_active", false)
+	mustPostInitBool(t, postInit, "activated", true)
 	mustPostInitBool(t, postInit, "needs_user_choice_for_activate", false)
 	mustPostInitBool(t, postInit, "needs_user_choice_for_default", false)
 
@@ -61,7 +61,7 @@ func TestIntegration_InitFirstVaultAutoRegisters(t *testing.T) {
 	}
 }
 
-func TestIntegration_InitSecondVaultRegistersWithoutActivating(t *testing.T) {
+func TestIntegration_InitSecondVaultRegistersAndActivates(t *testing.T) {
 	t.Parallel()
 	binary := testutil.BuildCLI(t)
 	root := t.TempDir()
@@ -75,7 +75,7 @@ func TestIntegration_InitSecondVaultRegistersWithoutActivating(t *testing.T) {
 	first := runInitPostInit(t, binary, configFile, stateFile, firstPath)
 	mustPostInitBool(t, first, "is_first_vault", true)
 
-	// The second vault must be registered but must not change routing.
+	// The second vault is registered and becomes active; the default stays first.
 	second := runInitPostInit(t, binary, configFile, stateFile, secondPath)
 	if got := second["registered_name"]; got != "second" {
 		t.Fatalf("registered_name = %#v, want %q", got, "second")
@@ -85,29 +85,40 @@ func TestIntegration_InitSecondVaultRegistersWithoutActivating(t *testing.T) {
 	mustPostInitBool(t, second, "is_first_vault", false)
 	mustPostInitBool(t, second, "has_existing_default", true)
 	mustPostInitBool(t, second, "is_default", false)
-	mustPostInitBool(t, second, "is_active", false)
-	mustPostInitBool(t, second, "selection_guard_active", true)
-	mustPostInitBool(t, second, "needs_user_choice_for_activate", true)
+	mustPostInitBool(t, second, "is_active", true)
+	mustPostInitBool(t, second, "activated", true)
+	mustPostInitBool(t, second, "needs_user_choice_for_activate", false)
 	mustPostInitBool(t, second, "needs_user_choice_for_default", true)
 
-	// Invocable actions to activate/pin the new vault must be present.
+	// Default changes remain explicit; activation is already complete.
 	actions, ok := second["actions"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("actions = %#v, want map", second["actions"])
 	}
-	activate, ok := actions["activate"].(map[string]interface{})
-	if !ok || activate["command"] != "vault use" {
-		t.Fatalf("actions.activate = %#v, want command=vault use", actions["activate"])
+	if _, ok := actions["activate"]; ok {
+		t.Fatalf("actions.activate = %#v, want automatic activation", actions["activate"])
 	}
 
-	// Routing must still point at the first vault.
+	active, ok := second["active_vault"].(map[string]interface{})
+	if !ok || active["name"] != "second" || active["path"] != secondPath {
+		t.Fatalf("active_vault = %#v, want second at %s", second["active_vault"], secondPath)
+	}
+	previous, ok := second["previous_active_vault"].(map[string]interface{})
+	if !ok || previous["name"] != "first" || previous["path"] != firstPath {
+		t.Fatalf("previous_active_vault = %#v, want first at %s", second["previous_active_vault"], firstPath)
+	}
+	if got := second["switch_back"]; got != `rvn --json vault use -- 'first'` {
+		t.Fatalf("switch_back = %#v, want exact restore command", got)
+	}
+
+	// Ambient routing now points at the newly initialized vault.
 	current := runVaultCurrent(t, binary, configFile, stateFile)
-	if got := current["name"]; got != "first" {
-		t.Fatalf("vault current name = %#v, want %q (routing must be unchanged)", got, "first")
+	if got := current["name"]; got != "second" {
+		t.Fatalf("vault current name = %#v, want %q", got, "second")
 	}
 }
 
-func TestIntegration_InitSecondVaultBlocksAmbientWrites(t *testing.T) {
+func TestIntegration_InitSecondVaultHumanOutputDisclosesSwitch(t *testing.T) {
 	t.Parallel()
 	binary := testutil.BuildCLI(t)
 	root := t.TempDir()
@@ -117,54 +128,64 @@ func TestIntegration_InitSecondVaultBlocksAmbientWrites(t *testing.T) {
 	secondPath := filepath.Join(root, "second")
 
 	runInitPostInit(t, binary, configFile, stateFile, firstPath)
-	runInitPostInit(t, binary, configFile, stateFile, secondPath)
 
-	blocked := exec.Command(
+	cmd := exec.Command(binary, "--config", configFile, "--state", stateFile, "init", secondPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("human init failed: %v\n%s", err, output)
+	}
+	for _, want := range []string{
+		"Active vault switched to 'second'",
+		secondPath,
+		"Previously active: 'first'",
+		firstPath,
+		`Switch back: rvn --json vault use -- 'first'`,
+	} {
+		if !strings.Contains(string(output), want) {
+			t.Fatalf("human output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestIntegration_InitSecondVaultRoutesAmbientWritesToNewActiveVault(t *testing.T) {
+	t.Parallel()
+	binary := testutil.BuildCLI(t)
+	root := t.TempDir()
+	configFile := filepath.Join(root, "config.toml")
+	stateFile := filepath.Join(root, "state.toml")
+	firstPath := filepath.Join(root, "first")
+	secondPath := filepath.Join(root, "second")
+
+	runInitPostInit(t, binary, configFile, stateFile, firstPath)
+	second := runInitPostInit(t, binary, configFile, stateFile, secondPath)
+	if got := second["switch_back"]; got != `rvn --json vault use -- 'first'` {
+		t.Fatalf("switch_back = %#v, want exact restore command", got)
+	}
+
+	ambient := exec.Command(
 		binary,
 		"--config", configFile,
 		"--state", stateFile,
 		"--json",
-		"schema", "add", "type", "must-not-land", "--name-field", "title",
+		"schema", "add", "type", "ambient-second", "--name-field", "title",
 	)
-	output, err := blocked.CombinedOutput()
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) {
-		t.Fatalf("expected VAULT_AMBIGUOUS to exit nonzero, got %v\n%s", err, output)
+	ambientOutput, err := ambient.CombinedOutput()
+	if err != nil {
+		t.Fatalf("ambient write to auto-activated vault failed: %v\n%s", err, ambientOutput)
 	}
-	if got := exitErr.ExitCode(); got != 1 {
-		t.Fatalf("exit code=%d, want 1\n%s", got, output)
+	firstSchema, err := os.ReadFile(filepath.Join(firstPath, "schema.yaml"))
+	if err != nil {
+		t.Fatalf("read first schema: %v", err)
 	}
-	var blockedResp struct {
-		OK    bool `json:"ok"`
-		Error struct {
-			Code       string `json:"code"`
-			Message    string `json:"message"`
-			Suggestion string `json:"suggestion"`
-		} `json:"error"`
+	if strings.Contains(string(firstSchema), "ambient-second") {
+		t.Fatalf("ambient write incorrectly reached previous vault:\n%s", firstSchema)
 	}
-	if err := json.Unmarshal(output, &blockedResp); err != nil {
-		t.Fatalf("unmarshal blocked response: %v\n%s", err, output)
+	secondSchema, err := os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
+	if err != nil {
+		t.Fatalf("read second schema: %v", err)
 	}
-	if blockedResp.OK || blockedResp.Error.Code != "VAULT_AMBIGUOUS" {
-		t.Fatalf("response = %s, want VAULT_AMBIGUOUS", output)
-	}
-	if !strings.Contains(blockedResp.Error.Message, "unqualified command would target") {
-		t.Fatalf("message = %q, want wrong-target explanation", blockedResp.Error.Message)
-	}
-	if !strings.Contains(blockedResp.Error.Suggestion, "rvn vault use") {
-		t.Fatalf("suggestion = %q, want activation guidance", blockedResp.Error.Suggestion)
-	}
-	for _, schemaPath := range []string{
-		filepath.Join(firstPath, "schema.yaml"),
-		filepath.Join(secondPath, "schema.yaml"),
-	} {
-		schema, readErr := os.ReadFile(schemaPath)
-		if readErr != nil {
-			t.Fatalf("read schema: %v", readErr)
-		}
-		if strings.Contains(string(schema), "must-not-land") {
-			t.Fatalf("blocked type was written to %s", schemaPath)
-		}
+	if !strings.Contains(string(secondSchema), "ambient-second") {
+		t.Fatalf("ambient write did not reach auto-activated vault:\n%s", secondSchema)
 	}
 
 	explicit := exec.Command(
@@ -179,7 +200,7 @@ func TestIntegration_InitSecondVaultBlocksAmbientWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("explicit second-vault write failed: %v\n%s", err, explicitOutput)
 	}
-	secondSchema, err := os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
+	secondSchema, err = os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
 	if err != nil {
 		t.Fatalf("read second schema: %v", err)
 	}
@@ -187,26 +208,26 @@ func TestIntegration_InitSecondVaultBlocksAmbientWrites(t *testing.T) {
 		t.Fatalf("explicit write did not reach second vault:\n%s", secondSchema)
 	}
 
-	use := exec.Command(binary, "--config", configFile, "--state", stateFile, "--json", "vault", "use", "second")
+	use := exec.Command(binary, "--config", configFile, "--state", stateFile, "--json", "vault", "use", "--", "first")
 	if useOutput, useErr := use.CombinedOutput(); useErr != nil {
-		t.Fatalf("activate second vault: %v\n%s", useErr, useOutput)
+		t.Fatalf("switch back to first vault: %v\n%s", useErr, useOutput)
 	}
 	afterUse := exec.Command(
 		binary,
 		"--config", configFile,
 		"--state", stateFile,
 		"--json",
-		"schema", "add", "type", "active-second", "--name-field", "title",
+		"schema", "add", "type", "restored-first", "--name-field", "title",
 	)
 	if afterUseOutput, afterUseErr := afterUse.CombinedOutput(); afterUseErr != nil {
-		t.Fatalf("ambient write after activation failed: %v\n%s", afterUseErr, afterUseOutput)
+		t.Fatalf("ambient write after switch-back failed: %v\n%s", afterUseErr, afterUseOutput)
 	}
-	secondSchema, err = os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
+	firstSchema, err = os.ReadFile(filepath.Join(firstPath, "schema.yaml"))
 	if err != nil {
-		t.Fatalf("read second schema after activation: %v", err)
+		t.Fatalf("read first schema after switch-back: %v", err)
 	}
-	if !strings.Contains(string(secondSchema), "active-second") {
-		t.Fatalf("ambient write after activation did not reach second vault:\n%s", secondSchema)
+	if !strings.Contains(string(firstSchema), "restored-first") {
+		t.Fatalf("ambient write after switch-back did not reach first vault:\n%s", firstSchema)
 	}
 }
 

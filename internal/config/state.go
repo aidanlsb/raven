@@ -19,9 +19,8 @@ const (
 
 // State represents mutable machine-local runtime state.
 type State struct {
-	Version              int    `toml:"version"`
-	ActiveVault          string `toml:"active_vault,omitempty"`
-	PendingInitVaultPath string `toml:"pending_init_vault_path,omitempty"`
+	Version     int    `toml:"version"`
+	ActiveVault string `toml:"active_vault,omitempty"`
 }
 
 // ResolveConfigPath resolves the effective config path from an optional override.
@@ -93,7 +92,6 @@ func LoadState(path string) (*State, error) {
 		state.Version = StateVersion
 	}
 	state.ActiveVault = strings.TrimSpace(state.ActiveVault)
-	state.PendingInitVaultPath = strings.TrimSpace(state.PendingInitVaultPath)
 
 	return &state, nil
 }
@@ -112,7 +110,6 @@ func SaveState(path string, state *State) error {
 		normalized.Version = StateVersion
 	}
 	normalized.ActiveVault = strings.TrimSpace(normalized.ActiveVault)
-	normalized.PendingInitVaultPath = strings.TrimSpace(normalized.PendingInitVaultPath)
 
 	var buf bytes.Buffer
 	if err := toml.NewEncoder(&buf).Encode(normalized); err != nil {

@@ -8,11 +8,9 @@ Use this guide after quickstart when you need an operational first pass through 
    `raven_invoke(command="init", args={"path":"/path/to/vault"})`
    Init auto-registers the new vault. Read the `post_init` object in the response:
    - `is_first_vault=true` means it is now the default and active vault; you can proceed.
-   - `is_first_vault=false` with `needs_user_choice_for_activate`/`needs_user_choice_for_default`
-     means another vault already exists. Ask the user before running the `activate` /
-     `set_default` actions; do not silently change the default or active vault. Until the
-     user chooses, pass the new vault's `vault` or `vault_path` on every vault-scoped call.
-     An omitted target that would resolve to the other vault fails with `VAULT_AMBIGUOUS`.
+   - `is_first_vault=false` means the additional vault was registered and made active.
+     Surface `active_vault`, `previous_active_vault` / `previous_vault`, and the exact
+     `switch_back` command before continuing. Changing the default remains an explicit choice.
 1. Understand the schema:
    `raven_invoke(command="schema", args={"subcommand":"types"})`
    `raven_invoke(command="schema", args={"subcommand":"traits"})`

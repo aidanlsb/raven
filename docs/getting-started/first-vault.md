@@ -38,11 +38,11 @@ Raven's long-form docs cache is global and lives next to global config, not insi
 
 - It auto-registers the vault in global config under a suggested name.
 - If this is the **first vault** on the machine (no `default_vault`, no `active_vault`, no other registered vault), it also sets the vault as `default_vault` and `active_vault` — first run just works.
-- If you already have another vault, `rvn init` still registers the new one but leaves `default_vault` and `active_vault` untouched. Raven records a pending selection guard: an unqualified command that would resolve to the other vault fails with `VAULT_AMBIGUOUS` instead of running there. Activate the new vault with `rvn vault use <name>`, or target either vault explicitly with `--vault` / `--vault-path`.
+- If you already have another vault, `rvn init` registers and activates the new one immediately while leaving `default_vault` unchanged. Output identifies the new active vault, the previous active/resolved vault, and the exact `rvn vault use ...` (or `rvn vault clear`) command that restores the prior routing.
 
-This is the same in interactive and `--json` mode. In `--json` mode, the `post_init` object reports what happened (`is_first_vault`, `has_existing_default`, `registered`, `is_default`, `is_active`, `selection_guard_active`), whether a choice still needs your input (`needs_user_choice_for_activate`, `needs_user_choice_for_default`), plus invocable actions and guidance. In interactive mode, Raven prompts you for the default/active choices only when another vault already exists.
+This is the same in interactive and `--json` mode. In `--json` mode, the `post_init` object reports what happened (`is_first_vault`, `has_existing_default`, `registered`, `is_default`, `is_active`, `activated`), structured `active_vault`, `previous_active_vault`, and `previous_vault` details, plus `switch_back`, invocable actions, and guidance. Interactive output prints the same switch clearly and only prompts about changing the default.
 
-If Raven cannot load global config/state or persist the selection guard, `init` fails loudly even though the vault-local files were created. JSON error details include `initialized: true`, the path, and `post_init`; fix global config/state access and rerun init before relying on ambient vault selection.
+If Raven cannot load global config/state or persist registration/activation, `init` fails loudly even though the vault-local files were created. JSON error details include `initialized: true`, the path, and `post_init`; fix global config/state access and rerun init.
 
 ## Sanity-check the new vault
 
@@ -54,7 +54,7 @@ rvn schema types
 rvn schema traits
 ```
 
-These resolve automatically for the first vault. For an additional vault, activate it first or add `--vault <registered-name>` to each command.
+These resolve automatically because `rvn init` makes the new vault active.
 
 Those confirm:
 - Raven can locate the vault
@@ -96,7 +96,7 @@ work = "/Users/you/work-notes"
 
 ## Register additional vaults
 
-Your first vault is registered automatically by `rvn init`. When you create more vaults, `rvn init` also registers each one, but only the first vault is set as default/active. To manage names and routing across multiple vaults:
+Every vault is registered automatically by `rvn init`. The first becomes default and active; each additional vault becomes active while the existing default remains unchanged. To manage names and routing across multiple vaults:
 
 ```bash
 rvn vault add work ~/work-notes --json
@@ -105,7 +105,7 @@ rvn vault use work --json
 rvn vault pin work --json
 ```
 
-`rvn vault add` gives a vault a stable name, `rvn vault use <name>` switches the active vault, and `rvn vault pin <name>` changes the default. These stay explicit so an additional vault never silently changes which vault your commands target. After initializing an additional vault, use `--vault <name>` / `--vault-path <path>` until you choose an active vault; Raven refuses an ambient target that points elsewhere.
+`rvn vault add` gives a vault a stable name, `rvn vault use <name>` switches the active vault, and `rvn vault pin <name>` changes the default. `rvn init` reports its automatic active-vault switch and the exact restore command. You can still target any vault explicitly with `--vault <name>` / `--vault-path <path>`.
 
 ## How Raven decides which vault to use
 
@@ -115,8 +115,6 @@ When a command needs a vault, Raven resolves in this order:
 2. `--vault <name>`
 3. `active_vault` from `state.toml`
 4. `default_vault` from `config.toml`
-
-After an additional `rvn init`, Raven compares an ambient result from steps 3–4 with the newly initialized vault. If they differ, the command fails with `VAULT_AMBIGUOUS`; steps 1–2 remain available, and `rvn vault use <name>` resolves the pending choice.
 
 If you mostly work in one vault, setting `default_vault` and `active_vault` makes the CLI much less noisy.
 

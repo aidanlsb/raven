@@ -69,7 +69,7 @@ func TestRunInitFollowUpRegistersPinsAndActivatesVault(t *testing.T) {
 	}
 }
 
-func TestRunInitFollowUpNonFirstVaultPromptsForDefaultAndActive(t *testing.T) {
+func TestRunInitFollowUpNonFirstVaultPromptsOnlyForDefault(t *testing.T) {
 	root := t.TempDir()
 	configFile := filepath.Join(root, "config.toml")
 	stateFile := filepath.Join(root, "state.toml")
@@ -87,7 +87,7 @@ func TestRunInitFollowUpNonFirstVaultPromptsForDefaultAndActive(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	if err := config.SaveState(stateFile, &config.State{ActiveVault: "existing"}); err != nil {
+	if err := config.SaveState(stateFile, &config.State{ActiveVault: "notes"}); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
 
@@ -106,19 +106,21 @@ func TestRunInitFollowUpNonFirstVaultPromptsForDefaultAndActive(t *testing.T) {
 
 	configPath = configFile
 	statePathFlag = stateFile
-	initPromptIn = strings.NewReader("y\ny\n")
-	initPromptOut = &bytes.Buffer{}
+	initPromptIn = strings.NewReader("y\n")
+	out := &bytes.Buffer{}
+	initPromptOut = out
 	initShouldPrompt = func() bool { return true }
 
 	info := initPostInitInfo{
-		Path:                vaultPath,
-		SuggestedName:       "notes",
-		RegisteredName:      "notes",
-		AlreadyRegistered:   true,
-		Registered:          true,
-		HasExistingDefault:  true,
-		NeedsDefaultChoice:  true,
-		NeedsActivateChoice: true,
+		Path:               vaultPath,
+		SuggestedName:      "notes",
+		RegisteredName:     "notes",
+		AlreadyRegistered:  true,
+		Registered:         true,
+		HasExistingDefault: true,
+		IsActive:           true,
+		Activated:          true,
+		NeedsDefaultChoice: true,
 	}
 	runInitFollowUp(&info)
 
@@ -137,6 +139,9 @@ func TestRunInitFollowUpNonFirstVaultPromptsForDefaultAndActive(t *testing.T) {
 	}
 	if !info.IsDefault || !info.IsActive {
 		t.Fatalf("info after prompts = %+v, want default+active", info)
+	}
+	if strings.Contains(out.String(), "active vault") {
+		t.Fatalf("unexpected activation prompt after automatic switch: %q", out.String())
 	}
 }
 

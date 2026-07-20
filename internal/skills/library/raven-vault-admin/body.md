@@ -53,7 +53,7 @@ Use structured commands for both surfaces instead of editing TOML or YAML by han
 
 - On `rvn vault remove`, respect guard flags when removing active/default entries.
 - Keep `default_vault` and `active_vault` coherent to avoid unexpected fallback behavior.
-- `rvn init` auto-registers the new vault. The first vault on a machine also becomes the default and active vault; when another vault already exists, init registers the new one but leaves default/active unchanged. Changing them stays an explicit `rvn vault use` / `rvn vault pin` decision (in `--json` mode, `post_init` flags when a choice needs the user).
+- `rvn init` auto-registers and activates the new vault. The first vault also becomes the default; later vaults leave the default unchanged. Surface the `post_init` active/previous vault details and exact `switch_back` command.
 - After changing vault-local directories or exclude patterns, use `raven-maintenance` to run `rvn reindex --json` and `rvn check --json`.
 
 ## Reference

@@ -72,8 +72,7 @@ func TestSaveStateRoundTrip(t *testing.T) {
 	path := filepath.Join(tmp, "state.toml")
 
 	err := SaveState(path, &State{
-		ActiveVault:          "work",
-		PendingInitVaultPath: "/vault/new-work",
+		ActiveVault: "work",
 	})
 	if err != nil {
 		t.Fatalf("save state: %v", err)
@@ -88,9 +87,6 @@ func TestSaveStateRoundTrip(t *testing.T) {
 	}
 	if loaded.ActiveVault != "work" {
 		t.Fatalf("expected active_vault=work, got %q", loaded.ActiveVault)
-	}
-	if loaded.PendingInitVaultPath != "/vault/new-work" {
-		t.Fatalf("expected pending_init_vault_path=/vault/new-work, got %q", loaded.PendingInitVaultPath)
 	}
 }
 

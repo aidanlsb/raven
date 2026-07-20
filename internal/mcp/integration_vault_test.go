@@ -120,7 +120,7 @@ func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
 	mustToolBool(t, first, "is_first_vault", true)
 	mustToolBool(t, first, "is_default", true)
 	mustToolBool(t, first, "is_active", true)
-	mustToolBool(t, first, "selection_guard_active", false)
+	mustToolBool(t, first, "activated", true)
 	mustToolBool(t, first, "needs_user_choice_for_activate", false)
 	mustToolBool(t, first, "needs_user_choice_for_default", false)
 	// Fully configured: no pending actions, so the agent can proceed immediately.
@@ -130,7 +130,7 @@ func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
 		t.Fatalf("actions = %#v, want empty for first vault", actions)
 	}
 
-	// Second vault: registered but routing must be left to the user.
+	// Second vault: registered and made active, with restore guidance.
 	second := mcpInitPostInit(t, server, secondPath)
 	if got := second["registered_name"]; got != "second" {
 		t.Fatalf("registered_name = %#v, want %q", got, "second")
@@ -140,46 +140,48 @@ func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
 	mustToolBool(t, second, "is_first_vault", false)
 	mustToolBool(t, second, "has_existing_default", true)
 	mustToolBool(t, second, "is_default", false)
-	mustToolBool(t, second, "is_active", false)
-	mustToolBool(t, second, "selection_guard_active", true)
-	mustToolBool(t, second, "needs_user_choice_for_activate", true)
+	mustToolBool(t, second, "is_active", true)
+	mustToolBool(t, second, "activated", true)
+	mustToolBool(t, second, "needs_user_choice_for_activate", false)
 	mustToolBool(t, second, "needs_user_choice_for_default", true)
+	active, ok := second["active_vault"].(map[string]interface{})
+	if !ok || active["name"] != "second" || active["path"] != secondPath {
+		t.Fatalf("active_vault = %#v, want second at %s", second["active_vault"], secondPath)
+	}
+	previous, ok := second["previous_active_vault"].(map[string]interface{})
+	if !ok || previous["name"] != "first" || previous["path"] != firstPath {
+		t.Fatalf("previous_active_vault = %#v, want first at %s", second["previous_active_vault"], firstPath)
+	}
+	if got := second["switch_back"]; got != `rvn --json vault use -- 'first'` {
+		t.Fatalf("switch_back = %#v, want exact restore command", got)
+	}
 
-	// An unqualified call must not silently mutate the still-active first vault.
-	blocked := server.callTool("raven_invoke", map[string]interface{}{
+	// An unqualified call now targets the newly initialized active vault.
+	ambient := server.callTool("raven_invoke", map[string]interface{}{
 		"command": "schema_add_type",
 		"args": map[string]interface{}{
-			"name": "must-not-land",
+			"name": "ambient-second",
 		},
 	})
-	if !blocked.IsError {
-		t.Fatalf("expected post-init ambient call to fail: %s", blocked.Text)
+	if ambient.IsError {
+		t.Fatalf("ambient call to auto-activated vault failed: %s", ambient.Text)
 	}
-	var blockedEnvelope struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
+	firstSchema, err := os.ReadFile(filepath.Join(firstPath, "schema.yaml"))
+	if err != nil {
+		t.Fatalf("read first schema: %v", err)
 	}
-	if err := json.Unmarshal([]byte(blocked.Text), &blockedEnvelope); err != nil {
-		t.Fatalf("unmarshal blocked call: %v\n%s", err, blocked.Text)
+	if strings.Contains(string(firstSchema), "ambient-second") {
+		t.Fatalf("ambient call incorrectly mutated previous vault:\n%s", firstSchema)
 	}
-	if blockedEnvelope.Error.Code != "VAULT_AMBIGUOUS" {
-		t.Fatalf("error code = %q, want VAULT_AMBIGUOUS; text=%s", blockedEnvelope.Error.Code, blocked.Text)
+	secondSchema, err := os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
+	if err != nil {
+		t.Fatalf("read second schema: %v", err)
 	}
-	for _, schemaPath := range []string{
-		filepath.Join(firstPath, "schema.yaml"),
-		filepath.Join(secondPath, "schema.yaml"),
-	} {
-		schema, err := os.ReadFile(schemaPath)
-		if err != nil {
-			t.Fatalf("read schema: %v", err)
-		}
-		if strings.Contains(string(schema), "must-not-land") {
-			t.Fatalf("blocked type was written to %s", schemaPath)
-		}
+	if !strings.Contains(string(secondSchema), "ambient-second") {
+		t.Fatalf("ambient call did not mutate new active vault:\n%s", secondSchema)
 	}
 
-	// An explicit per-call target remains available before activation.
+	// Explicit per-call targets remain available.
 	explicit := server.callTool("raven_invoke", map[string]interface{}{
 		"command": "schema_add_type",
 		"vault":   "second",
@@ -190,7 +192,7 @@ func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
 	if explicit.IsError {
 		t.Fatalf("explicit second-vault call failed: %s", explicit.Text)
 	}
-	secondSchema, err := os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
+	secondSchema, err = os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
 	if err != nil {
 		t.Fatalf("read second schema: %v", err)
 	}

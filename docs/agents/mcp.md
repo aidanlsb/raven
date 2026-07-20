@@ -72,10 +72,9 @@ vault was left active. The resolved vault is always reported in
   more than one vault is configured, the response carries a `VAULT_FALLBACK`
   warning. Pass an explicit `vault`/`vault_path` to silence it and be sure of
   the target.
-- **Post-init selection guard:** after `init` creates an additional vault without
-  activating it, an ambient call that would resolve to the previously active/default
-  vault fails with `VAULT_AMBIGUOUS`. Activate the new vault with `vault use`, or pass
-  an explicit `vault`/`vault_path` on each call until the user chooses.
+- **Post-init activation disclosure:** after `init` creates an additional vault,
+  it becomes active immediately. Inspect and surface `post_init.active_vault`,
+  `previous_active_vault` / `previous_vault`, and `switch_back` before continuing.
 - **Strict vault mode:** start the server with `rvn serve --strict-vault` (or set
   `[mcp] strict_vault = true` in `config.toml`) to require an explicit vault for
   every vault-scoped call. When no explicit `vault`/`vault_path` is given and the

@@ -6,7 +6,7 @@
 rvn init /path/to/new-vault --json
 ```
 
-This creates a vault with default config, schema, and index directories, and applies the first-run vault policy: the vault is auto-registered, and if it is the first vault on the machine it is also set as the default and active vault. When another vault already exists, init registers the new vault but leaves default/active unchanged (`post_init` sets `needs_user_choice_for_activate` / `needs_user_choice_for_default`). Ask the user before changing routing.
+This creates a vault with default config, schema, and index directories, and applies the first-run vault policy: the vault is auto-registered and made active. The first vault also becomes the default. When another vault already exists, init leaves that default unchanged and reports the new active vault, previous routing, and exact `switch_back` command.
 
 ## Register and activate named vaults
 
