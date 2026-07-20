@@ -33,15 +33,13 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 	objectIDs := commandIDsArg(req.Args, "object_ids")
 	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	if failure.Error != nil {
+		return failure
 	}
-
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
-	}
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
+	sch := rt.Schema
 
 	headingSpec := strings.TrimSpace(stringArg(req.Args, "heading"))
 	createHeading := boolArg(req.Args, "create-heading")

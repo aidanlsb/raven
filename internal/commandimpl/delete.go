@@ -11,7 +11,6 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // HandleDelete executes the canonical `delete` command.
@@ -21,10 +20,12 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
 	}
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
 
 	objectIDs := commandIDsArg(req.Args, "object_ids")
 	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
@@ -43,10 +44,10 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 	// Delete resolves the target reference (which is schema-aware) before
 	// removing a file, so a corrupt schema could resolve to the wrong object.
 	// Treat a schema load failure as fatal on this safety-sensitive path.
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
+	if rt.SchemaLoadErr != nil {
 		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
 	}
+	sch := rt.Schema
 	deletionCfg := vaultCfg.GetDeletionConfig()
 	if req.Preview {
 		preview, err := objectsvc.PreviewDeleteByReference(objectsvc.DeleteByReferenceRequest{

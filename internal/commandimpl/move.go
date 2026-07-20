@@ -19,18 +19,15 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+	// Move resolves references and rewrites backlinks using the schema, so
+	// require a valid schema on this safety-sensitive path.
+	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	if failure.Error != nil {
+		return failure
 	}
-
-	// Move resolves references and rewrites backlinks using the schema, so a
-	// corrupt schema could misresolve targets or update the wrong references.
-	// Treat a schema load failure as fatal on this safety-sensitive path.
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
-	}
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
+	sch := rt.Schema
 
 	objectIDs := commandIDsArg(req.Args, "object_ids")
 	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
