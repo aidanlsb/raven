@@ -127,8 +127,12 @@ func TestIntegration_InitSecondVaultBlocksAmbientWrites(t *testing.T) {
 		"schema", "add", "type", "must-not-land", "--name-field", "title",
 	)
 	output, err := blocked.CombinedOutput()
-	if err != nil {
-		t.Fatalf("expected handled JSON startup error, got process failure: %v\n%s", err, output)
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("expected VAULT_AMBIGUOUS to exit nonzero, got %v\n%s", err, output)
+	}
+	if got := exitErr.ExitCode(); got != 1 {
+		t.Fatalf("exit code=%d, want 1\n%s", got, output)
 	}
 	var blockedResp struct {
 		OK    bool `json:"ok"`
