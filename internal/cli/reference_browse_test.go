@@ -219,9 +219,11 @@ func TestValidateReferenceBrowseFlag(t *testing.T) {
 	jsonOutput = true
 	interactiveStdinIsTerminal = func() bool { return true }
 	interactiveStdoutIsTerminal = func() bool { return true }
-	if handled, err := validateReferenceBrowseFlag(cmd); !handled || err != nil {
-		t.Fatalf("expected handled --json/--browse conflict, got handled=%v err=%v", handled, err)
+	handled, err := validateReferenceBrowseFlag(cmd)
+	if !handled {
+		t.Fatal("expected handled --json/--browse conflict")
 	}
+	requireJSONResponseFailure(t, err)
 
 	jsonOutput = false
 	interactiveStdinIsTerminal = func() bool { return false }

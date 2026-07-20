@@ -4,6 +4,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,7 +31,14 @@ func TestIntegration_JSONStartupErrorsUseEnvelope(t *testing.T) {
 		t.Helper()
 
 		cmd := exec.Command(binary, args...)
-		output, _ := cmd.CombinedOutput()
+		output, err := cmd.CombinedOutput()
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			t.Fatalf("expected startup failure to exit nonzero, got %v\noutput=%s", err, output)
+		}
+		if got := exitErr.ExitCode(); got != 1 {
+			t.Fatalf("exit code = %d, want 1\noutput=%s", got, output)
+		}
 
 		var resp response
 		if err := json.Unmarshal(output, &resp); err != nil {

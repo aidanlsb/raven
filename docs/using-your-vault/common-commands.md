@@ -4,6 +4,16 @@ This guide covers the everyday Raven commands that are not covered by dedicated 
 
 For daily notes and quick capture (`rvn daily`, `rvn add`), see `using-your-vault/daily-notes.md`. For query syntax, see `querying/query-language.md`. For bulk operations on query results, see `vault-management/bulk-operations.md`.
 
+## JSON and exit status
+
+With `--json`, Raven still writes the standard response envelope. An
+`ok=false` response exits with status 1, including config, vault-resolution, and
+fatal schema failures; successful commands exit 0. Scripts should check the
+exit status and parse `error.code` for the specific failure.
+
+`rvn check` follows lint-style conventions and can exit 1 with `ok=true` when it
+finds issues (or warnings with `--strict`). Cancelling `rvn pick` exits 130.
+
 ## Interactive Pickers
 
 When Raven is running in an interactive terminal, a few commands open a Raven picker when you omit the target argument:

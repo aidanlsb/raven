@@ -10,6 +10,13 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
+func requireJSONResponseFailure(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, errJSONResponseFailure) {
+		t.Fatalf("error = %v, want errJSONResponseFailure", err)
+	}
+}
+
 func TestOutputJSONPropagatesWriteErrors(t *testing.T) {
 	// This test mutates the global os.Stdout, which is shared with the
 	// captureStdout helper used by other (parallel) tests. Hold the same mutex
@@ -47,5 +54,25 @@ func TestOutputJSONPropagatesWriteErrors(t *testing.T) {
 		if err.Error() == "" {
 			t.Fatal("expected non-empty error message")
 		}
+	}
+}
+
+func TestOutputJSONReturnsErrorAfterWritingFailureEnvelope(t *testing.T) {
+	var outputErr error
+	out := captureStdout(t, func() {
+		outputErr = outputJSON(commandexec.Failure(ErrInvalidInput, "invalid input", nil, "try again"))
+	})
+
+	requireJSONResponseFailure(t, outputErr)
+
+	var resp Response
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("unmarshal failure envelope: %v\noutput=%s", err, out)
+	}
+	if resp.OK {
+		t.Fatalf("expected ok=false\noutput=%s", out)
+	}
+	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+		t.Fatalf("error = %#v, want code %s\noutput=%s", resp.Error, ErrInvalidInput, out)
 	}
 }
