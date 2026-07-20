@@ -170,6 +170,10 @@ For commands that operate on a vault:
 
 If `active_vault` is set but missing from config, Raven falls back to `default_vault` and emits a warning in non-JSON mode.
 
+An additional `rvn init` updates `active_vault` to the newly initialized vault and reports
+the previous routing plus an exact switch-back command. The existing `default_vault` is
+left unchanged.
+
 ### Manage global vault config via CLI
 
 Instead of editing `config.toml` manually, you can manage vault entries directly:
@@ -408,7 +412,7 @@ It also creates the default folders.
 Beyond the vault-local files, `rvn init` also registers the new vault in global
 `config.toml`. If it is the first vault on the machine, init sets it as `default_vault`
 and `active_vault` as well; when another vault already exists, init registers the new vault
-but leaves routing unchanged. See
+and makes it active while leaving the default unchanged. See
 [Vault Creation & Management](../getting-started/first-vault.md) for the full first-run policy.
 
 ---

@@ -2,9 +2,9 @@ package commandimpl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/initsvc"
 	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
+	"github.com/aidanlsb/raven/internal/shellquote"
 	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
@@ -37,7 +38,24 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.FromServiceError(err)
 	}
 
-	postInit, setupWarnings := setupInitVault(result.Path, req.ConfigPath, req.StatePath)
+	postInit, setupWarnings, setupErr := setupInitVault(result.Path, req.ConfigPath, req.StatePath)
+	if setupErr != nil {
+		errorCode := codes.ErrInternal
+		var initSetupErr *initVaultSetupError
+		if errors.As(setupErr, &initSetupErr) {
+			errorCode = initSetupErr.code
+		}
+		return commandexec.Failure(
+			errorCode,
+			fmt.Sprintf("vault initialized at %s, but safe global vault setup could not be completed: %v", result.Path, setupErr),
+			map[string]interface{}{
+				"initialized": true,
+				"path":        result.Path,
+				"post_init":   postInit,
+			},
+			"Fix global config/state access and rerun init, or pass --vault/--vault-path explicitly on every vault-scoped command.",
+		)
+	}
 
 	warnings := make([]commandexec.Warning, 0, len(result.Warnings)+len(setupWarnings))
 	for _, warning := range result.Warnings {
@@ -173,16 +191,44 @@ func mapDateServiceError(err error) commandexec.Result {
 // initPostInitState is the resolved outcome of the first-run vault policy, used
 // to build the post_init payload returned by `init`.
 type initPostInitState struct {
-	cleanPath          string
-	suggestedName      string
-	registeredName     string
-	registeredNow      bool
-	isFirstVault       bool
-	hasExistingDefault bool
-	isDefault          bool
-	isActive           bool
-	configPath         string
-	statePath          string
+	cleanPath           string
+	suggestedName       string
+	registeredName      string
+	registeredPath      string
+	registeredNow       bool
+	isFirstVault        bool
+	hasExistingDefault  bool
+	isDefault           bool
+	isActive            bool
+	activated           bool
+	previousActiveName  string
+	previousActivePath  string
+	previousVaultName   string
+	previousVaultPath   string
+	previousVaultSource string
+	previousDefaultName string
+	switchBack          string
+	configPath          string
+	statePath           string
+}
+
+type initVaultSetupError struct {
+	code codes.ErrorCode
+	err  error
+}
+
+func (e *initVaultSetupError) Error() string {
+	if e == nil || e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e *initVaultSetupError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
 }
 
 // setupInitVault applies Raven's first-run vault policy after a successful init
@@ -192,16 +238,15 @@ type initPostInitState struct {
 //   - The new vault is always auto-registered under a suggested (collision-free) name.
 //   - First vault on the machine (no default, no active vault, no other registered
 //     vault): additionally set it as the default and active vault.
-//   - Otherwise: register only; the default and active vault are left untouched so a
-//     new vault never silently switches an existing setup. Agents must ask the user
-//     before activating it or changing the default.
+//   - Otherwise: set the newly initialized vault active while leaving the default
+//     unchanged. The response discloses the previous selection and how to switch back.
 //
-// Registration is additive and never fatal: if global config cannot be loaded or
-// written, init still succeeds and the payload degrades to manual suggestions.
-func setupInitVault(path, configPathOverride, statePathOverride string) (map[string]interface{}, []commandexec.Warning) {
+// Loading global config/state, registration, and activation failures are fatal so init
+// cannot report a completed routing switch when ambient commands still target elsewhere.
+func setupInitVault(path, configPathOverride, statePathOverride string) (map[string]interface{}, []commandexec.Warning, error) {
 	cleanPath := strings.TrimSpace(path)
 	if cleanPath == "" {
-		return map[string]interface{}{}, nil
+		return map[string]interface{}{}, nil, nil
 	}
 	if absPath, err := filepath.Abs(cleanPath); err == nil {
 		cleanPath = absPath
@@ -227,25 +272,38 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 	warnings := make([]commandexec.Warning, 0, 1)
 
 	ctx, err := configsvc.LoadVaultContext(opts)
-	if err != nil {
-		warnings = append(warnings, commandexec.Warning{
-			Code:    codes.WarnVaultRegisterFailed,
-			Message: fmt.Sprintf("Could not load global config to register the vault: %v. Register it manually with the commands in post_init.", err),
-		})
-		return buildInitPostInitPayload(state), warnings
+	if ctx != nil {
+		state.configPath = ctx.ConfigPath
+		state.statePath = ctx.StatePath
 	}
-
-	state.configPath = ctx.ConfigPath
-	state.statePath = ctx.StatePath
+	if err != nil {
+		return buildInitPostInitPayload(state), warnings, &initVaultSetupError{
+			code: codes.ErrConfigInvalid,
+			err:  fmt.Errorf("could not load global config/state: %w", err),
+		}
+	}
 
 	existingVaults := ctx.Cfg.ListVaults()
 	defaultName := configsvc.DefaultVaultName(ctx.Cfg)
+	state.previousDefaultName = defaultName
 	activeName := strings.TrimSpace(ctx.State.ActiveVault)
+	if activeName != "" {
+		if activePath, activeErr := ctx.Cfg.GetVaultPath(activeName); activeErr == nil {
+			state.previousActiveName = activeName
+			state.previousActivePath = activePath
+		}
+	}
+	if current, currentErr := configsvc.ResolveCurrentVault(ctx.Cfg, ctx.State); currentErr == nil {
+		state.previousVaultName = current.Name
+		state.previousVaultPath = current.Path
+		state.previousVaultSource = current.Source
+	}
 
 	otherVaultExists := false
 	for name, vaultPath := range existingVaults {
-		if filepath.Clean(vaultPath) == filepath.Clean(cleanPath) {
+		if configsvc.SameVaultPath(vaultPath, cleanPath) {
 			state.registeredName = name
+			state.registeredPath = vaultPath
 		} else {
 			otherVaultExists = true
 		}
@@ -264,44 +322,67 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 			RawPath:        cleanPath,
 		})
 		if addErr != nil {
-			warnings = append(warnings, commandexec.Warning{
-				Code:    codes.WarnVaultRegisterFailed,
-				Message: fmt.Sprintf("Could not auto-register the vault: %v. Register it manually with the commands in post_init.", addErr),
-			})
-		} else {
-			state.registeredName = addResult.Name
-			state.registeredNow = true
+			return buildInitPostInitPayload(state), warnings, &initVaultSetupError{
+				code: codes.ErrFileWrite,
+				err:  fmt.Errorf("could not auto-register vault: %w", addErr),
+			}
 		}
+		state.registeredName = addResult.Name
+		state.registeredPath = addResult.Path
+		state.registeredNow = true
 	}
 
 	state.isDefault = state.registeredName != "" && state.registeredName == defaultName
 	state.isActive = state.registeredName != "" && state.registeredName == activeName
+	if state.isActive && (state.previousVaultPath == "" || !configsvc.SameVaultPath(state.previousVaultPath, state.registeredPath)) {
+		state.activated = true
+		setInitSwitchBack(&state)
+	}
 
-	// First vault on the machine: pin as default and activate.
+	// First vault on the machine: pin as default.
 	if state.isFirstVault && state.registeredName != "" {
 		if !state.isDefault {
 			if _, pinErr := configsvc.PinVault(opts, state.registeredName); pinErr != nil {
-				warnings = append(warnings, commandexec.Warning{
-					Code:    codes.WarnVaultRegisterFailed,
-					Message: fmt.Sprintf("Registered the vault but could not set it as default: %v.", pinErr),
-				})
-			} else {
-				state.isDefault = true
+				return buildInitPostInitPayload(state), warnings, &initVaultSetupError{
+					code: codes.ErrFileWrite,
+					err:  fmt.Errorf("registered first vault but could not set it as default: %w", pinErr),
+				}
 			}
-		}
-		if !state.isActive {
-			if _, useErr := configsvc.UseVault(opts, state.registeredName); useErr != nil {
-				warnings = append(warnings, commandexec.Warning{
-					Code:    codes.WarnVaultRegisterFailed,
-					Message: fmt.Sprintf("Registered the vault but could not set it active: %v.", useErr),
-				})
-			} else {
-				state.isActive = true
-			}
+			state.isDefault = true
 		}
 	}
 
-	return buildInitPostInitPayload(state), warnings
+	// Every successfully initialized vault becomes active. For additional vaults,
+	// preserve enough prior context to disclose the switch and provide an exact
+	// restore command.
+	if !state.isActive {
+		if _, useErr := configsvc.UseVault(opts, state.registeredName); useErr != nil {
+			return buildInitPostInitPayload(state), warnings, &initVaultSetupError{
+				code: codes.ErrFileWrite,
+				err:  fmt.Errorf("registered vault but could not set it active: %w", useErr),
+			}
+		}
+		state.isActive = true
+		state.activated = true
+		setInitSwitchBack(&state)
+	}
+
+	return buildInitPostInitPayload(state), warnings, nil
+}
+
+func setInitSwitchBack(state *initPostInitState) {
+	if state == nil || state.isFirstVault {
+		return
+	}
+	if state.previousActiveName != "" && state.previousActivePath != "" {
+		state.switchBack = "rvn --json vault use -- " + shellquote.Quote(state.previousActiveName)
+		return
+	}
+	if state.previousVaultName == "" && state.previousDefaultName != "" {
+		state.switchBack = "rvn --json config unset --default-vault && rvn --json vault clear"
+		return
+	}
+	state.switchBack = "rvn --json vault clear"
 }
 
 // uniqueVaultName returns base if free, otherwise the first free base-N variant.
@@ -327,7 +408,6 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 	}
 
 	alreadyRegistered := s.registeredName != ""
-	needsActivateChoice := alreadyRegistered && !s.isActive && !s.isFirstVault
 	needsDefaultChoice := alreadyRegistered && !s.isDefault && !s.isFirstVault
 
 	nameForCommands := s.registeredName
@@ -335,18 +415,20 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 		nameForCommands = s.suggestedName
 	}
 	quotedPath := formatSuggestedCommandPath(s.cleanPath)
+	quotedName := shellquote.Quote(nameForCommands)
 	commands := map[string]interface{}{
-		"register":          "rvn vault add " + nameForCommands + " " + quotedPath + " --json",
-		"register_and_pin":  "rvn vault add " + nameForCommands + " " + quotedPath + " --pin --json",
-		"activate":          "rvn vault use " + nameForCommands + " --json",
-		"pin":               "rvn vault pin " + nameForCommands + " --json",
-		"register_activate": "rvn vault add " + nameForCommands + " " + quotedPath + " --json && rvn vault use " + nameForCommands + " --json",
+		"register":          "rvn --json vault add -- " + quotedName + " " + quotedPath,
+		"register_and_pin":  "rvn --json vault add --pin -- " + quotedName + " " + quotedPath,
+		"activate":          "rvn --json vault use -- " + quotedName,
+		"pin":               "rvn --json vault pin -- " + quotedName,
+		"register_activate": "rvn --json vault add -- " + quotedName + " " + quotedPath + " && rvn --json vault use -- " + quotedName,
+	}
+	if s.switchBack != "" {
+		commands["switch_back"] = s.switchBack
 	}
 
-	// Structured, invocable next actions (command IDs + args) for agents that
-	// should act on the payload rather than parse shell strings. Only *pending*
-	// actions are listed: a first vault is fully configured, so this is empty and
-	// the agent can proceed immediately without activating or pinning anything.
+	// Structured, invocable actions contain only choices that remain after init.
+	// Activation is automatic; changing the default remains an explicit decision.
 	actions := map[string]interface{}{}
 	switch {
 	case !alreadyRegistered:
@@ -356,13 +438,6 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 			"description": "Register this vault in global config.",
 		}
 	default:
-		if needsActivateChoice {
-			actions["activate"] = map[string]interface{}{
-				"command":     "vault use",
-				"args":        map[string]interface{}{"name": s.registeredName},
-				"description": "Set this vault as the active vault (machine-local state). Ask the user first.",
-			}
-		}
 		if needsDefaultChoice {
 			actions["set_default"] = map[string]interface{}{
 				"command":     "vault pin",
@@ -376,22 +451,34 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 	guidance := ""
 	switch {
 	case !alreadyRegistered:
-		guidance = "The new vault could not be registered automatically. Register it before use with the commands below."
+		guidance = fmt.Sprintf("The new vault could not be registered and activated automatically. Repair global config/state access and rerun init. Until then, target it explicitly with --vault-path %s.", formatSuggestedCommandPath(s.cleanPath))
 		nextSteps = append(nextSteps, "Register this vault globally: "+commands["register"].(string))
 		nextSteps = append(nextSteps, "Register and set as default: "+commands["register_and_pin"].(string))
 		nextSteps = append(nextSteps, "After registering, make it active: "+commands["activate"].(string))
-	case s.isFirstVault:
-		// Zero -> first vault: fully configured. No pending actions or next steps;
-		// the agent can proceed immediately.
+	case s.isFirstVault && s.isActive:
 		guidance = fmt.Sprintf("First vault on this machine: registered as %q and set as the default and active vault. It is ready to use now — no further vault setup is needed, and later commands resolve to it automatically.", s.registeredName)
+	case s.isFirstVault:
+		guidance = fmt.Sprintf("First vault %q was registered but could not be activated. Repair global state access and rerun init; until then, target it explicitly with --vault %s.", s.registeredName, shellquote.Quote(s.registeredName))
+	case !s.isActive:
+		guidance = fmt.Sprintf("Vault %q was registered at %s but could not be activated. Repair global state access and rerun init; until then, target it explicitly with --vault %s.", s.registeredName, s.registeredPath, shellquote.Quote(s.registeredName))
+	case s.activated:
+		guidance = fmt.Sprintf("Activated newly initialized vault %q at %s. Ambient CLI and MCP commands now target it.", s.registeredName, s.registeredPath)
+		if s.previousActiveName != "" {
+			guidance += fmt.Sprintf(" The previously active vault was %q at %s.", s.previousActiveName, s.previousActivePath)
+		} else if s.previousVaultName != "" {
+			guidance += fmt.Sprintf(" No active vault was set; ambient commands previously resolved to %q at %s via %s.", s.previousVaultName, s.previousVaultPath, s.previousVaultSource)
+		}
+		if s.switchBack != "" {
+			guidance += " To switch back, run: " + s.switchBack
+			nextSteps = append(nextSteps, "Switch back to the previous vault: "+s.switchBack)
+		}
 	default:
-		guidance = fmt.Sprintf("Another vault is already configured on this machine. The new vault was registered as %q but was NOT activated or set as default. Ask the user before activating it or changing the default vault.", s.registeredName)
-		if needsDefaultChoice {
-			nextSteps = append(nextSteps, "Ask the user first, then set this vault as default: "+commands["pin"].(string))
-		}
-		if needsActivateChoice {
-			nextSteps = append(nextSteps, "Ask the user first, then set this vault as active: "+commands["activate"].(string))
-		}
+		guidance = fmt.Sprintf("Vault %q at %s was already registered and active; no activation switch was needed.", s.registeredName, s.registeredPath)
+	}
+
+	var activeVault interface{}
+	if s.isActive {
+		activeVault = initVaultInfoPayload(s.registeredName, s.registeredPath, "active_vault")
 	}
 
 	return map[string]interface{}{
@@ -403,7 +490,12 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 		"has_existing_default":           s.hasExistingDefault,
 		"is_active":                      s.isActive,
 		"is_default":                     s.isDefault,
-		"needs_user_choice_for_activate": needsActivateChoice,
+		"activated":                      s.activated,
+		"active_vault":                   activeVault,
+		"previous_active_vault":          initVaultInfoPayload(s.previousActiveName, s.previousActivePath, "active_vault"),
+		"previous_vault":                 initVaultInfoPayload(s.previousVaultName, s.previousVaultPath, s.previousVaultSource),
+		"switch_back":                    s.switchBack,
+		"needs_user_choice_for_activate": false,
 		"needs_user_choice_for_default":  needsDefaultChoice,
 		"config_path":                    s.configPath,
 		"state_path":                     s.statePath,
@@ -414,7 +506,21 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 	}
 }
 
+func initVaultInfoPayload(name, path, source string) interface{} {
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(path) == "" {
+		return nil
+	}
+	info := map[string]interface{}{
+		"name": name,
+		"path": path,
+	}
+	if strings.TrimSpace(source) != "" {
+		info["source"] = source
+	}
+	return info
+}
+
 func formatSuggestedCommandPath(path string) string {
 	displayPath := strings.ReplaceAll(filepath.ToSlash(strings.TrimSpace(path)), "\\", "/")
-	return strconv.Quote(displayPath)
+	return shellquote.Quote(displayPath)
 }

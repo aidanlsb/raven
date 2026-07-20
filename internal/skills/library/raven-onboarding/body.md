@@ -32,9 +32,9 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
      - If `is_first_vault` is `true`, this was the first vault on the machine: it is registered, set as default, and active, and `post_init.actions` is empty — proceed directly, no further routing needed.
      - If `already_registered` is `true`, the vault is registered — do not run `rvn vault add` again.
      - If `is_default` is `true` and/or `is_active` is `true`, routing is already set — do not run `rvn vault pin` / `rvn vault use` for those.
-     - If `is_first_vault` is `false` with `needs_user_choice_for_activate` / `needs_user_choice_for_default` set to `true`, another vault already exists; `post_init.actions` lists the `activate` / `set_default` actions — ask the user before running them.
+     - If `is_first_vault` is `false`, init made the new vault active. Surface `active_vault`, `previous_active_vault` / `previous_vault`, and `switch_back` before continuing. Ask before changing the default.
      - If init did **not** register or route the vault (fields are `false`, or `post_init` is absent on older builds), offer to finish setup using the commands in `post_init.commands` / `post_init.next_steps`. Ask before setting a default or active vault, since routing is machine-wide config.
-   - After init, work against this vault (pass `--vault <name>` or `--vault-path <path>` if it is not yet the active vault).
+   - After init, work against this now-active vault; explicit `--vault <name>` or `--vault-path <path>` remains available when needed.
 3. **Set up the editor (once a vault exists).** Keep this short — it is one onboarding step, not an editor deep-dive.
    - Inspect current settings with `rvn config show --json` (and note `$EDITOR` if it is relevant to the user's choice).
    - If `editor` is unset, or the user wants to change it, ask which editor they use (common: `cursor`, `code`, `nvim`).

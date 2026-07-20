@@ -252,6 +252,7 @@ func Set(req SetRequest) (*SetResult, error) {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
 	ctx.ConfigExists = true
+	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath, ctx.Cfg)
 
 	return &SetResult{
 		Context: ctx,
@@ -321,6 +322,7 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
+	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath, ctx.Cfg)
 
 	return &UnsetResult{
 		Context: ctx,
@@ -349,6 +351,27 @@ type CurrentVaultInfo struct {
 	ActiveMissing bool   `json:"active_missing"`
 }
 
+// SameVaultPath reports whether two path spellings identify the same vault
+// directory, including symlink aliases when both paths exist.
+func SameVaultPath(left, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == "" || right == "" {
+		return false
+	}
+	leftAbs, leftErr := filepath.Abs(left)
+	rightAbs, rightErr := filepath.Abs(right)
+	if leftErr == nil && rightErr == nil {
+		leftInfo, leftStatErr := os.Stat(leftAbs)
+		rightInfo, rightStatErr := os.Stat(rightAbs)
+		if leftStatErr == nil && rightStatErr == nil {
+			return os.SameFile(leftInfo, rightInfo)
+		}
+		return filepath.Clean(leftAbs) == filepath.Clean(rightAbs)
+	}
+	return filepath.Clean(left) == filepath.Clean(right)
+}
+
 func LoadVaultContext(opts ContextOptions) (*VaultContext, error) {
 	loadedCfg, resolvedConfigPath, err := loadGlobalConfigWithPath(opts.ConfigPathOverride)
 	if err != nil {
@@ -361,7 +384,11 @@ func LoadVaultContext(opts ContextOptions) (*VaultContext, error) {
 	resolvedStatePath := config.ResolveStatePath(opts.StatePathOverride, resolvedConfigPath, loadedCfg)
 	state, err := config.LoadState(resolvedStatePath)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, "", err)
+		return &VaultContext{
+			Cfg:        loadedCfg,
+			ConfigPath: resolvedConfigPath,
+			StatePath:  resolvedStatePath,
+		}, newError(CodeConfigInvalid, "", err)
 	}
 
 	return &VaultContext{
@@ -645,6 +672,16 @@ func AddVault(req VaultAddRequest) (*VaultAddResult, error) {
 
 	if ctx.Cfg.Vaults == nil {
 		ctx.Cfg.Vaults = make(map[string]string)
+	}
+	// Preserve the legacy single-vault fallback when adding the first named
+	// vault. Without this migration, populating [vaults] would make the legacy
+	// path unreachable and an init switch-back command could not restore it.
+	if len(ctx.Cfg.Vaults) == 0 && strings.TrimSpace(ctx.Cfg.Vault) != "" {
+		ctx.Cfg.Vaults["default"] = strings.TrimSpace(ctx.Cfg.Vault)
+		if strings.TrimSpace(ctx.Cfg.DefaultVault) == "" {
+			ctx.Cfg.DefaultVault = "default"
+		}
+		ctx.Cfg.Vault = ""
 	}
 
 	prevPath, existed := ctx.Cfg.Vaults[name]

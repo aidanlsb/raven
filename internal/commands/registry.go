@@ -311,14 +311,15 @@ First-run vault policy (applied in both --json and interactive mode):
   - The new vault is always auto-registered in global config under a suggested name.
   - If it is the first vault on the machine (no default, no active, no other registered
     vault), it is also set as the default and active vault, so first-run just works.
-  - If another vault already exists, the vault is registered but the default and active
-    vault are left unchanged; changing them requires an explicit user decision.
+  - If another vault already exists, the new vault is registered and made active immediately;
+    the existing default is left unchanged. Human and JSON output identify the new active
+    vault, the previous active/resolved vault, and the exact command to switch back.
+  - If global config/state cannot be loaded, or registration/activation cannot be persisted,
+    init returns a failure with details.initialized=true and the created vault path.
 
 The post_init object reports what happened (is_first_vault, has_existing_default, registered,
-is_default, is_active), the choices that still need the user's consent
-(needs_user_choice_for_activate, needs_user_choice_for_default), invocable actions, and guidance.
-Agents must ask the user before activating the vault or changing the default when another vault
-already existed. In interactive mode, Raven prompts for those same choices instead.`,
+is_default, is_active, activated), structured active_vault / previous_active_vault details,
+switch_back, invocable actions, and guidance. Changing the default remains an explicit choice.`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "Directory path to initialize as a vault", Required: true},
 		},
@@ -2073,6 +2074,7 @@ Use 'config unset' to clear fields.`,
 		Name:        "config unset",
 		Description: "Clear one or more global config.toml fields",
 		VaultScope:  VaultScopeNone,
+		LongDesc:    "Clear one or more explicit global config fields.",
 		Flags: []FlagMeta{
 			{Name: "editor", Description: "Clear editor", Type: FlagTypeBool},
 			{Name: "editor-mode", Description: "Clear editor_mode", Type: FlagTypeBool},
@@ -2152,6 +2154,7 @@ The default vault is stored in config.toml and used as fallback.`,
 		Name:        "vault use",
 		Description: "Set the active vault in state.toml",
 		VaultScope:  VaultScopeNone,
+		LongDesc:    "Set the active vault in state.toml.",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Configured vault name", Required: true},
 		},

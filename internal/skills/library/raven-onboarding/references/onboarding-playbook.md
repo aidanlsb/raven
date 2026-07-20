@@ -33,12 +33,12 @@ Inspect `post_init` and act accordingly:
 - `already_registered: true` — the vault is registered; do **not** run `rvn vault add`.
 - `is_default: true` — it is already the default; do **not** run `rvn vault pin`.
 - `is_active: true` — it is already active; do **not** run `rvn vault use`.
-- `is_first_vault: false` with `needs_user_choice_for_activate` / `needs_user_choice_for_default` set — another vault already exists; `post_init.actions` lists the `activate` / `set_default` actions. Ask the user before running them (or before `rvn vault use <name>` / `rvn vault pin <name>`).
+- `is_first_vault: false` — another vault already existed, so init activated the new vault. Surface `active_vault`, `previous_active_vault` / `previous_vault`, and `switch_back`. Ask before changing the default.
 - Any routing field `false` (or `post_init` absent on older builds) — offer to finish setup using the commands surfaced in `post_init.commands` / `post_init.next_steps`. Ask the user before setting a default or active vault, since that is machine-wide routing.
 
 Different builds behave differently, so branch on the fields rather than assuming:
 - First vault is registered and set as default/active automatically (`is_first_vault: true`, empty `post_init.actions`).
-- A later vault is registered automatically but leaves default/active to the user — ask first (`needs_user_choice_for_activate` / `needs_user_choice_for_default`).
+- A later vault is registered and activated automatically; report the switch and exact restore command. The default stays unchanged unless the user explicitly changes it.
 - Older builds may register nothing in `--json` mode, in which case `post_init.commands.register_and_pin` and `post_init.commands.activate` show the exact commands to run once the user agrees.
 
 The starter vault ships a small default schema — `person` and `project` types plus `todo`, `due`, and `priority` traits. Treat these as a starting point to extend during the design conversation, not as the final model. Do **not** install extra preset types on your own; the schema grows from what the user tells you.

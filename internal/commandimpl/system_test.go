@@ -2,11 +2,13 @@ package commandimpl
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/configsvc"
@@ -53,7 +55,10 @@ func TestSetupInitVaultFirstVaultRegistersPinsAndActivates(t *testing.T) {
 		t.Fatalf("mkdir vault: %v", err)
 	}
 
-	data, warnings := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
@@ -70,6 +75,7 @@ func TestSetupInitVaultFirstVaultRegistersPinsAndActivates(t *testing.T) {
 	assertPostInitBool(t, data, "has_existing_default", false)
 	assertPostInitBool(t, data, "is_default", true)
 	assertPostInitBool(t, data, "is_active", true)
+	assertPostInitBool(t, data, "activated", true)
 	assertPostInitBool(t, data, "needs_user_choice_for_activate", false)
 	assertPostInitBool(t, data, "needs_user_choice_for_default", false)
 
@@ -103,9 +109,13 @@ func TestSetupInitVaultFirstVaultRegistersPinsAndActivates(t *testing.T) {
 	if ctx.State.ActiveVault != "my-notes" {
 		t.Fatalf("active_vault = %q, want %q", ctx.State.ActiveVault, "my-notes")
 	}
+	assertPostInitVaultInfo(t, data, "active_vault", "my-notes", filepath.Clean(vaultPath))
+	if data["previous_active_vault"] != nil {
+		t.Fatalf("previous_active_vault = %#v, want nil", data["previous_active_vault"])
+	}
 }
 
-func TestSetupInitVaultWithExistingDefaultRegistersOnly(t *testing.T) {
+func TestSetupInitVaultWithExistingDefaultRegistersAndActivates(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "config.toml")
@@ -131,7 +141,10 @@ func TestSetupInitVaultWithExistingDefaultRegistersOnly(t *testing.T) {
 		t.Fatalf("mkdir vault: %v", err)
 	}
 
-	data, warnings := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
@@ -144,11 +157,12 @@ func TestSetupInitVaultWithExistingDefaultRegistersOnly(t *testing.T) {
 	assertPostInitBool(t, data, "is_first_vault", false)
 	assertPostInitBool(t, data, "has_existing_default", true)
 	assertPostInitBool(t, data, "is_default", false)
-	assertPostInitBool(t, data, "is_active", false)
-	assertPostInitBool(t, data, "needs_user_choice_for_activate", true)
+	assertPostInitBool(t, data, "is_active", true)
+	assertPostInitBool(t, data, "activated", true)
+	assertPostInitBool(t, data, "needs_user_choice_for_activate", false)
 	assertPostInitBool(t, data, "needs_user_choice_for_default", true)
 
-	// Existing routing must be untouched.
+	// The default stays unchanged, while ambient routing switches to the new vault.
 	ctx, err := configsvc.LoadVaultContext(configsvc.ContextOptions{ConfigPathOverride: configPath, StatePathOverride: statePath})
 	if err != nil {
 		t.Fatalf("load vault context: %v", err)
@@ -156,28 +170,30 @@ func TestSetupInitVaultWithExistingDefaultRegistersOnly(t *testing.T) {
 	if ctx.Cfg.DefaultVault != "existing" {
 		t.Fatalf("default_vault = %q, want %q", ctx.Cfg.DefaultVault, "existing")
 	}
-	if ctx.State.ActiveVault != "existing" {
-		t.Fatalf("active_vault = %q, want %q", ctx.State.ActiveVault, "existing")
+	if ctx.State.ActiveVault != "notes" {
+		t.Fatalf("active_vault = %q, want %q", ctx.State.ActiveVault, "notes")
 	}
 	if got := ctx.Cfg.Vaults["notes"]; got != filepath.Clean(vaultPath) {
 		t.Fatalf("notes vault path = %q, want %q", got, filepath.Clean(vaultPath))
 	}
 
-	// Structured, invocable actions should be present for agents.
+	assertPostInitVaultInfo(t, data, "active_vault", "notes", filepath.Clean(vaultPath))
+	assertPostInitVaultInfo(t, data, "previous_active_vault", "existing", filepath.Clean(existingPath))
+	if got := data["switch_back"]; got != `rvn --json vault use -- 'existing'` {
+		t.Fatalf("switch_back = %#v, want restore command", got)
+	}
+	steps, ok := data["next_steps"].([]string)
+	if !ok || len(steps) == 0 || !strings.Contains(steps[0], `rvn --json vault use -- 'existing'`) {
+		t.Fatalf("next_steps = %#v, want switch-back command", data["next_steps"])
+	}
+
+	// Changing the default remains the only pending action.
 	actions, ok := data["actions"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("actions = %#v, want map", data["actions"])
 	}
-	activate, ok := actions["activate"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("actions.activate = %#v, want map", actions["activate"])
-	}
-	if activate["command"] != "vault use" {
-		t.Fatalf("actions.activate.command = %#v, want %q", activate["command"], "vault use")
-	}
-	activateArgs, ok := activate["args"].(map[string]interface{})
-	if !ok || activateArgs["name"] != "notes" {
-		t.Fatalf("actions.activate.args = %#v, want name=notes", activate["args"])
+	if _, ok := actions["activate"]; ok {
+		t.Fatalf("actions.activate = %#v, want automatic activation", actions["activate"])
 	}
 	setDefault, ok := actions["set_default"].(map[string]interface{})
 	if !ok || setDefault["command"] != "vault pin" {
@@ -208,7 +224,10 @@ func TestSetupInitVaultResolvesNameCollision(t *testing.T) {
 		t.Fatalf("mkdir vault: %v", err)
 	}
 
-	data, warnings := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
@@ -218,6 +237,119 @@ func TestSetupInitVaultResolvesNameCollision(t *testing.T) {
 	assertPostInitBool(t, data, "registered", true)
 	assertPostInitBool(t, data, "is_first_vault", false)
 	assertPostInitBool(t, data, "has_existing_default", true)
+	assertPostInitBool(t, data, "is_active", true)
+	assertPostInitBool(t, data, "activated", true)
+	assertPostInitVaultInfo(t, data, "active_vault", "notes-2", filepath.Clean(vaultPath))
+	assertPostInitVaultInfo(t, data, "previous_vault", "notes", filepath.Clean(otherPath))
+	if got := data["switch_back"]; got != "rvn --json vault clear" {
+		t.Fatalf("switch_back = %#v, want vault clear", got)
+	}
+}
+
+func TestSetupInitVaultDisclosesRoutingChangeFromMissingActive(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	statePath := filepath.Join(root, "state.toml")
+	firstPath := filepath.Join(root, "first")
+	secondPath := filepath.Join(root, "second")
+	for _, path := range []string{firstPath, secondPath} {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatalf("mkdir vault: %v", err)
+		}
+	}
+	if err := config.SaveTo(configPath, &config.Config{
+		DefaultVault: "first",
+		Vaults:       map[string]string{"first": firstPath},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	if err := config.SaveState(statePath, &config.State{ActiveVault: "second"}); err != nil {
+		t.Fatalf("save stale active state: %v", err)
+	}
+
+	data, warnings, setupErr := setupInitVault(secondPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", warnings)
+	}
+	assertPostInitBool(t, data, "activated", true)
+	assertPostInitVaultInfo(t, data, "active_vault", "second", secondPath)
+	if data["previous_active_vault"] != nil {
+		t.Fatalf("previous_active_vault = %#v, want nil for missing active name", data["previous_active_vault"])
+	}
+	assertPostInitVaultInfo(t, data, "previous_vault", "first", firstPath)
+	if got := data["switch_back"]; got != "rvn --json vault clear" {
+		t.Fatalf("switch_back = %#v, want vault clear", got)
+	}
+}
+
+func TestSetupInitVaultProvidesSwitchBackWithoutPriorSelection(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	statePath := filepath.Join(root, "state.toml")
+	oldPath := filepath.Join(root, "old")
+	newPath := filepath.Join(root, "new")
+	for _, path := range []string{oldPath, newPath} {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatalf("mkdir vault: %v", err)
+		}
+	}
+	if err := config.SaveTo(configPath, &config.Config{
+		Vaults: map[string]string{"old": oldPath},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	data, warnings, setupErr := setupInitVault(newPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", warnings)
+	}
+	assertPostInitBool(t, data, "activated", true)
+	if data["previous_active_vault"] != nil || data["previous_vault"] != nil {
+		t.Fatalf("previous vaults = active:%#v resolved:%#v, want nil", data["previous_active_vault"], data["previous_vault"])
+	}
+	if got := data["switch_back"]; got != "rvn --json vault clear" {
+		t.Fatalf("switch_back = %#v, want vault clear", got)
+	}
+}
+
+func TestSetupInitVaultRepairsStaleDefaultWithEffectiveSwitchBack(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	statePath := filepath.Join(root, "state.toml")
+	oldPath := filepath.Join(root, "old")
+	newPath := filepath.Join(root, "new")
+	for _, path := range []string{oldPath, newPath} {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatalf("mkdir vault: %v", err)
+		}
+	}
+	if err := config.SaveTo(configPath, &config.Config{
+		DefaultVault: "new",
+		Vaults:       map[string]string{"old": oldPath},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	data, warnings, setupErr := setupInitVault(newPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", warnings)
+	}
+	assertPostInitBool(t, data, "activated", true)
+	if got := data["switch_back"]; got != "rvn --json config unset --default-vault && rvn --json vault clear" {
+		t.Fatalf("switch_back = %#v, want command that restores no-selection behavior", got)
+	}
 }
 
 func TestSetupInitVaultAlreadyRegisteredSoleVaultPinsAndActivates(t *testing.T) {
@@ -236,7 +368,10 @@ func TestSetupInitVaultAlreadyRegisteredSoleVaultPinsAndActivates(t *testing.T) 
 		t.Fatalf("save config: %v", err)
 	}
 
-	data, warnings := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
@@ -245,6 +380,7 @@ func TestSetupInitVaultAlreadyRegisteredSoleVaultPinsAndActivates(t *testing.T) 
 	assertPostInitBool(t, data, "is_first_vault", true)
 	assertPostInitBool(t, data, "is_default", true)
 	assertPostInitBool(t, data, "is_active", true)
+	assertPostInitBool(t, data, "activated", true)
 
 	ctx, err := configsvc.LoadVaultContext(configsvc.ContextOptions{ConfigPathOverride: configPath, StatePathOverride: statePath})
 	if err != nil {
@@ -255,6 +391,73 @@ func TestSetupInitVaultAlreadyRegisteredSoleVaultPinsAndActivates(t *testing.T) 
 	}
 	if ctx.State.ActiveVault != "notes" {
 		t.Fatalf("active_vault = %q, want %q", ctx.State.ActiveVault, "notes")
+	}
+}
+
+func TestSetupInitVaultReportsConfiguredPathForSymlinkAlias(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	statePath := filepath.Join(root, "state.toml")
+	vaultPath := filepath.Join(root, "notes")
+	aliasPath := filepath.Join(root, "notes-alias")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	if err := os.Symlink(vaultPath, aliasPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := config.SaveTo(configPath, &config.Config{
+		Vaults: map[string]string{"notes": vaultPath},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	data, warnings, setupErr := setupInitVault(aliasPath, configPath, statePath)
+	if setupErr != nil {
+		t.Fatalf("setup init vault: %v", setupErr)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", warnings)
+	}
+	assertPostInitVaultInfo(t, data, "active_vault", "notes", vaultPath)
+}
+
+func TestSetupInitVaultFailsWhenGlobalStateCannotLoad(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	statePath := filepath.Join(root, "broken-state.toml")
+	vaultPath := filepath.Join(root, "notes")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	if err := config.SaveTo(configPath, &config.Config{StateFile: filepath.Base(statePath)}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte("active_vault = [\n"), 0o644); err != nil {
+		t.Fatalf("write invalid state: %v", err)
+	}
+
+	data, warnings, setupErr := setupInitVault(vaultPath, configPath, "")
+	if setupErr == nil {
+		t.Fatal("expected setup failure for invalid state")
+	}
+	var typedErr *initVaultSetupError
+	if !errors.As(setupErr, &typedErr) {
+		t.Fatalf("setup error type = %T, want *initVaultSetupError", setupErr)
+	}
+	if typedErr.code != codes.ErrConfigInvalid {
+		t.Fatalf("setup error code = %q, want %q", typedErr.code, codes.ErrConfigInvalid)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none on fatal setup failure", warnings)
+	}
+	if got := data["state_path"]; got != statePath {
+		t.Fatalf("state_path = %#v, want %q", got, statePath)
+	}
+	if guidance, _ := data["guidance"].(string); !strings.Contains(guidance, "could not be registered and activated") {
+		t.Fatalf("guidance = %q, want failed setup warning", guidance)
 	}
 }
 
@@ -269,11 +472,35 @@ func assertPostInitBool(t *testing.T, data map[string]interface{}, key string, w
 	}
 }
 
+func assertPostInitVaultInfo(t *testing.T, data map[string]interface{}, key, wantName, wantPath string) {
+	t.Helper()
+	got, ok := data[key].(map[string]interface{})
+	if !ok {
+		t.Fatalf("%s = %#v, want map", key, data[key])
+	}
+	if got["name"] != wantName || got["path"] != wantPath {
+		t.Fatalf("%s = %#v, want name=%q path=%q", key, got, wantName, wantPath)
+	}
+}
+
 func TestFormatSuggestedCommandPathNormalizesWindowsSeparators(t *testing.T) {
 	t.Parallel()
 	got := formatSuggestedCommandPath(`C:\Users\me\New Notes`)
-	want := `"C:/Users/me/New Notes"`
+	want := `'C:/Users/me/New Notes'`
 	if got != want {
 		t.Fatalf("formatSuggestedCommandPath() = %q, want %q", got, want)
+	}
+}
+
+func TestSetInitSwitchBackShellQuotesVaultName(t *testing.T) {
+	t.Parallel()
+	state := initPostInitState{
+		previousActiveName: "work$(touch /tmp/pwn)",
+		previousActivePath: "/vault/work",
+	}
+	setInitSwitchBack(&state)
+	want := "rvn --json vault use -- 'work$(touch /tmp/pwn)'"
+	if state.switchBack != want {
+		t.Fatalf("switch_back = %q, want %q", state.switchBack, want)
 	}
 }

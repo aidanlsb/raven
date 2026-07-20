@@ -172,17 +172,17 @@ MCP tool). Init applies Raven's first-run vault policy:
 - The new vault is auto-registered in global config.
 - If it is the first vault on the machine, it is also set as the default and active vault,
   so later commands resolve to it automatically.
-- If another vault already exists, init registers the new vault but does **not** change the
-  default or active vault.
+- If another vault already exists, init registers and activates the new vault while leaving
+  the existing default unchanged.
 
 Agents should read the `post_init` object in the response:
 
 - On the first vault, `is_first_vault` is `true`, `post_init.actions` is empty, and routing is
   already applied — the agent can proceed immediately, no further setup needed.
-- When another vault already exists, `needs_user_choice_for_activate` /
-  `needs_user_choice_for_default` are `true` and `post_init.actions` lists the `activate` /
-  `set_default` actions. The agent must ask you before running them — a newly created vault
-  should never silently change which vault other commands target.
+- When another vault already exists, `activated=true` and `active_vault` identify the new
+  target. `previous_active_vault` / `previous_vault` and `switch_back` disclose the routing
+  change and exact restore command. The agent should surface that switch before continuing;
+  changing the default remains a separate explicit choice.
 
 ## Recommended first prompt
 

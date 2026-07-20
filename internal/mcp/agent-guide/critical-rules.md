@@ -38,6 +38,8 @@ multi-vault setup, confirm `vault_context` points at the intended vault.
   verify or re-issue with an explicit vault.
 - If the server enforces strict vault mode, calls without an explicit vault fail
   with `VAULT_AMBIGUOUS`; supply `vault`/`vault_path` and retry.
+- After `init` creates an additional vault, it becomes active immediately. Surface
+  the returned active/previous vault details and `switch_back` command.
 
 ## Respect managed-content boundaries
 
