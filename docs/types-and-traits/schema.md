@@ -663,6 +663,10 @@ one for `blocked`. Scalar-to-array conversion maps each old scalar to an
 explicit JSON array. Collection-to-scalar conversion is rejected because there
 is no unambiguous reduction rule.
 
+For fields, ref/ref[] conversions preserve an existing `target`. Raven rejects
+conversion from a non-reference field to ref/ref[] because `schema convert`
+does not guess a reference target.
+
 After applying a conversion, run `rvn reindex --full`, then `rvn check`.
 
 ### After Schema Changes

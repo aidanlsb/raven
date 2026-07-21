@@ -1611,6 +1611,10 @@ Scalar-to-array conversions map each scalar to an explicit JSON array.
 Collection-to-scalar conversion is rejected because it has no unambiguous
 reduction rule.
 
+Existing ref/ref[] fields can convert between scalar and collection forms while
+preserving their target. Conversion from a non-reference field to ref/ref[] is
+rejected because this command does not infer a reference target.
+
 Omit --type for a same-type remap. Supply --type to change the type.
 Returns a preview by default; changes are not applied unless confirm=true.
 

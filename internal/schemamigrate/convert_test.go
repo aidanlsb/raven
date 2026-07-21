@@ -259,6 +259,81 @@ traits: {}
 			t.Fatalf("expected null rejection, got %v", err)
 		}
 	})
+
+	t.Run("trait values cannot contain backticks", func(t *testing.T) {
+		t.Parallel()
+		v := testutil.NewTestVault(t).
+			WithSchema(`version: 1
+types: {}
+traits:
+  priority:
+    type: enum
+    values: [high, low]
+`).
+			Build()
+		_, err := ConvertTrait(ConvertTraitRequest{
+			VaultPath: v.Path,
+			TraitName: "priority",
+			Mapping:   map[string]interface{}{"high": "`code`", "low": "low"},
+		})
+		if err == nil || !strings.Contains(err.Error(), "backticks") {
+			t.Fatalf("expected backtick rejection, got %v", err)
+		}
+	})
+}
+
+func TestConvertSkipsExcludedMarkdown(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types: {}
+traits:
+  priority:
+    type: enum
+    values: [high, low]
+`).
+		WithRavenYAML("exclude:\n  - ignored/\n").
+		WithFile("notes/work.md", "- Included @priority(high)\n").
+		WithFile("ignored/work.md", "- Excluded outlier @priority(urgent)\n").
+		Build()
+
+	_, err := ConvertTrait(ConvertTraitRequest{
+		VaultPath: v.Path,
+		TraitName: "priority",
+		Mapping:   map[string]interface{}{"high": "critical", "low": "low"},
+		Confirm:   true,
+	})
+	if err != nil {
+		t.Fatalf("ConvertTrait: %v", err)
+	}
+	v.AssertFileContains("notes/work.md", "@priority(critical)")
+	v.AssertFileContains("ignored/work.md", "@priority(urgent)")
+	v.AssertFileNotContains("ignored/work.md", "@priority(critical)")
+}
+
+func TestConvertFieldRejectsNonReferenceToReferenceWithoutTarget(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  project:
+    fields:
+      owner:
+        type: string
+traits: {}
+`).
+		Build()
+
+	_, err := ConvertField(ConvertFieldRequest{
+		VaultPath:  v.Path,
+		TypeName:   "project",
+		FieldName:  "owner",
+		TargetType: "ref",
+		Mapping:    map[string]interface{}{"alice": "[[people/alice]]"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "without a reference target") {
+		t.Fatalf("expected reference-target error, got %v", err)
+	}
 }
 
 func assertMissingMappingValue(t *testing.T, err error, value string) {

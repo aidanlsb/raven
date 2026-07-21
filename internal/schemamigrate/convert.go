@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/frontmatter"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -83,6 +85,10 @@ func ConvertTrait(req ConvertTraitRequest) (*ConvertResult, error) {
 	if err := validateCollectionConversion(sourceType, targetType); err != nil {
 		return nil, err
 	}
+	walkOptions, err := conversionWalkOptions(req.VaultPath)
+	if err != nil {
+		return nil, err
+	}
 
 	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, traitMappingOrder(traitDef, sourceType), func(value schema.FieldValue, element bool, enumValues []string) error {
 		targetDef := *traitDef
@@ -115,7 +121,7 @@ func ConvertTrait(req ConvertTraitRequest) (*ConvertResult, error) {
 
 	markdownFiles := make(map[string][]byte)
 	changes := make([]schemasvc.ValueConvertChange, 0)
-	err = vault.WalkMarkdownFiles(req.VaultPath, func(result vault.WalkResult) error {
+	err = vault.WalkMarkdownFilesWithOptions(req.VaultPath, walkOptions, func(result vault.WalkResult) error {
 		if result.Error != nil {
 			return result.Error
 		}
@@ -208,6 +214,19 @@ func ConvertField(req ConvertFieldRequest) (*ConvertResult, error) {
 	if err := validateCollectionConversion(sourceType, targetType); err != nil {
 		return nil, err
 	}
+	if isRefConversionType(targetType) && !isRefConversionType(sourceType) {
+		return nil, newError(
+			schemasvc.ErrorInvalidInput,
+			fmt.Sprintf("cannot convert non-reference field '%s.%s' to '%s' without a reference target", typeName, fieldName, targetType),
+			"The schema convert command does not infer ref targets; convert an existing ref/ref[] field so its target can be preserved",
+			nil,
+			nil,
+		)
+	}
+	walkOptions, err := conversionWalkOptions(req.VaultPath)
+	if err != nil {
+		return nil, err
+	}
 
 	order := fieldMappingOrder(fieldDef, sourceType)
 	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, order, func(value schema.FieldValue, element bool, enumValues []string) error {
@@ -249,7 +268,7 @@ func ConvertField(req ConvertFieldRequest) (*ConvertResult, error) {
 
 	markdownFiles := make(map[string][]byte)
 	changes := make([]schemasvc.ValueConvertChange, 0)
-	err = vault.WalkMarkdownFiles(req.VaultPath, func(result vault.WalkResult) error {
+	err = vault.WalkMarkdownFilesWithOptions(req.VaultPath, walkOptions, func(result vault.WalkResult) error {
 		if result.Error != nil {
 			return result.Error
 		}
@@ -712,6 +731,8 @@ func validateTraitLiteralValue(value schema.FieldValue) error {
 			return fmt.Errorf("trait values cannot contain newlines")
 		case strings.Contains(text, `"`):
 			return fmt.Errorf("trait values containing double quotes cannot be represented losslessly")
+		case strings.Contains(text, "`"):
+			return fmt.Errorf("trait values containing backticks cannot be represented losslessly")
 		}
 	}
 	return nil
@@ -980,4 +1001,16 @@ func isRefConversionType(fieldType schema.FieldType) bool {
 
 func arrayElementType(fieldType schema.FieldType) schema.FieldType {
 	return schema.FieldType(strings.TrimSuffix(string(fieldType), "[]"))
+}
+
+func conversionWalkOptions(vaultPath string) (*vault.WalkOptions, error) {
+	vaultConfig, err := config.LoadVaultConfig(vaultPath)
+	if err != nil {
+		return nil, newError(schemasvc.ErrorConfigInvalid, "failed to load raven.yaml", "Fix raven.yaml and try again", nil, err)
+	}
+	matcher, err := ravenignore.NewMatcher(vaultConfig.GetExcludePatterns())
+	if err != nil {
+		return nil, newError(schemasvc.ErrorConfigInvalid, "invalid exclude configuration in raven.yaml", "Fix raven.yaml and try again", nil, err)
+	}
+	return &vault.WalkOptions{ExcludeMatcher: matcher}, nil
 }
