@@ -1,10 +1,50 @@
 <h1 align="center">Raven</h1>
 
-**A CLI for plain-text knowledge management, with first-class support for AI agents.**
+<p align="center"><strong>A CLI for plain-text knowledge management, with first-class support for AI agents.</strong></p>
 
-Raven turns a folder of markdown files into a queryable knowledge base. You define a lightweight schema for the things you track (e.g., projects, meetings), annotate content with traits, and link notes together with references. Raven gives agents the tools to retrieve content efficiently and manage your notes. 
+Raven combines three properties so you retain full ownership of your knowledge while agents can work with it reliably:
 
-# Getting Started
+- **Enforced schema.** Raven validates your files against the types, fields, and traits you define, keeping their structure consistent over time.
+- **Deterministic queries.** Agents retrieve information using explicit, repeatable criteria rather than relying on fuzzy search or interpretation.
+- **Plain-text source of truth.** Everything is Markdown with YAML frontmatter. The SQLite index under `.raven/` is only a rebuildable cache.
+
+Here's an ordinary Raven note:
+
+```markdown
+---
+type: meeting
+title: Security review kickoff
+project: project/midgard-security-review
+---
+
+Met with [[person/freya]] on [[2026-07-20]] to plan the security review. We agreed to focus the first pass on authentication and infrastructure, but work cannot begin until the draft scope is approved.
+
+@todo @due(2026-07-22) Send the draft scope for review
+```
+
+That file contains Raven's core building blocks:
+
+- **Type:** `type: meeting` identifies what the note represents.
+- **Fields:** `title` and `project` are schema-validated frontmatter.
+- **References:** `project/midgard-security-review`, `[[person/freya]]`, and `[[2026-07-20]]` link this note to other objects.
+- **Traits:** `@todo` marks a task, while `@due(2026-07-22)` attaches a typed due date to it.
+
+Because these structures are indexed, you can query them explicitly:
+
+```bash
+rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review]]))'
+```
+
+Read that as: *find `todo` traits inside meetings that reference the Midgard security review.*
+
+An agent can run the same query when you ask:
+
+> Summarize what is blocking the Midgard security review, list its open follow-ups, and point me to the source notes.
+
+> The review is blocked until the draft scope is approved. One follow-up is open: send the draft scope for review by July 22. Source: `meeting/security-review-kickoff.md`.
+
+The rest of this README shows how to get there.
+
 ## Installation
 
 Install with Homebrew:
@@ -24,7 +64,7 @@ rvn version
 
 Prebuilt binaries for Linux, macOS, and Windows are also available on the [releases page](https://github.com/aidanlsb/raven/releases/latest) — see [Installation](docs/getting-started/installation.md) for details.
 
-Then initialize a vault:
+Then create a vault:
 
 ```bash
 rvn init ~/notes
@@ -34,7 +74,7 @@ Raven creates:
 
 ```text
 notes/
-├── .raven/       # derived cache and local metadata
+├── .raven/       # derived cache and local metadata (rebuildable with `rvn reindex`)
 ├── raven.yaml    # vault configuration
 └── schema.yaml   # types, fields, and traits
 ```
@@ -45,28 +85,20 @@ extra setup needed. Additional vaults are registered too, but you switch between
 explicitly with `rvn vault use` / `rvn vault pin`. See
 [Vault Creation & Management](docs/getting-started/first-vault.md).
 
-## Agent Setup
+The starter `schema.yaml` already includes `project` and `person` types, which you can modify or replace.
 
-Raven ships reusable [Agent Skills](https://agentskills.io/) that teach coding
-agents how to work with your vault. The fastest way to get started is to
-install the shipped skills:
+## Get started with an agent
+
+The fastest way to learn Raven is to let an agent set up your vault and teach you — this is where Raven shines. It ships reusable [Agent Skills](https://agentskills.io/) that give coding agents everything they need to drive your vault.
+
+### 1. Install the skills
 
 ```bash
 rvn skill install          # interactive: prints the plan and prompts [y/N]
 rvn skill install --yes    # agents / CI: apply without prompting
 ```
 
-In an interactive terminal, `rvn skill install` prints what will be installed
-and prompts before writing. In non-interactive or `--json` runs it does not
-prompt: pass `--yes` to apply, otherwise it returns a preview and reports that
-confirmation is required.
-
-By default it installs all shipped skills; pass skill names to narrow it, e.g.
-`rvn skill install raven-core raven-query`.
-
-Skills install to `~/.agents/skills` by default. Use `--scope project` for
-`.agents/skills` in the current project, or `--dest` to choose another
-location.
+This installs all shipped skills to `~/.agents/skills` (use `--scope project` for `.agents/skills` in the current project, or `--dest` for another location). Pass skill names to narrow it, e.g. `rvn skill install raven-core raven-query`. In non-interactive or `--json` runs it returns a preview unless you pass `--yes`.
 
 | Skill | Use it for |
 |---|---|
@@ -78,16 +110,19 @@ location.
 | `raven-templates` | Template files and schema-template bindings |
 | `raven-vault-admin` | Vault setup, selection, and configuration |
 
-The packaged skills teach CLI workflows and do not require MCP. Use
-`rvn skill install` for first-time installation. `rvn skill sync` is for
-updating already-installed Raven-managed skills: without a skill name it only
-updates/realigns existing ones and reports (but does not install) missing
-skills.
+### 2. Let the agent onboard you
 
-### MCP Setup
+Open your coding agent in the vault directory and give it this prompt:
 
-MCP gives compatible agents direct access to Raven commands. Install Raven
-into a supported MCP client:
+> Use the `raven-onboarding` skill to set up my vault and walk me through how Raven works.
+
+The onboarding skill introduces Raven's concepts, helps you shape a schema for what you actually track, and gets you creating and querying notes — all in the context of your own vault. From there you can ask for real work, like:
+
+> Add a meeting note for today's kickoff with Freya on the Midgard security review, capture any decisions and follow-ups, and link it to the project and to Freya.
+
+### Optional: MCP
+
+Skills teach CLI workflows and don't require MCP. To additionally give MCP-native agents direct tool access to Raven's commands, install Raven into a supported client:
 
 ```bash
 rvn mcp install --client claude-code
@@ -104,24 +139,21 @@ rvn mcp show
 rvn mcp show --client cursor
 ```
 
-### Agent Onboarding
-
-After installing the onboarding skill, ask your agent to use it to introduce
-Raven in the context of your vault.
+To update already-installed Raven-managed skills later, use `rvn skill sync` (see `rvn skill --help`).
 
 See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 
-## Example Usage
+## Doing it by hand
 
-Each note file in a Raven vault has a type indicating what that file represents. Types are defined in `schema.yaml` and can have required or optional frontmatter fields. 
+Prefer to drive Raven directly, or curious what the agent does under the hood? Here's the same flow — tracking projects, meetings, and the people involved — done manually.
 
-Let's say that you want to track projects, meetings, and the people involved in your vault. These are "types." You might also want a quick way to tag when decisions get made, which is a good use case for "traits."
+### 1. Extend the schema
 
-Raven's starter schema already gives you the `project` and `person` types (which you can modify), but `meeting` and `decision` do not yet exist. All types and traits in your vault are defined in `schema.yaml`. To add to your schema, you can edit `schema.yaml` directly, use the CLI, or ask an agent. We'll cover the first two here:
+Each file Raven indexes has a **type**, and custom types can require or allow specific **fields**. The starter schema gives you `project` and `person`; we'll add `meeting`.
 
-**Editing `schema.yaml`**
+We want each meeting to record which project it belongs to, so its schema includes a `project` reference. The `todo` and `due` traits used in the example are already part of the starter schema.
 
-Add your new types under `types` and add the fields you want to track for meetings. Let's say for meetings you'll want to track which project they're associated with, who you met with, and any explicit decisions recorded in the notes. Traits are single valued, so you just need to define what sort of value the trait holds (e.g., `enum`, `boolean`, `date`, etc.) and optionally set a default. Boolean traits default to `true` when left bare so they're a good fit for things like `decision` where you just want to add a structured tag to some content.
+You can edit `schema.yaml` directly:
 
 ```yaml
 types:
@@ -135,103 +167,75 @@ types:
       project:
         type: ref
         target: project
-      with:
-        type: ref[]
-        target: person
-
-traits:
-  decision:
-    type: boolean
 ```
 
-**Use the CLI**
+…or make the same changes from the CLI (or just ask your agent):
 
 ```bash
 rvn schema add type meeting --name-field title --default-path meeting/
 rvn schema add field meeting project --type ref --target project
-rvn schema add field meeting with --type ref[] --target person
-rvn schema add trait decision --type bool
 ```
 
-Create new instances of these types using the CLI:
+### 2. Create some notes
+
+Create objects with the CLI. Each becomes an ordinary Markdown file under the directory for its type (`project/`, `person/`, …):
 
 ```bash
-rvn new project "Midgard Security Review" --field status=active
-rvn new person "Freya" --field role=lead
+rvn new project "Midgard Security Review"
+rvn new person "Freya"
+rvn daily 2026-07-20
 ```
 
-Those commands create ordinary markdown files, saved to directories corresponding to the type (`project/` and `person/`).
-
-Raven also has a built-in daily notes feature, which will create a new note for every day for jotting things down.
-
-```bash
-rvn daily
-```
-You can use the `add` command to append content to existing notes. By default `add` appends to the daily note, but you can use the `--to` argument to write to different files as well.
-
-```
-rvn add "Met with [[person/freya]] about [[project/midgard-security-review]]" --to today
-rvn add "@todo Send the draft scope to [[person/freya]]" --to today
-```
-
-You can also create files manually. For example, to take notes for a meeting:
+The `daily` command creates a built-in date note, giving the `[[2026-07-20]]` reference in our meeting a target. Now create `meeting/security-review-kickoff.md` as an ordinary Markdown file:
 
 ```markdown
 ---
 type: meeting
-title: Kickoff
+title: Security review kickoff
 project: project/midgard-security-review
-with:
-  - person/freya
 ---
 
-[[person/freya]] wants the initial scope and timeline confirmed before the review begins.
+Met with [[person/freya]] on [[2026-07-20]] to plan the security review. We agreed to focus the first pass on authentication and infrastructure, but work cannot begin until the draft scope is approved.
 
-@todo Send the draft scope to [[person/freya]]
-@todo [[person/freya]] to confirm which systems are in scope for [[project/midgard-security-review]]
-@priority(high)
-@decision Keep the first pass focused on authentication and infrastructure.
+@todo @due(2026-07-22) Send the draft scope for review
 ```
 
-Use the Raven query language to retrieve information from your vault:
+> **A note on identifiers.** A note's canonical ID is usually `type/slug`, e.g. `project/midgard-security-review`; built-in date notes use the bare ISO date. Frontmatter references use canonical IDs. Inside `[[links]]`, you can also use a shorter form like `[[freya]]` when it's unambiguous.
+
+### 3. Query your vault
+
+The Raven Query Language (RQL) retrieves notes and traits by structure, not just text. For example:
 
 ```bash
+# Open todos inside meetings that reference the Midgard project
 rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review]]))'
-rvn query 'trait:decision within(type:meeting refs([[project/midgard-security-review]]))'
+
+# Items due by July 22 inside those same meetings
+rvn query 'trait:due .value<=2026-07-22 within(type:meeting refs([[project/midgard-security-review]]))'
 ```
-Results:
+
+Read the first query as: *find `todo` traits that live within a `meeting` that references `project/midgard-security-review`.* Both queries return the task from our note:
 
 ```text
-meeting/kickoff.md
-  @todo Send the draft scope to [[person/freya]]
-  @todo [[person/freya]] to confirm which systems are in scope for [[project/midgard-security-review]]
-
-meeting/kickoff.md
-  @decision Keep the first pass focused on authentication and infrastructure.
+meeting/security-review-kickoff.md
+  @todo @due(2026-07-22) Send the draft scope for review
 ```
 
-Trace everything connected to one person:
+References form a graph regardless of whether they point to a person, project, or date. Follow it with backlinks:
 
 ```bash
 rvn backlinks person/freya
+rvn backlinks 2026-07-20
 ```
 
 ```text
-meeting/kickoff.md
-  [[person/freya]] wants the initial scope and timeline confirmed before the review begins
-
-project/midgard-security-review.md
-  Project lead: [[person/freya]]
+meeting/security-review-kickoff.md
+  Met with [[person/freya]] on [[2026-07-20]] to plan the security review.
 ```
 
-Before the next leadership check-in, you can ask your agent for a briefing:
+### 4. Ask your agent
 
-> Summarize what is blocking the Midgard security review, tell me who owns each follow-up, and point me to the source notes.
-
-Because the agent can query Raven directly, it can answer from the project, the meeting note, the todo traits, and the backlinks instead of just searching raw files:
-
-> The review is waiting on scope confirmation before work begins. Two follow-ups are open from `meeting/kickoff.md`: send the draft scope to Freya, and have Freya confirm which systems are in scope for `project/midgard-security-review`. The current decision on record is to keep the first pass focused on authentication and infrastructure.
-
+With the vault populated, ask the question from the top of this README. The agent can run the same deterministic queries and backlink lookups you just used, then answer with the source note. See [Core Concepts](docs/getting-started/core-concepts.md) and the [Query Language](docs/querying/query-language.md) guide to go deeper.
 
 Raven also includes a built-in language server for diagnostics, completion,
 navigation, and hover while you edit. See the
@@ -262,3 +266,7 @@ You can also browse the docs from the CLI:
 ```bash
 rvn docs
 ```
+
+## License
+
+Raven is released under the [MIT License](LICENSE).
