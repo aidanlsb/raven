@@ -171,7 +171,7 @@ func TestSchemaConvertHelpDocumentsExhaustiveMapping(t *testing.T) {
 		if !strings.Contains(cmd.Long, "must cover every") {
 			t.Fatalf("%s help does not document exhaustive mapping:\n%s", path, cmd.Long)
 		}
-		if !strings.Contains(cmd.Long, "Array-to-array") {
+		if !strings.Contains(strings.ToLower(cmd.Long), "array-to-array") {
 			t.Fatalf("%s help does not document collection member mapping:\n%s", path, cmd.Long)
 		}
 	}

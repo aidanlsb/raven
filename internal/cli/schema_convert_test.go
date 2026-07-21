@@ -73,7 +73,7 @@ traits: {}
 	if result.ExitCode == 0 {
 		t.Fatal("expected JSON CLI failure to exit nonzero")
 	}
-	v.AssertFileContains("schema.yaml", "- todo")
+	v.AssertFileContains("schema.yaml", "values: [todo, done]")
 	v.AssertFileContains("projects/a.md", "status: legacy")
 }
 
