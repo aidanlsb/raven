@@ -54,8 +54,9 @@ traits:
 	v.AssertFileContains("schema.yaml", "type: bool")
 	v.AssertFileContains("schema.yaml", "default: true")
 	v.AssertFileNotContains("schema.yaml", "values:")
-	v.AssertFileContains("notes/work.md", "@priority(true)")
-	v.AssertFileContains("notes/work.md", "@priority(false)")
+	if got, want := v.ReadFile("notes/work.md"), "- Urgent @priority(true)\n- Later @priority(false)\n"; got != want {
+		t.Fatalf("converted annotations corrupted Markdown:\ngot:  %q\nwant: %q", got, want)
+	}
 }
 
 func TestConvertFieldBoolToEnumMigratesFrontmatter(t *testing.T) {
@@ -208,6 +209,56 @@ traits: {}
 	if !strings.Contains(content, "- open") || !strings.Contains(content, "- blocked") {
 		t.Fatalf("expected member-wise array conversion, got:\n%s", content)
 	}
+}
+
+func TestConvertRejectsWrongJSONRepresentationAndNull(t *testing.T) {
+	t.Parallel()
+
+	t.Run("trait bool requires JSON boolean", func(t *testing.T) {
+		t.Parallel()
+		v := testutil.NewTestVault(t).
+			WithSchema(`version: 1
+types: {}
+traits:
+  priority:
+    type: enum
+    values: [high, low]
+`).
+			Build()
+		_, err := ConvertTrait(ConvertTraitRequest{
+			VaultPath:  v.Path,
+			TraitName:  "priority",
+			TargetType: "bool",
+			Mapping:    map[string]interface{}{"high": "true", "low": "false"},
+		})
+		if err == nil || !strings.Contains(err.Error(), "JSON boolean") {
+			t.Fatalf("expected strict JSON boolean error, got %v", err)
+		}
+	})
+
+	t.Run("array members cannot map to null", func(t *testing.T) {
+		t.Parallel()
+		v := testutil.NewTestVault(t).
+			WithSchema(`version: 1
+types:
+  project:
+    fields:
+      labels:
+        type: string[]
+traits: {}
+`).
+			WithFile("projects/a.md", "---\ntype: project\nlabels: [old]\n---\n").
+			Build()
+		_, err := ConvertField(ConvertFieldRequest{
+			VaultPath: v.Path,
+			TypeName:  "project",
+			FieldName: "labels",
+			Mapping:   map[string]interface{}{"old": nil},
+		})
+		if err == nil || !strings.Contains(err.Error(), "null is not a schema value type") {
+			t.Fatalf("expected null rejection, got %v", err)
+		}
+	})
 }
 
 func assertMissingMappingValue(t *testing.T, err error, value string) {

@@ -626,9 +626,9 @@ rvn schema convert trait priority \
 - Previews by default; `--confirm` applies the same migration plan
 
 The mapping must be exhaustive. It must include every value allowed by the
-current schema and every value found in live vault data, including stale
-outliers that are already invalid. Raven refuses the entire conversion if an
-entry is missing.
+current schema, the current default, and every value found in live vault data,
+including stale outliers that are already invalid. Raven refuses the entire
+conversion if an entry is missing.
 
 ```bash
 # A missing "low" entry is rejected, even if no current annotation uses it

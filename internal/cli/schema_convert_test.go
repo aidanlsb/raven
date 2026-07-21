@@ -46,8 +46,9 @@ traits:
 	}
 	v.AssertFileContains("schema.yaml", "type: bool")
 	v.AssertFileContains("schema.yaml", "default: true")
-	v.AssertFileContains("notes/work.md", "@priority(true)")
-	v.AssertFileContains("notes/work.md", "@priority(false)")
+	if got, want := v.ReadFile("notes/work.md"), "- Now @priority(true)\n- Later @priority(false)\n"; got != want {
+		t.Fatalf("converted annotations corrupted Markdown:\ngot:  %q\nwant: %q", got, want)
+	}
 }
 
 func TestSchemaConvertFieldRefusesMissingLiveValueWithNonzeroExit(t *testing.T) {

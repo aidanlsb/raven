@@ -84,15 +84,12 @@ func ConvertTrait(req ConvertTraitRequest) (*ConvertResult, error) {
 		return nil, err
 	}
 
-	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, traitMappingOrder(traitDef, sourceType), func(value schema.FieldValue, element bool) error {
+	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, traitMappingOrder(traitDef, sourceType), func(value schema.FieldValue, element bool, enumValues []string) error {
 		targetDef := *traitDef
 		targetDef.Type = targetType
-		targetDef.Values = newValuesForValidation(req.Mapping, sourceType, targetType, traitMappingOrder(traitDef, sourceType))
+		targetDef.Values = enumValues
 		if element {
 			targetDef.Type = arrayElementType(targetType)
-		}
-		if value.IsNull() {
-			return fmt.Errorf("trait values cannot be null")
 		}
 		if err := validateTraitLiteralValue(value); err != nil {
 			return err
@@ -213,10 +210,10 @@ func ConvertField(req ConvertFieldRequest) (*ConvertResult, error) {
 	}
 
 	order := fieldMappingOrder(fieldDef, sourceType)
-	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, order, func(value schema.FieldValue, element bool) error {
+	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, order, func(value schema.FieldValue, element bool, enumValues []string) error {
 		targetDef := *fieldDef
 		targetDef.Type = targetType
-		targetDef.Values = newValuesForValidation(req.Mapping, sourceType, targetType, order)
+		targetDef.Values = enumValues
 		if !isRefConversionType(targetType) {
 			targetDef.Target = ""
 		}
@@ -358,7 +355,7 @@ func buildConversionMapper(
 	rawMapping map[string]interface{},
 	sourceType, targetType schema.FieldType,
 	order []string,
-	validate func(schema.FieldValue, bool) error,
+	validate func(schema.FieldValue, bool, []string) error,
 ) (*conversionMapper, []string, error) {
 	if rawMapping == nil {
 		return nil, nil, newError(
@@ -373,32 +370,33 @@ func buildConversionMapper(
 		return nil, nil, newError(schemasvc.ErrorInvalidInput, "--map-json must contain at least one mapping", "", nil, nil)
 	}
 
-	newValues := newValuesForValidation(rawMapping, sourceType, targetType, order)
-	if isEnumConversionType(targetType) && len(newValues) == 0 {
-		return nil, nil, newError(schemasvc.ErrorInvalidInput, "enum conversion must produce at least one non-null string value", "", nil, nil)
-	}
-
 	mapper := &conversionMapper{
 		sourceType: sourceType,
 		targetType: targetType,
 		values:     make(map[string]schema.FieldValue, len(rawMapping)),
 	}
-	for _, key := range orderedMappingKeys(rawMapping, order) {
+	orderedKeys := orderedMappingKeys(rawMapping, order)
+	elementMapping := isArrayConversionType(sourceType) && isArrayConversionType(targetType)
+	for _, key := range orderedKeys {
 		raw := rawMapping[key]
 		if containsMappingObject(raw) {
 			return nil, nil, invalidMappingValueError(key, targetType, fmt.Errorf("nested JSON objects are not supported"))
 		}
-		value := parser.FieldValueFromYAML(raw)
-		elementMapping := isArrayConversionType(sourceType) && isArrayConversionType(targetType)
-		if elementMapping {
-			if _, isArray := value.AsArray(); isArray {
-				return nil, nil, invalidMappingValueError(key, targetType, fmt.Errorf("array-to-array mappings must map each member to one scalar member"))
-			}
-		}
-		if err := validate(value, elementMapping); err != nil {
+		value, err := mappingValueForTarget(raw, targetType, elementMapping)
+		if err != nil {
 			return nil, nil, invalidMappingValueError(key, targetType, err)
 		}
 		mapper.values[key] = value
+	}
+
+	newValues := newEnumValues(mapper.values, orderedKeys, sourceType, targetType)
+	if isEnumConversionType(targetType) && len(newValues) == 0 {
+		return nil, nil, newError(schemasvc.ErrorInvalidInput, "enum conversion must produce at least one string value", "", nil, nil)
+	}
+	for _, key := range orderedKeys {
+		if err := validate(mapper.values[key], elementMapping, newValues); err != nil {
+			return nil, nil, invalidMappingValueError(key, targetType, err)
+		}
 	}
 	return mapper, newValues, nil
 }
@@ -499,27 +497,31 @@ func stageTraitConversions(
 	missing map[string]struct{},
 ) ([]byte, int) {
 	lines := strings.Split(raw, "\n")
-	byLine := make(map[int][]*model.Trait)
+	targetLines := make(map[int]struct{})
 	for _, trait := range traits {
 		if trait == nil || trait.TraitType != traitName || trait.Line <= 0 || trait.Line > len(lines) {
 			continue
 		}
-		byLine[trait.Line] = append(byLine[trait.Line], trait)
+		targetLines[trait.Line] = struct{}{}
 	}
 
 	converted := 0
-	for lineNumber, lineTraits := range byLine {
-		sort.SliceStable(lineTraits, func(i, j int) bool {
-			return lineTraits[i].PositionStart > lineTraits[j].PositionStart
-		})
+	for lineNumber := range targetLines {
 		line := lines[lineNumber-1]
-		for _, trait := range lineTraits {
-			value := effectiveTraitValue(trait, def)
+		annotations := parser.ParseTraitAnnotations(line, lineNumber)
+		sort.SliceStable(annotations, func(i, j int) bool {
+			return annotations[i].StartOffset > annotations[j].StartOffset
+		})
+		for _, annotation := range annotations {
+			if annotation.TraitName != traitName {
+				continue
+			}
+			value := effectiveTraitAnnotationValue(annotation.Value, def)
 			mapped, complete := mapper.convert(value, missing)
 			if !complete {
 				continue
 			}
-			start, end := trait.PositionStart, trait.PositionEnd
+			start, end := annotation.StartOffset, annotation.EndOffset
 			if start < 0 || end > len(line) || start >= end {
 				continue
 			}
@@ -546,9 +548,9 @@ func stageTraitConversions(
 	return []byte(strings.Join(lines, "\n")), converted
 }
 
-func effectiveTraitValue(trait *model.Trait, def *schema.TraitDefinition) schema.FieldValue {
-	if trait != nil && trait.Value != nil {
-		return *trait.Value
+func effectiveTraitAnnotationValue(value *schema.FieldValue, def *schema.TraitDefinition) schema.FieldValue {
+	if value != nil {
+		return *value
 	}
 	if def != nil && def.Default != nil {
 		return parser.FieldValueFromYAML(def.Default)
@@ -702,8 +704,15 @@ func validateTraitLiteralValue(value schema.FieldValue) error {
 		}
 		return nil
 	}
-	if text, ok := value.AsString(); ok && strings.Contains(text, ")") {
-		return fmt.Errorf("trait values containing ')' cannot be represented in @trait(...) syntax")
+	if text, ok := value.AsString(); ok {
+		switch {
+		case strings.Contains(text, ")"):
+			return fmt.Errorf("trait values containing ')' cannot be represented in @trait(...) syntax")
+		case strings.ContainsAny(text, "\r\n"):
+			return fmt.Errorf("trait values cannot contain newlines")
+		case strings.Contains(text, `"`):
+			return fmt.Errorf("trait values containing double quotes cannot be represented losslessly")
+		}
 	}
 	return nil
 }
@@ -725,8 +734,7 @@ func serializeTraitConversionLiteral(value schema.FieldValue, inArray bool) stri
 			(inArray && strings.Contains(text, ",")) ||
 			(strings.HasPrefix(text, "[") && strings.HasSuffix(text, "]"))
 		if quote {
-			encoded, _ := json.Marshal(text)
-			return string(encoded)
+			return `"` + text + `"`
 		}
 		return text
 	}
@@ -787,10 +795,10 @@ func orderedMappingKeys(mapping map[string]interface{}, preferred []string) []st
 	return append(keys, extra...)
 }
 
-func newValuesForValidation(
-	mapping map[string]interface{},
-	sourceType, targetType schema.FieldType,
+func newEnumValues(
+	mapping map[string]schema.FieldValue,
 	order []string,
+	sourceType, targetType schema.FieldType,
 ) []string {
 	if !isEnumConversionType(targetType) {
 		return nil
@@ -811,8 +819,8 @@ func newValuesForValidation(
 		seen[text] = struct{}{}
 		values = append(values, text)
 	}
-	for _, key := range orderedMappingKeys(mapping, order) {
-		value := parser.FieldValueFromYAML(mapping[key])
+	for _, key := range order {
+		value := mapping[key]
 		if isArrayConversionType(targetType) && !isArrayConversionType(sourceType) {
 			if items, ok := value.AsArray(); ok {
 				for _, item := range items {
@@ -824,6 +832,124 @@ func newValuesForValidation(
 		appendValue(value)
 	}
 	return values
+}
+
+func mappingValueForTarget(raw interface{}, targetType schema.FieldType, elementMapping bool) (schema.FieldValue, error) {
+	effectiveType := targetType
+	if elementMapping {
+		effectiveType = arrayElementType(targetType)
+	}
+	if isArrayConversionType(effectiveType) {
+		elementType := arrayElementType(effectiveType)
+		switch values := raw.(type) {
+		case []interface{}:
+			items := make([]schema.FieldValue, 0, len(values))
+			for _, item := range values {
+				converted, err := mappingScalarForTarget(item, elementType)
+				if err != nil {
+					return schema.Null(), err
+				}
+				items = append(items, converted)
+			}
+			return schema.Array(items), nil
+		case []string:
+			items := make([]schema.FieldValue, 0, len(values))
+			for _, item := range values {
+				converted, err := mappingScalarForTarget(item, elementType)
+				if err != nil {
+					return schema.Null(), err
+				}
+				items = append(items, converted)
+			}
+			return schema.Array(items), nil
+		default:
+			return schema.Null(), fmt.Errorf("expected a JSON array")
+		}
+	}
+	if _, isArray := raw.([]interface{}); isArray {
+		return schema.Null(), fmt.Errorf("expected a scalar JSON value")
+	}
+	if _, isArray := raw.([]string); isArray {
+		return schema.Null(), fmt.Errorf("expected a scalar JSON value")
+	}
+	return mappingScalarForTarget(raw, effectiveType)
+}
+
+func mappingScalarForTarget(raw interface{}, targetType schema.FieldType) (schema.FieldValue, error) {
+	if raw == nil {
+		return schema.Null(), fmt.Errorf("null is not a schema value type")
+	}
+	switch targetType {
+	case schema.FieldTypeString, schema.FieldTypeURL, schema.FieldTypeDate, schema.FieldTypeDatetime:
+		value, ok := raw.(string)
+		if !ok {
+			return schema.Null(), fmt.Errorf("expected a JSON string")
+		}
+		return schema.String(value), nil
+	case schema.FieldTypeEnum:
+		value, ok := raw.(string)
+		if !ok {
+			return schema.Null(), fmt.Errorf("expected a JSON string")
+		}
+		if parser.FieldValueFromYAML(value).IsRef() {
+			return schema.Null(), fmt.Errorf("enum values cannot use wikilink syntax")
+		}
+		return schema.String(value), nil
+	case schema.FieldTypeRef:
+		value, ok := raw.(string)
+		if !ok {
+			return schema.Null(), fmt.Errorf("expected a JSON string containing a reference")
+		}
+		return parser.FieldValueFromYAML(value), nil
+	case schema.FieldTypeBool:
+		value, ok := raw.(bool)
+		if !ok {
+			return schema.Null(), fmt.Errorf("expected a JSON boolean")
+		}
+		return schema.Bool(value), nil
+	case schema.FieldTypeNumber:
+		number, ok := jsonNumber(raw)
+		if !ok {
+			return schema.Null(), fmt.Errorf("expected a JSON number")
+		}
+		return schema.Number(number), nil
+	default:
+		return schema.Null(), fmt.Errorf("unsupported target type '%s'", targetType)
+	}
+}
+
+func jsonNumber(raw interface{}) (float64, bool) {
+	switch value := raw.(type) {
+	case float64:
+		return value, true
+	case float32:
+		return float64(value), true
+	case int:
+		return float64(value), true
+	case int8:
+		return float64(value), true
+	case int16:
+		return float64(value), true
+	case int32:
+		return float64(value), true
+	case int64:
+		return float64(value), true
+	case uint:
+		return float64(value), true
+	case uint8:
+		return float64(value), true
+	case uint16:
+		return float64(value), true
+	case uint32:
+		return float64(value), true
+	case uint64:
+		return float64(value), true
+	case json.Number:
+		number, err := value.Float64()
+		return number, err == nil
+	default:
+		return 0, false
+	}
 }
 
 func containsMappingObject(value interface{}) bool {
