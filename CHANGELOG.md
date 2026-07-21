@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- References written before their target existed are now healed automatically. Creating the target (`rvn new`, `rvn upsert`, etc.) re-resolves pending refs and ref fields across the vault, and `rvn reindex` runs its resolution pass even when no files need reindexing. Previously such refs stayed `missing` indefinitely unless a `rvn reindex --full` ran, which made objects invisible to canonical-ID queries (e.g. `.project==project/raven`) while still matching raw-literal queries (`.project==raven`).
+
 ## [v0.0.29] - 2026-07-20
 
 ### Added

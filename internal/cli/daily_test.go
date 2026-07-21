@@ -260,7 +260,10 @@ func TestDailyHumanOutputShowsLinkAs(t *testing.T) {
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = false
-	// No editor configured, so the created note is not opened.
+	// No editor configured, so the created note is not opened. GetEditor()
+	// falls back to $EDITOR, so clear it or this test launches a real editor
+	// and hangs.
+	t.Setenv("EDITOR", "")
 	cfg = &config.Config{}
 	if err := dailyCmd.Flags().Set("edit", "false"); err != nil {
 		t.Fatalf("set daily --edit: %v", err)

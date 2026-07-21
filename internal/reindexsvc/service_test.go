@@ -10,6 +10,8 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -317,6 +319,83 @@ func TestRunResolvesReferencesAfterBulkReindex(t *testing.T) {
 	}
 
 	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("failed to reopen index: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	var targetID string
+	err = db.DB().QueryRow(`SELECT target_id FROM refs WHERE file_path = ?`, "source.md").Scan(&targetID)
+	if err != nil {
+		t.Fatalf("failed to query refs table: %v", err)
+	}
+	if targetID != "target" {
+		t.Fatalf("target_id = %q, want %q", targetID, "target")
+	}
+}
+
+func TestRunHealsUnresolvedRefsWhenNoFilesAreStale(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "source.md"), []byte("# Source\n\nSee [[target]].\n"), 0o644); err != nil {
+		t.Fatalf("failed to write source fixture: %v", err)
+	}
+
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial full Run returned error: %v", err)
+	}
+
+	// Create the missing target and index it the way legacy/stale indexes got
+	// into this state: the target row is fresh in the index, but the pending
+	// ref in source.md was never re-resolved.
+	targetPath := filepath.Join(vaultPath, "target.md")
+	if err := os.WriteFile(targetPath, []byte("# Target\n"), 0o644); err != nil {
+		t.Fatalf("failed to write target fixture: %v", err)
+	}
+	targetInfo, err := os.Stat(targetPath)
+	if err != nil {
+		t.Fatalf("failed to stat target fixture: %v", err)
+	}
+
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		t.Fatalf("failed to load schema: %v", err)
+	}
+	doc, err := parser.ParseDocumentWithOptions("# Target\n", targetPath, vaultPath, nil)
+	if err != nil {
+		t.Fatalf("failed to parse target fixture: %v", err)
+	}
+
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("failed to open index: %v", err)
+	}
+	db.SetAutoResolveRefs(false)
+	if err := db.IndexDocumentWithMtime(doc, sch, targetInfo.ModTime().Unix()); err != nil {
+		_ = db.Close()
+		t.Fatalf("failed to index target fixture: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close index: %v", err)
+	}
+
+	// Incremental reindex with zero stale files must still run the resolve
+	// pass and heal the pending ref.
+	result, err := Run(RunRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("incremental Run returned error: %v", err)
+	}
+	if result.FilesIndexed != 0 {
+		t.Fatalf("files indexed = %d, want 0 (test must exercise the no-stale-files path)", result.FilesIndexed)
+	}
+	if !result.HasRefResult {
+		t.Fatalf("expected reference resolution result on incremental run, got %#v", result)
+	}
+	if result.RefsResolved < 1 {
+		t.Fatalf("refs resolved = %d, want >= 1", result.RefsResolved)
+	}
+
+	db, err = index.Open(vaultPath)
 	if err != nil {
 		t.Fatalf("failed to reopen index: %v", err)
 	}

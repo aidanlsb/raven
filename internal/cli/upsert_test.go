@@ -400,6 +400,9 @@ func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
 	upsertCmd.Flags().Lookup("path").Changed = false
 	upsertContent = "# Brief"
 	upsertCmd.Flags().Lookup("content").Changed = true
+	// GetEditor() falls back to $EDITOR, so clear it or this test launches a
+	// real editor and hangs.
+	t.Setenv("EDITOR", "")
 	cfg = &config.Config{}
 
 	out := captureStdout(t, func() {

@@ -874,6 +874,9 @@ types:
 	newPathFlag = ""
 	newCmd.Flags().Lookup("path").Changed = false
 	// No editor configured, so rendering prints the path instead of opening.
+	// GetEditor() falls back to $EDITOR, so clear it or this test launches a
+	// real editor and hangs.
+	t.Setenv("EDITOR", "")
 	cfg = &config.Config{}
 
 	out := captureStdout(t, func() {
