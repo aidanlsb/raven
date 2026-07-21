@@ -22,29 +22,28 @@ Met with [[person/freya]] on [[2026-07-20]] to plan the security review. We agre
 @todo @due(2026-07-22) Send the draft scope for review
 ```
 
-The frontmatter is schema-validated; the traits and references are deterministically queryable.
+That file contains Raven's core building blocks:
 
-Now ask your agent:
+- **Type:** `type: meeting` identifies what the note represents.
+- **Fields:** `title` and `project` are schema-validated frontmatter.
+- **References:** `project/midgard-security-review`, `[[person/freya]]`, and `[[2026-07-20]]` link this note to other objects.
+- **Traits:** `@todo` marks a task, while `@due(2026-07-22)` attaches a typed due date to it.
+
+Because these structures are indexed, you can query them explicitly:
+
+```bash
+rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review]]))'
+```
+
+Read that as: *find `todo` traits inside meetings that reference the Midgard security review.*
+
+An agent can run the same query when you ask:
 
 > Summarize what is blocking the Midgard security review, list its open follow-ups, and point me to the source notes.
 
 > The review is blocked until the draft scope is approved. One follow-up is open: send the draft scope for review by July 22. Source: `meeting/security-review-kickoff.md`.
 
 The rest of this README shows how to get there.
-
-## Mental model
-
-Five terms cover almost everything in Raven:
-
-| Term | What it is |
-|------|------------|
-| **Vault** | The folder that holds your notes (plus `raven.yaml`, `schema.yaml`, and the `.raven/` cache). |
-| **Type** | What a file represents — `project`, `meeting`, `person`. Custom types are defined in `schema.yaml`; `page`, `date`, and `section` are built in. |
-| **Field** | Structured data in a note's YAML frontmatter (e.g. a person's `email`, a meeting's `project`). |
-| **Trait** | An inline, structured tag on a line of content, like `@todo` or `@due(2026-07-22)`. Queryable, unlike a plain hashtag. |
-| **Reference** | A link to another note, written as a canonical ID in frontmatter or a `[[wiki-style/link]]` in content. References form a graph you can traverse with backlinks and queries. |
-
-Keep these in mind and the rest of the docs will read easily.
 
 ## Installation
 
