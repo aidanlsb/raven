@@ -2,11 +2,12 @@
 
 <p align="center"><strong>A CLI for plain-text knowledge management, with first-class support for AI agents.</strong></p>
 
-Raven combines three properties so you retain full ownership of your knowledge while agents can work with it reliably:
+A Raven "vault" is a folder of markdown notes, with a few additions enabled through the `rvn` CLI.
 
-- **Enforced schema.** Raven validates your files against the types, fields, and traits you define, keeping their structure consistent over time.
-- **Deterministic queries.** Agents retrieve information using explicit, repeatable criteria rather than relying on fuzzy search or interpretation.
-- **Plain-text source of truth.** Everything is Markdown with YAML frontmatter. The SQLite index under `.raven/` is only a rebuildable cache.
+- **Types & schema.** You define types for your notes, and their fields are validated against a schema you control—so structure is enforced, not just convention.
+- **Traits.** Inline markers like `@todo` or `@due(2026-07-22)` attach typed, queryable metadata to any line, not just whole notes.
+- **References.** `[[wiki-style]]` links connect notes to each other, and Raven keeps them valid as things are renamed or moved.
+- **Queries.** Retrieve information by explicit, repeatable criteria instead of relying on fuzzy search or interpretation.
 
 Here's an ordinary Raven note:
 
