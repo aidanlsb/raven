@@ -228,7 +228,7 @@ func queryPagination(result *readsvc.ExecuteQueryResult) commandpayload.Paginati
 }
 
 func handleQueryApply(ctx context.Context, req commandexec.Request, result *readsvc.ExecuteQueryResult, applyArgs []string, queryTimeMs int64) commandexec.Result {
-	if result.QueryKind == "asset" || result.QueryKind == "section" {
+	if result.QueryKind == "asset" {
 		return commandexec.Failure(
 			"INVALID_INPUT",
 			fmt.Sprintf("--apply is not supported for %s queries", result.QueryKind),
@@ -240,6 +240,14 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, result *read
 	rawApply, err := bulkops.ParseRawApply(applyArgs)
 	if err != nil {
 		return mapBulkopsFailure(err)
+	}
+	if result.QueryKind == "section" && rawApply.Command != string(bulkops.ObjectApplyMove) {
+		return commandexec.Failure(
+			"INVALID_INPUT",
+			fmt.Sprintf("--apply is not supported for %s queries", result.QueryKind),
+			nil,
+			"Use --ids and pass results to a compatible command",
+		)
 	}
 
 	if result.QueryKind == "trait" {
