@@ -659,7 +659,7 @@ IMPORTANT:
 	},
 	"move": {
 		Name:        "move",
-		Description: "Move or rename an object, section heading, or asset within the vault",
+		Description: "Move or rename an object or asset within the vault",
 		LongDesc: `Move or rename a file/object or asset within the vault.
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
@@ -685,20 +685,17 @@ Single-object move:
 Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
 move and the references it would update without applying.
 
-Section rename:
-When the source is a section ID (e.g., project/website#tasks), the destination
-is the NEW HEADING TEXT (plain text, no leading #). The heading level is kept,
-the new slug is derived from the text, and all inbound [[...#old-slug]] references
-are rewritten to the new slug. Renaming fails if it would create a duplicate
-section slug within the file.
+Section IDs are not valid move sources. Use 'rvn section rename <file#section>
+"<new heading text>"' to rename a heading and rewrite inbound fragment references.
+This is a hard error for both single and bulk move inputs.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
 Destination must be a directory (ending with /).
 IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
-			{Name: "source", Description: "Source object reference, section ID, or asset path (e.g., inbox/note.md, people/loki, project/website#tasks, assets/pdfs/file.pdf)", Required: false},
-			{Name: "destination", Description: "Destination path, or the new heading text when source is a section (e.g., people/loki-archived, archive/projects/, \"Completed Tasks\")", Required: false},
+			{Name: "source", Description: "Source object reference or asset path (e.g., inbox/note.md, people/loki, assets/pdfs/file.pdf); section IDs are rejected", Required: false},
+			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/projects/)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
@@ -714,14 +711,45 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"rvn move inbox/task.md projects/website/task.md --json",
 			"rvn move drafts/person.md people/freya.md --update-refs --json",
 			"rvn move assets/pdfs/paper.pdf assets/pdfs/archive/paper.pdf --json",
-			"rvn move project/website#tasks \"Completed Tasks\" --json",
 		},
 		UseCases: []string{
 			"Rename a file in place (NEVER use 'mv' shell command)",
 			"Move file to different directory with reference updates",
-			"Rename a section heading and update all references to its fragment",
 			"Reorganize vault structure while keeping links intact",
 			"Archive old content without breaking references",
+		},
+	},
+	"section_rename": {
+		Name:        "section rename",
+		CLIPath:     []string{"section", "rename"},
+		Description: "Rename a section heading and rewrite inbound fragment references",
+		Category:    CategoryContent,
+		Access:      AccessWrite,
+		Risk:        RiskMutating,
+		LongDesc: `Rename a Markdown section heading in place.
+
+The source must be a section ID such as project/website#tasks. The destination
+is plain heading text, not a Markdown heading and not another section ID. Raven
+preserves the heading level, derives the new slug from the text, and rewrites
+inbound [[...#old-slug]] references to the new slug.
+
+The rename fails without writing if the new slug duplicates another section or
+would shift another section's slug. It applies immediately by default; pass
+--dry-run to preview the new section ID and reference rewrites.`,
+		Args: []ArgMeta{
+			{Name: "section_id", Description: "Section ID to rename (e.g., project/website#tasks)", Required: true},
+			{Name: "new_heading_text", Description: "New heading text as plain text, without a leading #", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "dry-run", Description: "Preview the section rename without applying it", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			`rvn section rename project/website#tasks "Completed Tasks" --json`,
+			`rvn section rename project/website#tasks "Completed Tasks" --dry-run --json`,
+		},
+		UseCases: []string{
+			"Rename a section heading without breaking inbound fragment references",
+			"Preview the slug and reference impact of a heading rename",
 		},
 	},
 	"reclassify": {

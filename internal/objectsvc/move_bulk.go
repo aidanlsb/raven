@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -62,6 +63,15 @@ func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 	if !strings.HasSuffix(req.DestinationDir, "/") {
 		return nil, newError(ErrorInvalidInput, "destination must be a directory (end with /)", "Example: rvn move --stdin archive/projects/", nil, nil)
 	}
+	if sectionIDs := moveBulkSectionIDs(req.ObjectIDs); len(sectionIDs) > 0 {
+		return nil, newError(
+			ErrorInvalidInput,
+			"rvn move does not accept section sources",
+			`Use 'rvn section rename <file#section> "<new heading text>"' to rename one section heading and rewrite inbound references`,
+			map[string]interface{}{"section_ids": sectionIDs},
+			nil,
+		)
+	}
 
 	items := make([]MoveBulkPreviewItem, 0, len(req.ObjectIDs))
 	skipped := make([]MoveBulkResult, 0)
@@ -114,6 +124,15 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 	}
 	if !strings.HasSuffix(req.DestinationDir, "/") {
 		return nil, newError(ErrorInvalidInput, "destination must be a directory (end with /)", "Example: rvn move --stdin archive/projects/", nil, nil)
+	}
+	if sectionIDs := moveBulkSectionIDs(req.ObjectIDs); len(sectionIDs) > 0 {
+		return nil, newError(
+			ErrorInvalidInput,
+			"rvn move does not accept section sources",
+			`Use 'rvn section rename <file#section> "<new heading text>"' to rename one section heading and rewrite inbound references`,
+			map[string]interface{}{"section_ids": sectionIDs},
+			nil,
+		)
 	}
 
 	results := make([]MoveBulkResult, 0, len(req.ObjectIDs))
@@ -206,4 +225,14 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 		Destination:     req.DestinationDir,
 		WarningMessages: warnings,
 	}, nil
+}
+
+func moveBulkSectionIDs(ids []string) []string {
+	var sectionIDs []string
+	for _, id := range ids {
+		if _, _, isSection := paths.ParseSectionID(strings.TrimSpace(id)); isSection {
+			sectionIDs = append(sectionIDs, id)
+		}
+	}
+	return sectionIDs
 }

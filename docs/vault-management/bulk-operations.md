@@ -252,11 +252,13 @@ Path with fragment like `project/website#tasks`:
 rvn query "section .title==Tasks" --ids | rvn add "Review backlog" --stdin --confirm
 ```
 
-- Object mutation commands (`set`, `delete`, `move`) skip section IDs because sections are derived from Markdown headings, not editable schema objects. Skipped IDs are reported with a `SECTION_SKIPPED` warning:
+- Object mutation commands such as `set` and `delete` skip section IDs because sections are derived from Markdown headings, not editable schema objects. Skipped IDs are reported with a `SECTION_SKIPPED` warning:
 
 ```
 Skipped 1 section ID(s) - bulk operations only support file-level objects
 ```
+
+- `move` is stricter: if any bulk source is a section ID, the entire move request fails. Rename one heading at a time with `rvn section rename <file#section> "<new heading text>"`. A section query combined with `--apply "move ..."` fails for the same reason.
 
 ---
 

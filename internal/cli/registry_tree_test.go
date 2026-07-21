@@ -13,6 +13,7 @@ import (
 // hierarchy is generated from registry metadata via buildRegistrySubtree. New
 // migrated groups should be added here so the parity assertions cover them.
 var registryGeneratedSubtreePrefixes = [][]string{
+	{"section"},
 	{"vault", "config"},
 	{"schema", "template"},
 	{"schema", "add"},

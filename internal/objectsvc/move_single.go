@@ -54,13 +54,28 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	if strings.TrimSpace(req.Reference) == "" || strings.TrimSpace(req.Destination) == "" {
 		return nil, newError(ErrorInvalidInput, "source and destination are required", "Usage: rvn move <source> <destination>", nil, nil)
 	}
+	if _, _, isSection := paths.ParseSectionID(strings.TrimSpace(req.Reference)); isSection {
+		return nil, newError(
+			ErrorInvalidInput,
+			"rvn move does not accept section sources",
+			`Use 'rvn section rename <file#section> "<new heading text>"' to rename a section heading and rewrite inbound references`,
+			map[string]interface{}{"source": strings.TrimSpace(req.Reference)},
+			nil,
+		)
+	}
 
 	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
 	if err != nil {
 		return nil, err
 	}
 	if resolved.IsSection {
-		return renameSectionByReference(req, resolved)
+		return nil, newError(
+			ErrorInvalidInput,
+			"rvn move does not accept section sources",
+			`Use 'rvn section rename <file#section> "<new heading text>"' to rename a section heading and rewrite inbound references`,
+			map[string]interface{}{"source": resolved.ObjectID},
+			nil,
+		)
 	}
 	sourceFile := resolved.FilePath
 

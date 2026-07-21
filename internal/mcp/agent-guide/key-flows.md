@@ -56,6 +56,7 @@ raven_invoke(command="edit", args={
 ```text
 raven_invoke(command="move", args={"source":"person/loki", "destination":"person/loki-archived"})
 raven_invoke(command="move", args={"source":"assets/downloads/paper.pdf", "destination":"assets/pdfs/paper.pdf"})
+raven_invoke(command="section_rename", args={"section_id":"project/website#tasks", "new_heading_text":"Completed Tasks"})
 raven_invoke(command="reclassify", args={"object":"pages/draft", "new-type":"project"})
 raven_invoke(command="reclassify", args={"object":"person/freya", "new-type":"company", "fields-json":{"legal_name":"false"}})
 ```
@@ -67,9 +68,10 @@ raven_invoke(command="backlinks", args={"target":"project/old-project"})
 raven_invoke(command="delete", args={"object_id":"project/old-project"})
 ```
 
-Single-object `delete` and `move` apply immediately. Run the backlinks check
-first when impact is not already clear, or call with `dry-run=true` to preview.
-Bulk delete/move remain preview-first and require `confirm=true`.
+Single-object `delete`, `move`, and `section_rename` apply immediately. Run the
+backlinks check first for delete when impact is not already clear, or call a
+write with `dry-run=true` to preview. Bulk delete/move remain preview-first and
+require `confirm=true`; bulk move rejects section IDs.
 
 ## 5. Bulk mutation flow
 
