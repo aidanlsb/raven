@@ -57,7 +57,8 @@ Raven ships its own long-form documentation. Use these when you need usage detai
 - List doc sections: `rvn docs list --json`
 - Read a topic: `rvn docs <section> <topic> --json`
 - Search docs: `rvn docs search "<query>" --json` (continue with `--offset` when `has_more` is true)
-- Refresh global doc cache if missing or stale: `rvn docs fetch --json`
+- Existing stale caches refresh lazily on those docs reads; a failed refresh returns `DOCS_FETCH_FAILED` while serving cached content.
+- Fetch a missing cache, force a refresh, or pin a ref: `rvn docs fetch --json`
 
 ## Cross-references
 

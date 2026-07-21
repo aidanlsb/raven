@@ -382,11 +382,16 @@ rvn docs list                                    # List sections and their comma
 rvn docs getting-started                         # List topics in a section
 rvn docs search "saved query"                    # Full-text search across docs
 rvn docs search "exclude" --section using-your-vault --limit 10
-rvn docs fetch                                   # Refresh the global docs cache
+rvn docs fetch                                   # Force-refresh the global docs cache
 rvn docs fetch --ref v0.0.27                     # Pin docs to a specific ref
 ```
 
-Docs are cached in a global directory (fetched during `rvn init`). Run `rvn docs fetch` after upgrading Raven to keep the cache in sync with your installed version.
+Docs are cached in a global directory (fetched during `rvn init`). After an
+upgrade, the next docs read lazily refreshes an existing older cache from the
+installed CLI version tag. If that fetch fails, Raven emits
+`DOCS_FETCH_FAILED` and continues serving the existing cache. Missing caches
+still require `rvn docs fetch`; use that command explicitly to force a refresh
+or pin `--ref`.
 
 Key flags (`docs search`):
 - `--limit` / `-n` — maximum matches (default 20)

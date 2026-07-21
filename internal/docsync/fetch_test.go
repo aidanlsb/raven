@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -12,6 +13,145 @@ import (
 	"testing"
 	"time"
 )
+
+func TestRefreshIfStaleRefreshesFromInstalledVersionTag(t *testing.T) {
+	t.Parallel()
+
+	archive := buildArchive(t, map[string]string{
+		"raven-v0.0.2/docs/index.yaml":       "sections:\n  guide:\n    topics:\n      current:\n        path: current.md\n",
+		"raven-v0.0.2/docs/guide/current.md": "# Current\n",
+	})
+
+	globalDir := t.TempDir()
+	configPath := filepath.Join(globalDir, "config.toml")
+	docsPath := filepath.Join(globalDir, StoreRelPath)
+	writeDocsTestFile(t, filepath.Join(docsPath, DocsIndexFilename), "sections: {}\n")
+	writeDocsTestFile(t, filepath.Join(docsPath, "stale.md"), "stale\n")
+	writeDocsTestManifest(t, docsPath, "v0.0.1")
+
+	transport := &recordingTransport{Bodies: map[string][]byte{
+		"/archive/v0.0.2": archive,
+	}}
+	result, err := RefreshIfStale(RefreshOptions{
+		ConfigPath:    configPath,
+		CLIVersion:    "v0.0.2",
+		SourceBaseURL: "https://example.invalid/archive",
+		HTTPClient:    &http.Client{Transport: transport},
+	})
+	if err != nil {
+		t.Fatalf("RefreshIfStale() error = %v", err)
+	}
+	if !result.Refreshed {
+		t.Fatal("RefreshIfStale() Refreshed = false, want true")
+	}
+	if len(transport.Paths) != 1 || transport.Paths[0] != "/archive/v0.0.2" {
+		t.Fatalf("requested paths = %v, want [/archive/v0.0.2]", transport.Paths)
+	}
+	if _, err := os.Stat(filepath.Join(docsPath, "stale.md")); !os.IsNotExist(err) {
+		t.Fatalf("stale file still exists after refresh, err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(docsPath, "guide", "current.md")); err != nil {
+		t.Fatalf("refreshed docs file missing: %v", err)
+	}
+
+	manifest, err := ReadManifest(configPath)
+	if err != nil {
+		t.Fatalf("ReadManifest() error = %v", err)
+	}
+	if manifest == nil || manifest.Ref != "v0.0.2" || manifest.CLIVersion != "v0.0.2" {
+		t.Fatalf("manifest = %#v, want ref and cli_version v0.0.2", manifest)
+	}
+}
+
+func TestRefreshIfStaleRefreshesWhenManifestVersionIsMissing(t *testing.T) {
+	t.Parallel()
+
+	archive := buildArchive(t, map[string]string{
+		"raven-v2.0.0/docs/index.yaml": "sections: {}\n",
+	})
+	globalDir := t.TempDir()
+	configPath := filepath.Join(globalDir, "config.toml")
+	docsPath := filepath.Join(globalDir, StoreRelPath)
+	writeDocsTestFile(t, filepath.Join(docsPath, DocsIndexFilename), "sections: {}\n")
+	writeDocsTestManifest(t, docsPath, "")
+
+	transport := &recordingTransport{Bodies: map[string][]byte{
+		"/archive/v2.0.0": archive,
+	}}
+	result, err := RefreshIfStale(RefreshOptions{
+		ConfigPath:    configPath,
+		CLIVersion:    "v2.0.0",
+		SourceBaseURL: "https://example.invalid/archive",
+		HTTPClient:    &http.Client{Transport: transport},
+	})
+	if err != nil {
+		t.Fatalf("RefreshIfStale() error = %v", err)
+	}
+	if !result.Refreshed {
+		t.Fatal("RefreshIfStale() Refreshed = false, want true")
+	}
+	if len(transport.Paths) != 1 || transport.Paths[0] != "/archive/v2.0.0" {
+		t.Fatalf("requested paths = %v, want [/archive/v2.0.0]", transport.Paths)
+	}
+}
+
+func TestRefreshIfStaleSkipsMatchingNewerAndDevelopmentVersions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		cachedVersion  string
+		currentVersion string
+	}{
+		{name: "matching", cachedVersion: "v1.2.3", currentVersion: "v1.2.3"},
+		{name: "cache newer", cachedVersion: "v1.3.0", currentVersion: "v1.2.3"},
+		{name: "development build", cachedVersion: "v1.2.2", currentVersion: "devel"},
+		{name: "pseudo version", cachedVersion: "v1.2.2", currentVersion: "v1.2.3-0.20260721000000-deadbeef"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			globalDir := t.TempDir()
+			configPath := filepath.Join(globalDir, "config.toml")
+			docsPath := filepath.Join(globalDir, StoreRelPath)
+			writeDocsTestFile(t, filepath.Join(docsPath, DocsIndexFilename), "sections: {}\n")
+			writeDocsTestManifest(t, docsPath, tc.cachedVersion)
+
+			transport := &recordingTransport{}
+			result, err := RefreshIfStale(RefreshOptions{
+				ConfigPath: configPath,
+				CLIVersion: tc.currentVersion,
+				HTTPClient: &http.Client{Transport: transport},
+			})
+			if err != nil {
+				t.Fatalf("RefreshIfStale() error = %v", err)
+			}
+			if result.Refreshed {
+				t.Fatal("RefreshIfStale() Refreshed = true, want false")
+			}
+			if len(transport.Paths) != 0 {
+				t.Fatalf("requested paths = %v, want none", transport.Paths)
+			}
+		})
+	}
+}
+
+func TestRefreshIfStaleDoesNotFetchMissingCache(t *testing.T) {
+	t.Parallel()
+
+	transport := &recordingTransport{}
+	_, err := RefreshIfStale(RefreshOptions{
+		ConfigPath: filepath.Join(t.TempDir(), "config.toml"),
+		CLIVersion: "v1.2.3",
+		HTTPClient: &http.Client{Transport: transport},
+	})
+	if !errors.Is(err, ErrDocsNotFetched) {
+		t.Fatalf("RefreshIfStale() error = %v, want ErrDocsNotFetched", err)
+	}
+	if len(transport.Paths) != 0 {
+		t.Fatalf("requested paths = %v, want none", transport.Paths)
+	}
+}
 
 func TestFetchInstallsDocsFromArchive(t *testing.T) {
 	t.Parallel()
@@ -173,4 +313,53 @@ func (t fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		Body:       io.NopCloser(bytes.NewReader(body)),
 		Header:     make(http.Header),
 	}, nil
+}
+
+type recordingTransport struct {
+	StatusCode int
+	Bodies     map[string][]byte
+	Paths      []string
+}
+
+func (t *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.Paths = append(t.Paths, req.URL.Path)
+	body, ok := t.Bodies[req.URL.Path]
+	if !ok {
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       io.NopCloser(bytes.NewReader(nil)),
+			Header:     make(http.Header),
+		}, nil
+	}
+	status := t.StatusCode
+	if status == 0 {
+		status = http.StatusOK
+	}
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(bytes.NewReader(body)),
+		Header:     make(http.Header),
+	}, nil
+}
+
+func writeDocsTestManifest(t *testing.T, docsPath, cliVersion string) {
+	t.Helper()
+	raw, err := json.Marshal(Manifest{
+		SchemaVersion: manifestSchemaV1,
+		CLIVersion:    cliVersion,
+	})
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	writeDocsTestFile(t, filepath.Join(docsPath, ManifestFilename), string(raw))
+}
+
+func writeDocsTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }

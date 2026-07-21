@@ -111,11 +111,19 @@ Go:
 go install github.com/aidanlsb/raven/cmd/rvn@latest
 ```
 
-After upgrading, refresh the local docs cache to match the new version:
+After upgrading, the next docs read (`rvn docs`, `rvn docs list`, or
+`rvn docs search`) checks an existing global docs cache and lazily refreshes it
+from the installed Raven version tag. If the refresh cannot reach the network,
+Raven warns and continues serving the existing cache.
+
+Use `docs fetch` to force a refresh or pin another ref:
 
 ```bash
-rvn docs fetch
+rvn docs fetch                       # Force-refresh from the default ref
+rvn docs fetch --ref v0.0.29         # Pin a specific tag
 ```
+
+A missing cache is not fetched implicitly; run `rvn docs fetch` to create it.
 
 ## Next step
 

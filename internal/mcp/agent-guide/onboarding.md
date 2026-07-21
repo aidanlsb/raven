@@ -119,7 +119,10 @@ Check whether the user has global docs fetched so `rvn docs` works:
 raven_invoke(command="docs_list")
 ```
 
-If this fails with `NOT_FOUND`, fetch docs:
+An existing cache from an older release refreshes lazily during this call. If
+that refresh fails, Raven returns `DOCS_FETCH_FAILED` and continues with the
+cached docs. If the cache is missing and the call fails with `FILE_NOT_FOUND`,
+fetch docs:
 
 ```text
 raven_invoke(command="docs_fetch")

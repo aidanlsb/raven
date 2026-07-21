@@ -441,7 +441,9 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 		LongDesc: `Browse long-form documentation stored in Raven's global docs directory.
 
 Use this command for guides and references.
-Run 'rvn docs fetch' to sync or refresh global docs content.
+When an existing cache was fetched by an older Raven release, docs read commands lazily
+refresh it from the installed CLI version tag. Refresh failures return a warning and keep
+serving the existing cache. A missing cache still requires 'rvn docs fetch'.
 When run in an interactive terminal, 'rvn docs' opens Raven's picker.
 In the picker, use l to move forward into a section/topic and h to go back.
 For command-level usage, use 'rvn help <command>'.`,
@@ -458,7 +460,7 @@ For command-level usage, use 'rvn help <command>'.`,
 			"rvn docs search \"saved query\" --json",
 		},
 		UseCases: []string{
-			"Fetch docs into the global docs directory with `docs fetch`",
+			"Fetch, force-refresh, or pin docs with `docs fetch`",
 			"List docs sections and topic counts",
 			"Interactively select docs in Raven's picker",
 			"Browse docs topics by section",
@@ -484,7 +486,7 @@ By default, docs are fetched from the "main" ref.`,
 		},
 		UseCases: []string{
 			"Sync docs after init",
-			"Refresh docs without reinstalling rvn",
+			"Force-refresh docs without reinstalling rvn",
 			"Pin docs to a specific ref for reproducibility",
 		},
 	},

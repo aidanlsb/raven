@@ -1,6 +1,10 @@
 package docssvc
 
 import (
+	"bytes"
+	"io"
+	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +13,57 @@ import (
 	"testing"
 	"testing/fstest"
 )
+
+func TestLoadGlobalDocsSourceWarnsAndServesCacheWhenRefreshFails(t *testing.T) {
+	t.Parallel()
+
+	globalDir := t.TempDir()
+	configPath := filepath.Join(globalDir, "config.toml")
+	docsPath := filepath.Join(globalDir, "docs")
+	writeTestFile(t, filepath.Join(docsPath, "index.yaml"), `sections:
+  guide:
+    topics:
+      old:
+        path: old.md
+`)
+	writeTestFile(t, filepath.Join(docsPath, "guide", "old.md"), "# Cached docs\n")
+	writeTestFile(t, filepath.Join(docsPath, "manifest.json"), `{"cli_version":"v1.0.0"}`)
+
+	requests := 0
+	source, err := loadGlobalDocsSource(loadGlobalDocsOptions{
+		configPath:    configPath,
+		cliVersion:    "v1.1.0",
+		sourceBaseURL: "https://example.invalid/archive",
+		httpClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			requests++
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Body:       io.NopCloser(bytes.NewReader(nil)),
+				Header:     make(http.Header),
+			}, nil
+		})},
+	})
+	if err != nil {
+		t.Fatalf("loadGlobalDocsSource() error = %v", err)
+	}
+	if requests != 1 {
+		t.Fatalf("refresh requests = %d, want 1", requests)
+	}
+	if len(source.Warnings) != 1 || source.Warnings[0].Code != "DOCS_FETCH_FAILED" {
+		t.Fatalf("warnings = %#v, want DOCS_FETCH_FAILED", source.Warnings)
+	}
+	if !strings.Contains(source.Warnings[0].Message, "Serving the existing cache") {
+		t.Fatalf("warning message = %q, want stale-cache fallback", source.Warnings[0].Message)
+	}
+
+	content, err := fs.ReadFile(source.FS, "guide/old.md")
+	if err != nil {
+		t.Fatalf("read cached docs: %v", err)
+	}
+	if string(content) != "# Cached docs\n" {
+		t.Fatalf("cached content = %q", content)
+	}
+}
 
 func TestListSectionsFromRootLoadsRepositoryDocs(t *testing.T) {
 	t.Parallel()
@@ -307,4 +362,10 @@ func TestSearchFSRejectsInvalidOffset(t *testing.T) {
 	if err == nil {
 		t.Fatalf("SearchFS error = nil, want invalid offset error")
 	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
 }

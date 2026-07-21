@@ -33,11 +33,15 @@ whether an issue is a vulnerability.
 
 ### Local-first, no telemetry
 
-Raven is a local CLI. It sends no telemetry or analytics. The only network
-access is user-initiated:
+Raven is a local CLI. It sends no telemetry or analytics. Network access is
+limited to:
 
 - `rvn init` and `rvn docs fetch` download the documentation archive from
   GitHub (`codeload.github.com`, overridable with `--source`)
+- docs read commands (`rvn docs`, `rvn docs list`, and `rvn docs search`) may
+  lazily download docs from the installed CLI version tag when an existing
+  cache was created by an older release; failures warn and fall back to that
+  cache
 - installs and upgrades via Homebrew or `go install`
 
 ### Vault scoping
