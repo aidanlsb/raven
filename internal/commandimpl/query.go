@@ -262,9 +262,15 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, result *read
 		}, queryTimeMs)
 	}
 
-	ids := make([]string, 0, len(result.Objects))
-	for _, row := range result.Objects {
-		ids = append(ids, row.ID)
+	ids := make([]string, 0, len(result.Objects)+len(result.Sections))
+	if result.QueryKind == "section" {
+		for _, row := range result.Sections {
+			ids = append(ids, row.ID)
+		}
+	} else {
+		for _, row := range result.Objects {
+			ids = append(ids, row.ID)
+		}
 	}
 	ids = dedupeQueryApplyIDs(ids)
 	if len(ids) == 0 {
