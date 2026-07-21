@@ -104,6 +104,16 @@ type SearchResult struct {
 	HasMore  bool
 }
 
+type Warning struct {
+	Code    codes.WarningCode
+	Message string
+}
+
+type GlobalDocsSource struct {
+	FS       fs.FS
+	Warnings []Warning
+}
+
 type FetchRequest struct {
 	ConfigPath string
 	Ref        string
@@ -139,7 +149,23 @@ type docsIndexTopicMeta struct {
 	Path  string `yaml:"path"`
 }
 
-func LoadGlobalDocsSource(configPath string) (fs.FS, error) {
+type loadGlobalDocsOptions struct {
+	configPath    string
+	cliVersion    string
+	sourceBaseURL string
+	httpClient    *http.Client
+	now           func() time.Time
+}
+
+func LoadGlobalDocsSource(configPath, cliVersion string) (*GlobalDocsSource, error) {
+	return loadGlobalDocsSource(loadGlobalDocsOptions{
+		configPath: configPath,
+		cliVersion: cliVersion,
+	})
+}
+
+func loadGlobalDocsSource(opts loadGlobalDocsOptions) (*GlobalDocsSource, error) {
+	configPath := strings.TrimSpace(opts.configPath)
 	docsFS, err := docsync.OpenFS(configPath)
 	if err != nil {
 		if errors.Is(err, docsync.ErrDocsNotFetched) {
@@ -147,15 +173,46 @@ func LoadGlobalDocsSource(configPath string) (fs.FS, error) {
 		}
 		return nil, newError(CodeFileRead, "failed to open docs cache", "", err)
 	}
-	return docsFS, nil
+
+	refresh, refreshErr := docsync.RefreshIfStale(docsync.RefreshOptions{
+		ConfigPath:    configPath,
+		CLIVersion:    strings.TrimSpace(opts.cliVersion),
+		SourceBaseURL: strings.TrimSpace(opts.sourceBaseURL),
+		HTTPClient:    opts.httpClient,
+		Now:           opts.now,
+	})
+	if refreshErr != nil {
+		version := strings.TrimSpace(opts.cliVersion)
+		return &GlobalDocsSource{
+			FS: docsFS,
+			Warnings: []Warning{{
+				Code: codes.WarnDocsFetchFailed,
+				Message: fmt.Sprintf(
+					"Automatic docs refresh for CLI %s failed: %v. Serving the existing cache; run 'rvn docs fetch --ref %s' to retry.",
+					version,
+					refreshErr,
+					version,
+				),
+			}},
+		}, nil
+	}
+
+	if refresh.Refreshed {
+		docsFS, err = docsync.OpenFS(configPath)
+		if err != nil {
+			return nil, newError(CodeFileRead, "failed to open refreshed docs cache", "Run 'rvn docs fetch' to refresh docs", err)
+		}
+	}
+	return &GlobalDocsSource{FS: docsFS}, nil
 }
 
-func ListSections(configPath string) ([]SectionView, error) {
-	source, err := LoadGlobalDocsSource(configPath)
+func ListSections(configPath, cliVersion string) ([]SectionView, []Warning, error) {
+	source, err := LoadGlobalDocsSource(configPath, cliVersion)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return ListSectionsFS(source, ".")
+	sections, err := ListSectionsFS(source.FS, ".")
+	return sections, source.Warnings, err
 }
 
 func ListSectionsFS(docsFS fs.FS, docsRoot string) ([]SectionView, error) {
@@ -191,12 +248,13 @@ func ReadTopicContentFS(docsFS fs.FS, topic TopicRecord) (string, error) {
 	return string(content), nil
 }
 
-func Search(configPath, query, sectionFilter string, limit, offset int) (*SearchResult, error) {
-	source, err := LoadGlobalDocsSource(configPath)
+func Search(configPath, cliVersion, query, sectionFilter string, limit, offset int) (*SearchResult, []Warning, error) {
+	source, err := LoadGlobalDocsSource(configPath, cliVersion)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return SearchFS(source, ".", query, sectionFilter, limit, offset)
+	result, err := SearchFS(source.FS, ".", query, sectionFilter, limit, offset)
+	return result, source.Warnings, err
 }
 
 func SearchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit, offset int) (*SearchResult, error) {

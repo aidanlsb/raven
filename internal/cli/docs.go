@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io/fs"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -11,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/docssvc"
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/ui"
+	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
 const (
@@ -48,7 +50,9 @@ var docsCmd = &cobra.Command{
 	Long: `Browse long-form documentation stored in Raven's global docs directory.
 
 Use this command for guides, references, and design notes.
-Run 'rvn docs fetch' to sync or refresh docs content.
+An existing cache from an older Raven release refreshes lazily from the installed version tag.
+If that refresh fails, Raven warns and continues with the existing cache.
+Run 'rvn docs fetch' when the cache is missing or to force or pin a refresh.
 When run in an interactive terminal, 'rvn docs' opens Raven's picker.
 In the picker, use l to move forward into a section/topic and h to go back.
 For command-level usage, use 'rvn help <command>'.
@@ -70,12 +74,14 @@ Examples:
 					return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs")
 				}
 
-				sections, err := listDocsSectionsFS(source, ".")
+				outputDocsServiceWarnings(source.Warnings)
+
+				sections, err := listDocsSectionsFS(source.FS, ".")
 				if err != nil {
 					return handleError(ErrInternal, err, "Run 'rvn docs fetch' to refresh docs")
 				}
 
-				if err := runDocsPickerNavigator(source, sections); err != nil {
+				if err := runDocsPickerNavigator(source.FS, sections); err != nil {
 					return handleError(ErrInternal, err, "Run 'rvn docs list' for non-interactive output")
 				}
 				return nil
@@ -98,6 +104,7 @@ Examples:
 		if isJSONOutput() {
 			return outputJSON(result)
 		}
+		outputCanonicalDocsWarnings(result.Warnings)
 
 		data := canonicalDataMap(result)
 		switch len(args) {
@@ -137,6 +144,7 @@ func handleCanonicalDocsLeafFailure(result commandexec.Result) error {
 }
 
 func renderDocsList(_ *cobra.Command, result commandexec.Result) error {
+	outputCanonicalDocsWarnings(result.Warnings)
 	return outputDocsSections(docsSectionsFromCanonical(canonicalDataMap(result)["sections"]))
 }
 
@@ -161,6 +169,7 @@ func buildDocsSearchArgs(cmd *cobra.Command, args []string) (map[string]interfac
 }
 
 func renderDocsSearch(_ *cobra.Command, result commandexec.Result) error {
+	outputCanonicalDocsWarnings(result.Warnings)
 	data := canonicalDataMap(result)
 	matches := docsSearchMatchesFromCanonical(data["items"])
 	if len(matches) == 0 {
@@ -476,8 +485,20 @@ func int64Value(raw interface{}) int64 {
 	}
 }
 
-func loadGlobalDocsSource(configPath string) (fs.FS, error) {
-	return docssvc.LoadGlobalDocsSource(configPath)
+func outputCanonicalDocsWarnings(warnings []commandexec.Warning) {
+	for _, warning := range warnings {
+		fmt.Fprintln(os.Stderr, ui.Warningf("%s: %s", warning.Code, warning.Message))
+	}
+}
+
+func outputDocsServiceWarnings(warnings []docssvc.Warning) {
+	for _, warning := range warnings {
+		fmt.Fprintln(os.Stderr, ui.Warningf("%s: %s", warning.Code, warning.Message))
+	}
+}
+
+func loadGlobalDocsSource(configPath string) (*docssvc.GlobalDocsSource, error) {
+	return docssvc.LoadGlobalDocsSource(configPath, versioninfo.Current().Version)
 }
 
 func listDocsSectionsFS(docsFS fs.FS, docsRoot string) ([]docsSectionView, error) {
