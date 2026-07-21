@@ -1,8 +1,10 @@
 package objectsvc
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -166,5 +168,29 @@ traits: {}
 	}
 	if result.TypeMismatch.ActualType != "person" {
 		t.Fatalf("expected actual type person, got %q", result.TypeMismatch.ActualType)
+	}
+}
+
+func TestMoveByReferenceRejectsSectionSource(t *testing.T) {
+	t.Parallel()
+
+	_, err := MoveByReference(MoveByReferenceRequest{
+		VaultPath:   t.TempDir(),
+		VaultConfig: config.DefaultVaultConfig(),
+		Reference:   "projects/site#tasks",
+		Destination: "Completed Tasks",
+	})
+	if err == nil {
+		t.Fatal("MoveByReference() succeeded for a section source")
+	}
+	if !strings.Contains(err.Error(), "does not accept section sources") {
+		t.Fatalf("error = %v, want hard section-source rejection", err)
+	}
+	var serviceErr *Error
+	if !errors.As(err, &serviceErr) {
+		t.Fatalf("error type = %T, want *Error", err)
+	}
+	if !strings.Contains(serviceErr.Suggestion, "rvn section rename") {
+		t.Fatalf("suggestion = %q, want rvn section rename redirect", serviceErr.Suggestion)
 	}
 }
