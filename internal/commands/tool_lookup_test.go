@@ -29,6 +29,12 @@ func TestResolveToolCommandID(t *testing.T) {
 			wantOK:   true,
 		},
 		{
+			name:     "nested section tool name",
+			toolName: "raven_section_rename",
+			wantID:   "section_rename",
+			wantOK:   true,
+		},
+		{
 			name:     "unknown tool",
 			toolName: "raven_not_a_real_tool",
 			wantID:   "",

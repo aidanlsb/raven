@@ -130,17 +130,18 @@ var previewModeByCommandID = map[string]PreviewMode{
 // result already carries the phase. See HandleQuery.
 var mutationPhaseCommandIDs = map[string]struct{}{
 	// Content writes.
-	"new":        {},
-	"upsert":     {},
-	"add":        {},
-	"set":        {},
-	"unset":      {},
-	"delete":     {},
-	"move":       {},
-	"reclassify": {},
-	"update":     {},
-	"edit":       {},
-	"import":     {},
+	"new":            {},
+	"upsert":         {},
+	"add":            {},
+	"set":            {},
+	"unset":          {},
+	"delete":         {},
+	"move":           {},
+	"section_rename": {},
+	"reclassify":     {},
+	"update":         {},
+	"edit":           {},
+	"import":         {},
 
 	// Check repairs.
 	"check_fix":            {},

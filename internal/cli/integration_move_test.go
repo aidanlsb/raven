@@ -57,9 +57,34 @@ func TestIntegration_MoveDryRunDoesNotMutate(t *testing.T) {
 	v.AssertFileContains("projects/preview-ref.md", "[[people/preview-me]]")
 }
 
-// TestIntegration_MoveRenamesSectionHeading verifies that moving a section ID
-// renames the heading and rewrites inbound fragment references.
-func TestIntegration_MoveRenamesSectionHeading(t *testing.T) {
+func TestIntegration_MoveRejectsSectionSource(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/website.md", `---
+type: project
+title: Website
+status: active
+---
+
+## Tasks
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("move", "projects/website#tasks", "Completed Tasks")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "does not accept section sources")
+	if !strings.Contains(result.RawJSON, "rvn section rename") {
+		t.Fatalf("move rejection did not redirect to section rename: %s", result.RawJSON)
+	}
+	v.AssertFileContains("projects/website.md", "## Tasks")
+}
+
+// TestIntegration_SectionRenameRewritesReferences verifies that section rename
+// updates the heading, inbound references, and index.
+func TestIntegration_SectionRenameRewritesReferences(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -81,7 +106,7 @@ status: active
 
 	v.RunCLI("reindex").MustSucceed(t)
 
-	result := v.RunCLI("move", "projects/website#tasks", "Completed Tasks")
+	result := v.RunCLI("section", "rename", "projects/website#tasks", "Completed Tasks")
 	result.MustSucceed(t)
 	if got := result.DataString("destination"); got != "projects/website#completed-tasks" {
 		t.Fatalf("destination = %q, want projects/website#completed-tasks; raw: %s", got, result.RawJSON)
@@ -106,8 +131,7 @@ status: active
 	}
 }
 
-// TestIntegration_MoveSectionDryRunDoesNotMutate verifies section rename previews.
-func TestIntegration_MoveSectionDryRunDoesNotMutate(t *testing.T) {
+func TestIntegration_SectionRenameDryRunDoesNotMutate(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -125,7 +149,7 @@ status: active
 
 	v.RunCLI("reindex").MustSucceed(t)
 
-	result := v.RunCLI("move", "projects/website#tasks", "Completed Tasks", "--dry-run")
+	result := v.RunCLI("section", "rename", "projects/website#tasks", "Completed Tasks", "--dry-run")
 	result.MustSucceed(t)
 	if got := result.DataString("destination"); got != "projects/website#completed-tasks" {
 		t.Fatalf("destination = %q, want projects/website#completed-tasks; raw: %s", got, result.RawJSON)
@@ -133,6 +157,83 @@ status: active
 
 	v.AssertFileContains("projects/website.md", "## Tasks")
 	v.AssertFileContains("notes/planning.md", "[[projects/website#tasks]]")
+}
+
+func TestIntegration_SectionRenameRejectsSlugCollision(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/website.md", `---
+type: project
+title: Website
+status: active
+---
+
+## Tasks
+
+## Notes
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("section", "rename", "projects/website#tasks", "Notes")
+	result.MustFail(t, "VALIDATION_FAILED")
+	result.MustFailWithMessage(t, "duplicate section slug")
+	v.AssertFileContains("projects/website.md", "## Tasks")
+	v.AssertFileContains("projects/website.md", "## Notes")
+}
+
+func TestIntegration_MoveBulkRejectsSectionSources(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/website.md", `---
+type: project
+title: Website
+status: active
+---
+
+## Tasks
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLIWithStdin("projects/website\nprojects/website#tasks\n", "move", "--stdin", "archive/")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "does not accept section sources")
+	if strings.Contains(result.RawJSON, "SECTION_SKIPPED") {
+		t.Fatalf("bulk move silently skipped section source: %s", result.RawJSON)
+	}
+	v.AssertFileExists("projects/website.md")
+	v.AssertFileNotExists("archive/website.md")
+}
+
+func TestIntegration_QueryApplyMoveRejectsSectionSources(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/website.md", `---
+type: project
+title: Website
+status: active
+---
+
+## Tasks
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("query", "section .title==Tasks", "--apply", "move archive/")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "does not accept section sources")
+	if strings.Contains(result.RawJSON, "SECTION_SKIPPED") {
+		t.Fatalf("query --apply move silently skipped section source: %s", result.RawJSON)
+	}
+	v.AssertFileExists("projects/website.md")
+	v.AssertFileNotExists("archive/website.md")
 }
 
 // TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef verifies that

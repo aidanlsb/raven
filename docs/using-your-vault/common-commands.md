@@ -223,18 +223,17 @@ Key flags:
 
 ### `rvn move`
 
-Move or rename an object, section heading, or asset. References are updated automatically by default, including Raven wikilinks and Markdown links/images that point at moved assets.
+Move or rename an object or asset. References are updated automatically by default, including Raven wikilinks and Markdown links/images that point at moved assets.
 
 ```bash
 rvn move inbox/idea project/idea              # Rename/relocate
 rvn move project/old-name project/new-name    # Rename
 rvn move assets/pdfs/draft.pdf assets/pdfs/final.pdf
-rvn move project/website#tasks "Completed Tasks"   # Rename a section heading
 ```
 
 Asset destinations must include a file extension. Raven treats non-Markdown moves as asset moves and keeps the asset index in sync.
 
-When the source is a section ID (`file#slug`), the destination is the new heading text. The heading level is preserved, the slug is re-derived from the new text, and every inbound `[[...#old-slug]]` reference is rewritten to the new slug — so heading renames no longer leave stale fragment links behind. The rename fails if it would create a duplicate section slug within the file.
+Section IDs (`file#slug`) are not valid move sources. Single and bulk moves reject them; use `rvn section rename` instead.
 
 Single-object moves apply immediately; pass `--dry-run` to preview without writing. Bulk moves (`--stdin`) preview by default and require `--confirm`.
 
@@ -244,6 +243,17 @@ Key flags:
 - `--force` — skip confirmation
 - `--stdin` — bulk move from piped IDs
 - `--confirm` — apply a bulk move
+
+### `rvn section rename`
+
+Rename a section heading without breaking inbound fragment references:
+
+```bash
+rvn section rename project/website#tasks "Completed Tasks"
+rvn section rename project/website#tasks "Completed Tasks" --dry-run
+```
+
+The destination is plain heading text without a leading `#`. Raven preserves the heading level, derives the new slug, and rewrites every inbound `[[...#old-slug]]` reference. The command fails without writing if the rename would duplicate a slug or shift another section's slug.
 
 ### `rvn reclassify`
 

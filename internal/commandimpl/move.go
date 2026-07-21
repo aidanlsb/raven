@@ -107,7 +107,9 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 	}
 
 	fileIDs, sectionIDs := splitSectionIDs(ids)
-	warnings := sectionSkipWarnings(sectionIDs)
+	if len(sectionIDs) > 0 {
+		return moveSectionSourceFailure(sectionIDs)
+	}
 	request := objectsvc.MoveBulkRequest{
 		VaultPath:      vaultPath,
 		VaultConfig:    vaultCfg,
@@ -129,7 +131,6 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 			"items":       canonicalMovePreviewItems(preview.Items),
 			"skipped":     canonicalMoveResults(preview.Skipped),
 			"total":       preview.Total,
-			"warnings":    warnings,
 			"destination": preview.Destination,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
@@ -139,8 +140,7 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 		return mapContentMutationError(err)
 	}
 
-	allWarnings := append([]commandexec.Warning{}, warnings...)
-	allWarnings = append(allWarnings, warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)...)
+	allWarnings := warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"ok":          summary.Errors == 0,
 		"action":      summary.Action,
@@ -151,4 +151,13 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 		"moved":       summary.Moved,
 		"destination": summary.Destination,
 	}, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
+}
+
+func moveSectionSourceFailure(sectionIDs []string) commandexec.Result {
+	return commandexec.Failure(
+		codes.ErrInvalidInput,
+		"rvn move does not accept section sources",
+		map[string]interface{}{"section_ids": sectionIDs},
+		`Use 'rvn section rename <file#section> "<new heading text>"' to rename one section heading and rewrite inbound references`,
+	)
 }
