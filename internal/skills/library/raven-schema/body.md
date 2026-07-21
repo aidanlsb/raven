@@ -9,7 +9,9 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Inspect current schema before changes: `rvn schema --json`.
 - Use `rvn ... --json` for all schema operations so output stays deterministic.
 - Prefer additive changes first, then backfill objects, then tighten constraints.
-- Treat schema edits and object backfill as separate steps in the same migration.
+- Use `schema convert trait|field` when a value/type change should update the
+  schema and existing vault data as one previewed migration plan. Other schema
+  edits and object backfills remain separate steps.
 - Fields and traits use the same value type set; traits have one value slot, but that value may be an array.
 - Use the right validation pass for the job:
   - `rvn schema validate`: schema file correctness
@@ -48,6 +50,8 @@ Examples:
    - Fix body text with `rvn edit`
    - Re-type existing objects with `rvn reclassify` when the schema change implies a different type
 4. Tighten or clean up after the backfill is complete:
+   - Convert values/types: `rvn schema convert trait|field --map-json '{...}'`
+     (exhaustive map; preview first, then confirm)
    - Rename: `rvn schema rename type|field` (preview first, then confirm)
    - Remove: `rvn schema remove type|field|trait`
 5. Validate and refresh derived state:
@@ -71,4 +75,6 @@ Examples:
 - Do not make fields required until every affected object already contains a valid value.
 - For ref or ref[] fields, always set the target type.
 - Removed fields remain in frontmatter but are no longer validated; removed traits remain in files but are no longer indexed.
+- `schema update ... --type/--values` is schema-only. Use `schema convert` when
+  defaults and existing frontmatter/trait annotations must migrate too.
 - Expect `reclassify` to surface dropped fields or missing required values when schema changes alter object shape.

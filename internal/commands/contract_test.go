@@ -169,6 +169,8 @@ func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
 		"check create-missing",
 		"check_fix",
 		"query",
+		"schema_convert_field",
+		"schema_convert_trait",
 		"schema_rename_field",
 		"schema_rename_type",
 		"skill_install",
@@ -207,6 +209,23 @@ func TestConfirmFlagsHaveExplicitPreviewPolicy(t *testing.T) {
 		}
 		if got := PreviewModeForCommandID(commandID); got == PreviewModeNone {
 			t.Fatalf("%s exposes confirm but has no explicit preview policy", commandID)
+		}
+	}
+}
+
+func TestSchemaConvertRequiresMapJSON(t *testing.T) {
+	t.Parallel()
+	for _, commandID := range []string{"schema_convert_trait", "schema_convert_field"} {
+		contract, ok := BuildCommandContract(commandID)
+		if !ok {
+			t.Fatalf("expected %s contract", commandID)
+		}
+		spec := contract.Parameters["map-json"]
+		if !spec.Required || !containsString(contract.Required, "map-json") {
+			t.Fatalf("%s map-json should be required: %#v", commandID, contract)
+		}
+		if spec.Type != ParameterTypeObject {
+			t.Fatalf("%s map-json type=%q, want object", commandID, spec.Type)
 		}
 	}
 }

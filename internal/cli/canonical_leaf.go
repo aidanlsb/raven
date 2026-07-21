@@ -207,6 +207,9 @@ func bindMetaFlags(cmd *cobra.Command, flags []commands.FlagMeta) {
 		if flag.Short != "" {
 			cmd.Flags().Lookup(flag.Name).Shorthand = flag.Short
 		}
+		if flag.Required {
+			_ = cmd.MarkFlagRequired(flag.Name)
+		}
 	}
 }
 

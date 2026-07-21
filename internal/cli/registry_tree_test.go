@@ -18,6 +18,7 @@ var registryGeneratedSubtreePrefixes = [][]string{
 	{"schema", "add"},
 	{"schema", "update"},
 	{"schema", "remove"},
+	{"schema", "convert"},
 	{"schema", "rename"},
 }
 
@@ -117,6 +118,7 @@ func TestSchemaEditSubtreeGroupsArePureContainers(t *testing.T) {
 		"schema add",
 		"schema update",
 		"schema remove",
+		"schema convert",
 		"schema rename",
 	}
 
@@ -154,5 +156,23 @@ func TestSchemaTemplateSubtreeRootPrintsHelp(t *testing.T) {
 	}
 	if cmd.Annotations[canonicalLeafAnnotationKey] == "true" {
 		t.Error("group command \"schema template\" should not be a canonical leaf")
+	}
+}
+
+func TestSchemaConvertHelpDocumentsExhaustiveMapping(t *testing.T) {
+	for _, path := range []string{"schema convert trait", "schema convert field"} {
+		cmd, ok := findCommandByPath(rootCmd, path)
+		if !ok {
+			t.Fatalf("command missing for path %q", path)
+		}
+		if cmd.Flags().Lookup("map-json") == nil {
+			t.Fatalf("%s missing --map-json", path)
+		}
+		if !strings.Contains(cmd.Long, "must cover every") {
+			t.Fatalf("%s help does not document exhaustive mapping:\n%s", path, cmd.Long)
+		}
+		if !strings.Contains(strings.ToLower(cmd.Long), "array-to-array") {
+			t.Fatalf("%s help does not document collection member mapping:\n%s", path, cmd.Long)
+		}
 	}
 }

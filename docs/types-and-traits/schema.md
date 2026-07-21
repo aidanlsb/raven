@@ -608,23 +608,66 @@ rvn schema remove field person email
 
 ### Changing Enum Values
 
+Use `schema convert` when existing data must move with the schema:
+
 ```bash
-rvn schema update trait priority --values critical,high,medium,low
+rvn schema convert trait priority \
+  --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"} # Preview
+rvn schema convert trait priority \
+  --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"} \
+  --confirm
 ```
 
 **Effect:**
-- Existing trait enum values not in the new list cause `invalid_enum_value` errors
-- No automatic migration of existing values
+- Replaces the enum allow-list in `schema.yaml`
+- Rewrites the schema default when it maps from an old value
+- Rewrites every matching `@trait(value)` annotation
+- For fields, rewrites matching frontmatter on objects of the selected type
+- Previews by default; `--confirm` applies the same migration plan
 
-Fix with:
+The mapping must be exhaustive. It must include every value allowed by the
+current schema, the current default, and every value found in live vault data,
+including stale outliers that are already invalid. Raven refuses the entire
+conversion if an entry is missing.
 
 ```bash
-# Find invalid values
-rvn check
-
-# Update them
-rvn query "trait:priority .value==urgent" --apply "update critical" --confirm
+# A missing "low" entry is rejected, even if no current annotation uses it
+rvn schema convert trait priority \
+  --type bool \
+  --map-json '{"high":true,"medium":true}'
 ```
+
+`schema update ... --values` remains an immediate, schema-only edit. Use it when
+you intentionally do not want Raven to touch existing data; removed values can
+then surface as `invalid_enum_value` on `rvn check`.
+
+### Changing Value Types
+
+`schema convert` also performs mapped type changes:
+
+```bash
+# enum trait -> bool
+rvn schema convert trait priority --type bool \
+  --map-json '{"high":true,"medium":true,"low":false}' --confirm
+
+# bool field -> enum
+rvn schema convert field project status --type enum \
+  --map-json '{"true":"done","false":"todo"}' --confirm
+```
+
+Map values use the target type's JSON representation: strings are quoted,
+numbers and booleans are JSON primitives, and collection outputs are arrays.
+For array-to-array conversions, Raven maps each member independently. For
+example, an `enum[]` value `[todo, blocked]` uses one map entry for `todo` and
+one for `blocked`. Scalar-to-array conversion maps each old scalar to an
+explicit JSON array. Collection-to-scalar conversion is rejected because there
+is no unambiguous reduction rule.
+
+For fields, ref/ref[] conversions preserve an existing `target`. Raven rejects
+conversion from a non-reference field to ref/ref[] because `schema convert`
+does not guess a reference target.
+
+After applying a conversion, run `rvn reindex --full`, then `rvn check`.
 
 ### After Schema Changes
 
@@ -738,6 +781,11 @@ rvn schema update type person --description "People and contacts"
 rvn schema update trait priority --values critical,high,medium,low
 rvn schema update field person email --required=true
 rvn schema update field person email --description -
+
+# Convert values/types and migrate data
+rvn schema convert trait priority --type bool --map-json '{"high":true,"medium":true,"low":false}' # Preview
+rvn schema convert trait priority --type bool --map-json '{"high":true,"medium":true,"low":false}' --confirm
+rvn schema convert field project status --type enum --map-json '{"true":"done","false":"todo"}' --confirm
 
 # Rename a type (updates all files)
 rvn schema rename type event meeting          # Preview

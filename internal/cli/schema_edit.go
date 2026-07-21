@@ -391,6 +391,100 @@ func decodeSchemaCount(raw interface{}) (int, error) {
 }
 
 // =============================================================================
+// CONVERT COMMANDS
+// =============================================================================
+
+const schemaConvertLong = `Convert trait or field values and migrate schema.yaml plus matching vault data.
+
+Subcommands:
+  trait <name>
+  field <type> <field>
+
+--map-json is required and must exhaustively cover enum/bool allowed values,
+the current default, and every observed live value. Conversion is preview-only
+unless --confirm is supplied. Array-to-array conversion maps each member;
+scalar-to-array mappings use explicit JSON arrays.
+
+Examples:
+  rvn schema convert trait priority --type bool --map-json '{"high":true,"medium":true,"low":false}'
+  rvn schema convert field project status --type enum --map-json '{"true":"done","false":"todo"}'
+  rvn schema convert trait priority --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"}'`
+
+var schemaConvertCmd = buildRegistrySubtree(registrySubtreeSpec{
+	Prefix:    []string{"schema", "convert"},
+	VaultPath: getVaultPath,
+	Root: registryGroup{
+		Use:        "convert",
+		Short:      "Convert schema values and migrate vault data",
+		Long:       schemaConvertLong,
+		ParentOnly: true,
+	},
+	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+		"schema_convert_trait": renderSchemaConvert,
+		"schema_convert_field": renderSchemaConvert,
+	},
+})
+
+func renderSchemaConvert(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	kind := stringValue(data["kind"])
+	name := stringValue(data["name"])
+	label := name
+	if typeName := stringValue(data["type"]); typeName != "" {
+		label = typeName + "." + name
+	}
+	sourceType := stringValue(data["source_type"])
+	targetType := stringValue(data["target_type"])
+
+	if boolValue(data["preview"]) {
+		changes, err := decodeSchemaValue[[]schemasvc.ValueConvertChange](data["changes"])
+		if err != nil {
+			return err
+		}
+		totalChanges, err := decodeSchemaCount(data["total_changes"])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: Convert %s '%s' from %s to %s", kind, label, sourceType, targetType)))
+		fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Changes to be made (%d total):", totalChanges)))
+		printValueConvertChanges(changes)
+		fmt.Printf("\n%s\n", ui.Hint("Run with --confirm to apply these changes."))
+		return nil
+	}
+
+	changesApplied, err := decodeSchemaCount(data["changes_applied"])
+	if err != nil {
+		return err
+	}
+	fmt.Println(ui.Checkf("Converted %s '%s' from %s to %s", kind, label, sourceType, targetType))
+	fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Applied %d changes", changesApplied)))
+	fmt.Printf("\n%s.\n", ui.Hint(stringValue(data["hint"])))
+	return nil
+}
+
+func printValueConvertChanges(changes []schemasvc.ValueConvertChange) {
+	byFile := make(map[string][]schemasvc.ValueConvertChange)
+	for _, change := range changes {
+		byFile[change.FilePath] = append(byFile[change.FilePath], change)
+	}
+	files := make([]string, 0, len(byFile))
+	for file := range byFile {
+		files = append(files, file)
+	}
+	sort.Strings(files)
+	for _, file := range files {
+		fmt.Printf("\n  %s:\n", ui.FilePath(file))
+		for _, change := range byFile[file] {
+			if change.Line > 0 {
+				fmt.Printf("    %s %s\n", ui.Hint(fmt.Sprintf("Line %d:", change.Line)), change.Description)
+			} else {
+				fmt.Printf("    %s\n", change.Description)
+			}
+		}
+	}
+}
+
+// =============================================================================
 // RENAME COMMANDS
 // =============================================================================
 
@@ -636,12 +730,13 @@ func printTypeRenameChanges(changes []schemasvc.TypeRenameChange) {
 }
 
 func init() {
-	// schemaAddCmd/schemaUpdateCmd/schemaRemoveCmd/schemaRenameCmd are
+	// schemaAddCmd/schemaUpdateCmd/schemaRemoveCmd/schemaConvertCmd/schemaRenameCmd are
 	// registry-generated subtrees (see buildRegistrySubtree specs above).
 	// schema_validate remains a hand-wired direct leaf of schemaCmd.
 	schemaCmd.AddCommand(schemaAddCmd)
 	schemaCmd.AddCommand(schemaUpdateCmd)
 	schemaCmd.AddCommand(schemaRemoveCmd)
+	schemaCmd.AddCommand(schemaConvertCmd)
 	schemaCmd.AddCommand(schemaRenameCmd)
 	schemaCmd.AddCommand(schemaValidateCmd)
 }

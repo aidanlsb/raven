@@ -127,7 +127,7 @@ There are two mutation classes with different defaults:
    writing.
 2. High-blast-radius operations are preview-first (`meta.mutation.phase =
    "preview"`) and require `confirm=true` to apply: any bulk write (`stdin=true`),
-   `query` with `apply`, `schema rename`, and the `check fix` /
+   `query` with `apply`, `schema rename`, `schema convert`, and the `check fix` /
    `check create-missing` repair subcommands.
 
 Examples:

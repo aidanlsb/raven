@@ -147,6 +147,28 @@ func RenameType(result *schemamigrate.RenameTypeResult) map[string]interface{} {
 	return data
 }
 
+func Convert(result *schemamigrate.ConvertResult) map[string]interface{} {
+	data := map[string]interface{}{
+		"kind":        result.Kind,
+		"name":        result.Name,
+		"source_type": result.SourceType,
+		"target_type": result.TargetType,
+		"hint":        result.Hint,
+	}
+	if result.TypeName != "" {
+		data["type"] = result.TypeName
+	}
+	if result.Preview {
+		data["preview"] = true
+		data["total_changes"] = result.TotalChanges
+		data["changes"] = result.Changes
+		return data
+	}
+	data["converted"] = true
+	data["changes_applied"] = result.ChangesApplied
+	return data
+}
+
 func MapWarnings[T any](warnings []schemasvc.Warning, build func(code codes.WarningCode, message string) T) []T {
 	if len(warnings) == 0 {
 		return nil

@@ -307,6 +307,47 @@ func HandleSchemaRenameField(_ context.Context, req commandexec.Request) command
 	return commandexec.Success(schemapayload.RenameField(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
+// HandleSchemaConvertTrait executes the canonical `schema_convert_trait` command.
+func HandleSchemaConvertTrait(_ context.Context, req commandexec.Request) commandexec.Result {
+	start := time.Now()
+	mapping, ok := schemaConversionMapping(req.Args["map-json"])
+	if !ok {
+		return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"high":true,"low":false}`)
+	}
+	result, err := schemamigrate.ConvertTrait(schemamigrate.ConvertTraitRequest{
+		VaultPath:  req.VaultPath,
+		TraitName:  stringArg(req.Args, "name"),
+		TargetType: stringArg(req.Args, "type"),
+		Mapping:    mapping,
+		Confirm:    req.Confirm,
+	})
+	if err != nil {
+		return mapSchemaFailure(err)
+	}
+	return commandexec.Success(schemapayload.Convert(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+}
+
+// HandleSchemaConvertField executes the canonical `schema_convert_field` command.
+func HandleSchemaConvertField(_ context.Context, req commandexec.Request) commandexec.Result {
+	start := time.Now()
+	mapping, ok := schemaConversionMapping(req.Args["map-json"])
+	if !ok {
+		return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"true":"done","false":"todo"}`)
+	}
+	result, err := schemamigrate.ConvertField(schemamigrate.ConvertFieldRequest{
+		VaultPath:  req.VaultPath,
+		TypeName:   stringArg(req.Args, "type_name"),
+		FieldName:  stringArg(req.Args, "field_name"),
+		TargetType: stringArg(req.Args, "type"),
+		Mapping:    mapping,
+		Confirm:    req.Confirm,
+	})
+	if err != nil {
+		return mapSchemaFailure(err)
+	}
+	return commandexec.Success(schemapayload.Convert(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+}
+
 // HandleSchemaTemplateList executes the canonical `schema_template_list` command.
 func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
@@ -646,5 +687,22 @@ func schemaTemplateDefinitionPayload(id, file, description string) map[string]in
 		"id":          id,
 		"file":        file,
 		"description": description,
+	}
+}
+
+func schemaConversionMapping(raw interface{}) (map[string]interface{}, bool) {
+	switch values := raw.(type) {
+	case map[string]interface{}:
+		return values, true
+	case map[string]string:
+		out := make(map[string]interface{}, len(values))
+		for key, value := range values {
+			out[key] = value
+		}
+		return out, true
+	case nil:
+		return nil, true
+	default:
+		return nil, false
 	}
 }
