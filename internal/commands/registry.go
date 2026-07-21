@@ -40,6 +40,7 @@ type FlagMeta struct {
 	Description string   // Description
 	Type        FlagType // Type of flag
 	Default     string   // Default value
+	Required    bool     // Whether callers must provide the flag
 	Examples    []string // Example values
 }
 
@@ -1551,6 +1552,87 @@ Existing field values will remain in files but no longer be validated.`,
 		},
 		Examples: []string{
 			"rvn schema remove field person nickname --json",
+		},
+	},
+	"schema_convert_trait": {
+		Name:        "schema convert trait",
+		CLIPath:     []string{"schema", "convert", "trait"},
+		Description: "Convert a trait's type or values and migrate every annotation",
+		LongDesc: `Convert a trait's values, optionally changing its type, and migrate schema.yaml plus all matching annotations.
+
+--map-json must be a JSON object whose keys are old values and whose values use
+the target type's JSON representation. The map must cover every finite
+schema-allowed value (all enum members or true/false for bool), the current
+default, and every value observed in live @trait annotations. The command fails
+without writing anything when any value is missing.
+
+For collection types, array-to-array conversions map each member independently.
+Scalar-to-array conversions map each scalar to an explicit JSON array.
+Collection-to-scalar conversion is rejected because it has no unambiguous
+reduction rule.
+
+Omit --type for a same-type remap. Supply --type to change the type.
+Returns a preview by default; changes are not applied unless confirm=true.
+
+After applying, run 'rvn reindex --full --json' and 'rvn check --json'.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Trait to convert", Required: true, DynamicComp: "traits"},
+		},
+		Flags: []FlagMeta{
+			{Name: "type", Description: "Target trait type; omit for a same-type value remap", Type: FlagTypeString},
+			{Name: "map-json", Description: "Exhaustive JSON object mapping old values to target-type values", Type: FlagTypeJSON, Required: true},
+			{Name: "confirm", Description: "Apply the conversion (default: preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			`rvn schema convert trait priority --type bool --map-json '{"high":true,"medium":true,"low":false}' --json`,
+			`rvn schema convert trait priority --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"}' --json`,
+			`rvn schema convert trait tags --map-json '{"old":"new","keep":"keep"}' --confirm --json`,
+		},
+		UseCases: []string{
+			"Convert an enum trait to a boolean while keeping annotations valid",
+			"Rename enum members across schema defaults and live annotations",
+			"Remap every member of an array-valued trait",
+		},
+	},
+	"schema_convert_field": {
+		Name:        "schema convert field",
+		CLIPath:     []string{"schema", "convert", "field"},
+		Description: "Convert a field's type or values and migrate every object",
+		LongDesc: `Convert a field's values, optionally changing its type, and migrate schema.yaml plus matching object frontmatter.
+
+--map-json must be a JSON object whose keys are old values and whose values use
+the target type's JSON representation. The map must cover every finite
+schema-allowed value (all enum members or true/false for bool), the current
+default, and every value observed in live frontmatter for the selected type.
+The command fails without writing anything when any value is missing.
+
+For collection types, array-to-array conversions map each member independently.
+Scalar-to-array conversions map each scalar to an explicit JSON array.
+Collection-to-scalar conversion is rejected because it has no unambiguous
+reduction rule.
+
+Omit --type for a same-type remap. Supply --type to change the type.
+Returns a preview by default; changes are not applied unless confirm=true.
+
+After applying, run 'rvn reindex --full --json' and 'rvn check --json'.`,
+		Args: []ArgMeta{
+			{Name: "type_name", Description: "Type containing the field", Required: true, DynamicComp: "types"},
+			{Name: "field_name", Description: "Field to convert", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "type", Description: "Target field type; omit for a same-type value remap", Type: FlagTypeString},
+			{Name: "map-json", Description: "Exhaustive JSON object mapping old values to target-type values", Type: FlagTypeJSON, Required: true},
+			{Name: "confirm", Description: "Apply the conversion (default: preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			`rvn schema convert field project status --type enum --map-json '{"true":"done","false":"todo"}' --json`,
+			`rvn schema convert field project status --map-json '{"backlog":"todo","active":"active","done":"done"}' --json`,
+			`rvn schema convert field project labels --map-json '{"old":"new","keep":"keep"}' --confirm --json`,
+		},
+		UseCases: []string{
+			"Convert a boolean field to an enum while keeping frontmatter valid",
+			"Rename enum members across schema defaults and live objects",
+			"Remap every member of an array-valued field",
 		},
 	},
 	"schema_rename_type": {

@@ -14,6 +14,8 @@ coverage:
     - schema update type
     - schema update field
     - schema update trait
+    - schema convert trait
+    - schema convert field
     - schema rename type
     - schema rename field
     - schema remove type

@@ -335,6 +335,32 @@ func TestMutationPhaseSchemaRenameField(t *testing.T) {
 	})
 }
 
+func TestMutationPhaseSchemaConvertTrait(t *testing.T) {
+	t.Parallel()
+
+	convert := func() map[string]any {
+		return map[string]any{
+			"name":     "priority",
+			"type":     "bool",
+			"map-json": map[string]any{"low": false, "medium": true, "high": true},
+		}
+	}
+
+	t.Run("preview by default", func(t *testing.T) {
+		t.Parallel()
+		v := buildPhaseVault(t)
+		res := runInvoked(t, v.Path, "schema_convert_trait", convert(), nil)
+		requirePhase(t, res, commandexec.MutationPhasePreview)
+	})
+
+	t.Run("applies with confirm", func(t *testing.T) {
+		t.Parallel()
+		v := buildPhaseVault(t)
+		res := runInvoked(t, v.Path, "schema_convert_trait", convert(), withConfirm)
+		requirePhase(t, res, commandexec.MutationPhaseApplied)
+	})
+}
+
 func TestMutationPhaseQueryApplyDelegates(t *testing.T) {
 	t.Parallel()
 

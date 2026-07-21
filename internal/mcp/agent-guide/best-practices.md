@@ -14,7 +14,7 @@
 
 4. Use the command's documented mutation flow.
 - Single-object writes (`set`, `add`, `update`, `edit`, single `delete`/`move`) apply immediately; use `dry-run=true` to preview when you want to verify first.
-- High-blast-radius operations (bulk writes, `query` apply, `schema rename`, `check` fixes) preview first; show the preview, ask for approval, then apply with `confirm=true`.
+- High-blast-radius operations (bulk writes, `query` apply, `schema rename`, `schema convert`, `check` fixes) preview first; show the preview, ask for approval, then apply with `confirm=true`.
 - Because single-object writes apply on the first call, only invoke them when intent is clear.
 
 5. Author canonical references and surface ambiguity.

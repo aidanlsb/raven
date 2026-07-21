@@ -91,6 +91,8 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("schema_remove_field", HandleSchemaRemoveField)
 	registry.Register("schema_rename_type", HandleSchemaRenameType)
 	registry.Register("schema_rename_field", HandleSchemaRenameField)
+	registry.Register("schema_convert_trait", HandleSchemaConvertTrait)
+	registry.Register("schema_convert_field", HandleSchemaConvertField)
 	registry.Register("schema_template_list", HandleSchemaTemplateList)
 	registry.Register("schema_template_get", HandleSchemaTemplateGet)
 	registry.Register("schema_template_set", HandleSchemaTemplateSet)

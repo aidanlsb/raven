@@ -113,7 +113,8 @@ func defaultRiskForCommandID(commandID string, access AccessMode) RiskLevel {
 	if strings.Contains(commandID, "remove") || strings.Contains(commandID, "delete") {
 		return RiskDestructive
 	}
-	if commandID == "schema_rename_field" || commandID == "schema_rename_type" {
+	if commandID == "schema_rename_field" || commandID == "schema_rename_type" ||
+		commandID == "schema_convert_field" || commandID == "schema_convert_trait" {
 		return RiskDestructive
 	}
 	return RiskMutating

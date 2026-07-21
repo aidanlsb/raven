@@ -2,7 +2,10 @@
 
 1. Snapshot current state: inspect `rvn schema` and, if needed, query affected objects before changing definitions.
 2. Introduce additive changes first: add new optional fields, traits, or types before changing constraints.
-3. Backfill existing objects with Raven commands such as `rvn query`, `rvn set`, `rvn edit`, or `rvn reclassify`.
+3. For mapped value/type changes, prefer `rvn schema convert trait|field
+   --map-json '{...}'`: review its exhaustive preview, then apply with
+   `--confirm`. For other migrations, backfill with `rvn query`, `rvn set`,
+   `rvn edit`, or `rvn reclassify`.
 4. Remember that fields and traits share the same value type set; traits have one value slot, but it may be an array value.
 5. Enforce stronger constraints only after the backfill is complete: required fields, enum narrowing, ref targets, or removals.
 6. Run `rvn schema validate` to check schema correctness.

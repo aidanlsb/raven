@@ -485,7 +485,8 @@ Pass `dry-run` to preview a single-object write without applying it:
 ```
 
 High-blast-radius operations stay preview-first and require `confirm` to apply:
-bulk writes (`stdin`), `query` with `apply`, `schema rename`, and `check` fixes.
+bulk writes (`stdin`), `query` with `apply`, `schema rename`, `schema convert`,
+and `check` fixes.
 
 ```json
 {

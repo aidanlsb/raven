@@ -110,12 +110,15 @@ func BuildCommandContract(commandID string) (CommandContract, bool) {
 		spec := ParameterSpec{
 			Name:        flag.Name,
 			Type:        flagTypeToParameterType(flag.Type),
-			Required:    false,
+			Required:    flag.Required,
 			Description: flag.Description,
 			Examples:    append([]string{}, flag.Examples...),
 		}
 		parameters[flag.Name] = spec
 		paramOrder = append(paramOrder, flag.Name)
+		if flag.Required {
+			required = append(required, flag.Name)
+		}
 	}
 	if hasStdinFlag(meta.Flags) {
 		name, spec := stdinReplacementParameter(meta)
