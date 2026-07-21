@@ -100,6 +100,39 @@ func (d *Database) cachedResolverFileStateLocked(tx *sql.Tx, filePath string) (*
 	return loadResolverFileState(tx, filePath, d.referenceResolverCache.schema)
 }
 
+// writeResolverFileStateLocked loads the file's resolver-relevant rows for the
+// auto-resolving write path. Unlike cachedResolverFileStateLocked it also works
+// with a cold cache, because the write path needs the before/after states to
+// detect newly added resolution candidates even when no resolver has been
+// built yet in this process.
+func (d *Database) writeResolverFileStateLocked(tx *sql.Tx, filePath string, sch *schema.Schema) (*resolverFileState, error) {
+	if d.referenceResolverCache != nil {
+		return loadResolverFileState(tx, filePath, d.referenceResolverCache.schema)
+	}
+	if d.autoResolveRefs {
+		return loadResolverFileState(tx, filePath, sch)
+	}
+	return nil, nil
+}
+
+// resolverStateAddsCandidates reports whether newState introduces resolution
+// candidates (object/section/asset IDs, aliases, or name-field matches) that
+// oldState did not have. When a write adds candidates, refs elsewhere in the
+// vault that previously failed to resolve may now succeed.
+func resolverStateAddsCandidates(oldState, newState *resolverFileState) bool {
+	if newState == nil {
+		return false
+	}
+	if oldState == nil {
+		oldState = newResolverFileState()
+	}
+	update := diffResolverFileStates(oldState, newState)
+	return len(update.AddedObjectIDs) > 0 ||
+		len(update.AddedAssetIDs) > 0 ||
+		len(update.AddedAliases) > 0 ||
+		len(update.AddedNameFields) > 0
+}
+
 func (d *Database) updateReferenceResolverCacheLocked(oldState, newState *resolverFileState) {
 	if d.referenceResolverCache == nil || (oldState == nil && newState == nil) {
 		return

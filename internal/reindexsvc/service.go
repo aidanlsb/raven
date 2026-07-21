@@ -344,7 +344,11 @@ func Run(req RunRequest) (*RunResult, error) {
 		return result, nil
 	}
 
-	if !req.DryRun && result.FilesIndexed > 0 {
+	if !req.DryRun {
+		// Run the resolve pass even when no files were reindexed: earlier
+		// writes may have added targets for refs that are still recorded as
+		// unresolved, and the pass short-circuits cheaply when nothing is
+		// unresolved.
 		refResult, refErr := db.ResolveReferencesWithSchema(dailyDir, sch)
 		if refErr != nil {
 			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to resolve references: %v", refErr))
@@ -354,8 +358,10 @@ func Run(req RunRequest) (*RunResult, error) {
 			result.HasRefResult = true
 		}
 
-		if analyzeErr := db.Analyze(); analyzeErr != nil {
-			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to analyze database: %v", analyzeErr))
+		if result.FilesIndexed > 0 {
+			if analyzeErr := db.Analyze(); analyzeErr != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to analyze database: %v", analyzeErr))
+			}
 		}
 	}
 

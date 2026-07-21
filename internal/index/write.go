@@ -39,7 +39,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	if err := d.ensureReferenceResolverCacheCurrentLocked(tx); err != nil {
 		return err
 	}
-	oldResolverState, err := d.cachedResolverFileStateLocked(tx, doc.FilePath)
+	oldResolverState, err := d.writeResolverFileStateLocked(tx, doc.FilePath, sch)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 		return err
 	}
 
-	newResolverState, err := d.cachedResolverFileStateLocked(tx, doc.FilePath)
+	newResolverState, err := d.writeResolverFileStateLocked(tx, doc.FilePath, sch)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,15 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	if d.autoResolveRefs && d.dailyDirectory != "" {
 		d.updateReferenceResolverCacheLocked(oldResolverState, newResolverState)
 		d.setReferenceResolverGenerationLocked(resolverGeneration)
-		if _, err := d.resolveReferencesForFileWithSchemaLocked(doc.FilePath, d.dailyDirectory, sch); err != nil {
+		resolveScope := &doc.FilePath
+		if resolverStateAddsCandidates(oldResolverState, newResolverState) {
+			// The write introduced new resolution candidates, so refs in
+			// other files that previously failed to resolve may now succeed.
+			// A vault-wide pass is a cheap existence probe when nothing is
+			// unresolved.
+			resolveScope = nil
+		}
+		if _, err := d.resolveReferencesWithSchemaLocked(resolveScope, d.dailyDirectory, sch); err != nil {
 			return err
 		}
 	} else {
