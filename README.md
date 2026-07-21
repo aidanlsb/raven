@@ -2,25 +2,33 @@
 
 <p align="center"><strong>A CLI for plain-text knowledge management, with first-class support for AI agents.</strong></p>
 
-Raven turns a folder of Markdown files into a structured, queryable knowledge base — and gives AI agents the tools to read and maintain it for you. Your notes stay as plain `.md` files you fully own; Raven adds a lightweight schema, structured tags, and a query language on top.
+Raven combines three properties so you retain full ownership of your knowledge while agents can work with it reliably:
 
-## Why Raven?
+- **Enforced schema.** Raven validates your files against the types, fields, and traits you define, keeping their structure consistent over time.
+- **Deterministic queries.** Agents retrieve information using explicit, repeatable criteria rather than relying on fuzzy search or interpretation.
+- **Plain-text source of truth.** Everything is Markdown with YAML frontmatter. The SQLite index under `.raven/` is only a rebuildable cache.
 
-If you already keep notes in Markdown, you've probably hit the ceiling of plain files: you can grep for text, but you can't ask "which follow-ups from my meetings are still open?" or "what's blocking this project?" without reading everything yourself.
+Here's an ordinary Raven note:
 
-Note-taking apps add structure, but your data often ends up locked inside their format and their app. Raven takes a different approach:
+```markdown
+---
+type: meeting
+title: Security review kickoff
+project: project/midgard-security-review
+---
 
-- **Plain text is the source of truth.** Everything is Markdown with YAML frontmatter. No proprietary database, no lock-in. The index under `.raven/` is a derived cache you can rebuild any time with `rvn reindex`.
-- **Structure you define.** A lightweight schema describes the things you track (projects, meetings, people…) so notes become queryable data, not just prose.
-- **Agent-native.** Raven ships an MCP server so agents (Claude, Cursor, Codex, …) can query and update your vault through structured tools instead of blindly reading files — which makes their answers accurate and grounded in your notes.
+Met with [[person/freya]] on [[2026-07-20]] to plan the security review. We agreed to focus the first pass on authentication and infrastructure, but work cannot begin until the draft scope is approved.
 
-Here's the payoff. After capturing a few notes the normal way, you can ask your agent:
+@todo @due(2026-07-22) Send the draft scope for review
+```
 
-> Summarize what is blocking the Midgard security review, tell me who owns each follow-up, and point me to the source notes.
+The frontmatter is schema-validated; the traits and references are deterministically queryable.
 
-Because the agent queries Raven directly, it answers from the actual project, meeting notes, todo tags, and links — not a fuzzy text search:
+Now ask your agent:
 
-> The review is waiting on scope confirmation before work begins. Two follow-ups are open from `meeting/kickoff.md`: send the draft scope to Freya, and have Freya confirm which systems are in scope for `project/midgard-security-review`. The current decision on record is to keep the first pass focused on authentication and infrastructure.
+> Summarize what is blocking the Midgard security review, list its open follow-ups, and point me to the source notes.
+
+> The review is blocked until the draft scope is approved. One follow-up is open: send the draft scope for review by July 22. Source: `meeting/security-review-kickoff.md`.
 
 The rest of this README shows how to get there.
 
@@ -31,10 +39,10 @@ Five terms cover almost everything in Raven:
 | Term | What it is |
 |------|------------|
 | **Vault** | The folder that holds your notes (plus `raven.yaml`, `schema.yaml`, and the `.raven/` cache). |
-| **Type** | What a file represents — `project`, `meeting`, `person`. Every note has one, defined in `schema.yaml`. |
-| **Field** | Structured data in a note's YAML frontmatter (e.g. a project's `status`, a meeting's `with`). |
-| **Trait** | An inline, structured tag on a line of content, like `@todo` or `@decision`. Queryable, unlike a plain hashtag. |
-| **Reference** | A `[[wiki-style/link]]` between notes, forming a graph you can traverse with backlinks and queries. |
+| **Type** | What a file represents — `project`, `meeting`, `person`. Custom types are defined in `schema.yaml`; `page`, `date`, and `section` are built in. |
+| **Field** | Structured data in a note's YAML frontmatter (e.g. a person's `email`, a meeting's `project`). |
+| **Trait** | An inline, structured tag on a line of content, like `@todo` or `@due(2026-07-22)`. Queryable, unlike a plain hashtag. |
+| **Reference** | A link to another note, written as a canonical ID in frontmatter or a `[[wiki-style/link]]` in content. References form a graph you can traverse with backlinks and queries. |
 
 Keep these in mind and the rest of the docs will read easily.
 
@@ -125,8 +133,6 @@ rvn mcp install --client codex
 rvn mcp status
 ```
 
-**Claude Cowork** reads the same `claude_desktop_config.json` as Claude Desktop, so `rvn mcp install --client claude-desktop` also makes Raven available in Cowork.
-
 Or print a manual config snippet:
 
 ```bash
@@ -144,9 +150,9 @@ Prefer to drive Raven directly, or curious what the agent does under the hood? H
 
 ### 1. Extend the schema
 
-Every note has a **type** defined in `schema.yaml`, and each type can require or allow certain **fields**. The starter schema gives you `project` and `person`, but not `meeting` or `decision` — so we'll add them.
+Each file Raven indexes has a **type**, and custom types can require or allow specific **fields**. The starter schema gives you `project` and `person`; we'll add `meeting`.
 
-We want each meeting to record which project it belongs to and who attended, and we want a lightweight way to mark decisions. A project/person link is a **field** (a `ref`); a decision is a good fit for a **trait**, since it tags a specific line of content rather than the whole file. Traits hold a single typed value (`enum`, `boolean`, `date`, …); a boolean trait defaults to `true` when written bare, which is perfect for a plain `@decision` tag.
+We want each meeting to record which project it belongs to, so its schema includes a `project` reference. The `todo` and `due` traits used in the example are already part of the starter schema.
 
 You can edit `schema.yaml` directly:
 
@@ -162,13 +168,6 @@ types:
       project:
         type: ref
         target: project
-      with:
-        type: ref[]
-        target: person
-
-traits:
-  decision:
-    type: boolean
 ```
 
 …or make the same changes from the CLI (or just ask your agent):
@@ -176,8 +175,6 @@ traits:
 ```bash
 rvn schema add type meeting --name-field title --default-path meeting/
 rvn schema add field meeting project --type ref --target project
-rvn schema add field meeting with --type ref[] --target person
-rvn schema add trait decision --type bool
 ```
 
 ### 2. Create some notes
@@ -185,37 +182,26 @@ rvn schema add trait decision --type bool
 Create objects with the CLI. Each becomes an ordinary Markdown file under the directory for its type (`project/`, `person/`, …):
 
 ```bash
-rvn new project "Midgard Security Review" --field status=active
-rvn new person "Freya" --field role=lead
+rvn new project "Midgard Security Review"
+rvn new person "Freya"
+rvn daily 2026-07-20
 ```
 
-Raven also has built-in daily notes for quick capture. `add` appends to today's daily note by default; use `--to` to target another file:
-
-```bash
-rvn daily
-rvn add "Met with [[person/freya]] about [[project/midgard-security-review]]" --to today
-rvn add "@todo Send the draft scope to [[person/freya]]" --to today
-```
-
-Of course, you can also just write files by hand. Here's a meeting note:
+The `daily` command creates a built-in date note, giving the `[[2026-07-20]]` reference in our meeting a target. Now create `meeting/security-review-kickoff.md` as an ordinary Markdown file:
 
 ```markdown
 ---
 type: meeting
-title: Kickoff
+title: Security review kickoff
 project: project/midgard-security-review
-with:
-  - person/freya
 ---
 
-[[person/freya]] wants the initial scope and timeline confirmed before the review begins.
+Met with [[person/freya]] on [[2026-07-20]] to plan the security review. We agreed to focus the first pass on authentication and infrastructure, but work cannot begin until the draft scope is approved.
 
-@todo Send the draft scope to [[person/freya]]
-@todo [[person/freya]] to confirm which systems are in scope for [[project/midgard-security-review]]
-@decision Keep the first pass focused on authentication and infrastructure.
+@todo @due(2026-07-22) Send the draft scope for review
 ```
 
-> **A note on identifiers.** A note's canonical ID is `type/slug`, e.g. `project/midgard-security-review`. In frontmatter and `[[links]]` you can use that full ID, and inside `[[links]]` you can also use a shorter form like `[[freya]]` when it's unambiguous.
+> **A note on identifiers.** A note's canonical ID is usually `type/slug`, e.g. `project/midgard-security-review`; built-in date notes use the bare ISO date. Frontmatter references use canonical IDs. Inside `[[links]]`, you can also use a shorter form like `[[freya]]` when it's unambiguous.
 
 ### 3. Query your vault
 
@@ -225,38 +211,32 @@ The Raven Query Language (RQL) retrieves notes and traits by structure, not just
 # Open todos inside meetings that reference the Midgard project
 rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review]]))'
 
-# Decisions recorded in those same meetings
-rvn query 'trait:decision within(type:meeting refs([[project/midgard-security-review]]))'
+# Items due by July 22 inside those same meetings
+rvn query 'trait:due .value<=2026-07-22 within(type:meeting refs([[project/midgard-security-review]]))'
 ```
 
-Read the first query as: *find `todo` traits that live within a `meeting` that references `project/midgard-security-review`.* Results:
+Read the first query as: *find `todo` traits that live within a `meeting` that references `project/midgard-security-review`.* Both queries return the task from our note:
 
 ```text
-meeting/kickoff.md
-  @todo Send the draft scope to [[person/freya]]
-  @todo [[person/freya]] to confirm which systems are in scope for [[project/midgard-security-review]]
-
-meeting/kickoff.md
-  @decision Keep the first pass focused on authentication and infrastructure.
+meeting/security-review-kickoff.md
+  @todo @due(2026-07-22) Send the draft scope for review
 ```
 
-To trace everything connected to one person, follow the reference graph with backlinks:
+References form a graph regardless of whether they point to a person, project, or date. Follow it with backlinks:
 
 ```bash
 rvn backlinks person/freya
+rvn backlinks 2026-07-20
 ```
 
 ```text
-meeting/kickoff.md
-  [[person/freya]] wants the initial scope and timeline confirmed before the review begins
-
-project/midgard-security-review.md
-  Project lead: [[person/freya]]
+meeting/security-review-kickoff.md
+  Met with [[person/freya]] on [[2026-07-20]] to plan the security review.
 ```
 
 ### 4. Ask your agent
 
-With the vault populated, the briefing from the top of this README just works — the agent runs the same queries and backlinks you just saw and answers from your structured notes rather than a raw text search. See [Core Concepts](docs/getting-started/core-concepts.md) and the [Query Language](docs/querying/query-language.md) guide to go deeper.
+With the vault populated, ask the question from the top of this README. The agent can run the same deterministic queries and backlink lookups you just used, then answer with the source note. See [Core Concepts](docs/getting-started/core-concepts.md) and the [Query Language](docs/querying/query-language.md) guide to go deeper.
 
 Raven also includes a built-in language server for diagnostics, completion,
 navigation, and hover while you edit. See the
