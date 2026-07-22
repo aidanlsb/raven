@@ -183,7 +183,7 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
-			return result, fmt.Errorf("failed to read %s: %w", filePath, err)
+			return result, validationErrorf("failed to read %s: %w", filePath, err)
 		}
 
 		newContent := string(content)
@@ -216,7 +216,7 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 
 		if fixedCount > 0 {
 			if err := os.WriteFile(fullPath, []byte(newContent), 0o644); err != nil {
-				return result, fmt.Errorf("failed to write %s: %w", filePath, err)
+				return result, validationErrorf("failed to write %s: %w", filePath, err)
 			}
 			result.FileCount++
 			result.IssueCount += fixedCount

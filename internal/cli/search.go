@@ -110,7 +110,7 @@ func mapSearchCode(code codes.ErrorCode) codes.ErrorCode {
 	case codes.ErrMissingArgument:
 		return ErrMissingArgument
 	case codes.ErrDatabase:
-		return ErrDatabaseError
+		return ErrDatabase
 	case codes.ErrInvalidArgs, codes.ErrInvalidInput:
 		return ErrInvalidInput
 	default:

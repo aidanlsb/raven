@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/importsvc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 // HandleImport executes the canonical `import` command.
@@ -100,9 +101,9 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 }
 
 func mapImportFailure(err error, fallbackSuggestion string) commandexec.Result {
-	svcErr, ok := importsvc.AsError(err)
+	svcErr, ok := svcerr.AsError(err)
 	if !ok {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, fallbackSuggestion)
+		return commandexec.FromServiceErrorWithFallback(err, fallbackSuggestion)
 	}
 
 	suggestion := fallbackSuggestion
@@ -119,7 +120,7 @@ func mapImportFailure(err error, fallbackSuggestion string) commandexec.Result {
 		suggestion = "Fix raven.yaml and try again"
 	}
 
-	return commandexec.Failure(svcErr.Code, svcErr.Error(), nil, suggestion)
+	return commandexec.FromServiceErrorWithFallback(err, suggestion)
 }
 
 func stdinReader(stdin []byte) io.Reader {

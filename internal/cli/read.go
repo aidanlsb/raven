@@ -161,11 +161,11 @@ func mapReadCode(code codes.ErrorCode) codes.ErrorCode {
 	case codes.ErrInvalidArgs, codes.ErrInvalidInput:
 		return ErrInvalidInput
 	case codes.ErrDatabase:
-		return ErrDatabaseError
+		return ErrDatabase
 	case codes.ErrFileNotFound:
 		return ErrFileNotFound
 	case codes.ErrFileRead:
-		return ErrFileReadError
+		return ErrFileRead
 	default:
 		return ErrInternal
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -506,34 +507,13 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 	return commandexec.Success(data, nil)
 }
 
-// ambiguousRefFailure builds a REF_AMBIGUOUS failure that carries the candidate
-// matches (and their sources) in the error details. Surfacing the candidates is
-// what lets the CLI offer interactive disambiguation and lets agents see every
-// colliding object rather than a message alone.
-func ambiguousRefFailure(ambiguous *readsvc.AmbiguousRefError) commandexec.Result {
-	details := map[string]interface{}{
-		"reference": ambiguous.Reference,
-		"matches":   ambiguous.Matches,
-	}
-	if len(ambiguous.MatchSources) > 0 {
-		details["match_sources"] = ambiguous.MatchSources
-	}
-	return commandexec.Failure("REF_AMBIGUOUS", ambiguous.Error(), details, "Use a full object ID/path to disambiguate")
-}
-
 func mapResolveFailure(err error, reference string) commandexec.Result {
 	if failure, ok := mapIndexRebuildRequired(err); ok {
 		return failure
 	}
 
-	var ambiguous *readsvc.AmbiguousRefError
-	if errors.As(err, &ambiguous) {
-		return ambiguousRefFailure(ambiguous)
-	}
-
-	var notFound *readsvc.RefNotFoundError
-	if errors.As(err, &notFound) {
-		return commandexec.Failure("REF_NOT_FOUND", notFound.Error(), nil, "Check the object reference and run 'rvn reindex' if needed")
+	if _, ok := svcerr.AsError(err); ok {
+		return commandexec.FromServiceErrorWithFallback(err, "Check the object reference and run 'rvn reindex' if needed")
 	}
 
 	return commandexec.Failure("REF_NOT_FOUND", fmt.Sprintf("reference '%s' not found", reference), nil, "Check the object reference and run 'rvn reindex' if needed")
@@ -544,19 +524,8 @@ func mapReadFailure(err error) commandexec.Result {
 		return failure
 	}
 
-	var ambiguous *readsvc.AmbiguousRefError
-	if errors.As(err, &ambiguous) {
-		return ambiguousRefFailure(ambiguous)
-	}
-
-	var notFound *readsvc.RefNotFoundError
-	if errors.As(err, &notFound) {
-		return commandexec.Failure("REF_NOT_FOUND", notFound.Error(), nil, "Check the reference and try again")
-	}
-
-	var invalidRange *readsvc.InvalidLineRangeError
-	if errors.As(err, &invalidRange) {
-		return commandexec.Failure("INVALID_INPUT", invalidRange.Error(), nil, invalidRange.Suggestion())
+	if _, ok := svcerr.AsError(err); ok {
+		return commandexec.FromServiceErrorWithFallback(err, "Check the reference and try again")
 	}
 
 	if os.IsNotExist(err) {
@@ -575,13 +544,8 @@ func mapOpenFailure(err error) commandexec.Result {
 		return failure
 	}
 
-	var ambiguous *readsvc.AmbiguousRefError
-	if errors.As(err, &ambiguous) {
-		return ambiguousRefFailure(ambiguous)
-	}
-	var notFound *readsvc.RefNotFoundError
-	if errors.As(err, &notFound) {
-		return commandexec.Failure("REF_NOT_FOUND", notFound.Error(), nil, "Check the reference and try again")
+	if _, ok := svcerr.AsError(err); ok {
+		return commandexec.FromServiceErrorWithFallback(err, "Check the reference and try again")
 	}
 	return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 }

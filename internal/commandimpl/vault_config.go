@@ -293,11 +293,7 @@ func HandleVaultConfigDeletionUnset(_ context.Context, req commandexec.Request) 
 }
 
 func mapVaultConfigFailure(err error) commandexec.Result {
-	svcErr, ok := vaultconfigsvc.AsError(err)
-	if !ok {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-	}
-	return commandexec.Failure(svcErr.Code, svcErr.Error(), nil, svcErr.Suggestion)
+	return commandexec.FromServiceError(err)
 }
 
 func vaultConfigShowRequest(req commandexec.Request) vaultconfigsvc.ShowRequest {

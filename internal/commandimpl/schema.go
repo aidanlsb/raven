@@ -2,7 +2,6 @@ package commandimpl
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -624,11 +623,7 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 }
 
 func mapSchemaFailure(err error) commandexec.Result {
-	var svcErr *schemasvc.Error
-	if errors.As(err, &svcErr) {
-		return commandexec.Failure(svcErr.Code, svcErr.Message, svcErr.Details, svcErr.Suggestion)
-	}
-	return commandexec.Failure(codes.ErrInternal, err.Error(), nil, "")
+	return commandexec.FromServiceError(err)
 }
 
 func mapTemplateFailure(err error) commandexec.Result {

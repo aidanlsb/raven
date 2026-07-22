@@ -208,24 +208,5 @@ func docsTopicItems(topics []docssvc.TopicRecord) []map[string]interface{} {
 }
 
 func mapDocsSvcFailure(err error, fallbackSuggestion string) commandexec.Result {
-	svcErr, ok := docssvc.AsError(err)
-	if !ok {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, fallbackSuggestion)
-	}
-
-	suggestion := svcErr.Suggestion
-	if suggestion == "" {
-		suggestion = fallbackSuggestion
-	}
-
-	switch svcErr.Code {
-	case docssvc.CodeInvalidInput:
-		return commandexec.Failure("INVALID_INPUT", svcErr.Message, nil, suggestion)
-	case docssvc.CodeNotFound:
-		return commandexec.Failure("FILE_NOT_FOUND", svcErr.Message, nil, suggestion)
-	case docssvc.CodeFileRead:
-		return commandexec.Failure("FILE_READ_ERROR", svcErr.Message, nil, suggestion)
-	default:
-		return commandexec.Failure("INTERNAL_ERROR", svcErr.Message, nil, suggestion)
-	}
+	return commandexec.FromServiceErrorWithFallback(err, fallbackSuggestion)
 }

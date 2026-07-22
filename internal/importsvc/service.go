@@ -19,6 +19,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 type Code = codes.ErrorCode
@@ -30,42 +31,8 @@ const (
 	CodeConfigInvalid Code = codes.ErrConfigInvalid
 )
 
-type Error struct {
-	Code    Code
-	Message string
-	Err     error
-}
-
-func (e *Error) Error() string {
-	if e == nil {
-		return ""
-	}
-	if e.Message != "" {
-		return e.Message
-	}
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return string(e.Code)
-}
-
-func (e *Error) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
-}
-
-func newError(code Code, msg string, err error) *Error {
-	return &Error{Code: code, Message: msg, Err: err}
-}
-
-func AsError(err error) (*Error, bool) {
-	var svcErr *Error
-	if errors.As(err, &svcErr) {
-		return svcErr, true
-	}
-	return nil, false
+func newError(code Code, msg string, err error) *svcerr.Error {
+	return &svcerr.Error{Code: code, Message: msg, Err: err}
 }
 
 type MappingConfig struct {
@@ -564,8 +531,7 @@ func mutationErrorResult(id string, err error) ResultItem {
 		}
 	}
 
-	var svcErr *objectsvc.Error
-	if errors.As(err, &svcErr) {
+	if svcErr, ok := svcerr.AsError(err); ok {
 		return ResultItem{
 			ID:      id,
 			Action:  "error",

@@ -105,7 +105,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 	includeIssues, excludeIssues := parseIssueFilter(opts)
 	excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
 	if err != nil {
-		return nil, fmt.Errorf("invalid exclude config: %w", err)
+		return nil, validationErrorf("invalid exclude config: %w", err)
 	}
 
 	result := &RunResult{
@@ -233,7 +233,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 		return nil
 	})
 	if walkErr != nil {
-		return nil, fmt.Errorf("error walking vault: %w", walkErr)
+		return nil, validationErrorf("error walking vault: %w", walkErr)
 	}
 
 	validator := check.NewValidatorWithTypesAliasesAndResolver(sch, allObjectInfos, aliases, canonicalResolver)
@@ -614,7 +614,7 @@ func resolveScope(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 	}
 	resolved, err := readsvc.ResolveReference(pathArg, rt, false)
 	if err != nil {
-		return nil, fmt.Errorf("could not resolve '%s': %w", pathArg, err)
+		return nil, validationErrorf("could not resolve '%s': %w", pathArg, err)
 	}
 
 	scope.Type = "file"

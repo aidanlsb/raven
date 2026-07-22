@@ -8,10 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -36,6 +38,24 @@ func (e *AmbiguousRefError) Error() string {
 	return fmt.Sprintf("reference '%s' is ambiguous, matches: %v", e.Reference, e.Matches)
 }
 
+// Unwrap exposes the canonical service error while retaining the typed wrapper
+// that resolver callers use to distinguish ambiguity from a missing target.
+func (e *AmbiguousRefError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	details := map[string]any{
+		"reference": e.Reference,
+		"matches":   e.Matches,
+	}
+	if len(e.MatchSources) > 0 {
+		details["match_sources"] = e.MatchSources
+	}
+	return svcerr.New(codes.ErrRefAmbiguous, e.Error()).
+		WithSuggestion("Use a full object ID/path to disambiguate").
+		WithDetails(details)
+}
+
 type RefNotFoundError struct {
 	Reference string
 	Detail    string
@@ -46,6 +66,15 @@ func (e *RefNotFoundError) Error() string {
 		return fmt.Sprintf("reference '%s' not found: %s", e.Reference, e.Detail)
 	}
 	return fmt.Sprintf("reference '%s' not found", e.Reference)
+}
+
+// Unwrap makes missing-reference errors available to the shared service-error
+// adapter without erasing their typed resolver semantics.
+func (e *RefNotFoundError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return svcerr.New(codes.ErrRefNotFound, e.Error())
 }
 
 func IsAmbiguousRef(err error) bool {

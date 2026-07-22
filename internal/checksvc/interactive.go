@@ -1,7 +1,6 @@
 package checksvc
 
 import (
-	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -96,7 +95,10 @@ func CreateMissingPage(vaultPath string, sch *schema.Schema, targetPath, typeNam
 		ObjectsRoot:                 createObjectsRoot,
 		PagesRoot:                   createPagesRoot,
 	})
-	return err
+	if err != nil {
+		return validationError(err)
+	}
+	return nil
 }
 
 func AvailableTypeNames(s *schema.Schema) []string {
@@ -130,11 +132,11 @@ func AddTrait(vaultPath string, s *schema.Schema, traitName, traitType string, e
 
 	loaded, err := schema.Load(vaultPath)
 	if err != nil {
-		return fmt.Errorf("failed to reload schema after adding trait: %w", err)
+		return validationErrorf("failed to reload schema after adding trait: %w", err)
 	}
 	traitDef, ok := loaded.Traits[traitName]
 	if !ok {
-		return fmt.Errorf("added trait '%s' was not found after reload", traitName)
+		return validationErrorf("added trait '%s' was not found after reload", traitName)
 	}
 
 	if s.Traits == nil {
@@ -157,11 +159,11 @@ func AddType(vaultPath string, s *schema.Schema, typeName, defaultPath string) e
 
 	loaded, err := schema.Load(vaultPath)
 	if err != nil {
-		return fmt.Errorf("failed to reload schema after adding type: %w", err)
+		return validationErrorf("failed to reload schema after adding type: %w", err)
 	}
 	typeDef, ok := loaded.Types[typeName]
 	if !ok {
-		return fmt.Errorf("added type '%s' was not found after reload", typeName)
+		return validationErrorf("added type '%s' was not found after reload", typeName)
 	}
 
 	if s.Types == nil {

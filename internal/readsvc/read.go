@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
@@ -70,6 +72,13 @@ func (e *InvalidLineRangeError) Error() string {
 
 func (e *InvalidLineRangeError) Suggestion() string {
 	return "Use 1-indexed inclusive line numbers within the file's line_count"
+}
+
+func (e *InvalidLineRangeError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return svcerr.New(codes.ErrInvalidInput, e.Error()).WithSuggestion(e.Suggestion())
 }
 
 func Read(rt *Runtime, req ReadRequest) (*ReadResult, error) {

@@ -371,9 +371,8 @@ func resolveSectionReference(req RenameRequest, reference string) (*readsvc.Reso
 }
 
 func normalizeMutationError(err error) error {
-	var mutationErr *objectsvc.Error
-	if errors.As(err, &mutationErr) {
-		return newError(mutationErr.Code, mutationErr.Message, mutationErr.Suggestion, mutationErr.Details, err)
+	if _, ok := svcerr.AsError(err); ok {
+		return err
 	}
 	return newError(codes.ErrInternal, err.Error(), "", nil, err)
 }
