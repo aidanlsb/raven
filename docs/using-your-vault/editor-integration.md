@@ -29,9 +29,9 @@ and the workspace root is used.
 |---|---|
 | Diagnostics | Validates open buffers as you type: broken or ambiguous `[[refs]]`, undefined `@traits`, invalid trait values, unknown frontmatter keys, missing required fields, and more. Diagnostic codes match `rvn check` issue types (e.g. `missing_reference`). |
 | Completion | `[[` completes object IDs and aliases from the index. `@` completes trait names from the schema. Frontmatter key positions complete the declared type's fields. |
-| Go-to-definition | Jump from a `[[wikilink]]` to its target file or section heading. Ambiguous refs list all candidates. |
-| Find-references | Backlinks to the current file's object, or to the wikilink target under the cursor. |
-| Hover | Preview a wikilink target: object ID, type, frontmatter fields, and the first lines of the body. |
+| Go-to-definition | Jump from a `[[wikilink]]` or bare frontmatter `ref` / `ref[]` value to its target file or section heading. Ambiguous refs list all candidates. |
+| Find-references | Backlinks to the current file's object, or to the reference target under the cursor. |
+| Hover | Preview a reference target: object ID, type, frontmatter fields, and the first lines of the body. |
 
 The index is refreshed incrementally each time a file is saved, so completion
 and reference results track your edits. Diagnostics for unsaved buffer content

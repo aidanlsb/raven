@@ -453,6 +453,105 @@ func TestDefinition(t *testing.T) {
 	})
 }
 
+func TestFrontmatterDefinition(t *testing.T) {
+	schemaYAML := testutil.PersonProjectSchema()
+	ownerField := "      owner:\n        type: ref\n        target: person\n"
+	schemaYAML = strings.Replace(schemaYAML, ownerField, ownerField+"      reviewers:\n        type: ref[]\n        target: person\n", 1)
+	if schemaYAML == testutil.PersonProjectSchema() {
+		t.Fatal("failed to add reviewers field to test schema")
+	}
+
+	vault := testutil.NewTestVault(t).
+		WithSchema(schemaYAML).
+		WithFile("people/freya.md", "---\ntype: person\nname: First Freya\n---\n").
+		WithFile("people/loki.md", "---\ntype: person\nname: Loki\n---\n").
+		WithFile("legends/freya.md", "---\ntype: person\nname: Second Freya\n---\n").
+		Build()
+	client := startTestServer(t, vault.Path)
+	client.initialize(vault.Path)
+
+	content := `---
+type: project
+title: people/freya
+owner: people/freya
+reviewers:
+  - people/freya
+  - "[[people/loki|Trickster]]"
+  - freya
+  - people/nobody
+---
+`
+	uri := client.openDocument(filepath.Join(vault.Path, "projects/navigation.md"), content)
+	client.diagnosticsFor(uri)
+	lines := strings.Split(content, "\n")
+
+	requestDefinition := func(line int, needle string) []Location {
+		t.Helper()
+		character := strings.Index(lines[line], needle)
+		if character < 0 {
+			t.Fatalf("needle %q not found on line %d", needle, line)
+		}
+		raw := client.request("textDocument/definition", TextDocumentPositionParams{
+			TextDocument: TextDocumentIdentifier{URI: uri},
+			Position:     Position{Line: line, Character: character + 1},
+		})
+		var locations []Location
+		if len(raw) > 0 && string(raw) != "null" {
+			if err := json.Unmarshal(raw, &locations); err != nil {
+				t.Fatalf("invalid definition result: %v", err)
+			}
+		}
+		return locations
+	}
+
+	assertTarget := func(t *testing.T, locations []Location, suffix string) {
+		t.Helper()
+		if len(locations) != 1 {
+			t.Fatalf("got %d locations, want 1: %+v", len(locations), locations)
+		}
+		if !strings.HasSuffix(locations[0].URI, suffix) {
+			t.Errorf("URI = %q, want suffix %q", locations[0].URI, suffix)
+		}
+	}
+
+	t.Run("bare ref field", func(t *testing.T) {
+		assertTarget(t, requestDefinition(3, "people/freya"), "people/freya.md")
+	})
+
+	t.Run("bare ref array item", func(t *testing.T) {
+		assertTarget(t, requestDefinition(5, "people/freya"), "people/freya.md")
+	})
+
+	t.Run("display-text wikilink", func(t *testing.T) {
+		assertTarget(t, requestDefinition(6, "Trickster"), "people/loki.md")
+	})
+
+	t.Run("ambiguous bare ref returns all candidates", func(t *testing.T) {
+		locations := requestDefinition(7, "freya")
+		if len(locations) != 2 {
+			t.Fatalf("got %d locations, want 2: %+v", len(locations), locations)
+		}
+	})
+
+	t.Run("missing bare ref returns nothing", func(t *testing.T) {
+		if locations := requestDefinition(8, "people/nobody"); len(locations) != 0 {
+			t.Errorf("got %d locations, want 0", len(locations))
+		}
+	})
+
+	t.Run("non-ref frontmatter string returns nothing", func(t *testing.T) {
+		if locations := requestDefinition(2, "people/freya"); len(locations) != 0 {
+			t.Errorf("got %d locations, want 0", len(locations))
+		}
+	})
+
+	t.Run("field key does not navigate to schema", func(t *testing.T) {
+		if locations := requestDefinition(3, "owner"); len(locations) != 0 {
+			t.Errorf("got %d locations, want 0", len(locations))
+		}
+	})
+}
+
 func TestReferences(t *testing.T) {
 	vaultPath := newTestVault(t)
 	client := startTestServer(t, vaultPath)

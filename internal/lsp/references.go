@@ -75,8 +75,7 @@ func (s *Server) handleReferences(raw json.RawMessage) (interface{}, *ResponseEr
 // referenceTarget picks the ID to find references for: the wikilink under the
 // cursor when there is an unambiguous one, otherwise the current file's object.
 func referenceTarget(ws *workspace, doc document, params TextDocumentPositionParams, encoding string) string {
-	lines := documentLines(doc.content)
-	if ref, ok := refAtPosition(lines, params.Position, encoding); ok {
+	if ref, ok := refAtPosition(ws, doc, params.Position, encoding); ok {
 		targets := resolveTargets(ws, ref.target)
 		if len(targets) == 1 {
 			return targets[0]
