@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func derefInt(p *int) int {
@@ -514,5 +516,56 @@ func TestAllSections(t *testing.T) {
 	}
 	if results[1].ParentSectionID == nil || *results[1].ParentSectionID != "notes/alpha#overview" {
 		t.Fatalf("parent section ID = %#v, want notes/alpha#overview", results[1].ParentSectionID)
+	}
+}
+
+func TestAllIndexedFilePaths(t *testing.T) {
+	t.Parallel()
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	sch := schema.New()
+
+	// Index a few documents
+	files := []string{"people/alice.md", "projects/foo.md", "daily/2025-01-01.md"}
+	for _, file := range files {
+		doc := &parser.ParsedDocument{
+			FilePath: file,
+			Objects: []*model.Object{
+				{
+					ID:        file[:len(file)-3], // strip .md
+					Type:      "page",
+					Fields:    make(map[string]schema.FieldValue),
+					LineStart: 1,
+				},
+			},
+		}
+		if err := db.IndexDocument(doc, sch); err != nil {
+			t.Fatalf("failed to index %s: %v", file, err)
+		}
+	}
+
+	// Get all indexed paths
+	paths, err := db.AllIndexedFilePaths()
+	if err != nil {
+		t.Fatalf("failed to get indexed paths: %v", err)
+	}
+
+	if len(paths) != 3 {
+		t.Errorf("expected 3 indexed paths, got %d", len(paths))
+	}
+
+	// Verify all paths are present
+	pathSet := make(map[string]bool)
+	for _, p := range paths {
+		pathSet[p] = true
+	}
+	for _, f := range files {
+		if !pathSet[f] {
+			t.Errorf("expected path %s to be in indexed paths", f)
+		}
 	}
 }
