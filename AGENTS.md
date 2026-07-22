@@ -92,7 +92,7 @@ make check              # fmt-check + lint + test (run before submitting)
 
 - Use structured error codes defined in `internal/codes` (e.g., `codes.ErrTypeNotFound`, `codes.ErrRefAmbiguous`). These codes are stable and agents depend on them.
 - All CLI commands support `--json` output with a standard envelope: `{ ok, data, error?, warnings?, meta? }`.
-- Warning codes are also defined in `errors.go` (e.g., `WarnBacklinks`, `WarnUnknownField`).
+- Warning codes are also defined in `internal/codes` (e.g., `WarnBacklinks`, `WarnUnknownField`).
 
 #### Schema/config load-failure policy
 
