@@ -51,6 +51,9 @@ func TestRegistryBackedCanonicalCommandFlagsMatchRegistry(t *testing.T) {
 
 			for name := range cliFlags {
 				if _, ok := registryFlags[name]; !ok {
+					if isCLIOnlyFlag(path, name) {
+						continue
+					}
 					t.Errorf("CLI flag %q is missing from registry metadata", name)
 				}
 			}
@@ -76,6 +79,12 @@ func TestRegistryBackedCanonicalCommandFlagsMatchRegistry(t *testing.T) {
 			}
 		})
 	}
+}
+
+func isCLIOnlyFlag(commandPath, flagName string) bool {
+	// `daily --edit` controls whether the CLI opens a local editor after the
+	// canonical command completes; it is intentionally not an MCP parameter.
+	return commandPath == "daily" && flagName == "edit"
 }
 
 func cobraFlagType(flagType commands.FlagType) string {
