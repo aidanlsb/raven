@@ -4,18 +4,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/readsvc"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-func resolveReferenceForMutation(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, reference string) (*readsvc.ResolveResult, error) {
-	rt := &readsvc.Runtime{
-		VaultPath: vaultPath,
-		VaultCfg:  vaultCfg,
-		Schema:    sch,
-	}
-
+func resolveReferenceForMutation(rt *vaultruntime.Runtime, reference string) (*readsvc.ResolveResult, error) {
 	resolved, err := readsvc.ResolveReference(reference, rt, false)
 	if err != nil {
 		var ambiguousErr *readsvc.AmbiguousRefError
@@ -47,7 +40,7 @@ func resolveReferenceForMutation(vaultPath string, vaultCfg *config.VaultConfig,
 		)
 	}
 
-	if err := ValidateContentMutationFilePath(vaultPath, vaultCfg, resolved.FilePath); err != nil {
+	if err := ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, resolved.FilePath); err != nil {
 		return nil, err
 	}
 

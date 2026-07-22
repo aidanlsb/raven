@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type DeleteBulkRequest struct {
@@ -15,6 +16,7 @@ type DeleteBulkRequest struct {
 	ObjectIDs   []string
 	Behavior    string
 	TrashDir    string
+	Runtime     *vaultruntime.Runtime
 }
 
 type DeleteBulkPreviewItem struct {
@@ -54,11 +56,14 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 
-	db, err := index.Open(req.VaultPath)
-	if err != nil {
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, nil, nil)
+	if owned {
+		defer rt.Close()
+	}
+	if err := rt.OpenDB(); err != nil {
 		return nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
 	}
-	defer db.Close()
+	db := rt.DB
 
 	items := make([]DeleteBulkPreviewItem, 0, len(req.ObjectIDs))
 	skipped := make([]DeleteBulkResult, 0)
@@ -120,11 +125,14 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 
-	db, err := index.Open(req.VaultPath)
-	if err != nil {
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, nil, nil)
+	if owned {
+		defer rt.Close()
+	}
+	if err := rt.OpenDB(); err != nil {
 		return nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
 	}
-	defer db.Close()
+	db := rt.DB
 
 	results := make([]DeleteBulkResult, 0, len(req.ObjectIDs))
 	deletedCount := 0

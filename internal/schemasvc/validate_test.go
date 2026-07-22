@@ -23,7 +23,7 @@ traits:
     type: enum-ish
 `).Build()
 
-	result, err := Validate(vault.Path)
+	result, err := Validate(schemaTestRuntime(t, vault.Path))
 	if err != nil {
 		t.Fatalf("Validate returned error: %v", err)
 	}

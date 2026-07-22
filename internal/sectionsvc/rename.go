@@ -20,6 +20,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type RenameRequest struct {
@@ -31,6 +32,7 @@ type RenameRequest struct {
 	Preview        bool
 	ParseOptions   *parser.ParseOptions
 	FailOnIndexErr bool
+	Runtime        *vaultruntime.Runtime
 }
 
 type RenameResult struct {
@@ -62,6 +64,11 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	if req.VaultConfig == nil {
 		return nil, newError(codes.ErrValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
+	req.Runtime = rt
 
 	reference := strings.TrimSpace(req.Reference)
 	fileID, oldSlug, isSection := paths.ParseSectionID(reference)
@@ -209,15 +216,13 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	}
 
 	var db *index.Database
-	db, err = index.Open(req.VaultPath)
-	if err != nil {
+	if err := rt.OpenDB(); err != nil {
 		if req.FailOnIndexErr || errors.Is(err, index.ErrIndexRebuildRequired) {
 			return nil, newError(codes.ErrValidationFailed, "failed to open index database for section rename", "Run 'rvn reindex' to rebuild the database", nil, err)
 		}
 		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for section rename: %v", err))
 	} else {
-		defer db.Close()
-		db.SetDailyDirectory(req.VaultConfig.GetDailyDirectory())
+		db = rt.DB
 	}
 
 	rewritesByPath := make(map[string]*fileRewrite)
@@ -329,12 +334,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 }
 
 func resolveSectionReference(req RenameRequest, reference string) (*readsvc.ResolveResult, error) {
-	rt := &readsvc.Runtime{
-		VaultPath: req.VaultPath,
-		VaultCfg:  req.VaultConfig,
-		Schema:    req.Schema,
-	}
-	resolved, err := readsvc.ResolveReference(reference, rt, false)
+	resolved, err := readsvc.ResolveReference(reference, req.Runtime, false)
 	if err != nil {
 		var ambiguousErr *readsvc.AmbiguousRefError
 		if errors.As(err, &ambiguousErr) {

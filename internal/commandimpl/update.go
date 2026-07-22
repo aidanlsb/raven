@@ -102,7 +102,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		return mapTraitMutationError(err)
 	}
 
-	warnings := autoReindexWarnings(vaultPath, vaultCfg, summary.ChangedFilePaths...)
+	warnings := autoReindexWarnings(rt, summary.ChangedFilePaths...)
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"action":   summary.Action,

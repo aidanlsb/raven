@@ -15,6 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type ReclassifyRequest struct {
@@ -34,6 +35,7 @@ type ReclassifyRequest struct {
 	Force      bool
 
 	ParseOptions *parser.ParseOptions
+	Runtime      *vaultruntime.Runtime
 }
 
 type ReclassifyByReferenceRequest struct {
@@ -51,6 +53,7 @@ type ReclassifyByReferenceRequest struct {
 	Force      bool
 
 	ParseOptions *parser.ParseOptions
+	Runtime      *vaultruntime.Runtime
 }
 
 type ReclassifyResult struct {
@@ -81,6 +84,11 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	if req.Schema == nil {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
+	req.Runtime = rt
 	if strings.TrimSpace(req.FilePath) == "" {
 		return nil, newError(ErrorInvalidInput, "file path is required", "", nil, nil)
 	}
@@ -208,6 +216,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		&fieldmutation.RefValidationContext{
 			VaultPath:   req.VaultPath,
 			VaultConfig: req.VaultConfig,
+			Runtime:     rt,
 		},
 	)
 	if err != nil {
@@ -269,6 +278,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		VaultConfig:        req.VaultConfig,
 		Schema:             req.Schema,
 		ParseOptions:       req.ParseOptions,
+		Runtime:            rt,
 	})
 	if err != nil {
 		return nil, err
@@ -291,7 +301,11 @@ func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult,
 		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn reclassify <object> <new-type>", nil, nil)
 	}
 
-	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
+	resolved, err := resolveReferenceForMutation(rt, req.Reference)
 	if err != nil {
 		return nil, err
 	}
@@ -312,6 +326,7 @@ func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult,
 		UpdateRefs:   req.UpdateRefs,
 		Force:        req.Force,
 		ParseOptions: req.ParseOptions,
+		Runtime:      rt,
 	})
 }
 

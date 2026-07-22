@@ -6,7 +6,13 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func importTestRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
+	t.Helper()
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
+}
 
 func TestBuildMappingConfigReturnsSharedServiceError(t *testing.T) {
 	t.Parallel()
@@ -35,7 +41,7 @@ traits: {}
 `).
 		Build()
 
-	result, err := Run(RunRequest{
+	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
 		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "person",
@@ -87,7 +93,7 @@ name: AC/DC #1
 `).
 		Build()
 
-	result, err := Run(RunRequest{
+	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
 		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "person",
@@ -130,7 +136,7 @@ traits: {}
 `).
 		Build()
 
-	result, err := Run(RunRequest{
+	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
 		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type:         "person",
@@ -177,7 +183,7 @@ name: Freya
 `).
 		Build()
 
-	result, err := Run(RunRequest{
+	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
 		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type:         "person",
@@ -220,7 +226,7 @@ traits: {}
 `).
 		Build()
 
-	result, err := Run(RunRequest{
+	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
 		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "person",
@@ -273,7 +279,7 @@ name: Freya
 `).
 		Build()
 
-	result, err := Run(RunRequest{
+	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
 		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "person",
@@ -318,7 +324,7 @@ traits: {}
 `).
 		Build()
 
-	result, err := Run(RunRequest{
+	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
 		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "task",

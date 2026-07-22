@@ -8,9 +8,9 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // HandleDelete executes the canonical `delete` command.
@@ -33,7 +33,7 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		if len(objectIDs) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no object or asset IDs provided via stdin", nil, "Pipe object or asset IDs to stdin, one per line")
 		}
-		return runDeleteBulk(vaultPath, vaultCfg, objectIDs, req.Confirm)
+		return runDeleteBulk(rt, objectIDs, req.Confirm)
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
@@ -57,6 +57,7 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 			Reference:   reference,
 			Behavior:    deletionCfg.Behavior,
 			TrashDir:    deletionCfg.TrashDir,
+			Runtime:     rt,
 		})
 		if err != nil {
 			return mapContentMutationError(err)
@@ -79,6 +80,7 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		Reference:   reference,
 		Behavior:    deletionCfg.Behavior,
 		TrashDir:    deletionCfg.TrashDir,
+		Runtime:     rt,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -102,7 +104,9 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
-func runDeleteBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, confirm bool) commandexec.Result {
+func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool) commandexec.Result {
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
 	fileIDs, sectionIDs := splitSectionIDs(ids)
 	warnings := sectionSkipWarnings(sectionIDs)
 	deletionCfg := vaultCfg.GetDeletionConfig()
@@ -112,6 +116,7 @@ func runDeleteBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string,
 		ObjectIDs:   fileIDs,
 		Behavior:    deletionCfg.Behavior,
 		TrashDir:    deletionCfg.TrashDir,
+		Runtime:     rt,
 	}
 
 	if !confirm {

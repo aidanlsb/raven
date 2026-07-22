@@ -7,6 +7,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type SetByReferenceRequest struct {
@@ -16,6 +17,7 @@ type SetByReferenceRequest struct {
 	Reference    string
 	TypedUpdates map[string]schema.FieldValue
 	ParseOptions *parser.ParseOptions
+	Runtime      *vaultruntime.Runtime
 	// Preview validates and computes the resulting fields without writing the
 	// file, for dry-run callers.
 	Preview bool
@@ -44,8 +46,12 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 	if strings.TrimSpace(req.Reference) == "" {
 		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn set <object-id> field=value...", nil, nil)
 	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
 
-	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
+	resolved, err := resolveReferenceForMutation(rt, req.Reference)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +70,7 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 		AllowedFields: map[string]bool{"alias": true},
 		ParseOptions:  req.ParseOptions,
 		Preview:       req.Preview,
+		Runtime:       rt,
 	})
 	if err != nil {
 		return nil, err

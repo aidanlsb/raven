@@ -7,12 +7,19 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func configTestRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
+	t.Helper()
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{SkipSchema: true})
+}
 
 func TestShowMissingConfigUsesDefaults(t *testing.T) {
 	tmp := t.TempDir()
 
-	result, err := Show(ShowRequest{VaultPath: tmp})
+	result, err := Show(configTestRuntime(t, tmp), ShowRequest{VaultPath: tmp})
 	if err != nil {
 		t.Fatalf("Show() error = %v", err)
 	}
@@ -34,7 +41,7 @@ func TestShowMissingConfigUsesDefaults(t *testing.T) {
 func TestSetAutoReindexCreatesExplicitValue(t *testing.T) {
 	tmp := t.TempDir()
 
-	result, err := SetAutoReindex(SetAutoReindexRequest{
+	result, err := SetAutoReindex(configTestRuntime(t, tmp), SetAutoReindexRequest{
 		VaultPath: tmp,
 		Value:     false,
 	})
@@ -66,7 +73,7 @@ func TestUnsetAutoReindexClearsExplicitValue(t *testing.T) {
 		t.Fatalf("write raven.yaml: %v", err)
 	}
 
-	result, err := UnsetAutoReindex(UnsetAutoReindexRequest{VaultPath: tmp})
+	result, err := UnsetAutoReindex(configTestRuntime(t, tmp), UnsetAutoReindexRequest{VaultPath: tmp})
 	if err != nil {
 		t.Fatalf("UnsetAutoReindex() error = %v", err)
 	}
@@ -95,7 +102,7 @@ func TestProtectedPrefixesAddNormalizesAndDeduplicates(t *testing.T) {
 		t.Fatalf("write raven.yaml: %v", err)
 	}
 
-	result, err := AddProtectedPrefix(AddProtectedPrefixRequest{
+	result, err := AddProtectedPrefix(configTestRuntime(t, tmp), AddProtectedPrefixRequest{
 		VaultPath: tmp,
 		Prefix:    "./notes//team",
 	})
@@ -109,7 +116,7 @@ func TestProtectedPrefixesAddNormalizesAndDeduplicates(t *testing.T) {
 		t.Fatalf("expected normalized prefix notes/team/, got %q", result.Prefix)
 	}
 
-	result, err = AddProtectedPrefix(AddProtectedPrefixRequest{
+	result, err = AddProtectedPrefix(configTestRuntime(t, tmp), AddProtectedPrefixRequest{
 		VaultPath: tmp,
 		Prefix:    "private",
 	})
@@ -142,7 +149,7 @@ func TestProtectedPrefixesRemoveRequiresExistingPrefix(t *testing.T) {
 		t.Fatalf("write raven.yaml: %v", err)
 	}
 
-	result, err := RemoveProtectedPrefix(RemoveProtectedPrefixRequest{
+	result, err := RemoveProtectedPrefix(configTestRuntime(t, tmp), RemoveProtectedPrefixRequest{
 		VaultPath: tmp,
 		Prefix:    "private",
 	})
@@ -153,7 +160,7 @@ func TestProtectedPrefixesRemoveRequiresExistingPrefix(t *testing.T) {
 		t.Fatalf("expected removed private/, got %q", result.Removed)
 	}
 
-	_, err = RemoveProtectedPrefix(RemoveProtectedPrefixRequest{
+	_, err = RemoveProtectedPrefix(configTestRuntime(t, tmp), RemoveProtectedPrefixRequest{
 		VaultPath: tmp,
 		Prefix:    "missing",
 	})
@@ -172,7 +179,7 @@ func TestProtectedPrefixesRemoveRequiresExistingPrefix(t *testing.T) {
 func TestProtectedPrefixesRejectInvalidPrefix(t *testing.T) {
 	tmp := t.TempDir()
 
-	_, err := AddProtectedPrefix(AddProtectedPrefixRequest{
+	_, err := AddProtectedPrefix(configTestRuntime(t, tmp), AddProtectedPrefixRequest{
 		VaultPath: tmp,
 		Prefix:    "../outside",
 	})
@@ -190,8 +197,9 @@ func TestProtectedPrefixesRejectInvalidPrefix(t *testing.T) {
 
 func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
 	tmp := t.TempDir()
+	rt := configTestRuntime(t, tmp)
 
-	setResult, err := SetDirectories(SetDirectoriesRequest{
+	setResult, err := SetDirectories(rt, SetDirectoriesRequest{
 		VaultPath: tmp,
 		Daily:     strPtr("./journal"),
 		Object:    strPtr("objects"),
@@ -206,6 +214,9 @@ func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
 	if setResult.Directories.Daily != "journal/" {
 		t.Fatalf("expected daily journal/, got %q", setResult.Directories.Daily)
 	}
+	if !rt.VaultConfigExists || rt.ParseOptions == nil || rt.ParseOptions.DailyRoot != "journal" {
+		t.Fatalf("runtime was not refreshed after config save: %#v", rt)
+	}
 
 	cfg, err := config.LoadVaultConfig(tmp)
 	if err != nil {
@@ -215,7 +226,7 @@ func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
 		t.Fatalf("unexpected directories config: %#v", cfg.Directories)
 	}
 
-	unsetResult, err := UnsetDirectories(UnsetDirectoriesRequest{
+	unsetResult, err := UnsetDirectories(rt, UnsetDirectoriesRequest{
 		VaultPath: tmp,
 		Daily:     true,
 		Object:    true,
@@ -240,7 +251,7 @@ func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
 func TestCaptureSetAndUnsetLifecycle(t *testing.T) {
 	tmp := t.TempDir()
 
-	setResult, err := SetCapture(SetCaptureRequest{
+	setResult, err := SetCapture(configTestRuntime(t, tmp), SetCaptureRequest{
 		VaultPath:   tmp,
 		Destination: strPtr("inbox.md"),
 		Heading:     strPtr("## Captured"),
@@ -255,7 +266,7 @@ func TestCaptureSetAndUnsetLifecycle(t *testing.T) {
 		t.Fatalf("expected inbox.md destination, got %q", setResult.Capture.Destination)
 	}
 
-	unsetResult, err := UnsetCapture(UnsetCaptureRequest{
+	unsetResult, err := UnsetCapture(configTestRuntime(t, tmp), UnsetCaptureRequest{
 		VaultPath:   tmp,
 		Destination: true,
 		Heading:     true,
@@ -274,7 +285,7 @@ func TestCaptureSetAndUnsetLifecycle(t *testing.T) {
 func TestDeletionSetNormalizesTrashDirAndRejectsInvalidBehavior(t *testing.T) {
 	tmp := t.TempDir()
 
-	setResult, err := SetDeletion(SetDeletionRequest{
+	setResult, err := SetDeletion(configTestRuntime(t, tmp), SetDeletionRequest{
 		VaultPath: tmp,
 		Behavior:  strPtr("trash"),
 		TrashDir:  strPtr("./archive//trash"),
@@ -286,7 +297,7 @@ func TestDeletionSetNormalizesTrashDirAndRejectsInvalidBehavior(t *testing.T) {
 		t.Fatalf("expected archive/trash, got %q", setResult.Deletion.TrashDir)
 	}
 
-	_, err = SetDeletion(SetDeletionRequest{
+	_, err = SetDeletion(configTestRuntime(t, tmp), SetDeletionRequest{
 		VaultPath: tmp,
 		Behavior:  strPtr("invalid"),
 	})

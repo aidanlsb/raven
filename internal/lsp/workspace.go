@@ -116,15 +116,12 @@ func (ws *workspace) refresh() error {
 	// Reload config and schema from disk. A reload failure keeps the previous
 	// (stale) value so the workspace stays usable, but it is never swallowed:
 	// report it on stderr so the degraded state is visible.
-	if vaultCfg, err := config.LoadVaultConfig(ws.rt.VaultPath); err == nil {
-		ws.rt.VaultCfg = vaultCfg
-	} else {
+	if err := ws.rt.ReloadConfig(); err != nil {
 		fmt.Fprintf(os.Stderr, "rvn lsp: config reload failed, keeping previous config: %v\n", err)
 	}
-	if sch, err := schema.Load(ws.rt.VaultPath); err == nil {
-		ws.rt.Schema = sch
-	} else {
-		fmt.Fprintf(os.Stderr, "rvn lsp: schema reload failed, keeping previous schema: %v\n", err)
+	_ = ws.rt.ReloadSchema(false)
+	if ws.rt.SchemaLoadErr != nil {
+		fmt.Fprintf(os.Stderr, "rvn lsp: schema reload failed, keeping previous schema: %v\n", ws.rt.SchemaLoadErr)
 	}
 
 	if report, err := readsvc.SmartReindex(ws.rt); err != nil {

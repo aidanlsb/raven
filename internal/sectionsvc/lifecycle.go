@@ -17,6 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // Placement selects one structural insertion point. At most one field may be
@@ -38,6 +39,7 @@ type CreateRequest struct {
 	Preview        bool
 	ParseOptions   *parser.ParseOptions
 	FailOnIndexErr bool
+	Runtime        *vaultruntime.Runtime
 }
 
 type CreateResult struct {
@@ -58,6 +60,7 @@ type MoveRequest struct {
 	Preview        bool
 	ParseOptions   *parser.ParseOptions
 	FailOnIndexErr bool
+	Runtime        *vaultruntime.Runtime
 }
 
 type MoveResult struct {
@@ -87,6 +90,7 @@ type lifecycleContext struct {
 	vaultConfig  *config.VaultConfig
 	schema       *schema.Schema
 	parseOptions *parser.ParseOptions
+	runtime      *vaultruntime.Runtime
 }
 
 type documentState struct {
@@ -106,7 +110,11 @@ type trackedLine struct {
 
 // Create inserts a new, empty heading at a structural section boundary.
 func Create(req CreateRequest) (*CreateResult, error) {
-	ctx, err := newLifecycleContext(req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
+	ctx, err := newLifecycleContext(rt, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +215,11 @@ func Create(req CreateRequest) (*CreateResult, error) {
 // Move reorders or reparents one section and its complete subtree without
 // changing any heading text, level, or slug.
 func Move(req MoveRequest) (*MoveResult, error) {
-	ctx, err := newLifecycleContext(req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
+	ctx, err := newLifecycleContext(rt, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +324,7 @@ func Move(req MoveRequest) (*MoveResult, error) {
 	return result, nil
 }
 
-func newLifecycleContext(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, parseOptions *parser.ParseOptions) (*lifecycleContext, error) {
+func newLifecycleContext(rt *vaultruntime.Runtime, vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, parseOptions *parser.ParseOptions) (*lifecycleContext, error) {
 	if strings.TrimSpace(vaultPath) == "" {
 		return nil, newError(codes.ErrInvalidInput, "vault path is required", "", nil, nil)
 	}
@@ -324,6 +336,7 @@ func newLifecycleContext(vaultPath string, vaultCfg *config.VaultConfig, sch *sc
 		vaultConfig:  vaultCfg,
 		schema:       sch,
 		parseOptions: parseOptions,
+		runtime:      rt,
 	}, nil
 }
 
@@ -373,8 +386,7 @@ func (ctx *lifecycleContext) resolveReference(reference string) (*readsvc.Resolv
 	if reference == "" {
 		return nil, newError(codes.ErrInvalidInput, "file reference is required", "Pass an existing Markdown file", nil, nil)
 	}
-	rt := &readsvc.Runtime{VaultPath: ctx.vaultPath, VaultCfg: ctx.vaultConfig, Schema: ctx.schema}
-	resolved, err := readsvc.ResolveReference(reference, rt, false)
+	resolved, err := readsvc.ResolveReference(reference, ctx.runtime, false)
 	if err == nil {
 		return resolved, nil
 	}
@@ -610,16 +622,13 @@ func validateOriginalSectionSlugs(state *documentState, updatedDoc *parser.Parse
 
 func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnIndexErr bool) ([]string, error) {
 	var warnings []string
-	db, err := index.Open(ctx.vaultPath)
-	if err != nil {
+	if err := ctx.runtime.OpenDB(); err != nil {
 		if failOnIndexErr || errors.Is(err, index.ErrIndexRebuildRequired) {
 			return nil, newError(codes.ErrValidationFailed, "failed to open index database for section mutation", "Run 'rvn reindex' to rebuild the database", nil, err)
 		}
 		warnings = append(warnings, fmt.Sprintf("Failed to open index database for section mutation: %v", err))
-	} else {
-		defer db.Close()
-		db.SetDailyDirectory(ctx.vaultConfig.GetDailyDirectory())
 	}
+	db := ctx.runtime.DB
 
 	perm := os.FileMode(0o644)
 	if st, statErr := os.Stat(filePath); statErr == nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type MissingRefGroups struct {
@@ -119,7 +120,8 @@ func AddTrait(vaultPath string, s *schema.Schema, traitName, traitType string, e
 		}
 	}
 
-	_, err := schemasvc.AddTrait(schemasvc.AddTraitRequest{
+	rt := &vaultruntime.Runtime{VaultPath: vaultPath, Schema: s}
+	_, err := schemasvc.AddTrait(rt, schemasvc.AddTraitRequest{
 		VaultPath: vaultPath,
 		TraitName: traitName,
 		TraitType: traitType,
@@ -130,10 +132,10 @@ func AddTrait(vaultPath string, s *schema.Schema, traitName, traitType string, e
 		return err
 	}
 
-	loaded, err := schema.Load(vaultPath)
-	if err != nil {
+	if err := rt.ReloadSchema(true); err != nil {
 		return validationErrorf("failed to reload schema after adding trait: %w", err)
 	}
+	loaded := rt.Schema
 	traitDef, ok := loaded.Traits[traitName]
 	if !ok {
 		return validationErrorf("added trait '%s' was not found after reload", traitName)
@@ -148,7 +150,8 @@ func AddTrait(vaultPath string, s *schema.Schema, traitName, traitType string, e
 }
 
 func AddType(vaultPath string, s *schema.Schema, typeName, defaultPath string) error {
-	_, err := schemasvc.AddType(schemasvc.AddTypeRequest{
+	rt := &vaultruntime.Runtime{VaultPath: vaultPath, Schema: s}
+	_, err := schemasvc.AddType(rt, schemasvc.AddTypeRequest{
 		VaultPath:   vaultPath,
 		TypeName:    typeName,
 		DefaultPath: strings.TrimSpace(defaultPath),
@@ -157,10 +160,10 @@ func AddType(vaultPath string, s *schema.Schema, typeName, defaultPath string) e
 		return err
 	}
 
-	loaded, err := schema.Load(vaultPath)
-	if err != nil {
+	if err := rt.ReloadSchema(true); err != nil {
 		return validationErrorf("failed to reload schema after adding type: %w", err)
 	}
+	loaded := rt.Schema
 	typeDef, ok := loaded.Types[typeName]
 	if !ok {
 		return validationErrorf("added type '%s' was not found after reload", typeName)

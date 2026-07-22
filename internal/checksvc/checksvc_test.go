@@ -12,7 +12,15 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
 	vaultpkg "github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func runCheckTest(t *testing.T, vaultPath string, cfg *config.VaultConfig, sch *schema.Schema, opts Options) (*RunResult, error) {
+	t.Helper()
+	rt := &vaultruntime.Runtime{VaultPath: vaultPath, VaultCfg: cfg, Schema: sch}
+	defer rt.Close()
+	return Run(rt, opts)
+}
 
 func TestRun_FiltersParseErrorsBeforeCounting(t *testing.T) {
 	t.Parallel()
@@ -43,7 +51,7 @@ func TestRun_FiltersParseErrorsBeforeCounting(t *testing.T) {
 				t.Fatalf("load schema: %v", err)
 			}
 
-			result, err := Run(vault.Path, &config.VaultConfig{}, sch, tt.opts)
+			result, err := runCheckTest(t, vault.Path, &config.VaultConfig{}, sch, tt.opts)
 			if err != nil {
 				t.Fatalf("Run returned error: %v", err)
 			}
@@ -143,7 +151,7 @@ func TestRun_ReportsMissingAssetReference(t *testing.T) {
 		t.Fatalf("load schema: %v", err)
 	}
 
-	result, err := Run(vault.Path, config.DefaultVaultConfig(), sch, Options{})
+	result, err := runCheckTest(t, vault.Path, config.DefaultVaultConfig(), sch, Options{})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -184,7 +192,7 @@ func TestRun_ReportsOrphanedAsset(t *testing.T) {
 	}
 	db.Close()
 
-	result, err := Run(vaultPath, cfg, sch, Options{})
+	result, err := runCheckTest(t, vaultPath, cfg, sch, Options{})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -233,7 +241,7 @@ func TestRun_IgnoresExcludedMarkdownAndAssetIssues(t *testing.T) {
 	}
 	db.Close()
 
-	result, err := Run(vault.Path, cfg, sch, Options{})
+	result, err := runCheckTest(t, vault.Path, cfg, sch, Options{})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -275,7 +283,7 @@ func TestRun_ReportsCheckIncompleteWhenIndexUnavailable(t *testing.T) {
 		t.Fatalf("load schema: %v", err)
 	}
 
-	result, err := Run(vault.Path, &config.VaultConfig{}, sch, Options{})
+	result, err := runCheckTest(t, vault.Path, &config.VaultConfig{}, sch, Options{})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}

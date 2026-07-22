@@ -131,7 +131,7 @@ func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]in
 }
 
 func promptNewSchemaFields(reader *bufio.Reader, writer io.Writer, vaultPath, typeName, title string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}) error {
-	sch, err := schema.Load(vaultPath)
+	sch, err := loadSchemaSafe(vaultPath)
 	if err != nil {
 		return handleErrorMsg(ErrSchemaInvalid, "failed to load schema", "Fix schema.yaml and try again")
 	}
@@ -287,7 +287,7 @@ func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]stri
 		return schema.BuiltinTypeNames(), cobra.ShellCompDirectiveNoFileComp
 	}
 
-	s, err := schema.Load(vaultPath)
+	s, err := loadSchemaSafe(vaultPath)
 	if err != nil {
 		return schema.BuiltinTypeNames(), cobra.ShellCompDirectiveNoFileComp
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/aidanlsb/raven/internal/querysvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // readSavedQueriesResourceAt renders the raven://queries/saved resource. It
@@ -11,7 +12,12 @@ import (
 // command) and reuses the shared SavedQueryInfo.Payload shaping, so the resource
 // content stays identical to the command's --json data.
 func (s *Server) readSavedQueriesResourceAt(vaultPath string) (string, error) {
-	result, err := querysvc.List(querysvc.ListRequest{VaultPath: vaultPath})
+	rt, err := vaultruntime.New(vaultPath, vaultruntime.Options{SkipSchema: true})
+	if err != nil {
+		return "", err
+	}
+	defer rt.Close()
+	result, err := querysvc.List(rt, querysvc.ListRequest{VaultPath: vaultPath})
 	if err != nil {
 		return "", err
 	}

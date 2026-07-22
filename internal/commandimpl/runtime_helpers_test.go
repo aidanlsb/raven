@@ -11,9 +11,9 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestMissingRefWarning_InferredType(t *testing.T) {
@@ -153,15 +153,11 @@ Body
 `).
 				Build()
 
-			vaultCfg, err := config.LoadVaultConfig(v.Path)
-			if err != nil {
-				t.Fatalf("load vault config: %v", err)
-			}
-
 			filePath := filepath.Join(v.Path, "people", "alice.md")
 			tc.mutate(t, v.Path, filePath)
 
-			warnings := autoReindexWarnings(v.Path, vaultCfg, filePath)
+			rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+			warnings := autoReindexWarnings(rt, filePath)
 			if len(warnings) != 1 {
 				t.Fatalf("warnings = %#v, want 1 warning", warnings)
 			}

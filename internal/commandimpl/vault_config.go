@@ -9,7 +9,12 @@ import (
 )
 
 func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.Show(vaultConfigShowRequest(req))
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.Show(rt, vaultConfigShowRequest(req))
 	if err != nil {
 		return mapVaultConfigFailure(err)
 	}
@@ -44,7 +49,12 @@ func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandex
 }
 
 func HandleVaultConfigAutoReindexSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.SetAutoReindex(vaultconfigsvc.SetAutoReindexRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.SetAutoReindex(rt, vaultconfigsvc.SetAutoReindexRequest{
 		VaultPath: req.VaultPath,
 		Value:     boolArgDefault(req.Args, "value", true),
 	})
@@ -61,7 +71,12 @@ func HandleVaultConfigAutoReindexSet(_ context.Context, req commandexec.Request)
 }
 
 func HandleVaultConfigAutoReindexUnset(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.UnsetAutoReindex(vaultconfigsvc.UnsetAutoReindexRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.UnsetAutoReindex(rt, vaultconfigsvc.UnsetAutoReindexRequest{
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
@@ -76,7 +91,12 @@ func HandleVaultConfigAutoReindexUnset(_ context.Context, req commandexec.Reques
 }
 
 func HandleVaultConfigProtectedPrefixesList(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.ListProtectedPrefixes(vaultconfigsvc.ListProtectedPrefixesRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.ListProtectedPrefixes(rt, vaultconfigsvc.ListProtectedPrefixesRequest{
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
@@ -90,7 +110,12 @@ func HandleVaultConfigProtectedPrefixesList(_ context.Context, req commandexec.R
 }
 
 func HandleVaultConfigProtectedPrefixesAdd(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.AddProtectedPrefix(vaultconfigsvc.AddProtectedPrefixRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.AddProtectedPrefix(rt, vaultconfigsvc.AddProtectedPrefixRequest{
 		VaultPath: req.VaultPath,
 		Prefix:    strings.TrimSpace(stringArg(req.Args, "prefix")),
 	})
@@ -107,7 +132,12 @@ func HandleVaultConfigProtectedPrefixesAdd(_ context.Context, req commandexec.Re
 }
 
 func HandleVaultConfigProtectedPrefixesRemove(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.RemoveProtectedPrefix(vaultconfigsvc.RemoveProtectedPrefixRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.RemoveProtectedPrefix(rt, vaultconfigsvc.RemoveProtectedPrefixRequest{
 		VaultPath: req.VaultPath,
 		Prefix:    strings.TrimSpace(stringArg(req.Args, "prefix")),
 	})
@@ -123,7 +153,12 @@ func HandleVaultConfigProtectedPrefixesRemove(_ context.Context, req commandexec
 }
 
 func HandleVaultConfigExcludeList(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.ListExclude(vaultconfigsvc.ListExcludeRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.ListExclude(rt, vaultconfigsvc.ListExcludeRequest{
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
@@ -137,7 +172,12 @@ func HandleVaultConfigExcludeList(_ context.Context, req commandexec.Request) co
 }
 
 func HandleVaultConfigExcludeAdd(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.AddExclude(vaultconfigsvc.AddExcludeRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.AddExclude(rt, vaultconfigsvc.AddExcludeRequest{
 		VaultPath: req.VaultPath,
 		Pattern:   strings.TrimSpace(stringArg(req.Args, "pattern")),
 	})
@@ -154,7 +194,12 @@ func HandleVaultConfigExcludeAdd(_ context.Context, req commandexec.Request) com
 }
 
 func HandleVaultConfigExcludeRemove(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.RemoveExclude(vaultconfigsvc.RemoveExcludeRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.RemoveExclude(rt, vaultconfigsvc.RemoveExcludeRequest{
 		VaultPath: req.VaultPath,
 		Pattern:   strings.TrimSpace(stringArg(req.Args, "pattern")),
 	})
@@ -170,7 +215,12 @@ func HandleVaultConfigExcludeRemove(_ context.Context, req commandexec.Request) 
 }
 
 func HandleVaultConfigDirectoriesGet(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.GetDirectories(vaultconfigsvc.GetDirectoriesRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.GetDirectories(rt, vaultconfigsvc.GetDirectoriesRequest{
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
@@ -180,7 +230,12 @@ func HandleVaultConfigDirectoriesGet(_ context.Context, req commandexec.Request)
 }
 
 func HandleVaultConfigDirectoriesSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.SetDirectories(vaultconfigsvc.SetDirectoriesRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.SetDirectories(rt, vaultconfigsvc.SetDirectoriesRequest{
 		VaultPath: req.VaultPath,
 		Daily:     optionalStringArg(req.Args, "daily"),
 		Object:    optionalStringArg(req.Args, "type"),
@@ -198,7 +253,12 @@ func HandleVaultConfigDirectoriesSet(_ context.Context, req commandexec.Request)
 }
 
 func HandleVaultConfigDirectoriesUnset(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.UnsetDirectories(vaultconfigsvc.UnsetDirectoriesRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.UnsetDirectories(rt, vaultconfigsvc.UnsetDirectoriesRequest{
 		VaultPath: req.VaultPath,
 		Daily:     boolArg(req.Args, "daily"),
 		Object:    boolArg(req.Args, "type"),
@@ -215,7 +275,12 @@ func HandleVaultConfigDirectoriesUnset(_ context.Context, req commandexec.Reques
 }
 
 func HandleVaultConfigCaptureGet(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.GetCapture(vaultconfigsvc.GetCaptureRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.GetCapture(rt, vaultconfigsvc.GetCaptureRequest{
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
@@ -225,7 +290,12 @@ func HandleVaultConfigCaptureGet(_ context.Context, req commandexec.Request) com
 }
 
 func HandleVaultConfigCaptureSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.SetCapture(vaultconfigsvc.SetCaptureRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.SetCapture(rt, vaultconfigsvc.SetCaptureRequest{
 		VaultPath:   req.VaultPath,
 		Destination: optionalStringArg(req.Args, "destination"),
 		Heading:     optionalStringArg(req.Args, "heading"),
@@ -240,7 +310,12 @@ func HandleVaultConfigCaptureSet(_ context.Context, req commandexec.Request) com
 }
 
 func HandleVaultConfigCaptureUnset(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.UnsetCapture(vaultconfigsvc.UnsetCaptureRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.UnsetCapture(rt, vaultconfigsvc.UnsetCaptureRequest{
 		VaultPath:   req.VaultPath,
 		Destination: boolArg(req.Args, "destination"),
 		Heading:     boolArg(req.Args, "heading"),
@@ -254,7 +329,12 @@ func HandleVaultConfigCaptureUnset(_ context.Context, req commandexec.Request) c
 }
 
 func HandleVaultConfigDeletionGet(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.GetDeletion(vaultconfigsvc.GetDeletionRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.GetDeletion(rt, vaultconfigsvc.GetDeletionRequest{
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
@@ -264,7 +344,12 @@ func HandleVaultConfigDeletionGet(_ context.Context, req commandexec.Request) co
 }
 
 func HandleVaultConfigDeletionSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.SetDeletion(vaultconfigsvc.SetDeletionRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.SetDeletion(rt, vaultconfigsvc.SetDeletionRequest{
 		VaultPath: req.VaultPath,
 		Behavior:  optionalStringArg(req.Args, "behavior"),
 		TrashDir:  optionalStringArg(req.Args, "trash-dir"),
@@ -279,7 +364,12 @@ func HandleVaultConfigDeletionSet(_ context.Context, req commandexec.Request) co
 }
 
 func HandleVaultConfigDeletionUnset(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.UnsetDeletion(vaultconfigsvc.UnsetDeletionRequest{
+	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := vaultconfigsvc.UnsetDeletion(rt, vaultconfigsvc.UnsetDeletionRequest{
 		VaultPath: req.VaultPath,
 		Behavior:  boolArg(req.Args, "behavior"),
 		TrashDir:  boolArg(req.Args, "trash-dir"),

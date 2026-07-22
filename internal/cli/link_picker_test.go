@@ -9,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
@@ -30,7 +31,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 		WithFile("notes/alpha.md", "# Alpha\n\n## Details\n").
 		WithFile("assets/paper.pdf", "%PDF-1.4\n").
 		Build()
-	if _, err := reindexsvc.Run(reindexsvc.RunRequest{VaultPath: v.Path, Full: true, Context: context.Background()}); err != nil {
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{VaultPath: v.Path, Full: true, Context: context.Background()}); err != nil {
 		t.Fatalf("reindexsvc.Run() error = %v", err)
 	}
 

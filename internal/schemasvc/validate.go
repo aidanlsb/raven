@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type ValidateResult struct {
@@ -14,21 +15,26 @@ type ValidateResult struct {
 	Traits int
 }
 
-func Validate(vaultPath string) (*ValidateResult, error) {
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
+func Validate(rt *vaultruntime.Runtime) (*ValidateResult, error) {
+	if rt == nil {
+		return nil, newError(ErrorInvalidInput, "vault runtime is required", "", nil, nil)
+	}
+	if rt.SchemaLoadErr != nil {
 		code := ErrorSchemaInvalid
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(rt.SchemaLoadErr, os.ErrNotExist) {
 			code = ErrorSchemaNotFound
 		}
-		return nil, newError(code, err.Error(), "Fix the errors and try again", nil, err)
+		return nil, newError(code, rt.SchemaLoadErr.Error(), "Fix the errors and try again", nil, rt.SchemaLoadErr)
+	}
+	if rt.Schema == nil {
+		return nil, newError(ErrorSchemaNotFound, "schema runtime is required", "Fix the errors and try again", nil, nil)
 	}
 
-	issues := schema.ValidateSchema(sch)
+	issues := schema.ValidateSchema(rt.Schema)
 	return &ValidateResult{
 		Valid:  len(issues) == 0,
 		Issues: issues,
-		Types:  len(sch.Types),
-		Traits: len(sch.Traits),
+		Types:  len(rt.Schema.Types),
+		Traits: len(rt.Schema.Traits),
 	}, nil
 }

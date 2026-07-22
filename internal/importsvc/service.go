@@ -20,6 +20,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type Code = codes.ErrorCode
@@ -302,8 +303,11 @@ type RunResult struct {
 	VaultConfig      *config.VaultConfig
 }
 
-func Run(req RunRequest) (*RunResult, error) {
-	vaultPath := strings.TrimSpace(req.VaultPath)
+func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
+	if rt == nil {
+		return nil, newError(CodeInvalidInput, "vault runtime is required", nil)
+	}
+	vaultPath := strings.TrimSpace(rt.VaultPath)
 	if vaultPath == "" {
 		return nil, newError(CodeInvalidInput, "vault path is required", nil)
 	}
@@ -314,14 +318,17 @@ func Run(req RunRequest) (*RunResult, error) {
 		return nil, newError(CodeInvalidInput, "no items to import", nil)
 	}
 
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return nil, newError(CodeSchemaInvalid, err.Error(), err)
+	if rt.SchemaLoadErr != nil {
+		return nil, newError(CodeSchemaInvalid, rt.SchemaLoadErr.Error(), rt.SchemaLoadErr)
 	}
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return nil, newError(CodeConfigInvalid, err.Error(), err)
+	if rt.Schema == nil {
+		return nil, newError(CodeSchemaInvalid, "schema runtime is required", nil)
 	}
+	if rt.VaultCfg == nil {
+		return nil, newError(CodeConfigInvalid, "vault config runtime is required", nil)
+	}
+	sch := rt.Schema
+	vaultCfg := rt.VaultCfg
 	if err := ValidateMappingTypes(req.MappingConfig, sch); err != nil {
 		return nil, err
 	}
@@ -411,6 +418,7 @@ func Run(req RunRequest) (*RunResult, error) {
 			ObjectsRoot: objectsRoot,
 			PagesRoot:   pagesRoot,
 			TemplateDir: templateDir,
+			Runtime:     rt,
 		})
 		result.Results = append(result.Results, itemResult)
 		result.WarningMessages = append(result.WarningMessages, warnMsgs...)
@@ -439,6 +447,7 @@ type applyObjectRequest struct {
 	ObjectsRoot string
 	PagesRoot   string
 	TemplateDir string
+	Runtime     *vaultruntime.Runtime
 }
 
 // applyObject creates or updates a single imported object by routing through
@@ -469,6 +478,7 @@ func applyObject(req applyObjectRequest) (ResultItem, []string, string) {
 		ObjectsRoot: req.ObjectsRoot,
 		PagesRoot:   req.PagesRoot,
 		TemplateDir: req.TemplateDir,
+		Runtime:     req.Runtime,
 	})
 	if err != nil {
 		return mutationErrorResult(req.TargetPath, err), nil, ""

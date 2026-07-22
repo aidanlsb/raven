@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type SchemaResult struct {
@@ -114,16 +115,16 @@ type FlagSchema struct {
 	Examples    []string `json:"examples,omitempty"`
 }
 
-func FullSchema(vaultPath string) (*SchemaResult, error) {
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
+func FullSchema(rt *vaultruntime.Runtime) (*SchemaResult, error) {
+	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
 		return nil, err
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return nil, newError(ErrorConfigInvalid, fmt.Sprintf("failed to load raven.yaml: %v", err), "Fix raven.yaml and try again", nil, err)
+	if rt.VaultCfg == nil {
+		return nil, newError(ErrorConfigInvalid, "failed to load raven.yaml: vault config runtime is required", "Fix raven.yaml and try again", nil, nil)
 	}
+	vaultCfg := rt.VaultCfg
 
 	result := &SchemaResult{
 		Version: sch.Version,
@@ -177,8 +178,8 @@ func FullSchema(vaultPath string) (*SchemaResult, error) {
 	return result, nil
 }
 
-func Types(vaultPath string) (*TypesResult, error) {
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
+func Types(rt *vaultruntime.Runtime) (*TypesResult, error) {
+	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
 		return nil, err
 	}
@@ -217,8 +218,8 @@ func Types(vaultPath string) (*TypesResult, error) {
 	return out, nil
 }
 
-func Traits(vaultPath string) (*TraitsResult, error) {
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
+func Traits(rt *vaultruntime.Runtime) (*TraitsResult, error) {
+	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
 		return nil, err
 	}
@@ -231,8 +232,8 @@ func Traits(vaultPath string) (*TraitsResult, error) {
 	return &TraitsResult{Traits: traits}, nil
 }
 
-func CoreList(vaultPath string) (*CoreResult, error) {
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
+func CoreList(rt *vaultruntime.Runtime) (*CoreResult, error) {
+	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
 		return nil, err
 	}
@@ -244,8 +245,8 @@ func CoreList(vaultPath string) (*CoreResult, error) {
 	}}, nil
 }
 
-func CoreByName(vaultPath, coreTypeName string) (*CoreTypeResult, error) {
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
+func CoreByName(rt *vaultruntime.Runtime, coreTypeName string) (*CoreTypeResult, error) {
+	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
 		return nil, err
 	}
@@ -255,8 +256,8 @@ func CoreByName(vaultPath, coreTypeName string) (*CoreTypeResult, error) {
 	return &CoreTypeResult{Core: buildCoreTypeSchema(coreTypeName, sch.Core[coreTypeName])}, nil
 }
 
-func TypeByName(vaultPath, typeName string) (*TypeResult, error) {
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
+func TypeByName(rt *vaultruntime.Runtime, typeName string) (*TypeResult, error) {
+	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
 		return nil, err
 	}
@@ -273,8 +274,8 @@ func TypeByName(vaultPath, typeName string) (*TypeResult, error) {
 	return &TypeResult{Type: buildTypeSchema(typeName, typeDef, false)}, nil
 }
 
-func TraitByName(vaultPath, traitName string) (*TraitResult, error) {
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
+func TraitByName(rt *vaultruntime.Runtime, traitName string) (*TraitResult, error) {
+	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
 		return nil, err
 	}

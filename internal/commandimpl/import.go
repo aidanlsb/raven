@@ -37,7 +37,13 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("INVALID_INPUT", "no items to import", nil, "Provide a non-empty JSON array")
 	}
 
-	serviceResult, err := importsvc.Run(importsvc.RunRequest{
+	rt, failure := newSchemaFirstCommandVaultRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	serviceResult, err := importsvc.Run(rt, importsvc.RunRequest{
 		VaultPath:     vaultPath,
 		MappingConfig: mappingCfg,
 		Items:         items,
@@ -76,7 +82,7 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 			reindexed[changedFile] = struct{}{}
 			reindexWarnings = appendCommandWarnings(
 				reindexWarnings,
-				autoReindexWarnings(vaultPath, serviceResult.VaultConfig, changedFile),
+				autoReindexWarnings(rt, changedFile),
 			)
 		}
 		serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField)

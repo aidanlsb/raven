@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/sectionsvc"
 )
 
@@ -46,8 +45,9 @@ func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec
 		Level:          level,
 		Placement:      sectionPlacementArg(req.Args),
 		Preview:        req.Preview,
-		ParseOptions:   parseopts.FromVaultConfig(rt.VaultCfg),
+		ParseOptions:   rt.ParseOptions,
 		FailOnIndexErr: true,
+		Runtime:        rt,
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -87,8 +87,9 @@ func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.R
 		Reference:      sectionID,
 		Placement:      sectionPlacementArg(req.Args),
 		Preview:        req.Preview,
-		ParseOptions:   parseopts.FromVaultConfig(rt.VaultCfg),
+		ParseOptions:   rt.ParseOptions,
 		FailOnIndexErr: true,
+		Runtime:        rt,
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -132,8 +133,9 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 		Reference:      sectionID,
 		NewHeadingText: newHeadingText,
 		Preview:        req.Preview,
-		ParseOptions:   parseopts.FromVaultConfig(rt.VaultCfg),
+		ParseOptions:   rt.ParseOptions,
 		FailOnIndexErr: true,
+		Runtime:        rt,
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)

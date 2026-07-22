@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 const maxReferenceCompletionResults = 200
@@ -52,7 +52,11 @@ func completeReferenceValues(cmd *cobra.Command, toComplete string, includeDynam
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	db, err := index.Open(vaultPath)
+	rt, err := vaultruntime.New(vaultPath, vaultruntime.Options{
+		OpenDB:     true,
+		SkipConfig: true,
+		SkipSchema: true,
+	})
 	if err != nil {
 		dateMatches := filterDynamicDateKeywords(toComplete, includeDynamicDates)
 		if len(dateMatches) > 0 {
@@ -60,7 +64,8 @@ func completeReferenceValues(cmd *cobra.Command, toComplete string, includeDynam
 		}
 		return nil, cobra.ShellCompDirectiveDefault
 	}
-	defer db.Close()
+	defer rt.Close()
+	db := rt.DB
 
 	ids, err := db.AllObjectIDs()
 	if err != nil {

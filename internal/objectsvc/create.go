@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type CreateRequest struct {
@@ -22,6 +23,7 @@ type CreateRequest struct {
 	PagesRoot   string
 	TemplateDir string
 	TemplateID  string
+	Runtime     *vaultruntime.Runtime
 }
 
 type CreateResult struct {
@@ -99,7 +101,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, newError(ErrorInvalidInput, err.Error(), "Use `rvn schema template list --type <type_name>` to see available template IDs", nil, err)
 	}
 
-	validatedFields, _, err := validateCreateFieldValues(req.TypeName, fieldValues, req.Schema, nil, createRefValidationContext(req.VaultPath, req.VaultConfig))
+	validatedFields, _, err := validateCreateFieldValues(req.TypeName, fieldValues, req.Schema, nil, createRefValidationContext(req.Runtime, req.VaultPath, req.VaultConfig))
 	if err != nil {
 		return nil, newError(ErrorValidationFailed, err.Error(), "Ensure values match the schema field types for this object", nil, err)
 	}

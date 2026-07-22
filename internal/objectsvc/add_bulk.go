@@ -9,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type AddBulkRequest struct {
@@ -17,6 +18,7 @@ type AddBulkRequest struct {
 	ObjectIDs    []string
 	Line         string
 	ParseOptions *parser.ParseOptions
+	Runtime      *vaultruntime.Runtime
 }
 
 type AddBulkPreviewItem struct {
@@ -130,6 +132,10 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 	skippedCount := 0
 	errorCount := 0
 	captureCfg := req.VaultConfig.GetCaptureConfig()
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, nil, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
 
 	for _, id := range req.ObjectIDs {
 		result := AddBulkResult{ID: id}
@@ -156,7 +162,7 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 			continue
 		}
 
-		_, appendErr := AppendToFile(req.VaultPath, filePath, req.Line, captureCfg, req.VaultConfig, false, targetObjectID, req.ParseOptions)
+		_, appendErr := AppendToFile(rt, filePath, req.Line, captureCfg, false, targetObjectID)
 		if appendErr != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("append failed: %v", appendErr)

@@ -36,18 +36,18 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 		label := queryLabelOrParse(payload.Type, queryStr)
 		if browse {
 			if len(objects) == 0 {
-				sch, _ := schema.Load(getVaultPath())
+				sch, _ := loadSchemaSafe(getVaultPath())
 				printQueryObjectResults(queryStr, label, objects, sch)
 				return nil
 			}
-			sch, _ := schema.Load(getVaultPath())
+			sch, _ := loadSchemaSafe(getVaultPath())
 			return browseQueryResults(browseItemsForObjectResults(objects, sch), objectBrowseHeaders(objects, sch), objectBrowseLayout(objects, sch))
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects))
 			return nil
 		}
-		sch, _ := schema.Load(getVaultPath())
+		sch, _ := loadSchemaSafe(getVaultPath())
 		printQueryObjectResults(queryStr, label, objects, sch)
 		return nil
 	case commandpayload.QueryTraitResult:

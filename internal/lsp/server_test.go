@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // testClient drives a Server over OS pipes from tests.
@@ -934,7 +935,8 @@ func TestCompletionRefreshesAfterExternalIncrementalReindex(t *testing.T) {
 	if err := os.WriteFile(odinPath, []byte(odinContent), 0o644); err != nil {
 		t.Fatalf("write external file: %v", err)
 	}
-	if _, err := reindexsvc.Run(reindexsvc.RunRequest{VaultPath: vaultPath}); err != nil {
+	rt := testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
+	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{VaultPath: vaultPath}); err != nil {
 		t.Fatalf("external incremental reindex: %v", err)
 	}
 

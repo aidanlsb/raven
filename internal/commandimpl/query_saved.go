@@ -16,7 +16,13 @@ func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexe
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	result, err := querysvc.List(querysvc.ListRequest{VaultPath: vaultPath})
+	rt, failure := newLazyConfigCommandRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	result, err := querysvc.List(rt, querysvc.ListRequest{VaultPath: vaultPath})
 	if err != nil {
 		return mapQuerySvcFailure(err)
 	}
@@ -37,7 +43,13 @@ func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	result, err := querysvc.Get(querysvc.GetRequest{
+	rt, failure := newLazyConfigCommandRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	result, err := querysvc.Get(rt, querysvc.GetRequest{
 		VaultPath: vaultPath,
 		Name:      strings.TrimSpace(stringArg(req.Args, "name")),
 	})
@@ -55,7 +67,13 @@ func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	result, err := querysvc.Set(querysvc.SetRequest{
+	rt, failure := newLazyConfigCommandRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	result, err := querysvc.Set(rt, querysvc.SetRequest{
 		VaultPath:   vaultPath,
 		Name:        strings.TrimSpace(stringArg(req.Args, "name")),
 		QueryString: strings.TrimSpace(stringArg(req.Args, "query_string")),
@@ -79,7 +97,13 @@ func HandleQuerySavedRemove(_ context.Context, req commandexec.Request) commande
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	result, err := querysvc.Remove(querysvc.RemoveRequest{
+	rt, failure := newLazyConfigCommandRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	result, err := querysvc.Remove(rt, querysvc.RemoveRequest{
 		VaultPath: vaultPath,
 		Name:      strings.TrimSpace(stringArg(req.Args, "name")),
 	})

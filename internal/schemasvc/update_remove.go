@@ -9,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type UpdateTypeRequest struct {
@@ -80,7 +81,7 @@ type RemoveResult struct {
 	Warnings []Warning
 }
 
-func UpdateType(req UpdateTypeRequest) (*UpdateResult, error) {
+func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult, error) {
 	typeName := strings.TrimSpace(req.TypeName)
 	if typeName == "" {
 		return nil, newError(ErrorInvalidInput, "type name cannot be empty", "", nil, nil)
@@ -96,7 +97,7 @@ func UpdateType(req UpdateTypeRequest) (*UpdateResult, error) {
 	}
 
 	changes := make([]string, 0)
-	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		typeDef, exists := sch.Types[typeName]
 		if !exists {
@@ -223,14 +224,14 @@ func UpdateType(req UpdateTypeRequest) (*UpdateResult, error) {
 	}, nil
 }
 
-func UpdateTrait(req UpdateTraitRequest) (*UpdateResult, error) {
+func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResult, error) {
 	traitName := strings.TrimSpace(req.TraitName)
 	if traitName == "" {
 		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
 	}
 
 	changes := make([]string, 0)
-	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		traitDef, exists := doc.Schema().Traits[traitName]
 		if !exists {
 			return newError(
@@ -291,7 +292,7 @@ func UpdateTrait(req UpdateTraitRequest) (*UpdateResult, error) {
 	}, nil
 }
 
-func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
+func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResult, error) {
 	typeName := strings.TrimSpace(req.TypeName)
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
@@ -299,7 +300,7 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 	}
 
 	changes := make([]string, 0)
-	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		typeDef, exists := sch.Types[typeName]
 		if !exists {
@@ -376,12 +377,12 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 		}
 
 		if req.Required == "true" {
-			db, openErr := index.Open(req.VaultPath)
+			openErr := rt.OpenDB()
 			if errors.Is(openErr, index.ErrIndexRebuildRequired) {
 				return indexRebuildRequiredError(openErr)
 			}
 			if openErr == nil {
-				defer db.Close()
+				db := rt.DB
 				objects, objectsErr := objectsByType(db, typeName)
 				if objectsErr == nil && len(objects) > 0 {
 					missing := make([]string, 0)
@@ -536,7 +537,7 @@ func currentFieldType(def *schema.FieldDefinition) string {
 	return strings.TrimSpace(string(def.Type))
 }
 
-func RemoveType(req RemoveTypeRequest) (*RemoveResult, error) {
+func RemoveType(rt *vaultruntime.Runtime, req RemoveTypeRequest) (*RemoveResult, error) {
 	typeName := strings.TrimSpace(req.TypeName)
 	if typeName == "" {
 		return nil, newError(ErrorInvalidInput, "type name cannot be empty", "", nil, nil)
@@ -552,17 +553,17 @@ func RemoveType(req RemoveTypeRequest) (*RemoveResult, error) {
 	}
 
 	warnings := make([]Warning, 0)
-	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Types[typeName]; !exists {
 			return newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
 		}
 
-		db, dbErr := index.Open(req.VaultPath)
+		dbErr := rt.OpenDB()
 		if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
 			return indexRebuildRequiredError(dbErr)
 		}
 		if dbErr == nil {
-			defer db.Close()
+			db := rt.DB
 			if objects, objectsErr := objectsByType(db, typeName); objectsErr == nil && len(objects) > 0 {
 				warnings = append(warnings, Warning{
 					Code:    codes.WarnOrphanedFiles,
@@ -614,24 +615,24 @@ func RemoveType(req RemoveTypeRequest) (*RemoveResult, error) {
 	}, nil
 }
 
-func RemoveTrait(req RemoveTraitRequest) (*RemoveResult, error) {
+func RemoveTrait(rt *vaultruntime.Runtime, req RemoveTraitRequest) (*RemoveResult, error) {
 	traitName := strings.TrimSpace(req.TraitName)
 	if traitName == "" {
 		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
 	}
 
 	warnings := make([]Warning, 0)
-	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Traits[traitName]; !exists {
 			return newError(ErrorTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "", nil, nil)
 		}
 
-		db, dbErr := index.Open(req.VaultPath)
+		dbErr := rt.OpenDB()
 		if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
 			return indexRebuildRequiredError(dbErr)
 		}
 		if dbErr == nil {
-			defer db.Close()
+			db := rt.DB
 			if instances, instancesErr := traitsByType(db, traitName); instancesErr == nil && len(instances) > 0 {
 				warnings = append(warnings, Warning{
 					Code:    codes.WarnOrphanedTraits,
@@ -666,14 +667,14 @@ func RemoveTrait(req RemoveTraitRequest) (*RemoveResult, error) {
 	}, nil
 }
 
-func RemoveField(req RemoveFieldRequest) (*RemoveResult, error) {
+func RemoveField(rt *vaultruntime.Runtime, req RemoveFieldRequest) (*RemoveResult, error) {
 	typeName := strings.TrimSpace(req.TypeName)
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
 		return nil, newError(ErrorInvalidInput, "type and field names are required", "", nil, nil)
 	}
 
-	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		typeDef, exists := doc.Schema().Types[typeName]
 		if !exists {
 			return newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
@@ -697,12 +698,12 @@ func RemoveField(req RemoveFieldRequest) (*RemoveResult, error) {
 		}
 
 		if fieldDef != nil && fieldDef.Required {
-			db, dbErr := index.Open(req.VaultPath)
+			dbErr := rt.OpenDB()
 			if errors.Is(dbErr, index.ErrIndexRebuildRequired) {
 				return indexRebuildRequiredError(dbErr)
 			}
 			if dbErr == nil {
-				defer db.Close()
+				db := rt.DB
 				if objects, objectsErr := objectsByType(db, typeName); objectsErr == nil && len(objects) > 0 {
 					return newError(
 						ErrorDataIntegrity,

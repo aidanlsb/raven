@@ -12,7 +12,13 @@ import (
 func HandleVaultStats(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 
-	stats, err := maintsvc.Stats(req.VaultPath)
+	rt, failure := newDatabaseCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	stats, err := maintsvc.Stats(rt)
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}

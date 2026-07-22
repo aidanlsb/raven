@@ -7,13 +7,12 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type Code = codes.ErrorCode
@@ -45,15 +44,15 @@ type EnsureDailyResult struct {
 	Created      bool
 }
 
-func EnsureDaily(req EnsureDailyRequest) (*EnsureDailyResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
+func EnsureDaily(rt *vaultruntime.Runtime, req EnsureDailyRequest) (*EnsureDailyResult, error) {
+	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
 		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
 	}
-
-	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
-	if err != nil {
-		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+	if rt.VaultCfg == nil {
+		return nil, newError(CodeConfigInvalid, "vault config runtime is required", "Fix raven.yaml and try again", nil)
 	}
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
 
 	targetDate, err := vault.ParseDateArg(strings.TrimSpace(req.DateArg))
 	if err != nil {
@@ -63,10 +62,10 @@ func EnsureDaily(req EnsureDailyRequest) (*EnsureDailyResult, error) {
 	dateStr := vault.FormatDateISO(targetDate)
 	friendlyDate := vault.FormatDateFriendly(targetDate)
 	targetObjectPath := path.Join(vaultCfg.GetDailyDirectory(), dateStr)
-	filePath := vaultCfg.DailyNotePath(req.VaultPath, dateStr)
+	filePath := vaultCfg.DailyNotePath(vaultPath, dateStr)
 	relPath := filepath.ToSlash(path.Join(vaultCfg.GetDailyDirectory(), dateStr+".md"))
 
-	if pages.Exists(req.VaultPath, targetObjectPath) {
+	if pages.Exists(vaultPath, targetObjectPath) {
 		return &EnsureDailyResult{
 			Date:         dateStr,
 			FriendlyDate: friendlyDate,
@@ -76,10 +75,13 @@ func EnsureDaily(req EnsureDailyRequest) (*EnsureDailyResult, error) {
 		}, nil
 	}
 
-	sch, err := schema.Load(req.VaultPath)
-	if err != nil {
-		return nil, newError(CodeSchemaInvalid, "failed to load schema", "Fix schema.yaml and try again", err)
+	if rt.SchemaLoadErr != nil {
+		return nil, newError(CodeSchemaInvalid, "failed to load schema", "Fix schema.yaml and try again", rt.SchemaLoadErr)
 	}
+	if rt.Schema == nil {
+		return nil, newError(CodeSchemaInvalid, "schema runtime is required", "Fix schema.yaml and try again", nil)
+	}
+	sch := rt.Schema
 
 	var created *pages.CreateResult
 	templateID := strings.TrimSpace(req.TemplateID)
@@ -89,7 +91,7 @@ func EnsureDaily(req EnsureDailyRequest) (*EnsureDailyResult, error) {
 			return nil, newError(CodeInvalidInput, err.Error(), "Use `rvn schema template list --core date` to see available template IDs", err)
 		}
 		created, err = pages.CreateDailyNoteWithTemplate(
-			req.VaultPath,
+			vaultPath,
 			vaultCfg.GetDailyDirectory(),
 			dateStr,
 			friendlyDate,
@@ -102,7 +104,7 @@ func EnsureDaily(req EnsureDailyRequest) (*EnsureDailyResult, error) {
 		}
 	} else {
 		created, err = pages.CreateDailyNoteWithSchema(
-			req.VaultPath,
+			vaultPath,
 			vaultCfg.GetDailyDirectory(),
 			dateStr,
 			friendlyDate,
@@ -155,15 +157,14 @@ type DateHubResult struct {
 	Backlinks   []model.Reference `json:"backlinks"`
 }
 
-func DateHub(req DateHubRequest) (*DateHubResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
+func DateHub(rt *vaultruntime.Runtime, req DateHubRequest) (*DateHubResult, error) {
+	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
 		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
 	}
-
-	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
-	if err != nil {
-		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+	if rt.VaultCfg == nil {
+		return nil, newError(CodeConfigInvalid, "vault config runtime is required", "Fix raven.yaml and try again", nil)
 	}
+	vaultCfg := rt.VaultCfg
 
 	targetDate, err := vault.ParseDateArg(strings.TrimSpace(req.DateArg))
 	if err != nil {
@@ -180,11 +181,10 @@ func DateHub(req DateHubRequest) (*DateHubResult, error) {
 		Backlinks:   []model.Reference{},
 	}
 
-	db, err := index.Open(req.VaultPath)
-	if err != nil {
+	if err := rt.OpenDB(); err != nil {
 		return nil, newError(CodeDatabaseError, "failed to open database", "Run 'rvn reindex' to rebuild the database", err)
 	}
-	defer db.Close()
+	db := rt.DB
 
 	dailyNote, err := db.GetObject(result.DailyNoteID)
 	if err != nil {

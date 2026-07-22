@@ -13,7 +13,26 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func runTest(req RunRequest) (*RunResult, error) {
+	rt, err := vaultruntime.New(req.VaultPath, vaultruntime.Options{})
+	if err != nil {
+		var setupErr *vaultruntime.SetupError
+		if errors.As(err, &setupErr) {
+			switch setupErr.Stage {
+			case vaultruntime.StageConfig:
+				return nil, newError(CodeConfigInvalid, setupErr.Error(), "Fix raven.yaml and try again", err)
+			case vaultruntime.StageSchema:
+				return nil, newError(CodeSchemaInvalid, setupErr.Error(), "Run 'rvn init' to create a schema", err)
+			}
+		}
+		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+	}
+	defer rt.Close()
+	return Run(rt, req)
+}
 
 func assertReindexCode(t *testing.T, err error, want Code) *svcerr.Error {
 	t.Helper()
@@ -32,7 +51,7 @@ func assertReindexCode(t *testing.T, err error, want Code) *svcerr.Error {
 
 func TestRunInvalidInput(t *testing.T) {
 	t.Parallel()
-	_, err := Run(RunRequest{VaultPath: "   "})
+	_, err := runTest(RunRequest{VaultPath: "   "})
 	assertReindexCode(t, err, CodeInvalidInput)
 }
 
@@ -43,7 +62,7 @@ func TestRunSchemaInvalid(t *testing.T) {
 		t.Fatalf("failed to write malformed schema fixture: %v", err)
 	}
 
-	_, err := Run(RunRequest{VaultPath: vaultPath})
+	_, err := runTest(RunRequest{VaultPath: vaultPath})
 	assertReindexCode(t, err, CodeSchemaInvalid)
 }
 
@@ -54,7 +73,7 @@ func TestRunConfigInvalid(t *testing.T) {
 		t.Fatalf("failed to write malformed raven.yaml fixture: %v", err)
 	}
 
-	_, err := Run(RunRequest{VaultPath: vaultPath})
+	_, err := runTest(RunRequest{VaultPath: vaultPath})
 	assertReindexCode(t, err, CodeConfigInvalid)
 }
 
@@ -65,7 +84,7 @@ func TestRunDryRunIndexesDiscoveredFiles(t *testing.T) {
 		t.Fatalf("failed to write markdown fixture: %v", err)
 	}
 
-	result, err := Run(RunRequest{
+	result, err := runTest(RunRequest{
 		VaultPath: vaultPath,
 		DryRun:    true,
 	})
@@ -99,7 +118,7 @@ func TestRunIncrementalSkipsParsingUnchangedMarkdown(t *testing.T) {
 	if err := os.WriteFile(notePath, []byte("# Original\n"), 0o644); err != nil {
 		t.Fatalf("failed to write markdown fixture: %v", err)
 	}
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial full Run returned error: %v", err)
 	}
 	info, err := os.Stat(notePath)
@@ -116,7 +135,7 @@ func TestRunIncrementalSkipsParsingUnchangedMarkdown(t *testing.T) {
 		t.Fatalf("failed to restore markdown fixture mtime: %v", err)
 	}
 
-	result, err := Run(RunRequest{VaultPath: vaultPath})
+	result, err := runTest(RunRequest{VaultPath: vaultPath})
 	if err != nil {
 		t.Fatalf("incremental Run returned error: %v", err)
 	}
@@ -136,7 +155,7 @@ func TestRunIncrementalSucceedsWhileSharedIndexIsOpen(t *testing.T) {
 
 	vaultPath := t.TempDir()
 	writeTestFile(t, vaultPath, "existing.md", "# Existing\n")
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial full Run returned error: %v", err)
 	}
 
@@ -147,7 +166,7 @@ func TestRunIncrementalSucceedsWhileSharedIndexIsOpen(t *testing.T) {
 	defer holder.Close()
 
 	writeTestFile(t, vaultPath, "added.md", "# Added\n")
-	result, err := Run(RunRequest{VaultPath: vaultPath})
+	result, err := runTest(RunRequest{VaultPath: vaultPath})
 	if err != nil {
 		t.Fatalf("incremental Run with shared holder returned error: %v", err)
 	}
@@ -164,7 +183,7 @@ func TestRunFullFailsClearlyWhileSharedIndexIsOpen(t *testing.T) {
 
 	vaultPath := t.TempDir()
 	writeTestFile(t, vaultPath, "note.md", "# Note\n")
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial full Run returned error: %v", err)
 	}
 
@@ -174,7 +193,7 @@ func TestRunFullFailsClearlyWhileSharedIndexIsOpen(t *testing.T) {
 	}
 	defer holder.Close()
 
-	_, err = Run(RunRequest{VaultPath: vaultPath, Full: true})
+	_, err = runTest(RunRequest{VaultPath: vaultPath, Full: true})
 	svcErr := assertReindexCode(t, err, CodeDatabaseError)
 	if !errors.Is(svcErr.Err, index.ErrIndexLocked) {
 		t.Fatalf("underlying error = %v, want ErrIndexLocked", svcErr.Err)
@@ -189,7 +208,7 @@ func TestRunSchemaRebuildFailsWhileSharedIndexIsOpen(t *testing.T) {
 
 	vaultPath := t.TempDir()
 	writeTestFile(t, vaultPath, "note.md", "# Note\n")
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial full Run returned error: %v", err)
 	}
 
@@ -200,7 +219,7 @@ func TestRunSchemaRebuildFailsWhileSharedIndexIsOpen(t *testing.T) {
 	defer holder.Close()
 	downgradeIndexVersion(t, vaultPath)
 
-	_, err = Run(RunRequest{VaultPath: vaultPath})
+	_, err = runTest(RunRequest{VaultPath: vaultPath})
 	svcErr := assertReindexCode(t, err, CodeDatabaseError)
 	if !errors.Is(svcErr.Err, index.ErrIndexLocked) {
 		t.Fatalf("underlying error = %v, want ErrIndexLocked", svcErr.Err)
@@ -223,7 +242,7 @@ traits:
 		t.Fatalf("failed to write source fixture: %v", err)
 	}
 
-	fullResult, err := Run(RunRequest{
+	fullResult, err := runTest(RunRequest{
 		VaultPath: vaultPath,
 		Full:      true,
 	})
@@ -238,7 +257,7 @@ traits:
 		t.Fatalf("failed to write next fixture: %v", err)
 	}
 
-	result, err := Run(RunRequest{
+	result, err := runTest(RunRequest{
 		VaultPath: vaultPath,
 		DryRun:    true,
 	})
@@ -275,7 +294,7 @@ func TestRunDryRunDoesNotCleanTrashRows(t *testing.T) {
 
 	vaultPath := t.TempDir()
 	writeTestFile(t, vaultPath, "note.md", "# Note\n")
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial Run returned error: %v", err)
 	}
 
@@ -294,7 +313,7 @@ func TestRunDryRunDoesNotCleanTrashRows(t *testing.T) {
 		t.Fatalf("close seeded index: %v", err)
 	}
 
-	if _, err := Run(RunRequest{VaultPath: vaultPath, DryRun: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, DryRun: true}); err != nil {
 		t.Fatalf("dry-run returned error: %v", err)
 	}
 
@@ -317,12 +336,12 @@ func TestRunVersionMismatchCompletesFullReindexBeforeReopening(t *testing.T) {
 
 	vaultPath := t.TempDir()
 	writeTestFile(t, vaultPath, "note.md", "# Rebuild me\n")
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial Run returned error: %v", err)
 	}
 	downgradeIndexVersion(t, vaultPath)
 
-	result, err := Run(RunRequest{VaultPath: vaultPath})
+	result, err := runTest(RunRequest{VaultPath: vaultPath})
 	if err != nil {
 		t.Fatalf("Run after version mismatch returned error: %v", err)
 	}
@@ -352,13 +371,13 @@ func TestRunVersionMismatchFailureLeavesIndexUnavailable(t *testing.T) {
 
 	vaultPath := t.TempDir()
 	writeTestFile(t, vaultPath, "note.md", "# Initially valid\n")
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial Run returned error: %v", err)
 	}
 	writeTestFile(t, vaultPath, "note.md", "---\ntype: [\n---\n")
 	downgradeIndexVersion(t, vaultPath)
 
-	if _, err := Run(RunRequest{VaultPath: vaultPath}); err == nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath}); err == nil {
 		t.Fatal("expected failed full rebuild")
 	} else {
 		assertReindexCode(t, err, CodeFileReadError)
@@ -368,7 +387,7 @@ func TestRunVersionMismatchFailureLeavesIndexUnavailable(t *testing.T) {
 	}
 
 	writeTestFile(t, vaultPath, "note.md", "# Repaired\n")
-	result, err := Run(RunRequest{VaultPath: vaultPath})
+	result, err := runTest(RunRequest{VaultPath: vaultPath})
 	if err != nil {
 		t.Fatalf("retry Run returned error: %v", err)
 	}
@@ -382,12 +401,12 @@ func TestRunDryRunDoesNotPublishVersionMismatchWipe(t *testing.T) {
 
 	vaultPath := t.TempDir()
 	writeTestFile(t, vaultPath, "note.md", "# Keep the old index\n")
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial Run returned error: %v", err)
 	}
 	downgradeIndexVersion(t, vaultPath)
 
-	result, err := Run(RunRequest{VaultPath: vaultPath, DryRun: true})
+	result, err := runTest(RunRequest{VaultPath: vaultPath, DryRun: true})
 	if err != nil {
 		t.Fatalf("dry-run after version mismatch returned error: %v", err)
 	}
@@ -423,7 +442,7 @@ func TestRunResolvesReferencesAfterBulkReindex(t *testing.T) {
 		t.Fatalf("failed to write target fixture: %v", err)
 	}
 
-	result, err := Run(RunRequest{
+	result, err := runTest(RunRequest{
 		VaultPath: vaultPath,
 		Full:      true,
 	})
@@ -457,7 +476,7 @@ func TestRunHealsUnresolvedRefsWhenNoFilesAreStale(t *testing.T) {
 		t.Fatalf("failed to write source fixture: %v", err)
 	}
 
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial full Run returned error: %v", err)
 	}
 
@@ -497,7 +516,7 @@ func TestRunHealsUnresolvedRefsWhenNoFilesAreStale(t *testing.T) {
 
 	// Incremental reindex with zero stale files must still run the resolve
 	// pass and heal the pending ref.
-	result, err := Run(RunRequest{VaultPath: vaultPath})
+	result, err := runTest(RunRequest{VaultPath: vaultPath})
 	if err != nil {
 		t.Fatalf("incremental Run returned error: %v", err)
 	}
@@ -540,7 +559,7 @@ func TestRunIndexesAssetsAndResolvesMarkdownAssetLinks(t *testing.T) {
 		t.Fatalf("failed to write markdown fixture: %v", err)
 	}
 
-	result, err := Run(RunRequest{
+	result, err := runTest(RunRequest{
 		VaultPath: vaultPath,
 		Full:      true,
 	})
@@ -584,13 +603,13 @@ func TestRunIncrementalReindexesAssetsAfterConfigChange(t *testing.T) {
 	vaultPath := t.TempDir()
 	writeTestFile(t, vaultPath, "assets/raw/logo.svg", "<svg></svg>\n")
 
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial Run returned error: %v", err)
 	}
 
 	writeTestFile(t, vaultPath, "raven.yaml", "directories:\n  assets: assets/\n")
 
-	result, err := Run(RunRequest{VaultPath: vaultPath})
+	result, err := runTest(RunRequest{VaultPath: vaultPath})
 	if err != nil {
 		t.Fatalf("incremental Run returned error: %v", err)
 	}
@@ -627,7 +646,7 @@ func TestRunSkipsExcludedMarkdownAndAssets(t *testing.T) {
 	writeTestFile(t, vaultPath, "assets/pdfs/keep.pdf", "%PDF keep\n")
 	writeTestFile(t, vaultPath, "assets/generated/drop.pdf", "%PDF drop\n")
 
-	result, err := Run(RunRequest{VaultPath: vaultPath, Full: true})
+	result, err := runTest(RunRequest{VaultPath: vaultPath, Full: true})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -664,12 +683,12 @@ func TestRunIncrementalPurgesNewlyExcludedFiles(t *testing.T) {
 	writeTestFile(t, vaultPath, "keep.md", "# Keep\n")
 	writeTestFile(t, vaultPath, "AGENTS.md", "# Agents\n")
 
-	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("initial Run returned error: %v", err)
 	}
 	writeTestFile(t, vaultPath, "raven.yaml", "exclude:\n  - AGENTS.md\n")
 
-	result, err := Run(RunRequest{VaultPath: vaultPath})
+	result, err := runTest(RunRequest{VaultPath: vaultPath})
 	if err != nil {
 		t.Fatalf("incremental Run returned error: %v", err)
 	}

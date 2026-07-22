@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/querysvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 var queryCmd = &cobra.Command{
@@ -98,7 +99,17 @@ Examples:
 		// CLI never reimplements them: it supplies only the flags the user set
 		// explicitly, and querysvc overlays them on any saved-query defaults and
 		// returns the resolved query string used for human rendering.
-		runOpts, err := querysvc.ResolveRunOptions(getVaultPath(), rawQuery, savedQueryOptionsFromFlags(cmd))
+		rt, err := vaultruntime.New(getVaultPath(), vaultruntime.Options{SkipSchema: true})
+		if err != nil {
+			return handleCanonicalFailure(commandexec.Failure(
+				"CONFIG_INVALID",
+				"failed to load vault config",
+				nil,
+				"Fix raven.yaml and try again",
+			))
+		}
+		defer rt.Close()
+		runOpts, err := querysvc.ResolveRunOptions(rt, rawQuery, savedQueryOptionsFromFlags(cmd))
 		if err != nil {
 			return handleCanonicalFailure(commandexec.FromServiceError(err))
 		}

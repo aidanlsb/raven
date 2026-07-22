@@ -7,7 +7,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parseopts"
 )
 
 // HandleReclassify executes the canonical `reclassify` command.
@@ -49,7 +48,8 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		NoMove:       boolArg(req.Args, "no-move"),
 		UpdateRefs:   boolArgDefault(req.Args, "update-refs", true),
 		Force:        boolArg(req.Args, "force"),
-		ParseOptions: parseopts.FromVaultConfig(vaultCfg),
+		ParseOptions: rt.ParseOptions,
+		Runtime:      rt,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -80,7 +80,7 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 	if result.ChangedFilePath != "" {
 		warnings = appendCommandWarnings(
 			warnings,
-			autoReindexWarnings(vaultPath, vaultCfg, result.ChangedFilePath),
+			autoReindexWarnings(rt, result.ChangedFilePath),
 		)
 	}
 

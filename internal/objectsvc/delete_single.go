@@ -9,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type DeleteByReferenceRequest struct {
@@ -18,6 +19,7 @@ type DeleteByReferenceRequest struct {
 	Reference   string
 	Behavior    string
 	TrashDir    string
+	Runtime     *vaultruntime.Runtime
 }
 
 type DeleteByReferenceResult struct {
@@ -29,6 +31,11 @@ type DeleteByReferenceResult struct {
 }
 
 func PreviewDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
+	if owned {
+		defer rt.Close()
+	}
+	req.Runtime = rt
 	result, _, err := prepareDeleteByReference(req)
 	return result, err
 }
@@ -44,7 +51,7 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 		return nil, nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn delete <object-or-asset-id>", nil, nil)
 	}
 
-	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
+	resolved, err := resolveReferenceForMutation(req.Runtime, req.Reference)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -57,14 +64,11 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 		return nil, nil, err
 	}
 
-	db, err := index.Open(req.VaultPath)
-	if err != nil {
+	if err := req.Runtime.OpenDB(); err != nil {
 		return nil, nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
 	}
-	defer db.Close()
-	db.SetDailyDirectory(req.VaultConfig.GetDailyDirectory())
 
-	backlinks, err := db.Backlinks(target.ObjectID)
+	backlinks, err := req.Runtime.DB.Backlinks(target.ObjectID)
 	if err != nil {
 		return nil, nil, newError(ErrorDatabase, "failed to read backlinks", "Run 'rvn reindex' to rebuild the database", nil, err)
 	}
@@ -77,6 +81,12 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 }
 
 func DeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
+	if owned {
+		defer rt.Close()
+	}
+	req.Runtime = rt
+
 	preview, target, err := prepareDeleteByReference(req)
 	if err != nil {
 		return nil, err
@@ -93,13 +103,10 @@ func DeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, 
 	}
 
 	warnings := make([]string, 0)
-	db, err := index.Open(req.VaultPath)
-	if err != nil {
+	if err := req.Runtime.OpenDB(); err != nil {
 		warnings = append(warnings, fmt.Sprintf("Failed to open index database while removing deleted object: %v", err))
 	} else {
-		defer db.Close()
-		db.SetDailyDirectory(req.VaultConfig.GetDailyDirectory())
-		removeErr := removeDeleteTargetFromIndex(db, target)
+		removeErr := removeDeleteTargetFromIndex(req.Runtime.DB, target)
 		if removeErr != nil {
 			if errors.Is(removeErr, index.ErrObjectNotFound) {
 				warnings = append(warnings, "Object not found in index; consider running 'rvn reindex'")

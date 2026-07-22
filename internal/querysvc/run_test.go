@@ -113,9 +113,10 @@ func TestResolveRunOptionsMergesSavedDefaults(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := newQueryRuntime(t, vaultPath)
 	savedBrowse := true
 	savedLimit := 100
-	if _, err := Set(SetRequest{
+	if _, err := Set(rt, SetRequest{
 		VaultPath:   vaultPath,
 		Name:        "open-issues",
 		QueryString: "type:issue .status=={{args.status}}",
@@ -129,7 +130,7 @@ func TestResolveRunOptionsMergesSavedDefaults(t *testing.T) {
 	}
 
 	// No explicit flags: saved defaults apply and the query resolves.
-	opts, err := ResolveRunOptions(vaultPath, "open-issues open", nil)
+	opts, err := ResolveRunOptions(rt, "open-issues open", nil)
 	if err != nil {
 		t.Fatalf("ResolveRunOptions() unexpected error: %v", err)
 	}
@@ -149,7 +150,7 @@ func TestResolveRunOptionsMergesSavedDefaults(t *testing.T) {
 	// Explicit flags override saved defaults.
 	explicitBrowse := false
 	explicitLimit := 5
-	opts, err = ResolveRunOptions(vaultPath, "open-issues open", &config.QueryOptions{
+	opts, err = ResolveRunOptions(rt, "open-issues open", &config.QueryOptions{
 		Browse: &explicitBrowse,
 		Limit:  &explicitLimit,
 	})
@@ -168,8 +169,9 @@ func TestResolveRunOptionsNonSavedQuery(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := newQueryRuntime(t, vaultPath)
 	explicitIDs := true
-	opts, err := ResolveRunOptions(vaultPath, "type:project .status==active", &config.QueryOptions{
+	opts, err := ResolveRunOptions(rt, "type:project .status==active", &config.QueryOptions{
 		IDs: &explicitIDs,
 	})
 	if err != nil {

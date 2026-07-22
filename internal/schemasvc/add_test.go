@@ -6,7 +6,14 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func schemaTestRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
+	t.Helper()
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
+}
 
 func TestAddTrait_TrimsValuesAndCoercesBooleanDefault(t *testing.T) {
 	vaultPath := t.TempDir()
@@ -14,7 +21,8 @@ func TestAddTrait_TrimsValuesAndCoercesBooleanDefault(t *testing.T) {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
-	_, err := AddTrait(AddTraitRequest{
+	rt := schemaTestRuntime(t, vaultPath)
+	_, err := AddTrait(rt, AddTraitRequest{
 		VaultPath: vaultPath,
 		TraitName: "priority",
 		TraitType: "boolean",
@@ -23,6 +31,9 @@ func TestAddTrait_TrimsValuesAndCoercesBooleanDefault(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("AddTrait failed: %v", err)
+	}
+	if _, ok := rt.Schema.Traits["priority"]; !ok {
+		t.Fatal("runtime schema was not refreshed after AddTrait")
 	}
 
 	loaded, err := schema.Load(vaultPath)
@@ -60,7 +71,7 @@ func TestAddTrait_PreservesStringDefaultForNonBooleanTypes(t *testing.T) {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
-	_, err := AddTrait(AddTraitRequest{
+	_, err := AddTrait(schemaTestRuntime(t, vaultPath), AddTraitRequest{
 		VaultPath: vaultPath,
 		TraitName: "status",
 		TraitType: "enum",

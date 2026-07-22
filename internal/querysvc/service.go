@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type Code = codes.ErrorCode
@@ -105,14 +106,10 @@ type ApplyCommand struct {
 	Args    []string
 }
 
-func List(req ListRequest) (*ListResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
-	}
-
-	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
+func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
+	vaultCfg, err := runtimeConfig(rt)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+		return nil, err
 	}
 
 	names := make([]string, 0, len(vaultCfg.Queries))
@@ -129,18 +126,15 @@ func List(req ListRequest) (*ListResult, error) {
 	return &ListResult{Queries: queries}, nil
 }
 
-func Get(req GetRequest) (*GetResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
-	}
+func Get(rt *vaultruntime.Runtime, req GetRequest) (*GetResult, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query saved get <name>", nil)
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
+	vaultCfg, err := runtimeConfig(rt)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+		return nil, err
 	}
 	saved, exists := vaultCfg.Queries[name]
 	if !exists {
@@ -150,10 +144,7 @@ func Get(req GetRequest) (*GetResult, error) {
 	return &GetResult{Query: savedQueryInfo(name, saved)}, nil
 }
 
-func Set(req SetRequest) (*SetResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
-	}
+func Set(rt *vaultruntime.Runtime, req SetRequest) (*SetResult, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query saved set <name> <query-string>", nil)
@@ -177,9 +168,9 @@ func Set(req SetRequest) (*SetResult, error) {
 		return nil, err
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
+	vaultCfg, err := runtimeConfig(rt)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+		return nil, err
 	}
 
 	if vaultCfg.Queries == nil {
@@ -207,7 +198,7 @@ func Set(req SetRequest) (*SetResult, error) {
 	}
 	vaultCfg.Queries[name] = next
 
-	if err := config.SaveVaultConfig(req.VaultPath, vaultCfg); err != nil {
+	if err := saveRuntimeConfig(rt, vaultCfg); err != nil {
 		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 	}
 
@@ -217,29 +208,47 @@ func Set(req SetRequest) (*SetResult, error) {
 	}, nil
 }
 
-func Remove(req RemoveRequest) (*RemoveResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
-	}
+func Remove(rt *vaultruntime.Runtime, req RemoveRequest) (*RemoveResult, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query saved remove <name>", nil)
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
+	vaultCfg, err := runtimeConfig(rt)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+		return nil, err
 	}
 	if _, exists := vaultCfg.Queries[name]; !exists {
 		return nil, newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query saved list' to see available queries", nil)
 	}
 
 	delete(vaultCfg.Queries, name)
-	if err := config.SaveVaultConfig(req.VaultPath, vaultCfg); err != nil {
+	if err := saveRuntimeConfig(rt, vaultCfg); err != nil {
 		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 	}
 
 	return &RemoveResult{Name: name, Removed: true}, nil
+}
+
+func runtimeConfig(rt *vaultruntime.Runtime) (*config.VaultConfig, error) {
+	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	}
+	if rt.VaultCfg == nil {
+		if err := rt.ReloadConfig(); err != nil {
+			return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+		}
+	}
+	return rt.VaultCfg, nil
+}
+
+func saveRuntimeConfig(rt *vaultruntime.Runtime, cfg *config.VaultConfig) error {
+	err := config.SaveVaultConfig(rt.VaultPath, cfg)
+	reloadErr := rt.ReloadConfig()
+	if err != nil {
+		return err
+	}
+	return reloadErr
 }
 
 func savedQueryInfo(name string, q *config.SavedQuery) SavedQueryInfo {
