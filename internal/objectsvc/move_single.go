@@ -58,7 +58,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		return nil, newError(
 			ErrorInvalidInput,
 			"rvn move does not accept section sources",
-			`Use 'rvn section rename <file#section> "<new heading text>"' to rename a section heading and rewrite inbound references`,
+			`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`,
 			map[string]interface{}{"source": strings.TrimSpace(req.Reference)},
 			nil,
 		)
@@ -72,7 +72,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		return nil, newError(
 			ErrorInvalidInput,
 			"rvn move does not accept section sources",
-			`Use 'rvn section rename <file#section> "<new heading text>"' to rename a section heading and rewrite inbound references`,
+			`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`,
 			map[string]interface{}{"source": resolved.ObjectID},
 			nil,
 		)

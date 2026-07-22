@@ -79,6 +79,9 @@ status: active
 	if !strings.Contains(result.RawJSON, "rvn section rename") {
 		t.Fatalf("move rejection did not redirect to section rename: %s", result.RawJSON)
 	}
+	if !strings.Contains(result.RawJSON, "rvn section move") {
+		t.Fatalf("move rejection did not redirect to section move: %s", result.RawJSON)
+	}
 	v.AssertFileContains("projects/website.md", "## Tasks")
 }
 

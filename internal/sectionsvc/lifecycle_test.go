@@ -237,6 +237,76 @@ func TestMoveReordersEntireSubtree(t *testing.T) {
 	}
 }
 
+func TestMoveBeforeSibling(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", lifecycleOutline).
+		Build()
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+
+	_, err := Move(MoveRequest{
+		VaultPath:      v.Path,
+		VaultConfig:    config.DefaultVaultConfig(),
+		Schema:         sch,
+		Reference:      "projects/site#beta",
+		Placement:      Placement{Before: "projects/site#alpha"},
+		FailOnIndexErr: true,
+	})
+	if err != nil {
+		t.Fatalf("Move() error = %v", err)
+	}
+	assertHeadingOrder(t, v.ReadFile("projects/site.md"), "## Beta", "## Alpha", "### Alpha Child")
+}
+
+func TestMoveToEOF(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		reference string
+		wantOrder []string
+	}{
+		{
+			name:      "moves earlier subtree to EOF",
+			reference: "projects/site#alpha",
+			wantOrder: []string{"## Beta", "## Alpha", "### Alpha Child"},
+		},
+		{
+			name:      "last subtree is a no-op",
+			reference: "projects/site#beta",
+			wantOrder: []string{"## Alpha", "### Alpha Child", "## Beta"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			v := testutil.NewTestVault(t).
+				WithSchema(testutil.PersonProjectSchema()).
+				WithFile("projects/site.md", lifecycleOutline).
+				Build()
+			sch := loadTestSchema(t, v.Path)
+			indexVaultFiles(t, v.Path, sch, "projects/site.md")
+
+			_, err := Move(MoveRequest{
+				VaultPath:      v.Path,
+				VaultConfig:    config.DefaultVaultConfig(),
+				Schema:         sch,
+				Reference:      tt.reference,
+				FailOnIndexErr: true,
+			})
+			if err != nil {
+				t.Fatalf("Move() error = %v", err)
+			}
+			assertHeadingOrder(t, v.ReadFile("projects/site.md"), tt.wantOrder...)
+		})
+	}
+}
+
 func TestMoveReparentsSubtree(t *testing.T) {
 	t.Parallel()
 
@@ -365,6 +435,48 @@ func TestMoveDryRunAndInvalidPlacements(t *testing.T) {
 				t.Fatalf("failed move changed file:\n%s", got)
 			}
 		})
+	}
+}
+
+func TestMoveRejectsSlugShifts(t *testing.T) {
+	t.Parallel()
+
+	content := `---
+type: project
+title: Site
+status: active
+---
+
+## Repeat
+
+First
+
+## Other
+
+## Repeat
+
+Second
+`
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", content).
+		Build()
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+
+	_, err := Move(MoveRequest{
+		VaultPath:      v.Path,
+		VaultConfig:    config.DefaultVaultConfig(),
+		Schema:         sch,
+		Reference:      "projects/site#repeat-2",
+		Placement:      Placement{Before: "projects/site#repeat"},
+		FailOnIndexErr: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "shift slug") {
+		t.Fatalf("Move() error = %v, want slug-shift rejection", err)
+	}
+	if got := v.ReadFile("projects/site.md"); got != content {
+		t.Fatalf("failed move changed file:\n%s", got)
 	}
 }
 

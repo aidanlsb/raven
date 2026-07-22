@@ -261,7 +261,7 @@ func Move(req MoveRequest) (*MoveResult, error) {
 	movedLines := append([]trackedLine(nil), state.lines[sourceStart:sourceEnd]...)
 	remaining := append([]trackedLine(nil), state.lines[:sourceStart]...)
 	remaining = append(remaining, state.lines[sourceEnd:]...)
-	if destinationIndex > sourceEnd {
+	if destinationIndex >= sourceEnd {
 		destinationIndex -= sourceEnd - sourceStart
 	} else if destinationIndex > sourceStart {
 		return nil, newError(codes.ErrInvalidInput, "move destination is inside the source subtree", "Choose an anchor outside the section's subtree", nil, nil)
