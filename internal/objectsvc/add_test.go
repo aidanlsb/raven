@@ -143,6 +143,31 @@ next body
 	}
 }
 
+func TestAppendUnderHeadingRejectsMissingHeading(t *testing.T) {
+	t.Parallel()
+
+	destPath := filepath.Join(t.TempDir(), "project.md")
+	content := "# Project\n"
+	if err := os.WriteFile(destPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	_, err := appendUnderHeading(destPath, "item", "## Missing")
+	if err == nil {
+		t.Fatal("expected missing heading error")
+	}
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if svcErr.Code != ErrorRefNotFound {
+		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorRefNotFound)
+	}
+	if got := string(mustReadFile(t, destPath)); got != content {
+		t.Fatalf("missing heading add changed file: %q", got)
+	}
+}
+
 func TestAppendToFileMissingTargetReportsFileNotFound(t *testing.T) {
 	t.Parallel()
 
@@ -161,110 +186,11 @@ func TestAppendToFileMissingTargetReportsFileNotFound(t *testing.T) {
 	}
 }
 
-func TestResolveAddHeadingTargetReportsAmbiguousHeading(t *testing.T) {
-	t.Parallel()
-
-	vaultPath := t.TempDir()
-	destPath := filepath.Join(vaultPath, "project.md")
-	content := `# Project
-
-### Team Notes
-First section
-
-### Team Notes
-Second section
-`
-	if err := os.WriteFile(destPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-
-	_, err := ResolveAddHeadingTarget(vaultPath, destPath, "project", "### Team Notes", nil)
-	if err == nil {
-		t.Fatal("expected ambiguous heading error")
-	}
-
-	var svcErr *Error
-	if !errors.As(err, &svcErr) {
-		t.Fatalf("expected *Error, got %T: %v", err, err)
-	}
-	if svcErr.Code != ErrorRefAmbiguous {
-		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorRefAmbiguous)
-	}
-}
-
-func TestResolveAddHeadingTargetAcceptsSingleWordVisibleHeading(t *testing.T) {
-	t.Parallel()
-
-	vaultPath := t.TempDir()
-	destPath := filepath.Join(vaultPath, "project.md")
-	content := `# Project
-
-## Description
-Existing text
-`
-	if err := os.WriteFile(destPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-
-	got, err := ResolveAddHeadingTarget(vaultPath, destPath, "project", "Description", nil)
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	content, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("ResolveAddHeadingTarget failed: %v", err)
+		t.Fatalf("read file: %v", err)
 	}
-	if got != "project#description" {
-		t.Fatalf("ResolveAddHeadingTarget() = %q, want %q", got, "project#description")
-	}
-}
-
-func TestParseHeadingTextFromSpec(t *testing.T) {
-	t.Parallel()
-
-	t.Run("accepts markdown heading line", func(t *testing.T) {
-		t.Parallel()
-
-		got, ok := parseHeadingTextFromSpec("### Bugs / Fixes")
-		if !ok {
-			t.Fatal("expected heading to parse")
-		}
-		if got != "Bugs / Fixes" {
-			t.Fatalf("parseHeadingTextFromSpec() = %q, want %q", got, "Bugs / Fixes")
-		}
-	})
-
-	t.Run("does not treat fragment as heading", func(t *testing.T) {
-		t.Parallel()
-
-		if _, ok := parseHeadingTextFromSpec("#bugs-fixes"); ok {
-			t.Fatal("expected fragment to not parse as markdown heading")
-		}
-	})
-}
-
-func TestResolveAddHeadingTargetReportsParseFailure(t *testing.T) {
-	t.Parallel()
-
-	vaultPath := t.TempDir()
-	destPath := filepath.Join(vaultPath, "broken.md")
-	content := `---
-type: page
-meta:
-  nested: true
----
-# Broken
-`
-	if err := os.WriteFile(destPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-
-	_, err := ResolveAddHeadingTarget(vaultPath, destPath, "broken", "### Broken", nil)
-	if err == nil {
-		t.Fatal("expected parse failure")
-	}
-
-	var svcErr *Error
-	if !errors.As(err, &svcErr) {
-		t.Fatalf("expected *Error, got %T: %v", err, err)
-	}
-	if svcErr.Code != ErrorInvalidInput {
-		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorInvalidInput)
-	}
+	return content
 }

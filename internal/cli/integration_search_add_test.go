@@ -92,7 +92,7 @@ type: page
 	v.AssertFileContains("inbox.md", "New task for today")
 }
 
-func TestIntegration_AddToSectionBySlug(t *testing.T) {
+func TestIntegration_AddToSectionUsesDirectBodyRange(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
@@ -103,84 +103,17 @@ type: page
 
 ### Bugs / Fixes
 - Existing item
+
+#### Child
+- Child item
 
 ### Other
 - Keep this below
 `).
 		Build()
+	v.RunCLI("reindex").MustSucceed(t)
 
-	result := v.RunCLI("add", "New bug item", "--to", "project.md", "--heading", "bugs-fixes")
-	result.MustSucceed(t)
-
-	content, err := os.ReadFile(filepath.Join(v.Path, "project.md"))
-	if err != nil {
-		t.Fatalf("read project.md: %v", err)
-	}
-	text := string(content)
-	if !strings.Contains(text, "New bug item") {
-		t.Fatalf("expected new section content in project.md, got:\n%s", text)
-	}
-	if strings.Index(text, "New bug item") > strings.Index(text, "### Other") {
-		t.Fatalf("expected section append before next heading, got:\n%s", text)
-	}
-}
-
-func TestIntegration_AddToSectionByHeadingText(t *testing.T) {
-	t.Parallel()
-	v := testutil.NewTestVault(t).
-		WithSchema(testutil.MinimalSchema()).
-		WithFile("project.md", `---
-type: page
----
-# Project
-
-### Bugs / Fixes
-- Existing item
-`).
-		Build()
-
-	result := v.RunCLI("add", "Another bug item", "--to", "project.md", "--heading", "### Bugs / Fixes")
-	result.MustSucceed(t)
-	v.AssertFileContains("project.md", "Another bug item")
-}
-
-func TestIntegration_AddToSectionBySingleWordHeadingText(t *testing.T) {
-	t.Parallel()
-	v := testutil.NewTestVault(t).
-		WithSchema(testutil.MinimalSchema()).
-		WithFile("project.md", `---
-type: page
----
-# Project
-
-## Description
-Existing text
-`).
-		Build()
-
-	result := v.RunCLI("add", "More detail", "--to", "project.md", "--heading", "Description")
-	result.MustSucceed(t)
-	v.AssertFileContains("project.md", "More detail")
-}
-
-func TestIntegration_AddToSectionReportsInsertedLine(t *testing.T) {
-	t.Parallel()
-	v := testutil.NewTestVault(t).
-		WithSchema(testutil.MinimalSchema()).
-		WithFile("project.md", `---
-type: page
----
-# Project
-
-### Bugs / Fixes
-- Existing item
-
-### Other
-- Keep this below
-`).
-		Build()
-
-	result := v.RunCLI("add", "Another bug item", "--to", "project.md", "--heading", "### Bugs / Fixes")
+	result := v.RunCLI("add", "Another bug item", "--to", "project#bugs-fixes")
 	result.MustSucceed(t)
 
 	lineValue, ok := result.Data["line"].(float64)
@@ -190,63 +123,44 @@ type: page
 	if int(lineValue) != 8 {
 		t.Fatalf("line = %v, want 8", lineValue)
 	}
+	content, err := os.ReadFile(filepath.Join(v.Path, "project.md"))
+	if err != nil {
+		t.Fatalf("read project.md: %v", err)
+	}
+	text := string(content)
+	if !strings.Contains(text, "Another bug item") {
+		t.Fatalf("expected new section content in project.md, got:\n%s", text)
+	}
+	if strings.Index(text, "Another bug item") > strings.Index(text, "#### Child") {
+		t.Fatalf("expected direct-body append before child subtree, got:\n%s", text)
+	}
 }
 
-func TestIntegration_AddReportsStableHeadingErrorCodes(t *testing.T) {
+func TestIntegration_AddRejectsRemovedHeadingFlags(t *testing.T) {
 	t.Parallel()
 
-	t.Run("missing heading returns ref not found", func(t *testing.T) {
-		v := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile("project.md", `---
-type: page
----
-# Project
+	for _, flagArgs := range [][]string{
+		{"--heading", "### Log"},
+		{"--create-heading"},
+	} {
+		flagArgs := flagArgs
+		t.Run(flagArgs[0], func(t *testing.T) {
+			t.Parallel()
+			v := testutil.NewTestVault(t).
+				WithSchema(testutil.MinimalSchema()).
+				WithFile("project.md", "---\ntype: page\n---\n# Project\n").
+				Build()
 
-### Existing Heading
-- Existing item
-`).
-			Build()
-
-		result := v.RunCLI("add", "New item", "--to", "project.md", "--heading", "### Missing Heading")
-		result.MustFail(t, "REF_NOT_FOUND")
-	})
-
-	t.Run("ambiguous heading text returns ref ambiguous", func(t *testing.T) {
-		v := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile("project.md", `---
-type: page
----
-# Project
-
-### Team Notes
-First section
-
-### Team Notes
-Second section
-`).
-			Build()
-
-		result := v.RunCLI("add", "New item", "--to", "project.md", "--heading", "### Team Notes")
-		result.MustFail(t, "REF_AMBIGUOUS")
-	})
-
-	t.Run("heading parse failure returns invalid input", func(t *testing.T) {
-		v := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile("broken.md", `---
-type: page
-meta:
-  nested: true
----
-# Broken
-`).
-			Build()
-
-		result := v.RunCLI("add", "New item", "--to", "broken.md", "--heading", "### Broken")
-		result.MustFail(t, "INVALID_INPUT")
-	})
+			args := []string{"add", "New item", "--to", "project.md"}
+			args = append(args, flagArgs...)
+			result := v.RunCLI(args...)
+			result.MustFail(t, "INVALID_INPUT")
+			result.MustFailWithMessage(t, "rvn section create")
+			if strings.Contains(v.ReadFile("project.md"), "New item") {
+				t.Fatalf("rejected add changed file:\n%s", v.ReadFile("project.md"))
+			}
+		})
+	}
 }
 
 func TestIntegration_ResolveAndAddPreferDynamicTodayOverSectionShortName(t *testing.T) {

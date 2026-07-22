@@ -18,12 +18,48 @@ var sectionCmd = buildRegistrySubtree(registrySubtreeSpec{
 		ParentOnly: true,
 	},
 	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+		"section_create": renderSectionCreateResult,
+		"section_move":   renderSectionMoveResult,
 		"section_rename": renderSectionRenameResult,
 	},
 })
 
 func init() {
 	rootCmd.AddCommand(sectionCmd)
+}
+
+func renderSectionCreateResult(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	sectionID := stringValue(data["section"])
+
+	if boolValue(data["preview"]) {
+		fmt.Println(ui.Star(fmt.Sprintf("Would create section %s", ui.FilePath(sectionID))))
+		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
+		return nil
+	}
+
+	fmt.Println(ui.Checkf("Created section %s", ui.FilePath(sectionID)))
+	return nil
+}
+
+func renderSectionMoveResult(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	sectionID := stringValue(data["section"])
+	placement := stringValue(data["placement"])
+	anchor := stringValue(data["anchor"])
+	description := placement
+	if anchor != "" {
+		description += " " + anchor
+	}
+
+	if boolValue(data["preview"]) {
+		fmt.Println(ui.Star(fmt.Sprintf("Would move section %s %s", ui.FilePath(sectionID), description)))
+		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
+		return nil
+	}
+
+	fmt.Println(ui.Checkf("Moved section %s %s", ui.FilePath(sectionID), description))
+	return nil
 }
 
 func renderSectionRenameResult(_ *cobra.Command, result commandexec.Result) error {
