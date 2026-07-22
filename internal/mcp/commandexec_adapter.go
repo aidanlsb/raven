@@ -40,7 +40,6 @@ func (s *Server) callCanonicalCommandWithContext(ctx context.Context, commandID 
 		fallbackWarning = s.vaultFallbackWarning(commandID, res)
 	}
 
-	args = normalizeCanonicalArgs(commandID, args)
 	configOpts := s.directConfigContextOptions()
 
 	result := invoker.Execute(ctx, commandexec.Request{
@@ -103,9 +102,4 @@ func (s *Server) commandInvoker() *commandexec.Invoker {
 func marshalCanonicalResult(result commandexec.Result) (string, bool, bool) {
 	out, isErr := marshalResultEnvelope(result)
 	return out, isErr, true
-}
-
-func normalizeCanonicalArgs(commandID string, args map[string]interface{}) map[string]interface{} {
-	_ = commandID
-	return args
 }
