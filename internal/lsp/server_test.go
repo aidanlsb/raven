@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -240,6 +241,12 @@ func TestServerLifecycleAndCapabilities(t *testing.T) {
 	if result.Capabilities.CompletionProvider == nil {
 		t.Fatal("expected completion provider")
 	}
+	if result.Capabilities.CodeActionProvider == nil {
+		t.Fatal("expected code action provider")
+	}
+	if got := result.Capabilities.CodeActionProvider.CodeActionKinds; len(got) != 1 || got[0] != codeActionKindQuickFix {
+		t.Errorf("code action kinds = %v, want [%s]", got, codeActionKindQuickFix)
+	}
 	if result.ServerInfo.Name != "raven" {
 		t.Errorf("ServerInfo.Name = %q, want raven", result.ServerInfo.Name)
 	}
@@ -367,6 +374,146 @@ func TestDiagnostics(t *testing.T) {
 			t.Errorf("expected cleared diagnostics, got %+v", params.Diagnostics)
 		}
 	})
+}
+
+func TestCodeActions(t *testing.T) {
+	t.Run("short ref preserves display text and edits only target", func(t *testing.T) {
+		vaultPath := newTestVault(t)
+		client := startTestServer(t, vaultPath)
+		client.initialize(vaultPath)
+
+		content := "See [[freya|The Queen]] today.\n"
+		uri := client.openDocument(filepath.Join(vaultPath, "quick-fix.md"), content)
+		params := client.diagnosticsFor(uri)
+		diagnostic := diagnosticWithCode(t, params.Diagnostics, string(check.IssueShortRefCouldBeFullPath))
+
+		linkStart := strings.Index(content, "[[")
+		linkEnd := strings.Index(content, "]]") + len("]]")
+		if diagnostic.Range.Start.Character != linkStart || diagnostic.Range.End.Character != linkEnd {
+			t.Fatalf("diagnostic range = [%d, %d), want wikilink [%d, %d)",
+				diagnostic.Range.Start.Character, diagnostic.Range.End.Character, linkStart, linkEnd)
+		}
+
+		actions := requestCodeActions(t, client, uri, diagnostic.Range, []Diagnostic{diagnostic}, []string{codeActionKindQuickFix})
+		if len(actions) != 1 {
+			t.Fatalf("got %d actions, want 1: %+v", len(actions), actions)
+		}
+		action := actions[0]
+		if action.Title != "Expand short ref to [[people/freya]]" {
+			t.Errorf("title = %q", action.Title)
+		}
+		if action.Kind != codeActionKindQuickFix || !action.IsPreferred {
+			t.Errorf("kind/preferred = %q/%t, want quickfix/true", action.Kind, action.IsPreferred)
+		}
+		edits := action.Edit.Changes[uri]
+		if len(edits) != 1 {
+			t.Fatalf("edits = %+v, want one", edits)
+		}
+		edit := edits[0]
+		targetStart := strings.Index(content, "freya")
+		targetEnd := targetStart + len("freya")
+		if edit.Range.Start.Character != targetStart || edit.Range.End.Character != targetEnd {
+			t.Errorf("edit range = [%d, %d), want target-only [%d, %d)",
+				edit.Range.Start.Character, edit.Range.End.Character, targetStart, targetEnd)
+		}
+		if edit.NewText != "people/freya" {
+			t.Errorf("new text = %q, want people/freya", edit.NewText)
+		}
+		got := content[:targetStart] + edit.NewText + content[targetEnd:]
+		if want := "See [[people/freya|The Queen]] today.\n"; got != want {
+			t.Errorf("applied edit = %q, want %q", got, want)
+		}
+
+		outside := Range{
+			Start: Position{Line: 0, Character: 0},
+			End:   Position{Line: 0, Character: 3},
+		}
+		if actions := requestCodeActions(t, client, uri, outside, nil, nil); len(actions) != 0 {
+			t.Errorf("got actions outside diagnostic range: %+v", actions)
+		}
+		if actions := requestCodeActions(t, client, uri, diagnostic.Range, nil, []string{"source"}); len(actions) != 0 {
+			t.Errorf("got quick fix when context.only requested source actions: %+v", actions)
+		}
+	})
+
+	t.Run("non-canonical ref rewrites to canonical target", func(t *testing.T) {
+		vault := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithRavenYAML("directories:\n  type: type/\n  page: page/\n").
+			WithFile("type/person/freya.md", "---\ntype: person\nname: Freya\n---\n").
+			Build()
+		client := startTestServer(t, vault.Path)
+		client.initialize(vault.Path)
+
+		content := "See [[type/person/freya|Freya]].\n"
+		uri := client.openDocument(filepath.Join(vault.Path, "page", "quick-fix.md"), content)
+		params := client.diagnosticsFor(uri)
+		diagnostic := diagnosticWithCode(t, params.Diagnostics, string(check.IssueNonCanonicalRef))
+		actions := requestCodeActions(t, client, uri, diagnostic.Range, []Diagnostic{diagnostic}, nil)
+		if len(actions) != 1 {
+			t.Fatalf("got %d actions, want 1: %+v", len(actions), actions)
+		}
+
+		action := actions[0]
+		if action.Title != "Rewrite ref as [[person/freya]]" {
+			t.Errorf("title = %q", action.Title)
+		}
+		edits := action.Edit.Changes[uri]
+		if len(edits) != 1 || edits[0].NewText != "person/freya" {
+			t.Fatalf("edits = %+v, want canonical replacement", edits)
+		}
+		targetStart := strings.Index(content, "type/person/freya")
+		targetEnd := targetStart + len("type/person/freya")
+		if edits[0].Range.Start.Character != targetStart || edits[0].Range.End.Character != targetEnd {
+			t.Errorf("edit range = %+v, want target-only [%d, %d)", edits[0].Range, targetStart, targetEnd)
+		}
+	})
+
+	t.Run("diagnostic without unique text fix has no action", func(t *testing.T) {
+		vaultPath := newTestVault(t)
+		client := startTestServer(t, vaultPath)
+		client.initialize(vaultPath)
+
+		content := "See [[people/missing]].\n"
+		uri := client.openDocument(filepath.Join(vaultPath, "no-fix.md"), content)
+		params := client.diagnosticsFor(uri)
+		diagnostic := diagnosticWithCode(t, params.Diagnostics, string(check.IssueMissingReference))
+		if actions := requestCodeActions(t, client, uri, diagnostic.Range, []Diagnostic{diagnostic}, nil); len(actions) != 0 {
+			t.Errorf("got actions for missing reference: %+v", actions)
+		}
+	})
+}
+
+func diagnosticWithCode(t *testing.T, diagnostics []Diagnostic, code string) Diagnostic {
+	t.Helper()
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code == code {
+			return diagnostic
+		}
+	}
+	t.Fatalf("no %s diagnostic in %+v", code, diagnostics)
+	return Diagnostic{}
+}
+
+func requestCodeActions(
+	t *testing.T,
+	client *testClient,
+	uri string,
+	requestRange Range,
+	diagnostics []Diagnostic,
+	only []string,
+) []CodeAction {
+	t.Helper()
+	raw := client.request("textDocument/codeAction", CodeActionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        requestRange,
+		Context:      CodeActionContext{Diagnostics: diagnostics, Only: only},
+	})
+	var actions []CodeAction
+	if err := json.Unmarshal(raw, &actions); err != nil {
+		t.Fatalf("invalid code action result: %v", err)
+	}
+	return actions
 }
 
 func TestDefinition(t *testing.T) {

@@ -2,7 +2,7 @@
 
 Raven ships a built-in Language Server Protocol server, so any editor with an
 LSP client gets first-class support for vault files: diagnostics, completion,
-go-to-definition, find-references, and hover.
+quick-fix Code Actions, go-to-definition, find-references, and hover.
 
 ```bash
 rvn lsp
@@ -28,6 +28,7 @@ and the workspace root is used.
 | Capability | What it does |
 |---|---|
 | Diagnostics | Validates open buffers as you type: broken or ambiguous `[[refs]]`, undefined `@traits`, invalid trait values, unknown frontmatter keys, missing required fields, and more. Diagnostic codes match `rvn check` issue types (e.g. `missing_reference`). |
+| Code Actions | Offers in-buffer quick fixes when a diagnostic has one unambiguous textual replacement. In v1 this expands short refs such as `[[freya]]` to their full ID and removes non-canonical configured-root prefixes. Display text in links such as `[[freya\|The Queen]]` is preserved. |
 | Completion | `[[` completes object IDs and aliases from the index. `@` completes trait names from the schema. Frontmatter key positions complete the declared type's fields. |
 | Go-to-definition | Jump from a `[[wikilink]]` or bare frontmatter `ref` / `ref[]` value to its target file or section heading. Ambiguous refs list all candidates. |
 | Find-references | Backlinks to the current file's object, or to the reference target under the cursor. |
@@ -49,6 +50,10 @@ vim.lsp.config('raven', {
 })
 vim.lsp.enable('raven')
 ```
+
+Use Neovim's normal Code Action command (for example,
+`vim.lsp.buf.code_action()`) on a Raven diagnostic to apply an available
+quick fix. Lightbulb plugins discover the same `quickfix` actions.
 
 With `nvim-lspconfig` on older Neovim versions:
 

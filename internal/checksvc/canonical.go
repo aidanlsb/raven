@@ -41,7 +41,7 @@ func detectNonCanonicalIssues(
 		}
 		issues = append(issues, detectNonCanonicalPath(doc, sch, objectsRoot, pagesRoot, exempt)...)
 		issues = append(issues, detectDirectoryTypeMismatch(doc, sch, vaultCfg)...)
-		issues = append(issues, detectNonCanonicalRefs(doc, objectsRoot, pagesRoot)...)
+		issues = append(issues, check.DetectNonCanonicalRefs(doc, objectsRoot, pagesRoot)...)
 	}
 	return issues
 }
@@ -294,47 +294,6 @@ func canonicalDestinationPath(
 
 	filename := filepath.Base(relPath)
 	return expectedRoot + filename, true
-}
-
-// detectNonCanonicalRefs scans refs in a document for wikilink targets that
-// include the configured root prefix (e.g. "[[type/person/john]]"). These
-// resolve correctly today via the literal_path fallback in readsvc, but the
-// canonical form drops the root. Each finding includes a FixHint and Value
-// suitable for the wikilink fix path in ApplyFixes.
-func detectNonCanonicalRefs(doc *parser.ParsedDocument, objectsRoot, pagesRoot string) []check.Issue {
-	if len(doc.Refs) == 0 {
-		return nil
-	}
-
-	roots := uniqueNonEmpty(objectsRoot, pagesRoot)
-	if len(roots) == 0 {
-		return nil
-	}
-
-	var issues []check.Issue
-	for _, ref := range doc.Refs {
-		if ref == nil {
-			continue
-		}
-		raw := strings.TrimSpace(ref.TargetRaw)
-		if raw == "" {
-			continue
-		}
-		stripped, matched := stripRootPrefix(raw, roots)
-		if !matched || stripped == "" {
-			continue
-		}
-		issues = append(issues, check.Issue{
-			Level:    check.LevelWarning,
-			Type:     check.IssueNonCanonicalRef,
-			FilePath: doc.FilePath,
-			Line:     ref.LineOrZero(),
-			Message:  fmt.Sprintf("Reference [[%s]] includes the configured root prefix; canonical form is [[%s]]", raw, stripped),
-			Value:    raw,
-			FixHint:  fmt.Sprintf("Drop the configured root prefix: [[%s]]", stripped),
-		})
-	}
-	return issues
 }
 
 // stripRootPrefix removes any matching directory-root prefix from a wikilink

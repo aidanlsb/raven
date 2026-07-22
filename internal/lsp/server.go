@@ -164,6 +164,8 @@ func (s *Server) handleRequest(req *Request) (interface{}, *ResponseError) {
 		return s.handleHover(req.Params)
 	case "textDocument/completion":
 		return s.handleCompletion(req.Params)
+	case "textDocument/codeAction":
+		return s.handleCodeAction(req.Params)
 	default:
 		return nil, &ResponseError{Code: codeMethodNotFound, Message: fmt.Sprintf("method not supported: %s", req.Method)}
 	}
@@ -232,6 +234,7 @@ func (s *Server) handleInitialize(raw json.RawMessage) (interface{}, *ResponseEr
 			DefinitionProvider: true,
 			ReferencesProvider: true,
 			HoverProvider:      true,
+			CodeActionProvider: &CodeActionOptions{CodeActionKinds: []string{codeActionKindQuickFix}},
 		},
 		ServerInfo: ServerInfo{Name: "raven", Version: versioninfo.Current().Version},
 	}, nil

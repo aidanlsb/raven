@@ -196,13 +196,14 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 			suggestedID := v.displayID(result.TargetID)
 			v.shortRefs[ref.TargetRaw] = suggestedID
 			issues = append(issues, Issue{
-				Level:    LevelWarning,
-				Type:     IssueShortRefCouldBeFullPath,
-				FilePath: filePath,
-				Line:     line,
-				Message:  fmt.Sprintf("Short reference [[%s]] could be written as [[%s]] for clarity", ref.TargetRaw, suggestedID),
-				Value:    ref.TargetRaw,
-				FixHint:  fmt.Sprintf("Consider using full path: [[%s]]", suggestedID),
+				Level:          LevelWarning,
+				Type:           IssueShortRefCouldBeFullPath,
+				FilePath:       filePath,
+				Line:           line,
+				Message:        fmt.Sprintf("Short reference [[%s]] could be written as [[%s]] for clarity", ref.TargetRaw, suggestedID),
+				Value:          ref.TargetRaw,
+				FixHint:        fmt.Sprintf("Consider using full path: [[%s]]", suggestedID),
+				FixReplacement: suggestedID,
 			})
 		}
 
