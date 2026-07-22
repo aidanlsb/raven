@@ -161,6 +161,38 @@ title: Example
 	}
 }
 
+func TestHandleAddRejectsHeadingContent(t *testing.T) {
+	t.Parallel()
+
+	v := newSectionEditVault(t, `---
+type: note
+title: Example
+---
+
+Body
+`)
+	reindexForEditTest(t, v.Path)
+
+	for _, text := range []string{"## Log", "Title\n---", "Body line\n\n### Nested"} {
+		result := HandleAdd(context.Background(), commandexec.Request{
+			VaultPath: v.Path,
+			Args: map[string]any{
+				"text": text,
+				"to":   "note/example",
+			},
+		})
+		if result.OK || result.Error == nil || result.Error.Code != "INVALID_INPUT" {
+			t.Fatalf("text %q: expected INVALID_INPUT, got %#v", text, result)
+		}
+		if !strings.Contains(result.Error.Suggestion, "rvn section create") {
+			t.Fatalf("text %q: suggestion = %q", text, result.Error.Suggestion)
+		}
+	}
+	if got := v.ReadFile("note/example.md"); strings.Contains(got, "## Log") || strings.Contains(got, "### Nested") {
+		t.Fatalf("rejected heading content changed file:\n%s", got)
+	}
+}
+
 func TestHandleSetBulkWarnsOnSectionIDs(t *testing.T) {
 	t.Parallel()
 

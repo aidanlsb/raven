@@ -163,6 +163,21 @@ func TestIntegration_AddRejectsRemovedHeadingFlags(t *testing.T) {
 	}
 }
 
+func TestIntegration_AddRejectsHeadingContent(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("project.md", "---\ntype: page\n---\n# Project\n").
+		Build()
+
+	result := v.RunCLI("add", "## Log", "--to", "project.md")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "rvn section create")
+	if strings.Contains(v.ReadFile("project.md"), "## Log") {
+		t.Fatalf("rejected add created heading:\n%s", v.ReadFile("project.md"))
+	}
+}
+
 func TestIntegration_ResolveAndAddPreferDynamicTodayOverSectionShortName(t *testing.T) {
 	t.Parallel()
 	today := time.Now().Format("2006-01-02")

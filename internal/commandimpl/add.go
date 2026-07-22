@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -28,6 +29,9 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 	text := strings.TrimSpace(stringArg(req.Args, "text"))
 	if text == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires text argument", nil, "Usage: rvn add <text>")
+	}
+	if containsMarkdownHeading(text) {
+		return removedAddHeadingFailure()
 	}
 	if _, hasHeading := req.Args["heading"]; hasHeading {
 		return removedAddHeadingFailure()
@@ -180,10 +184,15 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 func removedAddHeadingFailure() commandexec.Result {
 	return commandexec.Failure(
 		"INVALID_INPUT",
-		"rvn add no longer accepts --heading or --create-heading",
+		"rvn add only appends body content; it does not accept or create headings",
 		nil,
 		`Create the heading with 'rvn section create <file> "<title>" --level N', then append content with 'rvn add <text> --to <file#section>'`,
 	)
+}
+
+func containsMarkdownHeading(text string) bool {
+	extracted, err := parser.ExtractFromAST([]byte(text), 1)
+	return err == nil && len(extracted.Headings) > 0
 }
 
 func isDailyNoteObjectID(objectID string, vaultCfg *config.VaultConfig) bool {

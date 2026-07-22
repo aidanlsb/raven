@@ -115,7 +115,7 @@ func init() {
 		if strings.Contains(message, "unknown flag: --heading") || strings.Contains(message, "unknown flag: --create-heading") {
 			return handleErrorMsg(
 				ErrInvalidInput,
-				"rvn add no longer accepts --heading or --create-heading",
+				"rvn add only appends body content; it no longer accepts --heading or --create-heading",
 				`Create the heading with 'rvn section create <file> "<title>" --level N', then append content with 'rvn add <text> --to <file#section>'`,
 			)
 		}

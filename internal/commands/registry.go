@@ -196,7 +196,8 @@ the full subtree boundary; create or move headings with 'rvn section create' and
 
 The removed --heading and --create-heading flags are hard errors. To create a
 heading, run 'rvn section create <file> "<title>" --level N', then append body
-content with 'rvn add <text> --to <file#section>'.
+content with 'rvn add <text> --to <file#section>'. Add also rejects text that
+contains Markdown headings; headings are section lifecycle, not body content.
 
 A configured capture.heading may target an existing literal Markdown heading,
 but add never creates a missing heading.
