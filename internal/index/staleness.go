@@ -116,3 +116,36 @@ func (d *Database) GetFileMtime(filePath string) (int64, error) {
 	}
 	return mtime.Int64, nil
 }
+
+// GetFileMtimes returns the indexed mtime for every indexed file.
+// Files without an indexed mtime are included with a zero value.
+func (d *Database) GetFileMtimes() (map[string]int64, error) {
+	rows, err := d.db.Query(`
+		SELECT file_path, MAX(file_mtime)
+		FROM (
+			SELECT file_path, file_mtime FROM objects
+			UNION ALL
+			SELECT file_path, file_mtime FROM assets
+		)
+		GROUP BY file_path
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	mtimes := make(map[string]int64)
+	for rows.Next() {
+		var filePath string
+		var mtime sql.NullInt64
+		if err := rows.Scan(&filePath, &mtime); err != nil {
+			return nil, err
+		}
+		if mtime.Valid {
+			mtimes[filePath] = mtime.Int64
+		} else {
+			mtimes[filePath] = 0
+		}
+	}
+	return mtimes, rows.Err()
+}

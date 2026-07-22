@@ -90,6 +90,46 @@ func TestRunDryRunIndexesDiscoveredFiles(t *testing.T) {
 	}
 }
 
+func TestRunIncrementalSkipsParsingUnchangedMarkdown(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	notePath := filepath.Join(vaultPath, "note.md")
+	if err := os.WriteFile(notePath, []byte("# Original\n"), 0o644); err != nil {
+		t.Fatalf("failed to write markdown fixture: %v", err)
+	}
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial full Run returned error: %v", err)
+	}
+	info, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("failed to stat indexed markdown fixture: %v", err)
+	}
+
+	// Malformed content would produce a parse error if the incremental walk
+	// read the file. Preserve its indexed mtime to exercise the pre-parse gate.
+	if err := os.WriteFile(notePath, []byte("---\ntype: [invalid yaml\n---\n"), 0o644); err != nil {
+		t.Fatalf("failed to replace markdown fixture: %v", err)
+	}
+	if err := os.Chtimes(notePath, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatalf("failed to restore markdown fixture mtime: %v", err)
+	}
+
+	result, err := Run(RunRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("incremental Run returned error: %v", err)
+	}
+	if result.FilesIndexed != 0 || result.FilesSkipped != 1 {
+		t.Fatalf("indexed/skipped = %d/%d, want 0/1", result.FilesIndexed, result.FilesSkipped)
+	}
+	if len(result.Errors) != 0 {
+		t.Fatalf("errors = %#v, want none because unchanged file must not be parsed", result.Errors)
+	}
+	if len(result.StaleFiles) != 0 {
+		t.Fatalf("stale files = %#v, want none", result.StaleFiles)
+	}
+}
+
 func TestRunDryRunProjectsIndexStats(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()

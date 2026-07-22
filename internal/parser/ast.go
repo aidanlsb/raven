@@ -15,6 +15,10 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
+// Goldmark's parser configuration is immutable after its first Parse call;
+// each Parse creates its own context and AST, so the parser can be reused.
+var markdownParser = goldmark.New().Parser()
+
 // ASTContent holds all Raven syntax extracted from a markdown AST.
 type ASTContent struct {
 	Headings []Heading
@@ -28,9 +32,8 @@ type ASTContent struct {
 // Code blocks (fenced, indented, inline) are automatically skipped - any
 // @traits or [[references]] inside code will not be extracted.
 func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
-	md := goldmark.New()
 	reader := text.NewReader(content)
-	doc := md.Parser().Parse(reader)
+	doc := markdownParser.Parse(reader)
 
 	lineStarts := computeLineStarts(string(content))
 

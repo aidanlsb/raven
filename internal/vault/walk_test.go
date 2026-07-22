@@ -219,6 +219,50 @@ func TestWalkMarkdownFilesWithOptionsExcludesPaths(t *testing.T) {
 	}
 }
 
+func TestWalkMarkdownFilesWithOptionsSkipsParseBeforeRead(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "unchanged.md")
+	if err := os.WriteFile(filePath, []byte("---\ntype: [invalid yaml\n---\n"), 0o644); err != nil {
+		t.Fatalf("write unchanged.md: %v", err)
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("stat unchanged.md: %v", err)
+	}
+
+	var gateCalls int
+	var results []WalkResult
+	err = WalkMarkdownFilesWithOptions(tmpDir, &WalkOptions{
+		ShouldParse: func(relativePath string, fileMtime int64) bool {
+			gateCalls++
+			if relativePath != "unchanged.md" {
+				t.Fatalf("relative path = %q, want unchanged.md", relativePath)
+			}
+			if fileMtime != info.ModTime().Unix() {
+				t.Fatalf("file mtime = %d, want %d", fileMtime, info.ModTime().Unix())
+			}
+			return false
+		},
+	}, func(result WalkResult) error {
+		results = append(results, result)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("WalkMarkdownFilesWithOptions returned error: %v", err)
+	}
+	if gateCalls != 1 {
+		t.Fatalf("ShouldParse calls = %d, want 1", gateCalls)
+	}
+	if len(results) != 1 {
+		t.Fatalf("results = %#v, want one skipped result", results)
+	}
+	if !results[0].ParseSkipped || results[0].Document != nil || results[0].Error != nil {
+		t.Fatalf("result = %#v, want parse-skipped result without document or error", results[0])
+	}
+}
+
 func TestCollectDocuments(t *testing.T) {
 	t.Parallel()
 	// Create a temp directory with test files
