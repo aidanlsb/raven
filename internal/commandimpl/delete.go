@@ -31,14 +31,14 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
 	if stdinMode {
 		if len(objectIDs) == 0 {
-			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
+			return commandexec.Failure("MISSING_ARGUMENT", "no object or asset IDs provided via stdin", nil, "Pipe object or asset IDs to stdin, one per line")
 		}
 		return runDeleteBulk(vaultPath, vaultCfg, objectIDs, req.Confirm)
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
 	if reference == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "requires object-id argument", nil, "Usage: rvn delete <object-id>")
+		return commandexec.Failure("MISSING_ARGUMENT", "requires object or asset ID argument", nil, "Usage: rvn delete <object-or-asset-id>")
 	}
 
 	// Delete resolves the target reference (which is schema-aware) before
@@ -161,7 +161,7 @@ func deleteBacklinkCommandWarnings(backlinks []model.Reference) []commandexec.Wa
 
 	return []commandexec.Warning{{
 		Code:    codes.WarnBacklinks,
-		Message: fmt.Sprintf("Object is referenced by %d other objects", len(backlinks)),
+		Message: fmt.Sprintf("Target is referenced by %d other objects", len(backlinks)),
 		Ref:     strings.Join(backlinkIDs, ", "),
 	}}
 }

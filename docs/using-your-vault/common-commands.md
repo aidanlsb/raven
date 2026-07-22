@@ -274,14 +274,20 @@ Key flags:
 
 ### `rvn delete`
 
-Remove an object. Files are moved to `.trash/` by default.
+Remove an object or asset. Files are moved to `.trash/` by default, backlink
+warnings are reported, and the object or asset index entry is removed.
 
 ```bash
 rvn delete project/old-project                 # Interactive: preview, then confirm prompt
 rvn delete project/old-project --force         # Skip the confirmation prompt
 rvn delete project/old-project --dry-run       # Preview without deleting
 rvn delete project/old-project --json          # Applies immediately (non-interactive)
+rvn delete assets/pdfs/old-paper.pdf --dry-run --json
+rvn query 'asset .extension==png' --ids | rvn delete --stdin --confirm --json
 ```
+
+Bulk deletion previews by default and only applies with `--confirm`. Section IDs
+remain unsupported: single deletes reject them, while bulk deletes skip them.
 
 Check backlinks before deleting to avoid broken references:
 

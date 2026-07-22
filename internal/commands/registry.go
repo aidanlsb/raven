@@ -614,8 +614,8 @@ The file is moved to .trash/ for recovery.`,
 	},
 	"delete": {
 		Name:        "delete",
-		Description: "Delete an object from the vault",
-		LongDesc: `Delete a file/object from the vault.
+		Description: "Delete an object or asset from the vault",
+		LongDesc: `Delete a file-backed object or asset from the vault.
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'rm'.
 Using 'rm' directly will NOT warn about backlinks (other files that reference this one),
@@ -625,35 +625,37 @@ potentially creating broken links throughout the vault. The raven_delete command
 - Updates the index properly
 
 By default, files are moved to a trash directory (.trash/).
-Warns about backlinks (objects that reference the deleted item).
+Warns about backlinks (objects that reference the deleted object or asset).
 
-Single-object delete:
+Single-file delete:
 Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
 deletion (and its backlink impact) without applying. Interactive CLI terminals still
 show a confirmation prompt unless --force is set. Only call delete after user intent
 is clear; when unsure, inspect the object and run backlinks first.
 
 Bulk operations:
-Use --stdin to read object IDs from stdin (one per line).
+Use --stdin to read object or asset IDs from stdin (one per line).
 IMPORTANT:
 - Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
-			{Name: "object_id", Description: "Object ID to delete (e.g., people/freya)", Required: false},
+			{Name: "object_id", Description: "Object or asset ID to delete (e.g., people/freya or assets/pdfs/paper.pdf)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip interactive CLI confirmation prompt", Type: FlagTypeBool},
-			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read object or asset IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk delete (without this flag, bulk shows preview only)", Type: FlagTypeBool},
-			{Name: "dry-run", Description: "Preview a single-object delete without applying it", Type: FlagTypeBool},
+			{Name: "dry-run", Description: "Preview a single-file delete without applying it", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn delete people/freya --json",
 			"rvn delete people/freya --dry-run --json",
+			"rvn delete assets/pdfs/paper.pdf --dry-run --json",
+			`rvn query "asset .extension==png" --ids | rvn delete --stdin --confirm --json`,
 			"rvn delete projects/old --force",
 		},
 		UseCases: []string{
 			"Delete a file safely (NEVER use 'rm' shell command)",
-			"Remove objects while checking for broken links",
+			"Remove objects or assets while checking for broken links",
 			"Move files to trash with backlink warnings",
 		},
 	},

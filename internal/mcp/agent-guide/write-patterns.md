@@ -14,7 +14,7 @@ Use this guide to choose the right mutation primitive.
 | Move or rename an asset | `move` | Updates Markdown links/images and refreshes the asset index |
 | Rename a section heading | `section_rename` | Source `file#section`, destination plain heading text; rewrites inbound `[[...#slug]]` refs |
 | Update trait value | `update` | Targeted trait mutation by trait ID |
-| Delete one object | `delete` | Safe deletion behavior with backlink warnings and trash support |
+| Delete one object or asset | `delete` | Safe deletion behavior with backlink warnings, trash support, and index updates |
 
 Rules:
 - Use `upsert` when reruns should produce one current canonical output.
@@ -89,6 +89,12 @@ Immediate single-object delete:
 ```text
 raven_invoke(command="backlinks", args={"target":"project/old-project"})
 raven_invoke(command="delete", args={"object_id":"project/old-project"})
+```
+
+Asset IDs returned by an `asset` query use the same delete path:
+
+```text
+raven_invoke(command="delete", args={"object_id":"assets/pdfs/old-paper.pdf", "dry-run":true})
 ```
 
 Single-object `set`, `add`, `update`, `edit`, `delete`, and `move` all apply
