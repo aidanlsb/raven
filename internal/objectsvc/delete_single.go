@@ -29,57 +29,62 @@ type DeleteByReferenceResult struct {
 }
 
 func PreviewDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
+	result, _, err := prepareDeleteByReference(req)
+	return result, err
+}
+
+func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, *deleteTarget, error) {
 	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, nil)
+		return nil, nil, newError(ErrorInvalidInput, "vault path is required", "", nil, nil)
 	}
 	if req.VaultConfig == nil {
-		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 	if strings.TrimSpace(req.Reference) == "" {
-		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn delete <object-id>", nil, nil)
+		return nil, nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn delete <object-or-asset-id>", nil, nil)
 	}
 
 	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if resolved.IsSection {
-		return nil, newError(ErrorInvalidInput, "delete only supports file-level objects", "Use a file-level object ID without a section fragment", nil, nil)
+		return nil, nil, newError(ErrorInvalidInput, "delete only supports file-level objects and assets", "Use a file-level object or asset ID without a section fragment", nil, nil)
+	}
+
+	target, err := deleteTargetFromFilePath(req.VaultPath, req.VaultConfig, resolved.FilePath, resolved.ObjectID)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	db, err := index.Open(req.VaultPath)
 	if err != nil {
-		return nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
+		return nil, nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
 	}
 	defer db.Close()
 	db.SetDailyDirectory(req.VaultConfig.GetDailyDirectory())
 
-	backlinks, err := db.Backlinks(resolved.ObjectID)
+	backlinks, err := db.Backlinks(target.ObjectID)
 	if err != nil {
-		return nil, newError(ErrorDatabase, "failed to read backlinks", "Run 'rvn reindex' to rebuild the database", nil, err)
+		return nil, nil, newError(ErrorDatabase, "failed to read backlinks", "Run 'rvn reindex' to rebuild the database", nil, err)
 	}
 
 	return &DeleteByReferenceResult{
-		ObjectID:  resolved.ObjectID,
+		ObjectID:  target.ObjectID,
 		Behavior:  req.Behavior,
 		Backlinks: backlinks,
-	}, nil
+	}, target, nil
 }
 
 func DeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
-	preview, err := PreviewDeleteByReference(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
+	preview, target, err := prepareDeleteByReference(req)
 	if err != nil {
 		return nil, err
 	}
 
 	delResult, err := DeleteFile(DeleteFileRequest{
 		VaultPath: req.VaultPath,
-		FilePath:  resolved.FilePath,
+		FilePath:  target.FilePath,
 		Behavior:  req.Behavior,
 		TrashDir:  req.TrashDir,
 	})
@@ -94,11 +99,12 @@ func DeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, 
 	} else {
 		defer db.Close()
 		db.SetDailyDirectory(req.VaultConfig.GetDailyDirectory())
-		if err := db.RemoveDocument(preview.ObjectID); err != nil {
-			if errors.Is(err, index.ErrObjectNotFound) {
+		removeErr := removeDeleteTargetFromIndex(db, target)
+		if removeErr != nil {
+			if errors.Is(removeErr, index.ErrObjectNotFound) {
 				warnings = append(warnings, "Object not found in index; consider running 'rvn reindex'")
 			} else {
-				warnings = append(warnings, fmt.Sprintf("Failed to remove deleted object from index: %v", err))
+				warnings = append(warnings, fmt.Sprintf("Failed to remove deleted file from index: %v", removeErr))
 			}
 		}
 	}

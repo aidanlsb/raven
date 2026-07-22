@@ -233,7 +233,9 @@ rvn move assets/pdfs/draft.pdf assets/pdfs/final.pdf
 
 Asset destinations must include a file extension. Raven treats non-Markdown moves as asset moves and keeps the asset index in sync.
 
-Section IDs (`file#slug`) are not valid move sources. Single and bulk moves reject them; use `rvn section rename` instead.
+Section IDs (`file#slug`) are not valid `rvn move` sources. Single and bulk
+object moves reject them; use `rvn section move` to reorder/reparent a section
+or `rvn section rename` to change its heading identity.
 
 Single-object moves apply immediately; pass `--dry-run` to preview without writing. Bulk moves (`--stdin`) preview by default and require `--confirm`.
 
@@ -243,6 +245,47 @@ Key flags:
 - `--force` — skip confirmation
 - `--stdin` — bulk move from piped IDs
 - `--confirm` — apply a bulk move
+
+### `rvn section create`
+
+Create an empty section heading with an explicit level:
+
+```bash
+rvn section create project/website "Notes" --level 2
+rvn section create project/website "Follow-up" --level 3 --under project/website#tasks
+rvn section create project/website "Archive" --level 2 --after project/website#tasks
+rvn section create project/website "Overview" --level 2 --before project/website#tasks --dry-run
+```
+
+The title is plain text—pass `"Notes"` with `--level 2`, not `"## Notes"`.
+`--after`, `--before`, and `--under` are mutually exclusive. `--after` inserts
+after the anchor's complete subtree, `--before` inserts before its heading, and
+`--under` inserts as its last direct child. With no anchor, creation appends at
+end of file.
+
+Sibling placement requires the same level as the anchor; child placement
+requires exactly the anchor level plus one. Raven never silently changes the
+requested level. It also rejects slug collisions or placements that would shift
+another section's slug. The command applies immediately; use `--dry-run` to
+preview and receive the canonical new `file#slug` ID without writing.
+
+### `rvn section move`
+
+Reorder or reparent a section without renaming it:
+
+```bash
+rvn section move project/website#notes --after project/website#tasks
+rvn section move project/website#follow-up --under project/website#tasks
+rvn section move project/website#archive --before project/website#notes --dry-run
+rvn section move project/website#appendix   # Move to end of file
+```
+
+The source section's complete subtree moves with it. Heading text, levels,
+slugs, and section IDs remain unchanged; use `section rename` for identity
+changes. `--before`/`--after` require equal source and anchor levels, while
+`--under` requires the source to be exactly one level deeper. Cross-file
+anchors, missing anchors, depth mismatches, and anchors inside the source
+subtree are hard errors.
 
 ### `rvn section rename`
 
@@ -254,6 +297,12 @@ rvn section rename project/website#tasks "Completed Tasks" --dry-run
 ```
 
 The destination is plain heading text without a leading `#`. Raven preserves the heading level, derives the new slug, and rewrites every inbound `[[...#old-slug]]` reference. The command fails without writing if the rename would duplicate a slug or shift another section's slug.
+
+Section lifecycle placement and body appends use different boundaries:
+`section create`/`section move` place headings using complete subtrees, while
+`rvn add <text> --to file#section` appends at the end of that section's direct
+body, before its first child heading. `add` rejects Markdown heading content;
+create headings with `section create` first.
 
 ### `rvn reclassify`
 
@@ -274,14 +323,20 @@ Key flags:
 
 ### `rvn delete`
 
-Remove an object. Files are moved to `.trash/` by default.
+Remove an object or asset. Files are moved to `.trash/` by default, backlink
+warnings are reported, and the object or asset index entry is removed.
 
 ```bash
 rvn delete project/old-project                 # Interactive: preview, then confirm prompt
 rvn delete project/old-project --force         # Skip the confirmation prompt
 rvn delete project/old-project --dry-run       # Preview without deleting
 rvn delete project/old-project --json          # Applies immediately (non-interactive)
+rvn delete assets/pdfs/old-paper.pdf --dry-run --json
+rvn query 'asset .extension==png' --ids | rvn delete --stdin --confirm --json
 ```
+
+Bulk deletion previews by default and only applies with `--confirm`. Section IDs
+remain unsupported: single deletes reject them, while bulk deletes skip them.
 
 Check backlinks before deleting to avoid broken references:
 

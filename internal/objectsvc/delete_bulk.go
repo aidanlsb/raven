@@ -7,7 +7,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 type DeleteBulkRequest struct {
@@ -73,19 +72,18 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 	}
 
 	for _, id := range req.ObjectIDs {
-		objectID := req.VaultConfig.FilePathToObjectID(id)
-		filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
+		target, err := resolveBulkDeleteTarget(req.VaultPath, req.VaultConfig, id)
 		if err != nil {
-			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
+			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: "object or asset not found"})
 			continue
 		}
-		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
 			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
 
 		details := ""
-		backlinks, _ := db.Backlinks(objectID)
+		backlinks, _ := db.Backlinks(target.ObjectID)
 		if len(backlinks) > 0 {
 			details = fmt.Sprintf("⚠ referenced by %d objects", len(backlinks))
 		}
@@ -95,7 +93,7 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 			changes = map[string]string{"behavior": fmt.Sprintf("move to %s/", trashDir)}
 		}
 
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		if _, err := os.Stat(target.FilePath); os.IsNotExist(err) {
 			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: "file not found"})
 			continue
 		}
@@ -145,16 +143,15 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 	for _, id := range req.ObjectIDs {
 		result := DeleteBulkResult{ID: id}
 
-		objectID := req.VaultConfig.FilePathToObjectID(id)
-		filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
+		target, err := resolveBulkDeleteTarget(req.VaultPath, req.VaultConfig, id)
 		if err != nil {
 			result.Status = "skipped"
-			result.Reason = "object not found"
+			result.Reason = "object or asset not found"
 			skippedCount++
 			results = append(results, result)
 			continue
 		}
-		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
 			result.Status = "error"
 			result.Reason = err.Error()
 			errorCount++
@@ -164,7 +161,7 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 
 		_, err = DeleteFile(DeleteFileRequest{
 			VaultPath: req.VaultPath,
-			FilePath:  filePath,
+			FilePath:  target.FilePath,
 			Behavior:  behavior,
 			TrashDir:  trashDir,
 		})
@@ -181,9 +178,10 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 			continue
 		}
 
-		if err := db.RemoveDocument(objectID); err != nil {
-			warningMsg := fmt.Sprintf("Failed to remove deleted object from index: %v", err)
-			if errors.Is(err, index.ErrObjectNotFound) {
+		removeErr := removeDeleteTargetFromIndex(db, target)
+		if removeErr != nil {
+			warningMsg := fmt.Sprintf("Failed to remove deleted file from index: %v", removeErr)
+			if errors.Is(removeErr, index.ErrObjectNotFound) {
 				warningMsg = "Object not found in index; consider running 'rvn reindex'"
 			}
 			warnings = append(warnings, warningMsg)

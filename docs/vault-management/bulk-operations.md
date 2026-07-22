@@ -97,7 +97,7 @@ Append text to the end of matching files.
 
 ```bash
 # Add a note
-rvn query "type:project .status==active" --apply "add ## Reviewed on $(date +%Y-%m-%d)" --confirm
+rvn query "type:project .status==active" --apply "add Reviewed on $(date +%Y-%m-%d)" --confirm
 
 # Add a trait
 rvn query "type:project .status==active" --apply "add @reviewed(2026-01-10)" --confirm
@@ -110,13 +110,14 @@ rvn query "type:meeting" --apply "add See also: [[project/website]]" --confirm
 
 - Only works on file-level objects (section IDs are skipped)
 - Text is appended to the end of the file
+- Markdown heading content is rejected; create headings with `rvn section create`
 - Respects the file's existing formatting
 
 ---
 
 ## Delete
 
-Delete matching objects (moves to trash by default).
+Delete matching objects or assets (moves to trash by default).
 
 ### Examples
 
@@ -126,12 +127,16 @@ rvn query "type:project .status==archived" --apply "delete" --confirm
 
 # Delete old daily notes (be careful!)
 rvn query "type:date" --ids | head -100 | rvn delete --stdin --confirm
+
+# Delete generated image assets
+rvn query 'asset startswith(.file_path, "assets/images/generated/")' --ids \
+  | rvn delete --stdin --confirm
 ```
 
 ### Behavior
 
 - Files are moved to `.trash/` by default (configurable)
-- Only works on file-level objects (section IDs are skipped)
+- Works on file-level objects and assets (section IDs are skipped)
 - Does NOT automatically update backlinks
 
 **Warning:** Always check backlinks before deleting:
@@ -223,7 +228,7 @@ rvn query "type:person" --ids | grep "team-" | rvn set --stdin department=engine
 | `rvn set` | Set fields on each object (file-level only) |
 | `rvn update` | Update each trait value (trait IDs only; also supports repeated `--trait-id`) |
 | `rvn add` | Append text to each file or section (section IDs append inside the section) |
-| `rvn delete` | Delete each object (file-level only) |
+| `rvn delete` | Delete each object or asset (file-level only) |
 | `rvn move` | Move each object (file-level only) |
 | `rvn backlinks` | Read-only grouped incoming references for each target |
 | `rvn outlinks` | Read-only grouped outgoing references for each source |
@@ -258,7 +263,11 @@ rvn query "section .title==Tasks" --ids | rvn add "Review backlog" --stdin --con
 Skipped 1 section ID(s) - bulk operations only support file-level objects
 ```
 
-- `move` is stricter: if any bulk source is a section ID, the entire move request fails. Rename one heading at a time with `rvn section rename <file#section> "<new heading text>"`. A section query combined with `--apply "move ..."` fails for the same reason.
+- `move` is stricter: if any bulk source is a section ID, the entire move request
+  fails. Reorder/reparent one section at a time with
+  `rvn section move <file#section>`, or change heading identity with
+  `rvn section rename <file#section> "<new heading text>"`. A section query
+  combined with `--apply "move ..."` fails for the same reason.
 
 ---
 

@@ -154,6 +154,19 @@ Every markdown heading automatically creates a `section` object. This gives your
 
 Sections can be referenced (`[[project/website#tasks]]`) and queried with scope predicates like `in(...)`, `within(...)`, `has(...)`, and `contains(...)`.
 
+Manage heading lifecycle explicitly:
+
+```bash
+rvn section create project/website "Tasks" --level 2
+rvn section move project/website#tasks --after project/website#overview
+rvn section rename project/website#tasks "Completed Tasks"
+```
+
+Create requires plain title text plus an explicit level. Move preserves the
+heading's identity and carries its complete subtree. Rename changes the
+heading-derived slug and rewrites inbound fragment references. `rvn add` only
+appends body content and rejects Markdown headings.
+
 ## Daily Notes
 
 Daily notes give you a date-stamped file for each day:

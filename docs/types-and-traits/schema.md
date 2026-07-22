@@ -10,12 +10,12 @@ This page is lookup-oriented and intentionally exhaustive.
 
 ## Schema Version
 
-The top-level `version` key declares the schema format version. The current version is `2`. Raven uses this to ensure backward compatibility when the schema format evolves. If omitted, Raven assumes the latest version.
+The top-level `version` key declares the schema format version. The current version is `1`. Raven uses this to ensure backward compatibility when the schema format evolves. If omitted, Raven assumes version 1 and emits a warning.
 
 ## Complete Example
 
 ```yaml
-version: 2
+version: 1
 
 types:
   person:
@@ -67,6 +67,7 @@ traits:
   todo:
     type: enum
     values: [todo, done]
+    default: todo
 ```
 
 ---
@@ -116,6 +117,8 @@ Queries expose additional structural fields on section rows: `.slug`, `.file_obj
 - Object ID is `<file-id>#<slugified-heading>`
 - Can be referenced like `[[project/website#tasks]]`
 - Queried with the `section` keyword (e.g., `rvn query "section .title==Tasks"`), not `type:section`
+- Created with `rvn section create project/website "Tasks" --level 2`
+- Reordered or reparented with `rvn section move project/website#tasks`; the complete subtree moves and identity stays unchanged
 - Renamed safely with `rvn section rename project/website#tasks "New Heading"`, which rewrites inbound refs
 
 ### `date`
@@ -506,9 +509,10 @@ traits:
   todo:
     type: enum
     values: [todo, done]
+    default: todo
 ```
 
-Usage: `@priority(high)`, `@todo(done)`
+Usage: `@priority(high)`, `@todo` (defaults to `todo`), `@todo(done)`
 
 #### Array Types
 

@@ -1,7 +1,6 @@
 package objectsvc
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,159 +18,6 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
-
-// ResolveAddHeadingTarget resolves an add --heading spec to a section ID.
-func ResolveAddHeadingTarget(
-	vaultPath string,
-	destPath string,
-	fileObjectID string,
-	headingSpec string,
-	parseOpts *parser.ParseOptions,
-) (string, error) {
-	spec := strings.TrimSpace(headingSpec)
-	if spec == "" {
-		return "", nil
-	}
-
-	contentBytes, err := os.ReadFile(destPath)
-	if err != nil {
-		return "", addFileReadError(destPath, "failed to read target file", "Check that the target file exists and is readable", err)
-	}
-	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), destPath, vaultPath, parseOpts)
-	if err != nil {
-		return "", newError(ErrorInvalidInput, "failed to parse target file", "Fix the target file content and try again", nil, err)
-	}
-
-	prefix := fileObjectID + "#"
-	candidates := make([]*model.Section, 0, len(doc.Sections))
-	for _, section := range doc.Sections {
-		if section == nil {
-			continue
-		}
-		if strings.HasPrefix(section.ID, prefix) {
-			candidates = append(candidates, section)
-		}
-	}
-	if len(candidates) == 0 {
-		return "", newError(ErrorRefNotFound, fmt.Sprintf("target file has no sections: %s", fileObjectID), "Use an existing section slug/id or heading text", nil, nil)
-	}
-
-	if headingText, ok := parseHeadingTextFromSpec(spec); ok {
-		return resolveSectionByHeadingText(candidates, headingText)
-	}
-	if strings.Contains(spec, " ") {
-		return resolveSectionByHeadingText(candidates, spec)
-	}
-	if strings.Contains(spec, "/") && strings.Contains(spec, "#") {
-		if !strings.HasPrefix(spec, prefix) {
-			return "", newError(ErrorInvalidInput, fmt.Sprintf("section %q does not belong to %s", spec, fileObjectID), "Use a section ID from the target file or change --to", nil, nil)
-		}
-		for _, section := range candidates {
-			if section.ID == spec {
-				return section.ID, nil
-			}
-		}
-		return "", newError(ErrorRefNotFound, fmt.Sprintf("section not found: %s", spec), "Use an existing section slug/id or heading text", nil, nil)
-	}
-
-	fragment := strings.TrimSpace(strings.TrimPrefix(spec, "#"))
-	if fragment == "" {
-		return "", newError(ErrorInvalidInput, "section fragment cannot be empty", "Pass a non-empty section slug or ID", nil, nil)
-	}
-	for _, section := range candidates {
-		if strings.TrimPrefix(section.ID, prefix) == fragment {
-			return section.ID, nil
-		}
-	}
-	if !strings.HasPrefix(spec, "#") {
-		sectionID, headingErr := resolveSectionByHeadingText(candidates, spec)
-		if headingErr == nil {
-			return sectionID, nil
-		}
-		var svcErr *Error
-		if errors.As(headingErr, &svcErr) && svcErr.Code == ErrorRefAmbiguous {
-			return "", headingErr
-		}
-	}
-	return "", newError(ErrorRefNotFound, fmt.Sprintf("section fragment not found: %s", fragment), "Use an existing section slug/id or heading text", nil, nil)
-}
-
-// HeadingForCreation derives heading text and level from an add --heading spec
-// for creating a missing heading. Markdown heading specs ("### Bugs / Fixes")
-// keep their level; plain text specs default to level 2. Section-ID and
-// fragment specs cannot be used for creation because they carry a slug, not
-// heading text.
-func HeadingForCreation(headingSpec string) (string, int, error) {
-	spec := strings.TrimSpace(headingSpec)
-	if spec == "" {
-		return "", 0, newError(ErrorInvalidInput, "heading text cannot be empty", "Pass a non-empty heading", nil, nil)
-	}
-	if text, ok := parseHeadingTextFromSpec(spec); ok {
-		level := 0
-		for level < len(spec) && spec[level] == '#' {
-			level++
-		}
-		if level > 6 {
-			level = 6
-		}
-		return text, level, nil
-	}
-	if strings.HasPrefix(spec, "#") || (strings.Contains(spec, "/") && strings.Contains(spec, "#")) {
-		return "", 0, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("cannot create a heading from a section ID or fragment: %s", spec),
-			`Pass heading text (e.g. --heading "Team Notes" or --heading "### Team Notes") to create a missing heading`,
-			nil, nil,
-		)
-	}
-	return spec, 2, nil
-}
-
-// AppendUnderNewHeading appends a new heading at the end of the file and
-// inserts the capture line under it. Returns the inserted line number and the
-// new section's ID.
-func AppendUnderNewHeading(
-	vaultPath string,
-	destPath string,
-	fileObjectID string,
-	line string,
-	headingSpec string,
-	parseOpts *parser.ParseOptions,
-) (int, string, error) {
-	text, level, err := HeadingForCreation(headingSpec)
-	if err != nil {
-		return 0, "", err
-	}
-	heading := strings.Repeat("#", level) + " " + text
-
-	insertedLine, err := appendUnderHeading(destPath, line, heading)
-	if err != nil {
-		return 0, "", err
-	}
-
-	// The new heading sits on the line directly above the inserted text.
-	sectionID := ""
-	if contentBytes, readErr := os.ReadFile(destPath); readErr == nil {
-		if doc, parseErr := parser.ParseDocumentWithOptions(string(contentBytes), destPath, vaultPath, parseOpts); parseErr == nil {
-			for _, section := range doc.Sections {
-				if section != nil && section.LineStart == insertedLine-1 {
-					sectionID = section.ID
-					break
-				}
-			}
-		}
-	}
-	if sectionID == "" {
-		sectionID = fileObjectID + "#" + parser.Slugify(text)
-	}
-	return insertedLine, sectionID, nil
-}
-
-// IsRefNotFound reports whether err is a service error with the REF_NOT_FOUND code.
-func IsRefNotFound(err error) bool {
-	var svcErr *Error
-	return errors.As(err, &svcErr) && svcErr.Code == ErrorRefNotFound
-}
 
 // AppendToFile appends a capture line to the target file, creating daily notes when needed.
 func AppendToFile(
@@ -342,15 +188,13 @@ func appendUnderHeading(destPath, line, heading string) (int, error) {
 		insertedLine int
 	)
 	if headingIdx == -1 {
-		trimmed := len(lines)
-		for trimmed > 0 && strings.TrimSpace(lines[trimmed-1]) == "" {
-			trimmed--
-		}
-		newLines = append([]string{}, lines[:trimmed]...)
-		newLines = append(newLines, "", heading, line)
-		insertedLine = len(newLines)
-		// Keep the file newline-terminated.
-		newLines = append(newLines, "")
+		return 0, newError(
+			ErrorRefNotFound,
+			fmt.Sprintf("configured capture heading not found: %s", heading),
+			`Create it with 'rvn section create <file> "<title>" --level N', then retry the add`,
+			nil,
+			nil,
+		)
 	} else if nextHeadingIdx == -1 {
 		insertIdx := len(lines)
 		for insertIdx > headingIdx+1 && strings.TrimSpace(lines[insertIdx-1]) == "" {
@@ -386,51 +230,6 @@ func appendedLineNumber(content []byte) int {
 		return lineCount + 2
 	}
 	return lineCount + 1
-}
-
-func resolveSectionByHeadingText(candidates []*model.Section, headingText string) (string, error) {
-	text := strings.TrimSpace(headingText)
-	if text == "" {
-		return "", newError(ErrorInvalidInput, "heading text cannot be empty", "Pass a non-empty heading", nil, nil)
-	}
-
-	matches := make([]string, 0, 2)
-	for _, section := range candidates {
-		if section == nil {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(section.Title), text) {
-			matches = append(matches, section.ID)
-		}
-	}
-
-	switch len(matches) {
-	case 0:
-		return "", newError(ErrorRefNotFound, fmt.Sprintf("heading not found: %q", text), "Use an existing section slug/id or heading text", nil, nil)
-	case 1:
-		return matches[0], nil
-	default:
-		return "", newError(ErrorRefAmbiguous, fmt.Sprintf("heading %q is ambiguous; use a section slug/id", text), "Use a unique section slug/id instead of heading text", nil, nil)
-	}
-}
-
-func parseHeadingTextFromSpec(spec string) (string, bool) {
-	trimmed := strings.TrimSpace(spec)
-	if !strings.HasPrefix(trimmed, "#") {
-		return "", false
-	}
-	i := 0
-	for i < len(trimmed) && trimmed[i] == '#' {
-		i++
-	}
-	if i == 0 || i >= len(trimmed) || trimmed[i] != ' ' {
-		return "", false
-	}
-	headingText := strings.TrimSpace(trimmed[i:])
-	if headingText == "" {
-		return "", false
-	}
-	return headingText, true
 }
 
 func addFileNotFoundError(destPath string, cause error) error {

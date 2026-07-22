@@ -43,14 +43,16 @@ If you are working against a non-default vault, pass the same `vault` or `vault_
 
 ```text
 create = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
-raven_invoke(command="add", args={"text":"## Notes\n- Kickoff next week", "to":create.data.file})
+notes = raven_invoke(command="section_create", args={"file":create.data.id, "title":"Notes", "level":2})
+raven_invoke(command="add", args={"text":"- Kickoff next week", "to":notes.data.section})
 ```
 
 If no existing type fits:
 
 ```text
 create = raven_invoke(command="new", args={"type":"page", "title":"Quick Note"})
-raven_invoke(command="add", args={"text":"## Notes\n- ...", "to":create.data.file})
+notes = raven_invoke(command="section_create", args={"file":create.data.id, "title":"Notes", "level":2})
+raven_invoke(command="add", args={"text":"- ...", "to":notes.data.section})
 ```
 
 ## Related topics

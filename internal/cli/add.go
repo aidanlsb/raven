@@ -12,11 +12,9 @@ import (
 )
 
 var (
-	addToFlag            string
-	addHeadingFlag       string
-	addCreateHeadingFlag bool
-	addStdin             bool
-	addConfirm           bool
+	addToFlag  string
+	addStdin   bool
+	addConfirm bool
 )
 
 var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
@@ -49,12 +47,6 @@ func buildAddArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 			"stdin":      true,
 			"object_ids": stringsToAny(ids),
 		}
-		if headingSpec := effectiveAddHeadingSpec(); headingSpec != "" {
-			argsMap["heading"] = headingSpec
-		}
-		if addCreateHeadingFlag {
-			argsMap["create-heading"] = true
-		}
 		return argsMap, nil
 	}
 
@@ -68,12 +60,6 @@ func buildAddArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 	}
 	if to := strings.TrimSpace(addToFlag); to != "" {
 		argsMap["to"] = to
-	}
-	if headingSpec := effectiveAddHeadingSpec(); headingSpec != "" {
-		argsMap["heading"] = headingSpec
-	}
-	if addCreateHeadingFlag {
-		argsMap["create-heading"] = true
 	}
 	return argsMap, nil
 }
@@ -112,10 +98,6 @@ func formatCaptureLine(text string) string {
 	return text
 }
 
-func effectiveAddHeadingSpec() string {
-	return strings.TrimSpace(addHeadingFlag)
-}
-
 func buildCreateObjectCommand(typeName, targetRaw string) string {
 	title := filepath.Base(strings.TrimSpace(targetRaw))
 	if title == "" || title == "." || title == "/" {
@@ -126,10 +108,19 @@ func buildCreateObjectCommand(typeName, targetRaw string) string {
 
 func init() {
 	addCmd.Flags().StringVar(&addToFlag, "to", "", "Target file (path or reference like 'cursor')")
-	addCmd.Flags().StringVar(&addHeadingFlag, "heading", "", "Target heading within destination (heading slug, object#heading ID, or markdown heading text)")
-	addCmd.Flags().BoolVar(&addCreateHeadingFlag, "create-heading", false, "Create the --heading target at the end of the file if it does not exist")
 	addCmd.Flags().BoolVar(&addStdin, "stdin", false, "Read object IDs from stdin (one per line)")
 	addCmd.Flags().BoolVar(&addConfirm, "confirm", false, "Apply bulk changes (without this flag, bulk shows preview only)")
+	addCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		message := err.Error()
+		if strings.Contains(message, "unknown flag: --heading") || strings.Contains(message, "unknown flag: --create-heading") {
+			return handleErrorMsg(
+				ErrInvalidInput,
+				"rvn add only appends body content; it no longer accepts --heading or --create-heading",
+				`Create the heading with 'rvn section create <file> "<title>" --level N', then append content with 'rvn add <text> --to <file#section>'`,
+			)
+		}
+		return err
+	})
 	if err := addCmd.RegisterFlagCompletionFunc("to", completeReferenceFlag(true)); err != nil {
 		panic(err)
 	}

@@ -8,12 +8,12 @@
 - Index is rebuildable; use `raven_invoke(command="reindex")` when state looks stale.
 
 3. Prefer explicit, schema-safe writes.
-- Use `raven_invoke` with commands like `new`, `set`, `edit`, `move`, `section_rename`, `delete`, and `upsert`.
+- Use `raven_invoke` with commands like `new`, `set`, `edit`, `move`, `section_create`, `section_move`, `section_rename`, `delete`, and `upsert`.
 - Avoid shell-level mutations for vault operations, including asset moves.
 - See `raven://guide/critical-rules` and `raven://guide/write-patterns`.
 
 4. Use the command's documented mutation flow.
-- Single-object writes (`set`, `add`, `update`, `edit`, `section_rename`, single `delete`/`move`) apply immediately; use `dry-run=true` to preview when you want to verify first.
+- Single-object writes (`set`, `add`, `update`, `edit`, `section_create`, `section_move`, `section_rename`, single `delete`/`move`) apply immediately; use `dry-run=true` to preview when you want to verify first.
 - High-blast-radius operations (bulk writes, `query` apply, `schema rename`, `schema convert`, `check` fixes) preview first; show the preview, ask for approval, then apply with `confirm=true`.
 - Because single-object writes apply on the first call, only invoke them when intent is clear.
 

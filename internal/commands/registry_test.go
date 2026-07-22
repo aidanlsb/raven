@@ -9,7 +9,7 @@ import (
 func TestRegistryHasRequiredCommands(t *testing.T) {
 	t.Parallel()
 	requiredCommands := []string{
-		"new", "add", "delete", "read", "move", "section_rename",
+		"new", "add", "delete", "read", "move", "section_create", "section_move", "section_rename",
 		"query", "backlinks", "vault_stats", "check", "date",
 		"schema",
 	}

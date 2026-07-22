@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -245,7 +246,7 @@ func queryLabelOrParse(label, queryStr string) string {
 	return parsed.TypeName
 }
 
-func listSavedQueries(queries []SavedQueryInfo) error {
+func listSavedQueries(queries []querysvc.SavedQueryInfo) error {
 	fmt.Println(ui.SectionHeader("Saved queries"))
 	if len(queries) == 0 {
 		fmt.Println(ui.Bullet(ui.Hint("(none defined)")))
@@ -266,11 +267,11 @@ func listSavedQueries(queries []SavedQueryInfo) error {
 	return nil
 }
 
-func savedQueriesFromResult(raw interface{}) []SavedQueryInfo {
+func savedQueriesFromResult(raw interface{}) []querysvc.SavedQueryInfo {
 	if rows, ok := raw.([]map[string]interface{}); ok {
-		queries := make([]SavedQueryInfo, 0, len(rows))
+		queries := make([]querysvc.SavedQueryInfo, 0, len(rows))
 		for _, entry := range rows {
-			queries = append(queries, SavedQueryInfo{
+			queries = append(queries, querysvc.SavedQueryInfo{
 				Name:        stringValue(entry["name"]),
 				Query:       stringValue(entry["query"]),
 				Args:        stringSliceFromAny(entry["args"]),
@@ -285,13 +286,13 @@ func savedQueriesFromResult(raw interface{}) []SavedQueryInfo {
 		return nil
 	}
 
-	queries := make([]SavedQueryInfo, 0, len(rows))
+	queries := make([]querysvc.SavedQueryInfo, 0, len(rows))
 	for _, row := range rows {
 		entry, ok := row.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		queries = append(queries, SavedQueryInfo{
+		queries = append(queries, querysvc.SavedQueryInfo{
 			Name:        stringValue(entry["name"]),
 			Query:       stringValue(entry["query"]),
 			Args:        stringSliceFromAny(entry["args"]),

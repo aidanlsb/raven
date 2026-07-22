@@ -12,9 +12,11 @@ Use this guide to choose the right mutation primitive.
 | Update frontmatter fields | `set` | Schema-validated metadata updates |
 | Replace body text safely | `edit` | Unique-string replacement in content markdown (applies immediately; `dry-run` to preview) |
 | Move or rename an asset | `move` | Updates Markdown links/images and refreshes the asset index |
+| Create a section heading | `section_create` | Plain title + required level; returns canonical `file#slug` |
+| Reorder/reparent a section | `section_move` | Moves the complete subtree without changing heading identity |
 | Rename a section heading | `section_rename` | Source `file#section`, destination plain heading text; rewrites inbound `[[...#slug]]` refs |
 | Update trait value | `update` | Targeted trait mutation by trait ID |
-| Delete one object | `delete` | Safe deletion behavior with backlink warnings and trash support |
+| Delete one object or asset | `delete` | Safe deletion behavior with backlink warnings, trash support, and index updates |
 
 Rules:
 - Use `upsert` when reruns should produce one current canonical output.
@@ -23,8 +25,11 @@ Rules:
 
 ## Section-targeted writes
 
-- Append inside a section: `add` with `to="file#section"`, or `heading="..."` (slug, section ID, or heading text). Insertion happens at the end of the section's direct content, before any child headings.
-- Create the heading when missing: `add` with `heading="### Log"` and `create-heading=true` — appends the heading at the end of the file, then the text.
+- Create a heading: `section_create` with `file`, plain `title`, and required integer `level`. Optionally pass exactly one of `after`, `before`, or `under`; no anchor appends at EOF.
+- Reorder/reparent without renaming: `section_move` with `section_id` and optionally one of `after`, `before`, or `under`. The source's complete subtree moves.
+- `after` uses the anchor's complete subtree boundary; `before` uses its heading line; `under` inserts as its last direct child. Sibling levels must match, and a direct child must be exactly one level deeper. Depth mismatches are hard errors—never retry with an inferred level.
+- Append body content inside a section: `add` with `to="file#section"`. Insertion happens at the end of the section's direct content, before any child headings.
+- `add` rejects Markdown heading content. Its removed `heading` and `create-heading` args are invalid; use `section_create`, then `add` to the returned section ID.
 - Bulk-append into sections: pipe section IDs from a `section` query into `add` with `stdin=true` (`query "section .title==Tasks" --ids`).
 - Rename a heading safely: `section_rename` with `section_id="file#section"` and `new_heading_text` set to plain heading text. Never rename headings with `move` (it rejects section sources) or `edit` (it leaves `stale_fragment` refs when other files link to the section).
 - Edit inside a section: `edit` with `path="file#section"` scopes replacements to the section's subtree (section plus child sections).
@@ -35,7 +40,8 @@ Create then append:
 
 ```text
 create = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
-raven_invoke(command="add", args={"text":"## Notes\n- Kickoff next week", "to":create.data.file})
+notes = raven_invoke(command="section_create", args={"file":create.data.id, "title":"Notes", "level":2})
+raven_invoke(command="add", args={"text":"- Kickoff next week", "to":notes.data.section})
 ```
 
 `new`, `upsert`, and `daily` return an identity pair: `data.file` (vault-relative
@@ -91,10 +97,17 @@ raven_invoke(command="backlinks", args={"target":"project/old-project"})
 raven_invoke(command="delete", args={"object_id":"project/old-project"})
 ```
 
-Single-object `set`, `add`, `update`, `edit`, `delete`, and `move` all apply
-immediately. Only call them after clear user approval or an unambiguous request,
-and use `dry-run=true` when you want to confirm the effect first. Bulk operations
-(`stdin=true`) stay preview-first and require `confirm=true`.
+Asset IDs returned by an `asset` query use the same delete path:
+
+```text
+raven_invoke(command="delete", args={"object_id":"assets/pdfs/old-paper.pdf", "dry-run":true})
+```
+
+Single-object `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
+`section_rename`, `delete`, and `move` all apply immediately. Only call them
+after clear user approval or an unambiguous request, and use `dry-run=true` when
+you want to confirm the effect first. Bulk operations (`stdin=true`) stay
+preview-first and require `confirm=true`.
 
 Regardless of command or flags, read `meta.mutation.phase` to confirm what
 happened: `"applied"` means the change was written, `"preview"` means nothing was

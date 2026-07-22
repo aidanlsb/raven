@@ -329,16 +329,19 @@ core:
 
 # Traits: Universal annotations in content (@name or @name(value))
 # Traits can be used on any object - just add them to your content.
-# Boolean traits: @todo (no value)
-# Valued traits: @due(2025-02-01), @priority(high)
+# Boolean traits: @highlight (no value)
+# Valued traits: @due(2025-02-01), @priority(high), @todo(done)
+# Valued traits with defaults can be bare: @todo uses its "todo" default.
 traits:
   # Date-related
   due:
     type: date
 
-  # Task marker (boolean trait)
+  # Task status (bare @todo defaults to the open "todo" value)
   todo:
-    type: boolean
+    type: enum
+    values: [todo, done]
+    default: todo
 
   # Priority
   priority:

@@ -70,6 +70,7 @@ rvn vault config directories unset --template --json
 rvn vault config capture get --json
 rvn vault config capture set --destination inbox.md --heading "## Captured" --json
 rvn vault config capture unset --heading --json
+# capture.heading must already exist; create it with `rvn section create`
 
 # Deletion behavior
 rvn vault config deletion get --json

@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `rvn section create <file> "<title>" --level N` creates headings at EOF or at explicit `--after` / `--before` / `--under` structural anchors, with dry-run previews, strict depth checks, and slug-stability validation.
+- `rvn section move <file#section>` reorders or reparents a section's complete subtree without changing heading text, level, slug, or identity.
+
+### Changed
+- `rvn add` is body-content only: section-targeted appends still use the direct-body boundary before child headings, while section lifecycle placement uses complete subtree boundaries. Markdown heading content is rejected.
+
 ### Fixed
 - References written before their target existed are now healed automatically. Creating the target (`rvn new`, `rvn upsert`, etc.) re-resolves pending refs and ref fields across the vault, and `rvn reindex` runs its resolution pass even when no files need reindexing. Previously such refs stayed `missing` indefinitely unless a `rvn reindex --full` ran, which made objects invisible to canonical-ID queries (e.g. `.project==project/raven`) while still matching raw-literal queries (`.project==raven`).
+
+### Removed
+- **Breaking:** `rvn add --heading` and `rvn add --create-heading` have been removed. Create headings with `rvn section create`, then append body content with `rvn add --to file#section`.
 
 ## [v0.0.29] - 2026-07-20
 

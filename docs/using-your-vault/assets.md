@@ -50,7 +50,7 @@ rvn reindex --json
 
 Run `rvn reindex --json` after changing `directories.assets` so cached asset metadata is refreshed.
 
-## Checks And Moves
+## Checks, Moves, And Deletes
 
 `rvn check` reports:
 
@@ -63,4 +63,16 @@ Use `rvn move` instead of shell `mv` for assets. It preserves vault safety check
 rvn move assets/downloads/paper.pdf assets/pdfs/paper.pdf
 rvn backlinks assets/pdfs/paper.pdf
 rvn resolve assets/pdfs/paper.pdf
+```
+
+Use `rvn delete` instead of shell `rm`. Asset deletion reports incoming
+backlinks, moves the file to `.trash/` by default, and removes it from the
+index. Single-file deletion applies immediately; add `--dry-run` to preview it.
+Bulk deletion remains preview-first and requires `--confirm`.
+
+```bash
+rvn delete assets/pdfs/paper.pdf --dry-run --json
+rvn delete assets/pdfs/paper.pdf --json
+rvn query 'asset startswith(.file_path, "assets/images/example/")' --ids \
+  | rvn delete --stdin --confirm --json
 ```
