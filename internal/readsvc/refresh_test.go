@@ -1,6 +1,7 @@
 package readsvc
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -52,6 +53,60 @@ func TestSmartReindexReportsParseFailures(t *testing.T) {
 	}
 	if report.Failures[0].Path != filepath.ToSlash("people/broken.md") {
 		t.Fatalf("path = %q, want people/broken.md", report.Failures[0].Path)
+	}
+}
+
+func TestSmartReindexSkipsParsingUnchangedMarkdown(t *testing.T) {
+	t.Parallel()
+
+	testVault := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\nbody\n").
+		Build()
+
+	sch, err := schema.Load(testVault.Path)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+	db, err := index.Open(testVault.Path)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	rt := &Runtime{
+		VaultPath: testVault.Path,
+		VaultCfg:  &config.VaultConfig{},
+		Schema:    sch,
+		DB:        db,
+	}
+	if report, err := SmartReindex(rt); err != nil {
+		t.Fatalf("initial SmartReindex: %v", err)
+	} else if report.Indexed != 1 {
+		t.Fatalf("initial indexed = %d, want 1", report.Indexed)
+	}
+
+	filePath := filepath.Join(testVault.Path, "people", "freya.md")
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("stat indexed markdown: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("---\ntype: [invalid yaml\n---\n"), 0o644); err != nil {
+		t.Fatalf("replace indexed markdown: %v", err)
+	}
+	if err := os.Chtimes(filePath, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatalf("restore indexed markdown mtime: %v", err)
+	}
+
+	report, err := SmartReindex(rt)
+	if err != nil {
+		t.Fatalf("SmartReindex: %v", err)
+	}
+	if report.Indexed != 0 {
+		t.Fatalf("indexed = %d, want 0", report.Indexed)
+	}
+	if len(report.Failures) != 0 {
+		t.Fatalf("failures = %#v, want none because unchanged file must not be parsed", report.Failures)
 	}
 }
 

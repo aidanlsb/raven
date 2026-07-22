@@ -228,12 +228,35 @@ func Run(req RunRequest) (*RunResult, error) {
 		}
 	}
 
+	var indexedMtimes map[string]int64
+	if incremental {
+		var mtimeErr error
+		indexedMtimes, mtimeErr = db.GetFileMtimes()
+		if mtimeErr != nil {
+			// Falling back to parsing every file is safe and preserves refresh
+			// behavior when the optimization query is unavailable.
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to load indexed file mtimes: %v", mtimeErr))
+			indexedMtimes = nil
+		}
+	}
+
 	walkOpts := &vault.WalkOptions{ParseOptions: parseOpts, ExcludeMatcher: excludeMatcher}
+	if incremental {
+		walkOpts.ShouldParse = func(relativePath string, fileMtime int64) bool {
+			indexedMtime := indexedMtimes[relativePath]
+			return indexedMtime <= 0 || fileMtime > indexedMtime
+		}
+	}
 	walkErr := vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(walkResult vault.WalkResult) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
+		}
+
+		if walkResult.ParseSkipped {
+			result.FilesSkipped++
+			return nil
 		}
 
 		if walkResult.Error != nil {
@@ -242,11 +265,6 @@ func Run(req RunRequest) (*RunResult, error) {
 		}
 
 		if incremental {
-			indexedMtime, mtimeErr := db.GetFileMtime(walkResult.RelativePath)
-			if mtimeErr == nil && indexedMtime > 0 && walkResult.FileMtime <= indexedMtime {
-				result.FilesSkipped++
-				return nil
-			}
 			result.StaleFiles = append(result.StaleFiles, walkResult.RelativePath)
 		}
 

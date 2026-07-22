@@ -113,6 +113,52 @@ func TestCheckStaleness(t *testing.T) {
 	}
 }
 
+func TestGetFileMtimes(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+	db.SetAutoResolveRefs(false)
+
+	sch := schema.New()
+	files := map[string]int64{
+		"notes/first.md":  100,
+		"notes/second.md": 200,
+	}
+	for filePath, mtime := range files {
+		doc := &parser.ParsedDocument{
+			FilePath: filePath,
+			Objects: []*model.Object{
+				{
+					ID:        filePath[:len(filePath)-len(".md")],
+					Type:      "page",
+					Fields:    map[string]schema.FieldValue{},
+					LineStart: 1,
+				},
+			},
+		}
+		if err := db.IndexDocumentWithMtime(doc, sch, mtime); err != nil {
+			t.Fatalf("failed to index %s: %v", filePath, err)
+		}
+	}
+
+	mtimes, err := db.GetFileMtimes()
+	if err != nil {
+		t.Fatalf("GetFileMtimes error: %v", err)
+	}
+	if len(mtimes) != len(files) {
+		t.Fatalf("mtimes = %#v, want %d entries", mtimes, len(files))
+	}
+	for filePath, want := range files {
+		if got := mtimes[filePath]; got != want {
+			t.Errorf("mtime for %s = %d, want %d", filePath, got, want)
+		}
+	}
+}
+
 func TestRemoveDeletedFiles(t *testing.T) {
 	t.Parallel()
 	db, err := OpenInMemory()

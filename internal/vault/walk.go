@@ -21,6 +21,7 @@ type WalkResult struct {
 	RelativePath string
 	Document     *parser.ParsedDocument
 	FileMtime    int64 // File modification time as Unix timestamp
+	ParseSkipped bool  // True when ShouldParse skipped reading and parsing the file
 	Error        error
 }
 
@@ -30,6 +31,10 @@ type WalkOptions struct {
 	ParseOptions *parser.ParseOptions
 	// ExcludeMatcher skips paths that are not managed by Raven.
 	ExcludeMatcher *ravenignore.Matcher
+	// ShouldParse is called after a file is validated and statted, but before it
+	// is read. Returning false skips parsing while still calling the handler
+	// with ParseSkipped set. When nil, all discovered markdown files are parsed.
+	ShouldParse func(relativePath string, fileMtime int64) bool
 }
 
 // WalkMarkdownFiles walks all markdown files in a vault and calls the handler for each.
@@ -106,6 +111,15 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 			})
 		}
 		fileMtime := info.ModTime().Unix()
+
+		if opts != nil && opts.ShouldParse != nil && !opts.ShouldParse(relativePath, fileMtime) {
+			return handler(WalkResult{
+				Path:         path,
+				RelativePath: relativePath,
+				FileMtime:    fileMtime,
+				ParseSkipped: true,
+			})
+		}
 
 		// Read file
 		content, err := os.ReadFile(path)

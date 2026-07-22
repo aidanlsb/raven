@@ -83,9 +83,27 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 		return SmartReindexReport{}, err
 	}
 
-	walkOpts := &vault.WalkOptions{ParseOptions: parseopts.FromVaultConfig(vaultCfg), ExcludeMatcher: matcher}
+	indexedMtimes, err := rt.DB.GetFileMtimes()
+	if err != nil {
+		// The mtime lookup is only an optimization. Parse all files if it fails
+		// so refresh retains its existing best-effort behavior.
+		indexedMtimes = nil
+	}
+
+	walkOpts := &vault.WalkOptions{
+		ParseOptions:   parseopts.FromVaultConfig(vaultCfg),
+		ExcludeMatcher: matcher,
+		ShouldParse: func(relativePath string, fileMtime int64) bool {
+			indexedMtime := indexedMtimes[relativePath]
+			return indexedMtime <= 0 || fileMtime > indexedMtime
+		},
+	}
 	report := SmartReindexReport{}
 	err = vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(result vault.WalkResult) error {
+		if result.ParseSkipped {
+			return nil
+		}
+
 		if result.Error != nil {
 			report.Failures = append(report.Failures, SmartReindexFailure{
 				Path:   result.RelativePath,
@@ -93,11 +111,6 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 				ErrMsg: result.Error.Error(),
 			})
 			return nil //nolint:nilerr // record and continue; caller surfaces Failures
-		}
-
-		indexedMtime, err := rt.DB.GetFileMtime(result.RelativePath)
-		if err == nil && indexedMtime > 0 && result.FileMtime <= indexedMtime {
-			return nil
 		}
 
 		if err := rt.DB.IndexDocumentWithMtime(result.Document, sch, result.FileMtime); err != nil {
