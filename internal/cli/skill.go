@@ -303,16 +303,3 @@ func skillDoctorReportsFromAny(raw interface{}) []skills.DoctorReport {
 	reports, _ := raw.([]skills.DoctorReport)
 	return reports
 }
-
-func intValue(raw interface{}) int {
-	switch value := raw.(type) {
-	case int:
-		return value
-	case int64:
-		return int(value)
-	case float64:
-		return int(value)
-	default:
-		return 0
-	}
-}

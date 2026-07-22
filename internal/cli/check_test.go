@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/checksvc"
+	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
 type fakeCheckInteraction struct {
@@ -80,5 +82,63 @@ func TestPromptTraitTypeAcceptsNumber(t *testing.T) {
 
 	if strings.Contains(interaction.output.String(), "Invalid type") {
 		t.Fatalf("prompt unexpectedly rejected number type: %s", interaction.output.String())
+	}
+}
+
+func TestCollectTraitDecisionsKeepsInteractiveOptions(t *testing.T) {
+	traits := []*check.UndefinedTrait{{
+		TraitName:  "priority",
+		HasValue:   true,
+		UsageCount: 3,
+	}}
+	interaction := &fakeCheckInteraction{inputs: []string{
+		"y\n",
+		"enum\n",
+		"low, medium, high\n",
+		"medium\n",
+	}}
+
+	got := collectTraitDecisions(traits, interaction)
+	want := checksvc.TraitResolution{
+		TraitName:    "priority",
+		TraitType:    "enum",
+		EnumValues:   []string{"low", "medium", "high"},
+		DefaultValue: "medium",
+	}
+	if len(got) != 1 {
+		t.Fatalf("resolution count = %d, want 1", len(got))
+	}
+	if got[0].TraitName != want.TraitName ||
+		got[0].TraitType != want.TraitType ||
+		got[0].DefaultValue != want.DefaultValue ||
+		strings.Join(got[0].EnumValues, ",") != strings.Join(want.EnumValues, ",") {
+		t.Fatalf("resolution = %#v, want %#v", got[0], want)
+	}
+}
+
+func TestCheckShouldExitPolicy(t *testing.T) {
+	tests := []struct {
+		name     string
+		errors   int
+		warnings int
+		strict   bool
+		want     bool
+	}{
+		{name: "clean", want: false},
+		{name: "warning non-strict", warnings: 1, want: false},
+		{name: "warning strict", warnings: 1, strict: true, want: true},
+		{name: "error", errors: 1, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := commandexec.Success(map[string]interface{}{
+				"error_count":   tt.errors,
+				"warning_count": tt.warnings,
+			}, nil)
+			if got := checkShouldExit(result, tt.strict); got != tt.want {
+				t.Fatalf("checkShouldExit() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

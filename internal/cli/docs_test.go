@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -34,6 +35,38 @@ func TestResolveCLICommandPath(t *testing.T) {
 
 	if _, ok := resolveCLICommandPath([]string{"not-a-command"}); ok {
 		t.Fatalf("expected unknown command path to return ok=false")
+	}
+}
+
+func TestDocsParentUsesCanonicalAdapter(t *testing.T) {
+	if docsCmd.Annotations[canonicalLeafAnnotationKey] != "true" {
+		t.Fatal("docs parent is not wired through the canonical leaf adapter")
+	}
+	if commandID, ok := registryCommandIDForCommand(docsCmd); !ok || commandID != "docs" {
+		t.Fatalf("docs registry command = %q (ok=%v), want docs", commandID, ok)
+	}
+}
+
+func TestRewriteCanonicalDocsFailurePreservesCommandRedirect(t *testing.T) {
+	result := commandexec.Failure(
+		ErrInvalidInput,
+		"unknown docs section: query",
+		map[string]interface{}{"available": []string{"querying"}},
+		"Run 'rvn docs' to list sections",
+	)
+
+	got := rewriteCanonicalDocsFailure(result, []string{"query"})
+	if got.Error == nil {
+		t.Fatal("rewritten result is missing its canonical error")
+	}
+	if got.Error.Message != `"query" is a CLI command, not a docs section` {
+		t.Fatalf("message = %q", got.Error.Message)
+	}
+	if got.Error.Suggestion != "Use 'rvn help query' for command documentation" {
+		t.Fatalf("suggestion = %q", got.Error.Suggestion)
+	}
+	if got.Error.Details == nil {
+		t.Fatal("rewritten result dropped canonical error details")
 	}
 }
 
