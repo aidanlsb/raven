@@ -34,9 +34,10 @@ and the workspace root is used.
 | Find-references | Backlinks to the current file's object, or to the reference target under the cursor. |
 | Hover | Preview a reference target: object ID, type, frontmatter fields, and the first lines of the body. |
 
-The index is refreshed incrementally each time a file is saved, so completion
-and reference results track your edits. Diagnostics for unsaved buffer content
-are computed fully in memory.
+The index is refreshed incrementally each time a file is saved. The server also
+detects commits from an external `rvn reindex` and reloads its index-backed
+caches on the next request or diagnostics pass. Diagnostics for unsaved buffer
+content are computed fully in memory.
 
 ## Neovim
 
@@ -94,8 +95,12 @@ language-servers = ["raven"]
 
 ## Notes
 
-- The server holds a read handle on the SQLite index (`.raven/index.db`) in
-  WAL mode; running `rvn` commands alongside it is safe.
+- The server holds a shared handle on the SQLite index (`.raven/index.db`) in
+  WAL mode. Incremental `rvn reindex` and other normal commands can run
+  alongside it.
+- `rvn reindex --full` and automatic incompatible-schema replacement require
+  exclusive index access. If one reports that the index is locked, stop the LSP
+  or wait for the other index user to finish, then retry.
 - Index-backed features (completion, references) reflect the last saved state
   of files. Diagnostics always reflect the current buffer.
 - The buffer's own file must be saved once before other files can resolve

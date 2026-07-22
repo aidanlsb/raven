@@ -1278,6 +1278,11 @@ index during incremental reindexing.
 
 Use --full to force a complete rebuild of the entire index.
 
+Incremental reindexing uses SQLite WAL and can run while readers such as rvn lsp
+hold the index open. Full reindexing and incompatible-schema replacement require
+exclusive access; stop the LSP or wait for the other process if the index is
+locked.
+
 When the on-disk index schema is incompatible with this Raven version, reindex
 replaces the derived database and automatically performs a full rebuild. The
 index remains unavailable until that rebuild completes; if it is interrupted,

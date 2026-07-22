@@ -427,6 +427,11 @@ rvn reindex --full                               # Complete rebuild
 rvn reindex --dry-run                            # Show what would be reindexed
 ```
 
+Incremental reindexing uses SQLite WAL and can run while `rvn lsp` or another
+reader holds the index open. `--full` and incompatible-schema replacement are
+destructive rebuild paths and still require exclusive access; stop the LSP or
+wait for the other process if Raven reports that the index is locked.
+
 Index schema upgrades use wipe-and-rebuild because the SQLite database is a
 derived cache. Raven blocks index-backed commands until the replacement full
 reindex completes, so an interrupted upgrade cannot silently serve an empty

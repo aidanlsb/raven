@@ -35,6 +35,8 @@ var (
 
 const rebuildRequiredFilename = "reindex-required"
 
+const sqliteBusyTimeoutMillis = 5000
+
 // DB returns the underlying sql.DB for advanced queries.
 func (d *Database) DB() *sql.DB {
 	return d.db
@@ -86,6 +88,10 @@ func openDatabase(vaultPath string, allowIncompatible bool) (*Database, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+	if err := configureDatabaseConnection(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 
 	if !isNewDB && !allowIncompatible && !isSchemaCompatible(db) {
 		_ = db.Close()
@@ -107,6 +113,10 @@ func OpenInMemory() (*Database, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := configureDatabaseConnection(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 
 	d := &Database{db: db, dailyDirectory: "daily", autoResolveRefs: true}
 	if err := d.initialize(true); err != nil {
@@ -115,6 +125,18 @@ func OpenInMemory() (*Database, error) {
 	}
 
 	return d, nil
+}
+
+func configureDatabaseConnection(db *sql.DB) error {
+	// SQLite permits one writer at a time. Keep each Raven handle on one
+	// connection so connection-local PRAGMAs are stable, then wait briefly for
+	// concurrent WAL writers instead of immediately returning SQLITE_BUSY.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	if _, err := db.Exec(fmt.Sprintf("PRAGMA busy_timeout = %d", sqliteBusyTimeoutMillis)); err != nil {
+		return fmt.Errorf("failed to configure database busy timeout: %w", err)
+	}
+	return nil
 }
 
 // Close closes the database.

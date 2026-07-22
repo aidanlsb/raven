@@ -180,6 +180,13 @@ func (d *Database) getReferenceResolverLocked(dailyDirectory string, sch *schema
 
 const resolverGenerationMetaKey = "resolver_generation"
 
+// ResolverGeneration returns the durable generation for resolver-relevant
+// index state. It changes when objects, sections, or assets are mutated,
+// including by another database handle or process.
+func (d *Database) ResolverGeneration() (int64, error) {
+	return resolverGeneration(d.db)
+}
+
 func resolverGeneration(db resolverQuerier) (int64, error) {
 	var raw string
 	err := db.QueryRow(`SELECT value FROM meta WHERE key = ?`, resolverGenerationMetaKey).Scan(&raw)

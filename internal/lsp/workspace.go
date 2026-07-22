@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,15 +19,21 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
+const maxCacheRebuildAttempts = 3
+
+var errIndexChanging = errors.New("index changed while rebuilding LSP caches")
+
 // workspace holds the resolved vault, its open index handle, and caches
-// derived from the index. Caches are rebuilt on save via refresh().
+// derived from the index. Caches are rebuilt on save and when another database
+// handle changes resolver-relevant index state.
 type workspace struct {
 	rt *readsvc.Runtime
 
-	resolver    *resolver.Resolver
-	objectInfos []check.ObjectInfo
-	objects     []model.Object
-	aliases     map[string]string
+	resolver        *resolver.Resolver
+	objectInfos     []check.ObjectInfo
+	objects         []model.Object
+	aliases         map[string]string
+	cacheGeneration int64
 }
 
 // isVaultDir reports whether dir looks like a Raven vault root.
@@ -128,38 +135,70 @@ func (ws *workspace) refresh() error {
 	return ws.rebuildCaches()
 }
 
+// ensureCachesFresh reloads derived state after another SQLite handle commits
+// resolver-relevant changes. It deliberately avoids a filesystem walk: the
+// external writer has already brought the on-disk index up to date.
+func (ws *workspace) ensureCachesFresh() error {
+	generation, err := ws.db().ResolverGeneration()
+	if err != nil {
+		return fmt.Errorf("failed to read index generation: %w", err)
+	}
+	if generation == ws.cacheGeneration {
+		return nil
+	}
+	return ws.rebuildCaches()
+}
+
 func (ws *workspace) rebuildCaches() error {
 	db := ws.db()
 
-	res, err := db.Resolver(index.ResolverOptions{
-		DailyDirectory: ws.vaultConfig().GetDailyDirectory(),
-		Schema:         ws.schema(),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to build resolver: %w", err)
+	for range maxCacheRebuildAttempts {
+		generationBefore, err := db.ResolverGeneration()
+		if err != nil {
+			return fmt.Errorf("failed to read index generation: %w", err)
+		}
+
+		res, err := db.Resolver(index.ResolverOptions{
+			DailyDirectory: ws.vaultConfig().GetDailyDirectory(),
+			Schema:         ws.schema(),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to build resolver: %w", err)
+		}
+
+		objects, err := db.AllObjects()
+		if err != nil {
+			return fmt.Errorf("failed to list objects: %w", err)
+		}
+		sort.Slice(objects, func(i, j int) bool { return objects[i].ID < objects[j].ID })
+
+		aliases, err := db.AllAliases()
+		if err != nil {
+			return fmt.Errorf("failed to list aliases: %w", err)
+		}
+
+		generationAfter, err := db.ResolverGeneration()
+		if err != nil {
+			return fmt.Errorf("failed to read index generation: %w", err)
+		}
+		if generationBefore != generationAfter {
+			continue
+		}
+
+		infos := make([]check.ObjectInfo, 0, len(objects))
+		for _, obj := range objects {
+			infos = append(infos, check.ObjectInfo{ID: obj.ID, Type: obj.Type})
+		}
+
+		ws.resolver = res
+		ws.objects = objects
+		ws.objectInfos = infos
+		ws.aliases = aliases
+		ws.cacheGeneration = generationAfter
+		return nil
 	}
 
-	objects, err := db.AllObjects()
-	if err != nil {
-		return fmt.Errorf("failed to list objects: %w", err)
-	}
-	sort.Slice(objects, func(i, j int) bool { return objects[i].ID < objects[j].ID })
-
-	aliases, err := db.AllAliases()
-	if err != nil {
-		return fmt.Errorf("failed to list aliases: %w", err)
-	}
-
-	infos := make([]check.ObjectInfo, 0, len(objects))
-	for _, obj := range objects {
-		infos = append(infos, check.ObjectInfo{ID: obj.ID, Type: obj.Type})
-	}
-
-	ws.resolver = res
-	ws.objects = objects
-	ws.objectInfos = infos
-	ws.aliases = aliases
-	return nil
+	return errIndexChanging
 }
 
 // newValidator builds a document validator backed by the cached index state.

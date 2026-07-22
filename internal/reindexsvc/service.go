@@ -2,6 +2,7 @@ package reindexsvc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -116,14 +117,19 @@ func Run(req RunRequest) (*RunResult, error) {
 		vaultCfg = &config.VaultConfig{}
 	}
 
-	rebuildSession, err := index.OpenWithRebuild(vaultPath, index.RebuildOptions{DryRun: req.DryRun})
+	db, rebuildSession, wasRebuilt, err := openRunDatabase(vaultPath, req.Full, req.DryRun)
 	if err != nil {
-		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to open database: %v", err), "Run 'rvn reindex' to rebuild the database", err)
+		suggestion := "Run 'rvn reindex' to rebuild the database"
+		if errors.Is(err, index.ErrIndexLocked) {
+			suggestion = "Another process (such as rvn lsp) is holding the index; stop the LSP or wait for the other process to finish, then try again"
+		}
+		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to open database: %v", err), suggestion, err)
 	}
-	defer rebuildSession.Close()
-
-	db := rebuildSession.Database()
-	wasRebuilt := rebuildSession.SchemaRebuilt()
+	if rebuildSession != nil {
+		defer rebuildSession.Close()
+	} else {
+		defer db.Close()
+	}
 
 	incremental := !req.Full
 	if wasRebuilt {
@@ -131,6 +137,10 @@ func Run(req RunRequest) (*RunResult, error) {
 	}
 
 	if !incremental && !req.DryRun {
+		if rebuildSession == nil {
+			err := errors.New("full reindex requires an exclusive rebuild session")
+			return nil, newError(CodeInternal, err.Error(), "", err)
+		}
 		if err := rebuildSession.BeginFullRebuild(); err != nil {
 			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to mark index for full reindex: %v", err), "", err)
 		}
@@ -393,11 +403,31 @@ func Run(req RunRequest) (*RunResult, error) {
 	result.References = stats.RefCount
 	result.Assets = stats.AssetCount
 
-	if err := rebuildSession.Complete(); err != nil {
-		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to complete index rebuild: %v", err), "Run 'rvn reindex --full' to rebuild the database", err)
+	if rebuildSession != nil {
+		if err := rebuildSession.Complete(); err != nil {
+			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to complete index rebuild: %v", err), "Run 'rvn reindex --full' to rebuild the database", err)
+		}
 	}
 
 	return result, nil
+}
+
+func openRunDatabase(vaultPath string, full, dryRun bool) (*index.Database, *index.RebuildSession, bool, error) {
+	if !full {
+		db, err := index.Open(vaultPath)
+		if err == nil {
+			return db, nil, false, nil
+		}
+		if !errors.Is(err, index.ErrIndexRebuildRequired) {
+			return nil, nil, false, err
+		}
+	}
+
+	session, err := index.OpenWithRebuild(vaultPath, index.RebuildOptions{DryRun: dryRun})
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return session.Database(), session, session.SchemaRebuilt(), nil
 }
 
 func parsedDocumentStats(doc *parser.ParsedDocument) index.IndexStats {

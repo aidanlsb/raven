@@ -1833,6 +1833,27 @@ func TestAllAliasesFromDB_LegacySchemaWithoutAliasColumn(t *testing.T) {
 	}
 }
 
+func TestDatabaseConfiguresSQLiteConcurrency(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("OpenInMemory: %v", err)
+	}
+	defer db.Close()
+
+	if got := db.DB().Stats().MaxOpenConnections; got != 1 {
+		t.Fatalf("MaxOpenConnections = %d, want 1", got)
+	}
+	var busyTimeout int
+	if err := db.DB().QueryRow("PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		t.Fatalf("read busy_timeout: %v", err)
+	}
+	if busyTimeout != sqliteBusyTimeoutMillis {
+		t.Fatalf("busy_timeout = %d, want %d", busyTimeout, sqliteBusyTimeoutMillis)
+	}
+}
+
 func TestAllIndexedFilePaths(t *testing.T) {
 	t.Parallel()
 	db, err := OpenInMemory()

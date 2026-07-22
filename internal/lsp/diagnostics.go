@@ -44,6 +44,7 @@ func (s *Server) publishDiagnostics(uri string) {
 		s.mu.Unlock()
 		return
 	}
+	s.ensureWorkspaceCachesFreshLocked(ws)
 	validator := ws.newValidator()
 	diagnostics := computeDiagnostics(ws, validator, doc.content, absPath, s.encoding)
 	s.mu.Unlock()

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -917,6 +918,40 @@ func TestCompletion(t *testing.T) {
 			t.Errorf("expected no items, got %v", list.Items)
 		}
 	})
+}
+
+func TestCompletionRefreshesAfterExternalIncrementalReindex(t *testing.T) {
+	vaultPath := newTestVault(t)
+	client := startTestServer(t, vaultPath)
+	client.initialize(vaultPath)
+
+	content := "Link: [[\n"
+	uri := client.openDocument(filepath.Join(vaultPath, "scratch.md"), content)
+	client.diagnosticsFor(uri)
+
+	odinPath := filepath.Join(vaultPath, "people", "odin.md")
+	odinContent := "---\ntype: person\nname: Odin\n---\n\n# Odin\n"
+	if err := os.WriteFile(odinPath, []byte(odinContent), 0o644); err != nil {
+		t.Fatalf("write external file: %v", err)
+	}
+	if _, err := reindexsvc.Run(reindexsvc.RunRequest{VaultPath: vaultPath}); err != nil {
+		t.Fatalf("external incremental reindex: %v", err)
+	}
+
+	raw := client.request("textDocument/completion", TextDocumentPositionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: 0, Character: len("Link: [[")},
+	})
+	var list CompletionList
+	if err := json.Unmarshal(raw, &list); err != nil {
+		t.Fatalf("invalid completion result: %v", err)
+	}
+	for _, item := range list.Items {
+		if item.Label == "people/odin" {
+			return
+		}
+	}
+	t.Fatalf("completion did not refresh after external reindex: %+v", list.Items)
 }
 
 func TestDidSaveRefreshesIndex(t *testing.T) {
