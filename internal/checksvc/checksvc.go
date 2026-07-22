@@ -12,6 +12,7 @@ import (
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/resolver"
@@ -201,7 +202,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 	}
 
 	walkOpts := &vault.WalkOptions{
-		ParseOptions:   parser.OptionsFromVaultConfig(vaultCfg),
+		ParseOptions:   parseopts.FromVaultConfig(vaultCfg),
 		ExcludeMatcher: excludeMatcher,
 	}
 	walkErr := vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(walkResult vault.WalkResult) error {

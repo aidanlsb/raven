@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -86,7 +87,7 @@ func New(vaultPath string, opts Options) (*Runtime, error) {
 		VaultPath:     vaultPath,
 		VaultCfg:      vaultCfg,
 		Schema:        sch,
-		ParseOptions:  parser.OptionsFromVaultConfig(vaultCfg),
+		ParseOptions:  parseopts.FromVaultConfig(vaultCfg),
 		SchemaLoadErr: schErr,
 	}
 

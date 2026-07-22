@@ -10,7 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -228,7 +228,7 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 		return result
 	}
 
-	parseOpts := parser.OptionsFromVaultConfig(vaultCfg)
+	parseOpts := parseopts.FromVaultConfig(vaultCfg)
 
 	sort.Slice(fixes, func(i, j int) bool {
 		return fixes[i].FilePath < fixes[j].FilePath

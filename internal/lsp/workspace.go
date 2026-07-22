@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/resolver"
@@ -173,7 +174,7 @@ func (ws *workspace) newValidator() *check.Validator {
 
 // parseBuffer parses in-memory buffer content as the document at absPath.
 func (ws *workspace) parseBuffer(content, absPath string) (*parser.ParsedDocument, error) {
-	return parser.ParseDocumentWithOptions(content, absPath, ws.vaultPath(), parser.OptionsFromVaultConfig(ws.vaultConfig()))
+	return parser.ParseDocumentWithOptions(content, absPath, ws.vaultPath(), parseopts.FromVaultConfig(ws.vaultConfig()))
 }
 
 // relativePath converts an absolute path to a vault-relative slash path.

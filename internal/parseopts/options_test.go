@@ -1,4 +1,4 @@
-package parser
+package parseopts
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 )
 
-func TestOptionsFromVaultConfig(t *testing.T) {
+func TestFromVaultConfig(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -50,19 +50,19 @@ func TestOptionsFromVaultConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := OptionsFromVaultConfig(tt.vaultConfig)
+			got := FromVaultConfig(tt.vaultConfig)
 			if tt.wantNil {
 				if got != nil {
-					t.Fatalf("OptionsFromVaultConfig() = %#v, want nil", got)
+					t.Fatalf("FromVaultConfig() = %#v, want nil", got)
 				}
 				return
 			}
 			if got == nil {
-				t.Fatal("OptionsFromVaultConfig() = nil, want options")
+				t.Fatal("FromVaultConfig() = nil, want options")
 			}
 			if got.ObjectsRoot != tt.wantObjects || got.PagesRoot != tt.wantPages || got.DailyRoot != tt.wantDaily {
 				t.Fatalf(
-					"OptionsFromVaultConfig() = %#v, want ObjectsRoot=%q PagesRoot=%q DailyRoot=%q",
+					"FromVaultConfig() = %#v, want ObjectsRoot=%q PagesRoot=%q DailyRoot=%q",
 					got,
 					tt.wantObjects,
 					tt.wantPages,

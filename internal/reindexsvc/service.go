@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -149,7 +150,7 @@ func Run(req RunRequest) (*RunResult, error) {
 		db.SetAutoResolveRefs(false)
 	}
 
-	parseOpts := parser.OptionsFromVaultConfig(vaultCfg)
+	parseOpts := parseopts.FromVaultConfig(vaultCfg)
 	excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
 	if err != nil {
 		return nil, newError(CodeConfigInvalid, fmt.Sprintf("invalid exclude config: %v", err), "Fix raven.yaml exclude patterns and try again", err)

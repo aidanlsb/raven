@@ -1,16 +1,21 @@
-package parser
+// Package parseopts translates vault configuration into canonical parser
+// options.
+package parseopts
 
-import "github.com/aidanlsb/raven/internal/config"
+import (
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/parser"
+)
 
-// OptionsFromVaultConfig builds the canonical parser options for a vault.
+// FromVaultConfig builds the canonical parser options for a vault.
 // Daily note identity always follows the configured daily root. Object and page
 // roots affect identity only when directory organization is explicitly enabled.
-func OptionsFromVaultConfig(vaultCfg *config.VaultConfig) *ParseOptions {
+func FromVaultConfig(vaultCfg *config.VaultConfig) *parser.ParseOptions {
 	if vaultCfg == nil {
 		return nil
 	}
 
-	opts := &ParseOptions{
+	opts := &parser.ParseOptions{
 		DailyRoot: vaultCfg.GetDailyDirectory(),
 	}
 	if vaultCfg.HasDirectoriesConfig() {

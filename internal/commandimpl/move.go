@@ -9,7 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -58,7 +58,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		UpdateRefs:     boolArgDefault(req.Args, "update-refs", true),
 		SkipTypeCheck:  boolArg(req.Args, "skip-type-check"),
 		Preview:        req.Preview,
-		ParseOptions:   parser.OptionsFromVaultConfig(vaultCfg),
+		ParseOptions:   parseopts.FromVaultConfig(vaultCfg),
 		FailOnIndexErr: true,
 	})
 	if err != nil {
@@ -118,7 +118,7 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 		ObjectIDs:      fileIDs,
 		DestinationDir: destination,
 		UpdateRefs:     updateRefs,
-		ParseOptions:   parser.OptionsFromVaultConfig(vaultCfg),
+		ParseOptions:   parseopts.FromVaultConfig(vaultCfg),
 	}
 
 	if !confirm {

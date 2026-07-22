@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
@@ -70,7 +71,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		VaultConfig:  vaultCfg,
 		ObjectIDs:    ids,
 		Line:         text,
-		ParseOptions: parser.OptionsFromVaultConfig(vaultCfg),
+		ParseOptions: parseopts.FromVaultConfig(vaultCfg),
 	}
 
 	if !confirm {
@@ -119,7 +120,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 
 func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, text, toRef string) commandexec.Result {
 	captureCfg := vaultCfg.GetCaptureConfig()
-	parseOpts := parser.OptionsFromVaultConfig(vaultCfg)
+	parseOpts := parseopts.FromVaultConfig(vaultCfg)
 
 	var destPath string
 	var isDailyNote bool

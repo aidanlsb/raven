@@ -6,7 +6,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -83,7 +83,7 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 		return SmartReindexReport{}, err
 	}
 
-	walkOpts := &vault.WalkOptions{ParseOptions: parser.OptionsFromVaultConfig(vaultCfg), ExcludeMatcher: matcher}
+	walkOpts := &vault.WalkOptions{ParseOptions: parseopts.FromVaultConfig(vaultCfg), ExcludeMatcher: matcher}
 	report := SmartReindexReport{}
 	err = vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(result vault.WalkResult) error {
 		if result.Error != nil {

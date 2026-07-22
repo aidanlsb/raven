@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/frontmatter"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -573,7 +574,7 @@ func validateRefTargets(
 
 	parseOpts := refCtx.ParseOptions
 	if parseOpts == nil {
-		parseOpts = parser.OptionsFromVaultConfig(refCtx.VaultConfig)
+		parseOpts = parseopts.FromVaultConfig(refCtx.VaultConfig)
 	}
 
 	var issues []schema.ValidationError
