@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type SetObjectFileRequest struct {
@@ -19,6 +20,7 @@ type SetObjectFileRequest struct {
 	Schema        *schema.Schema
 	AllowedFields map[string]bool
 	ParseOptions  *parser.ParseOptions
+	Runtime       *vaultruntime.Runtime
 	// Preview validates and computes the resulting fields without writing the
 	// file, for dry-run callers.
 	Preview bool
@@ -69,6 +71,7 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 			VaultPath:    req.VaultPath,
 			VaultConfig:  req.VaultConfig,
 			ParseOptions: req.ParseOptions,
+			Runtime:      req.Runtime,
 		},
 	)
 	if err != nil {

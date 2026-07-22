@@ -6,11 +6,9 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // DetectMissingRefs returns the page-style missing references found in the given
@@ -25,16 +23,18 @@ import (
 // Detection requires the index to resolve reference targets. If the index is
 // unavailable, detection is skipped (returns nil) rather than reporting false
 // positives for targets that exist on disk but are not yet indexed.
-func DetectMissingRefs(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, relPaths ...string) ([]*check.MissingRef, error) {
-	if vaultCfg == nil || sch == nil || len(relPaths) == 0 {
+func DetectMissingRefs(rt *vaultruntime.Runtime, relPaths ...string) ([]*check.MissingRef, error) {
+	if rt == nil || rt.VaultCfg == nil || rt.Schema == nil || len(relPaths) == 0 {
 		return nil, nil
 	}
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
+	sch := rt.Schema
 
-	db, err := index.Open(vaultPath)
-	if err != nil {
+	if err := rt.OpenDB(); err != nil {
 		return nil, nil
 	}
-	defer db.Close()
+	db := rt.DB
 
 	// index.Open creates an empty database if none exists. With an empty index no
 	// targets can resolve, so every reference would look "missing". Skip detection
@@ -58,8 +58,6 @@ func DetectMissingRefs(vaultPath string, vaultCfg *config.VaultConfig, sch *sche
 		validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 	}
 
-	parseOpts := parseopts.FromVaultConfig(vaultCfg)
-
 	seen := make(map[string]struct{}, len(relPaths))
 	for _, relPath := range relPaths {
 		relPath = strings.TrimSpace(relPath)
@@ -76,7 +74,7 @@ func DetectMissingRefs(vaultPath string, vaultCfg *config.VaultConfig, sch *sche
 		if readErr != nil {
 			continue
 		}
-		doc, parseErr := parser.ParseDocumentWithOptions(string(content), absPath, vaultPath, parseOpts)
+		doc, parseErr := parser.ParseDocumentWithOptions(string(content), absPath, vaultPath, rt.ParseOptions)
 		if parseErr != nil {
 			continue
 		}

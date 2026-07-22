@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // IsAssetQueryRoot reports whether a query string targets the asset root.
@@ -90,22 +91,18 @@ type RunOptions struct {
 	Pipe *bool
 }
 
-// ResolveRunOptions loads the vault config, resolves rawQueryString (expanding a
-// saved-query invocation when one is named), and merges the caller's explicit
+// ResolveRunOptions resolves rawQueryString (expanding a saved-query invocation
+// when one is named), and merges the caller's explicit
 // flag values over the saved query's stored option defaults. Explicit values
 // always win; unset explicit fields fall back to saved defaults, then to zero
 // values.
 //
 // It exists so saved-query resolution and option merging live in one shared
 // service rather than being reimplemented in the CLI.
-func ResolveRunOptions(vaultPath, rawQueryString string, explicit *config.QueryOptions) (*RunOptions, error) {
-	if strings.TrimSpace(vaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
-	}
-
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+func ResolveRunOptions(rt *vaultruntime.Runtime, rawQueryString string, explicit *config.QueryOptions) (*RunOptions, error) {
+	vaultCfg, err := runtimeConfig(rt)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+		return nil, err
 	}
 
 	name, saved, inputTokens, matched := MatchInvocation(vaultCfg, rawQueryString)

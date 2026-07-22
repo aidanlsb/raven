@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/template"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type TemplateDefinition struct {
@@ -27,8 +27,8 @@ type SetTemplateRequest struct {
 	Description string
 }
 
-func ListTemplates(vaultPath string) ([]TemplateDefinition, error) {
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
+func ListTemplates(rt *vaultruntime.Runtime) ([]TemplateDefinition, error) {
+	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
 		return nil, err
 	}
@@ -48,13 +48,13 @@ func ListTemplates(vaultPath string) ([]TemplateDefinition, error) {
 	return items, nil
 }
 
-func GetTemplate(vaultPath, templateID string) (*TemplateDefinition, error) {
+func GetTemplate(rt *vaultruntime.Runtime, templateID string) (*TemplateDefinition, error) {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return nil, newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
 	}
 
-	sch, err := loadSchema(vaultPath, "Run 'rvn init' to create a schema")
+	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func GetTemplate(vaultPath, templateID string) (*TemplateDefinition, error) {
 	}, nil
 }
 
-func SetTemplate(req SetTemplateRequest) (*TemplateDefinition, error) {
+func SetTemplate(rt *vaultruntime.Runtime, req SetTemplateRequest) (*TemplateDefinition, error) {
 	templateID := strings.TrimSpace(req.TemplateID)
 	if templateID == "" {
 		return nil, newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
@@ -86,10 +86,11 @@ func SetTemplate(req SetTemplateRequest) (*TemplateDefinition, error) {
 		return nil, newError(ErrorInvalidInput, "--file is required", "Use --file <path-under-directories.template>", nil, nil)
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
-	if err != nil {
-		return nil, newError(ErrorConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", nil, err)
+	if rt == nil || rt.VaultCfg == nil {
+		return nil, newError(ErrorConfigInvalid, "vault config runtime is required", "Fix raven.yaml and try again", nil, nil)
 	}
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
 
 	templateDir := vaultCfg.GetTemplateDirectory()
 	fileRef, err := template.ResolveFileRef(req.File, templateDir)
@@ -97,8 +98,8 @@ func SetTemplate(req SetTemplateRequest) (*TemplateDefinition, error) {
 		return nil, newError(ErrorInvalidInput, err.Error(), fmt.Sprintf("Use a file path under %s", templateDir), nil, err)
 	}
 
-	fullPath := filepath.Join(req.VaultPath, filepath.FromSlash(fileRef))
-	if err := paths.ValidateWithinVault(req.VaultPath, fullPath); err != nil {
+	fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
+	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
 		return nil, newError(ErrorFileOutside, "template files must be within the vault", "Template files must be within the vault", nil, err)
 	}
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
@@ -121,7 +122,7 @@ func SetTemplate(req SetTemplateRequest) (*TemplateDefinition, error) {
 	}
 
 	description := strings.TrimSpace(req.Description)
-	err = editSchemaWithLoadError(req.VaultPath, "", ErrorSchemaInvalid, func(doc *schemadoc.Document) error {
+	err = editSchemaWithLoadError(vaultPath, "", ErrorSchemaInvalid, func(doc *schemadoc.Document) error {
 		templatesNode := schemadoc.EnsureMap(doc.Root(), "templates")
 		templateNode := schemadoc.EnsureMap(templatesNode, templateID)
 		templateNode["file"] = fileRef
@@ -145,13 +146,13 @@ func SetTemplate(req SetTemplateRequest) (*TemplateDefinition, error) {
 	}, nil
 }
 
-func RemoveTemplate(vaultPath, templateID string) error {
+func RemoveTemplate(rt *vaultruntime.Runtime, templateID string) error {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
 	}
 
-	return editSchema(vaultPath, "Run 'rvn init' to create a schema", func(doc *schemadoc.Document) error {
+	return editSchema(rt.VaultPath, "Run 'rvn init' to create a schema", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		if _, ok := sch.Templates[templateID]; !ok {
 			return newError(ErrorInvalidInput, fmt.Sprintf("template '%s' not found", templateID), "Nothing to remove", nil, nil)
@@ -178,14 +179,6 @@ func RemoveTemplate(vaultPath, templateID string) error {
 		}
 		return nil
 	})
-}
-
-func loadSchema(vaultPath, suggestion string) (*schema.Schema, error) {
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return nil, newError(ErrorSchemaNotFound, err.Error(), suggestion, nil, err)
-	}
-	return sch, nil
 }
 
 func templateRefs(sch *schema.Schema, templateID string) []string {

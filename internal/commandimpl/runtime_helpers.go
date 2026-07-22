@@ -13,11 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -31,6 +27,18 @@ func newRequiredCommandVaultRuntime(vaultPath string, openDB bool) (*vaultruntim
 
 func newConfigCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{})
+}
+
+func newVaultConfigCommandRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
+	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{SkipSchema: true})
+}
+
+func newDatabaseCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
+	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{
+		OpenDB:     true,
+		SkipConfig: true,
+		SkipSchema: true,
+	})
 }
 
 func newCommandVaultRuntime(vaultPath string, opts vaultruntime.Options) (*vaultruntime.Runtime, commandexec.Result) {
@@ -67,8 +75,8 @@ func mapVaultRuntimeSetupFailure(err error) commandexec.Result {
 	return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 }
 
-func autoReindexWarnings(vaultPath string, vaultCfg *config.VaultConfig, filePaths ...string) []commandexec.Warning {
-	if vaultCfg == nil || !vaultCfg.IsAutoReindexEnabled() {
+func autoReindexWarnings(rt *vaultruntime.Runtime, filePaths ...string) []commandexec.Warning {
+	if rt == nil || rt.VaultCfg == nil || !rt.VaultCfg.IsAutoReindexEnabled() {
 		return nil
 	}
 
@@ -84,17 +92,20 @@ func autoReindexWarnings(vaultPath string, vaultCfg *config.VaultConfig, filePat
 			continue
 		}
 		seen[filePath] = struct{}{}
-		if warning, ok := autoReindexWarning(vaultPath, filePath, vaultCfg); ok {
+		if warning, ok := autoReindexWarning(rt, filePath); ok {
 			warnings = append(warnings, warning)
 		}
 	}
 	return warnings
 }
 
-func autoReindexWarning(vaultPath, filePath string, vaultCfg *config.VaultConfig) (commandexec.Warning, bool) {
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", err), true
+func autoReindexWarning(rt *vaultruntime.Runtime, filePath string) (commandexec.Warning, bool) {
+	vaultPath := rt.VaultPath
+	if rt.SchemaLoadErr != nil {
+		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", rt.SchemaLoadErr), true
+	}
+	if rt.Schema == nil {
+		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", errors.New("schema runtime is required")), true
 	}
 
 	content, err := os.ReadFile(filePath)
@@ -102,7 +113,7 @@ func autoReindexWarning(vaultPath, filePath string, vaultCfg *config.VaultConfig
 		return indexUpdateWarning(vaultPath, filePath, "failed to read file", err), true
 	}
 
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseopts.FromVaultConfig(vaultCfg))
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, rt.ParseOptions)
 	if err != nil {
 		return indexUpdateWarning(vaultPath, filePath, "failed to parse file", err), true
 	}
@@ -112,13 +123,10 @@ func autoReindexWarning(vaultPath, filePath string, vaultCfg *config.VaultConfig
 		mtime = st.ModTime().Unix()
 	}
 
-	db, err := index.Open(vaultPath)
-	if err != nil {
+	if err := rt.OpenDB(); err != nil {
 		return indexUpdateWarning(vaultPath, filePath, "failed to open index database", err), true
 	}
-	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-	if err := db.IndexDocumentWithMtime(doc, sch, mtime); err != nil {
+	if err := rt.DB.IndexDocumentWithMtime(doc, rt.Schema, mtime); err != nil {
 		return indexUpdateWarning(vaultPath, filePath, "failed to update index", err), true
 	}
 	return commandexec.Warning{}, false
@@ -142,8 +150,8 @@ func indexUpdateWarning(vaultPath, filePath, prefix string, err error) commandex
 // so callers can surface the missing target (interactively in the CLI, or via
 // the warning/data for agents). Detection failures are non-fatal and produce no
 // annotations.
-func missingRefEnvelope(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, relPaths ...string) (map[string]interface{}, []commandexec.Warning) {
-	refs, err := checksvc.DetectMissingRefs(vaultPath, vaultCfg, sch, relPaths...)
+func missingRefEnvelope(rt *vaultruntime.Runtime, relPaths ...string) (map[string]interface{}, []commandexec.Warning) {
+	refs, err := checksvc.DetectMissingRefs(rt, relPaths...)
 	if err != nil || len(refs) == 0 {
 		return nil, nil
 	}

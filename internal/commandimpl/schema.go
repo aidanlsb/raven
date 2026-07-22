@@ -9,7 +9,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schemamigrate"
 	"github.com/aidanlsb/raven/internal/schemapayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
@@ -21,9 +20,14 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 	start := time.Now()
 	subcommand := strings.TrimSpace(stringArg(req.Args, "subcommand"))
 	name := strings.TrimSpace(stringArg(req.Args, "name"))
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
 
 	if subcommand == "" {
-		result, err := schemasvc.FullSchema(req.VaultPath)
+		result, err := schemasvc.FullSchema(rt)
 		if err != nil {
 			return mapSchemaFailure(err)
 		}
@@ -47,7 +51,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 
 	switch subcommand {
 	case "types":
-		result, err := schemasvc.Types(req.VaultPath)
+		result, err := schemasvc.Types(rt)
 		if err != nil {
 			return mapSchemaFailure(err)
 		}
@@ -57,20 +61,20 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 		}
 		return commandexec.Success(data, &commandexec.Meta{Count: len(result.Types), QueryTimeMs: time.Since(start).Milliseconds()})
 	case "traits":
-		result, err := schemasvc.Traits(req.VaultPath)
+		result, err := schemasvc.Traits(rt)
 		if err != nil {
 			return mapSchemaFailure(err)
 		}
 		return commandexec.Success(map[string]interface{}{"traits": result.Traits}, &commandexec.Meta{Count: len(result.Traits), QueryTimeMs: time.Since(start).Milliseconds()})
 	case "core":
 		if name == "" {
-			result, err := schemasvc.CoreList(req.VaultPath)
+			result, err := schemasvc.CoreList(rt)
 			if err != nil {
 				return mapSchemaFailure(err)
 			}
 			return commandexec.Success(map[string]interface{}{"core": result.Core}, &commandexec.Meta{Count: len(result.Core), QueryTimeMs: time.Since(start).Milliseconds()})
 		}
-		result, err := schemasvc.CoreByName(req.VaultPath, name)
+		result, err := schemasvc.CoreByName(rt, name)
 		if err != nil {
 			return mapSchemaFailure(err)
 		}
@@ -79,7 +83,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 		if name == "" {
 			return commandexec.Failure("MISSING_ARGUMENT", "specify a type name", nil, "Usage: rvn schema type <name>")
 		}
-		result, err := schemasvc.TypeByName(req.VaultPath, name)
+		result, err := schemasvc.TypeByName(rt, name)
 		if err != nil {
 			return mapSchemaFailure(err)
 		}
@@ -88,7 +92,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 		if name == "" {
 			return commandexec.Failure("MISSING_ARGUMENT", "specify a trait name", nil, "Usage: rvn schema trait <name>")
 		}
-		result, err := schemasvc.TraitByName(req.VaultPath, name)
+		result, err := schemasvc.TraitByName(rt, name)
 		if err != nil {
 			return mapSchemaFailure(err)
 		}
@@ -101,7 +105,12 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 // HandleSchemaValidate executes the canonical `schema_validate` command.
 func HandleSchemaValidate(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemasvc.Validate(req.VaultPath)
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemasvc.Validate(rt)
 	if err != nil {
 		return mapSchemaFailure(err)
 	}
@@ -111,7 +120,12 @@ func HandleSchemaValidate(_ context.Context, req commandexec.Request) commandexe
 // HandleSchemaAddType executes the canonical `schema_add_type` command.
 func HandleSchemaAddType(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemasvc.AddType(schemasvc.AddTypeRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemasvc.AddType(rt, schemasvc.AddTypeRequest{
 		VaultPath:   req.VaultPath,
 		TypeName:    stringArg(req.Args, "name"),
 		DefaultPath: stringArg(req.Args, "default-path"),
@@ -127,7 +141,12 @@ func HandleSchemaAddType(_ context.Context, req commandexec.Request) commandexec
 // HandleSchemaAddTrait executes the canonical `schema_add_trait` command.
 func HandleSchemaAddTrait(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemasvc.AddTrait(schemasvc.AddTraitRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemasvc.AddTrait(rt, schemasvc.AddTraitRequest{
 		VaultPath: req.VaultPath,
 		TraitName: stringArg(req.Args, "name"),
 		TraitType: stringArg(req.Args, "type"),
@@ -143,7 +162,12 @@ func HandleSchemaAddTrait(_ context.Context, req commandexec.Request) commandexe
 // HandleSchemaAddField executes the canonical `schema_add_field` command.
 func HandleSchemaAddField(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemasvc.AddField(schemasvc.AddFieldRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemasvc.AddField(rt, schemasvc.AddFieldRequest{
 		VaultPath:   req.VaultPath,
 		TypeName:    stringArg(req.Args, "type_name"),
 		FieldName:   stringArg(req.Args, "field_name"),
@@ -164,7 +188,12 @@ func HandleSchemaAddField(_ context.Context, req commandexec.Request) commandexe
 func HandleSchemaUpdateType(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 	name := stringArg(req.Args, "name")
-	result, err := schemasvc.UpdateType(schemasvc.UpdateTypeRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemasvc.UpdateType(rt, schemasvc.UpdateTypeRequest{
 		VaultPath:   req.VaultPath,
 		TypeName:    name,
 		DefaultPath: stringArg(req.Args, "default-path"),
@@ -183,7 +212,12 @@ func HandleSchemaUpdateType(_ context.Context, req commandexec.Request) commande
 func HandleSchemaUpdateTrait(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 	name := stringArg(req.Args, "name")
-	result, err := schemasvc.UpdateTrait(schemasvc.UpdateTraitRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemasvc.UpdateTrait(rt, schemasvc.UpdateTraitRequest{
 		VaultPath: req.VaultPath,
 		TraitName: name,
 		TraitType: stringArg(req.Args, "type"),
@@ -201,7 +235,12 @@ func HandleSchemaUpdateField(_ context.Context, req commandexec.Request) command
 	start := time.Now()
 	typeName := stringArg(req.Args, "type_name")
 	fieldName := stringArg(req.Args, "field_name")
-	result, err := schemasvc.UpdateField(schemasvc.UpdateFieldRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemasvc.UpdateField(rt, schemasvc.UpdateFieldRequest{
 		VaultPath:   req.VaultPath,
 		TypeName:    typeName,
 		FieldName:   fieldName,
@@ -221,7 +260,12 @@ func HandleSchemaUpdateField(_ context.Context, req commandexec.Request) command
 // HandleSchemaRemoveType executes the canonical `schema_remove_type` command.
 func HandleSchemaRemoveType(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemasvc.RemoveType(schemasvc.RemoveTypeRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemasvc.RemoveType(rt, schemasvc.RemoveTypeRequest{
 		VaultPath:   req.VaultPath,
 		TypeName:    stringArg(req.Args, "name"),
 		Force:       boolArg(req.Args, "force") || req.Confirm,
@@ -241,7 +285,12 @@ func HandleSchemaRemoveType(_ context.Context, req commandexec.Request) commande
 // HandleSchemaRemoveTrait executes the canonical `schema_remove_trait` command.
 func HandleSchemaRemoveTrait(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemasvc.RemoveTrait(schemasvc.RemoveTraitRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemasvc.RemoveTrait(rt, schemasvc.RemoveTraitRequest{
 		VaultPath:   req.VaultPath,
 		TraitName:   stringArg(req.Args, "name"),
 		Force:       boolArg(req.Args, "force") || req.Confirm,
@@ -263,7 +312,12 @@ func HandleSchemaRemoveField(_ context.Context, req commandexec.Request) command
 	start := time.Now()
 	typeName := stringArg(req.Args, "type_name")
 	fieldName := stringArg(req.Args, "field_name")
-	if _, err := schemasvc.RemoveField(schemasvc.RemoveFieldRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	if _, err := schemasvc.RemoveField(rt, schemasvc.RemoveFieldRequest{
 		VaultPath: req.VaultPath,
 		TypeName:  typeName,
 		FieldName: fieldName,
@@ -276,7 +330,12 @@ func HandleSchemaRemoveField(_ context.Context, req commandexec.Request) command
 // HandleSchemaRenameType executes the canonical `schema_rename_type` command.
 func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemamigrate.RenameType(schemamigrate.RenameTypeRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemamigrate.RenameType(rt, schemamigrate.RenameTypeRequest{
 		VaultPath:         req.VaultPath,
 		OldName:           stringArg(req.Args, "old_name"),
 		NewName:           stringArg(req.Args, "new_name"),
@@ -293,7 +352,12 @@ func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commande
 // HandleSchemaRenameField executes the canonical `schema_rename_field` command.
 func HandleSchemaRenameField(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	result, err := schemamigrate.RenameField(schemamigrate.RenameFieldRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemamigrate.RenameField(rt, schemamigrate.RenameFieldRequest{
 		VaultPath: req.VaultPath,
 		TypeName:  stringArg(req.Args, "type_name"),
 		OldField:  stringArg(req.Args, "old_field"),
@@ -313,7 +377,12 @@ func HandleSchemaConvertTrait(_ context.Context, req commandexec.Request) comman
 	if !ok {
 		return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"high":true,"low":false}`)
 	}
-	result, err := schemamigrate.ConvertTrait(schemamigrate.ConvertTraitRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemamigrate.ConvertTrait(rt, schemamigrate.ConvertTraitRequest{
 		VaultPath:  req.VaultPath,
 		TraitName:  stringArg(req.Args, "name"),
 		TargetType: stringArg(req.Args, "type"),
@@ -333,7 +402,12 @@ func HandleSchemaConvertField(_ context.Context, req commandexec.Request) comman
 	if !ok {
 		return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"true":"done","false":"todo"}`)
 	}
-	result, err := schemamigrate.ConvertField(schemamigrate.ConvertFieldRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	result, err := schemamigrate.ConvertField(rt, schemamigrate.ConvertFieldRequest{
 		VaultPath:  req.VaultPath,
 		TypeName:   stringArg(req.Args, "type_name"),
 		FieldName:  stringArg(req.Args, "field_name"),
@@ -350,6 +424,11 @@ func HandleSchemaConvertField(_ context.Context, req commandexec.Request) comman
 // HandleSchemaTemplateList executes the canonical `schema_template_list` command.
 func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
 	targetKind, scopeKey, scopeValue, hasTarget, failure := schemaTemplateTarget(req.Args, false)
 	if failure.Error != nil {
 		return failure
@@ -361,9 +440,9 @@ func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) comman
 		)
 		switch targetKind {
 		case "type":
-			state, err = schemasvc.ListTypeTemplates(req.VaultPath, scopeValue)
+			state, err = schemasvc.ListTypeTemplates(rt, scopeValue)
 		case "core":
-			state, err = schemasvc.ListCoreTemplates(req.VaultPath, scopeValue)
+			state, err = schemasvc.ListCoreTemplates(rt, scopeValue)
 		default:
 			return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
 		}
@@ -377,7 +456,7 @@ func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) comman
 		}, &commandexec.Meta{Count: len(state.Templates), QueryTimeMs: time.Since(start).Milliseconds()})
 	}
 
-	items, err := schemasvc.ListTemplates(req.VaultPath)
+	items, err := schemasvc.ListTemplates(rt)
 	if err != nil {
 		return mapSchemaFailure(err)
 	}
@@ -387,7 +466,12 @@ func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) comman
 // HandleSchemaTemplateGet executes the canonical `schema_template_get` command.
 func HandleSchemaTemplateGet(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	item, err := schemasvc.GetTemplate(req.VaultPath, stringArg(req.Args, "template_id"))
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	item, err := schemasvc.GetTemplate(rt, stringArg(req.Args, "template_id"))
 	if err != nil {
 		return mapSchemaFailure(err)
 	}
@@ -398,7 +482,12 @@ func HandleSchemaTemplateGet(_ context.Context, req commandexec.Request) command
 func HandleSchemaTemplateSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 	description := stringArg(req.Args, "description")
-	item, err := schemasvc.SetTemplate(schemasvc.SetTemplateRequest{
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	item, err := schemasvc.SetTemplate(rt, schemasvc.SetTemplateRequest{
 		VaultPath:   req.VaultPath,
 		TemplateID:  stringArg(req.Args, "template_id"),
 		File:        stringArg(req.Args, "file"),
@@ -414,7 +503,12 @@ func HandleSchemaTemplateSet(_ context.Context, req commandexec.Request) command
 func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 	templateID := strings.TrimSpace(stringArg(req.Args, "template_id"))
-	if err := schemasvc.RemoveTemplate(req.VaultPath, templateID); err != nil {
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+	if err := schemasvc.RemoveTemplate(rt, templateID); err != nil {
 		return mapSchemaFailure(err)
 	}
 	return commandexec.Success(map[string]interface{}{"removed": true, "id": templateID}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
@@ -423,6 +517,11 @@ func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) comm
 // HandleSchemaTemplateBind executes the canonical `schema_template_bind` command.
 func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
+	rt, runtimeFailure := newConfigCommandVaultRuntime(req.VaultPath)
+	if runtimeFailure.Error != nil {
+		return runtimeFailure
+	}
+	defer rt.Close()
 	targetKind, scopeKey, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
 	if failure.Error != nil {
 		return failure
@@ -437,14 +536,14 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 	)
 	switch targetKind {
 	case "type":
-		result, err = schemasvc.AddTypeTemplate(req.VaultPath, scopeValue, templateID)
+		result, err = schemasvc.AddTypeTemplate(rt, scopeValue, templateID)
 		if err == nil && setDefault {
-			_, err = schemasvc.SetTypeDefaultTemplate(req.VaultPath, scopeValue, templateID, false)
+			_, err = schemasvc.SetTypeDefaultTemplate(rt, scopeValue, templateID, false)
 		}
 	case "core":
-		result, err = schemasvc.AddCoreTemplate(req.VaultPath, scopeValue, templateID)
+		result, err = schemasvc.AddCoreTemplate(rt, scopeValue, templateID)
 		if err == nil && setDefault {
-			_, err = schemasvc.SetCoreDefaultTemplate(req.VaultPath, scopeValue, templateID, false)
+			_, err = schemasvc.SetCoreDefaultTemplate(rt, scopeValue, templateID, false)
 		}
 	default:
 		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
@@ -470,6 +569,11 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 // HandleSchemaTemplateUnbind executes the canonical `schema_template_unbind` command.
 func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
+	rt, runtimeFailure := newConfigCommandVaultRuntime(req.VaultPath)
+	if runtimeFailure.Error != nil {
+		return runtimeFailure
+	}
+	defer rt.Close()
 	targetKind, scopeKey, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
 	if failure.Error != nil {
 		return failure
@@ -480,9 +584,9 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 	var err error
 	switch targetKind {
 	case "type":
-		err = schemasvc.RemoveTypeTemplate(req.VaultPath, scopeValue, templateID, clearDefault)
+		err = schemasvc.RemoveTypeTemplate(rt, scopeValue, templateID, clearDefault)
 	case "core":
-		err = schemasvc.RemoveCoreTemplate(req.VaultPath, scopeValue, templateID, clearDefault)
+		err = schemasvc.RemoveCoreTemplate(rt, scopeValue, templateID, clearDefault)
 	default:
 		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
 	}
@@ -504,6 +608,11 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 // HandleSchemaTemplateDefault executes the canonical `schema_template_default` command.
 func HandleSchemaTemplateDefault(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
+	rt, runtimeFailure := newConfigCommandVaultRuntime(req.VaultPath)
+	if runtimeFailure.Error != nil {
+		return runtimeFailure
+	}
+	defer rt.Close()
 	targetKind, scopeKey, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
 	if failure.Error != nil {
 		return failure
@@ -518,9 +627,9 @@ func HandleSchemaTemplateDefault(_ context.Context, req commandexec.Request) com
 	)
 	switch targetKind {
 	case "type":
-		newDefault, err = schemasvc.SetTypeDefaultTemplate(req.VaultPath, scopeValue, templateID, clearDefault)
+		newDefault, err = schemasvc.SetTypeDefaultTemplate(rt, scopeValue, templateID, clearDefault)
 	case "core":
-		newDefault, err = schemasvc.SetCoreDefaultTemplate(req.VaultPath, scopeValue, templateID, clearDefault)
+		newDefault, err = schemasvc.SetCoreDefaultTemplate(rt, scopeValue, templateID, clearDefault)
 	default:
 		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
 	}
@@ -537,12 +646,14 @@ func HandleSchemaTemplateDefault(_ context.Context, req commandexec.Request) com
 // HandleTemplateList executes the canonical `template_list` command.
 func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	vaultCfg, failure := loadVaultConfigResult(req.VaultPath)
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
 
-	result, err := templatesvc.List(templatesvc.ListRequest{
+	result, err := templatesvc.List(rt, templatesvc.ListRequest{
 		VaultPath:   req.VaultPath,
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
 	})
@@ -559,17 +670,19 @@ func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.
 // HandleTemplateWrite executes the canonical `template_write` command.
 func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	vaultCfg, failure := loadVaultConfigResult(req.VaultPath)
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
 	if boolArg(req.Args, "edit") {
 		if _, ok := req.Args["content"]; !ok {
 			return commandexec.Failure(codes.ErrInvalidInput, "template write --edit is only available in the interactive CLI", nil, "Use --content when invoking template_write non-interactively")
 		}
 	}
 
-	result, err := templatesvc.Write(templatesvc.WriteRequest{
+	result, err := templatesvc.Write(rt, templatesvc.WriteRequest{
 		VaultPath:   req.VaultPath,
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
 		Path:        stringArg(req.Args, "path"),
@@ -581,7 +694,7 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 
 	var warnings []commandexec.Warning
 	if result.Changed && result.ChangedPath != "" {
-		warnings = autoReindexWarnings(req.VaultPath, vaultCfg, filepath.Clean(result.ChangedPath))
+		warnings = autoReindexWarnings(rt, filepath.Clean(result.ChangedPath))
 	}
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
@@ -594,12 +707,14 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 // HandleTemplateDelete executes the canonical `template_delete` command.
 func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	vaultCfg, failure := loadVaultConfigResult(req.VaultPath)
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
+	defer rt.Close()
+	vaultCfg := rt.VaultCfg
 
-	result, err := templatesvc.Delete(templatesvc.DeleteRequest{
+	result, err := templatesvc.Delete(rt, templatesvc.DeleteRequest{
 		VaultPath:   req.VaultPath,
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
 		Path:        stringArg(req.Args, "path"),
@@ -649,14 +764,6 @@ func canonicalTemplateWarnings(serviceWarnings []templatesvc.Warning) []commande
 		})
 	}
 	return warnings
-}
-
-func loadVaultConfigResult(vaultPath string) (*config.VaultConfig, commandexec.Result) {
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return nil, commandexec.Failure("CONFIG_INVALID", "failed to load vault config", nil, "Fix raven.yaml and try again")
-	}
-	return vaultCfg, commandexec.Result{}
 }
 
 func schemaTemplateTarget(args map[string]interface{}, requireTarget bool) (string, string, string, bool, commandexec.Result) {

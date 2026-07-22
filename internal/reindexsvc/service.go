@@ -9,14 +9,12 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type Code = codes.ErrorCode
@@ -93,8 +91,11 @@ func (r *RunResult) Data() map[string]interface{} {
 	return data
 }
 
-func Run(req RunRequest) (*RunResult, error) {
-	vaultPath := strings.TrimSpace(req.VaultPath)
+func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
+	if rt == nil {
+		return nil, newError(CodeInvalidInput, "vault runtime is required", "", nil)
+	}
+	vaultPath := strings.TrimSpace(rt.VaultPath)
 	if vaultPath == "" {
 		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
 	}
@@ -104,17 +105,16 @@ func Run(req RunRequest) (*RunResult, error) {
 		ctx = context.Background()
 	}
 
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return nil, newError(CodeSchemaInvalid, fmt.Sprintf("failed to load schema: %v", err), "Run 'rvn init' to create a schema", err)
+	if rt.SchemaLoadErr != nil {
+		return nil, newError(CodeSchemaInvalid, fmt.Sprintf("failed to load schema: %v", rt.SchemaLoadErr), "Run 'rvn init' to create a schema", rt.SchemaLoadErr)
 	}
-
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return nil, newError(CodeConfigInvalid, fmt.Sprintf("failed to load raven.yaml: %v", err), "Fix raven.yaml and try again", err)
+	if rt.Schema == nil {
+		return nil, newError(CodeSchemaInvalid, "failed to load schema: schema runtime is required", "Run 'rvn init' to create a schema", nil)
 	}
+	sch := rt.Schema
+	vaultCfg := rt.VaultCfg
 	if vaultCfg == nil {
-		vaultCfg = &config.VaultConfig{}
+		return nil, newError(CodeConfigInvalid, "failed to load raven.yaml: vault config runtime is required", "Fix raven.yaml and try again", nil)
 	}
 
 	db, rebuildSession, wasRebuilt, err := openRunDatabase(vaultPath, req.Full, req.DryRun)
@@ -160,7 +160,6 @@ func Run(req RunRequest) (*RunResult, error) {
 		db.SetAutoResolveRefs(false)
 	}
 
-	parseOpts := parseopts.FromVaultConfig(vaultCfg)
 	excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
 	if err != nil {
 		return nil, newError(CodeConfigInvalid, fmt.Sprintf("invalid exclude config: %v", err), "Fix raven.yaml exclude patterns and try again", err)
@@ -250,7 +249,7 @@ func Run(req RunRequest) (*RunResult, error) {
 		}
 	}
 
-	walkOpts := &vault.WalkOptions{ParseOptions: parseOpts, ExcludeMatcher: excludeMatcher}
+	walkOpts := &vault.WalkOptions{ParseOptions: rt.ParseOptions, ExcludeMatcher: excludeMatcher}
 	if incremental {
 		walkOpts.ShouldParse = func(relativePath string, fileMtime int64) bool {
 			indexedMtime := indexedMtimes[relativePath]

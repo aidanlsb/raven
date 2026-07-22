@@ -19,6 +19,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type Options struct {
@@ -96,8 +97,14 @@ type CreateMissingFailure struct {
 	Error      string `json:"error"`
 }
 
-func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opts Options) (*RunResult, error) {
-	scope, err := resolveScope(vaultPath, vaultCfg, sch, opts)
+func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
+	if rt == nil || rt.VaultCfg == nil || rt.Schema == nil {
+		return nil, fmt.Errorf("vault runtime with config and schema is required")
+	}
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
+	sch := rt.Schema
+	scope, err := resolveScope(rt, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -141,11 +148,10 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 			result.WarningCount++
 		}
 	}
-	db, err := index.Open(vaultPath)
-	if err != nil {
+	if err := rt.OpenDB(); err != nil {
 		recordIncomplete("index", err)
 	} else {
-		defer db.Close()
+		db := rt.DB
 		stalenessInfo, stalenessErr := db.CheckStaleness(vaultPath)
 		if stalenessErr != nil {
 			recordIncomplete("index staleness", stalenessErr)
@@ -571,7 +577,8 @@ func CreateMissingRefsNonInteractive(
 	return result
 }
 
-func resolveScope(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opts Options) (*Scope, error) {
+func resolveScope(rt *vaultruntime.Runtime, opts Options) (*Scope, error) {
+	vaultPath := rt.VaultPath
 	scope := &Scope{Type: "full"}
 	if opts.TypeFilter != "" {
 		scope.Type = "type_filter"
@@ -607,11 +614,6 @@ func resolveScope(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 		return scope, nil
 	}
 
-	rt := &readsvc.Runtime{
-		VaultPath: vaultPath,
-		VaultCfg:  vaultCfg,
-		Schema:    sch,
-	}
 	resolved, err := readsvc.ResolveReference(pathArg, rt, false)
 	if err != nil {
 		return nil, validationErrorf("could not resolve '%s': %w", pathArg, err)

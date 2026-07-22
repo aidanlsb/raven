@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type SetBulkRequest struct {
@@ -20,6 +21,7 @@ type SetBulkRequest struct {
 	ObjectIDs    []string
 	TypedUpdates map[string]schema.FieldValue
 	ParseOptions *parser.ParseOptions
+	Runtime      *vaultruntime.Runtime
 }
 
 type SetBulkPreviewItem struct {
@@ -103,6 +105,7 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 				VaultPath:    req.VaultPath,
 				VaultConfig:  req.VaultConfig,
 				ParseOptions: req.ParseOptions,
+				Runtime:      req.Runtime,
 			},
 		)
 		if err != nil {
@@ -172,6 +175,7 @@ func ApplySetBulk(req SetBulkRequest, onModified func(filePath string)) (*SetBul
 			Schema:        req.Schema,
 			AllowedFields: map[string]bool{"alias": true},
 			ParseOptions:  req.ParseOptions,
+			Runtime:       req.Runtime,
 		})
 		if err != nil {
 			result.Status = "error"

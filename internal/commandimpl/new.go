@@ -61,12 +61,13 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 		PagesRoot:   vaultCfg.GetPagesRoot(),
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
 		TemplateID:  stringArg(req.Args, "template"),
+		Runtime:     rt,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
 	}
 
-	warnings := autoReindexWarnings(vaultPath, vaultCfg, result.FilePath)
+	warnings := autoReindexWarnings(rt, result.FilePath)
 
 	data := map[string]interface{}{
 		"file":  result.RelativePath,
@@ -74,7 +75,7 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 		"title": title,
 		"type":  typeName,
 	}
-	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, result.RelativePath)
+	missingData, missingWarnings := missingRefEnvelope(rt, result.RelativePath)
 	data = mergeDataFields(data, missingData)
 	warnings = appendCommandWarnings(warnings, missingWarnings)
 
@@ -149,6 +150,7 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 		ObjectsRoot: vaultCfg.GetObjectsRoot(),
 		PagesRoot:   vaultCfg.GetPagesRoot(),
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
+		Runtime:     rt,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -163,8 +165,8 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 		"title":  title,
 	}
 	if result.Status == "created" || result.Status == "updated" {
-		warnings = appendCommandWarnings(warnings, autoReindexWarnings(vaultPath, vaultCfg, result.FilePath))
-		missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, result.RelativePath)
+		warnings = appendCommandWarnings(warnings, autoReindexWarnings(rt, result.FilePath))
+		missingData, missingWarnings := missingRefEnvelope(rt, result.RelativePath)
 		data = mergeDataFields(data, missingData)
 		warnings = appendCommandWarnings(warnings, missingWarnings)
 	}

@@ -7,10 +7,8 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parseopts"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // HandleMove executes the canonical `move` command.
@@ -40,7 +38,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		if len(objectIDs) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Provide object IDs when using bulk move")
 		}
-		return runMoveBulk(vaultPath, vaultCfg, sch, objectIDs, destination, boolArgDefault(req.Args, "update-refs", true), req.Confirm)
+		return runMoveBulk(rt, objectIDs, destination, boolArgDefault(req.Args, "update-refs", true), req.Confirm)
 	}
 
 	source := strings.TrimSpace(stringArg(req.Args, "source"))
@@ -58,8 +56,9 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		UpdateRefs:     boolArgDefault(req.Args, "update-refs", true),
 		SkipTypeCheck:  boolArg(req.Args, "skip-type-check"),
 		Preview:        req.Preview,
-		ParseOptions:   parseopts.FromVaultConfig(vaultCfg),
+		ParseOptions:   rt.ParseOptions,
 		FailOnIndexErr: true,
+		Runtime:        rt,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -99,7 +98,10 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
-func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, ids []string, destination string, updateRefs bool, confirm bool) commandexec.Result {
+func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, updateRefs bool, confirm bool) commandexec.Result {
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
+	sch := rt.Schema
 	if strings.TrimSpace(destination) == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "no destination provided", nil, "Usage: rvn move --stdin <destination-directory/>")
 	}
@@ -118,7 +120,8 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 		ObjectIDs:      fileIDs,
 		DestinationDir: destination,
 		UpdateRefs:     updateRefs,
-		ParseOptions:   parseopts.FromVaultConfig(vaultCfg),
+		ParseOptions:   rt.ParseOptions,
+		Runtime:        rt,
 	}
 
 	if !confirm {

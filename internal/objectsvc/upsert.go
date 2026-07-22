@@ -15,6 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type ErrorCode = codes.ErrorCode
@@ -61,6 +62,7 @@ type UpsertRequest struct {
 	ObjectsRoot string
 	PagesRoot   string
 	TemplateDir string
+	Runtime     *vaultruntime.Runtime
 }
 
 type UpsertResult struct {
@@ -126,7 +128,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			fieldValues,
 			req.Schema,
 			map[string]bool{"type": true},
-			createRefValidationContext(req.VaultPath, req.VaultConfig),
+			createRefValidationContext(req.Runtime, req.VaultPath, req.VaultConfig),
 		)
 		if err != nil {
 			return nil, err
@@ -223,6 +225,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 				&fieldmutation.RefValidationContext{
 					VaultPath:   req.VaultPath,
 					VaultConfig: req.VaultConfig,
+					Runtime:     req.Runtime,
 				},
 			)
 			if err != nil {

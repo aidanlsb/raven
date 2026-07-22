@@ -3,11 +3,8 @@ package readsvc
 import (
 	"fmt"
 
-	"github.com/aidanlsb/raven/internal/config"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parseopts"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -52,25 +49,19 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 		return SmartReindexReport{}, fmt.Errorf("runtime with database is required")
 	}
 
-	vaultCfg := rt.VaultCfg
-	if vaultCfg == nil {
-		loaded, err := config.LoadVaultConfig(rt.VaultPath)
-		if err != nil {
-			return SmartReindexReport{}, err
-		}
-		vaultCfg = loaded
-		rt.VaultCfg = loaded
+	if rt.VaultCfg == nil {
+		return SmartReindexReport{}, fmt.Errorf("runtime with vault config is required")
 	}
+	vaultCfg := rt.VaultCfg
 	rt.DB.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 
-	sch := rt.Schema
-	if sch == nil {
-		loaded, err := schema.Load(rt.VaultPath)
-		if err != nil {
-			return SmartReindexReport{}, err
-		}
-		sch = loaded
+	if rt.SchemaLoadErr != nil && rt.Schema == nil {
+		return SmartReindexReport{}, rt.SchemaLoadErr
 	}
+	if rt.Schema == nil {
+		return SmartReindexReport{}, fmt.Errorf("runtime with schema is required")
+	}
+	sch := rt.Schema
 
 	if _, err := rt.DB.RemoveDeletedFiles(rt.VaultPath); err != nil {
 		return SmartReindexReport{}, err
@@ -91,7 +82,7 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 	}
 
 	walkOpts := &vault.WalkOptions{
-		ParseOptions:   parseopts.FromVaultConfig(vaultCfg),
+		ParseOptions:   rt.ParseOptions,
 		ExcludeMatcher: matcher,
 		ShouldParse: func(relativePath string, fileMtime int64) bool {
 			indexedMtime := indexedMtimes[relativePath]
@@ -143,16 +134,10 @@ func excludeMatcher(rt *Runtime) (*ravenignore.Matcher, error) {
 	if rt == nil {
 		return ravenignore.NewMatcher(nil)
 	}
-	vaultCfg := rt.VaultCfg
-	if vaultCfg == nil {
-		loaded, err := config.LoadVaultConfig(rt.VaultPath)
-		if err != nil {
-			return nil, err
-		}
-		vaultCfg = loaded
-		rt.VaultCfg = loaded
+	if rt.VaultCfg == nil {
+		return nil, fmt.Errorf("runtime with vault config is required")
 	}
-	return ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
+	return ravenignore.NewMatcher(rt.VaultCfg.GetExcludePatterns())
 }
 
 func removeExcludedIndexedFiles(rt *Runtime, matcher *ravenignore.Matcher) error {

@@ -26,6 +26,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type FieldRenameConflict struct {
@@ -120,7 +121,8 @@ type typeRenamePlan struct {
 
 var frontmatterTypeKeyLine = regexp.MustCompile(`^type\s*:`)
 
-func RenameField(req RenameFieldRequest) (*RenameFieldResult, error) {
+func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameFieldResult, error) {
+	req.VaultPath = rt.VaultPath
 	typeName := strings.TrimSpace(req.TypeName)
 	oldField := strings.TrimSpace(req.OldField)
 	newField := strings.TrimSpace(req.NewField)
@@ -153,7 +155,7 @@ func RenameField(req RenameFieldRequest) (*RenameFieldResult, error) {
 		return nil, newError(schemasvc.ErrorObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", newField, typeName), "", nil, nil)
 	}
 
-	plan, err := buildFieldRenamePlan(req.VaultPath, schemaDoc, typeName, oldField, newField)
+	plan, err := buildFieldRenamePlan(req.VaultPath, schemaDoc, typeName, oldField, newField, rt.VaultCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +202,8 @@ func RenameField(req RenameFieldRequest) (*RenameFieldResult, error) {
 	}, nil
 }
 
-func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
+func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeResult, error) {
+	req.VaultPath = rt.VaultPath
 	oldName := strings.TrimSpace(req.OldName)
 	newName := strings.TrimSpace(req.NewName)
 	if oldName == "" || newName == "" {
@@ -221,10 +224,10 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 		return nil, err
 	}
 	sch := schemaDoc.Schema()
-	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
-	if err != nil {
-		return nil, newError(schemasvc.ErrorConfigInvalid, "failed to load raven.yaml", "Fix raven.yaml and try again", nil, err)
+	if rt.VaultCfg == nil {
+		return nil, newError(schemasvc.ErrorConfigInvalid, "failed to load raven.yaml", "Fix raven.yaml and try again", nil, nil)
 	}
+	vaultCfg := rt.VaultCfg
 	oldTypeDef, exists := sch.Types[oldName]
 	if !exists {
 		return nil, newError(schemasvc.ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", oldName), "", nil, nil)
@@ -391,6 +394,7 @@ func buildFieldRenamePlan(
 	vaultPath string,
 	schemaDoc *schemadoc.Document,
 	typeName, oldField, newField string,
+	vaultCfg *config.VaultConfig,
 ) (*fieldRenamePlan, error) {
 	tokenOld := "{{field." + oldField + "}}"
 	tokenNew := "{{field." + newField + "}}"
@@ -436,10 +440,6 @@ func buildFieldRenamePlan(
 		}
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return nil, newError(schemasvc.ErrorFileRead, err.Error(), "", nil, err)
-	}
 	changedQueries := false
 	fieldRefPattern := regexp.MustCompile(`\.` + regexp.QuoteMeta(oldField) + `\b`)
 	if vaultCfg != nil && vaultCfg.Queries != nil {

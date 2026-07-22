@@ -4,6 +4,8 @@ package vaultruntime
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
@@ -45,6 +47,12 @@ func (e *SetupError) Unwrap() error {
 // Options controls which dependencies a vault operation requires.
 type Options struct {
 	OpenDB bool
+	// SkipConfig avoids loading raven.yaml for operations that only need the
+	// database and do not interpret vault paths.
+	SkipConfig bool
+	// SkipSchema avoids loading schema.yaml for operations that are explicitly
+	// schema-free, such as vault-config editing and database statistics.
+	SkipSchema bool
 	// RequireSchema controls how a schema load failure is handled.
 	//
 	// A missing schema.yaml is never a failure: schema.Load returns a default
@@ -57,11 +65,13 @@ type Options struct {
 // Runtime contains dependencies loaded for one vault-scoped operation. It is
 // invocation-scoped: callers must Close it and must not retain it globally.
 type Runtime struct {
-	VaultPath    string
-	VaultCfg     *config.VaultConfig
-	Schema       *schema.Schema
-	DB           *index.Database
-	ParseOptions *parser.ParseOptions
+	VaultPath         string
+	VaultConfigPath   string
+	VaultConfigExists bool
+	VaultCfg          *config.VaultConfig
+	Schema            *schema.Schema
+	DB                *index.Database
+	ParseOptions      *parser.ParseOptions
 
 	// SchemaLoadErr records a tolerated schema load failure.
 	SchemaLoadErr error
@@ -73,22 +83,19 @@ func New(vaultPath string, opts Options) (*Runtime, error) {
 		return nil, fmt.Errorf("vault path is required")
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return nil, &SetupError{Stage: StageConfig, Err: err}
-	}
-
-	sch, schErr := schema.Load(vaultPath)
-	if schErr != nil && opts.RequireSchema {
-		return nil, &SetupError{Stage: StageSchema, Err: schErr}
-	}
-
 	rt := &Runtime{
-		VaultPath:     vaultPath,
-		VaultCfg:      vaultCfg,
-		Schema:        sch,
-		ParseOptions:  parseopts.FromVaultConfig(vaultCfg),
-		SchemaLoadErr: schErr,
+		VaultPath:       vaultPath,
+		VaultConfigPath: filepath.Join(vaultPath, "raven.yaml"),
+	}
+	if !opts.SkipConfig {
+		if err := rt.ReloadConfig(); err != nil {
+			return nil, err
+		}
+	}
+	if !opts.SkipSchema {
+		if err := rt.ReloadSchema(opts.RequireSchema); err != nil {
+			return nil, err
+		}
 	}
 
 	if opts.OpenDB {
@@ -98,6 +105,51 @@ func New(vaultPath string, opts Options) (*Runtime, error) {
 	}
 
 	return rt, nil
+}
+
+// ReloadConfig refreshes the runtime's vault config and derived parse options.
+// Long-lived callers use it after raven.yaml changes; command runtimes normally
+// load config only once through New.
+func (r *Runtime) ReloadConfig() error {
+	if r == nil || r.VaultPath == "" {
+		return &SetupError{Stage: StageConfig, Err: fmt.Errorf("vault runtime is required")}
+	}
+	if r.VaultConfigPath == "" {
+		r.VaultConfigPath = filepath.Join(r.VaultPath, "raven.yaml")
+	}
+	_, statErr := os.Stat(r.VaultConfigPath)
+	r.VaultConfigExists = statErr == nil
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return &SetupError{Stage: StageConfig, Err: statErr}
+	}
+
+	vaultCfg, err := config.LoadVaultConfig(r.VaultPath)
+	if err != nil {
+		return &SetupError{Stage: StageConfig, Err: err}
+	}
+	r.VaultCfg = vaultCfg
+	r.ParseOptions = parseopts.FromVaultConfig(vaultCfg)
+	if r.DB != nil {
+		r.DB.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	}
+	return nil
+}
+
+// ReloadSchema refreshes the runtime's schema. A tolerated failure is recorded
+// on SchemaLoadErr and clears Schema; required failures are returned.
+func (r *Runtime) ReloadSchema(require bool) error {
+	if r == nil || r.VaultPath == "" {
+		return &SetupError{Stage: StageSchema, Err: fmt.Errorf("vault runtime is required")}
+	}
+	sch, err := schema.Load(r.VaultPath)
+	r.SchemaLoadErr = err
+	if err == nil {
+		r.Schema = sch
+	}
+	if err != nil && require {
+		return &SetupError{Stage: StageSchema, Err: err}
+	}
+	return nil
 }
 
 // OpenDB opens and configures the runtime's index on first use. It is safe to
@@ -113,7 +165,9 @@ func (r *Runtime) OpenDB() error {
 	if err != nil {
 		return &SetupError{Stage: StageDatabase, Err: err}
 	}
-	db.SetDailyDirectory(r.VaultCfg.GetDailyDirectory())
+	if r.VaultCfg != nil {
+		db.SetDailyDirectory(r.VaultCfg.GetDailyDirectory())
+	}
 	r.DB = db
 	return nil
 }
@@ -124,4 +178,5 @@ func (r *Runtime) Close() {
 		return
 	}
 	_ = r.DB.Close()
+	r.DB = nil
 }

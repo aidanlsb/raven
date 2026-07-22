@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type MoveByReferenceRequest struct {
@@ -23,6 +24,7 @@ type MoveByReferenceRequest struct {
 	Preview        bool
 	ParseOptions   *parser.ParseOptions
 	FailOnIndexErr bool
+	Runtime        *vaultruntime.Runtime
 }
 
 type MoveTypeMismatch struct {
@@ -51,6 +53,11 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	if req.VaultConfig == nil {
 		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
+	req.Runtime = rt
 	if strings.TrimSpace(req.Reference) == "" || strings.TrimSpace(req.Destination) == "" {
 		return nil, newError(ErrorInvalidInput, "source and destination are required", "Usage: rvn move <source> <destination>", nil, nil)
 	}
@@ -64,7 +71,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		)
 	}
 
-	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
+	resolved, err := resolveReferenceForMutation(rt, req.Reference)
 	if err != nil {
 		return nil, err
 	}
@@ -156,6 +163,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 			Schema:            req.Schema,
 			ParseOptions:      req.ParseOptions,
 			IsAsset:           true,
+			Runtime:           rt,
 		})
 		if err != nil {
 			return nil, err
@@ -225,6 +233,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		Schema:            sch,
 		ParseOptions:      req.ParseOptions,
 		IsAsset:           false,
+		Runtime:           rt,
 	})
 	if err != nil {
 		return nil, err

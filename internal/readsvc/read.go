@@ -388,15 +388,5 @@ func ensureReadDB(rt *Runtime) error {
 	if rt == nil {
 		return fmt.Errorf("runtime is required")
 	}
-	if rt.DB != nil {
-		return nil
-	}
-
-	db, err := index.Open(rt.VaultPath)
-	if err != nil {
-		return err
-	}
-	db.SetDailyDirectory(rt.VaultCfg.GetDailyDirectory())
-	rt.DB = db
-	return nil
+	return rt.OpenDB()
 }

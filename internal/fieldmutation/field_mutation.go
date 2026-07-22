@@ -38,6 +38,7 @@ type RefValidationContext struct {
 	VaultPath    string
 	VaultConfig  *config.VaultConfig
 	ParseOptions *parser.ParseOptions
+	Runtime      *readsvc.Runtime
 }
 
 func (e *ValidationError) Error() string {
@@ -553,13 +554,19 @@ func validateRefTargets(
 		return nil
 	}
 
-	rt := &readsvc.Runtime{
-		VaultPath: refCtx.VaultPath,
-		VaultCfg:  refCtx.VaultConfig,
-		Schema:    sch,
+	rt := refCtx.Runtime
+	owned := false
+	if rt == nil {
+		rt = &readsvc.Runtime{
+			VaultPath:    refCtx.VaultPath,
+			VaultCfg:     refCtx.VaultConfig,
+			Schema:       sch,
+			ParseOptions: refCtx.ParseOptions,
+		}
+		owned = true
 	}
 
-	db, err := index.Open(refCtx.VaultPath)
+	err := rt.OpenDB()
 	if errors.Is(err, index.ErrIndexRebuildRequired) {
 		return []schema.ValidationError{{
 			Field:   "reference",
@@ -567,9 +574,9 @@ func validateRefTargets(
 		}}
 	}
 	if err == nil {
-		db.SetDailyDirectory(refCtx.VaultConfig.GetDailyDirectory())
-		rt.DB = db
-		defer db.Close()
+		if owned {
+			defer rt.Close()
+		}
 	}
 
 	parseOpts := refCtx.ParseOptions

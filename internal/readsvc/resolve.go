@@ -90,7 +90,6 @@ func IsRefNotFound(err error) bool {
 type resolveOperation struct {
 	rt       *Runtime
 	db       *index.Database
-	closeDB  bool
 	resolver *resolver.Resolver
 }
 
@@ -102,10 +101,7 @@ func newResolveOperation(rt *Runtime) (*resolveOperation, error) {
 }
 
 func (op *resolveOperation) Close() error {
-	if op == nil || !op.closeDB || op.db == nil {
-		return nil
-	}
-	return op.db.Close()
+	return nil
 }
 
 func (op *resolveOperation) dailyDirectory() string {
@@ -127,13 +123,10 @@ func (op *resolveOperation) getDB() (*index.Database, error) {
 		return op.db, nil
 	}
 
-	db, err := index.Open(op.rt.VaultPath)
-	if err != nil {
+	if err := op.rt.OpenDB(); err != nil {
 		return nil, fmt.Errorf("failed to open database: %w (run 'rvn reindex' to rebuild)", err)
 	}
-	db.SetDailyDirectory(op.dailyDirectory())
-	op.db = db
-	op.closeDB = true
+	op.db = op.rt.DB
 	return op.db, nil
 }
 

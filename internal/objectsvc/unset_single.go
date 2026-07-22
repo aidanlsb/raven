@@ -7,6 +7,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type UnsetByReferenceRequest struct {
@@ -16,6 +17,7 @@ type UnsetByReferenceRequest struct {
 	Reference    string
 	Fields       []string
 	ParseOptions *parser.ParseOptions
+	Runtime      *vaultruntime.Runtime
 }
 
 type UnsetByReferenceResult struct {
@@ -42,8 +44,12 @@ func UnsetByReference(req UnsetByReferenceRequest) (*UnsetByReferenceResult, err
 	if strings.TrimSpace(req.Reference) == "" {
 		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn unset <object-id> <field>...", nil, nil)
 	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
 
-	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
+	resolved, err := resolveReferenceForMutation(rt, req.Reference)
 	if err != nil {
 		return nil, err
 	}

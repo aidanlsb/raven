@@ -11,11 +11,10 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/template"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type Code = codes.ErrorCode
@@ -101,10 +100,11 @@ type DeleteResult struct {
 	Warnings    []Warning
 }
 
-func List(req ListRequest) (*ListResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
+func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
+	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
 		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
 	}
+	req.VaultPath = rt.VaultPath
 
 	root := filepath.Join(req.VaultPath, filepath.FromSlash(req.TemplateDir))
 	if err := paths.ValidateWithinVault(req.VaultPath, root); err != nil {
@@ -183,10 +183,11 @@ func Read(req ReadRequest) (*ReadResult, error) {
 	}, nil
 }
 
-func Write(req WriteRequest) (*WriteResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
+func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
+	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
 		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
 	}
+	req.VaultPath = rt.VaultPath
 
 	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
 	if err != nil {
@@ -228,10 +229,11 @@ func Write(req WriteRequest) (*WriteResult, error) {
 	}, nil
 }
 
-func Delete(req DeleteRequest) (*DeleteResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
+func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) {
+	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
 		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
 	}
+	req.VaultPath = rt.VaultPath
 
 	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
 	if err != nil {
@@ -244,7 +246,7 @@ func Delete(req DeleteRequest) (*DeleteResult, error) {
 		return nil, newError(CodeFileReadError, "failed to read template file metadata", "", err)
 	}
 
-	templateIDs, err := schemaTemplateRefsForFile(req.VaultPath, fileRef, req.TemplateDir)
+	templateIDs, err := schemaTemplateRefsForFile(rt, fileRef, req.TemplateDir)
 	if err != nil {
 		return nil, err
 	}
@@ -263,22 +265,20 @@ func Delete(req DeleteRequest) (*DeleteResult, error) {
 	}
 
 	warnings := make([]Warning, 0, 1)
-	db, err := index.Open(req.VaultPath)
-	if err != nil {
+	if err := rt.OpenDB(); err != nil {
 		warnings = append(warnings, Warning{
 			Code:    WarningIndexUpdateFailed,
 			Message: fmt.Sprintf("failed to open index for cleanup: %v", err),
 			Ref:     "Run 'rvn reindex' to rebuild the index",
 		})
 	} else {
-		if err := db.RemoveFile(fileRef); err != nil {
+		if err := rt.DB.RemoveFile(fileRef); err != nil {
 			warnings = append(warnings, Warning{
 				Code:    WarningIndexUpdateFailed,
 				Message: fmt.Sprintf("failed to remove file from index: %v", err),
 				Ref:     "Run 'rvn reindex' to rebuild the index",
 			})
 		}
-		_ = db.Close()
 	}
 
 	return &DeleteResult{
@@ -304,11 +304,14 @@ func resolveTemplatePath(vaultPath, templateDir, pathArg string) (string, string
 	return fileRef, fullPath, nil
 }
 
-func schemaTemplateRefsForFile(vaultPath, fileRef, templateDir string) ([]string, error) {
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return nil, newError(CodeSchemaInvalid, "failed to load schema", "Fix schema.yaml and try again", err)
+func schemaTemplateRefsForFile(rt *vaultruntime.Runtime, fileRef, templateDir string) ([]string, error) {
+	if rt.SchemaLoadErr != nil {
+		return nil, newError(CodeSchemaInvalid, "failed to load schema", "Fix schema.yaml and try again", rt.SchemaLoadErr)
 	}
+	if rt.Schema == nil {
+		return nil, newError(CodeSchemaInvalid, "schema runtime is required", "Fix schema.yaml and try again", nil)
+	}
+	sch := rt.Schema
 
 	var refs []string
 	target := filepath.ToSlash(fileRef)

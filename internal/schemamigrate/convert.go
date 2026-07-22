@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/frontmatter"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/model"
@@ -18,6 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type ConvertTraitRequest struct {
@@ -62,7 +62,8 @@ type conversionMapper struct {
 	values     map[string]schema.FieldValue
 }
 
-func ConvertTrait(req ConvertTraitRequest) (*ConvertResult, error) {
+func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertResult, error) {
+	req.VaultPath = rt.VaultPath
 	traitName := strings.TrimSpace(req.TraitName)
 	if traitName == "" {
 		return nil, newError(schemasvc.ErrorInvalidInput, "trait name cannot be empty", "Usage: rvn schema convert trait <name> --map-json '<json>'", nil, nil)
@@ -85,7 +86,7 @@ func ConvertTrait(req ConvertTraitRequest) (*ConvertResult, error) {
 	if err := validateCollectionConversion(sourceType, targetType); err != nil {
 		return nil, err
 	}
-	walkOptions, err := conversionWalkOptions(req.VaultPath)
+	walkOptions, err := conversionWalkOptions(rt)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +175,8 @@ func ConvertTrait(req ConvertTraitRequest) (*ConvertResult, error) {
 	return finishValueConversion(req.VaultPath, req.Confirm, "trait", traitName, "", sourceType, targetType, plan)
 }
 
-func ConvertField(req ConvertFieldRequest) (*ConvertResult, error) {
+func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertResult, error) {
+	req.VaultPath = rt.VaultPath
 	typeName := strings.TrimSpace(req.TypeName)
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
@@ -223,7 +225,7 @@ func ConvertField(req ConvertFieldRequest) (*ConvertResult, error) {
 			nil,
 		)
 	}
-	walkOptions, err := conversionWalkOptions(req.VaultPath)
+	walkOptions, err := conversionWalkOptions(rt)
 	if err != nil {
 		return nil, err
 	}
@@ -1003,12 +1005,11 @@ func arrayElementType(fieldType schema.FieldType) schema.FieldType {
 	return schema.FieldType(strings.TrimSuffix(string(fieldType), "[]"))
 }
 
-func conversionWalkOptions(vaultPath string) (*vault.WalkOptions, error) {
-	vaultConfig, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return nil, newError(schemasvc.ErrorConfigInvalid, "failed to load raven.yaml", "Fix raven.yaml and try again", nil, err)
+func conversionWalkOptions(rt *vaultruntime.Runtime) (*vault.WalkOptions, error) {
+	if rt == nil || rt.VaultCfg == nil {
+		return nil, newError(schemasvc.ErrorConfigInvalid, "failed to load raven.yaml", "Fix raven.yaml and try again", nil, nil)
 	}
-	matcher, err := ravenignore.NewMatcher(vaultConfig.GetExcludePatterns())
+	matcher, err := ravenignore.NewMatcher(rt.VaultCfg.GetExcludePatterns())
 	if err != nil {
 		return nil, newError(schemasvc.ErrorConfigInvalid, "invalid exclude configuration in raven.yaml", "Fix raven.yaml and try again", nil, err)
 	}

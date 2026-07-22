@@ -34,7 +34,7 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 	vaultCfg := rt.VaultCfg
 	sch := rt.Schema
 
-	result, err := checksvc.Run(vaultPath, vaultCfg, sch, checksvc.Options{
+	result, err := checksvc.Run(rt, checksvc.Options{
 		PathArg:     strings.TrimSpace(stringArg(req.Args, "path")),
 		TypeFilter:  strings.TrimSpace(stringArg(req.Args, "type")),
 		TraitFilter: strings.TrimSpace(stringArg(req.Args, "trait")),

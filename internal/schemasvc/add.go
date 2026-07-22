@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type AddTypeRequest struct {
@@ -82,7 +83,7 @@ var validFieldTypes = map[string]bool{
 	"ref":      true,
 }
 
-func AddType(req AddTypeRequest) (*AddTypeResult, error) {
+func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, error) {
 	typeName := strings.TrimSpace(req.TypeName)
 	if typeName == "" {
 		return nil, newError(ErrorInvalidInput, "type name cannot be empty", "", nil, nil)
@@ -100,7 +101,7 @@ func AddType(req AddTypeRequest) (*AddTypeResult, error) {
 	description := strings.TrimSpace(req.Description)
 	nameField := strings.TrimSpace(req.NameField)
 	autoCreatedField := ""
-	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err := editSchema(rt.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Types[typeName]; exists {
 			return newError(ErrorObjectExists, fmt.Sprintf("type '%s' already exists", typeName), "", nil, nil)
 		}
@@ -138,7 +139,7 @@ func AddType(req AddTypeRequest) (*AddTypeResult, error) {
 	}, nil
 }
 
-func AddTrait(req AddTraitRequest) (*AddTraitResult, error) {
+func AddTrait(rt *vaultruntime.Runtime, req AddTraitRequest) (*AddTraitResult, error) {
 	traitName := strings.TrimSpace(req.TraitName)
 	if traitName == "" {
 		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
@@ -147,7 +148,7 @@ func AddTrait(req AddTraitRequest) (*AddTraitResult, error) {
 	traitType := normalizeTraitTypeInput(req.TraitType)
 	trimmedValues := splitCommaValues(req.Values)
 
-	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err := editSchema(rt.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Traits[traitName]; exists {
 			return newError(ErrorObjectExists, fmt.Sprintf("trait '%s' already exists", traitName), "", nil, nil)
 		}
@@ -177,7 +178,7 @@ func AddTrait(req AddTraitRequest) (*AddTraitResult, error) {
 	return result, nil
 }
 
-func AddField(req AddFieldRequest) (*AddFieldResult, error) {
+func AddField(rt *vaultruntime.Runtime, req AddFieldRequest) (*AddFieldResult, error) {
 	typeName := strings.TrimSpace(req.TypeName)
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
@@ -196,7 +197,7 @@ func AddField(req AddFieldRequest) (*AddFieldResult, error) {
 	trimmedTarget := strings.TrimSpace(req.Target)
 	trimmedValues := splitCommaValues(req.Values)
 	fieldType := ""
-	err := editSchema(req.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err := editSchema(rt.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		typeDef, exists := sch.Types[typeName]
 		if !exists {

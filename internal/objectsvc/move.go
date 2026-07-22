@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
@@ -33,6 +34,7 @@ type MoveFileRequest struct {
 	Schema             *schema.Schema
 	ParseOptions       *parser.ParseOptions
 	IsAsset            bool
+	Runtime            *vaultruntime.Runtime
 }
 
 type MoveFileResult struct {
@@ -92,17 +94,18 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 		dailyDir = req.VaultConfig.GetDailyDirectory()
 	}
 
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
 	var db *index.Database
-	var err error
-	db, err = index.Open(req.VaultPath)
-	if err != nil {
+	if err := rt.OpenDB(); err != nil {
 		if req.FailOnIndexError || errors.Is(err, index.ErrIndexRebuildRequired) {
 			return nil, newError(ErrorValidationFailed, "failed to open index database for move", "Run 'rvn reindex' to rebuild the database", nil, err)
 		}
 		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for move update: %v", err))
 	} else {
-		defer db.Close()
-		db.SetDailyDirectory(dailyDir)
+		db = rt.DB
 	}
 
 	var refPlans []refUpdatePlan

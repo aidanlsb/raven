@@ -14,22 +14,24 @@ import (
 	"github.com/aidanlsb/raven/internal/filelock"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/pages"
-	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // AppendToFile appends a capture line to the target file, creating daily notes when needed.
 func AppendToFile(
-	vaultPath string,
+	rt *vaultruntime.Runtime,
 	destPath string,
 	line string,
 	cfg *config.CaptureConfig,
-	vaultCfg *config.VaultConfig,
 	isDailyNote bool,
 	targetObjectID string,
-	parseOpts *parser.ParseOptions,
 ) (int, error) {
+	if rt == nil {
+		return 0, newError(ErrorValidationFailed, "vault runtime is required", "", nil, nil)
+	}
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
 	fileExists := true
 	if _, err := os.Stat(destPath); os.IsNotExist(err) {
 		fileExists = false
@@ -52,17 +54,19 @@ func AppendToFile(
 		if dailyDir == "" {
 			dailyDir = "daily"
 		}
-		s, err := schema.Load(vaultPath)
-		if err != nil {
-			return 0, newError(ErrorValidationFailed, "failed to load schema", "Fix schema.yaml and try again", nil, err)
+		if rt.SchemaLoadErr != nil {
+			return 0, newError(ErrorValidationFailed, "failed to load schema", "Fix schema.yaml and try again", nil, rt.SchemaLoadErr)
 		}
-		if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, s, vaultCfg.GetTemplateDirectory(), vaultCfg.ProtectedPrefixes); err != nil {
+		if rt.Schema == nil {
+			return 0, newError(ErrorValidationFailed, "schema runtime is required", "Fix schema.yaml and try again", nil, nil)
+		}
+		if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, rt.Schema, vaultCfg.GetTemplateDirectory(), vaultCfg.ProtectedPrefixes); err != nil {
 			return 0, addFileWriteError(destPath, "failed to create daily note", "Check the daily note path and try again", err)
 		}
 	}
 
 	if targetObjectID != "" && strings.Contains(targetObjectID, "#") {
-		return appendWithinObject(vaultPath, destPath, line, targetObjectID, parseOpts)
+		return appendWithinObject(vaultPath, destPath, line, targetObjectID, rt.ParseOptions)
 	}
 
 	if cfg != nil && cfg.Heading != "" {

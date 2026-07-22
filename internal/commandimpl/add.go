@@ -13,11 +13,10 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // HandleAdd executes the canonical `add` command.
@@ -49,20 +48,20 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 		return failure
 	}
 	defer rt.Close()
-	vaultCfg := rt.VaultCfg
-	sch := rt.Schema
 
 	if !stdinMode {
-		return runAddSingle(vaultPath, vaultCfg, sch, text, strings.TrimSpace(stringArg(req.Args, "to")))
+		return runAddSingle(rt, text, strings.TrimSpace(stringArg(req.Args, "to")))
 	}
 	if len(objectIDs) == 0 {
 		return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
 	}
 
-	return runAddBulk(vaultPath, vaultCfg, sch, objectIDs, text, req.Confirm)
+	return runAddBulk(rt, objectIDs, text, req.Confirm)
 }
 
-func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, ids []string, text string, confirm bool) commandexec.Result {
+func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm bool) commandexec.Result {
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
 	// Section IDs (file#slug) are passed through: bulk add appends within the
 	// targeted section instead of at the end of the file.
 	var warnings []commandexec.Warning
@@ -71,7 +70,8 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		VaultConfig:  vaultCfg,
 		ObjectIDs:    ids,
 		Line:         text,
-		ParseOptions: parseopts.FromVaultConfig(vaultCfg),
+		ParseOptions: rt.ParseOptions,
+		Runtime:      rt,
 	}
 
 	if !confirm {
@@ -93,7 +93,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 	var reindexWarnings []commandexec.Warning
 	var affectedFiles []string
 	summary, err := objectsvc.ApplyAddBulk(request, func(filePath string) {
-		reindexWarnings = appendCommandWarnings(reindexWarnings, autoReindexWarnings(vaultPath, vaultCfg, filePath))
+		reindexWarnings = appendCommandWarnings(reindexWarnings, autoReindexWarnings(rt, filePath))
 		if rel, relErr := filepath.Rel(vaultPath, filePath); relErr == nil {
 			affectedFiles = append(affectedFiles, rel)
 		}
@@ -112,26 +112,22 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		"added":   summary.Added,
 		"content": text,
 	}
-	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, affectedFiles...)
+	missingData, missingWarnings := missingRefEnvelope(rt, affectedFiles...)
 	data = mergeDataFields(data, missingData)
 	warnings = appendCommandWarnings(warnings, reindexWarnings, missingWarnings)
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 
-func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, text, toRef string) commandexec.Result {
+func runAddSingle(rt *vaultruntime.Runtime, text, toRef string) commandexec.Result {
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
 	captureCfg := vaultCfg.GetCaptureConfig()
-	parseOpts := parseopts.FromVaultConfig(vaultCfg)
 
 	var destPath string
 	var isDailyNote bool
 	var targetObjectID string
 
 	if strings.TrimSpace(toRef) != "" {
-		rt := &readsvc.Runtime{
-			VaultPath: vaultPath,
-			VaultCfg:  vaultCfg,
-			Schema:    sch,
-		}
 		resolved, err := readsvc.ResolveReferenceWithDynamicDates(toRef, rt, true)
 		if err != nil {
 			return mapResolveFailure(err, toRef)
@@ -164,19 +160,19 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
 	}
-	line, err := objectsvc.AppendToFile(vaultPath, destPath, text, captureCfg, vaultCfg, isDailyNote, targetObjectID, parseOpts)
+	line, err := objectsvc.AppendToFile(rt, destPath, text, captureCfg, isDailyNote, targetObjectID)
 	if err != nil {
 		return mapContentMutationError(err)
 	}
 
-	warnings := autoReindexWarnings(vaultPath, vaultCfg, destPath)
+	warnings := autoReindexWarnings(rt, destPath)
 	relPath, _ := filepath.Rel(vaultPath, destPath)
 	data := map[string]interface{}{
 		"file":    filepath.ToSlash(relPath),
 		"line":    line,
 		"content": text,
 	}
-	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, relPath)
+	missingData, missingWarnings := missingRefEnvelope(rt, relPath)
 	data = mergeDataFields(data, missingData)
 	warnings = appendCommandWarnings(warnings, missingWarnings)
 	return commandexec.SuccessWithWarnings(data, warnings, nil)

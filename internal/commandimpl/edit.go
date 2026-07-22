@@ -115,9 +115,9 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err := atomicfile.WriteFile(resolved.FilePath, []byte(newContent), 0o644); err != nil {
 		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
 	}
-	warnings := autoReindexWarnings(vaultPath, vaultCfg, resolved.FilePath)
+	warnings := autoReindexWarnings(rt, resolved.FilePath)
 
-	missingData, missingWarnings := missingRefEnvelope(vaultPath, vaultCfg, sch, relPath)
+	missingData, missingWarnings := missingRefEnvelope(rt, relPath)
 	warnings = appendCommandWarnings(warnings, missingWarnings)
 
 	if batchMode {

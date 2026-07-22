@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // deriveCreateTargetPath computes the path seed used to build a new object's
@@ -138,10 +139,11 @@ func requiredFieldGapDetails(gaps []requiredFieldGap) []map[string]interface{} {
 	return details
 }
 
-func createRefValidationContext(vaultPath string, vaultCfg *config.VaultConfig) *fieldmutation.RefValidationContext {
+func createRefValidationContext(rt *vaultruntime.Runtime, vaultPath string, vaultCfg *config.VaultConfig) *fieldmutation.RefValidationContext {
 	return &fieldmutation.RefValidationContext{
 		VaultPath:   vaultPath,
 		VaultConfig: vaultCfg,
+		Runtime:     rt,
 	}
 }
 

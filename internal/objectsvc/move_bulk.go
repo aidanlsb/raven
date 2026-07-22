@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type MoveBulkRequest struct {
@@ -22,6 +23,7 @@ type MoveBulkRequest struct {
 	DestinationDir string
 	UpdateRefs     bool
 	ParseOptions   *parser.ParseOptions
+	Runtime        *vaultruntime.Runtime
 }
 
 type MoveBulkPreviewItem struct {
@@ -193,6 +195,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 			VaultConfig:       req.VaultConfig,
 			Schema:            req.Schema,
 			ParseOptions:      req.ParseOptions,
+			Runtime:           req.Runtime,
 		})
 		if err != nil {
 			result.Status = "error"

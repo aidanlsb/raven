@@ -84,8 +84,14 @@ func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Res
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
+	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
 	start := time.Now()
-	result, err := reindexsvc.Run(reindexsvc.RunRequest{
+	result, err := reindexsvc.Run(rt, reindexsvc.RunRequest{
 		VaultPath: vaultPath,
 		Full:      boolArg(req.Args, "full"),
 		DryRun:    boolArg(req.Args, "dry-run"),
@@ -117,7 +123,13 @@ func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result 
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	result, err := datesvc.EnsureDaily(datesvc.EnsureDailyRequest{
+	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	result, err := datesvc.EnsureDaily(rt, datesvc.EnsureDailyRequest{
 		VaultPath:  vaultPath,
 		DateArg:    stringArg(req.Args, "date"),
 		TemplateID: stringArg(req.Args, "template"),
@@ -142,7 +154,13 @@ func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	result, err := datesvc.DateHub(datesvc.DateHubRequest{
+	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	result, err := datesvc.DateHub(rt, datesvc.DateHubRequest{
 		VaultPath: vaultPath,
 		DateArg:   stringArg(req.Args, "date"),
 	})

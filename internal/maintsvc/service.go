@@ -8,8 +8,8 @@ import (
 
 	"github.com/aidanlsb/raven/internal/buildinfo"
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type Code = codes.ErrorCode
@@ -30,18 +30,16 @@ type StatsResult struct {
 	RefCount    int `json:"ref_count"`
 }
 
-func Stats(vaultPath string) (*StatsResult, error) {
-	if strings.TrimSpace(vaultPath) == "" {
+func Stats(rt *vaultruntime.Runtime) (*StatsResult, error) {
+	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
 		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
 	}
 
-	db, err := index.Open(vaultPath)
-	if err != nil {
+	if err := rt.OpenDB(); err != nil {
 		return nil, newError(CodeDatabaseError, "failed to open database", "Run 'rvn reindex' to rebuild the database", err)
 	}
-	defer db.Close()
 
-	stats, err := db.Stats()
+	stats, err := rt.DB.Stats()
 	if err != nil {
 		return nil, newError(CodeDatabaseError, "failed to query stats", "", err)
 	}

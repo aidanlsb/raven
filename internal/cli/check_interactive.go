@@ -28,7 +28,7 @@ func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Resu
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
-	s, err := schema.Load(vaultPath)
+	s, err := loadSchemaSafe(vaultPath)
 	if err != nil {
 		return fmt.Errorf("failed to load schema: %w", err)
 	}
@@ -77,7 +77,7 @@ func promptCreateMissingRefsFromResult(vaultPath string, result commandexec.Resu
 	if err != nil {
 		return
 	}
-	s, err := schema.Load(vaultPath)
+	s, err := loadSchemaSafe(vaultPath)
 	if err != nil {
 		return
 	}
