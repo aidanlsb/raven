@@ -83,7 +83,7 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 		return SmartReindexReport{}, err
 	}
 
-	walkOpts := &vault.WalkOptions{ParseOptions: buildParseOptions(vaultCfg), ExcludeMatcher: matcher}
+	walkOpts := &vault.WalkOptions{ParseOptions: parser.OptionsFromVaultConfig(vaultCfg), ExcludeMatcher: matcher}
 	report := SmartReindexReport{}
 	err = vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(result vault.WalkResult) error {
 		if result.Error != nil {
@@ -168,18 +168,4 @@ func filterIncluded(paths []string, matcher *ravenignore.Matcher) []string {
 		out = append(out, path)
 	}
 	return out
-}
-
-func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {
-	if vaultCfg == nil {
-		return nil
-	}
-	opts := &parser.ParseOptions{
-		DailyRoot: vaultCfg.GetDailyDirectory(),
-	}
-	if vaultCfg.HasDirectoriesConfig() {
-		opts.ObjectsRoot = vaultCfg.GetObjectsRoot()
-		opts.PagesRoot = vaultCfg.GetPagesRoot()
-	}
-	return opts
 }

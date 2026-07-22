@@ -83,14 +83,10 @@ func New(vaultPath string, opts Options) (*Runtime, error) {
 	}
 
 	rt := &Runtime{
-		VaultPath: vaultPath,
-		VaultCfg:  vaultCfg,
-		Schema:    sch,
-		ParseOptions: &parser.ParseOptions{
-			ObjectsRoot: vaultCfg.GetObjectsRoot(),
-			PagesRoot:   vaultCfg.GetPagesRoot(),
-			DailyRoot:   vaultCfg.GetDailyDirectory(),
-		},
+		VaultPath:     vaultPath,
+		VaultCfg:      vaultCfg,
+		Schema:        sch,
+		ParseOptions:  parser.OptionsFromVaultConfig(vaultCfg),
 		SchemaLoadErr: schErr,
 	}
 

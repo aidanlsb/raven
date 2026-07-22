@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/parser"
 )
 
 // HandleReclassify executes the canonical `reclassify` command.
@@ -48,7 +49,7 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		NoMove:       boolArg(req.Args, "no-move"),
 		UpdateRefs:   boolArgDefault(req.Args, "update-refs", true),
 		Force:        boolArg(req.Args, "force"),
-		ParseOptions: buildParseOptions(vaultCfg),
+		ParseOptions: parser.OptionsFromVaultConfig(vaultCfg),
 	})
 	if err != nil {
 		return mapContentMutationError(err)

@@ -201,11 +201,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 	}
 
 	walkOpts := &vault.WalkOptions{
-		ParseOptions: &parser.ParseOptions{
-			ObjectsRoot: vaultCfg.GetObjectsRoot(),
-			PagesRoot:   vaultCfg.GetPagesRoot(),
-			DailyRoot:   vaultCfg.GetDailyDirectory(),
-		},
+		ParseOptions:   parser.OptionsFromVaultConfig(vaultCfg),
 		ExcludeMatcher: excludeMatcher,
 	}
 	walkErr := vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(walkResult vault.WalkResult) error {

@@ -573,11 +573,7 @@ func validateRefTargets(
 
 	parseOpts := refCtx.ParseOptions
 	if parseOpts == nil {
-		parseOpts = &parser.ParseOptions{
-			ObjectsRoot: refCtx.VaultConfig.GetObjectsRoot(),
-			PagesRoot:   refCtx.VaultConfig.GetPagesRoot(),
-			DailyRoot:   refCtx.VaultConfig.GetDailyDirectory(),
-		}
+		parseOpts = parser.OptionsFromVaultConfig(refCtx.VaultConfig)
 	}
 
 	var issues []schema.ValidationError

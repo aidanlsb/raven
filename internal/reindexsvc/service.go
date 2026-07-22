@@ -149,7 +149,7 @@ func Run(req RunRequest) (*RunResult, error) {
 		db.SetAutoResolveRefs(false)
 	}
 
-	parseOpts := buildParseOptions(vaultCfg)
+	parseOpts := parser.OptionsFromVaultConfig(vaultCfg)
 	excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
 	if err != nil {
 		return nil, newError(CodeConfigInvalid, fmt.Sprintf("invalid exclude config: %v", err), "Fix raven.yaml exclude patterns and try again", err)
@@ -488,18 +488,4 @@ func fileIndexStats(db *index.Database, filePath string) (index.IndexStats, erro
 		return index.IndexStats{}, err
 	}
 	return stats, nil
-}
-
-func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {
-	if vaultCfg == nil {
-		return nil
-	}
-	opts := &parser.ParseOptions{
-		DailyRoot: vaultCfg.GetDailyDirectory(),
-	}
-	if vaultCfg.HasDirectoriesConfig() {
-		opts.ObjectsRoot = vaultCfg.GetObjectsRoot()
-		opts.PagesRoot = vaultCfg.GetPagesRoot()
-	}
-	return opts
 }

@@ -228,7 +228,7 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 		return result
 	}
 
-	parseOpts := parserOptionsFor(vaultCfg)
+	parseOpts := parser.OptionsFromVaultConfig(vaultCfg)
 
 	sort.Slice(fixes, func(i, j int) bool {
 		return fixes[i].FilePath < fixes[j].FilePath
@@ -274,17 +274,6 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 	}
 
 	return result
-}
-
-func parserOptionsFor(vaultCfg *config.VaultConfig) *parser.ParseOptions {
-	if vaultCfg == nil {
-		return &parser.ParseOptions{}
-	}
-	return &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
-		DailyRoot:   vaultCfg.GetDailyDirectory(),
-	}
 }
 
 // tryFixNonCanonicalRef builds a wikilink text fix that strips the configured

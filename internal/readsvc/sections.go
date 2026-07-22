@@ -51,7 +51,7 @@ func ReadSections(rt *Runtime, reference string) (*SectionsResult, error) {
 	}
 	relPath = filepath.ToSlash(relPath)
 
-	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), resolved.FilePath, rt.VaultPath, buildParseOptions(rt.VaultCfg))
+	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), resolved.FilePath, rt.VaultPath, parser.OptionsFromVaultConfig(rt.VaultCfg))
 	if err != nil {
 		return nil, err
 	}

@@ -70,7 +70,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		VaultConfig:  vaultCfg,
 		ObjectIDs:    ids,
 		Line:         text,
-		ParseOptions: buildParseOptions(vaultCfg),
+		ParseOptions: parser.OptionsFromVaultConfig(vaultCfg),
 	}
 
 	if !confirm {
@@ -119,7 +119,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 
 func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, text, toRef string) commandexec.Result {
 	captureCfg := vaultCfg.GetCaptureConfig()
-	parseOpts := buildParseOptions(vaultCfg)
+	parseOpts := parser.OptionsFromVaultConfig(vaultCfg)
 
 	var destPath string
 	var isDailyNote bool

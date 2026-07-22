@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -101,7 +102,7 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		Schema:       sch,
 		Reference:    reference,
 		TypedUpdates: allUpdates,
-		ParseOptions: buildParseOptions(vaultCfg),
+		ParseOptions: parser.OptionsFromVaultConfig(vaultCfg),
 		Preview:      req.Preview,
 	})
 	if err != nil {
@@ -174,7 +175,7 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		Schema:       sch,
 		Reference:    reference,
 		Fields:       fields,
-		ParseOptions: buildParseOptions(vaultCfg),
+		ParseOptions: parser.OptionsFromVaultConfig(vaultCfg),
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -205,7 +206,7 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		Schema:       sch,
 		ObjectIDs:    fileIDs,
 		TypedUpdates: updates,
-		ParseOptions: buildParseOptions(vaultCfg),
+		ParseOptions: parser.OptionsFromVaultConfig(vaultCfg),
 	}
 	serializedUpdates := fieldmutation.SerializeFieldValueMap(updates)
 

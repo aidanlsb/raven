@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -576,35 +575,6 @@ func TestRunIncrementalPurgesNewlyExcludedFiles(t *testing.T) {
 	}
 	if !containsString(paths, "keep.md") {
 		t.Fatalf("indexed paths = %#v, expected keep.md", paths)
-	}
-}
-
-func TestBuildParseOptions(t *testing.T) {
-	t.Parallel()
-	if got := buildParseOptions(nil); got != nil {
-		t.Fatalf("expected nil parse options for nil config, got %#v", got)
-	}
-
-	// Without directories config, parse options still carry the daily root so
-	// daily notes derive bare-date object IDs.
-	if got := buildParseOptions(&config.VaultConfig{}); got == nil {
-		t.Fatal("expected parse options with daily root even without directories")
-	} else if got.ObjectsRoot != "" || got.PagesRoot != "" || got.DailyRoot != "daily" {
-		t.Fatalf("unexpected parse options without directories: %#v", got)
-	}
-
-	cfg := &config.VaultConfig{
-		Directories: &config.DirectoriesConfig{
-			Object: "objects",
-			Page:   "pages",
-		},
-	}
-	got := buildParseOptions(cfg)
-	if got == nil {
-		t.Fatal("expected parse options when directories are configured")
-	}
-	if got.ObjectsRoot != "objects/" || got.PagesRoot != "pages/" || got.DailyRoot != "daily" {
-		t.Fatalf("unexpected parse options roots: %#v", got)
 	}
 }
 

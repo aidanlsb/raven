@@ -57,11 +57,7 @@ func DetectMissingRefs(vaultPath string, vaultCfg *config.VaultConfig, sch *sche
 		validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 	}
 
-	parseOpts := &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
-		DailyRoot:   vaultCfg.GetDailyDirectory(),
-	}
+	parseOpts := parser.OptionsFromVaultConfig(vaultCfg)
 
 	seen := make(map[string]struct{}, len(relPaths))
 	for _, relPath := range relPaths {
