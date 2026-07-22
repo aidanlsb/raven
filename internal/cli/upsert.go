@@ -21,10 +21,16 @@ var (
 )
 
 var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
-	VaultPath:       getVaultPath,
-	BuildArgs:       buildUpsertArgs,
-	RenderHuman:     renderUpsertResult,
-	SkipFlagBinding: true,
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildUpsertArgs,
+	RenderHuman: renderUpsertResult,
+	FlagBindings: map[string]interface{}{
+		"field":        &upsertFieldFlags,
+		"fields-json":  &upsertFieldJSON,
+		"content":      &upsertContent,
+		"content-file": &upsertContentFile,
+		"path":         &upsertPathFlag,
+	},
 })
 
 func buildUpsertArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
@@ -145,10 +151,5 @@ func parseFieldFlags(flags []string) (map[string]string, error) {
 }
 
 func init() {
-	upsertCmd.Flags().StringArrayVar(&upsertFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
-	upsertCmd.Flags().StringVar(&upsertFieldJSON, "fields-json", "", "Set/update frontmatter fields as a JSON object")
-	upsertCmd.Flags().StringVar(&upsertContent, "content", "", "Replace body content (idempotent full-body mode)")
-	upsertCmd.Flags().StringVar(&upsertContentFile, "content-file", "", "Read replacement body content from a file, or '-' for stdin")
-	upsertCmd.Flags().StringVar(&upsertPathFlag, "path", "", "Explicit target path (overrides title-derived path)")
 	rootCmd.AddCommand(upsertCmd)
 }

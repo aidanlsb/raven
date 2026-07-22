@@ -126,6 +126,28 @@ func TestCLIOptionalArgsRemainRequiredInCommandContracts(t *testing.T) {
 	}
 }
 
+func TestVariadicCLIArgsRemainStringArraysInCommandContracts(t *testing.T) {
+	t.Parallel()
+
+	meta := Registry["skill_install"]
+	if len(meta.Args) != 1 || !meta.Args[0].Variadic || meta.Args[0].Name != "names" {
+		t.Fatalf("skill_install args = %#v, want variadic names positional arg", meta.Args)
+	}
+	for _, flag := range meta.Flags {
+		if flag.Name == "names" {
+			t.Fatal("skill_install names must be positional in the CLI, not registry flag metadata")
+		}
+	}
+
+	contract, ok := BuildCommandContract("skill_install")
+	if !ok {
+		t.Fatal("expected skill_install contract")
+	}
+	if got := contract.Parameters["names"].Type; got != ParameterTypeStringArray {
+		t.Fatalf("skill_install names type = %q, want %q", got, ParameterTypeStringArray)
+	}
+}
+
 func TestBacklinksOutlinksExposeStdinReplacementContracts(t *testing.T) {
 	t.Parallel()
 

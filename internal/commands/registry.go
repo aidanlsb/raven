@@ -29,8 +29,10 @@ type ArgMeta struct {
 	Description string   // Description
 	Required    bool     // Is this argument required for canonical/MCP invocation?
 	CLIOptional bool     `json:"-"` // Can interactive CLI omit this and prompt/pick instead?
+	Variadic    bool     `json:"-"` // Is this a repeated positional CLI argument represented as a string array canonically?
 	Completions []string // Static completions (if any)
 	DynamicComp string   // Dynamic completion type: "types", "traits", "files"
+	Examples    []string `json:"-"` // Example values
 }
 
 // FlagMeta defines a command flag.
@@ -146,8 +148,8 @@ CLI offers to create the missing pages; agents can run 'rvn check create-missing
 			{Name: "title", Description: "Title/name for the object (auto-populates name_field if configured)", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "field", Description: "Set field value using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
-			{Name: "fields-json", Description: "Set/update frontmatter fields as a JSON object with exact typed values", Type: FlagTypeJSON},
+			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
+			{Name: "fields-json", Description: "Set frontmatter fields via JSON object (typed values)", Type: FlagTypeJSON},
 			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"people/freya-2026", "note/raven-friction"}},
 			{Name: "template", Description: "Type template ID to use for object creation", Type: FlagTypeString, Examples: []string{"interview_technical", "interview_screen"}},
 		},
@@ -212,9 +214,9 @@ If text starts with a dash, put it after -- so it is not parsed as a flag:
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "to", Description: "Target file path or daily note date (today/tomorrow/yesterday/YYYY-MM-DD)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md", "tomorrow"}},
-			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
+			{Name: "to", Description: "Target file (path or reference like 'cursor')", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md", "tomorrow"}},
+			{Name: "stdin", Description: "Read object IDs from stdin (one per line)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk changes (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn add \"Quick thought\" --json",
@@ -269,10 +271,10 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 			{Name: "title", Description: "Title/name for the object (stable identity key)", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "field", Description: "Set/update frontmatter fields using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"source": "daily-brief", "status": "ready"}`}},
-			{Name: "fields-json", Description: "Set/update frontmatter fields as a JSON object with exact typed values", Type: FlagTypeJSON},
-			{Name: "content", Description: "Replace body content (full-body idempotent mode)", Type: FlagTypeString},
-			{Name: "content-file", Description: "Read replacement body content from a file, or '-' for stdin (mutually exclusive with --content)", Type: FlagTypeString, Examples: []string{"/tmp/brief.md", "-"}},
+			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, Examples: []string{`{"source": "daily-brief", "status": "ready"}`}},
+			{Name: "fields-json", Description: "Set/update frontmatter fields as a JSON object", Type: FlagTypeJSON},
+			{Name: "content", Description: "Replace body content (idempotent full-body mode)", Type: FlagTypeString},
+			{Name: "content-file", Description: "Read replacement body content from a file, or '-' for stdin", Type: FlagTypeString, Examples: []string{"/tmp/brief.md", "-"}},
 			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"brief/daily-2026-02-14", "note/raven-friction"}},
 		},
 		Examples: []string{
@@ -636,8 +638,8 @@ IMPORTANT:
 			{Name: "object_id", Description: "Object or asset ID to delete (e.g., people/freya or assets/pdfs/paper.pdf)", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "force", Description: "Skip interactive CLI confirmation prompt", Type: FlagTypeBool},
-			{Name: "stdin", Description: "Read object or asset IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "force", Description: "Skip confirmation prompt", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read object or asset IDs from stdin (one per line)", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk delete (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 			{Name: "dry-run", Description: "Preview a single-file delete without applying it", Type: FlagTypeBool},
 		},
@@ -698,9 +700,9 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
-			{Name: "update-refs", Description: "Update references to moved file (default: true)", Type: FlagTypeBool, Default: "true"},
+			{Name: "update-refs", Description: "Update references to moved file", Type: FlagTypeBool, Default: "true"},
 			{Name: "skip-type-check", Description: "Skip type-directory mismatch warning", Type: FlagTypeBool},
-			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read object IDs from stdin (one per line)", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk move (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 			{Name: "dry-run", Description: "Preview a single-object move without applying it", Type: FlagTypeBool},
 		},
@@ -871,11 +873,11 @@ References are updated when the file moves (controlled by --update-refs).`,
 			{Name: "new-type", Description: "Target type name", Required: true, DynamicComp: "types"},
 		},
 		Flags: []FlagMeta{
-			{Name: "field", Description: "Supply field values using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"author": "[[people/snorri]]", "genre": "mythology"}`}},
-			{Name: "fields-json", Description: "Supply field values as a JSON object with exact typed values", Type: FlagTypeJSON},
+			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, Examples: []string{`{"author": "[[people/snorri]]", "genre": "mythology"}`}},
+			{Name: "fields-json", Description: "Set/update frontmatter fields as a JSON object", Type: FlagTypeJSON},
 			{Name: "no-move", Description: "Skip moving file to new type's default_path", Type: FlagTypeBool},
-			{Name: "update-refs", Description: "Update references when file moves (default: true)", Type: FlagTypeBool, Default: "true"},
-			{Name: "force", Description: "Skip confirmation prompts (dropped fields, etc.)", Type: FlagTypeBool},
+			{Name: "update-refs", Description: "Update references when file moves", Type: FlagTypeBool, Default: "true"},
+			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn reclassify inbox/note book --json",
@@ -2781,11 +2783,14 @@ returns a preview and reports that confirmation is required.
 
 To only update or realign skills that are already installed, use
 'rvn skill sync' instead.`,
+		Args: []ArgMeta{
+			{Name: "names", Description: "Shipped skill names to install (default: all shipped skills)", Variadic: true, Examples: []string{"raven-core", "raven-query"}},
+		},
 		Flags: []FlagMeta{
-			{Name: "names", Description: "Shipped skill names to install (default: all shipped skills)", Type: FlagTypeStringSlice, Examples: []string{"raven-core", "raven-query"}},
 			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
 			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
 			{Name: "yes", Description: "Apply changes without prompting (required for --json/non-interactive runs)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Alias for --yes", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn skill install",

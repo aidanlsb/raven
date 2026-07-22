@@ -34,11 +34,16 @@ var (
 )
 
 var skillInstallCmd = newCanonicalLeafCommand("skill_install", canonicalLeafOptions{
-	Args:            cobra.ArbitraryArgs,
-	BuildArgs:       buildSkillInstallArgs,
-	Invoke:          invokeSkillInstall,
-	RenderHuman:     renderSkillInstall,
-	SkipFlagBinding: true,
+	Args:        cobra.ArbitraryArgs,
+	BuildArgs:   buildSkillInstallArgs,
+	Invoke:      invokeSkillInstall,
+	RenderHuman: renderSkillInstall,
+	FlagBindings: map[string]interface{}{
+		"yes":     &skillInstallYes,
+		"confirm": &skillInstallConfirm,
+		"scope":   &skillInstallScope,
+		"dest":    &skillInstallDest,
+	},
 })
 
 var skillRemoveCmd = newCanonicalLeafCommand("skill_remove", canonicalLeafOptions{
@@ -50,11 +55,6 @@ var skillDoctorCmd = newCanonicalLeafCommand("skill_doctor", canonicalLeafOption
 })
 
 func init() {
-	skillInstallCmd.Flags().BoolVar(&skillInstallYes, "yes", false, "Apply changes without prompting (required for --json/non-interactive runs)")
-	skillInstallCmd.Flags().BoolVar(&skillInstallConfirm, "confirm", false, "Alias for --yes")
-	skillInstallCmd.Flags().StringVar(&skillInstallScope, "scope", "user", "Install scope: user or project")
-	skillInstallCmd.Flags().StringVar(&skillInstallDest, "dest", "", "Override install root path")
-
 	skillCmd.AddCommand(skillListCmd)
 	skillCmd.AddCommand(skillInstallCmd)
 	skillCmd.AddCommand(skillSyncCmd)

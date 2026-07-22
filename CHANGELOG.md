@@ -7,18 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.30] - 2026-07-21
+
 ### Added
-- `rvn section create <file> "<title>" --level N` creates headings at EOF or at explicit `--after` / `--before` / `--under` structural anchors, with dry-run previews, strict depth checks, and slug-stability validation.
-- `rvn section move <file#section>` reorders or reparents a section's complete subtree without changing heading text, level, slug, or identity.
+- `rvn section rename <file#section> "<new heading text>"` renames a heading in place and rewrites inbound `#slug` references. Heading level is preserved.
+- `rvn section create <file> "<title>" --level N` creates headings at EOF or at explicit `--after` / `--before` / `--under` structural anchors, with dry-run previews, strict depth checks, and slug-stability validation. Title is plain text; `--level` is required.
+- `rvn section move <file#section>` reorders or reparents a section's complete subtree without changing heading text, level, slug, or identity. `--after` uses the anchor's full subtree boundary; depth mismatches are hard errors (no promote/demote).
+- `rvn delete` now accepts asset IDs (single and bulk), with the same dry-run, backlink warning, and trash recovery behavior as object deletes. Sections remain rejected.
+- Docs commands (`rvn docs`, `docs list`, `docs search`) lazily refresh the global docs cache when the installed CLI is newer than the cached docs version, fetching the tag that matches the running binary. Offline/fetch failures warn and keep serving the existing cache.
 
 ### Changed
-- `rvn add` is body-content only: section-targeted appends still use the direct-body boundary before child headings, while section lifecycle placement uses complete subtree boundaries. Markdown heading content is rejected.
+- `rvn add` is body-content only: section-targeted appends still use the direct-body boundary before child headings, while section lifecycle placement uses complete subtree boundaries. Markdown heading content is rejected. A configured `capture.heading` may still target an existing heading, but add never creates a missing one.
+- Starter `@todo` is an enum with `[todo, done]` (matching docs), and schema version docs now say `version: 1` (matching implementation).
+- Release toolchain upgrades Go to 1.25.12 and `golang.org/x/net` to v0.57.0, and CI/release preflight now run `govulncheck`.
+- Custom-wired CLI leaves (`add`, `delete`, `import`, `new`, `move`, `reclassify`, `skill`, `upsert`) bind flags from registry metadata, with generalized CLI/registry flag-parity coverage.
 
 ### Fixed
 - References written before their target existed are now healed automatically. Creating the target (`rvn new`, `rvn upsert`, etc.) re-resolves pending refs and ref fields across the vault, and `rvn reindex` runs its resolution pass even when no files need reindexing. Previously such refs stayed `missing` indefinitely unless a `rvn reindex --full` ran, which made objects invisible to canonical-ID queries (e.g. `.project==project/raven`) while still matching raw-literal queries (`.project==raven`).
 
 ### Removed
 - **Breaking:** `rvn add --heading` and `rvn add --create-heading` have been removed. Create headings with `rvn section create`, then append body content with `rvn add --to file#section`.
+- **Breaking:** `rvn move` no longer accepts section sources (`file#slug`). Use `rvn section rename` for heading renames and `rvn section move` for reorder/reparent.
+- Dead `toolexec` / `toolargs` packages and unused CLI result DTOs were deleted.
 
 ## [v0.0.29] - 2026-07-20
 

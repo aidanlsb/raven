@@ -3,7 +3,7 @@
 Thanks for your interest in Raven.
 
 ## How to contribute
-Raven is not currently accepting external PRs. Issues are welcome and genuinely useful. Please open one for:
+Raven is not currently accepting external PRs. Issues are welcome; please open them for:
 
 - Bugs
 - Feature requests
