@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration test-all lint fmt check clean install hooks-install hooks-uninstall release-preflight release-next release-auto release-changelog release-tag release
+.PHONY: all build test test-integration test-all vuln lint fmt check clean install hooks-install hooks-uninstall release-preflight release-next release-auto release-changelog release-tag release
 
 COVERAGE_DIR := .tmp/coverage
 COVERAGE_PROFILE := $(COVERAGE_DIR)/unit.out
@@ -9,6 +9,8 @@ COVERAGE_MIN ?= 55.0
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+GOVULNCHECK_VERSION ?= v1.6.0
+GOVULNCHECK_MODULE := golang.org/x/vuln/cmd/govulncheck
 GO_MOD_VERSION := $(shell sed -n 's/^go //p' go.mod | head -n 1)
 GOLANGCI_LINT_TOOLCHAIN ?= go$(GO_MOD_VERSION)
 
@@ -29,6 +31,10 @@ test-integration:
 
 # Run all tests (unit + integration)
 test-all: test test-integration
+
+# Scan source and dependencies for reachable known vulnerabilities
+vuln:
+	go run $(GOVULNCHECK_MODULE)@$(GOVULNCHECK_VERSION) ./...
 
 # Run tests with coverage
 test-coverage:
@@ -92,7 +98,7 @@ fmt-check:
 check: fmt-check lint test
 
 # Release gate used by CI release workflow and local release automation
-release-preflight: check test-integration
+release-preflight: check test-integration vuln
 
 # Compute the next stable semver release tag from existing tags.
 # Usage: make release-next BUMP=patch|minor|major

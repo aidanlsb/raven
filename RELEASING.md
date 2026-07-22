@@ -34,7 +34,19 @@ If `HOMEBREW_TAP_TOKEN` is missing, release binaries still publish, but Homebrew
 make release-preflight
 ```
 
-This runs formatting checks, lint, unit tests, and integration tests.
+This runs formatting checks, lint, unit tests, integration tests, and the
+vulnerability scan.
+
+Raven's required Go version is pinned in `go.mod`. To run only the vulnerability
+scan, use:
+
+```bash
+make vuln
+```
+
+This runs the `govulncheck` version pinned in `Makefile` against all packages.
+The same scan runs in CI for pull requests and pushes to `main`, and known
+reachable vulnerabilities fail the build.
 
 ## Release Commands
 
