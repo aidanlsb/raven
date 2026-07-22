@@ -3,11 +3,12 @@ package lsp
 import (
 	"encoding/json"
 
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
-// refUnderCursor describes the wikilink at a document position.
+// refUnderCursor describes a reference at a document position.
 type refUnderCursor struct {
 	target    string
 	lineIdx   int // 0-indexed
@@ -15,8 +16,10 @@ type refUnderCursor struct {
 	endByte   int
 }
 
-// refAtPosition finds the wikilink containing the given position, if any.
-func refAtPosition(lines []string, pos Position, encoding string) (refUnderCursor, bool) {
+// refAtPosition finds the wikilink or schema-typed frontmatter reference
+// containing the given position, if any.
+func refAtPosition(ws *workspace, doc document, pos Position, encoding string) (refUnderCursor, bool) {
+	lines := documentLines(doc.content)
 	line := lineAt(lines, pos.Line)
 	if line == "" {
 		return refUnderCursor{}, false
@@ -33,6 +36,24 @@ func refAtPosition(lines []string, pos Position, encoding string) (refUnderCurso
 			}, true
 		}
 	}
+
+	absPath := uriToPath(doc.uri)
+	if absPath == "" || ws.relativePath(absPath) == "" {
+		return refUnderCursor{}, false
+	}
+	parsed, err := ws.parseBuffer(doc.content, absPath)
+	if err != nil {
+		return refUnderCursor{}, false
+	}
+	if ref, ok := parser.SchemaFieldRefAtPosition(parsed, ws.schema(), pos.Line, byteCol); ok {
+		return refUnderCursor{
+			target:    ref.TargetRaw,
+			lineIdx:   pos.Line,
+			startByte: ref.Start,
+			endByte:   ref.End,
+		}, true
+	}
+
 	return refUnderCursor{}, false
 }
 
@@ -104,7 +125,7 @@ func (s *Server) handleDefinition(raw json.RawMessage) (interface{}, *ResponseEr
 	encoding := s.encoding
 	s.mu.Unlock()
 
-	ref, ok := refAtPosition(documentLines(doc.content), params.Position, encoding)
+	ref, ok := refAtPosition(ws, doc, params.Position, encoding)
 	if !ok {
 		return nil, nil
 	}

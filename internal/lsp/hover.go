@@ -30,7 +30,7 @@ func (s *Server) handleHover(raw json.RawMessage) (interface{}, *ResponseError) 
 	s.mu.Unlock()
 
 	lines := documentLines(doc.content)
-	ref, ok := refAtPosition(lines, params.Position, encoding)
+	ref, ok := refAtPosition(ws, doc, params.Position, encoding)
 	if !ok {
 		return nil, nil
 	}
