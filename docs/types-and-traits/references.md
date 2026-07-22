@@ -260,7 +260,13 @@ See also [[2026-03-14]] for context.
 See the tasks list: [[project/website#tasks]]
 ```
 
-Section fragments are derived from heading text. To rename a heading without breaking inbound references, use `rvn section rename project/website#tasks "New Heading"` — it updates the heading and rewrites every `[[...#tasks]]` reference to the new slug. `rvn move` rejects section sources.
+Section fragments are derived from heading text. Create headings with
+`rvn section create`, and reorder/reparent a complete section subtree with
+`rvn section move`; moving preserves the heading text, level, slug, and
+references. To rename a heading without breaking inbound references, use
+`rvn section rename project/website#tasks "New Heading"`—it updates the heading
+and rewrites every `[[...#tasks]]` reference to the new slug. The file/object
+`rvn move` command rejects section sources.
 
 ## Related docs
 

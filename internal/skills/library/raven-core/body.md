@@ -15,7 +15,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Author `[[references]]` and `ref` fields with canonical object IDs. After
   `new`/`upsert`/`daily`, use the returned `data.id` (the human CLI's
   `link as <id>` value); do not generate bare short forms.
-- Single-object writes (`rvn set`/`add`/`update`/`edit` and single `rvn move`/`rvn delete`) apply immediately; pass `--dry-run` to preview without writing. Bulk operations (`--stdin`), `query --apply`, `schema rename`, and `check` fixes stay preview-first and require `--confirm`.
+- Single-object writes (`rvn set`/`add`/`update`/`edit`, `rvn section create`/`move`/`rename`, and single `rvn move`/`rvn delete`) apply immediately; pass `--dry-run` to preview without writing. Bulk operations (`--stdin`), `query --apply`, `schema rename`, and `check` fixes stay preview-first and require `--confirm`.
 
 ## Choose the right write command
 
@@ -25,6 +25,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Update frontmatter fields only: `rvn set <object_id> field=value --json`
 - Exact body text replacement: `rvn edit`
 - Update a trait value by trait ID: `rvn update`
+- Create/reorder/rename headings: `rvn section create` / `rvn section move` / `rvn section rename`
 
 Key distinctions:
 - `upsert` vs `add`: use `upsert` when reruns should converge to one canonical state. Use `add` when history should accumulate.
@@ -47,7 +48,7 @@ Key distinctions:
 1. Inspect context: `rvn schema`, `rvn resolve`, `rvn read --raw`.
 2. Choose a write primitive (see command chooser above).
 3. For edits, always read the file raw first, then construct the exact `old_str` match.
-4. For lifecycle changes: `rvn reclassify` to change type, `rvn move` to rename/relocate, `rvn delete` to remove.
+4. For lifecycle changes: `rvn reclassify` to change type, `rvn move` to rename/relocate files, `rvn section create`/`move`/`rename` for headings, and `rvn delete` to remove files.
 5. After mutations, verify with `rvn read` or `rvn check`.
 
 ## Look things up
@@ -69,6 +70,7 @@ Raven ships its own long-form documentation. Use these when you need usage detai
 ## Safety
 
 - Avoid shell-level `rm`, `mv`, `sed`, or `awk` for vault objects when Raven commands exist.
+- Use `rvn section create` for headings; `rvn add` is body-only and rejects heading content.
 - Keep path operations vault-relative where possible.
 - If `reclassify` reports dropped fields or missing required values, stop and resolve explicitly.
 - Check `rvn backlinks` before deleting objects to avoid orphaned references.

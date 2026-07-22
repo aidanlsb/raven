@@ -326,7 +326,13 @@ Quick capture defaults for `rvn add`.
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
 | `destination` | string | `daily` | `"daily"` or a vault-relative file path like `inbox.md` |
-| `heading` | string | unset | If set, appends under that heading (creates heading if missing) |
+| `heading` | string | unset | If set, appends under that existing literal Markdown heading |
+
+`capture.heading` does not create a missing heading. Create it explicitly with
+`rvn section create <file> "<title>" --level N`; a subsequent `rvn add` can then
+use the configured heading. For per-call section targeting, prefer
+`rvn add <text> --to file#section`. The removed `add --heading` and
+`add --create-heading` flags are hard errors.
 
 ### `deletion`
 

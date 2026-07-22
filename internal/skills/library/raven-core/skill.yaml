@@ -18,6 +18,9 @@ coverage:
     - edit
     - reclassify
     - move
+    - section create
+    - section move
+    - section rename
     - delete
     - backlinks
     - check

@@ -69,7 +69,13 @@ Assets are graph resources, not schema object types. They do not have YAML front
 
 ### Sections
 
-Sections are Markdown heading regions. They are derived from headings during parsing — they have no frontmatter of their own, and their index entries are rebuilt on every reindex. The heading text and section content are ordinary Markdown you can edit; to rename a heading without breaking inbound references, use `rvn section rename <file#section> "<new heading text>"`. Section IDs combine the file object ID with a heading-derived fragment:
+Sections are Markdown heading regions. They are derived from headings during
+parsing—they have no frontmatter of their own, and their index entries are
+rebuilt on every reindex. Use `rvn section create` to add headings,
+`rvn section move` to reorder/reparent a complete subtree, and
+`rvn section rename` to change heading identity while rewriting inbound
+references. `rvn add` is body-only and rejects heading content. Section IDs
+combine the file object ID with a heading-derived fragment:
 
 ```
 <file-id>#<fragment>
