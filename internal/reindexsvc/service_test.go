@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/index"
@@ -127,6 +128,82 @@ func TestRunIncrementalSkipsParsingUnchangedMarkdown(t *testing.T) {
 	}
 	if len(result.StaleFiles) != 0 {
 		t.Fatalf("stale files = %#v, want none", result.StaleFiles)
+	}
+}
+
+func TestRunIncrementalSucceedsWhileSharedIndexIsOpen(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "existing.md", "# Existing\n")
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial full Run returned error: %v", err)
+	}
+
+	holder, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("open shared index holder: %v", err)
+	}
+	defer holder.Close()
+
+	writeTestFile(t, vaultPath, "added.md", "# Added\n")
+	result, err := Run(RunRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("incremental Run with shared holder returned error: %v", err)
+	}
+	if !result.Incremental || result.FilesIndexed != 1 {
+		t.Fatalf("unexpected incremental result: %#v", result)
+	}
+	if obj, err := holder.GetObject("added"); err != nil || obj == nil {
+		t.Fatalf("shared holder did not observe added object: object=%#v err=%v", obj, err)
+	}
+}
+
+func TestRunFullFailsClearlyWhileSharedIndexIsOpen(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "note.md", "# Note\n")
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial full Run returned error: %v", err)
+	}
+
+	holder, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("open shared index holder: %v", err)
+	}
+	defer holder.Close()
+
+	_, err = Run(RunRequest{VaultPath: vaultPath, Full: true})
+	svcErr := assertReindexCode(t, err, CodeDatabaseError)
+	if !errors.Is(svcErr.Err, index.ErrIndexLocked) {
+		t.Fatalf("underlying error = %v, want ErrIndexLocked", svcErr.Err)
+	}
+	if !strings.Contains(svcErr.Suggestion, "rvn lsp") || !strings.Contains(svcErr.Suggestion, "stop") {
+		t.Fatalf("lock suggestion = %q, want LSP stop/wait guidance", svcErr.Suggestion)
+	}
+}
+
+func TestRunSchemaRebuildFailsWhileSharedIndexIsOpen(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "note.md", "# Note\n")
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial full Run returned error: %v", err)
+	}
+
+	holder, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("open shared index holder: %v", err)
+	}
+	defer holder.Close()
+	downgradeIndexVersion(t, vaultPath)
+
+	_, err = Run(RunRequest{VaultPath: vaultPath})
+	svcErr := assertReindexCode(t, err, CodeDatabaseError)
+	if !errors.Is(svcErr.Err, index.ErrIndexLocked) {
+		t.Fatalf("underlying error = %v, want ErrIndexLocked", svcErr.Err)
 	}
 }
 

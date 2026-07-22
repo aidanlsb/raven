@@ -392,7 +392,9 @@ func (s *Server) scheduleDiagnostics(uri string) {
 	})
 }
 
-// snapshot returns the workspace and a copy of one open document.
+// snapshot returns immutable views of the workspace caches and one open
+// document. Copying the workspace keeps request handlers race-free if a
+// diagnostics timer refreshes the live caches concurrently.
 func (s *Server) snapshot(uri string) (*workspace, document, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -403,5 +405,15 @@ func (s *Server) snapshot(uri string) (*workspace, document, bool) {
 	if !ok {
 		return nil, document{}, false
 	}
-	return s.ws, *doc, true
+	s.ensureWorkspaceCachesFreshLocked(s.ws)
+	wsSnapshot := *s.ws
+	return &wsSnapshot, *doc, true
+}
+
+// ensureWorkspaceCachesFreshLocked refreshes LSP caches after commits made by
+// another index handle. The caller must hold s.mu.
+func (s *Server) ensureWorkspaceCachesFreshLocked(ws *workspace) {
+	if err := ws.ensureCachesFresh(); err != nil && !errors.Is(err, errIndexChanging) {
+		fmt.Fprintf(os.Stderr, "rvn lsp: external index refresh failed: %v\n", err)
+	}
 }
