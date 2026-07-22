@@ -85,7 +85,8 @@ Read this field to decide whether a write happened. Do **not** infer it from
 heterogeneous `data` fields (`data.status`, `data.preview`, `data.needs_confirm`,
 etc.), which vary by command and remain only for backward compatibility. The
 phase is consistent across every mutating command (`new`, `upsert`, `add`, `set`,
-`unset`, `delete`, `move`, `section_rename`, `reclassify`, `update`, `edit`, `import`, `check fix`,
+`unset`, `delete`, `move`, `section_create`, `section_move`, `section_rename`,
+`reclassify`, `update`, `edit`, `import`, `check fix`,
 `check create-missing`, `schema` writes/renames, `template` writes, saved-query
 writes, and skill installs) and across the CLI and MCP surfaces.
 
@@ -122,9 +123,9 @@ a `Created <file>` line followed by a `link as <id>` hint.
 There are two mutation classes with different defaults:
 
 1. Single-object writes apply immediately (`meta.mutation.phase = "applied"`):
-   `set`, `add`, `update`, `edit`, `section_rename`, and single-object `delete`/`move`. Pass
-   `dry-run=true` to get a preview (`meta.mutation.phase = "preview"`) without
-   writing.
+   `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
+   `section_rename`, and single-object `delete`/`move`. Pass `dry-run=true` to
+   get a preview (`meta.mutation.phase = "preview"`) without writing.
 2. High-blast-radius operations are preview-first (`meta.mutation.phase =
    "preview"`) and require `confirm=true` to apply: any bulk write (`stdin=true`),
    `query` with `apply`, `schema rename`, `schema convert`, and the `check fix` /
@@ -136,6 +137,8 @@ Examples:
 # Applies immediately (single-object):
 raven_invoke(command="edit", args={"path":"project/website.md", "old_str":"A", "new_str":"B"})
 raven_invoke(command="delete", args={"object_id":"project/old"})
+raven_invoke(command="section_create", args={"file":"project/website", "title":"Notes", "level":2})
+raven_invoke(command="section_move", args={"section_id":"project/website#notes", "after":"project/website#tasks"})
 raven_invoke(command="section_rename", args={"section_id":"project/website#tasks", "new_heading_text":"Completed Tasks"})
 
 # Preview a single-object write first (optional):

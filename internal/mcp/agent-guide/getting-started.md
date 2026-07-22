@@ -29,7 +29,8 @@ Use this guide after quickstart when you need an operational first pass through 
 
 ```text
 create = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
-raven_invoke(command="add", args={"text":"## Notes\n- Kickoff next week", "to":create.data.file})
+notes = raven_invoke(command="section_create", args={"file":create.data.id, "title":"Notes", "level":2})
+raven_invoke(command="add", args={"text":"- Kickoff next week", "to":notes.data.section})
 raven_invoke(command="set", args={"object_id":create.data.id, "fields":{"status":"active"}})
 ```
 

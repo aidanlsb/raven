@@ -97,7 +97,7 @@ Append text to the end of matching files.
 
 ```bash
 # Add a note
-rvn query "type:project .status==active" --apply "add ## Reviewed on $(date +%Y-%m-%d)" --confirm
+rvn query "type:project .status==active" --apply "add Reviewed on $(date +%Y-%m-%d)" --confirm
 
 # Add a trait
 rvn query "type:project .status==active" --apply "add @reviewed(2026-01-10)" --confirm
@@ -110,6 +110,7 @@ rvn query "type:meeting" --apply "add See also: [[project/website]]" --confirm
 
 - Only works on file-level objects (section IDs are skipped)
 - Text is appended to the end of the file
+- Markdown heading content is rejected; create headings with `rvn section create`
 - Respects the file's existing formatting
 
 ---
@@ -262,7 +263,11 @@ rvn query "section .title==Tasks" --ids | rvn add "Review backlog" --stdin --con
 Skipped 1 section ID(s) - bulk operations only support file-level objects
 ```
 
-- `move` is stricter: if any bulk source is a section ID, the entire move request fails. Rename one heading at a time with `rvn section rename <file#section> "<new heading text>"`. A section query combined with `--apply "move ..."` fails for the same reason.
+- `move` is stricter: if any bulk source is a section ID, the entire move request
+  fails. Reorder/reparent one section at a time with
+  `rvn section move <file#section>`, or change heading identity with
+  `rvn section rename <file#section> "<new heading text>"`. A section query
+  combined with `--apply "move ..."` fails for the same reason.
 
 ---
 

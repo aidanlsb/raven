@@ -193,4 +193,7 @@ func TestMoveByReferenceRejectsSectionSource(t *testing.T) {
 	if !strings.Contains(serviceErr.Suggestion, "rvn section rename") {
 		t.Fatalf("suggestion = %q, want rvn section rename redirect", serviceErr.Suggestion)
 	}
+	if !strings.Contains(serviceErr.Suggestion, "rvn section move") {
+		t.Fatalf("suggestion = %q, want rvn section move redirect", serviceErr.Suggestion)
+	}
 }

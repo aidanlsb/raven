@@ -44,24 +44,36 @@ Configure default capture behavior in `raven.yaml`:
 ```yaml
 capture:
   destination: daily       # "daily" or a vault-relative path like "inbox.md"
-  heading: "## Captured"   # Optional: append under this heading
+  heading: "## Captured"   # Optional: append under this existing heading
 ```
 
-When `heading` is set, Raven creates the heading if it does not exist and appends new content beneath it.
+When `heading` is set, Raven appends beneath that literal existing heading. A
+missing configured heading is an error; `rvn add` never creates it. Create the
+section explicitly with `rvn section create`.
 
 ### Adding under a specific heading
 
-Use `--heading` to append under a particular section:
+Target a section by canonical ID with `--to`:
 
 ```bash
-rvn add "@todo Review PR" --heading "## Tasks"
+rvn add "@todo Review PR" --to 2026-03-15#tasks
 ```
 
-`--heading` targets an existing heading (by slug, section ID, or heading text) and fails with `REF_NOT_FOUND` if it is missing. Add `--create-heading` to create the heading at the end of the note when it does not exist yet:
+If the section does not exist, create it first with plain title text and an
+explicit level, then use the returned canonical section ID:
 
 ```bash
-rvn add "@todo Review PR" --heading "## Tasks" --create-heading
+rvn section create 2026-03-15 "Tasks" --level 2
+rvn add "@todo Review PR" --to 2026-03-15#tasks
 ```
+
+`--heading` and `--create-heading` have been removed from `add`. Passing either
+is an `INVALID_INPUT` error. `add` also rejects text containing Markdown
+headings; it is a body-content command, not a section lifecycle command.
+
+Section-targeted `add` inserts at the end of the section's direct body, before
+any child headings. By contrast, `section create --after` and `section move`
+use complete subtree boundaries.
 
 ## Daily note templates
 

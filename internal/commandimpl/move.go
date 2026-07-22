@@ -158,6 +158,6 @@ func moveSectionSourceFailure(sectionIDs []string) commandexec.Result {
 		codes.ErrInvalidInput,
 		"rvn move does not accept section sources",
 		map[string]interface{}{"section_ids": sectionIDs},
-		`Use 'rvn section rename <file#section> "<new heading text>"' to rename one section heading and rewrite inbound references`,
+		`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`,
 	)
 }

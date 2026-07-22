@@ -137,6 +137,8 @@ var mutationPhaseCommandIDs = map[string]struct{}{
 	"unset":          {},
 	"delete":         {},
 	"move":           {},
+	"section_create": {},
+	"section_move":   {},
 	"section_rename": {},
 	"reclassify":     {},
 	"update":         {},

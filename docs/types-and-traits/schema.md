@@ -117,6 +117,8 @@ Queries expose additional structural fields on section rows: `.slug`, `.file_obj
 - Object ID is `<file-id>#<slugified-heading>`
 - Can be referenced like `[[project/website#tasks]]`
 - Queried with the `section` keyword (e.g., `rvn query "section .title==Tasks"`), not `type:section`
+- Created with `rvn section create project/website "Tasks" --level 2`
+- Reordered or reparented with `rvn section move project/website#tasks`; the complete subtree moves and identity stays unchanged
 - Renamed safely with `rvn section rename project/website#tasks "New Heading"`, which rewrites inbound refs
 
 ### `date`

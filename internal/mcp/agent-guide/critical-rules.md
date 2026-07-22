@@ -7,7 +7,9 @@ These rules are non-negotiable.
 | Intent | Command ID | Do not use |
 |--------|------------|------------|
 | Move or rename files, including assets | `move` | `mv`, `git mv` |
-| Rename section headings | `section_rename` | `move`, manual heading edits |
+| Create section headings | `section_create` | `add`, manual heading edits |
+| Reorder/reparent sections | `section_move` | `move`, manual cut/paste |
+| Rename section headings | `section_rename` | `section_move`, `move`, manual heading edits |
 | Delete files | `delete` | `rm`, `trash` |
 | Create typed items | `new` | `touch`, `echo >` |
 | Read vault files | `read` | `cat`, `head`, `tail` |
@@ -16,7 +18,9 @@ These rules are non-negotiable.
 
 Why:
 - `move` updates references, including Markdown links/images that point at assets.
-- `section_rename` updates inbound fragment references; `move` rejects section sources.
+- `section_create` validates levels and slug stability; `add` is body-only.
+- `section_move` preserves heading identity and moves the complete subtree.
+- `section_rename` updates inbound fragment references; object `move` rejects section sources.
 - `delete` checks impact and uses safe deletion behavior.
 - `new` applies schema and templates.
 - `edit` is for content markdown only; use `vault config`, `schema`, and `template` for control-plane files.

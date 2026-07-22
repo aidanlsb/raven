@@ -186,22 +186,21 @@ Bulk operations preview changes by default; use --confirm to apply.
 Configuration (raven.yaml):
   capture:
     destination: daily      # "daily" or a file path
-    heading: "## Captured"  # Optional heading to append under
+    heading: "## Captured"  # Optional existing heading to append under
 
-Use --heading to target an existing heading explicitly.
-Accepted values:
-- Heading slug (e.g., bugs-fixes)
-- Full object ID (e.g., project/raven#bugs-fixes)
-- Markdown heading text (e.g., "### Bugs / Fixes")
+Use --to file#section to append inside a section. Section-targeted adds, including
+section IDs supplied through --stdin, insert at the end of the section's DIRECT
+content, before any child headings. Structural section placement instead uses
+the full subtree boundary; create or move headings with 'rvn section create' and
+'rvn section move'.
 
-Section-targeted adds (--to file#section, --heading, or section IDs via stdin)
-insert at the end of the section's DIRECT content, before any child headings.
-This differs from read/edit, which operate on the section's full subtree.
+The removed --heading and --create-heading flags are hard errors. To create a
+heading, run 'rvn section create <file> "<title>" --level N', then append body
+content with 'rvn add <text> --to <file#section>'. Add also rejects text that
+contains Markdown headings; headings are section lifecycle, not body content.
 
-Use --create-heading with --heading to create the heading at the end of the
-file when it does not exist yet. Creation requires heading text (plain text
-defaults to a level-2 heading; markdown text like "### Log" keeps its level);
-slugs and section IDs cannot be used to create headings.
+A configured capture.heading may target an existing literal Markdown heading,
+but add never creates a missing heading.
 
 Permissive writes: if appended text contains a [[ref]] whose target does not exist
 yet, the write still succeeds. The response adds data.missing_refs,
@@ -214,8 +213,6 @@ If text starts with a dash, put it after -- so it is not parsed as a flag:
 		},
 		Flags: []FlagMeta{
 			{Name: "to", Description: "Target file path or daily note date (today/tomorrow/yesterday/YYYY-MM-DD)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md", "tomorrow"}},
-			{Name: "heading", Description: "Target existing heading within destination (slug, object#heading ID, or markdown heading text)", Type: FlagTypeString, Examples: []string{"bugs-fixes", "project/raven#bugs-fixes", "### Bugs / Fixes"}},
-			{Name: "create-heading", Description: "Create the --heading target at the end of the file if it does not exist (requires heading text, not a slug or section ID)", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
@@ -225,9 +222,7 @@ If text starts with a dash, put it after -- so it is not parsed as a flag:
 			"rvn add \"Note\" --to projects/website.md --json",
 			"rvn add \"Plan\" --to tomorrow --json",
 			"rvn add --to today -- \"- Review the rollout\"",
-			"rvn add \"Bug report\" --to project/raven --heading bugs-fixes --json",
-			"rvn add \"Bug report\" --to project/raven --heading \"### Bugs / Fixes\" --json",
-			"rvn add \"First entry\" --to project/raven --heading \"### Log\" --create-heading --json",
+			"rvn add \"Bug report\" --to project/raven#bugs-fixes --json",
 			"rvn query \"section .title==Tasks\" --ids | rvn add \"Review backlog\" --stdin --confirm --json",
 		},
 		UseCases: []string{
@@ -687,9 +682,11 @@ Single-object move:
 Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
 move and the references it would update without applying.
 
-Section IDs are not valid move sources. Use 'rvn section rename <file#section>
-"<new heading text>"' to rename a heading and rewrite inbound fragment references.
-This is a hard error for both single and bulk move inputs.
+Section IDs are not valid move sources. Use 'rvn section move <file#section>' to
+reorder or reparent a heading without changing its identity. Use 'rvn section
+rename <file#section> "<new heading text>"' only to rename a heading and rewrite
+inbound fragment references. This is a hard error for both single and bulk move
+inputs.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
@@ -752,6 +749,99 @@ would shift another section's slug. It applies immediately by default; pass
 		UseCases: []string{
 			"Rename a section heading without breaking inbound fragment references",
 			"Preview the slug and reference impact of a heading rename",
+		},
+	},
+	"section_create": {
+		Name:        "section create",
+		CLIPath:     []string{"section", "create"},
+		Use:         `create <file> "<title>" --level N`,
+		Description: "Create a Markdown section at an explicit structural boundary",
+		Category:    CategoryContent,
+		Access:      AccessWrite,
+		Risk:        RiskMutating,
+		LongDesc: `Create an empty Markdown section heading in an existing file.
+
+The title is plain text and --level is required; do not include Markdown '#'
+prefixes in the title. With no anchor, the heading is appended at end of file.
+
+Structural anchors are mutually exclusive:
+- --after inserts after the anchor's complete subtree, including all descendants.
+- --before inserts immediately before the anchor heading.
+- --under inserts as the anchor's last direct child.
+
+For --after and --before, --level must equal the anchor level. For --under,
+--level must equal the anchor level plus one. Raven never rewrites the requested
+level. Creation fails without writing if the new slug collides or if any existing
+section slug would shift.
+
+This command applies immediately by default. Pass --dry-run to preview and
+receive the canonical new section ID without writing.`,
+		Args: []ArgMeta{
+			{Name: "file", Description: "Existing file reference that will contain the section", Required: true},
+			{Name: "title", Description: "Plain section title without a leading #", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "level", Description: "Markdown heading level from 1 through 6", Type: FlagTypeInt, Required: true},
+			{Name: "after", Description: "Insert after this section's complete subtree", Type: FlagTypeString},
+			{Name: "before", Description: "Insert immediately before this section heading", Type: FlagTypeString},
+			{Name: "under", Description: "Insert as the last direct child of this section", Type: FlagTypeString},
+			{Name: "dry-run", Description: "Preview section creation without applying it", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			`rvn section create project/website "Tasks" --level 2 --json`,
+			`rvn section create project/website "Follow-up" --level 3 --under project/website#tasks --json`,
+			`rvn section create project/website "Notes" --level 2 --before project/website#archive --dry-run --json`,
+		},
+		UseCases: []string{
+			"Create a section without writing Markdown headings directly",
+			"Insert a sibling after a complete section subtree",
+			"Create a direct child at an explicit heading level",
+		},
+	},
+	"section_move": {
+		Name:        "section move",
+		CLIPath:     []string{"section", "move"},
+		Description: "Reorder or reparent a section and its complete subtree",
+		Category:    CategoryContent,
+		Access:      AccessWrite,
+		Risk:        RiskMutating,
+		LongDesc: `Move a Markdown section without renaming it.
+
+The source heading and every descendant in its complete subtree move together.
+The heading text, level, slug, and canonical section ID stay unchanged. Use
+'section rename' for identity changes.
+
+Structural anchors are mutually exclusive:
+- --after inserts after the anchor's complete subtree.
+- --before inserts immediately before the anchor heading.
+- --under reparents the source as the anchor's last direct child.
+
+For --after and --before, the source and anchor must have equal heading levels.
+For --under, the source level must equal the anchor level plus one. Raven never
+promotes or demotes headings. Anchors in another file, anchors inside the source
+subtree, missing anchors, and identity-changing placements are hard errors.
+With no anchor, the complete subtree is moved to end of file.
+
+This command applies immediately by default. Pass --dry-run to preview without
+writing.`,
+		Args: []ArgMeta{
+			{Name: "section_id", Description: "Section ID to move (e.g., project/website#tasks)", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "after", Description: "Move after this section's complete subtree", Type: FlagTypeString},
+			{Name: "before", Description: "Move immediately before this section heading", Type: FlagTypeString},
+			{Name: "under", Description: "Move as the last direct child of this section", Type: FlagTypeString},
+			{Name: "dry-run", Description: "Preview the section move without applying it", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			`rvn section move project/website#notes --after project/website#tasks --json`,
+			`rvn section move project/website#follow-up --under project/website#tasks --json`,
+			`rvn section move project/website#archive --dry-run --json`,
+		},
+		UseCases: []string{
+			"Reorder sibling sections while preserving nested children",
+			"Reparent a section without changing its heading level or identity",
+			"Move a complete section subtree to end of file",
 		},
 	},
 	"reclassify": {
