@@ -7,11 +7,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/app"
-	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/querysvc"
-	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 var queryCmd = &cobra.Command{
@@ -102,7 +100,7 @@ Examples:
 		// returns the resolved query string used for human rendering.
 		runOpts, err := querysvc.ResolveRunOptions(getVaultPath(), rawQuery, savedQueryOptionsFromFlags(cmd))
 		if err != nil {
-			return mapQuerySvcError(err)
+			return handleCanonicalFailure(commandexec.FromServiceError(err))
 		}
 
 		browse := effectiveQueryBrowse(runOpts.Browse, cmd.Flags().Changed("browse"))
@@ -147,22 +145,25 @@ Examples:
 // bulk-apply, and human rendering. queryStr is the resolved query string, used
 // only for human-readable labels and empty-result messages.
 func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
-	result := executeCanonicalQuery(args)
+	return renderCanonicalQueryResult(queryStr, args, executeCanonicalQuery(args))
+}
+
+func renderCanonicalQueryResult(queryStr string, args map[string]interface{}, result commandexec.Result) error {
 	if hasQueryApply(args) {
 		return renderCanonicalQueryApplyResult(args, result)
 	}
 	if !result.OK {
-		if isJSONOutput() {
-			return outputJSON(result)
+		if result.Error == nil {
+			if isJSONOutput() {
+				return outputCanonicalResultJSON(result)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
-		if result.Error != nil {
-			return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
-		}
-		return handleErrorMsg(ErrInternal, "command execution failed", "")
+		return handleCanonicalFailure(result)
 	}
 
 	if isJSONOutput() {
-		return outputJSON(result)
+		return outputCanonicalResultJSON(result)
 	}
 
 	return renderCanonicalQueryHuman(queryStr, result.Data, boolValue(args["browse"]))
@@ -283,49 +284,6 @@ func savedQueryOptionsFromFlags(cmd *cobra.Command) *config.QueryOptions {
 		return nil
 	}
 	return options
-}
-
-func mapQueryCode(code codes.ErrorCode) codes.ErrorCode {
-	switch code {
-	case codes.ErrMissingArgument:
-		return ErrMissingArgument
-	case codes.ErrInvalidArgs, codes.ErrInvalidInput:
-		return ErrInvalidInput
-	case codes.ErrQueryInvalid:
-		return ErrQueryInvalid
-	case codes.ErrQueryNotFound:
-		return ErrQueryNotFound
-	case codes.ErrDatabaseVersion:
-		return ErrDatabaseVersion
-	case codes.ErrConfigInvalid:
-		return ErrConfigInvalid
-	case codes.ErrDatabase:
-		return ErrDatabaseError
-	default:
-		return ErrInternal
-	}
-}
-
-func mapQuerySvcError(err error) error {
-	svcErr, ok := svcerr.AsError(err)
-	if !ok {
-		return handleError(ErrInternal, err, "")
-	}
-
-	switch svcErr.Code {
-	case querysvc.CodeInvalidInput:
-		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-	case querysvc.CodeQueryInvalid:
-		return handleErrorMsg(ErrQueryInvalid, svcErr.Message, svcErr.Suggestion)
-	case querysvc.CodeQueryNotFound:
-		return handleErrorMsg(ErrQueryNotFound, svcErr.Message, svcErr.Suggestion)
-	case querysvc.CodeConfigInvalid:
-		return handleError(ErrConfigInvalid, svcErr, svcErr.Suggestion)
-	case querysvc.CodeFileWriteError:
-		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-	default:
-		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
-	}
 }
 
 func init() {

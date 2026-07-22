@@ -22,26 +22,22 @@ var querySavedCmd = &cobra.Command{
 
 var querySavedListCmd = newCanonicalLeafCommand("query_saved_list", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	HandleError: handleCanonicalQueryFailure,
 	RenderHuman: renderQuerySavedList,
 })
 
 var querySavedGetCmd = newCanonicalLeafCommand("query_saved_get", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	HandleError: handleCanonicalQueryFailure,
 	RenderHuman: renderQuerySavedGet,
 })
 
 var querySavedSetCmd = newCanonicalLeafCommand("query_saved_set", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	BuildArgs:   buildQuerySavedSetArgs,
-	HandleError: handleCanonicalQueryFailure,
 	RenderHuman: renderQuerySavedSet,
 })
 
 var querySavedRemoveCmd = newCanonicalLeafCommand("query_saved_remove", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	HandleError: handleCanonicalQueryFailure,
 	RenderHuman: renderQuerySavedRemove,
 })
 
@@ -105,13 +101,6 @@ func addSavedQueryOptionArgs(cmd *cobra.Command, argsMap map[string]interface{})
 	}
 }
 
-func handleCanonicalQueryFailure(result commandexec.Result) error {
-	if result.Error == nil {
-		return nil
-	}
-	return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
-}
-
 func renderQuerySavedList(_ *cobra.Command, result commandexec.Result) error {
 	return listSavedQueries(savedQueriesFromResult(canonicalDataMap(result)["queries"]))
 }
@@ -159,7 +148,7 @@ func normalizeSavedQueryArgsForCommand(cmd *cobra.Command) ([]string, error) {
 	}
 	normalized, err := querysvc.NormalizeArgs(rawArgs)
 	if err != nil {
-		return nil, mapQuerySvcError(err)
+		return nil, handleCanonicalFailure(commandexec.FromServiceError(err))
 	}
 	return normalized, nil
 }
