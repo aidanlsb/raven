@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
 func TestJoinQueryArgs(t *testing.T) {
@@ -35,6 +39,57 @@ func TestJoinQueryArgs(t *testing.T) {
 			got := joinQueryArgs(tt.args)
 			if got != tt.want {
 				t.Errorf("joinQueryArgs(%q) = %q, want %q", tt.args, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRenderCanonicalQueryResultJSONPreservesCanonicalErrorCodes(t *testing.T) {
+	previousJSON := jsonOutput
+	jsonOutput = true
+	t.Cleanup(func() {
+		jsonOutput = previousJSON
+	})
+
+	tests := []struct {
+		name string
+		code codes.ErrorCode
+	}{
+		{name: "invalid args", code: codes.ErrInvalidArgs},
+		{name: "invalid query", code: codes.ErrQueryInvalid},
+		{name: "query not found", code: codes.ErrQueryNotFound},
+		{name: "schema invalid previously remapped to internal", code: codes.ErrSchemaInvalid},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			failure := commandexec.Failure(
+				tt.code,
+				"canonical message",
+				map[string]interface{}{"source": "canonical"},
+				"canonical suggestion",
+			)
+
+			out := captureStdout(t, func() {
+				requireJSONResponseFailure(t, renderCanonicalQueryResult("", nil, failure))
+			})
+
+			var response commandexec.Result
+			if err := json.Unmarshal([]byte(out), &response); err != nil {
+				t.Fatalf("unmarshal response: %v\noutput: %s", err, out)
+			}
+			if response.Error == nil {
+				t.Fatalf("error = nil\noutput: %s", out)
+			}
+			if response.Error.Code != tt.code {
+				t.Fatalf("error code = %q, want %q", response.Error.Code, tt.code)
+			}
+			if response.Error.Suggestion != "canonical suggestion" {
+				t.Fatalf("suggestion = %q, want canonical suggestion", response.Error.Suggestion)
+			}
+			details, ok := response.Error.Details.(map[string]interface{})
+			if !ok || details["source"] != "canonical" {
+				t.Fatalf("details = %#v, want canonical source", response.Error.Details)
 			}
 		})
 	}
