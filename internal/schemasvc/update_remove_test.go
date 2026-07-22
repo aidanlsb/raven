@@ -14,7 +14,7 @@ func TestUpdateField_RejectsInvalidFieldSpecs(t *testing.T) {
 
 	vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 
-	_, err := UpdateField(UpdateFieldRequest{
+	_, err := UpdateField(schemaTestRuntime(t, vault.Path), UpdateFieldRequest{
 		VaultPath: vault.Path,
 		TypeName:  "project",
 		FieldName: "status",
@@ -41,7 +41,7 @@ func TestUpdateField_NormalizesValuesAndClearsIncompatibleTarget(t *testing.T) {
 
 	vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 
-	_, err := UpdateField(UpdateFieldRequest{
+	_, err := UpdateField(schemaTestRuntime(t, vault.Path), UpdateFieldRequest{
 		VaultPath: vault.Path,
 		TypeName:  "project",
 		FieldName: "status",
@@ -66,7 +66,7 @@ func TestUpdateField_NormalizesValuesAndClearsIncompatibleTarget(t *testing.T) {
 		}
 	}
 
-	_, err = UpdateField(UpdateFieldRequest{
+	_, err = UpdateField(schemaTestRuntime(t, vault.Path), UpdateFieldRequest{
 		VaultPath: vault.Path,
 		TypeName:  "project",
 		FieldName: "owner",
@@ -105,7 +105,7 @@ traits:
     values: [low]
 `).Build()
 
-	_, err := UpdateTrait(UpdateTraitRequest{
+	_, err := UpdateTrait(schemaTestRuntime(t, vault.Path), UpdateTraitRequest{
 		VaultPath: vault.Path,
 		TraitName: "priority",
 		Values:    "low, medium, ,high",
@@ -113,7 +113,7 @@ traits:
 	if err != nil {
 		t.Fatalf("UpdateTrait values returned error: %v", err)
 	}
-	_, err = UpdateTrait(UpdateTraitRequest{
+	_, err = UpdateTrait(schemaTestRuntime(t, vault.Path), UpdateTraitRequest{
 		VaultPath: vault.Path,
 		TraitName: "done",
 		Default:   "true",

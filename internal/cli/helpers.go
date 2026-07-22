@@ -25,7 +25,10 @@ func loadVaultConfigSafe(vaultPath string) (*config.VaultConfig, error) {
 }
 
 func loadSchemaSafe(vaultPath string) (*schema.Schema, error) {
-	rt, err := vaultruntime.New(vaultPath, vaultruntime.Options{RequireSchema: true})
+	rt, err := vaultruntime.New(vaultPath, vaultruntime.Options{
+		SkipConfig:    true,
+		RequireSchema: true,
+	})
 	if err != nil {
 		return nil, err
 	}

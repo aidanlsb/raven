@@ -32,7 +32,6 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
-	sch := rt.Schema
 
 	reference := strings.TrimSpace(stringArg(req.Args, "path"))
 	if reference == "" {

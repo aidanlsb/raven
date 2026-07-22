@@ -29,8 +29,33 @@ func newConfigCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, comm
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{})
 }
 
-func newVaultConfigCommandRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
+func newConfigOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{SkipSchema: true})
+}
+
+func newSchemaOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
+	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{
+		SkipConfig:    true,
+		RequireSchema: true,
+	})
+}
+
+func newSchemaFirstCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
+	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{
+		RequireSchema: true,
+		SchemaFirst:   true,
+	})
+}
+
+func newLazyConfigCommandRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
+	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{
+		SkipConfig: true,
+		SkipSchema: true,
+	})
+}
+
+func newVaultConfigCommandRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
+	return newLazyConfigCommandRuntime(vaultPath)
 }
 
 func newDatabaseCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {

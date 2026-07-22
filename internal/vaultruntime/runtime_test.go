@@ -96,3 +96,63 @@ func TestOpenDBIsIdempotent(t *testing.T) {
 		t.Fatal("OpenDB() replaced the existing database handle")
 	}
 }
+
+func TestCloseClearsDatabaseAndAllowsReopen(t *testing.T) {
+	t.Parallel()
+
+	rt, err := New(t.TempDir(), Options{OpenDB: true})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	first := rt.DB
+	rt.Close()
+	if rt.DB != nil {
+		t.Fatal("Close() left DB attached")
+	}
+	if err := rt.OpenDB(); err != nil {
+		t.Fatalf("OpenDB() after Close() error: %v", err)
+	}
+	defer rt.Close()
+	if rt.DB == nil || rt.DB == first {
+		t.Fatal("OpenDB() did not attach a fresh database handle")
+	}
+}
+
+func TestNewCanSkipUnneededSchema(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("types: [unterminated\n"), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	rt, err := New(vaultPath, Options{SkipSchema: true})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	defer rt.Close()
+	if rt.VaultCfg == nil {
+		t.Fatal("VaultCfg = nil")
+	}
+	if rt.Schema != nil || rt.SchemaLoadErr != nil {
+		t.Fatalf("schema was unexpectedly loaded: schema=%#v err=%v", rt.Schema, rt.SchemaLoadErr)
+	}
+}
+
+func TestNewSchemaFirstPreservesFailurePrecedence(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("types: [unterminated\n"), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "raven.yaml"), []byte("directories: [unterminated\n"), 0o644); err != nil {
+		t.Fatalf("write raven.yaml: %v", err)
+	}
+
+	_, err := New(vaultPath, Options{SchemaFirst: true, RequireSchema: true})
+	var setupErr *SetupError
+	if !errors.As(err, &setupErr) || setupErr.Stage != StageSchema {
+		t.Fatalf("error = %v, want schema SetupError", err)
+	}
+}

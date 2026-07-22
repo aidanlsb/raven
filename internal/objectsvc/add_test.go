@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/filelock"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestAppendToFileWaitsForExclusiveLock(t *testing.T) {
@@ -30,7 +31,7 @@ func TestAppendToFileWaitsForExclusiveLock(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := AppendToFile("", destPath, "appended", nil, nil, false, "", nil)
+		_, err := AppendToFile(&vaultruntime.Runtime{}, destPath, "appended", nil, false, "")
 		done <- err
 	}()
 
@@ -79,7 +80,7 @@ func TestAppendToFileReturnsInsertedLineForSectionTarget(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	line, err := AppendToFile(vaultPath, destPath, "New bug item", nil, nil, false, "project#bugs-fixes", nil)
+	line, err := AppendToFile(&vaultruntime.Runtime{VaultPath: vaultPath}, destPath, "New bug item", nil, false, "project#bugs-fixes")
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -172,7 +173,7 @@ func TestAppendToFileMissingTargetReportsFileNotFound(t *testing.T) {
 	t.Parallel()
 
 	destPath := filepath.Join(t.TempDir(), "missing.md")
-	_, err := AppendToFile("", destPath, "appended", nil, nil, false, "", nil)
+	_, err := AppendToFile(&vaultruntime.Runtime{}, destPath, "appended", nil, false, "")
 	if err == nil {
 		t.Fatal("expected missing target error")
 	}

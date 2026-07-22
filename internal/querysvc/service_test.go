@@ -6,7 +6,14 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func newQueryRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
+	t.Helper()
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{SkipSchema: true})
+}
 
 func TestParseInputs(t *testing.T) {
 	t.Parallel()
@@ -102,8 +109,9 @@ func TestSavedQueryLifecycle(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := newQueryRuntime(t, vaultPath)
 
-	created, err := Set(SetRequest{
+	created, err := Set(rt, SetRequest{
 		VaultPath:   vaultPath,
 		Name:        "project-todos",
 		QueryString: "trait:todo refs([[{{args.project}}]])",
@@ -117,7 +125,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("Set(create) status = %q, want %q", created.Status, SetStatusCreated)
 	}
 
-	got, err := Get(GetRequest{VaultPath: vaultPath, Name: "project-todos"})
+	got, err := Get(rt, GetRequest{VaultPath: vaultPath, Name: "project-todos"})
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
@@ -125,7 +133,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("Get() = %#v", got.Query)
 	}
 
-	listed, err := List(ListRequest{VaultPath: vaultPath})
+	listed, err := List(rt, ListRequest{VaultPath: vaultPath})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
@@ -139,7 +147,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("List() = %#v, want %#v", listed.Queries, wantList)
 	}
 
-	unchanged, err := Set(SetRequest{
+	unchanged, err := Set(rt, SetRequest{
 		VaultPath:   vaultPath,
 		Name:        "project-todos",
 		QueryString: "trait:todo refs([[{{args.project}}]])",
@@ -153,7 +161,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("Set(unchanged) status = %q, want %q", unchanged.Status, SetStatusUnchanged)
 	}
 
-	updated, err := Set(SetRequest{
+	updated, err := Set(rt, SetRequest{
 		VaultPath:   vaultPath,
 		Name:        "project-todos",
 		QueryString: "trait:todo refs([[{{args.project}}]]) .value==todo",
@@ -169,7 +177,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("Set(update) description = %q, want empty", updated.Query.Description)
 	}
 
-	removed, err := Remove(RemoveRequest{VaultPath: vaultPath, Name: "project-todos"})
+	removed, err := Remove(rt, RemoveRequest{VaultPath: vaultPath, Name: "project-todos"})
 	if err != nil {
 		t.Fatalf("Remove() unexpected error: %v", err)
 	}
@@ -177,7 +185,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("Remove() removed = false, want true")
 	}
 
-	if _, err := Get(GetRequest{VaultPath: vaultPath, Name: "project-todos"}); err == nil {
+	if _, err := Get(rt, GetRequest{VaultPath: vaultPath, Name: "project-todos"}); err == nil {
 		t.Fatal("Get() after remove expected error, got nil")
 	}
 }
@@ -186,11 +194,12 @@ func TestSavedQueryLifecycleWithOptions(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := newQueryRuntime(t, vaultPath)
 	browse := true
 	limit := 100
 	confirm := true
 
-	created, err := Set(SetRequest{
+	created, err := Set(rt, SetRequest{
 		VaultPath:   vaultPath,
 		Name:        "open-issues",
 		QueryString: "type:issue .status==open",
@@ -214,7 +223,7 @@ func TestSavedQueryLifecycleWithOptions(t *testing.T) {
 		t.Fatalf("Set(create) limit = %#v, want 100", created.Query.Options.Limit)
 	}
 
-	unchanged, err := Set(SetRequest{
+	unchanged, err := Set(rt, SetRequest{
 		VaultPath:   vaultPath,
 		Name:        "open-issues",
 		QueryString: "type:issue .status==open",
@@ -232,7 +241,7 @@ func TestSavedQueryLifecycleWithOptions(t *testing.T) {
 		t.Fatalf("Set(unchanged) status = %q, want %q", unchanged.Status, SetStatusUnchanged)
 	}
 
-	got, err := Get(GetRequest{VaultPath: vaultPath, Name: "open-issues"})
+	got, err := Get(rt, GetRequest{VaultPath: vaultPath, Name: "open-issues"})
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}

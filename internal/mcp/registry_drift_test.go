@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // compactToolParamSpecs maps each compact tool to the parameter spec that drives
@@ -307,7 +308,8 @@ func TestSavedQueriesPayloadParityBetweenServiceAndCommand(t *testing.T) {
 `).
 		Build()
 
-	result, err := querysvc.List(querysvc.ListRequest{VaultPath: v.Path})
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{SkipSchema: true})
+	result, err := querysvc.List(rt, querysvc.ListRequest{VaultPath: v.Path})
 	if err != nil {
 		t.Fatalf("querysvc.List: %v", err)
 	}

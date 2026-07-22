@@ -122,7 +122,7 @@ func SetTemplate(rt *vaultruntime.Runtime, req SetTemplateRequest) (*TemplateDef
 	}
 
 	description := strings.TrimSpace(req.Description)
-	err = editSchemaWithLoadError(vaultPath, "", ErrorSchemaInvalid, func(doc *schemadoc.Document) error {
+	err = editRuntimeSchemaWithLoadError(rt, "", ErrorSchemaInvalid, func(doc *schemadoc.Document) error {
 		templatesNode := schemadoc.EnsureMap(doc.Root(), "templates")
 		templateNode := schemadoc.EnsureMap(templatesNode, templateID)
 		templateNode["file"] = fileRef
@@ -152,7 +152,7 @@ func RemoveTemplate(rt *vaultruntime.Runtime, templateID string) error {
 		return newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
 	}
 
-	return editSchema(rt.VaultPath, "Run 'rvn init' to create a schema", func(doc *schemadoc.Document) error {
+	return editRuntimeSchema(rt, "Run 'rvn init' to create a schema", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		if _, ok := sch.Templates[templateID]; !ok {
 			return newError(ErrorInvalidInput, fmt.Sprintf("template '%s' not found", templateID), "Nothing to remove", nil, nil)

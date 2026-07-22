@@ -84,7 +84,7 @@ func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Res
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	rt, failure := newSchemaFirstCommandVaultRuntime(vaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -154,7 +154,7 @@ func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	rt, failure := newConfigOnlyCommandVaultRuntime(vaultPath)
 	if failure.Error != nil {
 		return failure
 	}

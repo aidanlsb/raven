@@ -44,7 +44,7 @@ func AddTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string) (*Ad
 	typeName = normalizedTypeName
 
 	result := &AddTemplateBindingResult{}
-	err = editSchema(rt.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err = editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		typeDef, err := typeForTemplateConfig(sch, typeName)
 		if err != nil {
@@ -90,7 +90,7 @@ func RemoveTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string, c
 	}
 	typeName = normalizedTypeName
 
-	return editSchema(rt.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	return editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		typeDef, err := typeForTemplateConfig(doc.Schema(), typeName)
 		if err != nil {
 			return err
@@ -141,7 +141,7 @@ func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID strin
 	typeName = normalizedTypeName
 
 	newDefault := templateID
-	err = editSchema(rt.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err = editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		typeDef, err := typeForTemplateConfig(doc.Schema(), typeName)
 		if err != nil {
 			return err
@@ -210,7 +210,7 @@ func AddCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string) 
 	coreTypeName = normalizedCoreTypeName
 
 	result := &AddTemplateBindingResult{}
-	err = editSchema(rt.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err = editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		coreDef, err := coreTypeForTemplateConfig(sch, coreTypeName)
 		if err != nil {
@@ -253,7 +253,7 @@ func RemoveCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID strin
 	}
 	coreTypeName = normalizedCoreTypeName
 
-	return editSchema(rt.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	return editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		coreDef, err := coreTypeForTemplateConfig(doc.Schema(), coreTypeName)
 		if err != nil {
 			return err
@@ -301,7 +301,7 @@ func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID s
 	coreTypeName = normalizedCoreTypeName
 
 	newDefault := templateID
-	err = editSchema(rt.VaultPath, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	err = editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		coreDef, err := coreTypeForTemplateConfig(doc.Schema(), coreTypeName)
 		if err != nil {
 			return err
@@ -359,14 +359,14 @@ func loadTypeForTemplateConfig(rt *vaultruntime.Runtime, typeName string) (*sche
 }
 
 func loadCoreTypeForTemplateConfig(rt *vaultruntime.Runtime, coreTypeName string) (*schema.CoreTypeDefinition, error) {
-	_, coreDef, err := loadSchemaAndCoreType(vaultPath, coreTypeName)
+	_, coreDef, err := loadSchemaAndCoreType(rt, coreTypeName)
 	if err != nil {
 		return nil, err
 	}
 	return coreDef, nil
 }
 
-func loadSchemaAndCoreType(vaultPath, coreTypeName string) (*schema.Schema, *schema.CoreTypeDefinition, error) {
+func loadSchemaAndCoreType(rt *vaultruntime.Runtime, coreTypeName string) (*schema.Schema, *schema.CoreTypeDefinition, error) {
 	normalizedCoreTypeName, err := validateTemplateCoreTypeName(coreTypeName)
 	if err != nil {
 		return nil, nil, err

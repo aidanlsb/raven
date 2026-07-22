@@ -37,7 +37,7 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("INVALID_INPUT", "no items to import", nil, "Provide a non-empty JSON array")
 	}
 
-	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	rt, failure := newSchemaFirstCommandVaultRuntime(vaultPath)
 	if failure.Error != nil {
 		return failure
 	}

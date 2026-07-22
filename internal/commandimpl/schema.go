@@ -20,7 +20,11 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 	start := time.Now()
 	subcommand := strings.TrimSpace(stringArg(req.Args, "subcommand"))
 	name := strings.TrimSpace(stringArg(req.Args, "name"))
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	runtimeBuilder := newSchemaOnlyCommandVaultRuntime
+	if subcommand == "" {
+		runtimeBuilder = newSchemaFirstCommandVaultRuntime
+	}
+	rt, failure := runtimeBuilder(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -105,7 +109,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 // HandleSchemaValidate executes the canonical `schema_validate` command.
 func HandleSchemaValidate(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -120,7 +124,7 @@ func HandleSchemaValidate(_ context.Context, req commandexec.Request) commandexe
 // HandleSchemaAddType executes the canonical `schema_add_type` command.
 func HandleSchemaAddType(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -141,7 +145,7 @@ func HandleSchemaAddType(_ context.Context, req commandexec.Request) commandexec
 // HandleSchemaAddTrait executes the canonical `schema_add_trait` command.
 func HandleSchemaAddTrait(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -162,7 +166,7 @@ func HandleSchemaAddTrait(_ context.Context, req commandexec.Request) commandexe
 // HandleSchemaAddField executes the canonical `schema_add_field` command.
 func HandleSchemaAddField(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -188,7 +192,7 @@ func HandleSchemaAddField(_ context.Context, req commandexec.Request) commandexe
 func HandleSchemaUpdateType(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 	name := stringArg(req.Args, "name")
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -212,7 +216,7 @@ func HandleSchemaUpdateType(_ context.Context, req commandexec.Request) commande
 func HandleSchemaUpdateTrait(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 	name := stringArg(req.Args, "name")
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -235,7 +239,7 @@ func HandleSchemaUpdateField(_ context.Context, req commandexec.Request) command
 	start := time.Now()
 	typeName := stringArg(req.Args, "type_name")
 	fieldName := stringArg(req.Args, "field_name")
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -260,7 +264,7 @@ func HandleSchemaUpdateField(_ context.Context, req commandexec.Request) command
 // HandleSchemaRemoveType executes the canonical `schema_remove_type` command.
 func HandleSchemaRemoveType(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -285,7 +289,7 @@ func HandleSchemaRemoveType(_ context.Context, req commandexec.Request) commande
 // HandleSchemaRemoveTrait executes the canonical `schema_remove_trait` command.
 func HandleSchemaRemoveTrait(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -312,7 +316,7 @@ func HandleSchemaRemoveField(_ context.Context, req commandexec.Request) command
 	start := time.Now()
 	typeName := stringArg(req.Args, "type_name")
 	fieldName := stringArg(req.Args, "field_name")
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -330,7 +334,7 @@ func HandleSchemaRemoveField(_ context.Context, req commandexec.Request) command
 // HandleSchemaRenameType executes the canonical `schema_rename_type` command.
 func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaFirstCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -352,7 +356,7 @@ func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commande
 // HandleSchemaRenameField executes the canonical `schema_rename_field` command.
 func HandleSchemaRenameField(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaFirstCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -377,7 +381,7 @@ func HandleSchemaConvertTrait(_ context.Context, req commandexec.Request) comman
 	if !ok {
 		return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"high":true,"low":false}`)
 	}
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaFirstCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -402,7 +406,7 @@ func HandleSchemaConvertField(_ context.Context, req commandexec.Request) comman
 	if !ok {
 		return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"true":"done","false":"todo"}`)
 	}
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaFirstCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -424,7 +428,7 @@ func HandleSchemaConvertField(_ context.Context, req commandexec.Request) comman
 // HandleSchemaTemplateList executes the canonical `schema_template_list` command.
 func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -466,7 +470,7 @@ func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) comman
 // HandleSchemaTemplateGet executes the canonical `schema_template_get` command.
 func HandleSchemaTemplateGet(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -503,7 +507,7 @@ func HandleSchemaTemplateSet(_ context.Context, req commandexec.Request) command
 func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 	templateID := strings.TrimSpace(stringArg(req.Args, "template_id"))
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -517,7 +521,7 @@ func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) comm
 // HandleSchemaTemplateBind executes the canonical `schema_template_bind` command.
 func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, runtimeFailure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, runtimeFailure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if runtimeFailure.Error != nil {
 		return runtimeFailure
 	}
@@ -569,7 +573,7 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 // HandleSchemaTemplateUnbind executes the canonical `schema_template_unbind` command.
 func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, runtimeFailure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, runtimeFailure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if runtimeFailure.Error != nil {
 		return runtimeFailure
 	}
@@ -608,7 +612,7 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 // HandleSchemaTemplateDefault executes the canonical `schema_template_default` command.
 func HandleSchemaTemplateDefault(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, runtimeFailure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, runtimeFailure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
 	if runtimeFailure.Error != nil {
 		return runtimeFailure
 	}
@@ -646,7 +650,7 @@ func HandleSchemaTemplateDefault(_ context.Context, req commandexec.Request) com
 // HandleTemplateList executes the canonical `template_list` command.
 func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newConfigOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -670,7 +674,7 @@ func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.
 // HandleTemplateWrite executes the canonical `template_write` command.
 func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, failure := newConfigOnlyCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}

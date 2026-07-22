@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/config"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
@@ -148,10 +147,11 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 			result.WarningCount++
 		}
 	}
+	var db *index.Database
 	if err := rt.OpenDB(); err != nil {
 		recordIncomplete("index", err)
 	} else {
-		db := rt.DB
+		db = rt.DB
 		stalenessInfo, stalenessErr := db.CheckStaleness(vaultPath)
 		if stalenessErr != nil {
 			recordIncomplete("index staleness", stalenessErr)

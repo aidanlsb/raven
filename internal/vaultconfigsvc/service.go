@@ -373,7 +373,7 @@ func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDi
 	changed := !directoriesConfigEqual(before, next)
 	if changed {
 		cfg.Directories = next
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -422,7 +422,7 @@ func UnsetDirectories(rt *vaultruntime.Runtime, req UnsetDirectoriesRequest) (*U
 	changed := !directoriesConfigEqual(before, next)
 	if changed {
 		cfg.Directories = next
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -484,7 +484,7 @@ func SetCapture(rt *vaultruntime.Runtime, req SetCaptureRequest) (*SetCaptureRes
 	changed := !captureConfigEqual(before, next)
 	if changed {
 		cfg.Capture = next
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -526,7 +526,7 @@ func UnsetCapture(rt *vaultruntime.Runtime, req UnsetCaptureRequest) (*UnsetCapt
 	changed := !captureConfigEqual(before, next)
 	if changed {
 		cfg.Capture = next
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -590,7 +590,7 @@ func SetDeletion(rt *vaultruntime.Runtime, req SetDeletionRequest) (*SetDeletion
 	changed := !deletionConfigEqual(before, next)
 	if changed {
 		cfg.Deletion = next
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -632,7 +632,7 @@ func UnsetDeletion(rt *vaultruntime.Runtime, req UnsetDeletionRequest) (*UnsetDe
 	changed := !deletionConfigEqual(before, next)
 	if changed {
 		cfg.Deletion = next
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -656,7 +656,7 @@ func SetAutoReindex(rt *vaultruntime.Runtime, req SetAutoReindexRequest) (*SetAu
 	if changed {
 		value := req.Value
 		cfg.AutoReindex = &value
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -679,7 +679,7 @@ func UnsetAutoReindex(rt *vaultruntime.Runtime, req UnsetAutoReindexRequest) (*U
 	changed := cfg.AutoReindex != nil
 	if changed {
 		cfg.AutoReindex = nil
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -728,7 +728,7 @@ func AddProtectedPrefix(rt *vaultruntime.Runtime, req AddProtectedPrefixRequest)
 		prefixes = append(prefixes, prefix)
 		sort.Strings(prefixes)
 		cfg.ProtectedPrefixes = prefixes
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -768,7 +768,7 @@ func RemoveProtectedPrefix(rt *vaultruntime.Runtime, req RemoveProtectedPrefixRe
 	}
 
 	cfg.ProtectedPrefixes = next
-	if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+	if err := save(rt, cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 	}
 
@@ -815,7 +815,7 @@ func AddExclude(rt *vaultruntime.Runtime, req AddExcludeRequest) (*AddExcludeRes
 	if changed {
 		patterns = append(patterns, pattern)
 		cfg.Exclude = patterns
-		if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+		if err := save(rt, cfg); err != nil {
 			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 		}
 	}
@@ -855,7 +855,7 @@ func RemoveExclude(rt *vaultruntime.Runtime, req RemoveExcludeRequest) (*RemoveE
 	}
 
 	cfg.Exclude = next
-	if err := config.SaveVaultConfig(rt.VaultPath, cfg); err != nil {
+	if err := save(rt, cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 	}
 
@@ -872,9 +872,20 @@ func load(rt *vaultruntime.Runtime) (*config.VaultConfig, bool, string, error) {
 		return nil, false, "", newError(CodeInvalidInput, "vault path is required", "Resolve a vault before invoking the command", nil)
 	}
 	if rt.VaultCfg == nil {
-		return nil, rt.VaultConfigExists, rt.VaultConfigPath, newError(CodeConfigInvalid, "vault config runtime is required", "Fix raven.yaml and try again", nil)
+		if err := rt.ReloadConfig(); err != nil {
+			return nil, rt.VaultConfigExists, rt.VaultConfigPath, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+		}
 	}
 	return rt.VaultCfg, rt.VaultConfigExists, rt.VaultConfigPath, nil
+}
+
+func save(rt *vaultruntime.Runtime, cfg *config.VaultConfig) error {
+	err := config.SaveVaultConfig(rt.VaultPath, cfg)
+	reloadErr := rt.ReloadConfig()
+	if err != nil {
+		return err
+	}
+	return reloadErr
 }
 
 func normalizedProtectedPrefixes(prefixes []string) []string {

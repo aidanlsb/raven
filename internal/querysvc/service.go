@@ -198,7 +198,7 @@ func Set(rt *vaultruntime.Runtime, req SetRequest) (*SetResult, error) {
 	}
 	vaultCfg.Queries[name] = next
 
-	if err := config.SaveVaultConfig(rt.VaultPath, vaultCfg); err != nil {
+	if err := saveRuntimeConfig(rt, vaultCfg); err != nil {
 		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 	}
 
@@ -223,7 +223,7 @@ func Remove(rt *vaultruntime.Runtime, req RemoveRequest) (*RemoveResult, error) 
 	}
 
 	delete(vaultCfg.Queries, name)
-	if err := config.SaveVaultConfig(rt.VaultPath, vaultCfg); err != nil {
+	if err := saveRuntimeConfig(rt, vaultCfg); err != nil {
 		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 	}
 
@@ -235,9 +235,20 @@ func runtimeConfig(rt *vaultruntime.Runtime) (*config.VaultConfig, error) {
 		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
 	}
 	if rt.VaultCfg == nil {
-		return nil, newError(CodeConfigInvalid, "vault config runtime is required", "Fix raven.yaml and try again", nil)
+		if err := rt.ReloadConfig(); err != nil {
+			return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+		}
 	}
 	return rt.VaultCfg, nil
+}
+
+func saveRuntimeConfig(rt *vaultruntime.Runtime, cfg *config.VaultConfig) error {
+	err := config.SaveVaultConfig(rt.VaultPath, cfg)
+	reloadErr := rt.ReloadConfig()
+	if err != nil {
+		return err
+	}
+	return reloadErr
 }
 
 func savedQueryInfo(name string, q *config.SavedQuery) SavedQueryInfo {

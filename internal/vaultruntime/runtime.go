@@ -53,6 +53,10 @@ type Options struct {
 	// SkipSchema avoids loading schema.yaml for operations that are explicitly
 	// schema-free, such as vault-config editing and database statistics.
 	SkipSchema bool
+	// SchemaFirst preserves operations whose historical setup contract loaded
+	// schema before config. It only affects which setup failure wins when both
+	// files are invalid.
+	SchemaFirst bool
 	// RequireSchema controls how a schema load failure is handled.
 	//
 	// A missing schema.yaml is never a failure: schema.Load returns a default
@@ -87,13 +91,30 @@ func New(vaultPath string, opts Options) (*Runtime, error) {
 		VaultPath:       vaultPath,
 		VaultConfigPath: filepath.Join(vaultPath, "raven.yaml"),
 	}
-	if !opts.SkipConfig {
-		if err := rt.ReloadConfig(); err != nil {
+	loadConfig := func() error {
+		if opts.SkipConfig {
+			return nil
+		}
+		return rt.ReloadConfig()
+	}
+	loadSchema := func() error {
+		if opts.SkipSchema {
+			return nil
+		}
+		return rt.ReloadSchema(opts.RequireSchema)
+	}
+	if opts.SchemaFirst {
+		if err := loadSchema(); err != nil {
 			return nil, err
 		}
-	}
-	if !opts.SkipSchema {
-		if err := rt.ReloadSchema(opts.RequireSchema); err != nil {
+		if err := loadConfig(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := loadConfig(); err != nil {
+			return nil, err
+		}
+		if err := loadSchema(); err != nil {
 			return nil, err
 		}
 	}

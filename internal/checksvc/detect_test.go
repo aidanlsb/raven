@@ -4,30 +4,22 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func reindexForTest(t *testing.T, vaultPath string) {
 	t.Helper()
-	if _, err := reindexsvc.Run(reindexsvc.RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	rt := testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
+	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
 		t.Fatalf("reindex: %v", err)
 	}
 }
 
-func loadForDetect(t *testing.T, vaultPath string) (*config.VaultConfig, *schema.Schema) {
+func loadForDetect(t *testing.T, vaultPath string) *vaultruntime.Runtime {
 	t.Helper()
-	cfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		t.Fatalf("load config: %v", err)
-	}
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		t.Fatalf("load schema: %v", err)
-	}
-	return cfg, sch
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
 }
 
 func TestDetectMissingRefs_CertainFromTypedField(t *testing.T) {
@@ -39,8 +31,8 @@ func TestDetectMissingRefs_CertainFromTypedField(t *testing.T) {
 		Build()
 	reindexForTest(t, vault.Path)
 
-	cfg, sch := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(vault.Path, cfg, sch, "projects/website.md")
+	rt := loadForDetect(t, vault.Path)
+	refs, err := DetectMissingRefs(rt, "projects/website.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -72,8 +64,8 @@ func TestDetectMissingRefs_ExistingTargetNotReported(t *testing.T) {
 		Build()
 	reindexForTest(t, vault.Path)
 
-	cfg, sch := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(vault.Path, cfg, sch, "projects/website.md")
+	rt := loadForDetect(t, vault.Path)
+	refs, err := DetectMissingRefs(rt, "projects/website.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -91,8 +83,8 @@ func TestDetectMissingRefs_InferredFromPath(t *testing.T) {
 		Build()
 	reindexForTest(t, vault.Path)
 
-	cfg, sch := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(vault.Path, cfg, sch, "notes/mention.md")
+	rt := loadForDetect(t, vault.Path)
+	refs, err := DetectMissingRefs(rt, "notes/mention.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -124,8 +116,8 @@ func TestDetectMissingRefs_PrefixedDailyRefResolvesAsAlias(t *testing.T) {
 		Build()
 	reindexForTest(t, vault.Path)
 
-	cfg, sch := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(vault.Path, cfg, sch, "notes/mention.md")
+	rt := loadForDetect(t, vault.Path)
+	refs, err := DetectMissingRefs(rt, "notes/mention.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -145,8 +137,8 @@ func TestDetectMissingRefs_AmbiguousNotReported(t *testing.T) {
 		Build()
 	reindexForTest(t, vault.Path)
 
-	cfg, sch := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(vault.Path, cfg, sch, "notes/mention.md")
+	rt := loadForDetect(t, vault.Path)
+	refs, err := DetectMissingRefs(rt, "notes/mention.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -167,8 +159,8 @@ func TestDetectMissingRefs_SkippedWhenNoIndex(t *testing.T) {
 	// Intentionally do not reindex: with no index, detection is skipped rather
 	// than reporting false positives for unindexed targets.
 
-	cfg, sch := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(vault.Path, cfg, sch, "projects/website.md")
+	rt := loadForDetect(t, vault.Path)
+	refs, err := DetectMissingRefs(rt, "projects/website.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}

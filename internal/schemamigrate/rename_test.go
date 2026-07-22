@@ -6,7 +6,13 @@ import (
 
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func migrationTestRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
+	t.Helper()
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
+}
 
 const eventTypeSchema = `version: 2
 types:
@@ -64,7 +70,7 @@ func TestRenameType_PreviewCountMatchesApplyForQuotedTypes(t *testing.T) {
 		WithFile("notes/other.md", "---\ntype: page\ntitle: Other\n---\n# Other\n").
 		Build()
 
-	preview, err := RenameType(RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
+	preview, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
 	if err != nil {
 		t.Fatalf("preview RenameType: %v", err)
 	}
@@ -75,7 +81,7 @@ func TestRenameType_PreviewCountMatchesApplyForQuotedTypes(t *testing.T) {
 		t.Fatalf("expected preview to count 3 frontmatter changes (quoted, single, plain), got %d\n%+v", got, preview.Changes)
 	}
 
-	apply, err := RenameType(RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting", Confirm: true})
+	apply, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting", Confirm: true})
 	if err != nil {
 		t.Fatalf("apply RenameType: %v", err)
 	}
@@ -115,7 +121,7 @@ func TestRenameType_PreviewListsReferenceUpdatesFromDirectoryMove(t *testing.T) 
 		Build()
 
 	beforeRoadmap := vault.ReadFile("projects/roadmap.md")
-	preview, err := RenameType(RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
+	preview, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
 	if err != nil {
 		t.Fatalf("preview RenameType: %v", err)
 	}
@@ -148,7 +154,7 @@ func TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs(t *testing.T) {
 		WithFile("projects/roadmap.md", "---\ntype: project\nkickoff: events/kickoff\n---\n# Roadmap\n\nKickoff: [[events/kickoff]]\n").
 		Build()
 
-	preview, err := RenameType(RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
+	preview, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
 	if err != nil {
 		t.Fatalf("preview RenameType: %v", err)
 	}
@@ -159,7 +165,7 @@ func TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs(t *testing.T) {
 		t.Fatalf("expected files_to_move=1, got %d", preview.FilesToMove)
 	}
 
-	result, err := RenameType(RenameTypeRequest{
+	result, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{
 		VaultPath:         vault.Path,
 		OldName:           "event",
 		NewName:           "meeting",

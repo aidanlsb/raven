@@ -14,6 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/filelock"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )

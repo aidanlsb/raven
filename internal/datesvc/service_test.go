@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestDateHub_BacklinksUseDailyNoteObjectID(t *testing.T) {
@@ -17,7 +18,8 @@ func TestDateHub_BacklinksUseDailyNoteObjectID(t *testing.T) {
 
 	vault.RunCLI("reindex").MustSucceed(t)
 
-	result, err := DateHub(DateHubRequest{
+	rt := testutil.NewVaultRuntime(t, vault.Path, vaultruntime.Options{})
+	result, err := DateHub(rt, DateHubRequest{
 		VaultPath: vault.Path,
 		DateArg:   "2026-02-01",
 	})

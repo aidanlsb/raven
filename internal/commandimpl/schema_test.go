@@ -2,6 +2,8 @@ package commandimpl
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -71,5 +73,19 @@ func TestHandleSchemaUpdateTraitAcceptsArrayValues(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("values = %v, want %v", got, want)
 		}
+	}
+}
+
+func TestHandleSchemaValidateIgnoresUnrelatedInvalidVaultConfig(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+	if err := os.WriteFile(filepath.Join(vault.Path, "raven.yaml"), []byte("directories: [unterminated\n"), 0o644); err != nil {
+		t.Fatalf("write invalid raven.yaml: %v", err)
+	}
+
+	result := HandleSchemaValidate(context.Background(), commandexec.Request{VaultPath: vault.Path})
+	if !result.OK {
+		t.Fatalf("schema validate failed on unrelated config error: %#v", result.Error)
 	}
 }

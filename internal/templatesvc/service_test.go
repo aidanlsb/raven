@@ -7,7 +7,14 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func templateTestRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
+	t.Helper()
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
+}
 
 func assertTemplateCode(t *testing.T, err error, want Code) *svcerr.Error {
 	t.Helper()
@@ -27,7 +34,7 @@ func assertTemplateCode(t *testing.T, err error, want Code) *svcerr.Error {
 func TestWriteAndListLifecycle(t *testing.T) {
 	vaultPath := t.TempDir()
 
-	listResult, err := List(ListRequest{
+	listResult, err := List(templateTestRuntime(t, vaultPath), ListRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 	})
@@ -38,7 +45,7 @@ func TestWriteAndListLifecycle(t *testing.T) {
 		t.Fatalf("expected empty template list, got %#v", listResult.Templates)
 	}
 
-	writeCreated, err := Write(WriteRequest{
+	writeCreated, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
@@ -54,7 +61,7 @@ func TestWriteAndListLifecycle(t *testing.T) {
 		t.Fatalf("path = %q, want %q", writeCreated.Path, "templates/meeting.md")
 	}
 
-	writeUnchanged, err := Write(WriteRequest{
+	writeUnchanged, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
@@ -67,7 +74,7 @@ func TestWriteAndListLifecycle(t *testing.T) {
 		t.Fatalf("unexpected unchanged write result: %#v", writeUnchanged)
 	}
 
-	writeUpdated, err := Write(WriteRequest{
+	writeUpdated, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
@@ -88,7 +95,7 @@ func TestWriteAndListLifecycle(t *testing.T) {
 		t.Fatalf("unexpected template content: %q", string(updatedContent))
 	}
 
-	finalList, err := List(ListRequest{
+	finalList, err := List(templateTestRuntime(t, vaultPath), ListRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 	})
@@ -105,7 +112,7 @@ func TestWriteAndListLifecycle(t *testing.T) {
 
 func TestReadReturnsExistingContentOrEmptyNewTemplate(t *testing.T) {
 	vaultPath := t.TempDir()
-	if _, err := Write(WriteRequest{
+	if _, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
@@ -142,7 +149,7 @@ func TestReadReturnsExistingContentOrEmptyNewTemplate(t *testing.T) {
 func TestWriteRejectsFrontmatter(t *testing.T) {
 	vaultPath := t.TempDir()
 
-	_, err := Write(WriteRequest{
+	_, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "daily.md",
@@ -157,7 +164,7 @@ func TestWriteRejectsFrontmatter(t *testing.T) {
 func TestDeleteRespectsSchemaReferences(t *testing.T) {
 	vaultPath := t.TempDir()
 
-	_, err := Write(WriteRequest{
+	_, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
@@ -176,7 +183,7 @@ templates:
 		t.Fatalf("failed to write schema fixture: %v", err)
 	}
 
-	_, err = Delete(DeleteRequest{
+	_, err = Delete(templateTestRuntime(t, vaultPath), DeleteRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
@@ -191,7 +198,7 @@ templates:
 		t.Fatalf("template should still exist after blocked delete, stat err: %v", statErr)
 	}
 
-	deleteResult, err := Delete(DeleteRequest{
+	deleteResult, err := Delete(templateTestRuntime(t, vaultPath), DeleteRequest{
 		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
@@ -222,8 +229,9 @@ templates:
 }
 
 func TestWriteRejectsPathOutsideTemplateDirectory(t *testing.T) {
-	_, err := Write(WriteRequest{
-		VaultPath:   t.TempDir(),
+	vaultPath := t.TempDir()
+	_, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
+		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "other/meeting.md",
 		Content:     "# Meeting\n",

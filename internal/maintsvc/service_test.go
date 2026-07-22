@@ -7,6 +7,8 @@ import (
 	"github.com/aidanlsb/raven/internal/buildinfo"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func assertCode(t *testing.T, err error, want Code) {
@@ -25,7 +27,7 @@ func assertCode(t *testing.T, err error, want Code) {
 
 func TestStats_InvalidInput(t *testing.T) {
 	t.Parallel()
-	_, err := Stats(" ")
+	_, err := Stats(&vaultruntime.Runtime{VaultPath: " "})
 	assertCode(t, err, CodeInvalidInput)
 }
 
@@ -66,7 +68,11 @@ func TestStats_HappyPath(t *testing.T) {
 		t.Fatalf("failed to close db: %v", err)
 	}
 
-	stats, err := Stats(vaultPath)
+	rt := testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{
+		SkipConfig: true,
+		SkipSchema: true,
+	})
+	stats, err := Stats(rt)
 	if err != nil {
 		t.Fatalf("Stats returned error: %v", err)
 	}

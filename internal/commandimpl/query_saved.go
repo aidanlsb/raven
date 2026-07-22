@@ -16,7 +16,7 @@ func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexe
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	rt, failure := newLazyConfigCommandRuntime(vaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -43,7 +43,7 @@ func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	rt, failure := newLazyConfigCommandRuntime(vaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -67,7 +67,7 @@ func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	rt, failure := newLazyConfigCommandRuntime(vaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -97,7 +97,7 @@ func HandleQuerySavedRemove(_ context.Context, req commandexec.Request) commande
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	rt, failure := newLazyConfigCommandRuntime(vaultPath)
 	if failure.Error != nil {
 		return failure
 	}
