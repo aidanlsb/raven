@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/resolver"
@@ -171,25 +172,9 @@ func (ws *workspace) newValidator() *check.Validator {
 	return validator
 }
 
-// parseOptions returns parser options matching the vault's directory config.
-func (ws *workspace) parseOptions() *parser.ParseOptions {
-	vaultCfg := ws.vaultConfig()
-	if vaultCfg == nil {
-		return nil
-	}
-	opts := &parser.ParseOptions{
-		DailyRoot: vaultCfg.GetDailyDirectory(),
-	}
-	if vaultCfg.HasDirectoriesConfig() {
-		opts.ObjectsRoot = vaultCfg.GetObjectsRoot()
-		opts.PagesRoot = vaultCfg.GetPagesRoot()
-	}
-	return opts
-}
-
 // parseBuffer parses in-memory buffer content as the document at absPath.
 func (ws *workspace) parseBuffer(content, absPath string) (*parser.ParsedDocument, error) {
-	return parser.ParseDocumentWithOptions(content, absPath, ws.vaultPath(), ws.parseOptions())
+	return parser.ParseDocumentWithOptions(content, absPath, ws.vaultPath(), parseopts.FromVaultConfig(ws.vaultConfig()))
 }
 
 // relativePath converts an absolute path to a vault-relative slash path.

@@ -10,7 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -228,7 +228,7 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 		return result
 	}
 
-	parseOpts := parserOptionsFor(vaultCfg)
+	parseOpts := parseopts.FromVaultConfig(vaultCfg)
 
 	sort.Slice(fixes, func(i, j int) bool {
 		return fixes[i].FilePath < fixes[j].FilePath
@@ -274,17 +274,6 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 	}
 
 	return result
-}
-
-func parserOptionsFor(vaultCfg *config.VaultConfig) *parser.ParseOptions {
-	if vaultCfg == nil {
-		return &parser.ParseOptions{}
-	}
-	return &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
-		DailyRoot:   vaultCfg.GetDailyDirectory(),
-	}
 }
 
 // tryFixNonCanonicalRef builds a wikilink text fix that strips the configured

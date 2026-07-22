@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -57,11 +58,7 @@ func DetectMissingRefs(vaultPath string, vaultCfg *config.VaultConfig, sch *sche
 		validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 	}
 
-	parseOpts := &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
-		DailyRoot:   vaultCfg.GetDailyDirectory(),
-	}
+	parseOpts := parseopts.FromVaultConfig(vaultCfg)
 
 	seen := make(map[string]struct{}, len(relPaths))
 	for _, relPath := range relPaths {

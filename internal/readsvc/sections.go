@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 )
 
@@ -51,7 +52,7 @@ func ReadSections(rt *Runtime, reference string) (*SectionsResult, error) {
 	}
 	relPath = filepath.ToSlash(relPath)
 
-	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), resolved.FilePath, rt.VaultPath, buildParseOptions(rt.VaultCfg))
+	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), resolved.FilePath, rt.VaultPath, parseopts.FromVaultConfig(rt.VaultCfg))
 	if err != nil {
 		return nil, err
 	}

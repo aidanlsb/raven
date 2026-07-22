@@ -15,6 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -66,17 +67,6 @@ func mapVaultRuntimeSetupFailure(err error) commandexec.Result {
 	return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 }
 
-func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {
-	if vaultCfg == nil {
-		return nil
-	}
-	return &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
-		DailyRoot:   vaultCfg.GetDailyDirectory(),
-	}
-}
-
 func autoReindexWarnings(vaultPath string, vaultCfg *config.VaultConfig, filePaths ...string) []commandexec.Warning {
 	if vaultCfg == nil || !vaultCfg.IsAutoReindexEnabled() {
 		return nil
@@ -112,7 +102,7 @@ func autoReindexWarning(vaultPath, filePath string, vaultCfg *config.VaultConfig
 		return indexUpdateWarning(vaultPath, filePath, "failed to read file", err), true
 	}
 
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, buildParseOptions(vaultCfg))
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseopts.FromVaultConfig(vaultCfg))
 	if err != nil {
 		return indexUpdateWarning(vaultPath, filePath, "failed to parse file", err), true
 	}
