@@ -25,11 +25,20 @@ var (
 )
 
 var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
-	VaultPath:       getVaultPath,
-	BuildArgs:       buildImportArgs,
-	Invoke:          invokeImport,
-	RenderHuman:     renderImportResult,
-	SkipFlagBinding: true,
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildImportArgs,
+	Invoke:      invokeImport,
+	RenderHuman: renderImportResult,
+	FlagBindings: map[string]interface{}{
+		"file":          &importFile,
+		"mapping":       &importMapping,
+		"map":           &importMapFlags,
+		"key":           &importKey,
+		"content-field": &importContentField,
+		"dry-run":       &importDryRun,
+		"create-only":   &importCreateOnly,
+		"update-only":   &importUpdateOnly,
+	},
 })
 
 type importResult = importsvc.ResultItem
@@ -185,13 +194,5 @@ func renderCanonicalImportResult(result commandexec.Result) error {
 }
 
 func init() {
-	importCmd.Flags().StringVar(&importFile, "file", "", "Read JSON from file instead of stdin")
-	importCmd.Flags().StringVar(&importMapping, "mapping", "", "Path to YAML mapping file")
-	importCmd.Flags().StringArrayVar(&importMapFlags, "map", nil, "Field mapping: external_key=schema_field (repeatable)")
-	importCmd.Flags().StringVar(&importKey, "key", "", "Field used for matching existing objects (default: type's name_field)")
-	importCmd.Flags().StringVar(&importContentField, "content-field", "", "JSON field to use as page body content")
-	importCmd.Flags().BoolVar(&importDryRun, "dry-run", false, "Preview changes without writing")
-	importCmd.Flags().BoolVar(&importCreateOnly, "create-only", false, "Only create new objects, skip updates")
-	importCmd.Flags().BoolVar(&importUpdateOnly, "update-only", false, "Only update existing objects, skip creation")
 	rootCmd.AddCommand(importCmd)
 }

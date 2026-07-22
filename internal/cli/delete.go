@@ -19,12 +19,17 @@ var (
 )
 
 var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
-	VaultPath:       getVaultPath,
-	Args:            cobra.MaximumNArgs(1),
-	BuildArgs:       buildDeleteArgs,
-	Invoke:          invokeDelete,
-	RenderHuman:     renderDeleteResult,
-	SkipFlagBinding: true,
+	VaultPath:   getVaultPath,
+	Args:        cobra.MaximumNArgs(1),
+	BuildArgs:   buildDeleteArgs,
+	Invoke:      invokeDelete,
+	RenderHuman: renderDeleteResult,
+	FlagBindings: map[string]interface{}{
+		"force":   &deleteForce,
+		"stdin":   &deleteStdin,
+		"confirm": &deleteConfirm,
+		"dry-run": &deleteDryRun,
+	},
 })
 
 func buildDeleteArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
@@ -179,10 +184,6 @@ func deletePreviewBacklinks(raw interface{}) []model.Reference {
 }
 
 func init() {
-	deleteCmd.Flags().BoolVar(&deleteForce, "force", false, "Skip confirmation prompt")
-	deleteCmd.Flags().BoolVar(&deleteStdin, "stdin", false, "Read object or asset IDs from stdin (one per line)")
-	deleteCmd.Flags().BoolVar(&deleteConfirm, "confirm", false, "Apply bulk delete (without this flag, bulk shows preview only)")
-	deleteCmd.Flags().BoolVar(&deleteDryRun, "dry-run", false, "Preview a single-file delete without applying it")
 	deleteCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
 		IncludeDynamicDates: false,
 		DisableWhenStdin:    true,

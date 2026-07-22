@@ -37,3 +37,29 @@ func TestCanonicalLeafSuccessSkipsFailureHandlerBeforeHumanRender(t *testing.T) 
 		t.Fatal("expected human renderer to run")
 	}
 }
+
+func TestCanonicalLeafBindsRegistryFlagsToCustomTargets(t *testing.T) {
+	var ref, source string
+	cmd := newCanonicalLeafCommand("docs_fetch", canonicalLeafOptions{
+		FlagBindings: map[string]interface{}{
+			"ref":    &ref,
+			"source": &source,
+		},
+	})
+
+	if ref != "main" {
+		t.Fatalf("bound ref default = %q, want %q", ref, "main")
+	}
+	if source == "" {
+		t.Fatal("bound source default must come from registry metadata")
+	}
+	if err := cmd.ParseFlags([]string{"--ref", "release", "--source", "https://example.com/docs"}); err != nil {
+		t.Fatalf("ParseFlags() error = %v", err)
+	}
+	if ref != "release" {
+		t.Fatalf("bound ref = %q, want %q", ref, "release")
+	}
+	if source != "https://example.com/docs" {
+		t.Fatalf("bound source = %q, want example URL", source)
+	}
+}

@@ -93,11 +93,16 @@ func BuildCommandContract(commandID string) (CommandContract, bool) {
 	required := make([]string, 0, len(meta.Args))
 
 	for _, arg := range meta.Args {
+		paramType := ParameterTypeString
+		if arg.Variadic {
+			paramType = ParameterTypeStringArray
+		}
 		spec := ParameterSpec{
 			Name:        arg.Name,
-			Type:        ParameterTypeString,
+			Type:        paramType,
 			Required:    arg.Required,
 			Description: arg.Description,
+			Examples:    append([]string{}, arg.Examples...),
 		}
 		parameters[arg.Name] = spec
 		paramOrder = append(paramOrder, arg.Name)

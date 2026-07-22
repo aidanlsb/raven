@@ -18,12 +18,16 @@ var (
 )
 
 var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
-	VaultPath:       getVaultPath,
-	Args:            cobra.ArbitraryArgs,
-	BuildArgs:       buildAddArgs,
-	Invoke:          invokeAdd,
-	RenderHuman:     renderAddResult,
-	SkipFlagBinding: true,
+	VaultPath:   getVaultPath,
+	Args:        cobra.ArbitraryArgs,
+	BuildArgs:   buildAddArgs,
+	Invoke:      invokeAdd,
+	RenderHuman: renderAddResult,
+	FlagBindings: map[string]interface{}{
+		"to":      &addToFlag,
+		"stdin":   &addStdin,
+		"confirm": &addConfirm,
+	},
 })
 
 func buildAddArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
@@ -107,9 +111,6 @@ func buildCreateObjectCommand(typeName, targetRaw string) string {
 }
 
 func init() {
-	addCmd.Flags().StringVar(&addToFlag, "to", "", "Target file (path or reference like 'cursor')")
-	addCmd.Flags().BoolVar(&addStdin, "stdin", false, "Read object IDs from stdin (one per line)")
-	addCmd.Flags().BoolVar(&addConfirm, "confirm", false, "Apply bulk changes (without this flag, bulk shows preview only)")
 	addCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		message := err.Error()
 		if strings.Contains(message, "unknown flag: --heading") || strings.Contains(message, "unknown flag: --create-heading") {

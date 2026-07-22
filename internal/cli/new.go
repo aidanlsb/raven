@@ -26,12 +26,17 @@ var (
 )
 
 var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
-	VaultPath:       getVaultPath,
-	Args:            cobra.RangeArgs(1, 2),
-	BuildArgs:       buildNewArgs,
-	Invoke:          invokeNew,
-	RenderHuman:     renderNewResult,
-	SkipFlagBinding: true,
+	VaultPath:   getVaultPath,
+	Args:        cobra.RangeArgs(1, 2),
+	BuildArgs:   buildNewArgs,
+	Invoke:      invokeNew,
+	RenderHuman: renderNewResult,
+	FlagBindings: map[string]interface{}{
+		"field":       &newFieldFlags,
+		"fields-json": &newFieldJSON,
+		"path":        &newPathFlag,
+		"template":    &newTemplate,
+	},
 })
 
 func buildNewArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
@@ -300,10 +305,6 @@ func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]stri
 }
 
 func init() {
-	newCmd.Flags().StringArrayVar(&newFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
-	newCmd.Flags().StringVar(&newFieldJSON, "fields-json", "", "Set frontmatter fields via JSON object (typed values)")
-	newCmd.Flags().StringVar(&newPathFlag, "path", "", "Explicit target path (overrides title-derived path)")
-	newCmd.Flags().StringVar(&newTemplate, "template", "", "Type template ID to use for object creation")
 	newCmd.ValidArgsFunction = completeTypes
 	rootCmd.AddCommand(newCmd)
 }
