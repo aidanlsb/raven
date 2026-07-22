@@ -130,6 +130,7 @@ type ServerCapabilities struct {
 	DefinitionProvider bool                    `json:"definitionProvider,omitempty"`
 	ReferencesProvider bool                    `json:"referencesProvider,omitempty"`
 	HoverProvider      bool                    `json:"hoverProvider,omitempty"`
+	CodeActionProvider *CodeActionOptions      `json:"codeActionProvider,omitempty"`
 }
 
 // Text document sync kinds.
@@ -152,6 +153,14 @@ type SaveOptions struct {
 // CompletionOptions configures the completion provider.
 type CompletionOptions struct {
 	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
+}
+
+// Code action kinds supported by this server.
+const codeActionKindQuickFix = "quickfix"
+
+// CodeActionOptions configures the code action provider.
+type CodeActionOptions struct {
+	CodeActionKinds []string `json:"codeActionKinds,omitempty"`
 }
 
 // DidOpenTextDocumentParams is the didOpen notification payload.
@@ -208,6 +217,33 @@ type Diagnostic struct {
 	Code     string `json:"code,omitempty"`
 	Source   string `json:"source,omitempty"`
 	Message  string `json:"message"`
+}
+
+// CodeActionParams is the textDocument/codeAction request payload.
+type CodeActionParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Range        Range                  `json:"range"`
+	Context      CodeActionContext      `json:"context"`
+}
+
+// CodeActionContext carries diagnostics and requested action kinds.
+type CodeActionContext struct {
+	Diagnostics []Diagnostic `json:"diagnostics"`
+	Only        []string     `json:"only,omitempty"`
+}
+
+// CodeAction describes an editor action that can apply a workspace edit.
+type CodeAction struct {
+	Title       string         `json:"title"`
+	Kind        string         `json:"kind,omitempty"`
+	Diagnostics []Diagnostic   `json:"diagnostics,omitempty"`
+	IsPreferred bool           `json:"isPreferred,omitempty"`
+	Edit        *WorkspaceEdit `json:"edit,omitempty"`
+}
+
+// WorkspaceEdit groups text edits by document URI.
+type WorkspaceEdit struct {
+	Changes map[string][]TextEdit `json:"changes"`
 }
 
 // ReferenceParams is the textDocument/references request payload.

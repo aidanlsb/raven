@@ -349,7 +349,7 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 		Name:        "lsp",
 		Description: "Run Raven as an LSP server",
 		VaultScope:  VaultScopeNone,
-		LongDesc:    "Run Raven as a Language Server Protocol server over stdio for editor integration (diagnostics, completion, go-to-definition, find-references, hover).",
+		LongDesc:    "Run Raven as a Language Server Protocol server over stdio for editor integration (diagnostics, quick-fix code actions, completion, go-to-definition, find-references, hover).",
 		Examples: []string{
 			"rvn lsp",
 			"rvn lsp --vault personal",

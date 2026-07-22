@@ -61,7 +61,7 @@ func computeDiagnostics(ws *workspace, validator *check.Validator, content, absP
 	diagnostics := []Diagnostic{}
 	lines := documentLines(content)
 
-	doc, err := ws.parseBuffer(content, absPath)
+	doc, issues, err := validateBuffer(ws, validator, content, absPath)
 	if err != nil {
 		diagnostics = append(diagnostics, Diagnostic{
 			Range:    wholeLineRange(lineAt(lines, 0), 0, encoding),
@@ -73,27 +73,72 @@ func computeDiagnostics(ws *workspace, validator *check.Validator, content, absP
 		return diagnostics
 	}
 
-	for _, issue := range validator.ValidateDocument(doc) {
-		severity := severityError
-		if issue.Level == check.LevelWarning {
-			severity = severityWarning
-		}
-		diagnostics = append(diagnostics, Diagnostic{
-			Range:    issueRange(issue, doc, lines, encoding),
-			Severity: severity,
-			Code:     string(issue.Type),
-			Source:   "raven",
-			Message:  issue.Message,
-		})
+	for _, item := range diagnosticsForIssues(issues, doc, lines, encoding) {
+		diagnostics = append(diagnostics, item.diagnostic)
 	}
 
 	return diagnostics
 }
 
+func validateBuffer(ws *workspace, validator *check.Validator, content, absPath string) (*parser.ParsedDocument, []check.Issue, error) {
+	doc, err := ws.parseBuffer(content, absPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	issues := validator.ValidateDocument(doc)
+	vaultCfg := ws.vaultConfig()
+	if vaultCfg.HasDirectoriesConfig() {
+		issues = append(issues, check.DetectNonCanonicalRefs(
+			doc,
+			vaultCfg.GetObjectsRoot(),
+			vaultCfg.GetPagesRoot(),
+		)...)
+	}
+	return doc, issues, nil
+}
+
+type issueDiagnostic struct {
+	issue      check.Issue
+	diagnostic Diagnostic
+}
+
+func diagnosticsForIssues(issues []check.Issue, doc *parser.ParsedDocument, lines []string, encoding string) []issueDiagnostic {
+	items := make([]issueDiagnostic, 0, len(issues))
+	ranges := issueRangeResolver{refOccurrences: make(map[refIssueKey]int)}
+	for _, issue := range issues {
+		severity := severityError
+		if issue.Level == check.LevelWarning {
+			severity = severityWarning
+		}
+		items = append(items, issueDiagnostic{
+			issue: issue,
+			diagnostic: Diagnostic{
+				Range:    ranges.issueRange(issue, doc, lines, encoding),
+				Severity: severity,
+				Code:     string(issue.Type),
+				Source:   "raven",
+				Message:  issue.Message,
+			},
+		})
+	}
+	return items
+}
+
+type refIssueKey struct {
+	issueType check.IssueType
+	line      int
+	value     string
+}
+
+type issueRangeResolver struct {
+	refOccurrences map[refIssueKey]int
+}
+
 // issueRange finds the most precise range for an issue: the wikilink span for
 // reference issues, the annotation span for trait issues, and the whole line
 // otherwise.
-func issueRange(issue check.Issue, doc *parser.ParsedDocument, lines []string, encoding string) Range {
+func (r *issueRangeResolver) issueRange(issue check.Issue, doc *parser.ParsedDocument, lines []string, encoding string) Range {
 	lineIdx := issue.Line - 1
 	if lineIdx < 0 {
 		lineIdx = 0
@@ -107,7 +152,10 @@ func issueRange(issue check.Issue, doc *parser.ParsedDocument, lines []string, e
 	line := lineAt(lines, lineIdx)
 
 	if _, ok := refIssueTypes[issue.Type]; ok && issue.Value != "" {
-		if start, end, found := refSpanOnLine(line, issue.Value); found {
+		key := refIssueKey{issueType: issue.Type, line: lineIdx, value: issue.Value}
+		occurrence := r.refOccurrences[key]
+		r.refOccurrences[key] = occurrence + 1
+		if start, end, found := refSpanOnLine(line, issue.Value, occurrence); found {
 			return byteRangeToRange(line, lineIdx, start, end, encoding)
 		}
 	}
@@ -122,13 +170,18 @@ func issueRange(issue check.Issue, doc *parser.ParsedDocument, lines []string, e
 }
 
 // refSpanOnLine finds the byte span of the wikilink whose target matches value.
-func refSpanOnLine(line, value string) (start, end int, found bool) {
+func refSpanOnLine(line, value string, occurrence int) (start, end int, found bool) {
+	var matches []parser.Reference
 	for _, ref := range parser.ExtractRefs(line, 1) {
 		if ref.TargetRaw == value {
-			return ref.Start, ref.End, true
+			matches = append(matches, ref)
 		}
 	}
-	return 0, 0, false
+	if len(matches) == 0 {
+		return 0, 0, false
+	}
+	ref := matches[occurrence%len(matches)]
+	return ref.Start, ref.End, true
 }
 
 // traitNamePattern extracts trait names from raw line text for range mapping.

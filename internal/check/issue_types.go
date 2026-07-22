@@ -78,14 +78,15 @@ func AllIssueTypes() []IssueType {
 
 // Issue represents a validation issue.
 type Issue struct {
-	Level      IssueLevel
-	Type       IssueType
-	FilePath   string
-	Line       int
-	Message    string
-	Value      string // The problematic value (type name, trait name, ref, etc.)
-	FixCommand string // Suggested command to fix the issue
-	FixHint    string // Human-readable fix hint
+	Level          IssueLevel
+	Type           IssueType
+	FilePath       string
+	Line           int
+	Message        string
+	Value          string // The problematic value (type name, trait name, ref, etc.)
+	FixCommand     string // Suggested command to fix the issue
+	FixHint        string // Human-readable fix hint
+	FixReplacement string // Exact replacement for Value when a unique textual fix is known
 }
 
 // SchemaIssue represents a schema-level validation issue (not file-specific).

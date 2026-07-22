@@ -66,7 +66,11 @@ func CollectFixableIssues(issues []check.Issue, shortRefMap map[string]string, s
 	for _, issue := range issues {
 		switch issue.Type {
 		case check.IssueShortRefCouldBeFullPath:
-			if fullPath, ok := shortRefMap[issue.Value]; ok {
+			fullPath := issue.FixReplacement
+			if fullPath == "" {
+				fullPath = shortRefMap[issue.Value]
+			}
+			if fullPath != "" && fullPath != issue.Value {
 				fixable = append(fixable, FixableIssue{
 					FilePath:    issue.FilePath,
 					Line:        issue.Line,
@@ -277,18 +281,25 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 }
 
 // tryFixNonCanonicalRef builds a wikilink text fix that strips the configured
-// root prefix from a ref target. Returns nil if no configured root matches the
-// ref value (defensive — detection should have already filtered).
+// root prefix from a ref target. The checker's exact replacement takes
+// precedence; configured roots provide compatibility for older issue values.
 func tryFixNonCanonicalRef(issue check.Issue, vaultCfg *config.VaultConfig) *FixableIssue {
-	if vaultCfg == nil {
-		return nil
+	stripped := issue.FixReplacement
+	if stripped == "" {
+		if vaultCfg == nil {
+			return nil
+		}
+		roots := uniqueNonEmpty(
+			paths.NormalizeDirRoot(vaultCfg.GetObjectsRoot()),
+			paths.NormalizeDirRoot(vaultCfg.GetPagesRoot()),
+		)
+		var matched bool
+		stripped, matched = stripRootPrefix(issue.Value, roots)
+		if !matched {
+			return nil
+		}
 	}
-	roots := uniqueNonEmpty(
-		paths.NormalizeDirRoot(vaultCfg.GetObjectsRoot()),
-		paths.NormalizeDirRoot(vaultCfg.GetPagesRoot()),
-	)
-	stripped, matched := stripRootPrefix(issue.Value, roots)
-	if !matched || stripped == "" || stripped == issue.Value {
+	if stripped == "" || stripped == issue.Value {
 		return nil
 	}
 	return &FixableIssue{
