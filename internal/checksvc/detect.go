@@ -32,7 +32,7 @@ func DetectMissingRefs(rt *vaultruntime.Runtime, relPaths ...string) ([]*check.M
 	sch := rt.Schema
 
 	if err := rt.OpenDB(); err != nil {
-		return nil, nil
+		return nil, nil //nolint:nilerr // unavailable index intentionally disables detection
 	}
 	db := rt.DB
 
@@ -40,7 +40,7 @@ func DetectMissingRefs(rt *vaultruntime.Runtime, relPaths ...string) ([]*check.M
 	// targets can resolve, so every reference would look "missing". Skip detection
 	// in that case rather than report false positives for an unindexed vault.
 	if objectIDs, idErr := db.AllObjectIDs(); idErr != nil || len(objectIDs) == 0 {
-		return nil, nil
+		return nil, nil //nolint:nilerr // empty or unreadable index would create false positives
 	}
 
 	aliases, _ := db.AllAliases()

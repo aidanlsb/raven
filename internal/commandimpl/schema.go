@@ -674,7 +674,7 @@ func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.
 // HandleTemplateWrite executes the canonical `template_write` command.
 func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigOnlyCommandVaultRuntime(req.VaultPath)
+	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
