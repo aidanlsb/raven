@@ -427,6 +427,37 @@ types:
 	})
 }
 
+func TestCreateDefaultUsesEnumTodoWorkflow(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	created, err := CreateDefault(vaultPath)
+	if err != nil {
+		t.Fatalf("CreateDefault: %v", err)
+	}
+	if !created {
+		t.Fatal("CreateDefault created = false, want true")
+	}
+
+	loaded, err := Load(vaultPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	todo := loaded.Traits["todo"]
+	if todo == nil {
+		t.Fatal("starter schema is missing todo trait")
+	}
+	if todo.Type != FieldTypeEnum {
+		t.Fatalf("todo type = %q, want %q", todo.Type, FieldTypeEnum)
+	}
+	if len(todo.Values) != 2 || todo.Values[0] != "todo" || todo.Values[1] != "done" {
+		t.Fatalf("todo values = %v, want [todo done]", todo.Values)
+	}
+	if todo.Default != "todo" {
+		t.Fatalf("todo default = %#v, want %q", todo.Default, "todo")
+	}
+}
+
 func TestLoadWithWarningsWarnsOnFutureVersion(t *testing.T) {
 	t.Parallel()
 

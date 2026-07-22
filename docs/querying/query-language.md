@@ -77,6 +77,9 @@ Traits attach to the **nearest section**, not to the file object. A `@todo` writ
 - `type:project contains(trait:todo .value==todo)` is correct — it searches the whole section tree.
 - From the trait side, use `trait:todo within(type:project)`, not `in(type:project)`.
 
+In the starter schema, `todo` is an enum with `todo`/`done` values and a
+default of `todo`, so a bare `@todo` matches `.value==todo`.
+
 Lead with the forgiving forms `contains`/`within` unless you specifically want a direct-only match.
 
 ### Naming Collision: `in()` vs `oneof()`

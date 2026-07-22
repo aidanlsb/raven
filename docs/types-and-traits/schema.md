@@ -10,12 +10,12 @@ This page is lookup-oriented and intentionally exhaustive.
 
 ## Schema Version
 
-The top-level `version` key declares the schema format version. The current version is `2`. Raven uses this to ensure backward compatibility when the schema format evolves. If omitted, Raven assumes the latest version.
+The top-level `version` key declares the schema format version. The current version is `1`. Raven uses this to ensure backward compatibility when the schema format evolves. If omitted, Raven assumes version 1 and emits a warning.
 
 ## Complete Example
 
 ```yaml
-version: 2
+version: 1
 
 types:
   person:
@@ -67,6 +67,7 @@ traits:
   todo:
     type: enum
     values: [todo, done]
+    default: todo
 ```
 
 ---
@@ -506,9 +507,10 @@ traits:
   todo:
     type: enum
     values: [todo, done]
+    default: todo
 ```
 
-Usage: `@priority(high)`, `@todo(done)`
+Usage: `@priority(high)`, `@todo` (defaults to `todo`), `@todo(done)`
 
 #### Array Types
 
