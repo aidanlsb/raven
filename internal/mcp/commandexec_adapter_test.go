@@ -5,38 +5,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
 )
-
-func TestNormalizeCanonicalArgsLeavesUpdateArgsUntouched(t *testing.T) {
-	args := map[string]interface{}{
-		"stdin":     true,
-		"trait_ids": []interface{}{"tasks/task1.md:trait:0"},
-		"value":     "done",
-	}
-
-	got := normalizeCanonicalArgs("update", args)
-
-	if !reflect.DeepEqual(got, args) {
-		t.Fatalf("normalizeCanonicalArgs changed update args: got %#v want %#v", got, args)
-	}
-	if _, ok := got["object_ids"]; ok {
-		t.Fatalf("expected update args to stay on trait_ids, got %#v", got)
-	}
-}
-
-func TestNormalizeCanonicalArgsLeavesOtherCommandsUntouched(t *testing.T) {
-	args := map[string]interface{}{"object_ids": []interface{}{"people/freya"}}
-	got := normalizeCanonicalArgs("set", args)
-	if got["object_ids"] == nil {
-		t.Fatalf("expected object_ids to remain present: %#v", got)
-	}
-}
 
 func TestAdaptCanonicalResultForMCPRewritesValidationSuggestion(t *testing.T) {
 	result := adaptCanonicalResultForMCP("add", nil, commandexec.Failure("INVALID_ARGS", "argument validation failed", nil, "Check command arguments and retry"))
