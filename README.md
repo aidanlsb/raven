@@ -2,14 +2,14 @@
 
 <p align="center"><strong>A CLI for plain-text knowledge management, with first-class support for AI agents.</strong></p>
 
-A Raven "vault" is a folder of markdown notes, with a few additions enabled through the `rvn` CLI.
+A Raven "vault" is a folder of markdown files, with a few additional features:
 
-- **Types & schema.** You define types for your notes, and their fields are validated against a schema you control—so structure is enforced, not just convention.
-- **Traits.** Inline markers like `@todo` or `@due(2026-07-22)` attach typed, queryable metadata to any line, not just whole notes.
-- **References.** `[[wiki-style]]` links connect notes to each other, and Raven keeps them valid as things are renamed or moved.
-- **Queries.** Retrieve information by explicit, repeatable criteria instead of relying on fuzzy search or interpretation.
+- **Types & schema.** You define types for your notes, and their fields (YAML frontmatter) are validated against the schema.
+- **Traits.** Inline markers like `@todo` or `@due(2026-07-22)` attach typed, queryable metadata to particular content.
+- **References.** `[[wiki-style]]` links connect notes to each other, and Raven maintains them as files are renamed or moved.
+- **Queries.** A full query language allows precise retrieval of content, by you or your agent.
 
-Here's an ordinary Raven note:
+Here's an example:
 
 ```markdown
 ---
@@ -18,33 +18,26 @@ title: Security review kickoff
 project: project/midgard-security-review
 ---
 
-Met with [[person/freya]] on [[2026-07-20]] to plan the security review. We agreed to focus the first pass on authentication and infrastructure, but work cannot begin until the draft scope is approved.
+- Met with [[person/freya]] on [[2026-07-20]] to plan the security review 
+- Agreed to focus the first pass on authentication and infrastructure
+- Work cannot begin until the draft scope is approved
 
 @todo @due(2026-07-22) Send the draft scope for review
 ```
 
-That file contains Raven's core building blocks:
-
-- **Type:** `type: meeting` identifies what the note represents.
-- **Fields:** `title` and `project` are schema-validated frontmatter.
-- **References:** `project/midgard-security-review`, `[[person/freya]]`, and `[[2026-07-20]]` link this note to other objects.
-- **Traits:** `@todo` marks a task, while `@due(2026-07-22)` attaches a typed due date to it.
-
-Because these structures are indexed, you can query them explicitly:
+Let's say later you wanted to find "todos inside meetings that reference the Midgard security review project":
 
 ```bash
-rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review]]))'
+rvn query 'trait:todo within(type:meeting refs(project/midgard-security-review))'
 ```
 
-Read that as: *find `todo` traits inside meetings that reference the Midgard security review.*
+An agent can also run the same query when you ask:
 
-An agent can run the same query when you ask:
-
-> Summarize what is blocking the Midgard security review, list its open follow-ups, and point me to the source notes.
+> List the open todos for the the Midgard security review, list its open follow-ups, and point me to the source notes.
 
 > The review is blocked until the draft scope is approved. One follow-up is open: send the draft scope for review by July 22. Source: `meeting/security-review-kickoff.md`.
 
-The rest of this README shows how to get there.
+The rest of this README walks through setup in more detail.
 
 ## Installation
 
@@ -95,11 +88,10 @@ The fastest way to learn Raven is to let an agent set up your vault and teach yo
 ### 1. Install the skills
 
 ```bash
-rvn skill install          # interactive: prints the plan and prompts [y/N]
-rvn skill install --yes    # agents / CI: apply without prompting
+rvn skill install
 ```
 
-This installs all shipped skills to `~/.agents/skills` (use `--scope project` for `.agents/skills` in the current project, or `--dest` for another location). Pass skill names to narrow it, e.g. `rvn skill install raven-core raven-query`. In non-interactive or `--json` runs it returns a preview unless you pass `--yes`.
+This installs the following shipped skills to `~/.agents/skills` (use `--scope project` for `.agents/skills` in the current project, or `--dest` for another location).
 
 | Skill | Use it for |
 |---|---|
@@ -113,7 +105,7 @@ This installs all shipped skills to `~/.agents/skills` (use `--scope project` fo
 
 ### 2. Let the agent onboard you
 
-Open your coding agent in the vault directory and give it this prompt:
+Open your agent in the vault directory and give it this prompt:
 
 > Use the `raven-onboarding` skill to set up my vault and walk me through how Raven works.
 
