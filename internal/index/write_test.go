@@ -3,12 +3,9 @@ package index
 import (
 	"database/sql"
 	"errors"
-	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/filelock"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
