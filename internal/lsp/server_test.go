@@ -431,8 +431,45 @@ func TestCodeActions(t *testing.T) {
 		if actions := requestCodeActions(t, client, uri, outside, nil, nil); len(actions) != 0 {
 			t.Errorf("got actions outside diagnostic range: %+v", actions)
 		}
+		afterLink := Range{Start: diagnostic.Range.End, End: diagnostic.Range.End}
+		if actions := requestCodeActions(t, client, uri, afterLink, nil, nil); len(actions) != 0 {
+			t.Errorf("got actions at diagnostic's exclusive end: %+v", actions)
+		}
 		if actions := requestCodeActions(t, client, uri, diagnostic.Range, nil, []string{"source"}); len(actions) != 0 {
 			t.Errorf("got quick fix when context.only requested source actions: %+v", actions)
+		}
+	})
+
+	t.Run("request range selects one repeated ref", func(t *testing.T) {
+		vaultPath := newTestVault(t)
+		client := startTestServer(t, vaultPath)
+		client.initialize(vaultPath)
+
+		content := "See [[freya]] and [[freya]].\n"
+		uri := client.openDocument(filepath.Join(vaultPath, "repeated-ref.md"), content)
+		params := client.diagnosticsFor(uri)
+		var diagnostics []Diagnostic
+		for _, diagnostic := range params.Diagnostics {
+			if diagnostic.Code == string(check.IssueShortRefCouldBeFullPath) {
+				diagnostics = append(diagnostics, diagnostic)
+			}
+		}
+		if len(diagnostics) != 2 {
+			t.Fatalf("got %d short-ref diagnostics, want 2: %+v", len(diagnostics), params.Diagnostics)
+		}
+
+		second := diagnostics[1]
+		actions := requestCodeActions(t, client, uri, second.Range, []Diagnostic{second}, nil)
+		if len(actions) != 1 {
+			t.Fatalf("got %d actions, want 1 for second ref: %+v", len(actions), actions)
+		}
+		edits := actions[0].Edit.Changes[uri]
+		if len(edits) != 1 {
+			t.Fatalf("edits = %+v, want one", edits)
+		}
+		wantStart := strings.LastIndex(content, "freya")
+		if edits[0].Range.Start.Character != wantStart {
+			t.Errorf("edit starts at %d, want second target at %d", edits[0].Range.Start.Character, wantStart)
 		}
 	})
 

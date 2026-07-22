@@ -151,10 +151,12 @@ func rangesOverlap(a, b Range) bool {
 	aEmpty := a.Start == a.End
 	bEmpty := b.Start == b.End
 	switch {
+	case aEmpty && bEmpty:
+		return a.Start == b.Start
 	case aEmpty:
-		return comparePosition(b.Start, a.Start) <= 0 && comparePosition(a.Start, b.End) <= 0
+		return comparePosition(b.Start, a.Start) <= 0 && comparePosition(a.Start, b.End) < 0
 	case bEmpty:
-		return comparePosition(a.Start, b.Start) <= 0 && comparePosition(b.Start, a.End) <= 0
+		return comparePosition(a.Start, b.Start) <= 0 && comparePosition(b.Start, a.End) < 0
 	default:
 		return comparePosition(a.Start, b.End) < 0 && comparePosition(b.Start, a.End) < 0
 	}

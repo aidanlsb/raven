@@ -171,17 +171,17 @@ func (r *issueRangeResolver) issueRange(issue check.Issue, doc *parser.ParsedDoc
 
 // refSpanOnLine finds the byte span of the wikilink whose target matches value.
 func refSpanOnLine(line, value string, occurrence int) (start, end int, found bool) {
-	matched := 0
+	var matches []parser.Reference
 	for _, ref := range parser.ExtractRefs(line, 1) {
 		if ref.TargetRaw == value {
-			if matched < occurrence {
-				matched++
-				continue
-			}
-			return ref.Start, ref.End, true
+			matches = append(matches, ref)
 		}
 	}
-	return 0, 0, false
+	if len(matches) == 0 {
+		return 0, 0, false
+	}
+	ref := matches[occurrence%len(matches)]
+	return ref.Start, ref.End, true
 }
 
 // traitNamePattern extracts trait names from raw line text for range mapping.
