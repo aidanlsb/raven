@@ -1,6 +1,9 @@
 package schemasvc
 
-import "github.com/aidanlsb/raven/internal/codes"
+import (
+	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/svcerr"
+)
 
 type ErrorCode = codes.ErrorCode
 
@@ -24,34 +27,16 @@ const (
 	ErrorInternal       ErrorCode = codes.ErrInternal
 )
 
-type Error struct {
-	Code       ErrorCode
-	Message    string
-	Suggestion string
-	Details    map[string]interface{}
-	Cause      error
-}
+// Error is kept as a compatibility alias for schema migration callers that
+// previously matched schemasvc's package-local error type.
+type Error = svcerr.Error
 
-func (e *Error) Error() string {
-	if e == nil {
-		return ""
-	}
-	return e.Message
-}
-
-func (e *Error) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Cause
-}
-
-func newError(code ErrorCode, message, suggestion string, details map[string]interface{}, cause error) *Error {
-	return &Error{
+func newError(code ErrorCode, message, suggestion string, details map[string]interface{}, cause error) *svcerr.Error {
+	return &svcerr.Error{
 		Code:       code,
 		Message:    message,
 		Suggestion: suggestion,
 		Details:    details,
-		Cause:      cause,
+		Err:        cause,
 	}
 }

@@ -12,7 +12,26 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
+
+func TestSearchFSReturnsPublicSharedServiceCode(t *testing.T) {
+	t.Parallel()
+
+	_, err := SearchFS(fstest.MapFS{}, ".", "", "", 20, 0)
+	svcErr, ok := svcerr.AsError(err)
+	if !ok || svcErr.Code != codes.ErrInvalidInput {
+		t.Fatalf("SearchFS() error = %#v, want %s", svcErr, codes.ErrInvalidInput)
+	}
+
+	_, err = ListSectionsFS(fstest.MapFS{}, ".")
+	svcErr, ok = svcerr.AsError(err)
+	if !ok || svcErr.Code != codes.ErrFileNotFound {
+		t.Fatalf("ListSectionsFS() error = %#v, want %s", svcErr, codes.ErrFileNotFound)
+	}
+}
 
 func TestLoadGlobalDocsSourceWarnsAndServesCacheWhenRefreshFails(t *testing.T) {
 	t.Parallel()

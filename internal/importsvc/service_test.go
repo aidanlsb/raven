@@ -4,8 +4,19 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
+
+func TestBuildMappingConfigReturnsSharedServiceError(t *testing.T) {
+	t.Parallel()
+
+	_, err := BuildMappingConfig(BuildMappingConfigRequest{})
+	svcErr, ok := svcerr.AsError(err)
+	if !ok || svcErr.Code != codes.ErrInvalidInput {
+		t.Fatalf("BuildMappingConfig() error = %#v, want %s", svcErr, codes.ErrInvalidInput)
+	}
+}
 
 func TestRun_SlugifiesImportMatchValueAsSinglePathComponent(t *testing.T) {
 	t.Parallel()

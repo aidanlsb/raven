@@ -70,7 +70,7 @@ func buildUpsertArgs(cmd *cobra.Command, args []string) (map[string]interface{},
 	if contentFileChanged && strings.TrimSpace(upsertContentFile) == "-" {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return nil, handleErrorMsg(ErrFileReadError, "failed to read content from stdin", err.Error())
+			return nil, handleErrorMsg(ErrFileRead, "failed to read content from stdin", err.Error())
 		}
 		content = string(data)
 		replaceBody = true

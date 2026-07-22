@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -93,6 +95,13 @@ func TestResolveErrorHelpers(t *testing.T) {
 	if ambiguous.Error() == "" {
 		t.Fatal("ambiguous error message should not be empty")
 	}
+	ambiguousSvcErr, ok := svcerr.AsError(ambiguous)
+	if !ok || ambiguousSvcErr.Code != codes.ErrRefAmbiguous {
+		t.Fatalf("ambiguous service error = %#v, want %s", ambiguousSvcErr, codes.ErrRefAmbiguous)
+	}
+	if matches, ok := ambiguousSvcErr.Details["matches"].([]string); !ok || len(matches) != 2 {
+		t.Fatalf("ambiguous service details = %#v, want matches", ambiguousSvcErr.Details)
+	}
 
 	notFound := &RefNotFoundError{Reference: "freya", Detail: "file was deleted"}
 	if !IsRefNotFound(notFound) {
@@ -100,6 +109,10 @@ func TestResolveErrorHelpers(t *testing.T) {
 	}
 	if got := notFound.Error(); got != "reference 'freya' not found: file was deleted" {
 		t.Fatalf("RefNotFoundError.Error() = %q", got)
+	}
+	notFoundSvcErr, ok := svcerr.AsError(notFound)
+	if !ok || notFoundSvcErr.Code != codes.ErrRefNotFound {
+		t.Fatalf("not-found service error = %#v, want %s", notFoundSvcErr, codes.ErrRefNotFound)
 	}
 }
 

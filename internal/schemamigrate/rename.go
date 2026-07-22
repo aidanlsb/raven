@@ -24,6 +24,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/schemasvc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -828,13 +829,13 @@ func newError(
 	message, suggestion string,
 	details map[string]interface{},
 	cause error,
-) *schemasvc.Error {
-	return &schemasvc.Error{
+) *svcerr.Error {
+	return &svcerr.Error{
 		Code:       code,
 		Message:    message,
 		Suggestion: suggestion,
 		Details:    details,
-		Cause:      cause,
+		Err:        cause,
 	}
 }
 

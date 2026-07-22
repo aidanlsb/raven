@@ -5,8 +5,22 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
+
+func TestSetReturnsSharedServiceError(t *testing.T) {
+	t.Parallel()
+
+	_, err := Set(SetRequest{ContextOptions: ContextOptions{
+		ConfigPathOverride: filepath.Join(t.TempDir(), "config.toml"),
+	}})
+	svcErr, ok := svcerr.AsError(err)
+	if !ok || svcErr.Code != codes.ErrMissingArgument {
+		t.Fatalf("Set() error = %#v, want %s", svcErr, codes.ErrMissingArgument)
+	}
+}
 
 func TestSameVaultPathTreatsSymlinkAsSameVault(t *testing.T) {
 	t.Parallel()

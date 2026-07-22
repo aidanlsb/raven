@@ -257,7 +257,7 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 func outputDocsTopicContent(docsFS fs.FS, topic docsTopicRecord) error {
 	content, err := fs.ReadFile(docsFS, topic.FSPath)
 	if err != nil {
-		return handleError(ErrFileReadError, err, "")
+		return handleError(ErrFileRead, err, "")
 	}
 
 	if isJSONOutput() {

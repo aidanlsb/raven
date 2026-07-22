@@ -14,6 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 // HandleNew executes the canonical `new` command.
@@ -81,9 +82,8 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 }
 
 func mapContentMutationError(err error) commandexec.Result {
-	var svcErr *objectsvc.Error
-	if errors.As(err, &svcErr) {
-		return commandexec.Failure(mapServiceCode(svcErr.Code), svcErr.Message, svcErr.Details, svcErr.Suggestion)
+	if _, ok := svcerr.AsError(err); ok {
+		return commandexec.FromServiceError(err)
 	}
 
 	var unknownErr *fieldmutation.UnknownFieldMutationError
@@ -96,14 +96,7 @@ func mapContentMutationError(err error) commandexec.Result {
 		return commandexec.Failure("VALIDATION_FAILED", validationErr.Error(), nil, validationErr.Suggestion())
 	}
 
-	return commandexec.Failure(codes.ErrInternal, err.Error(), nil, "")
-}
-
-func mapServiceCode(code objectsvc.ErrorCode) codes.ErrorCode {
-	if codes.IsErrorCode(string(code)) {
-		return code
-	}
-	return codes.ErrInternal
+	return commandexec.FromServiceError(err)
 }
 
 // HandleUpsert executes the canonical `upsert` command.

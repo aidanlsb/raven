@@ -56,7 +56,7 @@ Examples:
 		entry := mcpclient.BuildServerEntry(configPath, statePathFlag, mcpVaultName, mcpVaultPathFlag)
 		result, err := mcpclient.Install(client, cfgPath, entry)
 		if err != nil {
-			return handleError(ErrMCPConfigWriteError, err, "")
+			return handleError(ErrMCPConfigWrite, err, "")
 		}
 
 		if isJSONOutput() {
@@ -109,7 +109,7 @@ Examples:
 
 		removed, err := mcpclient.Remove(client, cfgPath)
 		if err != nil {
-			return handleError(ErrMCPConfigWriteError, err, "")
+			return handleError(ErrMCPConfigWrite, err, "")
 		}
 
 		if isJSONOutput() {

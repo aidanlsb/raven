@@ -105,7 +105,7 @@ func editTemplateContent(pathArg string) (string, error) {
 
 	tmpDir, err := os.MkdirTemp("", "rvn-template-edit-*")
 	if err != nil {
-		return "", handleError(ErrFileWriteError, err, "Check temporary directory permissions and try again")
+		return "", handleError(ErrFileWrite, err, "Check temporary directory permissions and try again")
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -115,7 +115,7 @@ func editTemplateContent(pathArg string) (string, error) {
 	}
 	tmpPath := filepath.Join(tmpDir, "template"+ext)
 	if err := os.WriteFile(tmpPath, []byte(readResult.Content), 0o600); err != nil {
-		return "", handleError(ErrFileWriteError, err, "Check temporary directory permissions and try again")
+		return "", handleError(ErrFileWrite, err, "Check temporary directory permissions and try again")
 	}
 
 	if err := runBlockingEditor(editor, tmpPath); err != nil {
@@ -124,7 +124,7 @@ func editTemplateContent(pathArg string) (string, error) {
 
 	content, err := os.ReadFile(tmpPath)
 	if err != nil {
-		return "", handleError(ErrFileReadError, err, "Check temporary directory permissions and try again")
+		return "", handleError(ErrFileRead, err, "Check temporary directory permissions and try again")
 	}
 	return string(content), nil
 }

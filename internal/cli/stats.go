@@ -39,7 +39,7 @@ func mapMaintSvcCode(code codes.ErrorCode) codes.ErrorCode {
 	case maintsvc.CodeInvalidInput:
 		return ErrInvalidInput
 	case maintsvc.CodeDatabaseError:
-		return ErrDatabaseError
+		return ErrDatabase
 	default:
 		return ErrInternal
 	}

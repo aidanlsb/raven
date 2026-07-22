@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestShowMissingConfigUsesDefaults(t *testing.T) {
@@ -159,7 +160,7 @@ func TestProtectedPrefixesRemoveRequiresExistingPrefix(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected missing prefix error")
 	}
-	svcErr, ok := AsError(err)
+	svcErr, ok := svcerr.AsError(err)
 	if !ok {
 		t.Fatalf("expected typed service error, got %T", err)
 	}
@@ -178,7 +179,7 @@ func TestProtectedPrefixesRejectInvalidPrefix(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected invalid prefix error")
 	}
-	svcErr, ok := AsError(err)
+	svcErr, ok := svcerr.AsError(err)
 	if !ok {
 		t.Fatalf("expected typed service error, got %T", err)
 	}
@@ -292,7 +293,7 @@ func TestDeletionSetNormalizesTrashDirAndRejectsInvalidBehavior(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected invalid behavior error")
 	}
-	svcErr, ok := AsError(err)
+	svcErr, ok := svcerr.AsError(err)
 	if !ok {
 		t.Fatalf("expected typed error, got %T", err)
 	}

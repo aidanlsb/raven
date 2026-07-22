@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/configsvc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 // HandleConfigShow executes the canonical `config_show` command.
@@ -74,7 +75,7 @@ func HandleConfigSet(_ context.Context, req commandexec.Request) commandexec.Res
 	result, err := configsvc.Set(setReq)
 	if err != nil {
 		suggestion := ""
-		if svcErr, ok := configsvc.AsError(err); ok && svcErr.Code == configsvc.CodeInvalidInput && strings.Contains(svcErr.Message, "not configured") {
+		if svcErr, ok := svcerr.AsError(err); ok && svcErr.Code == configsvc.CodeInvalidInput && strings.Contains(svcErr.Message, "not configured") {
 			suggestion = "Run 'rvn vault list' to see configured vaults"
 		}
 		return mapConfigSvcFailure(err, suggestion)
@@ -189,7 +190,7 @@ func HandleVaultAdd(_ context.Context, req commandexec.Request) commandexec.Resu
 		Pin:            boolArg(req.Args, "pin"),
 	})
 	if err != nil {
-		if svcErr, ok := configsvc.AsError(err); ok {
+		if svcErr, ok := svcerr.AsError(err); ok {
 			switch svcErr.Code {
 			case configsvc.CodeFileNotFound:
 				return mapConfigSvcFailure(err, "Run 'rvn init "+rawPath+"' to create it first")
@@ -219,7 +220,7 @@ func HandleVaultRemove(_ context.Context, req commandexec.Request) commandexec.R
 		ClearActive:    boolArg(req.Args, "clear-active"),
 	})
 	if err != nil {
-		if svcErr, ok := configsvc.AsError(err); ok && svcErr.Code == configsvc.CodeConfirmationNeeded {
+		if svcErr, ok := svcerr.AsError(err); ok && svcErr.Code == configsvc.CodeConfirmationNeeded {
 			if strings.Contains(svcErr.Message, "default vault") {
 				return mapConfigSvcFailure(err, "Use --clear-default to clear default_vault as part of removal, or pin another vault first")
 			}
@@ -257,9 +258,5 @@ func configContextOptions(req commandexec.Request) configsvc.ContextOptions {
 }
 
 func mapConfigSvcFailure(err error, fallbackSuggestion string) commandexec.Result {
-	svcErr, ok := configsvc.AsError(err)
-	if !ok {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, fallbackSuggestion)
-	}
-	return commandexec.Failure(svcErr.Code, svcErr.Error(), nil, fallbackSuggestion)
+	return commandexec.FromServiceErrorWithFallback(err, fallbackSuggestion)
 }
