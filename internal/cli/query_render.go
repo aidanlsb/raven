@@ -323,12 +323,12 @@ func traitsFromItems(items []commandpayload.TraitItem) []model.Trait {
 	results := make([]model.Trait, 0, len(items))
 	for _, item := range items {
 		trait := model.Trait{
-			ID:             item.ID,
-			TraitType:      item.TraitType,
-			Content:        item.Content,
-			FilePath:       item.FilePath,
-			Line:           item.Line,
-			ParentObjectID: item.ObjectID,
+			ID:            item.ID,
+			TraitType:     item.TraitType,
+			Content:       item.Content,
+			FilePath:      item.FilePath,
+			Line:          item.Line,
+			ParentScopeID: item.ScopeID,
 		}
 		trait.SetIndexValueString(item.Value)
 		results = append(results, trait)

@@ -836,7 +836,7 @@ func TestExecuteTraitQuery(t *testing.T) {
 			if len(results) != tt.wantCount {
 				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
 				for _, r := range results {
-					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentObjectID)
+					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentScopeID)
 				}
 			}
 		})
@@ -969,7 +969,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 			if len(results) != tt.wantCount {
 				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
 				for _, r := range results {
-					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentObjectID)
+					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentScopeID)
 				}
 			}
 		})
@@ -1083,7 +1083,7 @@ func TestOrAndGroupPredicates(t *testing.T) {
 			if len(results) != tt.wantCount {
 				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
 				for _, r := range results {
-					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentObjectID)
+					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentScopeID)
 				}
 			}
 		})
@@ -1505,7 +1505,7 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 			if len(results) != tt.wantCount {
 				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
 				for _, r := range results {
-					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentObjectID)
+					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentScopeID)
 				}
 			}
 		})

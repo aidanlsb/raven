@@ -146,9 +146,10 @@ func (d *Database) Backlinks(targetID string) ([]model.Reference, error) {
 // Includes refs whose source_id is a section of the source (source_id LIKE '<source>#%').
 func (d *Database) Outlinks(sourceID string) ([]model.Reference, error) {
 	query := `
-		SELECT r.source_id, o.type, r.target_raw, r.file_path, r.line_number, r.display_text
+		SELECT r.source_id, COALESCE(o.type, CASE WHEN s.id IS NOT NULL THEN 'section' END), r.target_raw, r.file_path, r.line_number, r.display_text
 		FROM refs r
 		LEFT JOIN objects o ON r.source_id = o.id
+		LEFT JOIN sections s ON r.source_id = s.id
 		WHERE r.source_id = ? OR r.source_id LIKE ?
 		ORDER BY r.file_path, r.line_number, r.position_start
 	`
@@ -205,9 +206,10 @@ func (d *Database) BacklinksWithRoots(targetID, objectRoot, pageRoot string) ([]
 	}
 
 	query := `
-		SELECT r.source_id, o.type, r.target_raw, r.file_path, r.line_number, r.position_start, r.position_end, r.display_text
+		SELECT r.source_id, COALESCE(o.type, CASE WHEN s.id IS NOT NULL THEN 'section' END), r.target_raw, r.file_path, r.line_number, r.position_start, r.position_end, r.display_text
 		FROM refs r
 		LEFT JOIN objects o ON r.source_id = o.id
+		LEFT JOIN sections s ON r.source_id = s.id
 		WHERE ` + strings.Join(conditions, " OR ")
 
 	rows, err := d.db.Query(query, args...)
@@ -264,7 +266,7 @@ func (d *Database) GetTrait(id string) (*model.Trait, error) {
 	err := d.db.QueryRow(
 		"SELECT id, trait_type, value, content, file_path, line_number, parent_object_id FROM traits WHERE id = ?",
 		id,
-	).Scan(&result.ID, &result.TraitType, &value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID)
+	).Scan(&result.ID, &result.TraitType, &value, &result.Content, &result.FilePath, &result.Line, &result.ParentScopeID)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

@@ -230,6 +230,13 @@ func TestBacklinks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert test objects: %v", err)
 	}
+	_, err = db.db.Exec(`
+		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start)
+		VALUES ('projects/bifrost#tasks', 'projects/bifrost', 'projects/bifrost.md', 'tasks', 'Tasks', 2, 11)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test section: %v", err)
+	}
 
 	// Insert test refs
 	_, err = db.db.Exec(`
@@ -237,7 +244,7 @@ func TestBacklinks(t *testing.T) {
 		VALUES 
 			('daily/2025-02-01', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 5, 4, 20),
 			('projects/bifrost', 'people/freya', 'freya', 'projects/bifrost.md', 10, NULL, NULL),
-			('projects/bifrost', 'people/freya#notes', 'freya#notes', 'projects/bifrost.md', 11, 0, 15)
+			('projects/bifrost#tasks', 'people/freya#notes', 'freya#notes', 'projects/bifrost.md', 11, 0, 15)
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test refs: %v", err)
@@ -250,7 +257,12 @@ func TestBacklinks(t *testing.T) {
 		}
 		// Includes a section backlink via target_id LIKE 'people/freya#%'.
 		if len(results) != 3 {
-			t.Errorf("expected 3 backlinks, got %d", len(results))
+			t.Fatalf("expected 3 backlinks, got %d", len(results))
+		}
+		for _, result := range results {
+			if result.SourceID == "projects/bifrost#tasks" && result.SourceType != "section" {
+				t.Errorf("section source type = %q, want section", result.SourceType)
+			}
 		}
 	})
 
@@ -314,6 +326,13 @@ func TestOutlinks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert test objects: %v", err)
 	}
+	_, err = db.db.Exec(`
+		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start)
+		VALUES ('projects/bifrost#notes', 'projects/bifrost', 'projects/bifrost.md', 'notes', 'Notes', 2, 11)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test section: %v", err)
+	}
 
 	// Insert test refs (including a section outlink via source_id LIKE 'projects/bifrost#%').
 	_, err = db.db.Exec(`
@@ -333,7 +352,17 @@ func TestOutlinks(t *testing.T) {
 			t.Fatalf("query failed: %v", err)
 		}
 		if len(results) != 2 {
-			t.Errorf("expected 2 outlinks, got %d", len(results))
+			t.Fatalf("expected 2 outlinks, got %d", len(results))
+		}
+		sourceTypes := make(map[string]string, len(results))
+		for _, result := range results {
+			sourceTypes[result.SourceID] = result.SourceType
+		}
+		if sourceTypes["projects/bifrost"] != "project" {
+			t.Errorf("object source type = %q, want project", sourceTypes["projects/bifrost"])
+		}
+		if sourceTypes["projects/bifrost#notes"] != "section" {
+			t.Errorf("section source type = %q, want section", sourceTypes["projects/bifrost#notes"])
 		}
 	})
 

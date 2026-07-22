@@ -40,7 +40,7 @@ type TraitItem struct {
 	Content   string  `json:"content"`
 	FilePath  string  `json:"file_path"`
 	Line      int     `json:"line"`
-	ObjectID  string  `json:"object_id"`
+	ScopeID   string  `json:"object_id"` // JSON name retained for compatibility.
 }
 
 // AssetItem is a single row in an `asset` query result.

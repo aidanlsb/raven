@@ -35,9 +35,9 @@ type Trait struct {
 	// Line is the 1-indexed line number where this trait appears.
 	Line int `json:"line"`
 
-	// ParentObjectID is the ID of the object containing this trait.
-	// This is the nearest ancestor object in the document hierarchy.
-	ParentObjectID string `json:"parent_object_id"`
+	// ParentScopeID is the ID of the file object or section directly containing
+	// this trait.
+	ParentScopeID string `json:"-"`
 
 	// PositionStart is the byte offset of the annotation start within its line.
 	// Parse/edit metadata only; omitted from query JSON.
@@ -104,6 +104,6 @@ func (t Trait) MarshalJSON() ([]byte, error) {
 		Content:        t.Content,
 		FilePath:       t.FilePath,
 		Line:           t.Line,
-		ParentObjectID: t.ParentObjectID,
+		ParentObjectID: t.ParentScopeID,
 	})
 }

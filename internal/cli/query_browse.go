@@ -112,7 +112,7 @@ func browseItemsForTraitResults(results []model.Trait) []picker.Item {
 				result.TraitType,
 				value,
 				result.Content,
-				result.ParentObjectID,
+				result.ParentScopeID,
 				location,
 				result.FilePath,
 			),

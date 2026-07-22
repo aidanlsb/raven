@@ -4,10 +4,11 @@ package model
 // This is used for both backlinks (who references X?) and outlinks (what does X reference?).
 // Parse/index paths also use this as the canonical in-document reference type.
 type Reference struct {
-	// SourceID is the ID of the object or trait containing the reference.
+	// SourceID is the ID of the file object or section scope containing the reference.
 	SourceID string `json:"source_id"`
 
-	// SourceType indicates whether the source is an "object" or "trait".
+	// SourceType is the Raven type of the source scope (for example, "page",
+	// "project", or "section"). It may be empty when type information is unavailable.
 	SourceType string `json:"source_type"`
 
 	// TargetRaw is the raw target as written in the wikilink.

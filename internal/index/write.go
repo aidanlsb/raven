@@ -328,7 +328,7 @@ func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schem
 		_, execErr := traitStmt.Exec(
 			indexedTrait.ID,
 			doc.FilePath,
-			trait.ParentObjectID,
+			trait.ParentScopeID,
 			trait.TraitType,
 			valueStr,
 			trait.Content,

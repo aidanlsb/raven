@@ -203,10 +203,10 @@ func TestValidatorTraitValidation(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "due",
-					Value:          &dueValue,
-					ParentObjectID: "notes/test",
-					Line:           5,
+					TraitType:     "due",
+					Value:         &dueValue,
+					ParentScopeID: "notes/test",
+					Line:          5,
 				},
 			},
 		}
@@ -231,10 +231,10 @@ func TestValidatorTraitValidation(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "due",
-					Value:          &badValue,
-					ParentObjectID: "notes/test",
-					Line:           5,
+					TraitType:     "due",
+					Value:         &badValue,
+					ParentScopeID: "notes/test",
+					Line:          5,
 				},
 			},
 		}
@@ -264,10 +264,10 @@ func TestValidatorTraitValidation(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "priority",
-					Value:          &badValue,
-					ParentObjectID: "notes/test",
-					Line:           5,
+					TraitType:     "priority",
+					Value:         &badValue,
+					ParentScopeID: "notes/test",
+					Line:          5,
 				},
 			},
 		}
@@ -297,10 +297,10 @@ func TestValidatorTraitValidation(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "score",
-					Value:          &scoreValue,
-					ParentObjectID: "notes/test",
-					Line:           5,
+					TraitType:     "score",
+					Value:         &scoreValue,
+					ParentScopeID: "notes/test",
+					Line:          5,
 				},
 			},
 		}
@@ -325,10 +325,10 @@ func TestValidatorTraitValidation(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "score",
-					Value:          &scoreValue,
-					ParentObjectID: "notes/test",
-					Line:           5,
+					TraitType:     "score",
+					Value:         &scoreValue,
+					ParentScopeID: "notes/test",
+					Line:          5,
 				},
 			},
 		}
@@ -370,7 +370,7 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 				{ID: "notes/test", Type: "page"},
 			},
 			Traits: []*model.Trait{
-				{TraitType: "done", Value: nil, ParentObjectID: "notes/test", Line: 5},
+				{TraitType: "done", Value: nil, ParentScopeID: "notes/test", Line: 5},
 			},
 		}
 
@@ -391,7 +391,7 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 				{ID: "notes/test", Type: "page"},
 			},
 			Traits: []*model.Trait{
-				{TraitType: "done", Value: &trueValue, ParentObjectID: "notes/test", Line: 5},
+				{TraitType: "done", Value: &trueValue, ParentScopeID: "notes/test", Line: 5},
 			},
 		}
 
@@ -412,7 +412,7 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 				{ID: "notes/test", Type: "page"},
 			},
 			Traits: []*model.Trait{
-				{TraitType: "toread", Value: &falseValue, ParentObjectID: "notes/test", Line: 5},
+				{TraitType: "toread", Value: &falseValue, ParentScopeID: "notes/test", Line: 5},
 			},
 		}
 
@@ -433,7 +433,7 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 				{ID: "notes/test", Type: "page"},
 			},
 			Traits: []*model.Trait{
-				{TraitType: "done", Value: &badValue, ParentObjectID: "notes/test", Line: 5},
+				{TraitType: "done", Value: &badValue, ParentScopeID: "notes/test", Line: 5},
 			},
 		}
 
@@ -472,7 +472,7 @@ func TestValidatorNilTraitDefinition(t *testing.T) {
 			{ID: "notes/test", Type: "page"},
 		},
 		Traits: []*model.Trait{
-			{TraitType: "broken", ParentObjectID: "notes/test", Line: 5},
+			{TraitType: "broken", ParentScopeID: "notes/test", Line: 5},
 		},
 	}
 
@@ -794,10 +794,10 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "remind",
-					Value:          &validValue,
-					ParentObjectID: "notes/test",
-					Line:           5,
+					TraitType:     "remind",
+					Value:         &validValue,
+					ParentScopeID: "notes/test",
+					Line:          5,
 				},
 			},
 		}
@@ -819,10 +819,10 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "remind",
-					Value:          &badValue,
-					ParentObjectID: "notes/test",
-					Line:           5,
+					TraitType:     "remind",
+					Value:         &badValue,
+					ParentScopeID: "notes/test",
+					Line:          5,
 				},
 			},
 		}

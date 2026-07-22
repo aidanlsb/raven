@@ -206,8 +206,8 @@ Natural foo-2 section.
 		}
 
 		// Task should be parented to the "Tasks" section
-		if doc.Traits[0].ParentObjectID != "project#tasks" {
-			t.Errorf("trait parent = %q, want project#tasks", doc.Traits[0].ParentObjectID)
+		if doc.Traits[0].ParentScopeID != "project#tasks" {
+			t.Errorf("trait parent = %q, want project#tasks", doc.Traits[0].ParentScopeID)
 		}
 	})
 

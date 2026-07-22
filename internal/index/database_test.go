@@ -34,7 +34,7 @@ func traitsByType(t *testing.T, db *Database, traitType string) []model.Trait {
 	for rows.Next() {
 		var trait model.Trait
 		var value sql.NullString
-		if err := rows.Scan(&trait.ID, &trait.TraitType, &value, &trait.Content, &trait.FilePath, &trait.Line, &trait.ParentObjectID); err != nil {
+		if err := rows.Scan(&trait.ID, &trait.TraitType, &value, &trait.Content, &trait.FilePath, &trait.Line, &trait.ParentScopeID); err != nil {
 			t.Fatalf("failed to scan trait: %v", err)
 		}
 		if value.Valid {
@@ -262,11 +262,11 @@ func TestDatabase(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "tags",
-					Value:          &value,
-					Content:        "Review built-in skills",
-					ParentObjectID: "test",
-					Line:           1,
+					TraitType:     "tags",
+					Value:         &value,
+					Content:       "Review built-in skills",
+					ParentScopeID: "test",
+					Line:          1,
 				},
 			},
 			Refs: []*model.Reference{},
@@ -379,11 +379,11 @@ func TestDatabase(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "highlight",
-					Value:          nil, // Bare trait, no value
-					Content:        "This is important",
-					Line:           5,
-					ParentObjectID: "test",
+					TraitType:     "highlight",
+					Value:         nil, // Bare trait, no value
+					Content:       "This is important",
+					Line:          5,
+					ParentScopeID: "test",
 				},
 			},
 		}
@@ -430,11 +430,11 @@ func TestDatabase(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "pinned",
-					Value:          nil, // Bare trait
-					Content:        "Pinned item",
-					Line:           3,
-					ParentObjectID: "test",
+					TraitType:     "pinned",
+					Value:         nil, // Bare trait
+					Content:       "Pinned item",
+					Line:          3,
+					ParentScopeID: "test",
 				},
 			},
 		}
@@ -481,11 +481,11 @@ func TestDatabase(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "priority",
-					Value:          nil, // Bare trait, should get default "medium"
-					Content:        "A task",
-					Line:           5,
-					ParentObjectID: "test",
+					TraitType:     "priority",
+					Value:         nil, // Bare trait, should get default "medium"
+					Content:       "A task",
+					Line:          5,
+					ParentScopeID: "test",
 				},
 			},
 		}
@@ -540,11 +540,11 @@ func TestDatabase(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "highlight",
-					Value:          nil,
-					Content:        "Hello",
-					ParentObjectID: "people/freya",
-					Line:           7,
+					TraitType:     "highlight",
+					Value:         nil,
+					Content:       "Hello",
+					ParentScopeID: "people/freya",
+					Line:          7,
 				},
 			},
 			Refs: []*model.Reference{
@@ -635,11 +635,11 @@ func TestDatabase(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "highlight",
-					Value:          nil,
-					Content:        "Hello",
-					ParentObjectID: "people/freya",
-					Line:           7,
+					TraitType:     "highlight",
+					Value:         nil,
+					Content:       "Hello",
+					ParentScopeID: "people/freya",
+					Line:          7,
 				},
 			},
 			Refs: []*model.Reference{
@@ -839,18 +839,18 @@ func TestDatabase(t *testing.T) {
 			},
 			Traits: []*model.Trait{
 				{
-					TraitType:      "defined", // This one IS in schema
-					Value:          nil,
-					Content:        "Defined trait",
-					Line:           3,
-					ParentObjectID: "test",
+					TraitType:     "defined", // This one IS in schema
+					Value:         nil,
+					Content:       "Defined trait",
+					Line:          3,
+					ParentScopeID: "test",
 				},
 				{
-					TraitType:      "undefined", // This one is NOT in schema
-					Value:          nil,
-					Content:        "Undefined trait",
-					Line:           5,
-					ParentObjectID: "test",
+					TraitType:     "undefined", // This one is NOT in schema
+					Value:         nil,
+					Content:       "Undefined trait",
+					Line:          5,
+					ParentScopeID: "test",
 				},
 			},
 		}
@@ -1168,19 +1168,19 @@ func TestTraitIDConsistency(t *testing.T) {
 		Traits: []*model.Trait{
 			{
 				// raw index 0 — undefined, must be skipped
-				TraitType:      "undefined",
-				Value:          nil,
-				Content:        "some note",
-				Line:           3,
-				ParentObjectID: "test",
+				TraitType:     "undefined",
+				Value:         nil,
+				Content:       "some note",
+				Line:          3,
+				ParentScopeID: "test",
 			},
 			{
 				// raw index 1, but first defined trait → traitIdx=0 in both functions
-				TraitType:      "due",
-				Value:          &dueValue,
-				Content:        "finish by",
-				Line:           4,
-				ParentObjectID: "test",
+				TraitType:     "due",
+				Value:         &dueValue,
+				Content:       "finish by",
+				Line:          4,
+				ParentScopeID: "test",
 			},
 		},
 	}
@@ -1236,31 +1236,31 @@ func TestDateIndexTraitIDsTrackIndexedTraitOrder(t *testing.T) {
 		},
 		Traits: []*model.Trait{
 			{
-				TraitType:      "undefined",
-				Content:        "skip me",
-				Line:           2,
-				ParentObjectID: "notes/plan",
+				TraitType:     "undefined",
+				Content:       "skip me",
+				Line:          2,
+				ParentScopeID: "notes/plan",
 			},
 			{
-				TraitType:      "due",
-				Value:          &dueValue,
-				Content:        "ship it",
-				Line:           3,
-				ParentObjectID: "notes/plan",
+				TraitType:     "due",
+				Value:         &dueValue,
+				Content:       "ship it",
+				Line:          3,
+				ParentScopeID: "notes/plan",
 			},
 			{
-				TraitType:      "status",
-				Value:          &statusValue,
-				Content:        "state",
-				Line:           4,
-				ParentObjectID: "notes/plan",
+				TraitType:     "status",
+				Value:         &statusValue,
+				Content:       "state",
+				Line:          4,
+				ParentScopeID: "notes/plan",
 			},
 			{
-				TraitType:      "review",
-				Value:          &reviewValue,
-				Content:        "check it",
-				Line:           5,
-				ParentObjectID: "notes/plan",
+				TraitType:     "review",
+				Value:         &reviewValue,
+				Content:       "check it",
+				Line:          5,
+				ParentScopeID: "notes/plan",
 			},
 		},
 	}

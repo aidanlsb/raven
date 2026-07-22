@@ -13,3 +13,15 @@ type Section struct {
 	SubtreeLineEnd  *int    `json:"subtree_line_end,omitempty"`
 	ParentSectionID *string `json:"parent_section_id,omitempty"`
 }
+
+// ParentScopeID returns the section's direct parent scope. Top-level sections
+// are directly contained by their file object.
+func (s *Section) ParentScopeID() string {
+	if s == nil {
+		return ""
+	}
+	if s.ParentSectionID != nil {
+		return *s.ParentSectionID
+	}
+	return s.FileObjectID
+}

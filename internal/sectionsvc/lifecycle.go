@@ -486,22 +486,15 @@ func validateResultingPlacement(section, anchor *model.Section, kind placementKi
 		return newError(codes.ErrInternal, "section placement validation failed", "", nil, nil)
 	}
 	if kind == placementUnder {
-		if section.ParentSectionID == nil || *section.ParentSectionID != anchor.ID {
+		if section.ParentScopeID() != anchor.ID {
 			return newError(codes.ErrValidationFailed, fmt.Sprintf("section would not be a direct child of %s", anchor.ID), "Choose a compatible --under anchor", nil, nil)
 		}
 		return nil
 	}
-	if !sameOptionalString(section.ParentSectionID, anchor.ParentSectionID) {
+	if section.ParentScopeID() != anchor.ParentScopeID() {
 		return newError(codes.ErrValidationFailed, fmt.Sprintf("section would not be a sibling of %s", anchor.ID), "Choose a compatible --before or --after anchor", nil, nil)
 	}
 	return nil
-}
-
-func sameOptionalString(left, right *string) bool {
-	if left == nil || right == nil {
-		return left == nil && right == nil
-	}
-	return *left == *right
 }
 
 func placementIndex(lines []trackedLine, anchor *model.Section, kind placementKind) int {

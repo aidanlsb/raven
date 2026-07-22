@@ -71,7 +71,7 @@ func (d *Database) initialize(isNewDB bool) error {
 		CREATE TABLE IF NOT EXISTS traits (
 			id TEXT PRIMARY KEY,
 			file_path TEXT NOT NULL,
-			parent_object_id TEXT NOT NULL,
+			parent_object_id TEXT NOT NULL,       -- Compatibility name; contains a file object or section scope ID
 			trait_type TEXT NOT NULL,
 			value TEXT,                          -- Single trait value (NULL for boolean traits)
 			content TEXT NOT NULL,

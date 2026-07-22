@@ -37,7 +37,7 @@ func scanTraitRows(rows *sql.Rows) ([]model.Trait, error) {
 	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Trait, error) {
 		var r model.Trait
 		var value sql.NullString
-		if err := rows.Scan(&r.ID, &r.TraitType, &value, &r.Content, &r.FilePath, &r.Line, &r.ParentObjectID); err != nil {
+		if err := rows.Scan(&r.ID, &r.TraitType, &value, &r.Content, &r.FilePath, &r.Line, &r.ParentScopeID); err != nil {
 			return model.Trait{}, err
 		}
 		if value.Valid {

@@ -138,14 +138,14 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		parentID := findScopeForLine(fileID, sections, astTrait.Line)
 
 		traits = append(traits, &model.Trait{
-			TraitType:      astTrait.TraitName,
-			Value:          astTrait.Value,
-			Content:        astTrait.Content,
-			FilePath:       relativePath,
-			ParentObjectID: parentID,
-			Line:           astTrait.Line,
-			PositionStart:  astTrait.StartOffset,
-			PositionEnd:    astTrait.EndOffset,
+			TraitType:     astTrait.TraitName,
+			Value:         astTrait.Value,
+			Content:       astTrait.Content,
+			FilePath:      relativePath,
+			ParentScopeID: parentID,
+			Line:          astTrait.Line,
+			PositionStart: astTrait.StartOffset,
+			PositionEnd:   astTrait.EndOffset,
 		})
 	}
 

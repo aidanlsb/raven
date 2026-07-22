@@ -432,7 +432,7 @@ func traitQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.TraitI
 			Content:   row.Content,
 			FilePath:  row.FilePath,
 			Line:      row.Line,
-			ObjectID:  row.ParentObjectID,
+			ScopeID:   row.ParentScopeID,
 		}
 	}
 	return items

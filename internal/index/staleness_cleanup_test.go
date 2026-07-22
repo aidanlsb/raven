@@ -149,7 +149,7 @@ func TestRemoveDeletedFiles(t *testing.T) {
 			{ID: "notes/missing", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 		},
 		Traits: []*model.Trait{
-			{TraitType: "flag", Value: nil, Content: "x", ParentObjectID: "notes/missing", Line: 2},
+			{TraitType: "flag", Value: nil, Content: "x", ParentScopeID: "notes/missing", Line: 2},
 		},
 		Refs: []*model.Reference{
 			{SourceID: "notes/missing", TargetRaw: "people/freya", Line: model.IntPtr(3)},
@@ -162,7 +162,7 @@ func TestRemoveDeletedFiles(t *testing.T) {
 			{ID: "notes/also-missing", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
 		},
 		Traits: []*model.Trait{
-			{TraitType: "flag", Value: nil, Content: "y", ParentObjectID: "notes/also-missing", Line: 2},
+			{TraitType: "flag", Value: nil, Content: "y", ParentScopeID: "notes/also-missing", Line: 2},
 		},
 		Refs: []*model.Reference{
 			{SourceID: "notes/also-missing", TargetRaw: "people/thor", Line: model.IntPtr(3)},

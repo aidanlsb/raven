@@ -69,12 +69,12 @@ func TestBrowseItemsForObjectResultsUseNameFieldAndDetails(t *testing.T) {
 func TestBrowseItemsForTraitResultsUseColumnsAndSearchText(t *testing.T) {
 	value := "done"
 	trait := model.Trait{
-		ID:             "type/project/raven.md:trait:1",
-		TraitType:      "todo",
-		Content:        "Polish the Raven query picker so trait result rows have enough surrounding context",
-		FilePath:       "type/project/raven.md",
-		Line:           42,
-		ParentObjectID: "project/raven",
+		ID:            "type/project/raven.md:trait:1",
+		TraitType:     "todo",
+		Content:       "Polish the Raven query picker so trait result rows have enough surrounding context",
+		FilePath:      "type/project/raven.md",
+		Line:          42,
+		ParentScopeID: "project/raven",
 	}
 	trait.SetIndexValueString(&value)
 	items := browseItemsForTraitResults([]model.Trait{trait})
