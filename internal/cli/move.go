@@ -20,12 +20,19 @@ var (
 )
 
 var moveCmd = newCanonicalLeafCommand("move", canonicalLeafOptions{
-	VaultPath:       getVaultPath,
-	Args:            cobra.MaximumNArgs(2),
-	BuildArgs:       buildMoveArgs,
-	Invoke:          invokeMove,
-	RenderHuman:     renderMoveResult,
-	SkipFlagBinding: true,
+	VaultPath:   getVaultPath,
+	Args:        cobra.MaximumNArgs(2),
+	BuildArgs:   buildMoveArgs,
+	Invoke:      invokeMove,
+	RenderHuman: renderMoveResult,
+	FlagBindings: map[string]interface{}{
+		"force":           &moveForce,
+		"update-refs":     &moveUpdateRefs,
+		"skip-type-check": &moveSkipTypeCheck,
+		"stdin":           &moveStdin,
+		"confirm":         &moveConfirm,
+		"dry-run":         &moveDryRun,
+	},
 })
 
 func buildMoveArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
@@ -126,12 +133,6 @@ func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]i
 }
 
 func init() {
-	moveCmd.Flags().BoolVar(&moveForce, "force", false, "Skip confirmation prompts")
-	moveCmd.Flags().BoolVar(&moveUpdateRefs, "update-refs", true, "Update references to moved file")
-	moveCmd.Flags().BoolVar(&moveSkipTypeCheck, "skip-type-check", false, "Skip type-directory mismatch warning")
-	moveCmd.Flags().BoolVar(&moveStdin, "stdin", false, "Read object IDs from stdin (one per line)")
-	moveCmd.Flags().BoolVar(&moveConfirm, "confirm", false, "Apply bulk move (without this flag, bulk shows preview only)")
-	moveCmd.Flags().BoolVar(&moveDryRun, "dry-run", false, "Preview a single-object move without applying it")
 	moveCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
 		IncludeDynamicDates: false,
 		DisableWhenStdin:    true,

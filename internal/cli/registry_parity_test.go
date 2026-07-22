@@ -10,39 +10,103 @@ import (
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
-func TestCheckCommandFlagsMatchRegistry(t *testing.T) {
-	meta, ok := commands.Registry["check"]
-	if !ok {
-		t.Fatal("check command missing from registry")
-	}
-
-	cmd, ok := findCommandByPath(rootCmd, "check")
-	if !ok {
-		t.Fatal("check command missing from CLI tree")
-	}
-
-	cliFlags := make(map[string]struct{})
-	cmd.LocalFlags().VisitAll(func(flag *pflag.Flag) {
-		if flag.Name == "help" {
-			return
+func TestRegistryBackedCanonicalCommandFlagsMatchRegistry(t *testing.T) {
+	for _, path := range commandPaths(rootCmd) {
+		cmd, ok := findCommandByPath(rootCmd, path)
+		if !ok {
+			t.Errorf("failed to locate command for path %q", path)
+			continue
 		}
-		cliFlags[flag.Name] = struct{}{}
-	})
-
-	registryFlags := make(map[string]struct{}, len(meta.Flags))
-	for _, flag := range meta.Flags {
-		registryFlags[flag.Name] = struct{}{}
-	}
-
-	for name := range cliFlags {
-		if _, ok := registryFlags[name]; !ok {
-			t.Errorf("CLI check flag %q is missing from registry metadata", name)
+		if !cmd.Runnable() || cmd.Annotations[canonicalLeafAnnotationKey] != "true" {
+			continue
 		}
-	}
-	for name := range registryFlags {
-		if _, ok := cliFlags[name]; !ok {
-			t.Errorf("registry check flag %q is missing from CLI command", name)
+
+		commandID, ok := registryCommandIDForCommand(cmd)
+		if !ok {
+			t.Errorf("canonical command %q is missing registry metadata", path)
+			continue
 		}
+		meta, ok := commands.EffectiveMeta(commandID)
+		if !ok {
+			t.Errorf("canonical command %q resolved to missing registry id %q", path, commandID)
+			continue
+		}
+
+		t.Run(path, func(t *testing.T) {
+			cliFlags := make(map[string]*pflag.Flag)
+			cmd.LocalFlags().VisitAll(func(flag *pflag.Flag) {
+				if flag.Name == "help" {
+					return
+				}
+				cliFlags[flag.Name] = flag
+			})
+
+			registryFlags := make(map[string]commands.FlagMeta, len(meta.Flags))
+			for _, flag := range meta.Flags {
+				if flag.Type == commands.FlagTypePosKeyValue {
+					continue
+				}
+				registryFlags[flag.Name] = flag
+			}
+
+			for name := range cliFlags {
+				if _, ok := registryFlags[name]; !ok {
+					t.Errorf("CLI flag %q is missing from registry metadata", name)
+				}
+			}
+			for name := range registryFlags {
+				cliFlag, ok := cliFlags[name]
+				if !ok {
+					t.Errorf("registry flag %q is missing from CLI command", name)
+					continue
+				}
+				metaFlag := registryFlags[name]
+				if cliFlag.Usage != metaFlag.Description {
+					t.Errorf("CLI flag %q description = %q, want registry description %q", name, cliFlag.Usage, metaFlag.Description)
+				}
+				if cliFlag.Shorthand != metaFlag.Short {
+					t.Errorf("CLI flag %q shorthand = %q, want registry shorthand %q", name, cliFlag.Shorthand, metaFlag.Short)
+				}
+				if cliFlag.Value.Type() != cobraFlagType(metaFlag.Type) {
+					t.Errorf("CLI flag %q type = %q, want %q", name, cliFlag.Value.Type(), cobraFlagType(metaFlag.Type))
+				}
+				if cliFlag.DefValue != cobraFlagDefault(metaFlag) {
+					t.Errorf("CLI flag %q default = %q, want %q", name, cliFlag.DefValue, cobraFlagDefault(metaFlag))
+				}
+			}
+		})
+	}
+}
+
+func cobraFlagType(flagType commands.FlagType) string {
+	switch flagType {
+	case commands.FlagTypeBool:
+		return "bool"
+	case commands.FlagTypeInt:
+		return "int"
+	case commands.FlagTypeKeyValue, commands.FlagTypeStringSlice:
+		return "stringArray"
+	default:
+		return "string"
+	}
+}
+
+func cobraFlagDefault(flag commands.FlagMeta) string {
+	switch flag.Type {
+	case commands.FlagTypeBool:
+		if flag.Default == "true" {
+			return "true"
+		}
+		return "false"
+	case commands.FlagTypeInt:
+		if strings.TrimSpace(flag.Default) == "" {
+			return "0"
+		}
+		return strings.TrimSpace(flag.Default)
+	case commands.FlagTypeKeyValue, commands.FlagTypeStringSlice:
+		return "[]"
+	default:
+		return flag.Default
 	}
 }
 

@@ -23,11 +23,17 @@ var (
 )
 
 var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
-	VaultPath:       getVaultPath,
-	BuildArgs:       buildReclassifyArgs,
-	Invoke:          invokeReclassify,
-	RenderHuman:     renderReclassifyResult,
-	SkipFlagBinding: true,
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildReclassifyArgs,
+	Invoke:      invokeReclassify,
+	RenderHuman: renderReclassifyResult,
+	FlagBindings: map[string]interface{}{
+		"field":       &reclassifyFieldFlags,
+		"fields-json": &reclassifyFieldJSON,
+		"no-move":     &reclassifyNoMove,
+		"update-refs": &reclassifyUpdateRefs,
+		"force":       &reclassifyForce,
+	},
 })
 
 type ReclassifyResult = objectsvc.ReclassifyResult
@@ -191,11 +197,6 @@ func promptMissingReclassifyFields(newTypeName string, details map[string]interf
 }
 
 func init() {
-	reclassifyCmd.Flags().StringArrayVar(&reclassifyFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
-	reclassifyCmd.Flags().StringVar(&reclassifyFieldJSON, "fields-json", "", "Set/update frontmatter fields as a JSON object")
-	reclassifyCmd.Flags().BoolVar(&reclassifyNoMove, "no-move", false, "Skip moving file to new type's default_path")
-	reclassifyCmd.Flags().BoolVar(&reclassifyUpdateRefs, "update-refs", true, "Update references when file moves")
-	reclassifyCmd.Flags().BoolVar(&reclassifyForce, "force", false, "Skip confirmation prompts")
 	reclassifyCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
 		IncludeDynamicDates: false,
 		DisableWhenStdin:    false,
