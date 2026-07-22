@@ -34,7 +34,7 @@ func buildDeleteArgs(_ *cobra.Command, args []string) (map[string]interface{}, e
 			return nil, handleError(ErrInternal, err, "")
 		}
 		if len(ids) == 0 && len(sectionIDs) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
+			return nil, handleErrorMsg(ErrMissingArgument, "no object or asset IDs provided via stdin", "Pipe object or asset IDs to stdin, one per line")
 		}
 		return map[string]interface{}{
 			"stdin":      true,
@@ -43,7 +43,7 @@ func buildDeleteArgs(_ *cobra.Command, args []string) (map[string]interface{}, e
 	}
 
 	if len(args) == 0 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires object-id argument", "Usage: rvn delete <object-id>")
+		return nil, handleErrorMsg(ErrMissingArgument, "requires object or asset ID argument", "Usage: rvn delete <object-or-asset-id>")
 	}
 	return map[string]interface{}{
 		"object_id": args[0],
@@ -180,9 +180,9 @@ func deletePreviewBacklinks(raw interface{}) []model.Reference {
 
 func init() {
 	deleteCmd.Flags().BoolVar(&deleteForce, "force", false, "Skip confirmation prompt")
-	deleteCmd.Flags().BoolVar(&deleteStdin, "stdin", false, "Read object IDs from stdin (one per line)")
+	deleteCmd.Flags().BoolVar(&deleteStdin, "stdin", false, "Read object or asset IDs from stdin (one per line)")
 	deleteCmd.Flags().BoolVar(&deleteConfirm, "confirm", false, "Apply bulk delete (without this flag, bulk shows preview only)")
-	deleteCmd.Flags().BoolVar(&deleteDryRun, "dry-run", false, "Preview a single-object delete without applying it")
+	deleteCmd.Flags().BoolVar(&deleteDryRun, "dry-run", false, "Preview a single-file delete without applying it")
 	deleteCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
 		IncludeDynamicDates: false,
 		DisableWhenStdin:    true,

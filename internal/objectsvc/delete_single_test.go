@@ -1,11 +1,14 @@
 package objectsvc
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/testutil"
 )
 
 func TestDeleteByReferenceSuccess(t *testing.T) {
@@ -53,4 +56,88 @@ traits: {}
 	if _, err := os.Stat(result.TrashPath); err != nil {
 		t.Fatalf("expected trashed file to exist: %v", err)
 	}
+}
+
+func TestDeleteByReferenceAssetPreviewAndApply(t *testing.T) {
+	t.Parallel()
+
+	const assetID = "assets/images/example/chart.png"
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile(assetID, "png").
+		WithFile("notes/reference.md", "![Chart]("+assetID+")\n").
+		Build()
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "notes/reference.md")
+	indexVaultAssets(t, v.Path, assetID)
+	resolveVaultRefs(t, v.Path, sch)
+
+	req := DeleteByReferenceRequest{
+		VaultPath:   v.Path,
+		VaultConfig: config.DefaultVaultConfig(),
+		Schema:      sch,
+		Reference:   assetID,
+		Behavior:    "trash",
+		TrashDir:    ".trash",
+	}
+	preview, err := PreviewDeleteByReference(req)
+	if err != nil {
+		t.Fatalf("PreviewDeleteByReference() error = %v", err)
+	}
+	if preview.ObjectID != assetID {
+		t.Fatalf("ObjectID = %q, want %q", preview.ObjectID, assetID)
+	}
+	if len(preview.Backlinks) != 1 || preview.Backlinks[0].SourceID != "notes/reference" {
+		t.Fatalf("Backlinks = %#v, want notes/reference", preview.Backlinks)
+	}
+	v.AssertFileExists(assetID)
+
+	result, err := DeleteByReference(req)
+	if err != nil {
+		t.Fatalf("DeleteByReference() error = %v", err)
+	}
+	if len(result.WarningMessages) != 0 {
+		t.Fatalf("WarningMessages = %#v, want none", result.WarningMessages)
+	}
+	v.AssertFileNotExists(assetID)
+	v.AssertFileExists(".trash/" + assetID)
+
+	db, err := index.Open(v.Path)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	defer db.Close()
+	assets, err := db.QueryAssets()
+	if err != nil {
+		t.Fatalf("QueryAssets() error = %v", err)
+	}
+	if len(assets) != 0 {
+		t.Fatalf("QueryAssets() = %#v, want no assets after delete", assets)
+	}
+}
+
+func TestDeleteByReferenceRejectsSection(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("notes/sectioned.md", "# Notes\n\n## Details\n").
+		Build()
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "notes/sectioned.md")
+
+	_, err := PreviewDeleteByReference(DeleteByReferenceRequest{
+		VaultPath:   v.Path,
+		VaultConfig: config.DefaultVaultConfig(),
+		Schema:      sch,
+		Reference:   "notes/sectioned#details",
+	})
+	if err == nil {
+		t.Fatal("PreviewDeleteByReference() succeeded for a section ID")
+	}
+	var serviceErr *Error
+	if !errors.As(err, &serviceErr) || serviceErr.Code != ErrorInvalidInput {
+		t.Fatalf("error = %v, want %s", err, ErrorInvalidInput)
+	}
+	v.AssertFileExists("notes/sectioned.md")
 }
