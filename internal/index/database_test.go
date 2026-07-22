@@ -49,6 +49,45 @@ func traitsByType(t *testing.T, db *Database, traitType string) []model.Trait {
 	return results
 }
 
+func TestStarterSchemaBareTodoIndexesAsOpen(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if _, err := schema.CreateDefault(vaultPath); err != nil {
+		t.Fatalf("create starter schema: %v", err)
+	}
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		t.Fatalf("load starter schema: %v", err)
+	}
+	doc, err := parser.ParseDocument(
+		"# Tasks\n\n- @todo Review the PR\n",
+		filepath.Join(vaultPath, "tasks.md"),
+		vaultPath,
+	)
+	if err != nil {
+		t.Fatalf("parse document: %v", err)
+	}
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("open in-memory database: %v", err)
+	}
+	defer db.Close()
+	if err := db.IndexDocument(doc, sch); err != nil {
+		t.Fatalf("index document: %v", err)
+	}
+
+	results := traitsByType(t, db, "todo")
+	if len(results) != 1 {
+		t.Fatalf("todo result count = %d, want 1", len(results))
+	}
+	value := results[0].IndexValueString()
+	if value == nil || *value != "todo" {
+		t.Fatalf("bare todo value = %v, want %q", value, "todo")
+	}
+}
+
 func TestDatabase(t *testing.T) {
 	t.Parallel()
 	// Create a minimal schema for testing
