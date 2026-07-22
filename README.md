@@ -5,9 +5,9 @@
 A Raven "vault" is a folder of markdown files, with a few additional features:
 
 - **Types & schema.** You define types for your notes, and their fields (YAML frontmatter) are validated against the schema.
-- **Traits.** Inline markers like `@todo` or `@due(2026-07-22)` attach typed, queryable metadata to particular content.
+- **Traits.** Inline markers like `@todo` or `@due(2026-07-22)` attach queryable metadata to particular pieces of content.
 - **References.** `[[wiki-style]]` links connect notes to each other, and Raven maintains them as files are renamed or moved.
-- **Queries.** A full query language allows precise retrieval of content, by you or your agent.
+- **Queries.** A full query language allows precise retrieval, by you or your agent.
 
 Here's an example:
 
@@ -25,17 +25,11 @@ project: project/midgard-security-review
 @todo @due(2026-07-22) Send the draft scope for review
 ```
 
-Let's say later you wanted to find "todos inside meetings that reference the Midgard security review project":
+Let's say later you wanted to find "todos inside meetings that reference the Midgard security review project." You could ask your agent or run the following with the CLI:
 
 ```bash
 rvn query 'trait:todo within(type:meeting refs(project/midgard-security-review))'
 ```
-
-An agent can also run the same query when you ask:
-
-> List the open todos for the the Midgard security review, list its open follow-ups, and point me to the source notes.
-
-> The review is blocked until the draft scope is approved. One follow-up is open: send the draft scope for review by July 22. Source: `meeting/security-review-kickoff.md`.
 
 The rest of this README walks through setup in more detail.
 
@@ -58,32 +52,13 @@ rvn version
 
 Prebuilt binaries for Linux, macOS, and Windows are also available on the [releases page](https://github.com/aidanlsb/raven/releases/latest) — see [Installation](docs/getting-started/installation.md) for details.
 
-Then create a vault:
-
-```bash
-rvn init ~/notes
-```
-
-Raven creates:
-
-```text
-notes/
-├── .raven/       # derived cache and local metadata (rebuildable with `rvn reindex`)
-├── raven.yaml    # vault configuration
-└── schema.yaml   # types, fields, and traits
-```
-
-On a fresh machine, this first `rvn init` also registers `~/notes` in global config
-and sets it as your default and active vault, so the CLI can find it right away — no
-extra setup needed. Additional vaults are registered too, but you switch between them
-explicitly with `rvn vault use` / `rvn vault pin`. See
-[Vault Creation & Management](docs/getting-started/first-vault.md).
-
-The starter `schema.yaml` already includes `project` and `person` types, which you can modify or replace.
+That's the whole install: a single `rvn` binary. You don't have to create a vault
+by hand — the fastest path is to let an agent set one up and teach you (below). If
+you'd rather drive everything yourself, skip to [Doing it by hand](#doing-it-by-hand).
 
 ## Get started with an agent
 
-The fastest way to learn Raven is to let an agent set up your vault and teach you — this is where Raven shines. It ships reusable [Agent Skills](https://agentskills.io/) that give coding agents everything they need to drive your vault.
+The fastest way to learn Raven is to let an agent set up your vault and teach you — this is where Raven shines. Starting from a clean machine with no vault at all, an agent can create and register one for you, then shape a schema around what you actually track. It ships reusable [Agent Skills](https://agentskills.io/) that give coding agents everything they need to drive your vault.
 
 ### 1. Install the skills
 
@@ -105,11 +80,11 @@ This installs the following shipped skills to `~/.agents/skills` (use `--scope p
 
 ### 2. Let the agent onboard you
 
-Open your agent in the vault directory and give it this prompt:
+Open your agent wherever you want your notes to live and give it this prompt:
 
 > Use the `raven-onboarding` skill to set up my vault and walk me through how Raven works.
 
-The onboarding skill introduces Raven's concepts, helps you shape a schema for what you actually track, and gets you creating and querying notes — all in the context of your own vault. From there you can ask for real work, like:
+The onboarding skill detects that you have no vault yet, creates and registers one, then introduces Raven's concepts, helps you shape a schema for what you actually track, and gets you creating and querying notes — all in the context of your own vault. From there you can ask for real work, like:
 
 > Add a meeting note for today's kickoff with Freya on the Midgard security review, capture any decisions and follow-ups, and link it to the project and to Freya.
 
@@ -139,6 +114,27 @@ See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-st
 ## Doing it by hand
 
 Prefer to drive Raven directly, or curious what the agent does under the hood? Here's the same flow — tracking projects, meetings, and the people involved — done manually.
+
+First, create a vault:
+
+```bash
+rvn init ~/notes
+```
+
+Raven creates:
+
+```text
+notes/
+├── .raven/       # derived cache and local metadata (rebuildable with `rvn reindex`)
+├── raven.yaml    # vault configuration
+└── schema.yaml   # types, fields, and traits
+```
+
+On a fresh machine, this first `rvn init` also registers `~/notes` in global config
+and sets it as your default and active vault, so the CLI can find it right away — no
+extra setup needed. Additional vaults are registered too, but you switch between them
+explicitly with `rvn vault use` / `rvn vault pin`. See
+[Vault Creation & Management](docs/getting-started/first-vault.md).
 
 ### 1. Extend the schema
 
@@ -234,6 +230,40 @@ Raven also includes a built-in language server for diagnostics, completion,
 navigation, and hover while you edit. See the
 [editor integration guide](docs/using-your-vault/editor-integration.md) to
 configure `rvn lsp` in your editor.
+
+## Daily notes & quick capture
+
+Daily notes give you a date-stamped file for each day — for journaling, quick
+capture, or meeting notes. Each is an ordinary `date`-typed note, so everything
+you've already seen (types, traits, references, queries) applies.
+
+```bash
+rvn daily                 # open (creating if needed) today's note
+rvn daily yesterday       # or a relative day
+rvn daily 2026-07-20      # or a specific date
+```
+
+The real quality-of-life win is `rvn add`, which appends a line to today's note
+without opening it — the fastest way to capture a thought or a task:
+
+```bash
+rvn add "Met with [[person/freya]] about the rollout"
+rvn add "@todo Send scope doc to [[person/freya]]"
+rvn add "Prep for standup" --to tomorrow   # target another day or file
+```
+
+Because daily notes are just `date`-typed notes, the traits and references you
+capture stay queryable. Pull today's open todos, or review everything tied to a
+day with the read-only `rvn date` hub:
+
+```bash
+rvn query 'trait:todo within([[2026-07-20]])'   # todos captured that day
+rvn date today                                  # everything connected to a date
+```
+
+You can give new daily notes consistent structure with a template, and change
+where they're stored via `directories.daily` in `raven.yaml`. See the
+[Daily Notes](docs/using-your-vault/daily-notes.md) guide for the full workflow.
 
 ## Documentation
 
