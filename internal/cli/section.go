@@ -25,6 +25,20 @@ var sectionCmd = buildRegistrySubtree(registrySubtreeSpec{
 })
 
 func init() {
+	createCmd, _, err := sectionCmd.Find([]string{"create"})
+	if err != nil {
+		panic(err)
+	}
+	createCmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
+		if !cmd.Flags().Changed("level") {
+			return handleErrorMsg(
+				ErrInvalidInput,
+				"--level is required",
+				`Usage: rvn section create <file> "<title>" --level N`,
+			)
+		}
+		return nil
+	}
 	rootCmd.AddCommand(sectionCmd)
 }
 

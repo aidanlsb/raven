@@ -121,6 +121,12 @@ func TestIntegration_SectionCreateDryRunAndErrors(t *testing.T) {
 			code:    "INVALID_INPUT",
 			message: "plain text",
 		},
+		{
+			name:    "level is required",
+			args:    []string{"section", "create", "projects/site", "Missing Level"},
+			code:    "INVALID_INPUT",
+			message: "--level is required",
+		},
 	}
 
 	for _, tt := range tests {
