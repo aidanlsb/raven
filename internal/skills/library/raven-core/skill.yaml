@@ -1,6 +1,6 @@
 id: raven-core
 title: Raven Core
-version: 1
+version: 2
 summary: Core Raven workflows for creating, reading, editing, and organizing content safely.
 entry: body.md
 references:

@@ -93,7 +93,6 @@ type documentState struct {
 	filePath        string
 	fileRelative    string
 	fileID          string
-	content         string
 	trailingNewline bool
 	lines           []trackedLine
 	doc             *parser.ParsedDocument
@@ -429,7 +428,6 @@ func (ctx *lifecycleContext) loadDocument(filePath, fileID string) (*documentSta
 		filePath:        filePath,
 		fileRelative:    paths.NormalizeVaultRelPath(relative),
 		fileID:          fileID,
-		content:         content,
 		trailingNewline: trailingNewline,
 		lines:           lines,
 		doc:             doc,
