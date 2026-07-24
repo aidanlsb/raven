@@ -448,7 +448,7 @@ func projectedDryRunStats(db *index.Database, deletedFiles []string, reindexedFi
 	projected := *stats
 
 	for _, filePath := range deletedFiles {
-		current, err := fileIndexStats(db, filePath)
+		current, err := db.StatsForFile(filePath)
 		if err != nil {
 			return nil, err
 		}
@@ -458,7 +458,7 @@ func projectedDryRunStats(db *index.Database, deletedFiles []string, reindexedFi
 	}
 
 	for filePath, next := range reindexedFiles {
-		current, err := fileIndexStats(db, filePath)
+		current, err := db.StatsForFile(filePath)
 		if err != nil {
 			return nil, err
 		}
@@ -518,22 +518,4 @@ func uniqueStrings(groups ...[]string) []string {
 		}
 	}
 	return out
-}
-
-func fileIndexStats(db *index.Database, filePath string) (index.IndexStats, error) {
-	if db == nil {
-		return index.IndexStats{}, fmt.Errorf("database is nil")
-	}
-
-	var stats index.IndexStats
-	if err := db.DB().QueryRow(`SELECT COUNT(*) FROM objects WHERE file_path = ?`, filePath).Scan(&stats.ObjectCount); err != nil {
-		return index.IndexStats{}, err
-	}
-	if err := db.DB().QueryRow(`SELECT COUNT(*) FROM traits WHERE file_path = ?`, filePath).Scan(&stats.TraitCount); err != nil {
-		return index.IndexStats{}, err
-	}
-	if err := db.DB().QueryRow(`SELECT COUNT(*) FROM refs WHERE file_path = ?`, filePath).Scan(&stats.RefCount); err != nil {
-		return index.IndexStats{}, err
-	}
-	return stats, nil
 }
