@@ -151,8 +151,8 @@ func TestApplyChangeSetProjectsReusedMoveDestination(t *testing.T) {
 
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
-		WithFile("a.md", "# A\n").
-		WithFile("b.md", "# B\n").
+		WithFile("a.md", "A\n").
+		WithFile("b.md", "B\n").
 		Build()
 	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
 	indexPostMutationFiles(t, rt, "a.md", "b.md")
