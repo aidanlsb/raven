@@ -145,6 +145,7 @@ var mutationPhaseCommandIDs = map[string]struct{}{
 	"update":         {},
 	"edit":           {},
 	"import":         {},
+	"asset_import":   {},
 
 	// Check repairs.
 	"check_fix":            {},
@@ -189,18 +190,19 @@ var mutationPhaseCommandIDs = map[string]struct{}{
 // The shared invoker uses this policy to install a write-ahead journal guard
 // before dispatch.
 var postMutationIndexCommandIDs = map[string]struct{}{
-	"new":        {},
-	"upsert":     {},
-	"add":        {},
-	"set":        {},
-	"unset":      {},
-	"delete":     {},
-	"move":       {},
-	"reclassify": {},
-	"update":     {},
-	"edit":       {},
-	"import":     {},
-	"check_fix":  {},
+	"new":          {},
+	"upsert":       {},
+	"add":          {},
+	"set":          {},
+	"unset":        {},
+	"delete":       {},
+	"move":         {},
+	"reclassify":   {},
+	"update":       {},
+	"edit":         {},
+	"import":       {},
+	"asset_import": {},
+	"check_fix":    {},
 }
 
 // EmitsMutationPhase reports whether a command carries the standard

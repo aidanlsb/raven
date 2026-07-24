@@ -12,6 +12,7 @@ Use this guide to choose the right mutation primitive.
 | Update frontmatter fields | `set` | Schema-validated metadata updates |
 | Change object types | `reclassify` | Applies target-type fields/defaults and safely moves files |
 | Replace body text safely | `edit` | Unique-string replacement in content markdown (applies immediately; `dry-run` to preview) |
+| Import an external asset | `asset_import` | Copies/moves a host file under `directories.assets` and refreshes the asset index |
 | Move or rename an asset | `move` | Updates Markdown links/images and refreshes the asset index |
 | Create a section heading | `section_create` | Plain title + required level; returns canonical `file#slug` |
 | Reorder/reparent a section | `section_move` | Moves the complete subtree without changing heading identity |
@@ -104,6 +105,21 @@ Asset IDs returned by an `asset` query use the same delete path:
 raven_invoke(command="delete", args={"reference":"assets/pdfs/old-paper.pdf", "dry-run":true})
 ```
 
+Import an external asset with an absolute or `~`-relative source path and a
+vault-relative destination under `directories.assets`:
+
+```text
+raven_invoke(command="asset_import", args={
+  "source":"/tmp/paper.pdf",
+  "destination":"assets/pdfs/"
+})
+```
+
+The default mode is copy. Set `move=true` to remove the source after the write
+and index handoff, `force=true` to overwrite an existing destination, or
+`dry-run=true` to preview. Markdown sources and destinations outside the asset
+root are rejected. Use `move` when the source is already in the vault.
+
 Single-object `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
 `section_rename`, `delete`, `move`, and `reclassify` all apply immediately. Only call them
 after clear user approval or an unambiguous request, and use `dry-run=true` when
@@ -150,4 +166,5 @@ vault-health concern surfaced by `check`, not a write-time error.
 - If data is narrative, prefer body content (`add`, `edit`, `upsert content=...`).
 - Use `edit` only for vault content files, not `raven.yaml`, `schema.yaml`, or template files.
 - Use `move` for assets instead of shell `mv`; asset destinations must include a file extension.
+- Use `asset_import` instead of shell `cp`/`mv` to bring an external non-Markdown file under `directories.assets`.
 - Prefer raw reads before constructing `old_str` for `edit`.

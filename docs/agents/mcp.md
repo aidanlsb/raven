@@ -396,7 +396,27 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 
 ### Asset references
 
-Use `backlinks` to find notes that reference a vault-local asset. Use `move` instead of shell `mv` so Markdown links/images and wikilinks are rewritten.
+Use `asset_import` to copy or move an external non-Markdown file into the
+configured asset root. The source is an absolute or `~`-relative host path; the
+destination is vault-relative and must stay under `directories.assets`.
+
+```json
+{
+  "command": "asset_import",
+  "args": {
+    "source": "/tmp/paper.pdf",
+    "destination": "assets/pdfs/"
+  }
+}
+```
+
+The default mode is copy. Add `"move": true` to remove the source after the
+write and index handoff, `"force": true` to overwrite a collision, or
+`"dry-run": true` to preview.
+
+Use `backlinks` to find notes that reference a vault-local asset. Use `move`
+instead of shell `mv` for an asset already in the vault so Markdown links/images
+and wikilinks are rewritten.
 
 ```json
 {
@@ -529,7 +549,7 @@ write it delegates to.
 3. Use raw `read` ranges before building string replacements for `edit`.
 4. Use `edit` only for content markdown files; use dedicated commands for `raven.yaml`, `schema.yaml`, and templates.
 5. Single-object writes apply immediately (`dry-run` to preview); bulk and query-driven mutations stay preview-first and need `confirm`. Read `meta.mutation.phase` (`applied`/`preview`) to confirm whether a write happened.
-6. Use `move` for asset relocation so references and the asset index stay correct.
+6. Use `asset_import` for external assets and `move` for in-vault asset relocation so references and the asset index stay correct.
 7. Reindex after schema-level structural changes or out-of-band asset file changes when required.
 8. Treat `raven_describe` as the authority for argument shape.
 

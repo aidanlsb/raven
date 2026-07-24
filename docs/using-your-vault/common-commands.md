@@ -221,6 +221,23 @@ Key flags:
 
 ## Organizing content
 
+### `rvn asset import`
+
+Copy an external non-Markdown file into the configured asset root. Sources must
+be absolute or `~`-relative host paths; destinations are vault-relative paths
+under `directories.assets`.
+
+```bash
+rvn asset import ~/Downloads/paper.pdf assets/pdfs/
+rvn asset import /tmp/photo.png assets/images/hero.png --move
+rvn asset import /tmp/data.csv assets/data/ --dry-run
+```
+
+Directory destinations preserve the source basename. The final path must have a
+file extension. Imports fail on collisions unless `--force` is supplied.
+`--move` removes the external source only after a successful vault write and
+index handoff. Use `rvn move` for files already inside the vault.
+
 ### `rvn move`
 
 Move or rename an object or asset. References are updated automatically by default, including Raven wikilinks and Markdown links/images that point at moved assets.

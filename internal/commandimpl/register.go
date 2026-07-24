@@ -22,6 +22,7 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("update", HandleUpdate)
 	registry.Register("edit", HandleEdit)
 	registry.Register("import", HandleImport)
+	registry.Register("asset_import", HandleAssetImport)
 	registry.Register("init", HandleInit)
 	registry.Register("reindex", HandleReindex)
 	registry.Register("check", HandleCheck)
