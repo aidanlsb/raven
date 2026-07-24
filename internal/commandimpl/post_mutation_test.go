@@ -35,6 +35,43 @@ func TestApplyChangeSetAutoReindexDisabled(t *testing.T) {
 	}
 }
 
+func TestApplyChangeSetAutoReindexDisabledSkipsStaleMoveAnnotations(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML("auto_reindex: false\n").
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		WithFile("notes/ref.md", "See [[people/freya]].\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+	indexPostMutationFiles(t, rt, "people/freya.md", "notes/ref.md")
+
+	if err := os.MkdirAll(filepath.Join(v.Path, "archive"), 0o755); err != nil {
+		t.Fatalf("mkdir archive: %v", err)
+	}
+	if err := os.Rename(
+		filepath.Join(v.Path, "people", "freya.md"),
+		filepath.Join(v.Path, "archive", "freya.md"),
+	); err != nil {
+		t.Fatalf("move file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(v.Path, "notes", "ref.md"), []byte("See [[archive/freya]].\n"), 0o644); err != nil {
+		t.Fatalf("rewrite ref: %v", err)
+	}
+
+	changes := mutation.NewChangeSet()
+	changes.AddMoved("people/freya.md", "archive/freya.md")
+	changes.AddChanged("notes/ref.md")
+	data, warnings := applyChangeSet(rt, changes)
+	if len(data) != 0 {
+		t.Fatalf("data = %#v, want no stale missing-ref annotations", data)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none with auto-reindex disabled", warnings)
+	}
+}
+
 func TestApplyChangeSetReportsMissingRefsAcrossFiles(t *testing.T) {
 	t.Parallel()
 

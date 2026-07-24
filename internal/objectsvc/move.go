@@ -30,6 +30,7 @@ type MoveFileRequest struct {
 	ReplacementContent []byte
 	UpdateRefs         bool
 	Preview            bool
+	PriorMoves         []mutation.Move
 	VaultConfig        *config.VaultConfig
 	Schema             *schema.Schema
 	ParseOptions       *parser.ParseOptions
@@ -376,6 +377,13 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 		}
 
 		reportSourceID := remapMovedSourceID(bl.SourceID, req.SourceObjectID, req.DestinationObject)
+		for _, priorMove := range req.PriorMoves {
+			reportSourceID = remapMovedSourceID(
+				reportSourceID,
+				movePathObjectID(priorMove.From, req.VaultConfig),
+				movePathObjectID(priorMove.To, req.VaultConfig),
+			)
+		}
 		plans = append(plans, refUpdatePlan{
 			reportSourceID: reportSourceID,
 			applySourceID:  reportSourceID,
@@ -386,6 +394,17 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 	}
 
 	return plans, warnings
+}
+
+func movePathObjectID(relPath string, vaultCfg *config.VaultConfig) string {
+	relPath = paths.NormalizeVaultRelPath(relPath)
+	if !paths.HasMDExtension(relPath) {
+		return relPath
+	}
+	if vaultCfg != nil {
+		return vaultCfg.FilePathToObjectID(relPath)
+	}
+	return strings.TrimSuffix(relPath, filepath.Ext(relPath))
 }
 
 // refBaseFromTargetRaw extracts the base target (without any section fragment)

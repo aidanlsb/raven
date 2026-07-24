@@ -14,14 +14,14 @@ func TestChangeSetMergeAndProjectionPaths(t *testing.T) {
 	first.AddMoved("people/old.md", "people/new.md")
 
 	second := NewChangeSet()
-	second.AddChanged("notes/two.md", "people/new.md")
+	second.AddChanged("notes/two.md", "people/new.md", "assets/old.pdf")
 	second.AddDeleted("archive/gone.md", "archive/other.md")
 	second.AddMoved("people/old.md", "people/new.md")
 	second.AddMoved("assets/old.pdf", "assets/new.pdf")
 
 	first.Merge(second)
 
-	if got, want := first.Changed, []string{"notes/one.md", "notes/two.md", "people/new.md"}; !reflect.DeepEqual(got, want) {
+	if got, want := first.Changed, []string{"notes/one.md", "notes/two.md", "people/new.md", "assets/old.pdf"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Changed = %#v, want %#v", got, want)
 	}
 	if got, want := first.Deleted, []string{"archive/gone.md", "archive/other.md"}; !reflect.DeepEqual(got, want) {

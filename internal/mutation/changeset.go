@@ -95,9 +95,21 @@ func (c ChangeSet) Empty() bool {
 // IndexPaths returns existing files whose current contents should be projected
 // into the index. Move destinations are included.
 func (c ChangeSet) IndexPaths() []string {
-	result := append([]string(nil), c.Changed...)
+	removed := make(map[string]struct{}, len(c.Deleted)+len(c.Moved))
+	for _, relPath := range c.RemovedPaths() {
+		removed[relPath] = struct{}{}
+	}
+
+	result := make([]string, 0, len(c.Changed)+len(c.Moved))
+	for _, relPath := range c.Changed {
+		if _, wasRemoved := removed[relPath]; !wasRemoved {
+			result = appendUnique(result, relPath)
+		}
+	}
 	for _, move := range c.Moved {
-		result = appendUnique(result, move.To)
+		if _, wasRemoved := removed[move.To]; !wasRemoved {
+			result = appendUnique(result, move.To)
+		}
 	}
 	return result
 }

@@ -20,22 +20,31 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet) (map[s
 		return nil, nil
 	}
 
+	indexPaths := changes.IndexPaths()
+	autoReindexEnabled := rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled()
 	var warnings []commandexec.Warning
-	if rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled() {
+	if autoReindexEnabled {
 		for _, relPath := range changes.RemovedPaths() {
 			if warning, ok := removeIndexPathWarning(rt, relPath); ok {
 				warnings = append(warnings, warning)
 			}
 		}
-		for _, relPath := range changes.IndexPaths() {
+		for _, relPath := range indexPaths {
 			if warning, ok := projectIndexPathWarning(rt, relPath); ok {
 				warnings = append(warnings, warning)
 			}
 		}
 	}
 
-	missingPaths := make([]string, 0, len(changes.IndexPaths()))
-	for _, relPath := range changes.IndexPaths() {
+	// Missing-reference detection relies on a current resolver. If projection
+	// failed, or a move was intentionally not projected, stale IDs can produce
+	// false REF_TARGET_MISSING remediation for files that exist on disk.
+	if len(warnings) > 0 || (!autoReindexEnabled && len(changes.Moved) > 0) {
+		return nil, warnings
+	}
+
+	missingPaths := make([]string, 0, len(indexPaths))
+	for _, relPath := range indexPaths {
 		if paths.HasMDExtension(relPath) {
 			missingPaths = append(missingPaths, relPath)
 		}

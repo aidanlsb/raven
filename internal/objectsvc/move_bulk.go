@@ -194,6 +194,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 			SourceObjectID:    sourceID,
 			DestinationObject: destID,
 			UpdateRefs:        req.UpdateRefs,
+			PriorMoves:        append([]mutation.Move(nil), changes.Moved...),
 			VaultConfig:       req.VaultConfig,
 			Schema:            req.Schema,
 			ParseOptions:      req.ParseOptions,
