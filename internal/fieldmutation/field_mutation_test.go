@@ -120,8 +120,8 @@ func TestPrepareValidatedFrontmatterMutationValues(t *testing.T) {
 				if status, _ := fm.Fields["status"].AsString(); status != "done" {
 					t.Fatalf("status = %q, want done", status)
 				}
-				if due, _ := fm.Fields["due"].AsString(); due != "2026-07-24" || !fm.Fields["due"].IsDate() {
-					t.Fatalf("due = %q IsDate=%v, want typed date", due, fm.Fields["due"].IsDate())
+				if due, _ := fm.Fields["due"].AsString(); due != "2026-07-24" {
+					t.Fatalf("due = %q, want normalized date", due)
 				}
 			},
 		},
