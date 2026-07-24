@@ -51,8 +51,7 @@ who gathered knowledge from across the world.`,
 			cfg = &config.Config{}
 		}
 		resolvedStatePath = config.ResolveStatePath(statePathFlag, resolvedConfigPath, cfg)
-		ui.ConfigureTheme(cfg.UI.Accent)
-		ui.ConfigureMarkdownCodeTheme(cfg.UI.CodeTheme)
+		ui.ConfigureStyles()
 		ui.ConfigureMarkdownStyle(cfg.UI.MarkdownStyle)
 
 		if !shouldResolveVaultForCommand(cmd) {
@@ -88,7 +87,7 @@ who gathered knowledge from across the world.`,
 						return handleStartupError(
 							ErrVaultNotFound,
 							fmt.Sprintf("active vault '%s' not found in config and no default vault configured", activeVaultName),
-							"Run 'rvn vault use <name>' or set default_vault in config.toml",
+							"Run 'rvn vault use <name>' or 'rvn vault pin <name>'",
 						)
 					}
 					if !jsonOutput {
@@ -106,7 +105,7 @@ who gathered knowledge from across the world.`,
   1. Use --vault <name> (from config)
   2. Use --vault-path /path/to/vault
   3. Run 'rvn vault use <name>' to set active_vault in state.toml
-  4. Set default_vault in ~/.config/raven/config.toml
+  4. Run 'rvn vault pin <name>' to set default_vault
   5. Run 'rvn init /path/to/new/vault' to create one`,
 					)
 				}

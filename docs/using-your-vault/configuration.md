@@ -30,6 +30,7 @@ Rule of thumb:
 ### Typical example
 
 ```toml
+# Managed by: rvn vault pin work
 default_vault = "work"
 state_file = "state.toml"
 editor = "cursor"
@@ -40,12 +41,7 @@ work = "/Users/you/work-notes"
 personal = "/Users/you/personal-notes"
 
 [ui]
-accent = "39"
-code_theme = "monokai"
 markdown_style = "auto"
-
-[mcp]
-strict_vault = true
 ```
 
 ### Keys
@@ -57,60 +53,11 @@ strict_vault = true
 | `editor` | string | `$EDITOR` | Used by commands that open files |
 | `editor_mode` | string | `auto` behavior in caller logic | One of `auto`, `terminal`, `gui` |
 | `[vaults]` | table | empty | Name -> absolute path mapping |
-| `[ui].accent` | string | unset | Accent color for styled terminal output. Supports ANSI (`"0"`-`"255"`) or hex (`"#RRGGBB"` / `"#RGB"`). |
-| `[ui].code_theme` | string | unset (`monokai` effective default) | Markdown code-block theme (Glamour/Chroma), for example `monokai`, `dracula`, `github` |
-| `[ui].markdown_style` | string | unset (`auto` effective default) | Full Glamour Markdown style: `auto`, `raven`, a built-in style name such as `dark`/`light`, or a custom style JSON path |
-| `[mcp].strict_vault` | bool | `false` | When true, the MCP server requires an explicit vault (`vault`/`vault_path` or a pinned vault) for vault-scoped calls; ambient fallback is rejected with `VAULT_AMBIGUOUS`. Overridden by `rvn serve --strict-vault`. |
+| `[ui].markdown_style` | string | `auto` | Glamour Markdown style: `auto`, a stock built-in style name such as `dark`/`light`/`notty`/`ascii`, or a custom style JSON path |
 
 ### UI options in detail
 
 `[ui]` controls human-facing terminal presentation. It does not affect JSON payloads (`--json`).
-
-#### `[ui].accent`
-
-Purpose:
-- Colors section headers, divider labels, and syntax-highlighted Raven markers in CLI output.
-
-Accepted values:
-- ANSI color index as string: `"0"` to `"255"` (example: `"39"`).
-- Hex color: `"#RRGGBB"` or shorthand `"#RGB"` (example: `"#5fd7ff"` or `"#5cf"`).
-- Disable accent explicitly with `"none"`, `"off"`, or `"default"` (in `config.toml`).
-
-Behavior details:
-- `#RGB` is normalized internally to `#RRGGBB`.
-- If the value is invalid, Raven falls back to its default non-accent style (bold headings, default syntax color).
-- `rvn config set --ui-accent` only enforces non-empty input; format validity is evaluated when output is rendered.
-- If `NO_COLOR` is set in the environment, Raven suppresses ANSI styling entirely, regardless of `[ui].accent`.
-
-Examples:
-
-```bash
-rvn config set --ui-accent 39 --json
-rvn config set --ui-accent '#5fd7ff' --json
-rvn config unset --ui-accent --json
-```
-
-#### `[ui].code_theme`
-
-Purpose:
-- Selects the Chroma theme used for fenced code blocks when `markdown_style = "raven"`.
-
-Accepted values:
-- Any Chroma style name (case-insensitive), for example: `monokai`, `dracula`, `github`, `nord`.
-
-Behavior details:
-- Current scope: Raven's built-in Markdown style (`markdown_style = "raven"`).
-- Empty or invalid theme values fall back to `monokai`.
-- `rvn config set --ui-code-theme` only enforces non-empty input; theme validity is resolved when markdown is rendered.
-- If `NO_COLOR` is set, Raven renders markdown with a plain no-color style and ignores the configured code theme for that run.
-
-Examples:
-
-```bash
-rvn config set --ui-code-theme dracula --json
-rvn config set --ui-code-theme GitHub --json
-rvn config unset --ui-code-theme --json
-```
 
 #### `[ui].markdown_style`
 
@@ -119,7 +66,6 @@ Purpose:
 
 Accepted values:
 - `auto` or unset: Glamour detects a light or dark style from the terminal background.
-- `raven`: Raven's built-in legacy Markdown style, which also uses `[ui].code_theme` for fenced code blocks.
 - A Glamour built-in style name, such as `dark`, `light`, `notty`, or `ascii`.
 - A path to a custom Glamour style JSON file.
 
@@ -130,19 +76,16 @@ Behavior details:
 Examples:
 
 ```bash
-rvn config set --ui-markdown-style dark --json
-rvn config set --ui-markdown-style /Users/you/.config/glamour/light.json --json
-rvn config set --ui-markdown-style raven --json
-rvn config unset --ui-markdown-style --json
+rvn config set ui.markdown_style=dark --json
+rvn config set ui.markdown_style=/Users/you/.config/glamour/light.json --json
+rvn config unset ui.markdown_style --json
 ```
 
-#### Combined example
+#### Custom style example
 
 ```toml
 [ui]
-accent = "#5fd7ff"
-markdown_style = "auto"
-code_theme = "github"
+markdown_style = "/Users/you/.config/glamour/custom.json"
 ```
 
 ### Legacy compatibility
@@ -181,21 +124,33 @@ Instead of editing `config.toml` manually, you can manage vault entries directly
 ```bash
 rvn vault add personal /Users/you/personal-notes --pin --json
 rvn vault use personal --json
+rvn vault pin personal --json
 rvn vault list --json
 rvn vault remove personal --clear-default --clear-active --json
 ```
 
+`rvn vault pin <name>` is the only command that sets `default_vault`.
+`rvn config unset default_vault` can clear it.
+
 ### Manage global config fields via CLI
 
-Use `rvn config` for machine-level config lifecycle and explicit field edits:
+Use dotted `config.toml` keys with `rvn config set key=value` and
+`rvn config unset key`. Multiple settings can be changed in one invocation.
+The supported set keys are `editor`, `editor_mode`, `state_file`, and
+`ui.markdown_style`.
 
 ```bash
 rvn config init --json
 rvn config show --json
-rvn config set --editor cursor --editor-mode auto --json
-rvn config set --ui-accent 39 --ui-code-theme monokai --ui-markdown-style auto --json
-rvn config unset --ui-accent --ui-code-theme --ui-markdown-style --json
+rvn config set editor=cursor editor_mode=auto --json
+rvn config set ui.markdown_style=auto --json
+rvn config unset editor ui.markdown_style --json
 ```
+
+`rvn config show` returns resolved/effective values in both human and JSON
+output. In particular, unset `editor_mode` and `ui.markdown_style` appear as
+`auto`, `editor` falls back to `$EDITOR`, and `state_file` is shown as its
+resolved path.
 
 ---
 

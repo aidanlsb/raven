@@ -46,11 +46,14 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 		Name:        "serve",
 		Description: "Run Raven as an MCP server",
 		VaultScope:  VaultScopeNone,
-		LongDesc:    "Run Raven as an MCP server over stdio.",
+		LongDesc: `Run Raven as an MCP server over stdio.
+
+Vault-scoped calls must provide vault or vault_path unless the server is pinned
+with --vault or --vault-path.`,
 		Examples: []string{
 			"rvn serve",
 			"rvn serve --vault personal",
-			"rvn serve --strict-vault",
+			"rvn serve --vault-path /path/to/vault",
 		},
 		UseCases: []string{
 			"Launch Raven MCP server for local clients",

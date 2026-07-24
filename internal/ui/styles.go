@@ -2,14 +2,11 @@ package ui
 
 import (
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
 // Minimal color palette with focused semantic accents.
-// Optional accent color can be configured via [ui].accent.
 // Uses ANSI colors for terminal theme compatibility.
 //
 // - Default: Primary text (terminal foreground)
@@ -19,34 +16,28 @@ import (
 
 var (
 	// Muted style for secondary info, hints, line numbers
-	Muted = mutedStyle()
+	Muted lipgloss.Style
 
 	// Bold style for emphasis and highlights
-	Bold = boldStyle()
+	Bold lipgloss.Style
 
-	// Accent style for optional user-configurable highlights.
-	// Defaults to Bold with no color when accent is not configured.
-	Accent = Bold
+	// Accent style for semantic highlights. Raven uses fixed bold styling.
+	Accent lipgloss.Style
 
 	// Syntax style for code-like tokens and Raven syntax markers.
-	// Defaults to cyan for visibility when no accent is configured.
-	Syntax = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
+	Syntax lipgloss.Style
 
 	// SyntaxSubtle style for supporting syntax values.
-	SyntaxSubtle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-
-	accentColor string
+	SyntaxSubtle lipgloss.Style
 )
 
-// ConfigureTheme configures optional UI theme colors from config.
-// Supported accent values:
-//   - ANSI codes: "0" to "255"
-//   - Hex colors: "#RRGGBB" or "#RGB"
-//
-// Special values "none", "off", and "default" disable the accent color.
-func ConfigureTheme(accent string) {
+func init() {
+	ConfigureStyles()
+}
+
+// ConfigureStyles applies Raven's fixed terminal styles and honors NO_COLOR.
+func ConfigureStyles() {
 	if NoColorEnabled() {
-		accentColor = ""
 		Muted = lipgloss.NewStyle()
 		Bold = lipgloss.NewStyle()
 		Accent = lipgloss.NewStyle()
@@ -57,79 +48,14 @@ func ConfigureTheme(accent string) {
 
 	Muted = mutedStyle()
 	Bold = boldStyle()
-
-	normalized, ok := normalizeAccentColor(accent)
-	if !ok {
-		accentColor = ""
-		Accent = Bold
-		Syntax = syntaxStyle()
-		SyntaxSubtle = syntaxSubtleStyle()
-		return
-	}
-
-	accentColor = normalized
-	Accent = lipgloss.NewStyle().Foreground(lipgloss.Color(normalized)).Bold(true)
-	Syntax = lipgloss.NewStyle().Foreground(lipgloss.Color(normalized)).Bold(true)
-	SyntaxSubtle = lipgloss.NewStyle().Foreground(lipgloss.Color(normalized))
-}
-
-// AccentColor returns the currently configured accent color, if any.
-func AccentColor() (string, bool) {
-	if accentColor == "" {
-		return "", false
-	}
-	return accentColor, true
+	Accent = Bold
+	Syntax = syntaxStyle()
+	SyntaxSubtle = syntaxSubtleStyle()
 }
 
 // NoColorEnabled returns true when terminal color output should be suppressed.
 func NoColorEnabled() bool {
 	return os.Getenv("NO_COLOR") != ""
-}
-
-func normalizeAccentColor(raw string) (string, bool) {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return "", false
-	}
-
-	switch strings.ToLower(value) {
-	case "none", "off", "default":
-		return "", false
-	}
-
-	if strings.HasPrefix(value, "#") {
-		switch {
-		case len(value) == 4 && isHexColor(value[1:]):
-			// Expand #RGB to #RRGGBB
-			return "#" + strings.Repeat(string(value[1]), 2) +
-				strings.Repeat(string(value[2]), 2) +
-				strings.Repeat(string(value[3]), 2), true
-		case len(value) == 7 && isHexColor(value[1:]):
-			return value, true
-		default:
-			return "", false
-		}
-	}
-
-	n, err := strconv.Atoi(value)
-	if err != nil {
-		return "", false
-	}
-	if n < 0 || n > 255 {
-		return "", false
-	}
-	return strconv.Itoa(n), true
-}
-
-func isHexColor(s string) bool {
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
-			continue
-		}
-		return false
-	}
-	return true
 }
 
 func mutedStyle() lipgloss.Style {

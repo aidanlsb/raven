@@ -486,7 +486,7 @@ func TestResourcesReadSchemaIncludesVaultContext(t *testing.T) {
 	}
 }
 
-func TestResourcesReadStrictModeRejectsAmbientFallback(t *testing.T) {
+func TestResourcesReadRejectsAmbientFallback(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
 	vaultPath := filepath.Join(tmp, "work-vault")
@@ -502,14 +502,13 @@ func TestResourcesReadStrictModeRejectsAmbientFallback(t *testing.T) {
 	}
 
 	s := &Server{
-		baseArgs:    []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
-		strictVault: true,
+		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
 	}
 	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
 		"uri": "raven://schema/current",
 	})
 	if resp.Error == nil {
-		t.Fatal("expected strict mode to reject ambient resource read")
+		t.Fatal("expected MCP to reject ambient resource read")
 	}
 	data, ok := resp.Error.Data.(map[string]interface{})
 	if !ok {
@@ -520,7 +519,7 @@ func TestResourcesReadStrictModeRejectsAmbientFallback(t *testing.T) {
 	}
 }
 
-func TestResourcesReadStrictModeAllowsExplicitVaultPath(t *testing.T) {
+func TestResourcesReadAllowsExplicitVaultPath(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
 	vaultPath := filepath.Join(tmp, "work-vault")
@@ -531,7 +530,7 @@ func TestResourcesReadStrictModeAllowsExplicitVaultPath(t *testing.T) {
 		t.Fatalf("write schema: %v", err)
 	}
 
-	s := &Server{strictVault: true}
+	s := &Server{}
 	content := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
 		"uri":        "raven://schema/current",
 		"vault_path": vaultPath,
@@ -673,19 +672,10 @@ func TestStartupModeMessage(t *testing.T) {
 		}
 	})
 
-	t.Run("defaults to dynamic mode", func(t *testing.T) {
+	t.Run("describes explicit-vault requirement when unpinned", func(t *testing.T) {
 		s := &Server{}
 		msg := s.startupModeMessage()
-		want := "[raven-mcp] Server starting with dynamic vault resolution"
-		if msg != want {
-			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
-		}
-	})
-
-	t.Run("annotates strict vault mode", func(t *testing.T) {
-		s := &Server{vaultPath: "/tmp/explicit", strictVault: true}
-		msg := s.startupModeMessage()
-		want := "[raven-mcp] Server starting with pinned vault: /tmp/explicit (strict vault mode)"
+		want := "[raven-mcp] Server starting without a pinned vault; vault-scoped calls require vault or vault_path"
 		if msg != want {
 			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
 		}
@@ -819,7 +809,7 @@ func TestResolveVaultForInvocationBaseArgsVaultPathSource(t *testing.T) {
 	}
 }
 
-func TestResolveVaultForInvocationStrictModeRejectsAmbientFallback(t *testing.T) {
+func TestResolveVaultForInvocationRejectsAmbientFallback(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
 	vaultPath := filepath.Join(tmp, "work-vault")
@@ -832,13 +822,12 @@ func TestResolveVaultForInvocationStrictModeRejectsAmbientFallback(t *testing.T)
 	}
 
 	s := &Server{
-		baseArgs:    []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
-		strictVault: true,
+		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
 	}
 
 	_, err := s.resolveVaultForInvocation("", "")
 	if err == nil {
-		t.Fatal("expected strict mode to reject ambient fallback")
+		t.Fatal("expected MCP to reject ambient fallback")
 	}
 	var vErr *vaultResolutionError
 	if !errors.As(err, &vErr) {
@@ -849,10 +838,10 @@ func TestResolveVaultForInvocationStrictModeRejectsAmbientFallback(t *testing.T)
 	}
 }
 
-func TestResolveVaultForInvocationStrictModeAllowsExplicitVaultPath(t *testing.T) {
+func TestResolveVaultForInvocationAllowsExplicitVaultPath(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
-	s := &Server{strictVault: true}
+	s := &Server{}
 
 	res, err := s.resolveVaultForInvocation("", tmp)
 	if err != nil {
@@ -866,10 +855,10 @@ func TestResolveVaultForInvocationStrictModeAllowsExplicitVaultPath(t *testing.T
 	}
 }
 
-func TestResolveVaultForInvocationStrictModeAllowsPinnedVault(t *testing.T) {
+func TestResolveVaultForInvocationAllowsPinnedVault(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
-	s := &Server{vaultPath: tmp, strictVault: true}
+	s := &Server{vaultPath: tmp}
 
 	res, err := s.resolveVaultForInvocation("", "")
 	if err != nil {

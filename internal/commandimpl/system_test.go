@@ -347,7 +347,7 @@ func TestSetupInitVaultRepairsStaleDefaultWithEffectiveSwitchBack(t *testing.T) 
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
 	assertPostInitBool(t, data, "activated", true)
-	if got := data["switch_back"]; got != "rvn --json config unset --default-vault && rvn --json vault clear" {
+	if got := data["switch_back"]; got != "rvn --json config unset default_vault && rvn --json vault clear" {
 		t.Fatalf("switch_back = %#v, want command that restores no-selection behavior", got)
 	}
 }

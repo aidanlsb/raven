@@ -43,7 +43,7 @@ func TestMCPIntegration_InvokeVaultPathOverride(t *testing.T) {
 	}
 }
 
-func TestMCPIntegration_StrictVaultRejectsAmbientFallback(t *testing.T) {
+func TestMCPIntegration_RejectsAmbientVaultFallback(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -58,9 +58,8 @@ func TestMCPIntegration_StrictVaultRejectsAmbientFallback(t *testing.T) {
 
 	binary := testutil.BuildCLI(t)
 	server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
-	server.strictVault = true
 
-	// Without an explicit vault, strict mode must refuse to fall back.
+	// Without an explicit vault, MCP must refuse to fall back.
 	result := server.callTool("raven_invoke", map[string]interface{}{
 		"command": "new",
 		"args": map[string]interface{}{
@@ -83,10 +82,10 @@ func TestMCPIntegration_StrictVaultRejectsAmbientFallback(t *testing.T) {
 		t.Fatalf("error code = %q, want VAULT_AMBIGUOUS; text=%s", envelope.Error.Code, result.Text)
 	}
 	if v.FileExists("people/strict-no-vault.md") {
-		t.Fatal("expected no object to be created when strict resolution fails")
+		t.Fatal("expected no object to be created when explicit resolution fails")
 	}
 
-	// With an explicit vault_path, strict mode allows the write.
+	// With an explicit vault_path, the write is allowed.
 	ok := server.callTool("raven_invoke", map[string]interface{}{
 		"command":    "new",
 		"vault_path": v.Path,
@@ -96,7 +95,7 @@ func TestMCPIntegration_StrictVaultRejectsAmbientFallback(t *testing.T) {
 		},
 	})
 	if ok.IsError {
-		t.Fatalf("expected strict invoke with explicit vault to succeed, got error: %s", ok.Text)
+		t.Fatalf("expected invoke with explicit vault to succeed, got error: %s", ok.Text)
 	}
 	if !v.FileExists("people/strict-with-vault.md") {
 		t.Fatal("expected object to be created with explicit vault_path")
@@ -156,29 +155,26 @@ func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
 		t.Fatalf("switch_back = %#v, want exact restore command", got)
 	}
 
-	// An unqualified call now targets the newly initialized active vault.
+	// An unqualified call never targets the newly initialized active vault.
 	ambient := server.callTool("raven_invoke", map[string]interface{}{
 		"command": "schema_add_type",
 		"args": map[string]interface{}{
 			"name": "ambient-second",
 		},
 	})
-	if ambient.IsError {
-		t.Fatalf("ambient call to auto-activated vault failed: %s", ambient.Text)
+	if !ambient.IsError {
+		t.Fatalf("ambient call unexpectedly succeeded: %s", ambient.Text)
 	}
-	firstSchema, err := os.ReadFile(filepath.Join(firstPath, "schema.yaml"))
-	if err != nil {
-		t.Fatalf("read first schema: %v", err)
-	}
-	if strings.Contains(string(firstSchema), "ambient-second") {
-		t.Fatalf("ambient call incorrectly mutated previous vault:\n%s", firstSchema)
+	ambientEnvelope := parseMCPEnvelope(t, ambient.Text)
+	if ambientEnvelope.Error == nil || ambientEnvelope.Error.Code != "VAULT_AMBIGUOUS" {
+		t.Fatalf("ambient error = %#v, want VAULT_AMBIGUOUS", ambientEnvelope.Error)
 	}
 	secondSchema, err := os.ReadFile(filepath.Join(secondPath, "schema.yaml"))
 	if err != nil {
 		t.Fatalf("read second schema: %v", err)
 	}
-	if !strings.Contains(string(secondSchema), "ambient-second") {
-		t.Fatalf("ambient call did not mutate new active vault:\n%s", secondSchema)
+	if strings.Contains(string(secondSchema), "ambient-second") {
+		t.Fatalf("ambient call mutated active vault:\n%s", secondSchema)
 	}
 
 	// Explicit per-call targets remain available.

@@ -2,12 +2,41 @@ package commandimpl
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 )
+
+func TestHandleConfigShowReturnsEffectiveDefaults(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("# empty config\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	result := HandleConfigShow(context.Background(), commandexec.Request{ConfigPath: configPath})
+	if !result.OK {
+		t.Fatalf("HandleConfigShow() failed: %+v", result.Error)
+	}
+	data, ok := result.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("data = %#v, want map", result.Data)
+	}
+	if data["editor_mode"] != "auto" {
+		t.Fatalf("editor_mode = %#v, want auto", data["editor_mode"])
+	}
+	uiData, ok := data["ui"].(map[string]interface{})
+	if !ok || uiData["markdown_style"] != "auto" || len(uiData) != 1 {
+		t.Fatalf("ui = %#v, want only markdown_style=auto", data["ui"])
+	}
+	if data["state_file"] != filepath.Join(filepath.Dir(configPath), "state.toml") {
+		t.Fatalf("state_file = %#v, want resolved sibling state.toml", data["state_file"])
+	}
+}
 
 func TestHandleVaultCurrentIncludesMissingActiveVaultName(t *testing.T) {
 	t.Parallel()

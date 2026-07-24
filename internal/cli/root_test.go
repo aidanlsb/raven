@@ -9,12 +9,12 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-func TestPersistentPreRunEAppliesThemeForNonVaultCommands(t *testing.T) {
+func TestPersistentPreRunEAppliesMarkdownStyleForNonVaultCommands(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 
 	dir := t.TempDir()
 	configFile := filepath.Join(dir, "config.toml")
-	content := []byte("[ui]\naccent = \"39\"\ncode_theme = \"dracula\"\nmarkdown_style = \"dark\"\n")
+	content := []byte("[ui]\nmarkdown_style = \"dark\"\n")
 	if err := os.WriteFile(configFile, content, 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -46,8 +46,7 @@ func TestPersistentPreRunEAppliesThemeForNonVaultCommands(t *testing.T) {
 		ui.Muted = prevMuted
 		ui.Syntax = prevSyntax
 		ui.SyntaxSubtle = prevSyntaxSubtle
-		ui.ConfigureTheme("")
-		ui.ConfigureMarkdownCodeTheme("")
+		ui.ConfigureStyles()
 		ui.ConfigureMarkdownStyle("")
 	})
 
@@ -64,11 +63,7 @@ func TestPersistentPreRunEAppliesThemeForNonVaultCommands(t *testing.T) {
 		t.Fatalf("PersistentPreRunE() error = %v", err)
 	}
 
-	got, ok := ui.AccentColor()
-	if !ok {
-		t.Fatalf("expected accent color to be configured for non-vault command")
-	}
-	if got != "39" {
-		t.Fatalf("expected accent color 39, got %q", got)
+	if _, err := ui.RenderMarkdown("# configured", 80); err != nil {
+		t.Fatalf("RenderMarkdown() with configured style error = %v", err)
 	}
 }

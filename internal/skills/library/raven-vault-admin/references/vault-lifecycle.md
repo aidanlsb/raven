@@ -43,11 +43,11 @@ Use `vault path` to confirm resolution and `vault stats` to confirm you are poin
 ```bash
 rvn config init --json
 rvn config show --json
-rvn config set --editor code --editor-mode auto --json
-rvn config unset --editor --editor-mode --json
+rvn config set editor=code editor_mode=auto --json
+rvn config unset editor editor_mode --json
 ```
 
-`rvn config` is machine-level. Use it for editor/UI settings, state file location, named vault paths, and `default_vault`. Do not use it for vault-local behavior.
+`rvn config` is machine-level. Use it for editor/Markdown settings and state file location. Manage named vault paths with `rvn vault add/remove`, and set `default_vault` with `rvn vault pin`. Do not use it for vault-local behavior.
 
 ## Vault-local config lifecycle
 

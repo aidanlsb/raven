@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `rvn config set` now accepts one or more dotted `key=value` arguments, and `rvn config unset` accepts the same dotted keys as positional arguments. Setting `default_vault` is exclusive to `rvn vault pin`; it can still be cleared with `rvn config unset default_vault`.
+- `rvn config show` now reports the full effective global configuration, including resolved defaults for editor mode, state path, and Markdown style.
+- Vault-scoped MCP operations now always require a per-call `vault`/`vault_path` or a server-pinned vault. MCP no longer falls back to active/default vault state.
+
+### Removed
+- **Breaking:** the global `ui.accent` and `ui.code_theme` settings, Raven's built-in Markdown style, and their CLI flags and rendering hooks were removed. Use a stock Glamour built-in style or a Glamour style JSON via `ui.markdown_style`.
+- **Breaking:** the MCP strict-vault setting and `rvn serve --strict-vault` flag were removed because explicit vault targeting is now always enforced.
+
 ## [v0.0.30] - 2026-07-21
 
 ### Added

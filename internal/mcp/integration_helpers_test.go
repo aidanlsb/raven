@@ -241,11 +241,10 @@ func runCLIWithConfig(t *testing.T, binary, configPath string, args ...string) *
 
 // testServer wraps the MCP Server for testing purposes.
 type testServer struct {
-	t           *testing.T
-	vaultPath   string
-	baseArgs    []string
-	executable  string
-	strictVault bool
+	t          *testing.T
+	vaultPath  string
+	baseArgs   []string
+	executable string
 }
 
 // toolResult represents the result of a tool call.
@@ -292,7 +291,6 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 	} else {
 		server = mcp.NewServerWithExecutable(s.vaultPath, s.executable)
 	}
-	server.SetStrictVault(s.strictVault)
 
 	// Create a simulated JSON-RPC request
 	paramsBytes, _ := json.Marshal(map[string]interface{}{

@@ -138,7 +138,7 @@ On a brand-new machine, `rvn init` alone gives you a working, resolvable vault:
 
 ```bash
 rvn init ~/notes
-rvn config set --editor cursor --editor-mode auto --json
+rvn config set editor=cursor editor_mode=auto --json
 ```
 
 The first `rvn init` registers `~/notes` and sets it as the default and active vault, so the CLI can find it immediately. Add `rvn config set` only if you want to configure the editor.

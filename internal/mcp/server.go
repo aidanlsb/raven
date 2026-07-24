@@ -24,13 +24,12 @@ import (
 
 // Server is an MCP server that wraps Raven CLI commands.
 type Server struct {
-	vaultPath   string
-	baseArgs    []string
-	in          io.Reader
-	out         io.Writer
-	executable  string // Path to the rvn executable
-	strictVault bool   // Require an explicit vault for vault-scoped operations
-	invoker     *commandexec.Invoker
+	vaultPath  string
+	baseArgs   []string
+	in         io.Reader
+	out        io.Writer
+	executable string // Path to the rvn executable
+	invoker    *commandexec.Invoker
 
 	sendMu     sync.Mutex
 	inFlightMu sync.Mutex
@@ -140,7 +139,7 @@ func NewServer(vaultPath string) *Server {
 }
 
 // NewServerWithBaseArgs creates a new MCP server using a set of base CLI flags.
-// This is used by `rvn serve` for dynamic vault resolution with optional pass-through flags.
+// This is used by `rvn serve` for optional config/state context and vault pins.
 func NewServerWithBaseArgs(baseArgs []string) *Server {
 	normalized := append([]string{}, baseArgs...)
 	return &Server{
@@ -185,14 +184,6 @@ func NewServerWithBaseArgsAndExecutable(baseArgs []string, executable string) *S
 func (s *Server) SetIO(in io.Reader, out io.Writer) {
 	s.in = in
 	s.out = out
-}
-
-// SetStrictVault toggles strict vault mode. In strict mode, vault-scoped
-// operations that lack an explicit vault (per-call vault/vault_path or a
-// server-pinned vault) fail with VAULT_AMBIGUOUS instead of falling back to the
-// ambient active/default vault.
-func (s *Server) SetStrictVault(strict bool) {
-	s.strictVault = strict
 }
 
 // HandleRequest processes a single MCP request.
@@ -245,11 +236,7 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) startupModeMessage() string {
-	base := s.startupVaultModeMessage()
-	if s.strictVault {
-		return base + " (strict vault mode)"
-	}
-	return base
+	return s.startupVaultModeMessage()
 }
 
 func (s *Server) startupVaultModeMessage() string {
@@ -262,7 +249,7 @@ func (s *Server) startupVaultModeMessage() string {
 	if vaultName, ok := baseArgValue(s.baseArgs, "--vault"); ok {
 		return fmt.Sprintf("[raven-mcp] Server starting with pinned named vault: %s", vaultName)
 	}
-	return "[raven-mcp] Server starting with dynamic vault resolution"
+	return "[raven-mcp] Server starting without a pinned vault; vault-scoped calls require vault or vault_path"
 }
 
 func baseArgValue(args []string, flag string) (string, bool) {
@@ -505,7 +492,7 @@ func (s *Server) handleResourcesList(req *Request) {
 	// Resolve the vault the list reflects so callers can see which vault the
 	// vault-scoped resources map to. This mirrors resources/read, which accepts
 	// the same vault/vault_path params. Resolution is best-effort: when it fails
-	// (e.g. strict mode without an explicit vault), the vault-independent guide
+	// (e.g. without an explicit vault), the vault-independent guide
 	// resources are still returned.
 	res, resErr := s.resolveVaultForInvocation(params.Vault, params.VaultPath)
 	if resErr == nil {
@@ -652,7 +639,7 @@ func vaultContextFromResolution(res vaultResolution) *commandexec.VaultContext {
 
 // sendResourceVaultError surfaces a vault resolution failure for a resource
 // read. When the error carries a stable Raven code (e.g. VAULT_AMBIGUOUS from
-// strict mode), the code is included in the RPC error data.
+// explicit-vault enforcement), the code is included in the RPC error data.
 func (s *Server) sendResourceVaultError(id interface{}, context string, err error) {
 	var vErr *vaultResolutionError
 	if errors.As(err, &vErr) {
@@ -744,20 +731,6 @@ func (e *vaultResolutionError) Error() string {
 	return e.message
 }
 
-// ambientVaultSources are the resolution sources that come from mutable global
-// state rather than an explicit per-call or server-pinned vault. Resolving via
-// one of these is the "silent wrong-vault" risk that strict mode blocks.
-var ambientVaultSources = map[string]struct{}{
-	"active_vault":           {},
-	"default_vault":          {},
-	"default_vault_fallback": {},
-}
-
-func isAmbientVaultSource(source string) bool {
-	_, ok := ambientVaultSources[source]
-	return ok
-}
-
 func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultResolution, error) {
 	if resolved := strings.TrimSpace(vaultPath); resolved != "" {
 		p, err := s.validateResolvedVaultPath(resolved)
@@ -797,43 +770,11 @@ func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultRe
 		}
 		return vaultResolution{path: p, source: "base_args", name: vn}, nil
 	}
-	// No explicit per-call or server-pinned vault. Any resolution from here uses
-	// ambient global state (active/default vault). In strict mode we refuse to
-	// guess to prevent silent wrong-vault operations.
-	if s.strictVault {
-		return vaultResolution{}, &vaultResolutionError{
-			code:       string(codes.ErrVaultAmbiguous),
-			message:    "strict vault mode requires an explicit vault; pass vault or vault_path (or pin one when starting the server)",
-			suggestion: "Pass vault (a configured vault name) or vault_path (an absolute vault directory) with this call.",
-		}
+	return vaultResolution{}, &vaultResolutionError{
+		code:       string(codes.ErrVaultAmbiguous),
+		message:    "vault-scoped MCP operations require an explicit vault; pass vault or vault_path (or pin one when starting the server)",
+		suggestion: "Pass vault (a configured vault name) or vault_path (an absolute vault directory) with this call.",
 	}
-	return s.currentVaultResolution()
-}
-
-func (s *Server) currentVaultResolution() (vaultResolution, error) {
-	result, err := configsvc.CurrentVault(s.directConfigContextOptions())
-	if err != nil {
-		return vaultResolution{}, err
-	}
-	p, err := s.validateResolvedVaultPath(result.Current.Path)
-	if err != nil {
-		return vaultResolution{}, err
-	}
-	return vaultResolution{
-		path:   p,
-		source: result.Current.Source,
-		name:   result.Current.Name,
-	}, nil
-}
-
-// configuredVaultCount returns the number of vaults configured for this server.
-// It is best-effort: on any load error it returns 0.
-func (s *Server) configuredVaultCount() int {
-	ctx, err := configsvc.LoadVaultContext(s.directConfigContextOptions())
-	if err != nil {
-		return 0
-	}
-	return len(ctx.Cfg.ListVaults())
 }
 
 // lookupVaultName attempts a best-effort reverse lookup of vault name from path.

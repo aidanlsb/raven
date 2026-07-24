@@ -188,7 +188,7 @@ confirm which vault was used on every vault-scoped call:
     "vault_context": {
       "name": "work",
       "path": "/home/user/vaults/work",
-      "source": "active_vault"
+      "source": "vault"
     }
   }
 }
@@ -196,7 +196,7 @@ confirm which vault was used on every vault-scoped call:
 
 Fields:
 - `path` — resolved absolute vault path (always present).
-- `source` — how the vault was selected: `vault_path` (explicit path override), `vault` (named vault from invocation), `pinned` (server pinned path), `base_args` (from serve flags), `active_vault`, `default_vault`, or `default_vault_fallback`.
+- `source` — how the vault was selected: `vault_path` (explicit path override), `vault` (named vault from invocation), `pinned` (server pinned path), or `base_args` (from serve flags).
 - `name` — configured vault name (omitted when no name could be resolved).
 
 Vault-scoped `resources/list` and `resources/read` responses also return a
@@ -204,21 +204,14 @@ top-level `vault_context` object with the same fields.
 
 Commands that do not require vault resolution (e.g. `version`, `config show`) omit `vault_context`.
 
-### Explicit vs ambient vaults
+### Explicit vaults are required
 
-`vault_path`, `vault`, `pinned`, and `base_args` are *explicit* sources you (or the
-server operator) chose. `active_vault`, `default_vault`, and
-`default_vault_fallback` are *ambient* — they come from mutable global state, so a
-call that omits an explicit vault can silently target whatever vault was last made
-active. To be certain which vault a write hits, pass `vault` or `vault_path`.
+Every vault-scoped MCP operation requires an explicit source: per-call
+`vault_path` / `vault`, or a server pin supplied with `--vault-path` / `--vault`.
+MCP never resolves from the CLI's active or default vault.
 
-- `VAULT_FALLBACK` warning: a write resolved its vault from ambient state while
-  more than one vault is configured. Confirm `vault_context` is the vault you
-  intended, or re-issue the call with an explicit `vault`/`vault_path`.
-- `VAULT_AMBIGUOUS` error: the server runs in strict vault mode
-  (`rvn serve --strict-vault` or `[mcp] strict_vault = true`) and the call lacked
-  an explicit `vault`/`vault_path` with no server-pinned vault. Retry with an
-  explicit vault.
+- `VAULT_AMBIGUOUS` error: the call lacked an explicit `vault`/`vault_path` and
+  the server has no pinned vault. Retry with an explicit vault.
 
 ## Warnings
 

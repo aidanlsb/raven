@@ -161,6 +161,34 @@ func TestRequiresVaultMetadata(t *testing.T) {
 	}
 }
 
+func TestGlobalConfigCommandContractsUsePositionalKeys(t *testing.T) {
+	t.Parallel()
+
+	setContract, ok := BuildCommandContract("config_set")
+	if !ok {
+		t.Fatal("config_set contract missing")
+	}
+	setSpec, ok := setContract.Parameters["settings"]
+	if !ok || setSpec.Type != ParameterTypeStringArray || !setSpec.Required {
+		t.Fatalf("config_set settings = %#v, want required string array", setSpec)
+	}
+	if len(setContract.Parameters) != 1 {
+		t.Fatalf("config_set parameters = %#v, want only settings", setContract.Parameters)
+	}
+
+	unsetContract, ok := BuildCommandContract("config_unset")
+	if !ok {
+		t.Fatal("config_unset contract missing")
+	}
+	unsetSpec, ok := unsetContract.Parameters["keys"]
+	if !ok || unsetSpec.Type != ParameterTypeStringArray || !unsetSpec.Required {
+		t.Fatalf("config_unset keys = %#v, want required string array", unsetSpec)
+	}
+	if len(unsetContract.Parameters) != 1 {
+		t.Fatalf("config_unset parameters = %#v, want only keys", unsetContract.Parameters)
+	}
+}
+
 func TestRegistryLongDescriptionsUseCompactReindexGuidance(t *testing.T) {
 	t.Parallel()
 

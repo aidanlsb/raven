@@ -156,7 +156,7 @@ up Raven from scratch:
 
 The agent detects your vault state, creates a first vault with `rvn init` when
 none exists (asking where to put it), sets your editor with `rvn config set
---editor <cmd> --editor-mode auto` (asking first, since it is machine-wide), then
+editor=<cmd> editor_mode=auto` (asking first, since it is machine-wide), then
 asks what you're trying to keep track of and proposes a small, personalized
 schema in plain English before applying it. Once you agree, it seeds that schema
 with your real projects, people, and tasks and teaches create, query, and check

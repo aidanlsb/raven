@@ -35,50 +35,12 @@ func HandleConfigInit(_ context.Context, req commandexec.Request) commandexec.Re
 
 // HandleConfigSet executes the canonical `config_set` command.
 func HandleConfigSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	setReq := configsvc.SetRequest{ContextOptions: configContextOptions(req)}
-	if raw, ok := req.Args["editor"]; ok {
-		value := stringArg(req.Args, "editor")
-		setReq.Editor = &value
-		_ = raw
-	}
-	if raw, ok := req.Args["editor-mode"]; ok {
-		value := stringArg(req.Args, "editor-mode")
-		setReq.EditorMode = &value
-		_ = raw
-	}
-	if raw, ok := req.Args["state-file"]; ok {
-		value := stringArg(req.Args, "state-file")
-		setReq.StateFile = &value
-		_ = raw
-	}
-	if raw, ok := req.Args["default-vault"]; ok {
-		value := stringArg(req.Args, "default-vault")
-		setReq.DefaultVault = &value
-		_ = raw
-	}
-	if raw, ok := req.Args["ui-accent"]; ok {
-		value := stringArg(req.Args, "ui-accent")
-		setReq.UIAccent = &value
-		_ = raw
-	}
-	if raw, ok := req.Args["ui-code-theme"]; ok {
-		value := stringArg(req.Args, "ui-code-theme")
-		setReq.UICodeTheme = &value
-		_ = raw
-	}
-	if raw, ok := req.Args["ui-markdown-style"]; ok {
-		value := stringArg(req.Args, "ui-markdown-style")
-		setReq.UIMarkdownStyle = &value
-		_ = raw
-	}
-
-	result, err := configsvc.Set(setReq)
+	result, err := configsvc.Set(configsvc.SetRequest{
+		ContextOptions: configContextOptions(req),
+		Settings:       stringSliceArg(req.Args["settings"]),
+	})
 	if err != nil {
-		suggestion := ""
-		if svcErr, ok := svcerr.AsError(err); ok && svcErr.Code == configsvc.CodeInvalidInput && strings.Contains(svcErr.Message, "not configured") {
-			suggestion = "Run 'rvn vault list' to see configured vaults"
-		}
-		return mapConfigSvcFailure(err, suggestion)
+		return mapConfigSvcFailure(err, "")
 	}
 
 	data := result.Context.Data()
@@ -89,14 +51,8 @@ func HandleConfigSet(_ context.Context, req commandexec.Request) commandexec.Res
 // HandleConfigUnset executes the canonical `config_unset` command.
 func HandleConfigUnset(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := configsvc.Unset(configsvc.UnsetRequest{
-		ContextOptions:  configContextOptions(req),
-		Editor:          boolArg(req.Args, "editor"),
-		EditorMode:      boolArg(req.Args, "editor-mode"),
-		StateFile:       boolArg(req.Args, "state-file"),
-		DefaultVault:    boolArg(req.Args, "default-vault"),
-		UIAccent:        boolArg(req.Args, "ui-accent"),
-		UICodeTheme:     boolArg(req.Args, "ui-code-theme"),
-		UIMarkdownStyle: boolArg(req.Args, "ui-markdown-style"),
+		ContextOptions: configContextOptions(req),
+		Keys:           stringSliceArg(req.Args["keys"]),
 	})
 	if err != nil {
 		return mapConfigSvcFailure(err, "Run 'rvn config init' first")
@@ -127,7 +83,7 @@ func HandleVaultList(_ context.Context, req commandexec.Request) commandexec.Res
 func HandleVaultCurrent(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := configsvc.CurrentVault(configContextOptions(req))
 	if err != nil {
-		return mapConfigSvcFailure(err, "Use 'rvn vault use <name>' or set default_vault in config.toml")
+		return mapConfigSvcFailure(err, "Use 'rvn vault use <name>' or 'rvn vault pin <name>'")
 	}
 	return commandexec.Success(map[string]interface{}{
 		"name":           result.Current.Name,

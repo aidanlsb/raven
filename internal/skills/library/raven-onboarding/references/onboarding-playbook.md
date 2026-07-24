@@ -57,7 +57,7 @@ Once a vault exists, help the user point Raven at their editor. Keep it short.
 
 ```bash
 rvn config show --json                                    # inspect current settings; note $EDITOR if relevant
-rvn config set --editor cursor --editor-mode auto --json  # ask first — this is machine-wide config
+rvn config set editor=cursor editor_mode=auto --json  # ask first — this is machine-wide config
 rvn config show --json                                    # confirm
 ```
 

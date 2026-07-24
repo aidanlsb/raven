@@ -6,48 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
-
 	"github.com/aidanlsb/raven/internal/config"
 )
-
-func resetConfigSetFlagsForTest() {
-	resetStringFlag(configSetCmd, "editor")
-	resetStringFlag(configSetCmd, "editor-mode")
-	resetStringFlag(configSetCmd, "state-file")
-	resetStringFlag(configSetCmd, "default-vault")
-	resetStringFlag(configSetCmd, "ui-accent")
-	resetStringFlag(configSetCmd, "ui-code-theme")
-	resetStringFlag(configSetCmd, "ui-markdown-style")
-}
-
-func resetConfigUnsetFlagsForTest() {
-	resetBoolFlag(configUnsetCmd, "editor")
-	resetBoolFlag(configUnsetCmd, "editor-mode")
-	resetBoolFlag(configUnsetCmd, "state-file")
-	resetBoolFlag(configUnsetCmd, "default-vault")
-	resetBoolFlag(configUnsetCmd, "ui-accent")
-	resetBoolFlag(configUnsetCmd, "ui-code-theme")
-	resetBoolFlag(configUnsetCmd, "ui-markdown-style")
-}
-
-func resetStringFlag(cmd *cobra.Command, name string) {
-	if err := cmd.Flags().Set(name, ""); err != nil {
-		panic(err)
-	}
-	if f := cmd.Flags().Lookup(name); f != nil {
-		f.Changed = false
-	}
-}
-
-func resetBoolFlag(cmd *cobra.Command, name string) {
-	if err := cmd.Flags().Set(name, "false"); err != nil {
-		panic(err)
-	}
-	if f := cmd.Flags().Lookup(name); f != nil {
-		f.Changed = false
-	}
-}
 
 func TestConfigInitCreatesConfigFile(t *testing.T) {
 	tmp := t.TempDir()
@@ -97,34 +57,17 @@ work = "/vault/work"
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		resetConfigSetFlagsForTest()
 	})
 
 	configPath = cfgPath
 	statePathFlag = ""
 	jsonOutput = true
-	resetConfigSetFlagsForTest()
 
-	if err := configSetCmd.Flags().Set("editor", "code"); err != nil {
-		t.Fatalf("set editor: %v", err)
-	}
-	if err := configSetCmd.Flags().Set("editor-mode", "terminal"); err != nil {
-		t.Fatalf("set editor-mode: %v", err)
-	}
-	if err := configSetCmd.Flags().Set("default-vault", "work"); err != nil {
-		t.Fatalf("set default-vault: %v", err)
-	}
-	if err := configSetCmd.Flags().Set("ui-accent", "39"); err != nil {
-		t.Fatalf("set ui-accent: %v", err)
-	}
-	if err := configSetCmd.Flags().Set("ui-code-theme", "dracula"); err != nil {
-		t.Fatalf("set ui-code-theme: %v", err)
-	}
-	if err := configSetCmd.Flags().Set("ui-markdown-style", "dark"); err != nil {
-		t.Fatalf("set ui-markdown-style: %v", err)
-	}
-
-	if err := configSetCmd.RunE(configSetCmd, []string{}); err != nil {
+	if err := configSetCmd.RunE(configSetCmd, []string{
+		"editor=code",
+		"editor_mode=terminal",
+		"ui.markdown_style=dark",
+	}); err != nil {
 		t.Fatalf("configSetCmd.RunE returned error: %v", err)
 	}
 
@@ -137,15 +80,6 @@ work = "/vault/work"
 	}
 	if cfg.EditorMode != "terminal" {
 		t.Fatalf("expected editor_mode=terminal, got %q", cfg.EditorMode)
-	}
-	if cfg.DefaultVault != "work" {
-		t.Fatalf("expected default_vault=work, got %q", cfg.DefaultVault)
-	}
-	if cfg.UI.Accent != "39" {
-		t.Fatalf("expected ui.accent=39, got %q", cfg.UI.Accent)
-	}
-	if cfg.UI.CodeTheme != "dracula" {
-		t.Fatalf("expected ui.code_theme=dracula, got %q", cfg.UI.CodeTheme)
 	}
 	if cfg.UI.MarkdownStyle != "dark" {
 		t.Fatalf("expected ui.markdown_style=dark, got %q", cfg.UI.MarkdownStyle)
@@ -164,8 +98,6 @@ editor_mode = "gui"
 work = "/vault/work"
 
 [ui]
-accent = "39"
-code_theme = "dracula"
 markdown_style = "dark"
 `
 	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
@@ -179,34 +111,18 @@ markdown_style = "dark"
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		resetConfigUnsetFlagsForTest()
 	})
 
 	configPath = cfgPath
 	statePathFlag = ""
 	jsonOutput = true
-	resetConfigUnsetFlagsForTest()
 
-	if err := configUnsetCmd.Flags().Set("editor", "true"); err != nil {
-		t.Fatalf("set editor: %v", err)
-	}
-	if err := configUnsetCmd.Flags().Set("editor-mode", "true"); err != nil {
-		t.Fatalf("set editor-mode: %v", err)
-	}
-	if err := configUnsetCmd.Flags().Set("default-vault", "true"); err != nil {
-		t.Fatalf("set default-vault: %v", err)
-	}
-	if err := configUnsetCmd.Flags().Set("ui-accent", "true"); err != nil {
-		t.Fatalf("set ui-accent: %v", err)
-	}
-	if err := configUnsetCmd.Flags().Set("ui-code-theme", "true"); err != nil {
-		t.Fatalf("set ui-code-theme: %v", err)
-	}
-	if err := configUnsetCmd.Flags().Set("ui-markdown-style", "true"); err != nil {
-		t.Fatalf("set ui-markdown-style: %v", err)
-	}
-
-	if err := configUnsetCmd.RunE(configUnsetCmd, []string{}); err != nil {
+	if err := configUnsetCmd.RunE(configUnsetCmd, []string{
+		"editor",
+		"editor_mode",
+		"default_vault",
+		"ui.markdown_style",
+	}); err != nil {
 		t.Fatalf("configUnsetCmd.RunE returned error: %v", err)
 	}
 
@@ -223,18 +139,12 @@ markdown_style = "dark"
 	if cfg.DefaultVault != "" {
 		t.Fatalf("expected default_vault to be cleared, got %q", cfg.DefaultVault)
 	}
-	if cfg.UI.Accent != "" {
-		t.Fatalf("expected ui.accent to be cleared, got %q", cfg.UI.Accent)
-	}
-	if cfg.UI.CodeTheme != "" {
-		t.Fatalf("expected ui.code_theme to be cleared, got %q", cfg.UI.CodeTheme)
-	}
 	if cfg.UI.MarkdownStyle != "" {
 		t.Fatalf("expected ui.markdown_style to be cleared, got %q", cfg.UI.MarkdownStyle)
 	}
 }
 
-func TestConfigSetRejectsUnknownDefaultVault(t *testing.T) {
+func TestConfigSetRejectsDefaultVaultWithPinGuidance(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 	if err := os.WriteFile(cfgPath, []byte(""), 0o644); err != nil {
@@ -248,23 +158,28 @@ func TestConfigSetRejectsUnknownDefaultVault(t *testing.T) {
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		resetConfigSetFlagsForTest()
 	})
 
 	configPath = cfgPath
 	statePathFlag = ""
 	jsonOutput = false
-	resetConfigSetFlagsForTest()
 
-	if err := configSetCmd.Flags().Set("default-vault", "missing"); err != nil {
-		t.Fatalf("set default-vault: %v", err)
-	}
-
-	err := configSetCmd.RunE(configSetCmd, []string{})
+	err := configSetCmd.RunE(configSetCmd, []string{"default_vault=missing"})
 	if err == nil {
-		t.Fatalf("expected error for unknown default vault")
+		t.Fatalf("expected error for default_vault set")
 	}
-	if !strings.Contains(err.Error(), "not configured") {
-		t.Fatalf("expected unknown vault error, got %v", err)
+	if !strings.Contains(err.Error(), "rvn vault pin") {
+		t.Fatalf("expected vault pin guidance, got %v", err)
+	}
+}
+
+func TestConfigCommandsDoNotExposeLegacyFieldFlags(t *testing.T) {
+	for _, name := range []string{"editor", "editor-mode", "state-file", "default-vault", "ui-markdown-style"} {
+		if flag := configSetCmd.Flags().Lookup(name); flag != nil {
+			t.Fatalf("config set unexpectedly exposes --%s", name)
+		}
+		if flag := configUnsetCmd.Flags().Lookup(name); flag != nil {
+			t.Fatalf("config unset unexpectedly exposes --%s", name)
+		}
 	}
 }

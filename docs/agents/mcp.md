@@ -47,7 +47,7 @@ Start the server directly with:
 rvn serve --vault-path /path/to/vault
 ```
 
-## Vault Resolution and Strict Mode
+## Vault Resolution
 
 Every vault-scoped `raven_invoke` call and vault-scoped resource read resolves a
 vault in this priority order:
@@ -55,35 +55,23 @@ vault in this priority order:
 1. Per-call `vault_path` (explicit path)
 2. Per-call `vault` (configured vault name)
 3. Server-pinned vault (`rvn serve --vault-path` / `--vault`)
-4. Ambient global state: active vault (`rvn vault use`), then default vault
 
-Sources 1–3 are *explicit*. Source 4 is *ambient* — it depends on mutable global
-state, so an agent that omits an explicit vault can silently operate on whatever
-vault was left active. The resolved vault is always reported in
+If none is present, Raven returns `VAULT_AMBIGUOUS`. MCP never guesses from the
+CLI's active or default vault. The resolved vault is always reported in
 `meta.vault_context` (see below).
 
-### Guarding against silent wrong-vault operations
+### Explicit vault requirement
 
 - **`vault_context` is always present** on vault-scoped results. Inspect
   `meta.vault_context.source` to confirm which vault was used and how it was
   chosen.
-- **`VAULT_FALLBACK` warning:** in the default mode, when a write command
-  resolves its vault from ambient state (`active_vault`/`default_vault`) while
-  more than one vault is configured, the response carries a `VAULT_FALLBACK`
-  warning. Pass an explicit `vault`/`vault_path` to silence it and be sure of
-  the target.
 - **Post-init activation disclosure:** after `init` creates an additional vault,
   it becomes active immediately. Inspect and surface `post_init.active_vault`,
   `previous_active_vault` / `previous_vault`, and `switch_back` before continuing.
-- **Strict vault mode:** start the server with `rvn serve --strict-vault` (or set
-  `[mcp] strict_vault = true` in `config.toml`) to require an explicit vault for
-  every vault-scoped call. When no explicit `vault`/`vault_path` is given and the
-  server has no pinned vault, the call fails with the stable error code
-  `VAULT_AMBIGUOUS` instead of falling back to ambient state. Single-vault users
-  who pin a vault (e.g. via `rvn mcp install --vault-path`) are unaffected.
-
-An explicit `--strict-vault` flag always overrides the config value; pass
-`--strict-vault=false` to force-disable it even when the config enables it.
+- **`VAULT_AMBIGUOUS`:** when no explicit `vault`/`vault_path` is given and the
+  server has no pinned vault, the call fails with this stable error code.
+  Single-vault users who pin a vault (for example via
+  `rvn mcp install --vault-path`) are unaffected.
 
 ## MCP Resources
 
@@ -102,7 +90,7 @@ Vault-scoped resource content is produced by the same shared services that back 
 
 Vault-scoped resources use stable URIs. On `resources/read`, `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional `vault` or `vault_path` params to target a different vault for that read. Do not pass both. `resources/list` accepts the same optional `vault`/`vault_path` params, so list and read stay consistent — the list reflects (and reports) the same vault a read with identical params would target.
 
-Both `resources/list` and `resources/read` include a `vault_context` object in the result for vault-scoped requests, mirroring `meta.vault_context` on tool results, so multi-vault sessions can always confirm which vault was used. In strict vault mode (see above), a vault-scoped `resources/read` without an explicit vault fails with `VAULT_AMBIGUOUS`.
+Both `resources/list` and `resources/read` include a `vault_context` object in the result for vault-scoped requests, mirroring `meta.vault_context` on tool results, so multi-vault sessions can always confirm which vault was used. A vault-scoped `resources/read` without an explicit or server-pinned vault fails with `VAULT_AMBIGUOUS`.
 
 Example:
 

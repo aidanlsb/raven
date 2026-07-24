@@ -221,8 +221,6 @@ work = "/path/to/work"
 personal = "/path/to/personal"
 
 [ui]
-accent = "39"
-code_theme = "dracula"
 markdown_style = "dark"
 `
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
@@ -245,12 +243,6 @@ markdown_style = "dark"
 	}
 	if len(cfg.Vaults) != 2 {
 		t.Errorf("expected 2 vaults, got %d: %v", len(cfg.Vaults), cfg.Vaults)
-	}
-	if cfg.UI.Accent != "39" {
-		t.Errorf("expected ui.accent '39', got %q", cfg.UI.Accent)
-	}
-	if cfg.UI.CodeTheme != "dracula" {
-		t.Errorf("expected ui.code_theme 'dracula', got %q", cfg.UI.CodeTheme)
 	}
 	if cfg.UI.MarkdownStyle != "dark" {
 		t.Errorf("expected ui.markdown_style 'dark', got %q", cfg.UI.MarkdownStyle)

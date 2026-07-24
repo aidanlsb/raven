@@ -86,7 +86,7 @@ func TestAddVaultPreservesLegacyDefault(t *testing.T) {
 	}
 }
 
-func TestSetAndUnsetEditorAndUIFields(t *testing.T) {
+func TestSetAndUnsetGlobalFields(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -94,35 +94,32 @@ func TestSetAndUnsetEditorAndUIFields(t *testing.T) {
 	statePath := filepath.Join(root, "state", "active.toml")
 	vaultPath := filepath.Join(root, "vault")
 	if err := config.SaveTo(configPath, &config.Config{
-		Vaults: map[string]string{"personal": vaultPath},
+		DefaultVault: "personal",
+		Vaults:       map[string]string{"personal": vaultPath},
 	}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 
 	result, err := Set(SetRequest{
-		ContextOptions:  ContextOptions{ConfigPathOverride: configPath, StatePathOverride: statePath},
-		Editor:          configStringPtr(" code --wait "),
-		EditorMode:      configStringPtr(" GUI "),
-		StateFile:       configStringPtr("runtime/state.toml"),
-		DefaultVault:    configStringPtr("personal"),
-		UIAccent:        configStringPtr(" 39 "),
-		UICodeTheme:     configStringPtr(" monokai "),
-		UIMarkdownStyle: configStringPtr(" dark "),
+		ContextOptions: ContextOptions{ConfigPathOverride: configPath, StatePathOverride: statePath},
+		Settings: []string{
+			"editor= code --wait ",
+			"editor_mode= GUI ",
+			"state_file=runtime/state.toml",
+			"ui.markdown_style= dark ",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Set() error = %v", err)
 	}
-	wantChanged := []string{
+	wantSetChanged := []string{
 		"editor",
 		"editor_mode",
 		"state_file",
-		"default_vault",
-		"ui.accent",
-		"ui.code_theme",
 		"ui.markdown_style",
 	}
-	if !reflect.DeepEqual(result.Changed, wantChanged) {
-		t.Fatalf("Set() Changed = %#v, want %#v", result.Changed, wantChanged)
+	if !reflect.DeepEqual(result.Changed, wantSetChanged) {
+		t.Fatalf("Set() Changed = %#v, want %#v", result.Changed, wantSetChanged)
 	}
 	if result.Context.ConfigPath != configPath || result.Context.StatePath != statePath {
 		t.Fatalf("Set() paths = (%q, %q), want overrides (%q, %q)", result.Context.ConfigPath, result.Context.StatePath, configPath, statePath)
@@ -135,25 +132,20 @@ func TestSetAndUnsetEditorAndUIFields(t *testing.T) {
 	if loaded.Editor != "code --wait" || loaded.EditorMode != "gui" || loaded.StateFile != "runtime/state.toml" || loaded.DefaultVault != "personal" {
 		t.Fatalf("set global fields = %#v", loaded)
 	}
-	if loaded.UI.Accent != "39" || loaded.UI.CodeTheme != "monokai" || loaded.UI.MarkdownStyle != "dark" {
+	if loaded.UI.MarkdownStyle != "dark" {
 		t.Fatalf("set UI fields = %#v", loaded.UI)
 	}
 
 	unset, err := Unset(UnsetRequest{
-		ContextOptions:  ContextOptions{ConfigPathOverride: configPath, StatePathOverride: statePath},
-		Editor:          true,
-		EditorMode:      true,
-		StateFile:       true,
-		DefaultVault:    true,
-		UIAccent:        true,
-		UICodeTheme:     true,
-		UIMarkdownStyle: true,
+		ContextOptions: ContextOptions{ConfigPathOverride: configPath, StatePathOverride: statePath},
+		Keys:           []string{"editor", "editor_mode", "state_file", "default_vault", "ui.markdown_style"},
 	})
 	if err != nil {
 		t.Fatalf("Unset() error = %v", err)
 	}
-	if !reflect.DeepEqual(unset.Changed, wantChanged) {
-		t.Fatalf("Unset() Changed = %#v, want %#v", unset.Changed, wantChanged)
+	wantUnsetChanged := []string{"editor", "editor_mode", "state_file", "default_vault", "ui.markdown_style"}
+	if !reflect.DeepEqual(unset.Changed, wantUnsetChanged) {
+		t.Fatalf("Unset() Changed = %#v, want %#v", unset.Changed, wantUnsetChanged)
 	}
 
 	loaded, err = config.LoadFrom(configPath)
@@ -165,53 +157,57 @@ func TestSetAndUnsetEditorAndUIFields(t *testing.T) {
 	}
 }
 
-func TestSetValidatesEditorAndUIFields(t *testing.T) {
+func TestSetValidatesSettings(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		set  func(*SetRequest)
-		code Code
+		name     string
+		settings []string
+		code     Code
 	}{
 		{
 			name: "no fields",
-			set:  func(*SetRequest) {},
 			code: CodeMissingArgument,
 		},
 		{
-			name: "empty editor",
-			set:  func(req *SetRequest) { req.Editor = configStringPtr("  ") },
-			code: CodeInvalidInput,
+			name:     "empty editor",
+			settings: []string{"editor=  "},
+			code:     CodeInvalidInput,
 		},
 		{
-			name: "invalid editor mode",
-			set:  func(req *SetRequest) { req.EditorMode = configStringPtr("background") },
-			code: CodeInvalidInput,
+			name:     "invalid editor mode",
+			settings: []string{"editor_mode=background"},
+			code:     CodeInvalidInput,
 		},
 		{
-			name: "empty state file",
-			set:  func(req *SetRequest) { req.StateFile = configStringPtr("") },
-			code: CodeInvalidInput,
+			name:     "empty state file",
+			settings: []string{"state_file="},
+			code:     CodeInvalidInput,
 		},
 		{
-			name: "unknown default vault",
-			set:  func(req *SetRequest) { req.DefaultVault = configStringPtr("missing") },
-			code: CodeInvalidInput,
+			name:     "default vault must use pin",
+			settings: []string{"default_vault=personal"},
+			code:     CodeInvalidInput,
 		},
 		{
-			name: "empty UI accent",
-			set:  func(req *SetRequest) { req.UIAccent = configStringPtr("\t") },
-			code: CodeInvalidInput,
+			name:     "empty UI markdown style",
+			settings: []string{"ui.markdown_style=\n"},
+			code:     CodeInvalidInput,
 		},
 		{
-			name: "empty UI code theme",
-			set:  func(req *SetRequest) { req.UICodeTheme = configStringPtr(" ") },
-			code: CodeInvalidInput,
+			name:     "unknown key",
+			settings: []string{"unknown=value"},
+			code:     CodeInvalidInput,
 		},
 		{
-			name: "empty UI markdown style",
-			set:  func(req *SetRequest) { req.UIMarkdownStyle = configStringPtr("\n") },
-			code: CodeInvalidInput,
+			name:     "malformed setting",
+			settings: []string{"editor"},
+			code:     CodeInvalidInput,
+		},
+		{
+			name:     "duplicate key",
+			settings: []string{"editor=nvim", "editor=code"},
+			code:     CodeInvalidInput,
 		},
 	}
 
@@ -224,11 +220,19 @@ func TestSetValidatesEditorAndUIFields(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("save config: %v", err)
 			}
-			req := SetRequest{ContextOptions: ContextOptions{ConfigPathOverride: configPath}}
-			tt.set(&req)
+			req := SetRequest{
+				ContextOptions: ContextOptions{ConfigPathOverride: configPath},
+				Settings:       tt.settings,
+			}
 
 			_, err := Set(req)
 			requireConfigServiceCode(t, err, tt.code)
+			if tt.name == "default vault must use pin" && !strings.Contains(err.Error(), "rvn vault pin") {
+				t.Fatalf("Set() error = %v, want vault pin guidance", err)
+			}
+			if tt.name == "unknown key" && !strings.Contains(err.Error(), strings.Join(validSetKeys, ", ")) {
+				t.Fatalf("Set() error = %v, want valid key list", err)
+			}
 		})
 	}
 }
@@ -251,7 +255,7 @@ func TestUnsetValidatesSelectionAndConfigPresence(t *testing.T) {
 		{
 			name:       "missing config file",
 			createFile: false,
-			request:    UnsetRequest{Editor: true},
+			request:    UnsetRequest{Keys: []string{"editor"}},
 			code:       CodeFileNotFound,
 		},
 	}
@@ -287,6 +291,14 @@ func TestConfigPathOverrides(t *testing.T) {
 	}
 	if ctx.ConfigExists || ctx.ConfigPath != configPath || ctx.StatePath != statePath {
 		t.Fatalf("ShowContext() = %#v, want missing override paths", ctx)
+	}
+	data := ctx.Data()
+	if data["editor_mode"] != "auto" || data["state_file"] != statePath {
+		t.Fatalf("ShowContext().Data() defaults = %#v", data)
+	}
+	uiData, ok := data["ui"].(map[string]interface{})
+	if !ok || uiData["markdown_style"] != "auto" || len(uiData) != 1 {
+		t.Fatalf("ShowContext().Data().ui = %#v, want only effective markdown_style=auto", data["ui"])
 	}
 
 	initResult, err := Init(InitRequest{ConfigPathOverride: configPath})
@@ -603,10 +615,6 @@ func TestRemoveVaultRequiresConfirmation(t *testing.T) {
 			}
 		})
 	}
-}
-
-func configStringPtr(value string) *string {
-	return &value
 }
 
 func requireConfigServiceCode(t *testing.T, err error, want Code) {

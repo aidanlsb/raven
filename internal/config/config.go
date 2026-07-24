@@ -32,31 +32,12 @@ type Config struct {
 	// EditorMode controls how the editor is launched: auto, terminal, or gui.
 	EditorMode string `toml:"editor_mode"`
 
-	// UI controls optional CLI theming preferences.
+	// UI controls optional Markdown rendering preferences.
 	UI UIConfig `toml:"ui"`
-
-	// MCP controls MCP server behavior.
-	MCP MCPConfig `toml:"mcp"`
-}
-
-// MCPConfig represents optional MCP server behavior settings.
-type MCPConfig struct {
-	// StrictVault, when true, makes the MCP server require an explicit vault for
-	// vault-scoped operations. Calls that would otherwise fall back to ambient
-	// global state (active/default vault) fail with VAULT_AMBIGUOUS instead.
-	StrictVault bool `toml:"strict_vault"`
 }
 
 // UIConfig represents optional CLI theming preferences.
 type UIConfig struct {
-	// Accent is an optional accent color for CLI output and markdown rendering.
-	// Supported values are ANSI color codes ("0" to "255") or hex colors ("#RRGGBB").
-	Accent string `toml:"accent"`
-
-	// CodeTheme sets the Glamour/Chroma theme used for rendered markdown code blocks.
-	// Example values: "monokai", "dracula", "github", "nord".
-	CodeTheme string `toml:"code_theme"`
-
 	// MarkdownStyle sets the full Glamour markdown style.
 	// Empty or "auto" uses Glamour's automatic light/dark style.
 	MarkdownStyle string `toml:"markdown_style"`
@@ -191,7 +172,8 @@ func CreateDefaultAt(path string) (string, error) {
 	defaultConfig := `# Raven Configuration
 # See: https://github.com/aidanlsb/raven
 
-# Default vault name (must exist in [vaults] below)
+# Default vault name (must exist in [vaults] below).
+# Set this with: rvn vault pin <name>
 # default_vault = "personal"
 
 # Optional state file location (default: sibling state.toml next to config.toml)
@@ -211,20 +193,10 @@ func CreateDefaultAt(path string) (string, error) {
 #   gui      - always run in the background (non-blocking)
 # editor_mode = "auto"
 #
-# Optional UI accent color for headers/links in terminal output.
-# Supports ANSI color codes (0-255) or hex (#RRGGBB).
+# Optional Glamour markdown style. Use "auto", a stock built-in style name
+# (such as "dark", "light", "notty", or "ascii"), or a style JSON path.
 # [ui]
-# accent = "39"
-# code_theme = "monokai"
 # markdown_style = "auto"
-#
-# MCP server behavior.
-# When strict_vault is true, vault-scoped MCP calls must specify a vault
-# explicitly (per-call vault/vault_path or a server-pinned vault); otherwise
-# they fail with VAULT_AMBIGUOUS instead of silently falling back to the
-# active/default vault.
-# [mcp]
-# strict_vault = true
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {

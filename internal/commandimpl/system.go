@@ -396,7 +396,7 @@ func setInitSwitchBack(state *initPostInitState) {
 		return
 	}
 	if state.previousVaultName == "" && state.previousDefaultName != "" {
-		state.switchBack = "rvn --json config unset --default-vault && rvn --json vault clear"
+		state.switchBack = "rvn --json config unset default_vault && rvn --json vault clear"
 		return
 	}
 	state.switchBack = "rvn --json vault clear"
