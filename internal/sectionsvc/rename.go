@@ -13,7 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
@@ -116,7 +116,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	}
 
 	sourceFile := resolved.FilePath
-	if err := objectsvc.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
 		return nil, normalizeMutationError(err)
 	}
 	sourceRelPath, err := filepath.Rel(req.VaultPath, sourceFile)
@@ -276,7 +276,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to update refs in %s: %v", sourceFileID, err))
 				continue
 			}
-			if err := objectsvc.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, refFilePath); err != nil {
+			if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, refFilePath); err != nil {
 				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Skipped ref update in %s: %v", sourceFileID, err))
 				continue
 			}

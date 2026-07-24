@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -256,7 +257,7 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 			continue
 		}
 
-		if err := objectsvc.ValidateContentMutationRelPath(vaultCfg, fix.NewFilePath); err != nil {
+		if err := mutationguard.ValidateContentMutationRelPath(vaultCfg, fix.NewFilePath); err != nil {
 			result.Skipped = append(result.Skipped, skippedFix(fix, err.Error()))
 			continue
 		}

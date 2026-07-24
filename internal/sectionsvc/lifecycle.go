@@ -12,7 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
@@ -413,7 +413,7 @@ func (ctx *lifecycleContext) resolveSection(reference string) (*readsvc.ResolveR
 }
 
 func (ctx *lifecycleContext) loadDocument(filePath, fileID string) (*documentState, error) {
-	if err := objectsvc.ValidateContentMutationFilePath(ctx.vaultPath, ctx.vaultConfig, filePath); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(ctx.vaultPath, ctx.vaultConfig, filePath); err != nil {
 		return nil, normalizeMutationError(err)
 	}
 	contentBytes, err := os.ReadFile(filePath)

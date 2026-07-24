@@ -1,88 +1,14 @@
 package objectsvc
 
 import (
-	"path/filepath"
-	"strings"
-
 	"github.com/aidanlsb/raven/internal/config"
-	ravenignore "github.com/aidanlsb/raven/internal/ignore"
-	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 )
 
 func ValidateContentMutationFilePath(vaultPath string, vaultCfg *config.VaultConfig, filePath string) error {
-	if strings.TrimSpace(filePath) == "" {
-		return newError(ErrorInvalidInput, "file path is required", "", nil, nil)
-	}
-
-	relPath := filePath
-	if filepath.IsAbs(filePath) {
-		if strings.TrimSpace(vaultPath) == "" {
-			return nil
-		}
-		var err error
-		relPath, err = filepath.Rel(vaultPath, filePath)
-		if err != nil {
-			return newError(ErrorValidationFailed, "failed to resolve target path", "", nil, err)
-		}
-	}
-
-	return ValidateContentMutationRelPath(vaultCfg, relPath)
+	return mutationguard.ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath)
 }
 
 func ValidateContentMutationRelPath(vaultCfg *config.VaultConfig, relPath string) error {
-	normalized := paths.NormalizeVaultRelPath(relPath)
-	if normalized == "" {
-		return newError(ErrorInvalidInput, "path is required", "", nil, nil)
-	}
-
-	templateDir := ""
-	protectedPrefixes := []string(nil)
-	if vaultCfg != nil {
-		templateDir = vaultCfg.GetTemplateDirectory()
-		protectedPrefixes = vaultCfg.ProtectedPrefixes
-	}
-
-	if paths.IsProtectedRelPath(normalized, protectedPrefixes) {
-		return newError(
-			ErrorValidationFailed,
-			"cannot modify protected or system-managed paths",
-			"Choose a path outside protected prefixes, or update them with 'rvn vault config protected-prefixes ...'",
-			map[string]interface{}{"path": normalized},
-			nil,
-		)
-	}
-
-	if vaultCfg != nil {
-		excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
-		if err != nil {
-			return newError(
-				ErrorValidationFailed,
-				"invalid exclude config",
-				"Fix raven.yaml exclude patterns and try again",
-				map[string]interface{}{"path": normalized},
-				err,
-			)
-		}
-		if excludeMatcher.Match(normalized, false) {
-			return newError(
-				ErrorValidationFailed,
-				"cannot modify excluded paths",
-				"Choose a managed path, or update exclusions with 'rvn vault config exclude ...'",
-				map[string]interface{}{"path": normalized},
-				nil,
-			)
-		}
-	}
-
-	if templateDir != "" && strings.HasPrefix(normalized, templateDir) {
-		return newError(
-			ErrorValidationFailed,
-			"cannot modify template files with content mutation commands",
-			"Use 'rvn template ...' or 'rvn schema template ...' for template changes",
-			map[string]interface{}{"path": normalized},
-			nil,
-		)
-	}
-
-	return nil
+	return mutationguard.ValidateContentMutationRelPath(vaultCfg, relPath)
 }
