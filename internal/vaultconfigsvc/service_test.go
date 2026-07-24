@@ -340,7 +340,6 @@ func TestExcludeList(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			vaultPath := t.TempDir()
@@ -414,7 +413,6 @@ func TestExcludeAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			vaultPath := t.TempDir()
@@ -481,7 +479,6 @@ func TestExcludeRemove(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			vaultPath := t.TempDir()

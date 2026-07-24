@@ -1,6 +1,7 @@
 package fieldmutation
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -175,7 +176,6 @@ func TestPrepareValidatedFrontmatterMutationValues(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var fm *parser.Frontmatter
@@ -200,7 +200,8 @@ func TestPrepareValidatedFrontmatterMutationValues(t *testing.T) {
 				if err == nil || reflect.TypeOf(err) != reflect.TypeOf(tt.wantErr) {
 					t.Fatalf("error = %T %v, want %T", err, err, tt.wantErr)
 				}
-				if unknown, ok := err.(*UnknownFieldMutationError); ok {
+				var unknown *UnknownFieldMutationError
+				if errors.As(err, &unknown) {
 					want := []string{"a_unknown", "z_unknown"}
 					if !reflect.DeepEqual(unknown.Unknown, want) {
 						t.Fatalf("unknown fields = %#v, want %#v", unknown.Unknown, want)
@@ -292,7 +293,6 @@ func TestPrepareFrontmatterUnset(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			updated, removed, missing, err := PrepareFrontmatterUnset(tt.content, tt.fields, mutationTestSchema())

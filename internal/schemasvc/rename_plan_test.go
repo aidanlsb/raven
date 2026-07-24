@@ -139,7 +139,6 @@ types:
 traits: {}
 `
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			plan, err := BuildTypeRenamePlan(TypeRenamePlanRequest{
@@ -204,7 +203,6 @@ func TestBuildTypeRenamePlanErrors(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			_, err := BuildTypeRenamePlan(TypeRenamePlanRequest{
@@ -312,7 +310,6 @@ traits: {}
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			plan, err := BuildFieldRenamePlan(FieldRenamePlanRequest{
