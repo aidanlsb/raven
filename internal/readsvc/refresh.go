@@ -67,6 +67,12 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 	}
 	sch := rt.Schema
 
+	projectionLock, err := indexjournal.LockProjection(rt.VaultPath)
+	if err != nil {
+		return SmartReindexReport{}, err
+	}
+	defer func() { _ = projectionLock.Close() }()
+
 	pending, err := indexjournal.Load(rt.VaultPath)
 	if err != nil {
 		return SmartReindexReport{}, fmt.Errorf("load index dirty journal: %w", err)

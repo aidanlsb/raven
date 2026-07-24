@@ -109,7 +109,7 @@ func Begin(vaultPath string) (string, error) {
 // paths. If operationID is empty, a new operation is created. Empty paths
 // complete the operation, which is used for successful no-op mutations.
 func SetPaths(vaultPath, operationID string, relPaths []string) (string, error) {
-	defer releaseActiveOperation(vaultPath, operationID)
+	defer func() { _ = releaseActiveOperation(vaultPath, operationID) }()
 	if operationID != "" && !validOperationID(operationID) {
 		return "", fmt.Errorf("invalid index dirty operation %q", operationID)
 	}
@@ -185,7 +185,7 @@ func CancelUnknown(vaultPath, operationID string) error {
 	if operationID == "" {
 		return nil
 	}
-	defer releaseActiveOperation(vaultPath, operationID)
+	defer func() { _ = releaseActiveOperation(vaultPath, operationID) }()
 	if !validOperationID(operationID) {
 		return fmt.Errorf("invalid index dirty operation %q", operationID)
 	}
@@ -196,6 +196,16 @@ func CancelUnknown(vaultPath, operationID string) error {
 		}
 		return nil
 	})
+}
+
+// Abandon releases this process's active-operation lock while preserving the
+// unknown journal entry. It is used when a handler fails because the failure
+// may have followed a partial multi-file write.
+func Abandon(vaultPath, operationID string) error {
+	if operationID == "" {
+		return nil
+	}
+	return releaseActiveOperation(vaultPath, operationID)
 }
 
 // CompleteIfUnchanged removes an operation only if it still matches a recovery
@@ -444,17 +454,18 @@ func completeUnknownIfInactive(vaultPath string, operation Operation) error {
 	return errors.Join(completeErr, releaseErr)
 }
 
-func releaseActiveOperation(vaultPath, operationID string) {
+func releaseActiveOperation(vaultPath, operationID string) error {
 	if operationID == "" {
-		return
+		return nil
 	}
 	activeOperations.Lock()
 	lockFile := activeOperations.files[operationID]
 	delete(activeOperations.files, operationID)
 	activeOperations.Unlock()
 	if lockFile != nil {
-		_ = releaseOperationGuard(vaultPath, operationID, lockFile)
+		return releaseOperationGuard(vaultPath, operationID, lockFile)
 	}
+	return nil
 }
 
 func releaseOperationGuard(vaultPath, operationID string, lockFile *os.File) error {

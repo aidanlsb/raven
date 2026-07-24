@@ -80,17 +80,17 @@ func TestInvokerExecuteRunsBeforeDispatch(t *testing.T) {
 	registry.Register("new", func(_ context.Context, req Request) Result {
 		return Success(req.IndexJournalOperation, nil)
 	})
-	invoker := NewInvoker(registry, nil).WithBeforeDispatch(func(_ context.Context, req Request) (Request, []Warning) {
+	invoker := NewInvoker(registry, nil).WithBeforeDispatch(func(_ context.Context, req Request) (Request, Result, bool) {
 		req.IndexJournalOperation = "operation-id"
-		return req, []Warning{{Code: "BEFORE_WARNING", Message: "before dispatch"}}
+		return req, Result{}, true
 	})
 
 	result := invoker.Execute(context.Background(), Request{CommandID: "new"})
 	if result.Data != "operation-id" {
 		t.Fatalf("result.Data = %#v, want operation-id", result.Data)
 	}
-	if len(result.Warnings) != 1 || result.Warnings[0].Code != "BEFORE_WARNING" {
-		t.Fatalf("result.Warnings = %#v, want before-dispatch warning", result.Warnings)
+	if len(result.Warnings) != 0 {
+		t.Fatalf("result.Warnings = %#v, want none", result.Warnings)
 	}
 }
 

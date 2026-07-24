@@ -165,6 +165,14 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	if err != nil {
 		return nil, newError(CodeConfigInvalid, fmt.Sprintf("invalid exclude config: %v", err), "Fix raven.yaml exclude patterns and try again", err)
 	}
+	var projectionLock *indexjournal.ProjectionLock
+	if !req.DryRun {
+		projectionLock, err = indexjournal.LockProjection(vaultPath)
+		if err != nil {
+			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to lock index projection: %v", err), "Wait for the active write or refresh to finish, then retry", err)
+		}
+		defer func() { _ = projectionLock.Close() }()
+	}
 	pending, err := indexjournal.Load(vaultPath)
 	if err != nil {
 		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to load index dirty journal: %v", err), "Run 'rvn reindex --full' after repairing or removing disposable .raven metadata", err)

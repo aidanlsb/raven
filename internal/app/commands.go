@@ -29,20 +29,21 @@ func CommandInvoker() *commandexec.Invoker {
 	return commandInvoker
 }
 
-func beginIndexJournalOperation(_ context.Context, req commandexec.Request) (commandexec.Request, []commandexec.Warning) {
+func beginIndexJournalOperation(_ context.Context, req commandexec.Request) (commandexec.Request, commandexec.Result, bool) {
 	if req.Preview || !commands.UsesPostMutationIndex(req.CommandID) {
-		return req, nil
+		return req, commandexec.Result{}, true
 	}
 	operationID, err := indexjournal.Begin(req.VaultPath)
 	if err != nil {
-		return req, []commandexec.Warning{{
-			Code:    codes.WarnIndexUpdateFailed,
-			Message: fmt.Sprintf("failed to establish index recovery guard before mutation: %v", err),
-			Ref:     "Run 'rvn reindex' after the write to ensure the derived index is current",
-		}}
+		return req, commandexec.Failure(
+			codes.ErrDatabase,
+			"failed to establish index recovery guard",
+			map[string]interface{}{"cause": err.Error()},
+			"Restore write access to .raven and retry; no vault content was changed",
+		), false
 	}
 	req.IndexJournalOperation = operationID
-	return req, nil
+	return req, commandexec.Result{}, true
 }
 
 // annotateMutationPhase attaches the standard meta.mutation.phase signal to
@@ -54,10 +55,10 @@ func beginIndexJournalOperation(_ context.Context, req commandexec.Request) (com
 // move awaiting confirmation writes nothing); that explicit phase is preserved.
 func annotateMutationPhase(_ context.Context, req commandexec.Request, result commandexec.Result) commandexec.Result {
 	if !result.OK {
-		if err := indexjournal.CancelUnknown(req.VaultPath, req.IndexJournalOperation); err != nil {
+		if err := indexjournal.Abandon(req.VaultPath, req.IndexJournalOperation); err != nil {
 			result.Warnings = append(result.Warnings, commandexec.Warning{
 				Code:    codes.WarnIndexUpdateFailed,
-				Message: fmt.Sprintf("failed to clear unused index recovery guard: %v", err),
+				Message: fmt.Sprintf("failed to release index recovery guard after mutation failure: %v", err),
 				Ref:     "Run 'rvn reindex' before relying on index-backed results",
 			})
 		}
@@ -96,7 +97,7 @@ func annotateMutationPhase(_ context.Context, req commandexec.Request, result co
 
 func surfacesIndexDirtyWarning(commandID string) bool {
 	switch commandID {
-	case "query", "search", "read", "resolve", "backlinks", "outlinks", "open", "date", "check":
+	case "query", "search", "read", "resolve", "backlinks", "outlinks", "open", "date", "check", "vault_stats":
 		return true
 	default:
 		return false

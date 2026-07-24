@@ -6,9 +6,9 @@ import "context"
 type ValidateFunc func(context.Context, Request) (Request, Result, bool)
 
 // BeforeDispatchFunc runs after validation and handler lookup, immediately
-// before dispatch. It may attach invocation-scoped state to the request and
-// return non-fatal warnings.
-type BeforeDispatchFunc func(context.Context, Request) (Request, []Warning)
+// before dispatch. It may attach invocation-scoped state to the request or
+// reject dispatch when a required precondition cannot be established.
+type BeforeDispatchFunc func(context.Context, Request) (Request, Result, bool)
 
 // AnnotateFunc post-processes a handler result before it is returned. It runs
 // only for dispatched handlers (not validation/lookup failures) and is used to
@@ -71,14 +71,15 @@ func (i *Invoker) Execute(ctx context.Context, req Request) Result {
 		)
 	}
 
-	var beforeWarnings []Warning
 	if i.beforeDispatch != nil {
-		req, beforeWarnings = i.beforeDispatch(ctx, req)
+		var result Result
+		var ok bool
+		req, result, ok = i.beforeDispatch(ctx, req)
+		if !ok {
+			return result
+		}
 	}
 	result := handler(ctx, req)
-	if len(beforeWarnings) > 0 {
-		result.Warnings = append(append([]Warning(nil), beforeWarnings...), result.Warnings...)
-	}
 	if i.annotate != nil {
 		result = i.annotate(ctx, req, result)
 	}

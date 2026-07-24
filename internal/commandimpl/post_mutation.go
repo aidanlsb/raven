@@ -40,26 +40,57 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journa
 	autoReindexEnabled := rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled()
 	failedPaths := make(map[string]struct{})
 	if autoReindexEnabled {
-		for _, relPath := range changes.RemovedPaths() {
-			if warning, ok := removeIndexPathWarning(rt, relPath); ok {
-				warnings = append(warnings, warning)
+		canProject := true
+		if err := rt.OpenDB(); err != nil {
+			warnings = append(warnings, indexUpdateWarning(
+				rt.VaultPath,
+				filepath.Join(rt.VaultPath, ".raven", "index.db"),
+				"failed to open index database",
+				err,
+			))
+			canProject = false
+		}
+		var projectionLock *indexjournal.ProjectionLock
+		if canProject {
+			var err error
+			projectionLock, err = indexjournal.LockProjection(rt.VaultPath)
+			if err != nil {
+				warnings = append(warnings, indexJournalWarning("failed to lock index projection", err))
+				canProject = false
+			}
+		}
+
+		if !canProject {
+			for _, relPath := range affectedPaths {
 				failedPaths[relPath] = struct{}{}
 			}
-		}
-		for _, relPath := range indexPaths {
-			if warning, ok := projectIndexPathWarning(rt, relPath); ok {
-				warnings = append(warnings, warning)
-				failedPaths[relPath] = struct{}{}
+		} else {
+			for _, relPath := range changes.RemovedPaths() {
+				if warning, ok := removeIndexPathWarning(rt, relPath); ok {
+					warnings = append(warnings, warning)
+					failedPaths[relPath] = struct{}{}
+				}
+			}
+			for _, relPath := range indexPaths {
+				if warning, ok := projectIndexPathWarning(rt, relPath); ok {
+					warnings = append(warnings, warning)
+					failedPaths[relPath] = struct{}{}
+				}
+			}
+			successfulPaths := make([]string, 0, len(affectedPaths))
+			for _, relPath := range affectedPaths {
+				if _, failed := failedPaths[relPath]; !failed {
+					successfulPaths = append(successfulPaths, relPath)
+				}
+			}
+			if err := indexjournal.ClearPaths(rt.VaultPath, trackedOperation, successfulPaths...); err != nil {
+				warnings = append(warnings, indexJournalWarning("failed to clear completed index updates", err))
 			}
 		}
-		successfulPaths := make([]string, 0, len(affectedPaths))
-		for _, relPath := range affectedPaths {
-			if _, failed := failedPaths[relPath]; !failed {
-				successfulPaths = append(successfulPaths, relPath)
+		if projectionLock != nil {
+			if err := projectionLock.Close(); err != nil {
+				warnings = append(warnings, indexJournalWarning("failed to unlock index projection", err))
 			}
-		}
-		if err := indexjournal.ClearPaths(rt.VaultPath, trackedOperation, successfulPaths...); err != nil {
-			warnings = append(warnings, indexJournalWarning("failed to clear completed index updates", err))
 		}
 	}
 
