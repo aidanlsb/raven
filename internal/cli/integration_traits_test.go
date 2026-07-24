@@ -283,32 +283,38 @@ traits:
 		"tasks/first.md:trait:1",
 		"tasks/first.md:trait:0",
 	}
-	result := v.RunCLIWithStdin(
-		attempted[0]+"\n"+attempted[1]+"\n"+attempted[2]+"\n",
-		"update",
-		"--stdin",
-		"done",
-		"--confirm",
-	)
-	result.MustFail(t, "VALIDATION_FAILED")
-	if result.Error == nil {
-		t.Fatalf("missing error envelope: %s", result.RawJSON)
+	stdin := attempted[0] + "\n" + attempted[1] + "\n" + attempted[2] + "\n"
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "preview", args: []string{"update", "--stdin", "done"}},
+		{name: "apply", args: []string{"update", "--stdin", "done", "--confirm"}},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := v.RunCLIWithStdin(stdin, tt.args...)
+			result.MustFail(t, "VALIDATION_FAILED")
+			if result.Error == nil {
+				t.Fatalf("missing error envelope: %s", result.RawJSON)
+			}
 
-	gotIDs, ok := result.Error.Details["trait_ids"].([]interface{})
-	if !ok {
-		t.Fatalf("trait_ids = %#v, want ordered array; raw: %s", result.Error.Details["trait_ids"], result.RawJSON)
-	}
-	if len(gotIDs) != len(attempted) {
-		t.Fatalf("trait_ids count = %d, want %d; raw: %s", len(gotIDs), len(attempted), result.RawJSON)
-	}
-	for i, want := range attempted {
-		if gotIDs[i] != want {
-			t.Fatalf("trait_ids[%d] = %#v, want %q; raw: %s", i, gotIDs[i], want, result.RawJSON)
-		}
-	}
-	if total, ok := result.Error.Details["total"].(float64); !ok || int(total) != len(attempted) {
-		t.Fatalf("total = %#v, want %d; raw: %s", result.Error.Details["total"], len(attempted), result.RawJSON)
+			gotIDs, ok := result.Error.Details["trait_ids"].([]interface{})
+			if !ok {
+				t.Fatalf("trait_ids = %#v, want ordered array; raw: %s", result.Error.Details["trait_ids"], result.RawJSON)
+			}
+			if len(gotIDs) != len(attempted) {
+				t.Fatalf("trait_ids count = %d, want %d; raw: %s", len(gotIDs), len(attempted), result.RawJSON)
+			}
+			for i, want := range attempted {
+				if gotIDs[i] != want {
+					t.Fatalf("trait_ids[%d] = %#v, want %q; raw: %s", i, gotIDs[i], want, result.RawJSON)
+				}
+			}
+			if total, ok := result.Error.Details["total"].(float64); !ok || int(total) != len(attempted) {
+				t.Fatalf("total = %#v, want %d; raw: %s", result.Error.Details["total"], len(attempted), result.RawJSON)
+			}
+		})
 	}
 
 	v.AssertFileContains("tasks/first.md", "@todo(false)")
