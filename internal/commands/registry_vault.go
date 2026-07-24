@@ -112,6 +112,9 @@ is switched or cleared.`,
 			"rvn vault config show --json",
 			"rvn vault add work /Users/you/work-notes --json",
 			"rvn vault use work --json",
+			"rvn vault focus work --json",
+			"rvn vault focus --path /Users/you/work-notes --json",
+			"rvn vault focus --clear --json",
 			"rvn vault pin personal --json",
 			"rvn vault remove personal --clear-default --clear-active --json",
 			"rvn vault clear --json",
@@ -121,6 +124,7 @@ is switched or cleared.`,
 			"Inspect or mutate structured raven.yaml settings via 'vault config'",
 			"Register named vault paths in config.toml",
 			"Switch active vault for subsequent CLI commands",
+			"Set or clear the in-memory focus for a running MCP server session",
 			"Pin a default fallback vault in config.toml",
 		},
 	},
@@ -164,6 +168,41 @@ is switched or cleared.`,
 		},
 		Examples: []string{
 			"rvn vault use work --json",
+		},
+	},
+	"vault_focus": {
+		Name:        "vault focus",
+		Use:         "focus [name]",
+		Description: "Set or clear the current MCP server session focus",
+		VaultScope:  VaultScopeNone,
+		LongDesc: `Validate a vault target for MCP session focus.
+
+When invoked through raven_invoke, this command updates only the running
+rvn serve process's in-memory session focus. The focus is used by subsequent
+vault-scoped MCP calls that omit per-call vault and vault_path overrides.
+
+Direct CLI invocation validates and describes the target but cannot mutate
+another process's memory. It does not write active_vault or default_vault.
+
+Provide exactly one of a configured vault name, --path, or --clear.
+The --path value must be an absolute existing Raven vault directory.
+Use --clear to restore the immutable launch pin, or unpinned behavior if the
+server was started without a vault pin.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Configured vault name to focus", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "path", Description: "Absolute Raven vault directory to focus", Type: FlagTypeString},
+			{Name: "clear", Description: "Clear session focus and restore launch-pin behavior", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn vault focus work --json",
+			"rvn vault focus --path /Users/you/work-notes --json",
+			"rvn vault focus --clear --json",
+		},
+		UseCases: []string{
+			"Switch the default vault for subsequent calls in one MCP server session",
+			"Clear a session switch and return to the server's launch vault pin",
 		},
 	},
 	"vault_add": {

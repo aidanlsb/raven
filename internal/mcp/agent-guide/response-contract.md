@@ -196,7 +196,7 @@ confirm which vault was used on every vault-scoped call:
 
 Fields:
 - `path` — resolved absolute vault path (always present).
-- `source` — how the vault was selected: `vault_path` (explicit path override), `vault` (named vault from invocation), `pinned` (server pinned path), or `base_args` (from serve flags).
+- `source` — how the vault was selected: `vault_path` (explicit path override), `vault` (named vault from invocation), `focus` (in-memory MCP session focus), `pinned` (constructor launch pin), or `base_args` (from serve flags).
 - `name` — configured vault name (omitted when no name could be resolved).
 
 Vault-scoped `resources/list` and `resources/read` responses also return a
@@ -207,11 +207,14 @@ Commands that do not require vault resolution (e.g. `version`, `config show`) om
 ### Explicit vaults are required
 
 Every vault-scoped MCP operation requires an explicit source: per-call
-`vault_path` / `vault`, or a server pin supplied with `--vault-path` / `--vault`.
-MCP never resolves from the CLI's active or default vault.
+`vault_path` / `vault`, an in-memory session focus set with `vault_focus`, or a
+server launch pin supplied with `--vault-path` / `--vault`. Per-call values
+override session focus for one invocation. MCP never resolves from the CLI's
+`active_vault` or config's `default_vault`.
 
 - `VAULT_AMBIGUOUS` error: the call lacked an explicit `vault`/`vault_path` and
-  the server has no pinned vault. Retry with an explicit vault.
+  the server has neither session focus nor a launch pin. Retry with an explicit
+  vault or invoke `vault_focus`.
 
 ## Warnings
 

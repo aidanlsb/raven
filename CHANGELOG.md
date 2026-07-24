@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `rvn vault focus` sets or clears an MCP server's in-memory session vault pin, allowing agents to switch the default vault for subsequent calls without changing CLI `active_vault` or config `default_vault`.
+
 ### Changed
 - CLI vault resolution now fails when `active_vault` names an unconfigured vault instead of warning and falling back to `default_vault`; clear or replace the stale active selection, or target a vault explicitly.
 - **Breaking:** `rvn config set` now accepts one or more dotted `key=value` arguments, and `rvn config unset` accepts the same dotted keys as positional arguments. Setting `default_vault` is exclusive to `rvn vault pin`; it can still be cleared with `rvn config unset default_vault`.

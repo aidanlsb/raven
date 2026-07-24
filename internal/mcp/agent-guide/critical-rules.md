@@ -40,9 +40,13 @@ Every vault-scoped result includes `meta.vault_context`. Confirm it points at th
 intended vault before writing.
 
 - Pass an explicit `vault` (configured name) or `vault_path` (absolute directory)
-  on each call, or use a server pinned to one vault.
-- Calls without an explicit or server-pinned vault fail with `VAULT_AMBIGUOUS`;
-  supply `vault`/`vault_path` and retry. MCP never uses active/default vault state.
+  on each call, set the session focus with `vault_focus`, or use a server pinned
+  to one vault.
+- To switch vaults for the rest of this MCP server session, invoke
+  `vault_focus`; a per-call `vault`/`vault_path` still overrides it once. Clear
+  focus to restore the server's launch pin.
+- Calls without a per-call target, session focus, or server launch pin fail with
+  `VAULT_AMBIGUOUS`. MCP never uses `active_vault` or `default_vault`.
 - After `init` creates an additional vault, it becomes active immediately. Surface
   the returned active/previous vault details and `switch_back` command.
 

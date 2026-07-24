@@ -4,6 +4,7 @@ package mcp_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,6 +100,177 @@ func TestMCPIntegration_RejectsAmbientVaultFallback(t *testing.T) {
 	}
 	if !v.FileExists("people/strict-with-vault.md") {
 		t.Fatal("expected object to be created with explicit vault_path")
+	}
+}
+
+func TestMCPIntegration_VaultFocusOverridesAndRestoresLaunchPin(t *testing.T) {
+	t.Parallel()
+
+	a := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+	b := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+	c := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	configData := fmt.Sprintf("[vaults]\na = %q\nb = %q\nc = %q\n", a.Path, b.Path, c.Path)
+	if err := os.WriteFile(configPath, []byte(configData), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	binary := testutil.BuildCLI(t)
+	baseArgs := append(baseArgsForConfig(configPath), "--vault-path", a.Path)
+	server := newTestServerWithBaseArgs(t, baseArgs, binary)
+
+	focus := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "vault_focus",
+		"args":    map[string]interface{}{"name": "b"},
+	})
+	if focus.IsError {
+		t.Fatalf("focus B failed: %s", focus.Text)
+	}
+	focusEnvelope := parseMCPEnvelope(t, focus.Text)
+	if focusEnvelope.Data["applied"] != true || focusEnvelope.Data["path"] != b.Path {
+		t.Fatalf("focus response = %s", focus.Text)
+	}
+
+	focused := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "new",
+		"args": map[string]interface{}{
+			"type":  "person",
+			"title": "Session Focus",
+		},
+	})
+	if focused.IsError {
+		t.Fatalf("unqualified focused call failed: %s", focused.Text)
+	}
+	assertMCPVaultContext(t, focused.Text, b.Path, "b", "focus")
+	if !b.FileExists("people/session-focus.md") || a.FileExists("people/session-focus.md") {
+		t.Fatal("session-focused call did not target B")
+	}
+
+	override := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "new",
+		"vault":   "c",
+		"args": map[string]interface{}{
+			"type":  "person",
+			"title": "Per Call Override",
+		},
+	})
+	if override.IsError {
+		t.Fatalf("per-call C override failed: %s", override.Text)
+	}
+	assertMCPVaultContext(t, override.Text, c.Path, "c", "vault")
+	if !c.FileExists("people/per-call-override.md") || b.FileExists("people/per-call-override.md") {
+		t.Fatal("per-call vault did not override session focus")
+	}
+
+	clear := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "vault_focus",
+		"args":    map[string]interface{}{"clear": true},
+	})
+	if clear.IsError {
+		t.Fatalf("clear focus failed: %s", clear.Text)
+	}
+
+	restored := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "new",
+		"args": map[string]interface{}{
+			"type":  "person",
+			"title": "Restored Launch",
+		},
+	})
+	if restored.IsError {
+		t.Fatalf("launch-pin call after clear failed: %s", restored.Text)
+	}
+	assertMCPVaultContext(t, restored.Text, a.Path, "a", "base_args")
+	if !a.FileExists("people/restored-launch.md") || b.FileExists("people/restored-launch.md") {
+		t.Fatal("clear did not restore launch pin A")
+	}
+}
+
+func TestMCPIntegration_VaultFocusOnUnpinnedServer(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("[vaults]\nwork = %q\n", v.Path)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
+
+	before := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "new",
+		"args":    map[string]interface{}{"type": "person", "title": "Before Focus"},
+	})
+	assertMCPErrorCode(t, before, "VAULT_AMBIGUOUS")
+
+	focus := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "vault_focus",
+		"args":    map[string]interface{}{"path": v.Path},
+	})
+	if focus.IsError {
+		t.Fatalf("focus path failed: %s", focus.Text)
+	}
+
+	after := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "new",
+		"args":    map[string]interface{}{"type": "person", "title": "After Focus"},
+	})
+	if after.IsError {
+		t.Fatalf("focused call failed: %s", after.Text)
+	}
+	assertMCPVaultContext(t, after.Text, v.Path, "work", "focus")
+	if !v.FileExists("people/after-focus.md") {
+		t.Fatal("focused call did not target the selected vault")
+	}
+
+	clear := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "vault_focus",
+		"args":    map[string]interface{}{"clear": true},
+	})
+	if clear.IsError {
+		t.Fatalf("clear focus failed: %s", clear.Text)
+	}
+
+	afterClear := server.callTool("raven_invoke", map[string]interface{}{
+		"command": "new",
+		"args":    map[string]interface{}{"type": "person", "title": "After Clear"},
+	})
+	assertMCPErrorCode(t, afterClear, "VAULT_AMBIGUOUS")
+	if v.FileExists("people/after-clear.md") {
+		t.Fatal("unqualified call after clear mutated the former focus vault")
+	}
+}
+
+func assertMCPVaultContext(t *testing.T, raw, wantPath, wantName, wantSource string) {
+	t.Helper()
+	var envelope struct {
+		Meta struct {
+			VaultContext struct {
+				Path   string `json:"path"`
+				Name   string `json:"name"`
+				Source string `json:"source"`
+			} `json:"vault_context"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
+		t.Fatalf("parse vault context: %v\n%s", err, raw)
+	}
+	got := envelope.Meta.VaultContext
+	if got.Path != wantPath || got.Name != wantName || got.Source != wantSource {
+		t.Fatalf("vault context = %#v, want path=%q name=%q source=%q", got, wantPath, wantName, wantSource)
+	}
+}
+
+func assertMCPErrorCode(t *testing.T, result toolResult, want string) {
+	t.Helper()
+	if !result.IsError {
+		t.Fatalf("expected %s error, got success: %s", want, result.Text)
+	}
+	envelope := parseMCPEnvelope(t, result.Text)
+	if envelope.Error == nil || envelope.Error.Code != want {
+		t.Fatalf("error = %#v, want %s; response=%s", envelope.Error, want, result.Text)
 	}
 }
 

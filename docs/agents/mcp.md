@@ -54,11 +54,52 @@ vault in this priority order:
 
 1. Per-call `vault_path` (explicit path)
 2. Per-call `vault` (configured vault name)
-3. Server-pinned vault (`rvn serve --vault-path` / `--vault`)
+3. In-memory session focus set by `vault focus`
+4. Server launch pin (`rvn serve --vault-path` / `--vault`)
 
 If none is present, Raven returns `VAULT_AMBIGUOUS`. MCP never guesses from the
 CLI's active or default vault. The resolved vault is always reported in
 `meta.vault_context` (see below).
+
+### Switch vaults within one session
+
+Invoke `vault_focus` through the running MCP server to change the default target
+for subsequent vault-scoped calls:
+
+```json
+{
+  "command": "vault_focus",
+  "args": {
+    "name": "work"
+  }
+}
+```
+
+Use `"path": "/absolute/path/to/vault"` instead of `name` to focus an
+unregistered vault. The directory must exist and contain `raven.yaml`,
+`schema.yaml`, or `.raven/`. Do not pass both.
+
+A per-call top-level `vault` or `vault_path` still overrides session focus for
+that invocation. Clear focus to return to the server's immutable launch pin:
+
+```json
+{
+  "command": "vault_focus",
+  "args": {
+    "clear": true
+  }
+}
+```
+
+If the server started unpinned, clearing focus returns it to unpinned behavior,
+so unqualified vault-scoped calls fail with `VAULT_AMBIGUOUS`. Restarting
+`rvn serve` also discards session focus.
+
+`rvn vault use` writes CLI `active_vault`, and `rvn vault pin` writes
+`default_vault`; MCP intentionally reads neither. Running `rvn vault focus`
+directly in a shell validates and describes the target, but cannot alter another
+process's memory. Session focus changes only when `vault_focus` is invoked
+through `raven_invoke` on the running server.
 
 ### Explicit vault requirement
 
@@ -69,7 +110,7 @@ CLI's active or default vault. The resolved vault is always reported in
   it becomes active immediately. Inspect and surface `post_init.active_vault`,
   `previous_active_vault` / `previous_vault`, and `switch_back` before continuing.
 - **`VAULT_AMBIGUOUS`:** when no explicit `vault`/`vault_path` is given and the
-  server has no pinned vault, the call fails with this stable error code.
+  server has neither session focus nor a launch pin, the call fails with this stable error code.
   Single-vault users who pin a vault (for example via
   `rvn mcp install --vault-path`) are unaffected.
 
@@ -90,7 +131,7 @@ Vault-scoped resource content is produced by the same shared services that back 
 
 Vault-scoped resources use stable URIs. On `resources/read`, `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional `vault` or `vault_path` params to target a different vault for that read. Do not pass both. `resources/list` accepts the same optional `vault`/`vault_path` params, so list and read stay consistent — the list reflects (and reports) the same vault a read with identical params would target.
 
-Both `resources/list` and `resources/read` include a `vault_context` object in the result for vault-scoped requests, mirroring `meta.vault_context` on tool results, so multi-vault sessions can always confirm which vault was used. A vault-scoped `resources/read` without an explicit or server-pinned vault fails with `VAULT_AMBIGUOUS`.
+Both `resources/list` and `resources/read` include a `vault_context` object in the result for vault-scoped requests, mirroring `meta.vault_context` on tool results, so multi-vault sessions can always confirm which vault was used. Resource resolution also honors session focus. A vault-scoped `resources/read` without a per-call target, session focus, or server launch pin fails with `VAULT_AMBIGUOUS`.
 
 Example:
 

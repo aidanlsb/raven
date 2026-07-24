@@ -132,6 +132,7 @@ func TestRequiresVaultMetadata(t *testing.T) {
 		"vault_list",
 		"vault_current",
 		"vault_use",
+		"vault_focus",
 		"vault_add",
 		"vault_remove",
 		"vault_pin",

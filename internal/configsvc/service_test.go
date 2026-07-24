@@ -574,6 +574,121 @@ func TestAddVaultValidationAndReplacement(t *testing.T) {
 	})
 }
 
+func TestFocusVaultValidatesWithoutWritingConfigOrState(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	statePath := filepath.Join(root, "state.toml")
+	vaultPath := filepath.Join(root, "work")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "raven.yaml"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write vault marker: %v", err)
+	}
+	if err := config.SaveTo(configPath, &config.Config{
+		DefaultVault: "work",
+		Vaults:       map[string]string{"work": vaultPath},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	if err := config.SaveState(statePath, &config.State{
+		Version:     config.StateVersion,
+		ActiveVault: "work",
+	}); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+	configBefore, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	stateBefore, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+
+	opts := ContextOptions{ConfigPathOverride: configPath, StatePathOverride: statePath}
+	byName, err := FocusVault(VaultFocusRequest{ContextOptions: opts, Name: "work"})
+	if err != nil {
+		t.Fatalf("focus by name: %v", err)
+	}
+	if byName.Name != "work" || byName.Path != vaultPath || byName.Cleared {
+		t.Fatalf("focus by name = %#v", byName)
+	}
+
+	byPath, err := FocusVault(VaultFocusRequest{ContextOptions: opts, Path: vaultPath})
+	if err != nil {
+		t.Fatalf("focus by path: %v", err)
+	}
+	if byPath.Name != "" || byPath.Path != vaultPath || byPath.Cleared {
+		t.Fatalf("focus by path = %#v", byPath)
+	}
+
+	cleared, err := FocusVault(VaultFocusRequest{ContextOptions: opts, Clear: true})
+	if err != nil {
+		t.Fatalf("clear focus: %v", err)
+	}
+	if !cleared.Cleared || cleared.Name != "" || cleared.Path != "" {
+		t.Fatalf("clear focus = %#v", cleared)
+	}
+
+	configAfter, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config after focus: %v", err)
+	}
+	stateAfter, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state after focus: %v", err)
+	}
+	if string(configAfter) != string(configBefore) {
+		t.Fatal("focus changed config.toml")
+	}
+	if string(stateAfter) != string(stateBefore) {
+		t.Fatal("focus changed state.toml")
+	}
+}
+
+func TestFocusVaultRejectsInvalidTargets(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	plainDir := filepath.Join(root, "plain")
+	if err := os.MkdirAll(plainDir, 0o755); err != nil {
+		t.Fatalf("mkdir plain dir: %v", err)
+	}
+	if err := config.SaveTo(configPath, &config.Config{
+		Vaults: map[string]string{"plain": plainDir},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	opts := ContextOptions{ConfigPathOverride: configPath}
+
+	tests := []struct {
+		name string
+		req  VaultFocusRequest
+		code Code
+	}{
+		{name: "missing mode", req: VaultFocusRequest{}, code: CodeMissingArgument},
+		{name: "name and path", req: VaultFocusRequest{Name: "plain", Path: plainDir}, code: CodeInvalidInput},
+		{name: "clear and name", req: VaultFocusRequest{Name: "plain", Clear: true}, code: CodeInvalidInput},
+		{name: "relative path", req: VaultFocusRequest{Path: "relative"}, code: CodeInvalidInput},
+		{name: "missing path", req: VaultFocusRequest{Path: filepath.Join(root, "missing")}, code: CodeFileNotFound},
+		{name: "directory without marker", req: VaultFocusRequest{Path: plainDir}, code: CodeInvalidInput},
+		{name: "configured directory without marker", req: VaultFocusRequest{Name: "plain"}, code: CodeInvalidInput},
+		{name: "unknown name", req: VaultFocusRequest{Name: "missing"}, code: CodeVaultNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := tt.req
+			req.ContextOptions = opts
+			_, err := FocusVault(req)
+			requireConfigServiceCode(t, err, tt.code)
+		})
+	}
+}
+
 func TestRemoveVaultRequiresConfirmation(t *testing.T) {
 	t.Parallel()
 

@@ -88,3 +88,50 @@ func TestHandleVaultCurrentRejectsMissingActiveVault(t *testing.T) {
 		t.Fatalf("error suggestion = %q, want clear/list guidance", got)
 	}
 }
+
+func TestHandleVaultFocusDescribesCLIAndMCPApplication(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	vaultPath := filepath.Join(root, "work")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("version: 1\n"), 0o644); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+
+	for _, tt := range []struct {
+		name        string
+		caller      commandexec.Caller
+		wantApplied bool
+		wantHint    bool
+	}{
+		{name: "CLI validates only", caller: commandexec.CallerCLI, wantApplied: false, wantHint: true},
+		{name: "MCP applies in adapter", caller: commandexec.CallerMCP, wantApplied: true, wantHint: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result := HandleVaultFocus(context.Background(), commandexec.Request{
+				Caller: tt.caller,
+				Args:   map[string]interface{}{"path": vaultPath},
+			})
+			if !result.OK {
+				t.Fatalf("HandleVaultFocus() failed: %+v", result.Error)
+			}
+			data, ok := result.Data.(map[string]interface{})
+			if !ok {
+				t.Fatalf("data = %#v, want map", result.Data)
+			}
+			if data["applied"] != tt.wantApplied {
+				t.Fatalf("applied = %#v, want %v", data["applied"], tt.wantApplied)
+			}
+			_, hasHint := data["hint"]
+			if hasHint != tt.wantHint {
+				t.Fatalf("hint presence = %v, want %v", hasHint, tt.wantHint)
+			}
+			if data["path"] != vaultPath || data["scope"] != "mcp_session" || data["session_only"] != true {
+				t.Fatalf("focus data = %#v", data)
+			}
+		})
+	}
+}
