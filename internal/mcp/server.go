@@ -24,12 +24,16 @@ import (
 
 // Server is an MCP server that wraps Raven CLI commands.
 type Server struct {
-	vaultPath  string
-	baseArgs   []string
+	vaultPath  string   // Immutable launch-time path pin.
+	baseArgs   []string // Immutable launch-time serve arguments.
 	in         io.Reader
 	out        io.Writer
 	executable string // Path to the rvn executable
 	invoker    *commandexec.Invoker
+
+	sessionVaultMu   sync.RWMutex
+	sessionVaultPath string
+	sessionVaultName string
 
 	sendMu     sync.Mutex
 	inFlightMu sync.Mutex
@@ -747,6 +751,13 @@ func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultRe
 		}
 		return vaultResolution{path: p, source: "vault", name: resolved}, nil
 	}
+	if sessionName, sessionPath := s.sessionVaultFocus(); sessionPath != "" {
+		p, err := s.validateResolvedVaultPath(sessionPath)
+		if err != nil {
+			return vaultResolution{}, err
+		}
+		return vaultResolution{path: p, source: "focus", name: sessionName}, nil
+	}
 	if pinned := strings.TrimSpace(s.vaultPath); pinned != "" {
 		p, err := s.validateResolvedVaultPath(pinned)
 		if err != nil {
@@ -772,9 +783,44 @@ func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultRe
 	}
 	return vaultResolution{}, &vaultResolutionError{
 		code:       string(codes.ErrVaultAmbiguous),
-		message:    "vault-scoped MCP operations require an explicit vault; pass vault or vault_path (or pin one when starting the server)",
-		suggestion: "Pass vault (a configured vault name) or vault_path (an absolute vault directory) with this call.",
+		message:    "vault-scoped MCP operations require an explicit vault, session focus, or server launch pin",
+		suggestion: "Pass vault or vault_path with this call, or invoke vault_focus to set the MCP session focus.",
 	}
+}
+
+func (s *Server) sessionVaultFocus() (string, string) {
+	s.sessionVaultMu.RLock()
+	defer s.sessionVaultMu.RUnlock()
+	return s.sessionVaultName, s.sessionVaultPath
+}
+
+func (s *Server) setSessionVaultFocus(name, path string) {
+	s.sessionVaultMu.Lock()
+	defer s.sessionVaultMu.Unlock()
+	s.sessionVaultName = strings.TrimSpace(name)
+	s.sessionVaultPath = strings.TrimSpace(path)
+}
+
+func (s *Server) applyVaultFocusResult(result commandexec.Result) error {
+	data, ok := result.Data.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("vault focus returned invalid result data")
+	}
+	if boolValue(data["cleared"]) {
+		s.setSessionVaultFocus("", "")
+		return nil
+	}
+
+	path := strings.TrimSpace(toString(data["path"]))
+	if path == "" {
+		return fmt.Errorf("vault focus returned an empty path")
+	}
+	name := strings.TrimSpace(toString(data["name"]))
+	if name == "" {
+		name = s.lookupVaultName(path)
+	}
+	s.setSessionVaultFocus(name, path)
+	return nil
 }
 
 // lookupVaultName attempts a best-effort reverse lookup of vault name from path.

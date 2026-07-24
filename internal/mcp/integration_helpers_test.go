@@ -245,6 +245,7 @@ type testServer struct {
 	vaultPath  string
 	baseArgs   []string
 	executable string
+	server     *mcp.Server
 }
 
 // toolResult represents the result of a tool call.
@@ -255,18 +256,22 @@ type toolResult struct {
 
 // newTestServer creates a test server with a custom executable path.
 func newTestServer(t *testing.T, vaultPath, executable string) *testServer {
+	server := mcp.NewServerWithExecutable(vaultPath, executable)
 	return &testServer{
 		t:          t,
 		vaultPath:  vaultPath,
 		executable: executable,
+		server:     server,
 	}
 }
 
 func newTestServerWithBaseArgs(t *testing.T, baseArgs []string, executable string) *testServer {
+	server := mcp.NewServerWithBaseArgsAndExecutable(baseArgs, executable)
 	return &testServer{
 		t:          t,
 		baseArgs:   append([]string{}, baseArgs...),
 		executable: executable,
+		server:     server,
 	}
 }
 
@@ -282,14 +287,6 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 		if args != nil {
 			requestArgs["args"] = args
 		}
-	}
-
-	// Create a real MCP server but with custom executable.
-	var server *mcp.Server
-	if len(s.baseArgs) > 0 {
-		server = mcp.NewServerWithBaseArgsAndExecutable(s.baseArgs, s.executable)
-	} else {
-		server = mcp.NewServerWithExecutable(s.vaultPath, s.executable)
 	}
 
 	// Create a simulated JSON-RPC request
@@ -308,10 +305,10 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 
 	// Capture output
 	var output bytes.Buffer
-	server.SetIO(strings.NewReader(""), &output)
+	s.server.SetIO(strings.NewReader(""), &output)
 
 	// Handle the request directly
-	server.HandleRequest(&request)
+	s.server.HandleRequest(&request)
 
 	// Parse the response
 	var response struct {

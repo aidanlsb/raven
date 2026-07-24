@@ -466,6 +466,93 @@ type VaultUseResult struct {
 	StatePath   string `json:"state_path"`
 }
 
+type VaultFocusRequest struct {
+	ContextOptions
+	Name  string
+	Path  string
+	Clear bool
+}
+
+type VaultFocusResult struct {
+	Name    string `json:"name,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Cleared bool   `json:"cleared"`
+}
+
+// FocusVault validates an MCP session focus target without writing global
+// config or state. The MCP server owns the in-memory mutation after this
+// validation succeeds.
+func FocusVault(req VaultFocusRequest) (*VaultFocusResult, error) {
+	name := strings.TrimSpace(req.Name)
+	rawPath := strings.TrimSpace(req.Path)
+
+	selected := 0
+	if name != "" {
+		selected++
+	}
+	if rawPath != "" {
+		selected++
+	}
+	if req.Clear {
+		selected++
+	}
+	if selected == 0 {
+		return nil, newError(CodeMissingArgument, "vault focus requires a name, --path, or --clear", nil)
+	}
+	if selected > 1 {
+		return nil, newError(CodeInvalidInput, "vault focus name, --path, and --clear are mutually exclusive", nil)
+	}
+	if req.Clear {
+		return &VaultFocusResult{Cleared: true}, nil
+	}
+
+	resolvedPath := rawPath
+	if name != "" {
+		ctx, err := LoadVaultContext(req.ContextOptions)
+		if err != nil {
+			return nil, err
+		}
+		resolvedPath, err = ctx.Cfg.GetVaultPath(name)
+		if err != nil {
+			return nil, newError(CodeVaultNotFound, err.Error(), nil)
+		}
+	} else if !filepath.IsAbs(rawPath) {
+		return nil, newError(CodeInvalidInput, fmt.Sprintf("vault focus path must be absolute: %s", rawPath), nil)
+	}
+
+	absPath, err := filepath.Abs(strings.TrimSpace(resolvedPath))
+	if err != nil {
+		return nil, newError(CodeInvalidInput, fmt.Sprintf("failed to resolve vault focus path: %v", err), err)
+	}
+	info, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, newError(CodeFileNotFound, fmt.Sprintf("vault focus path does not exist: %s", absPath), nil)
+		}
+		return nil, newError(CodeFileReadError, "", err)
+	}
+	if !info.IsDir() {
+		return nil, newError(CodeInvalidInput, fmt.Sprintf("vault focus path must be a directory: %s", absPath), nil)
+	}
+	if !looksLikeVault(absPath) {
+		return nil, newError(CodeInvalidInput, fmt.Sprintf("vault focus path is not a Raven vault: %s", absPath), nil)
+	}
+
+	return &VaultFocusResult{
+		Name: name,
+		Path: filepath.Clean(absPath),
+	}, nil
+}
+
+func looksLikeVault(path string) bool {
+	for _, marker := range []string{"raven.yaml", "schema.yaml", ".raven"} {
+		if _, err := os.Stat(filepath.Join(path, marker)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func UseVault(opts ContextOptions, name string) (*VaultUseResult, error) {
 	name = strings.TrimSpace(name)
 	ctx, err := LoadVaultContext(opts)

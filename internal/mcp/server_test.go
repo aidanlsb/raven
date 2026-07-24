@@ -775,6 +775,41 @@ work = %q
 	}
 }
 
+func TestResolveVaultForInvocationSessionFocusOrderAndSource(t *testing.T) {
+	t.Parallel()
+
+	launchVault := t.TempDir()
+	focusVault := t.TempDir()
+	overrideVault := t.TempDir()
+	s := &Server{vaultPath: launchVault}
+	s.setSessionVaultFocus("focused", focusVault)
+
+	res, err := s.resolveVaultForInvocation("", "")
+	if err != nil {
+		t.Fatalf("resolve focused vault: %v", err)
+	}
+	if res.path != focusVault || res.name != "focused" || res.source != "focus" {
+		t.Fatalf("focused resolution = %#v", res)
+	}
+
+	res, err = s.resolveVaultForInvocation("", overrideVault)
+	if err != nil {
+		t.Fatalf("resolve per-call override: %v", err)
+	}
+	if res.path != overrideVault || res.source != "vault_path" {
+		t.Fatalf("override resolution = %#v", res)
+	}
+
+	s.setSessionVaultFocus("", "")
+	res, err = s.resolveVaultForInvocation("", "")
+	if err != nil {
+		t.Fatalf("resolve launch pin after clear: %v", err)
+	}
+	if res.path != launchVault || res.source != "pinned" {
+		t.Fatalf("launch resolution after clear = %#v", res)
+	}
+}
+
 func TestResolveVaultForInvocationPinnedSource(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()

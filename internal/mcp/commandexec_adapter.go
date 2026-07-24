@@ -48,6 +48,11 @@ func (s *Server) callCanonicalCommandWithContext(ctx context.Context, commandID 
 		Caller:         commandexec.CallerMCP,
 		Args:           args,
 	})
+	if commandID == "vault_focus" && result.OK {
+		if err := s.applyVaultFocusResult(result); err != nil {
+			result = commandexec.Failure("INTERNAL_ERROR", "failed to update MCP session vault focus", nil, err.Error())
+		}
+	}
 	result = adaptCanonicalResultForMCP(commandID, args, result)
 
 	if vaultCtx != nil {

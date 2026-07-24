@@ -61,6 +61,10 @@ var vaultUseCmd = newCanonicalLeafCommand("vault_use", canonicalLeafOptions{
 	RenderHuman: renderVaultUse,
 })
 
+var vaultFocusCmd = newCanonicalLeafCommand("vault_focus", canonicalLeafOptions{
+	RenderHuman: renderVaultFocus,
+})
+
 var vaultClearCmd = newCanonicalLeafCommand("vault_clear", canonicalLeafOptions{
 	RenderHuman: renderVaultClear,
 })
@@ -83,6 +87,7 @@ func init() {
 	vaultCmd.AddCommand(vaultPathCmd)
 	vaultCmd.AddCommand(vaultStatsCmd)
 	vaultCmd.AddCommand(vaultUseCmd)
+	vaultCmd.AddCommand(vaultFocusCmd)
 	vaultCmd.AddCommand(vaultPinCmd)
 	vaultCmd.AddCommand(vaultClearCmd)
 	vaultCmd.AddCommand(vaultAddCmd)
@@ -149,6 +154,19 @@ func renderVaultUse(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Println(ui.Checkf("Active vault set to '%s' -> %s", stringValue(data["active_vault"]), ui.FilePath(stringValue(data["path"]))))
 	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(stringValue(data["state_path"])))
+	return nil
+}
+
+func renderVaultFocus(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["cleared"]) {
+		fmt.Println(ui.Check("MCP session focus clear request validated."))
+	} else if name := stringValue(data["name"]); name != "" {
+		fmt.Println(ui.Checkf("MCP session focus target validated: '%s' -> %s", name, ui.FilePath(stringValue(data["path"]))))
+	} else {
+		fmt.Println(ui.Checkf("MCP session focus target validated: %s", ui.FilePath(stringValue(data["path"]))))
+	}
+	fmt.Println(ui.Hint("CLI validation does not change a running MCP server; invoke vault_focus through raven_invoke in that session."))
 	return nil
 }
 

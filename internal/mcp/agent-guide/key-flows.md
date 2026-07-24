@@ -7,6 +7,19 @@ For detailed tool semantics, see:
 - `raven://guide/query-at-scale`
 - `raven://guide/response-contract`
 
+## 0. Switch vaults for the MCP session
+
+```text
+raven_invoke(command="vault_focus", args={"name":"work"})
+# Subsequent vault-scoped calls use work unless they pass vault/vault_path.
+raven_invoke(command="vault_focus", args={"clear":true})
+```
+
+Use `args={"path":"/absolute/vault/path"}` to focus an unregistered vault.
+Per-call `vault` or `vault_path` overrides focus once. Clearing focus restores
+the server's immutable launch pin; on an unpinned server, unqualified calls
+return `VAULT_AMBIGUOUS` again.
+
 ## 1. Vault health and cleanup
 
 ```text

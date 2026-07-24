@@ -109,6 +109,38 @@ func HandleVaultUse(_ context.Context, req commandexec.Request) commandexec.Resu
 	}, nil)
 }
 
+// HandleVaultFocus validates a target for the current MCP server's in-memory
+// session focus. The MCP adapter applies the validated result to its Server;
+// direct CLI calls intentionally perform validation only.
+func HandleVaultFocus(_ context.Context, req commandexec.Request) commandexec.Result {
+	result, err := configsvc.FocusVault(configsvc.VaultFocusRequest{
+		ContextOptions: configContextOptions(req),
+		Name:           stringArg(req.Args, "name"),
+		Path:           stringArg(req.Args, "path"),
+		Clear:          boolArg(req.Args, "clear"),
+	})
+	if err != nil {
+		return mapConfigSvcFailure(err, "Use 'rvn vault list' to see configured vaults")
+	}
+
+	data := map[string]interface{}{
+		"applied":      req.Caller == commandexec.CallerMCP,
+		"cleared":      result.Cleared,
+		"scope":        "mcp_session",
+		"session_only": true,
+	}
+	if result.Name != "" {
+		data["name"] = result.Name
+	}
+	if result.Path != "" {
+		data["path"] = result.Path
+	}
+	if req.Caller == commandexec.CallerCLI {
+		data["hint"] = "CLI validates the target only; invoke vault_focus through raven_invoke to update a running MCP server session."
+	}
+	return commandexec.Success(data, nil)
+}
+
 // HandleVaultClear executes the canonical `vault_clear` command.
 func HandleVaultClear(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := configsvc.ClearActiveVault(configContextOptions(req))
