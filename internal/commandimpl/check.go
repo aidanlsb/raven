@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -78,8 +79,8 @@ func HandleCheckCreateMissing(ctx context.Context, req commandexec.Request) comm
 
 func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
 	vaultPath := rt.VaultPath
-	fixes := checksvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch, vaultCfg)
-	grouped := checksvc.GroupFixesByFile(fixes)
+	fixes := checkfixsvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch, vaultCfg)
+	grouped := checkfixsvc.GroupFixesByFile(fixes)
 
 	if !confirm {
 		return commandexec.Success(map[string]interface{}{
@@ -93,7 +94,7 @@ func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch 
 		}, nil)
 	}
 
-	applied, err := checksvc.ApplyFixes(vaultPath, fixes, vaultCfg, sch)
+	applied, err := checkfixsvc.ApplyFixes(vaultPath, fixes, vaultCfg, sch)
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
@@ -152,7 +153,7 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		return commandexec.Success(data, nil)
 	}
 
-	created := checksvc.CreateMissingRefsNonInteractive(
+	created := checkfixsvc.CreateMissingRefsNonInteractive(
 		vaultPath,
 		sch,
 		result.MissingRefs,

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/checksvc"
+	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -17,8 +17,8 @@ import (
 
 // renderCanonicalCheckCreateMissing runs the interactive create-missing flow in
 // non-JSON mode. Prompts stay here in the CLI; all schema/file mutations are
-// delegated to checksvc appliers via collectMissingRefDecisions +
-// checksvc.ApplyMissingRefResolutions (and the trait equivalents).
+// delegated to checkfixsvc appliers via collectMissingRefDecisions +
+// checkfixsvc.ApplyMissingRefResolutions (and the trait equivalents).
 func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	missingRefs := decodeMissingRefs(data["missing_ref_items"])
@@ -110,14 +110,14 @@ func decodeCanonicalValue(raw interface{}, target interface{}) bool {
 }
 
 // runMissingRefsInteractive prompts for missing-reference creation decisions and
-// delegates the resulting schema/file mutations to checksvc. It returns the
+// delegates the resulting schema/file mutations to checkfixsvc. It returns the
 // number of pages created.
 func runMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, interaction checkInteraction, vaultCfg *config.VaultConfig) int {
 	newTypes, resolutions := collectMissingRefDecisions(s, refs, interaction, vaultCfg)
 	if len(newTypes) == 0 && len(resolutions) == 0 {
 		return 0
 	}
-	applied := checksvc.ApplyMissingRefResolutions(vaultPath, s, newTypes, resolutions, vaultCfg)
+	applied := checkfixsvc.ApplyMissingRefResolutions(vaultPath, s, newTypes, resolutions, vaultCfg)
 	return renderMissingRefOutcomes(interaction, applied)
 }
 
@@ -125,8 +125,8 @@ func runMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*check
 // returns the user's resolved decisions. It performs no mutations: new types
 // the user asks to create are returned as NewTypeResolutions, and pages to
 // create are returned as MissingRefResolutions.
-func collectMissingRefDecisions(s *schema.Schema, refs []*check.MissingRef, interaction checkInteraction, vaultCfg *config.VaultConfig) ([]checksvc.NewTypeResolution, []checksvc.MissingRefResolution) {
-	groups := checksvc.GroupMissingRefsForInteractive(refs)
+func collectMissingRefDecisions(s *schema.Schema, refs []*check.MissingRef, interaction checkInteraction, vaultCfg *config.VaultConfig) ([]checkfixsvc.NewTypeResolution, []checkfixsvc.MissingRefResolution) {
+	groups := checkfixsvc.GroupMissingRefsForInteractive(refs)
 
 	interaction.Printf("\n%s\n", ui.SectionHeader("Missing References"))
 
@@ -134,11 +134,11 @@ func collectMissingRefDecisions(s *schema.Schema, refs []*check.MissingRef, inte
 	pagesRoot := vaultCfg.GetPagesRoot()
 	dailyDir := vaultCfg.GetDailyDirectory()
 	resolvePath := func(targetPath, typeName string) string {
-		return checksvc.ResolveAndSlugifyTargetPath(targetPath, typeName, s, objectsRoot, pagesRoot, dailyDir)
+		return checkfixsvc.ResolveAndSlugifyTargetPath(targetPath, typeName, s, objectsRoot, pagesRoot, dailyDir)
 	}
 
-	var newTypes []checksvc.NewTypeResolution
-	var resolutions []checksvc.MissingRefResolution
+	var newTypes []checkfixsvc.NewTypeResolution
+	var resolutions []checkfixsvc.MissingRefResolution
 	// pendingTypes lets a second unknown ref reuse a type the user already
 	// chose to create in this session (mirrors the old in-place schema update).
 	pendingTypes := map[string]struct{}{}
@@ -163,7 +163,7 @@ func collectMissingRefDecisions(s *schema.Schema, refs []*check.MissingRef, inte
 		response := readTrimmedLowerLine(interaction)
 		if response == "" || response == "y" || response == "yes" {
 			for _, ref := range groups.Certain {
-				resolutions = append(resolutions, checksvc.MissingRefResolution{TargetPath: ref.TargetPath, TypeName: ref.InferredType})
+				resolutions = append(resolutions, checkfixsvc.MissingRefResolution{TargetPath: ref.TargetPath, TypeName: ref.InferredType})
 			}
 		}
 	}
@@ -185,7 +185,7 @@ func collectMissingRefDecisions(s *schema.Schema, refs []*check.MissingRef, inte
 			interaction.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Bold.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
 			response := readTrimmedLowerLine(interaction)
 			if response == "y" || response == "yes" {
-				resolutions = append(resolutions, checksvc.MissingRefResolution{TargetPath: ref.TargetPath, TypeName: ref.InferredType})
+				resolutions = append(resolutions, checkfixsvc.MissingRefResolution{TargetPath: ref.TargetPath, TypeName: ref.InferredType})
 			}
 		}
 	}
@@ -200,7 +200,7 @@ func collectMissingRefDecisions(s *schema.Schema, refs []*check.MissingRef, inte
 			interaction.Println(ui.Bullet(item))
 		}
 
-		typeNames := checksvc.AvailableTypeNames(s)
+		typeNames := checkfixsvc.AvailableTypeNames(s)
 		interaction.Printf("\nAvailable types: %s\n", ui.Bold.Render(strings.Join(typeNames, ", ")))
 
 		for _, ref := range groups.Unknown {
@@ -221,11 +221,11 @@ func collectMissingRefDecisions(s *schema.Schema, refs []*check.MissingRef, inte
 				if !create {
 					continue
 				}
-				newTypes = append(newTypes, checksvc.NewTypeResolution{TypeName: response, DefaultPath: defaultPath})
+				newTypes = append(newTypes, checkfixsvc.NewTypeResolution{TypeName: response, DefaultPath: defaultPath})
 				pendingTypes[response] = struct{}{}
 			}
 
-			resolutions = append(resolutions, checksvc.MissingRefResolution{TargetPath: ref.TargetPath, TypeName: response})
+			resolutions = append(resolutions, checkfixsvc.MissingRefResolution{TargetPath: ref.TargetPath, TypeName: response})
 		}
 	}
 
@@ -234,7 +234,7 @@ func collectMissingRefDecisions(s *schema.Schema, refs []*check.MissingRef, inte
 
 // renderMissingRefOutcomes prints the results of applying missing-ref decisions
 // and returns the number of pages created.
-func renderMissingRefOutcomes(interaction checkInteraction, applied checksvc.MissingRefApplyResult) int {
+func renderMissingRefOutcomes(interaction checkInteraction, applied checkfixsvc.MissingRefApplyResult) int {
 	for _, typeOutcome := range applied.Types {
 		if typeOutcome.Err != nil {
 			interaction.Printf("  %s\n", ui.Errorf("Failed to create type '%s': %v", typeOutcome.TypeName, typeOutcome.Err))
@@ -259,20 +259,20 @@ func renderMissingRefOutcomes(interaction checkInteraction, applied checksvc.Mis
 }
 
 // runUndefinedTraitsInteractive prompts for undefined-trait decisions and
-// delegates the schema mutations to checksvc. It returns the number of traits
+// delegates the schema mutations to checkfixsvc. It returns the number of traits
 // added.
 func runUndefinedTraitsInteractive(vaultPath string, s *schema.Schema, traits []*check.UndefinedTrait, interaction checkInteraction) int {
 	resolutions := collectTraitDecisions(traits, interaction)
 	if len(resolutions) == 0 {
 		return 0
 	}
-	outcomes := checksvc.ApplyTraitResolutions(vaultPath, s, resolutions)
+	outcomes := checkfixsvc.ApplyTraitResolutions(vaultPath, s, resolutions)
 	return renderTraitOutcomes(interaction, outcomes)
 }
 
 // collectTraitDecisions prompts the user about undefined traits and returns the
 // resolved decisions. It performs no mutations.
-func collectTraitDecisions(traits []*check.UndefinedTrait, interaction checkInteraction) []checksvc.TraitResolution {
+func collectTraitDecisions(traits []*check.UndefinedTrait, interaction checkInteraction) []checkfixsvc.TraitResolution {
 	if len(traits) == 0 {
 		return nil
 	}
@@ -299,7 +299,7 @@ func collectTraitDecisions(traits []*check.UndefinedTrait, interaction checkInte
 
 	interaction.Println("\nWould you like to add these traits to the schema?")
 
-	var resolutions []checksvc.TraitResolution
+	var resolutions []checkfixsvc.TraitResolution
 	for _, trait := range traits {
 		interaction.Printf("\nAdd %s to schema? %s ", ui.Bold.Render("@"+trait.TraitName), ui.Muted.Render("[y/N]"))
 		response := readTrimmedLowerLine(interaction)
@@ -332,7 +332,7 @@ func collectTraitDecisions(traits []*check.UndefinedTrait, interaction checkInte
 			defaultValue = readTrimmedLine(interaction)
 		}
 
-		resolutions = append(resolutions, checksvc.TraitResolution{
+		resolutions = append(resolutions, checkfixsvc.TraitResolution{
 			TraitName:    trait.TraitName,
 			TraitType:    traitType,
 			EnumValues:   enumValues,
@@ -345,7 +345,7 @@ func collectTraitDecisions(traits []*check.UndefinedTrait, interaction checkInte
 
 // renderTraitOutcomes prints the results of applying trait decisions and returns
 // the number of traits added.
-func renderTraitOutcomes(interaction checkInteraction, outcomes []checksvc.TraitOutcome) int {
+func renderTraitOutcomes(interaction checkInteraction, outcomes []checkfixsvc.TraitOutcome) int {
 	added := 0
 	for _, outcome := range outcomes {
 		if outcome.Err != nil {
@@ -396,7 +396,7 @@ func promptTraitType(trait *check.UndefinedTrait, interaction checkInteraction) 
 
 // promptNewTypeCreation asks the user whether to create a type that does not yet
 // exist and, if so, for its default path. It performs no mutations; the caller
-// records the decision and checksvc applies it. Returns create=false when the
+// records the decision and checkfixsvc applies it. Returns create=false when the
 // user declines (the referencing page is then skipped).
 func promptNewTypeCreation(typeName string, ref *check.MissingRef, interaction checkInteraction) (create bool, defaultPath string) {
 	interaction.Printf("\n  Type %s doesn't exist. Would you like to create it? %s ",

@@ -1,4 +1,4 @@
-package checksvc
+package checkfixsvc
 
 import (
 	"fmt"
@@ -316,6 +316,37 @@ func tryFixNonCanonicalRef(issue check.Issue, vaultCfg *config.VaultConfig) *Fix
 		NewValue:    stripped,
 		Description: fmt.Sprintf("[[%s]] -> [[%s]]", issue.Value, stripped),
 	}
+}
+
+// stripRootPrefix removes any matching directory-root prefix from a wikilink
+// target. Roots are tried in order; the first match wins. Returns the stripped
+// value and true on match; the original value and false otherwise.
+func stripRootPrefix(raw string, roots []string) (string, bool) {
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		if strings.HasPrefix(raw, root) {
+			return strings.TrimPrefix(raw, root), true
+		}
+	}
+	return raw, false
+}
+
+func uniqueNonEmpty(values ...string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 // tryFixNonCanonicalPath turns a non_canonical_path finding into a fix

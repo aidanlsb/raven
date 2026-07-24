@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -117,7 +118,7 @@ func renderCanonicalCheckFix(result commandexec.Result) {
 		fmt.Println(ui.Hint("Use --confirm to apply these fixes."))
 		fmt.Println()
 		switch grouped := data["files"].(type) {
-		case []checksvc.FileFixes:
+		case []checkfixsvc.FileFixes:
 			printCheckFileFixes(grouped, fixableIssues)
 		case []interface{}:
 			printCheckFileFixMaps(grouped, fixableIssues)
@@ -131,7 +132,7 @@ func renderCanonicalCheckFix(result commandexec.Result) {
 	}
 }
 
-func printCheckFileFixes(grouped []checksvc.FileFixes, total int) {
+func printCheckFileFixes(grouped []checkfixsvc.FileFixes, total int) {
 	for _, file := range grouped {
 		fmt.Printf("%s %s\n", ui.FilePath(file.FilePath), ui.Muted.Render(fmt.Sprintf("(%d fix%s)", len(file.Fixes), pluralize(len(file.Fixes)))))
 		for _, fix := range file.Fixes {

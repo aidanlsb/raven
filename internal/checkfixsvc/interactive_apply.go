@@ -1,4 +1,4 @@
-package checksvc
+package checkfixsvc
 
 import (
 	"github.com/aidanlsb/raven/internal/config"

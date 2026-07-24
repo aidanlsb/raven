@@ -10,13 +10,10 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/resolver"
-	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -83,17 +80,6 @@ type CheckResultJSON struct {
 	WarnCount  int                `json:"warning_count"`
 	Issues     []CheckIssueJSON   `json:"issues"`
 	Summary    []CheckSummaryJSON `json:"summary"`
-}
-
-type CreateMissingResult struct {
-	Created  int                    `json:"created"`
-	Failures []CreateMissingFailure `json:"failures,omitempty"`
-}
-
-type CreateMissingFailure struct {
-	TargetPath string `json:"target_path"`
-	TypeName   string `json:"type_name,omitempty"`
-	Error      string `json:"error"`
 }
 
 func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
@@ -527,54 +513,6 @@ func filterIncludedPaths(paths []string, excludeMatcher *ravenignore.Matcher) []
 		out = append(out, path)
 	}
 	return out
-}
-
-func CreateMissingRefsNonInteractive(
-	vaultPath string,
-	sch *schema.Schema,
-	refs []*check.MissingRef,
-	objectsRoot string,
-	pagesRoot string,
-	dailyDir string,
-	templateDir string,
-	protectedPrefixes []string,
-) CreateMissingResult {
-	result := CreateMissingResult{}
-	seen := make(map[string]struct{})
-
-	for _, ref := range refs {
-		typeName := ref.InferredType
-		if typeName == "" {
-			continue
-		}
-		if _, exists := sch.Types[typeName]; !exists && !schema.IsBuiltinType(typeName) {
-			continue
-		}
-
-		resolvedPath := ResolveTargetPath(ref.TargetPath, typeName, sch, objectsRoot, pagesRoot, dailyDir)
-		slugPath := slugs.PathSlug(resolvedPath)
-		if _, alreadyHandled := seen[slugPath]; alreadyHandled {
-			continue
-		}
-		seen[slugPath] = struct{}{}
-
-		if pages.Exists(vaultPath, resolvedPath) {
-			continue
-		}
-
-		err := CreateMissingPage(vaultPath, sch, ref.TargetPath, typeName, objectsRoot, pagesRoot, dailyDir, templateDir, protectedPrefixes)
-		if err != nil {
-			result.Failures = append(result.Failures, CreateMissingFailure{
-				TargetPath: ref.TargetPath,
-				TypeName:   typeName,
-				Error:      err.Error(),
-			})
-			continue
-		}
-		result.Created++
-	}
-
-	return result
 }
 
 func resolveScope(rt *vaultruntime.Runtime, opts Options) (*Scope, error) {

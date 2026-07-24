@@ -296,37 +296,6 @@ func canonicalDestinationPath(
 	return expectedRoot + filename, true
 }
 
-// stripRootPrefix removes any matching directory-root prefix from a wikilink
-// target. Roots are tried in order; the first match wins. Returns the stripped
-// value and true on match; the original value and false otherwise.
-func stripRootPrefix(raw string, roots []string) (string, bool) {
-	for _, root := range roots {
-		if root == "" {
-			continue
-		}
-		if strings.HasPrefix(raw, root) {
-			return strings.TrimPrefix(raw, root), true
-		}
-	}
-	return raw, false
-}
-
-func uniqueNonEmpty(values ...string) []string {
-	seen := make(map[string]struct{}, len(values))
-	out := make([]string, 0, len(values))
-	for _, v := range values {
-		if v == "" {
-			continue
-		}
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
-	}
-	return out
-}
-
 func displayType(objectType string) string {
 	if objectType == "" {
 		return "page"
