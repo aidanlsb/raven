@@ -35,14 +35,13 @@ traits: {}
 	}
 
 	result, err := MoveByReference(MoveByReferenceRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    &config.VaultConfig{},
-		Schema:         sch,
-		Reference:      "people/freya",
-		Destination:    "archive/freya-archived",
-		UpdateRefs:     true,
-		SkipTypeCheck:  true,
-		FailOnIndexErr: false,
+		VaultPath:     vaultPath,
+		VaultConfig:   &config.VaultConfig{},
+		Schema:        sch,
+		Reference:     "people/freya",
+		Destination:   "archive/freya-archived",
+		UpdateRefs:    true,
+		SkipTypeCheck: true,
 	})
 	if err != nil {
 		t.Fatalf("MoveByReference: %v", err)
@@ -86,15 +85,14 @@ traits: {}
 	}
 
 	result, err := MoveByReference(MoveByReferenceRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    &config.VaultConfig{},
-		Schema:         sch,
-		Reference:      "people/freya",
-		Destination:    "archive/freya-archived",
-		UpdateRefs:     true,
-		SkipTypeCheck:  true,
-		Preview:        true,
-		FailOnIndexErr: false,
+		VaultPath:     vaultPath,
+		VaultConfig:   &config.VaultConfig{},
+		Schema:        sch,
+		Reference:     "people/freya",
+		Destination:   "archive/freya-archived",
+		UpdateRefs:    true,
+		SkipTypeCheck: true,
+		Preview:       true,
 	})
 	if err != nil {
 		t.Fatalf("MoveByReference: %v", err)
@@ -104,6 +102,9 @@ traits: {}
 	}
 	if result.DestinationID != "archive/freya-archived" {
 		t.Fatalf("expected destination id archive/freya-archived, got %q", result.DestinationID)
+	}
+	if !result.ChangeSet.Empty() {
+		t.Fatalf("preview ChangeSet = %#v, want empty", result.ChangeSet)
 	}
 	if _, err := os.Stat(filePath); err != nil {
 		t.Fatalf("expected source file to remain: %v", err)
@@ -145,14 +146,13 @@ traits: {}
 	}
 
 	result, err := MoveByReference(MoveByReferenceRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    &config.VaultConfig{},
-		Schema:         sch,
-		Reference:      "people/freya",
-		Destination:    "projects/freya",
-		UpdateRefs:     true,
-		SkipTypeCheck:  false,
-		FailOnIndexErr: false,
+		VaultPath:     vaultPath,
+		VaultConfig:   &config.VaultConfig{},
+		Schema:        sch,
+		Reference:     "people/freya",
+		Destination:   "projects/freya",
+		UpdateRefs:    true,
+		SkipTypeCheck: false,
 	})
 	if err != nil {
 		t.Fatalf("MoveByReference: %v", err)

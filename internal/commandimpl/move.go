@@ -48,17 +48,16 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	serviceResult, err := objectsvc.MoveByReference(objectsvc.MoveByReferenceRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    vaultCfg,
-		Schema:         sch,
-		Reference:      source,
-		Destination:    destination,
-		UpdateRefs:     boolArgDefault(req.Args, "update-refs", true),
-		SkipTypeCheck:  boolArg(req.Args, "skip-type-check"),
-		Preview:        req.Preview,
-		ParseOptions:   rt.ParseOptions,
-		FailOnIndexErr: true,
-		Runtime:        rt,
+		VaultPath:     vaultPath,
+		VaultConfig:   vaultCfg,
+		Schema:        sch,
+		Reference:     source,
+		Destination:   destination,
+		UpdateRefs:    boolArgDefault(req.Args, "update-refs", true),
+		SkipTypeCheck: boolArg(req.Args, "skip-type-check"),
+		Preview:       req.Preview,
+		ParseOptions:  rt.ParseOptions,
+		Runtime:       rt,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -93,6 +92,11 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	if len(serviceResult.UpdatedRefs) > 0 {
 		data["updated_refs"] = serviceResult.UpdatedRefs
+	}
+	if !req.Preview {
+		postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet)
+		data = mergeDataFields(data, postData)
+		warnings = appendCommandWarnings(warnings, postWarnings)
 	}
 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
@@ -144,8 +148,7 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 		return mapContentMutationError(err)
 	}
 
-	allWarnings := warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
+	data := map[string]interface{}{
 		"ok":          summary.Errors == 0,
 		"action":      summary.Action,
 		"items":       canonicalMoveResults(summary.Results),
@@ -154,7 +157,14 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 		"errors":      summary.Errors,
 		"moved":       summary.Moved,
 		"destination": summary.Destination,
-	}, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
+	}
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	data = mergeDataFields(data, postData)
+	allWarnings := appendCommandWarnings(
+		warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode),
+		postWarnings,
+	)
+	return commandexec.SuccessWithWarnings(data, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 
 func moveSectionSourceFailure(sectionIDs []string) commandexec.Result {

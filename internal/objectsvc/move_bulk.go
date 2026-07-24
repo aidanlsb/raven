@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -56,6 +57,7 @@ type MoveBulkSummary struct {
 	Moved           int
 	Destination     string
 	WarningMessages []string
+	ChangeSet       mutation.ChangeSet
 }
 
 func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
@@ -142,6 +144,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 	skippedCount := 0
 	errorCount := 0
 	warnings := make([]string, 0)
+	changes := mutation.NewChangeSet()
 
 	for _, id := range req.ObjectIDs {
 		result := MoveBulkResult{ID: id}
@@ -191,7 +194,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 			SourceObjectID:    sourceID,
 			DestinationObject: destID,
 			UpdateRefs:        req.UpdateRefs,
-			FailOnIndexError:  true,
+			PriorMoves:        append([]mutation.Move(nil), changes.Moved...),
 			VaultConfig:       req.VaultConfig,
 			Schema:            req.Schema,
 			ParseOptions:      req.ParseOptions,
@@ -211,6 +214,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 		}
 
 		warnings = append(warnings, serviceResult.WarningMessages...)
+		changes.Merge(serviceResult.ChangeSet)
 
 		result.Status = "moved"
 		result.Details = destPath
@@ -227,6 +231,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 		Moved:           movedCount,
 		Destination:     req.DestinationDir,
 		WarningMessages: warnings,
+		ChangeSet:       changes,
 	}, nil
 }
 

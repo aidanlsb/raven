@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -29,6 +30,7 @@ type UnsetByReferenceResult struct {
 	MissingFields  []string
 	Modified       bool
 	PreviousFields map[string]schema.FieldValue
+	ChangeSet      mutation.ChangeSet
 }
 
 func UnsetByReference(req UnsetByReferenceRequest) (*UnsetByReferenceResult, error) {
@@ -72,6 +74,10 @@ func UnsetByReference(req UnsetByReferenceRequest) (*UnsetByReferenceResult, err
 
 	relPath, _ := filepath.Rel(req.VaultPath, resolved.FilePath)
 	relPath = filepath.ToSlash(relPath)
+	changes := mutation.NewChangeSet()
+	if result.Modified {
+		changes.AddChanged(relPath)
+	}
 	return &UnsetByReferenceResult{
 		FilePath:       resolved.FilePath,
 		RelativePath:   relPath,
@@ -81,5 +87,6 @@ func UnsetByReference(req UnsetByReferenceRequest) (*UnsetByReferenceResult, err
 		MissingFields:  result.MissingFields,
 		Modified:       result.Modified,
 		PreviousFields: result.PreviousFields,
+		ChangeSet:      changes,
 	}, nil
 }

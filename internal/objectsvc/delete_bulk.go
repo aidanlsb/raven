@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -41,14 +41,14 @@ type DeleteBulkPreview struct {
 }
 
 type DeleteBulkSummary struct {
-	Action          string
-	Results         []DeleteBulkResult
-	Total           int
-	Skipped         int
-	Errors          int
-	Deleted         int
-	Behavior        string
-	WarningMessages []string
+	Action    string
+	Results   []DeleteBulkResult
+	Total     int
+	Skipped   int
+	Errors    int
+	Deleted   int
+	Behavior  string
+	ChangeSet mutation.ChangeSet
 }
 
 func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
@@ -129,16 +129,11 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 	if owned {
 		defer rt.Close()
 	}
-	if err := rt.OpenDB(); err != nil {
-		return nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
-	}
-	db := rt.DB
-
 	results := make([]DeleteBulkResult, 0, len(req.ObjectIDs))
 	deletedCount := 0
 	skippedCount := 0
 	errorCount := 0
-	warnings := make([]string, 0)
+	changes := mutation.NewChangeSet()
 	behavior := req.Behavior
 	if behavior == "" {
 		behavior = "trash"
@@ -186,28 +181,20 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 			continue
 		}
 
-		removeErr := removeDeleteTargetFromIndex(db, target)
-		if removeErr != nil {
-			warningMsg := fmt.Sprintf("Failed to remove deleted file from index: %v", removeErr)
-			if errors.Is(removeErr, index.ErrObjectNotFound) {
-				warningMsg = "Object not found in index; consider running 'rvn reindex'"
-			}
-			warnings = append(warnings, warningMsg)
-		}
-
 		result.Status = "deleted"
 		deletedCount++
+		changes.AddDeleted(target.RelativePath)
 		results = append(results, result)
 	}
 
 	return &DeleteBulkSummary{
-		Action:          "delete",
-		Results:         results,
-		Total:           len(results),
-		Skipped:         skippedCount,
-		Errors:          errorCount,
-		Deleted:         deletedCount,
-		Behavior:        behavior,
-		WarningMessages: warnings,
+		Action:    "delete",
+		Results:   results,
+		Total:     len(results),
+		Skipped:   skippedCount,
+		Errors:    errorCount,
+		Deleted:   deletedCount,
+		Behavior:  behavior,
+		ChangeSet: changes,
 	}, nil
 }

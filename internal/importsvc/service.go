@@ -14,6 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -297,10 +298,10 @@ type RunRequest struct {
 }
 
 type RunResult struct {
-	Results          []ResultItem
-	WarningMessages  []string
-	ChangedFilePaths []string
-	VaultConfig      *config.VaultConfig
+	Results         []ResultItem
+	WarningMessages []string
+	ChangeSet       mutation.ChangeSet
+	VaultConfig     *config.VaultConfig
 }
 
 func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
@@ -334,10 +335,10 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	}
 
 	result := &RunResult{
-		Results:          make([]ResultItem, 0, len(req.Items)),
-		WarningMessages:  []string{},
-		ChangedFilePaths: []string{},
-		VaultConfig:      vaultCfg,
+		Results:         make([]ResultItem, 0, len(req.Items)),
+		WarningMessages: []string{},
+		ChangeSet:       mutation.NewChangeSet(),
+		VaultConfig:     vaultCfg,
 	}
 
 	objectsRoot := vaultCfg.GetObjectsRoot()
@@ -405,7 +406,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 			continue
 		}
 
-		itemResult, warnMsgs, filePath := applyObject(applyObjectRequest{
+		itemResult, warnMsgs, changes := applyObject(applyObjectRequest{
 			VaultPath:   vaultPath,
 			Exists:      exists,
 			TargetName:  targetName,
@@ -422,9 +423,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		})
 		result.Results = append(result.Results, itemResult)
 		result.WarningMessages = append(result.WarningMessages, warnMsgs...)
-		if filePath != "" {
-			result.ChangedFilePaths = append(result.ChangedFilePaths, filePath)
-		}
+		result.ChangeSet.Merge(changes)
 	}
 
 	return result, nil
@@ -460,7 +459,7 @@ type applyObjectRequest struct {
 // body. So the body is only handed to upsert for replacement on update; on
 // create the object is written without body content and the content is appended
 // afterwards.
-func applyObject(req applyObjectRequest) (ResultItem, []string, string) {
+func applyObject(req applyObjectRequest) (ResultItem, []string, mutation.ChangeSet) {
 	fieldValues := fieldsToSchemaValues(req.Fields)
 	delete(fieldValues, "type")
 
@@ -481,7 +480,7 @@ func applyObject(req applyObjectRequest) (ResultItem, []string, string) {
 		Runtime:     req.Runtime,
 	})
 	if err != nil {
-		return mutationErrorResult(req.TargetPath, err), nil, ""
+		return mutationErrorResult(req.TargetPath, err), nil, mutation.ChangeSet{}
 	}
 
 	if !req.Exists && req.Content != "" {
@@ -490,7 +489,7 @@ func applyObject(req applyObjectRequest) (ResultItem, []string, string) {
 				ID:     req.TargetPath,
 				Action: "error",
 				Reason: fmt.Sprintf("failed to write content: %v", err),
-			}, result.WarningMessages, ""
+			}, result.WarningMessages, result.ChangeSet
 		}
 	}
 
@@ -498,7 +497,7 @@ func applyObject(req applyObjectRequest) (ResultItem, []string, string) {
 		ID:     req.VaultConfig.FilePathToObjectID(result.RelativePath),
 		Action: importActionForUpsertStatus(result.Status),
 		File:   result.RelativePath,
-	}, result.WarningMessages, result.FilePath
+	}, result.WarningMessages, result.ChangeSet
 }
 
 // importActionForUpsertStatus maps an upsert status onto the action vocabulary

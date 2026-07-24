@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -74,13 +75,13 @@ type BulkPreview struct {
 }
 
 type BulkSummary struct {
-	Action           string       `json:"action"`
-	Results          []BulkResult `json:"items"`
-	Total            int          `json:"total"`
-	Modified         int          `json:"modified"`
-	Skipped          int          `json:"skipped"`
-	Errors           int          `json:"errors"`
-	ChangedFilePaths []string     `json:"-"`
+	Action    string             `json:"action"`
+	Results   []BulkResult       `json:"items"`
+	Total     int                `json:"total"`
+	Modified  int                `json:"modified"`
+	Skipped   int                `json:"skipped"`
+	Errors    int                `json:"errors"`
+	ChangeSet mutation.ChangeSet `json:"-"`
 }
 
 func ResolveTraitIDs(db *index.Database, ids []string) ([]model.Trait, []BulkResult, error) {
@@ -164,7 +165,7 @@ func ApplyUpdates(vaultPath string, traits []model.Trait, newValue string, sch *
 	modified := 0
 	skipped := len(extraSkipped)
 	errored := 0
-	changed := make([]string, 0, len(traitsByFile))
+	changes := mutation.NewChangeSet()
 
 	for filePath, fileTraits := range traitsByFile {
 		fullPath := filePath
@@ -225,18 +226,20 @@ func ApplyUpdates(vaultPath string, traits []model.Trait, newValue string, sch *
 				}
 				continue
 			}
-			changed = append(changed, fullPath)
+			if relPath, relErr := filepath.Rel(vaultPath, fullPath); relErr == nil {
+				changes.AddChanged(relPath)
+			}
 		}
 	}
 
 	return &BulkSummary{
-		Action:           "update-trait",
-		Results:          results,
-		Total:            len(traits) + len(extraSkipped),
-		Modified:         modified,
-		Skipped:          skipped,
-		Errors:           errored,
-		ChangedFilePaths: changed,
+		Action:    "update-trait",
+		Results:   results,
+		Total:     len(traits) + len(extraSkipped),
+		Modified:  modified,
+		Skipped:   skipped,
+		Errors:    errored,
+		ChangeSet: changes,
 	}, nil
 }
 

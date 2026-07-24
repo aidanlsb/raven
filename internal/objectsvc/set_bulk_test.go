@@ -51,7 +51,7 @@ traits: {}
 		TypedUpdates: map[string]schema.FieldValue{
 			"email": schema.String("true"),
 		},
-	}, nil)
+	})
 	if err != nil {
 		t.Fatalf("ApplySetBulk: %v", err)
 	}
@@ -60,6 +60,9 @@ traits: {}
 	}
 	if summary.Errors != 0 {
 		t.Fatalf("errors = %d, want 0", summary.Errors)
+	}
+	if got := summary.ChangeSet.Changed; len(got) != 2 || got[0] != "people/one.md" || got[1] != "people/two.md" {
+		t.Fatalf("ChangeSet.Changed = %#v, want both modified files", got)
 	}
 
 	for _, person := range []string{"one", "two"} {

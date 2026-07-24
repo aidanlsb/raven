@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 const checkApplyIncompleteWarningCode = codes.WarnCheckIncomplete
@@ -48,7 +49,7 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 
 	switch {
 	case boolArg(req.Args, "fix"):
-		return handleCheckFix(vaultPath, vaultCfg, sch, result, req.Confirm)
+		return handleCheckFix(rt, vaultCfg, sch, result, req.Confirm)
 	case boolArg(req.Args, "create-missing"):
 		return handleCheckCreateMissing(vaultPath, vaultCfg, sch, result, req.Confirm)
 	default:
@@ -75,7 +76,8 @@ func HandleCheckCreateMissing(ctx context.Context, req commandexec.Request) comm
 	return HandleCheck(ctx, req)
 }
 
-func handleCheckFix(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
+func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
+	vaultPath := rt.VaultPath
 	fixes := checksvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch, vaultCfg)
 	grouped := checksvc.GroupFixesByFile(fixes)
 
@@ -109,8 +111,10 @@ func handleCheckFix(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 		"error_count":    result.ErrorCount,
 		"warning_count":  result.WarningCount,
 	}
+	postData, postWarnings := applyChangeSet(rt, applied.ChangeSet)
+	data = mergeDataFields(data, postData)
 	if len(applied.Skipped) > 0 {
-		return commandexec.SuccessWithWarnings(data, []commandexec.Warning{
+		postWarnings = appendCommandWarnings(postWarnings, []commandexec.Warning{
 			{
 				Code: checkApplyIncompleteWarningCode,
 				Message: fmt.Sprintf(
@@ -120,9 +124,9 @@ func handleCheckFix(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 					len(applied.Skipped),
 				),
 			},
-		}, nil)
+		})
 	}
-	return commandexec.Success(data, nil)
+	return commandexec.SuccessWithWarnings(data, postWarnings, nil)
 }
 
 func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {

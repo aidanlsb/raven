@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -44,12 +46,13 @@ type SetBulkPreview struct {
 }
 
 type SetBulkSummary struct {
-	Action   string
-	Results  []SetBulkResult
-	Total    int
-	Skipped  int
-	Errors   int
-	Modified int
+	Action    string
+	Results   []SetBulkResult
+	Total     int
+	Skipped   int
+	Errors    int
+	Modified  int
+	ChangeSet mutation.ChangeSet
 }
 
 func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
@@ -133,7 +136,7 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 	}, nil
 }
 
-func ApplySetBulk(req SetBulkRequest, onModified func(filePath string)) (*SetBulkSummary, error) {
+func ApplySetBulk(req SetBulkRequest) (*SetBulkSummary, error) {
 	if req.VaultConfig == nil {
 		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
@@ -145,6 +148,7 @@ func ApplySetBulk(req SetBulkRequest, onModified func(filePath string)) (*SetBul
 	modifiedCount := 0
 	skippedCount := 0
 	errorCount := 0
+	changes := mutation.NewChangeSet()
 
 	for _, id := range req.ObjectIDs {
 		result := SetBulkResult{ID: id}
@@ -187,19 +191,20 @@ func ApplySetBulk(req SetBulkRequest, onModified func(filePath string)) (*SetBul
 
 		result.Status = "modified"
 		modifiedCount++
-		if onModified != nil {
-			onModified(filePath)
+		if relPath, relErr := filepath.Rel(req.VaultPath, filePath); relErr == nil {
+			changes.AddChanged(relPath)
 		}
 		results = append(results, result)
 	}
 
 	return &SetBulkSummary{
-		Action:   "set",
-		Results:  results,
-		Total:    len(results),
-		Skipped:  skippedCount,
-		Errors:   errorCount,
-		Modified: modifiedCount,
+		Action:    "set",
+		Results:   results,
+		Total:     len(results),
+		Skipped:   skippedCount,
+		Errors:    errorCount,
+		Modified:  modifiedCount,
+		ChangeSet: changes,
 	}, nil
 }
 

@@ -1,0 +1,107 @@
+package commandimpl
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
+)
+
+// applyChangeSet coordinates derived post-write work for an applied mutation.
+// Markdown files remain the durable source of truth: projection failures are
+// returned as warnings and never turn a successful write into a failed command.
+func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet) (map[string]interface{}, []commandexec.Warning) {
+	if rt == nil || changes.Empty() {
+		return nil, nil
+	}
+
+	indexPaths := existingIndexPaths(rt, changes)
+	autoReindexEnabled := rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled()
+	var warnings []commandexec.Warning
+	if autoReindexEnabled {
+		for _, relPath := range changes.RemovedPaths() {
+			if warning, ok := removeIndexPathWarning(rt, relPath); ok {
+				warnings = append(warnings, warning)
+			}
+		}
+		for _, relPath := range indexPaths {
+			if warning, ok := projectIndexPathWarning(rt, relPath); ok {
+				warnings = append(warnings, warning)
+			}
+		}
+	}
+
+	// Missing-reference detection relies on a current resolver. If projection
+	// failed, or a move was intentionally not projected, stale IDs can produce
+	// false REF_TARGET_MISSING remediation for files that exist on disk.
+	if len(warnings) > 0 || (!autoReindexEnabled && len(changes.Moved) > 0) {
+		return nil, warnings
+	}
+
+	missingPaths := make([]string, 0, len(indexPaths))
+	for _, relPath := range indexPaths {
+		if paths.HasMDExtension(relPath) {
+			missingPaths = append(missingPaths, relPath)
+		}
+	}
+	missingData, missingWarnings := missingRefEnvelope(rt, missingPaths...)
+	return missingData, appendCommandWarnings(warnings, missingWarnings)
+}
+
+func existingIndexPaths(rt *vaultruntime.Runtime, changes mutation.ChangeSet) []string {
+	removed := make(map[string]struct{}, len(changes.Deleted)+len(changes.Moved))
+	for _, relPath := range changes.RemovedPaths() {
+		removed[relPath] = struct{}{}
+	}
+
+	candidates := changes.IndexPaths()
+	result := make([]string, 0, len(candidates))
+	for _, relPath := range candidates {
+		if _, wasRemoved := removed[relPath]; wasRemoved {
+			filePath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				continue
+			}
+		}
+		result = append(result, relPath)
+	}
+	return result
+}
+
+func removeIndexPathWarning(rt *vaultruntime.Runtime, relPath string) (commandexec.Warning, bool) {
+	if err := rt.OpenDB(); err != nil {
+		return indexUpdateWarning(rt.VaultPath, filepath.Join(rt.VaultPath, filepath.FromSlash(relPath)), "failed to open index database", err), true
+	}
+	if err := rt.DB.RemoveFile(relPath); err != nil {
+		return indexUpdateWarning(rt.VaultPath, filepath.Join(rt.VaultPath, filepath.FromSlash(relPath)), "failed to remove file from index", err), true
+	}
+	return commandexec.Warning{}, false
+}
+
+func projectIndexPathWarning(rt *vaultruntime.Runtime, relPath string) (commandexec.Warning, bool) {
+	filePath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
+	if paths.HasMDExtension(relPath) {
+		return autoReindexWarning(rt, filePath)
+	}
+
+	if rt.VaultCfg == nil {
+		return indexUpdateWarning(rt.VaultPath, filePath, "failed to index asset", fmt.Errorf("vault config is required")), true
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return indexUpdateWarning(rt.VaultPath, filePath, "failed to read file", err), true
+	}
+	if err := rt.OpenDB(); err != nil {
+		return indexUpdateWarning(rt.VaultPath, filePath, "failed to open index database", err), true
+	}
+	asset := vault.BuildAsset(relPath, info, rt.VaultCfg)
+	if err := rt.DB.IndexAsset(asset); err != nil {
+		return indexUpdateWarning(rt.VaultPath, filePath, "failed to update index", err), true
+	}
+	return commandexec.Warning{}, false
+}

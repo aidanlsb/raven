@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -41,12 +42,13 @@ type AddBulkPreview struct {
 }
 
 type AddBulkSummary struct {
-	Action  string
-	Results []AddBulkResult
-	Total   int
-	Skipped int
-	Errors  int
-	Added   int
+	Action    string
+	Results   []AddBulkResult
+	Total     int
+	Skipped   int
+	Errors    int
+	Added     int
+	ChangeSet mutation.ChangeSet
 }
 
 func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
@@ -122,7 +124,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 	}, nil
 }
 
-func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSummary, error) {
+func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
 	if req.VaultConfig == nil {
 		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
@@ -131,6 +133,7 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 	addedCount := 0
 	skippedCount := 0
 	errorCount := 0
+	changes := mutation.NewChangeSet()
 	captureCfg := req.VaultConfig.GetCaptureConfig()
 	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, nil, req.ParseOptions)
 	if owned {
@@ -162,7 +165,7 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 			continue
 		}
 
-		_, appendErr := AppendToFile(rt, filePath, req.Line, captureCfg, false, targetObjectID)
+		appendResult, appendErr := Append(rt, filePath, req.Line, captureCfg, false, targetObjectID)
 		if appendErr != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("append failed: %v", appendErr)
@@ -171,9 +174,7 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 			continue
 		}
 
-		if onAdded != nil {
-			onAdded(filePath)
-		}
+		changes.Merge(appendResult.ChangeSet)
 
 		result.Status = "added"
 		addedCount++
@@ -181,11 +182,12 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 	}
 
 	return &AddBulkSummary{
-		Action:  "add",
-		Results: results,
-		Total:   len(results),
-		Skipped: skippedCount,
-		Errors:  errorCount,
-		Added:   addedCount,
+		Action:    "add",
+		Results:   results,
+		Total:     len(results),
+		Skipped:   skippedCount,
+		Errors:    errorCount,
+		Added:     addedCount,
+		ChangeSet: changes,
 	}, nil
 }

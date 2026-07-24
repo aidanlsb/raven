@@ -148,8 +148,8 @@ func TestApplyUpdatesModifiesFile(t *testing.T) {
 	if summary.Modified != 1 || summary.Errors != 0 || summary.Skipped != 0 {
 		t.Fatalf("unexpected summary counters: %#v", summary)
 	}
-	if len(summary.ChangedFilePaths) != 1 {
-		t.Fatalf("expected one changed file path, got %#v", summary.ChangedFilePaths)
+	if got := summary.ChangeSet.Changed; len(got) != 1 || got[0] != "notes/tasks.md" {
+		t.Fatalf("ChangeSet.Changed = %#v, want [notes/tasks.md]", got)
 	}
 	if summary.Results[0].OldValue != "open" || summary.Results[0].NewValue != "done" {
 		t.Fatalf("unexpected update result values: %#v", summary.Results[0])

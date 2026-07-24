@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -31,6 +32,7 @@ type SetByReferenceResult struct {
 	ResolvedUpdates map[string]string
 	WarningMessages []string
 	PreviousFields  map[string]schema.FieldValue
+	ChangeSet       mutation.ChangeSet
 }
 
 func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
@@ -78,6 +80,10 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 
 	relPath, _ := filepath.Rel(req.VaultPath, resolved.FilePath)
 	relPath = filepath.ToSlash(relPath)
+	changes := mutation.NewChangeSet()
+	if !req.Preview {
+		changes.AddChanged(relPath)
+	}
 	return &SetByReferenceResult{
 		FilePath:        resolved.FilePath,
 		RelativePath:    relPath,
@@ -86,5 +92,6 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 		ResolvedUpdates: result.ResolvedUpdates,
 		WarningMessages: result.WarningMessages,
 		PreviousFields:  result.PreviousFields,
+		ChangeSet:       changes,
 	}, nil
 }

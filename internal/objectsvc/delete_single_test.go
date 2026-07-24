@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -96,23 +95,10 @@ func TestDeleteByReferenceAssetPreviewAndApply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeleteByReference() error = %v", err)
 	}
-	if len(result.WarningMessages) != 0 {
-		t.Fatalf("WarningMessages = %#v, want none", result.WarningMessages)
-	}
 	v.AssertFileNotExists(assetID)
 	v.AssertFileExists(".trash/" + assetID)
-
-	db, err := index.Open(v.Path)
-	if err != nil {
-		t.Fatalf("open index: %v", err)
-	}
-	defer db.Close()
-	assets, err := db.QueryAssets()
-	if err != nil {
-		t.Fatalf("QueryAssets() error = %v", err)
-	}
-	if len(assets) != 0 {
-		t.Fatalf("QueryAssets() = %#v, want no assets after delete", assets)
+	if got := result.ChangeSet.Deleted; len(got) != 1 || got[0] != assetID {
+		t.Fatalf("ChangeSet.Deleted = %#v, want [%s]", got, assetID)
 	}
 }
 

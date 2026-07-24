@@ -70,30 +70,18 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 	}
 
 	if !boolArg(req.Args, "dry-run") {
-		reindexed := make(map[string]struct{}, len(serviceResult.ChangedFilePaths))
-		var reindexWarnings []commandexec.Warning
-		for _, changedFile := range serviceResult.ChangedFilePaths {
-			if changedFile == "" {
-				continue
-			}
-			if _, seen := reindexed[changedFile]; seen {
-				continue
-			}
-			reindexed[changedFile] = struct{}{}
-			reindexWarnings = appendCommandWarnings(
-				reindexWarnings,
-				autoReindexWarnings(rt, changedFile),
-			)
-		}
-		serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField)
-		return commandexec.SuccessWithWarnings(map[string]interface{}{
+		data := map[string]interface{}{
 			"total":   len(serviceResult.Results),
 			"created": created,
 			"updated": updated,
 			"skipped": skipped,
 			"errors":  errored,
 			"items":   serviceResult.Results,
-		}, appendCommandWarnings(serviceWarnings, reindexWarnings), nil)
+		}
+		postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet)
+		data = mergeDataFields(data, postData)
+		serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField)
+		return commandexec.SuccessWithWarnings(data, appendCommandWarnings(serviceWarnings, postWarnings), nil)
 	}
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{

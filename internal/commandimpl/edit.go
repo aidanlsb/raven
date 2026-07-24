@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/editsvc"
@@ -111,13 +110,11 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		}, nil)
 	}
 
-	if err := atomicfile.WriteFile(resolved.FilePath, []byte(newContent), 0o644); err != nil {
-		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
+	writeResult, err := editsvc.WriteAppliedEdits(resolved.FilePath, relPath, newContent)
+	if err != nil {
+		return mapEditFailure(err)
 	}
-	warnings := autoReindexWarnings(rt, resolved.FilePath)
-
-	missingData, missingWarnings := missingRefEnvelope(rt, relPath)
-	warnings = appendCommandWarnings(warnings, missingWarnings)
+	postData, warnings := applyChangeSet(rt, writeResult.ChangeSet)
 
 	if batchMode {
 		applied := make([]map[string]interface{}, 0, len(results))
@@ -136,7 +133,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 			"count":  len(applied),
 			"edits":  applied,
 		}
-		data = mergeDataFields(data, missingData)
+		data = mergeDataFields(data, postData)
 		return commandexec.SuccessWithWarnings(data, warnings, nil)
 	}
 
@@ -149,7 +146,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		"new_str": result.NewStr,
 		"context": result.Context,
 	}
-	data = mergeDataFields(data, missingData)
+	data = mergeDataFields(data, postData)
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -51,22 +50,9 @@ func TestDeleteBulkAssetPreviewAndApply(t *testing.T) {
 	if summary.Deleted != 1 || summary.Skipped != 0 || summary.Errors != 0 {
 		t.Fatalf("summary = %#v, want one deleted asset", summary)
 	}
-	if len(summary.WarningMessages) != 0 {
-		t.Fatalf("WarningMessages = %#v, want none", summary.WarningMessages)
-	}
 	v.AssertFileNotExists(assetID)
 	v.AssertFileExists(".trash/" + assetID)
-
-	db, err := index.Open(v.Path)
-	if err != nil {
-		t.Fatalf("open index: %v", err)
-	}
-	defer db.Close()
-	assets, err := db.QueryAssets()
-	if err != nil {
-		t.Fatalf("QueryAssets() error = %v", err)
-	}
-	if len(assets) != 0 {
-		t.Fatalf("QueryAssets() = %#v, want no assets after bulk delete", assets)
+	if got := summary.ChangeSet.Deleted; len(got) != 1 || got[0] != assetID {
+		t.Fatalf("ChangeSet.Deleted = %#v, want [%s]", got, assetID)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -70,6 +71,7 @@ type UpsertResult struct {
 	FilePath        string
 	RelativePath    string
 	WarningMessages []string
+	ChangeSet       mutation.ChangeSet
 }
 
 func Upsert(req UpsertRequest) (*UpsertResult, error) {
@@ -246,11 +248,16 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		}
 	}
 
+	changes := mutation.NewChangeSet()
+	if status == "created" || status == "updated" {
+		changes.AddChanged(relPath)
+	}
 	return &UpsertResult{
 		Status:          status,
 		FilePath:        filePath,
 		RelativePath:    relPath,
 		WarningMessages: warningMessages,
+		ChangeSet:       changes,
 	}, nil
 }
 
