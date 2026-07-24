@@ -15,7 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -382,26 +382,26 @@ func parsePlacement(raw Placement) (parsedPlacement, error) {
 	return result, nil
 }
 
-func (ctx *lifecycleContext) resolveReference(reference string) (*readsvc.ResolveResult, error) {
+func (ctx *lifecycleContext) resolveReference(reference string) (*refresolve.ResolveResult, error) {
 	if reference == "" {
 		return nil, newError(codes.ErrInvalidInput, "file reference is required", "Pass an existing Markdown file", nil, nil)
 	}
-	resolved, err := readsvc.ResolveReference(reference, ctx.runtime, false)
+	resolved, err := refresolve.Resolve(reference, ctx.runtime, false)
 	if err == nil {
 		return resolved, nil
 	}
-	var ambiguousErr *readsvc.AmbiguousRefError
+	var ambiguousErr *refresolve.AmbiguousRefError
 	if errors.As(err, &ambiguousErr) {
 		return nil, newError(codes.ErrRefAmbiguous, ambiguousErr.Error(), "Use a full object or section ID to disambiguate", map[string]any{"matches": ambiguousErr.Matches}, err)
 	}
-	var notFoundErr *readsvc.RefNotFoundError
+	var notFoundErr *refresolve.RefNotFoundError
 	if errors.As(err, &notFoundErr) {
 		return nil, newError(codes.ErrRefNotFound, notFoundErr.Error(), "Check the reference and run 'rvn reindex' if needed", nil, err)
 	}
 	return nil, newError(codes.ErrInternal, fmt.Sprintf("failed to resolve reference: %v", err), "Run 'rvn reindex' and try again", nil, err)
 }
 
-func (ctx *lifecycleContext) resolveSection(reference string) (*readsvc.ResolveResult, error) {
+func (ctx *lifecycleContext) resolveSection(reference string) (*refresolve.ResolveResult, error) {
 	resolved, err := ctx.resolveReference(reference)
 	if err != nil {
 		return nil, err

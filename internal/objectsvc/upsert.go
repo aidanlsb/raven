@@ -79,6 +79,10 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 	if req.Schema == nil {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
+	if owned {
+		defer rt.Close()
+	}
 
 	typeDef, err := lookupTypeDefinitionForCreate(req.Schema, req.TypeName)
 	if err != nil {
@@ -126,12 +130,16 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			)
 		}
 
+		refCtx, err := createRefValidationContext(rt, req.TypeName, nil)
+		if err != nil {
+			return nil, err
+		}
 		validatedCreateFields, createWarnings, err := validateCreateFieldValues(
 			req.TypeName,
 			fieldValues,
 			req.Schema,
 			map[string]bool{"type": true},
-			createRefValidationContext(req.Runtime, req.VaultPath, req.VaultConfig),
+			refCtx,
 		)
 		if err != nil {
 			return nil, err
@@ -218,6 +226,10 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		nextContent := original
 		if len(updates) > 0 {
 			var updateWarnings []string
+			refCtx, refCtxErr := createRefValidationContext(rt, req.TypeName, nil)
+			if refCtxErr != nil {
+				return nil, refCtxErr
+			}
 			nextContent, updateWarnings, err = fieldmutation.PrepareValidatedFrontmatterMutationValues(
 				original,
 				fm,
@@ -225,11 +237,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 				updates,
 				req.Schema,
 				map[string]bool{"type": true, "alias": true},
-				&fieldmutation.RefValidationContext{
-					VaultPath:   req.VaultPath,
-					VaultConfig: req.VaultConfig,
-					Runtime:     req.Runtime,
-				},
+				refCtx,
 			)
 			if err != nil {
 				return nil, err

@@ -7,11 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/testutil"
 )
 
 func TestCoerceFieldValueForDefinitionAtDateInputs(t *testing.T) {
@@ -333,10 +331,6 @@ func TestPrepareFrontmatterUnset(t *testing.T) {
 func TestValidateRefTargets(t *testing.T) {
 	t.Parallel()
 
-	vault := testutil.NewTestVault(t).
-		WithFile("people/alex.md", "---\ntype: person\nname: Alex\n---\n").
-		WithFile("companies/acme.md", "---\ntype: company\nname: Acme\n---\n").
-		Build()
 	sch := mutationTestSchema()
 	fieldDefs := map[string]*schema.FieldDefinition{
 		"owner":     {Type: schema.FieldTypeRef, Target: "person"},
@@ -344,8 +338,12 @@ func TestValidateRefTargets(t *testing.T) {
 		"label":     {Type: schema.FieldTypeString, Target: "person"},
 	}
 	refCtx := &RefValidationContext{
-		VaultPath:   vault.Path,
-		VaultConfig: &config.VaultConfig{},
+		ResolveTargetType: func(rawReference string) (string, error) {
+			return map[string]string{
+				"people/alex":    "person",
+				"companies/acme": "company",
+			}[rawReference], nil
+		},
 	}
 
 	tests := []struct {
