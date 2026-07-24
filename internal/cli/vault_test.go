@@ -72,7 +72,7 @@ func TestResolveCurrentVault(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to default when active missing", func(t *testing.T) {
+	t.Run("errors when active vault is missing", func(t *testing.T) {
 		cfg := &config.Config{
 			DefaultVault: "work",
 			Vaults: map[string]string{
@@ -82,17 +82,32 @@ func TestResolveCurrentVault(t *testing.T) {
 		state := &config.State{ActiveVault: "personal"}
 
 		got, err := resolveCurrentVault(cfg, state)
+		if err == nil {
+			t.Fatalf("expected error, got %#v", got)
+		}
+		if !strings.Contains(err.Error(), "active vault 'personal' not found in config") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("uses default when active vault is empty", func(t *testing.T) {
+		cfg := &config.Config{
+			DefaultVault: "work",
+			Vaults: map[string]string{
+				"work": "/vault/work",
+			},
+		}
+		state := &config.State{}
+
+		got, err := resolveCurrentVault(cfg, state)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got.Name != "work" {
-			t.Fatalf("expected name=work, got %q", got.Name)
+		if got.Name != "work" || got.Path != "/vault/work" {
+			t.Fatalf("current vault = %#v, want work default", got)
 		}
-		if got.Source != "default_vault_fallback" {
-			t.Fatalf("expected source=default_vault_fallback, got %q", got.Source)
-		}
-		if !got.ActiveMissing {
-			t.Fatalf("expected active_missing=true")
+		if got.Source != "default_vault" {
+			t.Fatalf("expected source=default_vault, got %q", got.Source)
 		}
 	})
 

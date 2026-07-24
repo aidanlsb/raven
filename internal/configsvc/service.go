@@ -381,35 +381,29 @@ func ResolveCurrentVault(cfg *config.Config, state *config.State) (*CurrentVault
 
 	if activeName != "" {
 		p, err := cfg.GetVaultPath(activeName)
-		if err == nil {
-			return &CurrentVaultInfo{
-				Name:   activeName,
-				Path:   p,
-				Source: "active_vault",
-			}, nil
+		if err != nil {
+			return nil, newError(
+				CodeVaultNotFound,
+				fmt.Sprintf("active vault '%s' not found in config", activeName),
+				err,
+			).WithSuggestion("Run 'rvn vault list' to see configured vaults, then 'rvn vault use <name>' to replace active_vault or 'rvn vault clear' to use default_vault")
 		}
+		return &CurrentVaultInfo{
+			Name:   activeName,
+			Path:   p,
+			Source: "active_vault",
+		}, nil
 	}
 
 	defaultPath, err := cfg.GetDefaultVaultPath()
 	if err != nil {
-		if activeName != "" {
-			return nil, newError(CodeVaultNotSpecified, fmt.Sprintf("active vault '%s' not found in config and no default vault configured", activeName), nil)
-		}
 		return nil, newError(CodeVaultNotSpecified, err.Error(), nil)
 	}
 
-	source := "default_vault"
-	activeMissing := false
-	if activeName != "" {
-		source = "default_vault_fallback"
-		activeMissing = true
-	}
-
 	return &CurrentVaultInfo{
-		Name:          DefaultVaultName(cfg),
-		Path:          defaultPath,
-		Source:        source,
-		ActiveMissing: activeMissing,
+		Name:   DefaultVaultName(cfg),
+		Path:   defaultPath,
+		Source: "default_vault",
 	}, nil
 }
 

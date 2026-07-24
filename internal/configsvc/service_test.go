@@ -42,6 +42,35 @@ func TestSameVaultPathTreatsSymlinkAsSameVault(t *testing.T) {
 	}
 }
 
+func TestResolveCurrentVaultRejectsMissingActiveVault(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		DefaultVault: "work",
+		Vaults: map[string]string{
+			"work": "/vault/work",
+		},
+	}
+
+	current, err := ResolveCurrentVault(cfg, &config.State{ActiveVault: "personal"})
+	if err == nil {
+		t.Fatalf("ResolveCurrentVault() = %#v, want error", current)
+	}
+	svcErr, ok := svcerr.AsError(err)
+	if !ok {
+		t.Fatalf("ResolveCurrentVault() error = %T %v, want service error", err, err)
+	}
+	if svcErr.Code != CodeVaultNotFound {
+		t.Fatalf("ResolveCurrentVault() code = %q, want %q", svcErr.Code, CodeVaultNotFound)
+	}
+	if !strings.Contains(svcErr.Message, "active vault 'personal' not found in config") {
+		t.Fatalf("ResolveCurrentVault() message = %q, want active vault name", svcErr.Message)
+	}
+	if !strings.Contains(svcErr.Suggestion, "rvn vault use <name>") || !strings.Contains(svcErr.Suggestion, "rvn vault clear") {
+		t.Fatalf("ResolveCurrentVault() suggestion = %q, want use/clear guidance", svcErr.Suggestion)
+	}
+}
+
 func TestAddVaultPersistsLoadedSinglePathMigration(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 )
@@ -44,7 +46,7 @@ func TestHandleConfigShowReturnsEffectiveDefaults(t *testing.T) {
 	}
 }
 
-func TestHandleVaultCurrentIncludesMissingActiveVaultName(t *testing.T) {
+func TestHandleVaultCurrentRejectsMissingActiveVault(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -70,21 +72,19 @@ func TestHandleVaultCurrentIncludesMissingActiveVaultName(t *testing.T) {
 		ConfigPath: configPath,
 		StatePath:  statePath,
 	})
-	if !result.OK {
-		t.Fatalf("HandleVaultCurrent() failed: %+v", result.Error)
+	if result.OK {
+		t.Fatalf("HandleVaultCurrent() succeeded: %#v", result.Data)
 	}
-
-	data, ok := result.Data.(map[string]interface{})
-	if !ok {
-		t.Fatalf("data = %#v, want map", result.Data)
+	if result.Error == nil {
+		t.Fatal("HandleVaultCurrent() returned no error details")
 	}
-	if got := data["active_missing"]; got != true {
-		t.Fatalf("active_missing = %#v, want true", got)
+	if got := result.Error.Code; got != codes.ErrVaultNotFound {
+		t.Fatalf("error code = %q, want %q", got, codes.ErrVaultNotFound)
 	}
-	if got := data["active_vault"]; got != "personal" {
-		t.Fatalf("active_vault = %#v, want %q", got, "personal")
+	if got := result.Error.Message; !strings.Contains(got, "active vault 'personal' not found in config") {
+		t.Fatalf("error message = %q, want missing active vault name", got)
 	}
-	if got := data["source"]; got != "default_vault_fallback" {
-		t.Fatalf("source = %#v, want %q", got, "default_vault_fallback")
+	if got := result.Error.Suggestion; !strings.Contains(got, "rvn vault clear") || !strings.Contains(got, "rvn vault list") {
+		t.Fatalf("error suggestion = %q, want clear/list guidance", got)
 	}
 }
