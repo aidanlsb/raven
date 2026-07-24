@@ -110,6 +110,64 @@ traits: {}
 	assertReclassifyType(t, filepath.Join(vaultPath, "notes/missing.md"), "note")
 }
 
+func TestReclassifyBulkSkipsDuplicateDestinations(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  note:
+    default_path: notes/
+    fields:
+      title:
+        type: string
+  doc:
+    default_path: docs/
+    fields:
+      title:
+        type: string
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+	for _, relPath := range []string{"notes/shared.md", "archive/shared.md"} {
+		filePath := filepath.Join(vaultPath, relPath)
+		if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", relPath, err)
+		}
+		if err := os.WriteFile(filePath, []byte("---\ntype: note\ntitle: Shared\n---\n"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", relPath, err)
+		}
+	}
+
+	request := ReclassifyBulkRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: &config.VaultConfig{},
+		Schema:      sch,
+		ObjectIDs:   []string{"notes/shared", "archive/shared"},
+		NewTypeName: "doc",
+		UpdateRefs:  true,
+	}
+
+	preview, err := PreviewReclassifyBulk(request)
+	if err != nil {
+		t.Fatalf("PreviewReclassifyBulk: %v", err)
+	}
+	if len(preview.Items) != 1 || len(preview.Skipped) != 1 {
+		t.Fatalf("preview items/skipped = %d/%d, want 1/1: %#v", len(preview.Items), len(preview.Skipped), preview)
+	}
+	if got := preview.Skipped[0].ErrorDetails["destination"]; got != "docs/shared.md" {
+		t.Fatalf("collision destination = %#v, want docs/shared.md", got)
+	}
+
+	applied, err := ApplyReclassifyBulk(request, nil)
+	if err != nil {
+		t.Fatalf("ApplyReclassifyBulk: %v", err)
+	}
+	if applied.Reclassified != 1 || applied.Skipped != 1 || applied.Errors != 0 {
+		t.Fatalf("applied summary = %#v, want 1 reclassified and 1 skipped", applied)
+	}
+	assertReclassifyType(t, filepath.Join(vaultPath, "docs/shared.md"), "doc")
+	assertReclassifyType(t, filepath.Join(vaultPath, "archive/shared.md"), "note")
+}
+
 func assertReclassifyType(t *testing.T, filePath, objectType string) {
 	t.Helper()
 	content, err := os.ReadFile(filePath)

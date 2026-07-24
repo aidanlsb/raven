@@ -176,6 +176,18 @@ func TestMutationPhaseBulkWrites(t *testing.T) {
 	}
 }
 
+func TestMutationPhaseBulkReclassifyAllBlockedPreviews(t *testing.T) {
+	t.Parallel()
+
+	v := buildPhaseVault(t)
+	res := runInvoked(t, v.Path, "reclassify", map[string]any{
+		"stdin":      true,
+		"object_ids": []any{"projects/scratch"},
+		"new-type":   "person",
+	}, withConfirm)
+	requirePhase(t, res, commandexec.MutationPhasePreview)
+}
+
 func TestMutationPhaseMoveNeedsConfirmPreviews(t *testing.T) {
 	t.Parallel()
 	v := buildPhaseVault(t)

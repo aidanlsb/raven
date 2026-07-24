@@ -86,6 +86,12 @@ type ReclassifyBulkSummary struct {
 	WarningMessages []string
 }
 
+type reclassifyBulkPlan struct {
+	id     string
+	result *ReclassifyResult
+	err    error
+}
+
 func PreviewReclassifyBulk(req ReclassifyBulkRequest) (*ReclassifyBulkPreview, error) {
 	if err := validateReclassifyBulkRequest(req); err != nil {
 		return nil, err
@@ -95,14 +101,13 @@ func PreviewReclassifyBulk(req ReclassifyBulkRequest) (*ReclassifyBulkPreview, e
 	skipped := make([]ReclassifyBulkResult, 0)
 	warnings := make([]string, 0)
 
-	for _, id := range req.ObjectIDs {
-		result, err := reclassifyBulkObject(req, id, true)
-		if err != nil {
-			skipped = append(skipped, reclassifyBulkErrorResult(id, req.NewTypeName, "skipped", err))
+	for _, plan := range planReclassifyBulk(req) {
+		if plan.err != nil {
+			skipped = append(skipped, reclassifyBulkErrorResult(plan.id, req.NewTypeName, "skipped", plan.err))
 			continue
 		}
-		items = append(items, reclassifyBulkPreviewResult(id, result))
-		warnings = append(warnings, result.WarningMessages...)
+		items = append(items, reclassifyBulkPreviewResult(plan.id, plan.result))
+		warnings = append(warnings, plan.result.WarningMessages...)
 	}
 
 	return &ReclassifyBulkPreview{
@@ -126,11 +131,13 @@ func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*Reclass
 	skippedCount := 0
 	errorCount := 0
 
-	for _, id := range req.ObjectIDs {
-		result, err := reclassifyBulkObject(req, id, false)
-		if err != nil {
-			item := reclassifyBulkErrorResult(id, req.NewTypeName, "error", err)
+	for _, plan := range planReclassifyBulk(req) {
+		if plan.err != nil {
+			item := reclassifyBulkErrorResult(plan.id, req.NewTypeName, "error", plan.err)
 			if item.ErrorCode == codes.ErrRefNotFound {
+				item.Status = "skipped"
+				skippedCount++
+			} else if isReclassifyBulkCollision(plan.err) {
 				item.Status = "skipped"
 				skippedCount++
 			} else {
@@ -140,16 +147,26 @@ func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*Reclass
 			continue
 		}
 
-		item := reclassifyBulkApplyResult(id, result)
-		if result.NeedsConfirm {
+		if plan.result.NeedsConfirm {
+			item := reclassifyBulkApplyResult(plan.id, plan.result)
 			item.Status = "skipped"
 			skippedCount++
-		} else {
-			item.Status = "reclassified"
-			reclassifiedCount++
-			if onReclassified != nil {
-				onReclassified(result)
-			}
+			results = append(results, item)
+			continue
+		}
+
+		result, err := reclassifyBulkObject(req, plan.id, false)
+		if err != nil {
+			results = append(results, reclassifyBulkErrorResult(plan.id, req.NewTypeName, "error", err))
+			errorCount++
+			continue
+		}
+
+		item := reclassifyBulkApplyResult(plan.id, result)
+		item.Status = "reclassified"
+		reclassifiedCount++
+		if onReclassified != nil {
+			onReclassified(result)
 		}
 		results = append(results, item)
 		warnings = append(warnings, result.WarningMessages...)
@@ -165,6 +182,40 @@ func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*Reclass
 		NewType:         req.NewTypeName,
 		WarningMessages: warnings,
 	}, nil
+}
+
+func planReclassifyBulk(req ReclassifyBulkRequest) []reclassifyBulkPlan {
+	plans := make([]reclassifyBulkPlan, 0, len(req.ObjectIDs))
+	destinations := make(map[string]string)
+
+	for _, id := range req.ObjectIDs {
+		result, err := reclassifyBulkObject(req, id, true)
+		if err == nil && result.Moved && !result.NeedsConfirm {
+			if firstID, exists := destinations[result.NewPath]; exists {
+				err = newError(
+					ErrorValidationFailed,
+					fmt.Sprintf("bulk destination collision: %s and %s would both move to %s", firstID, id, result.NewPath),
+					"Rename one of the source objects or reclassify the objects separately",
+					map[string]interface{}{
+						"destination": result.NewPath,
+						"first_id":    firstID,
+						"object_id":   id,
+					},
+					nil,
+				)
+			} else {
+				destinations[result.NewPath] = id
+			}
+		}
+		plans = append(plans, reclassifyBulkPlan{id: id, result: result, err: err})
+	}
+
+	return plans
+}
+
+func isReclassifyBulkCollision(err error) bool {
+	svcErr, ok := svcerr.AsError(err)
+	return ok && svcErr.Details["first_id"] != nil && svcErr.Details["destination"] != nil
 }
 
 func validateReclassifyBulkRequest(req ReclassifyBulkRequest) error {

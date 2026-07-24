@@ -173,5 +173,9 @@ func runReclassifyBulk(
 	warnings := warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)
 	warnings = appendCommandWarnings(warnings, reindexWarnings, missingWarnings)
 
-	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Reclassified})
+	result := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Reclassified})
+	if summary.Reclassified == 0 {
+		return result.WithMutationPhase(commandexec.MutationPhasePreview)
+	}
+	return result
 }
