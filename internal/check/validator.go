@@ -4,7 +4,6 @@ package check
 import (
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -17,7 +16,7 @@ type Validator struct {
 	allIDs           map[string]struct{}
 	objectTypes      map[string]string          // Object ID -> type name (for target type validation)
 	aliases          map[string]string          // Alias -> object ID
-	duplicateAliases []index.DuplicateAlias     // Aliases used by multiple objects
+	duplicateAliases []resolver.AliasCollision  // Aliases used by multiple objects
 	missingRefs      map[string]*MissingRef     // Keyed by target path to dedupe
 	undefinedTraits  map[string]*UndefinedTrait // Keyed by trait name to dedupe
 	usedTypes        map[string]struct{}        // Types actually used in documents
@@ -115,7 +114,7 @@ func NewValidatorWithTypesAliasesAndResolver(
 
 // SetDuplicateAliases sets duplicate alias information for validation.
 // This should be called before ValidateSchema to report duplicate aliases.
-func (v *Validator) SetDuplicateAliases(duplicates []index.DuplicateAlias) {
+func (v *Validator) SetDuplicateAliases(duplicates []resolver.AliasCollision) {
 	v.duplicateAliases = duplicates
 }
 

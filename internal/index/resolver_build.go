@@ -82,15 +82,9 @@ func extractNameFieldValue(typeNameFields map[string]string, objType string, fie
 	return indexschema.ExtractNameFieldValue(typeNameFields, objType, fieldsJSON)
 }
 
-// DuplicateAlias represents multiple objects sharing the same alias.
-type DuplicateAlias struct {
-	Alias     string   // The duplicated alias
-	ObjectIDs []string // All object IDs using this alias
-}
-
 // FindDuplicateAliases finds cases where multiple objects use the same alias.
 // This is a validation issue that should be reported to the user.
-func (d *Database) FindDuplicateAliases() ([]DuplicateAlias, error) {
+func (d *Database) FindDuplicateAliases() ([]resolver.AliasCollision, error) {
 	// Find aliases that appear more than once
 	rows, err := d.db.Query(`
 		SELECT alias, GROUP_CONCAT(id, '|') as ids
@@ -105,16 +99,17 @@ func (d *Database) FindDuplicateAliases() ([]DuplicateAlias, error) {
 	}
 	defer rows.Close()
 
-	var duplicates []DuplicateAlias
+	var duplicates []resolver.AliasCollision
 	for rows.Next() {
 		var alias, idsConcat string
 		if err := rows.Scan(&alias, &idsConcat); err != nil {
 			return nil, err
 		}
 		ids := strings.Split(idsConcat, "|")
-		duplicates = append(duplicates, DuplicateAlias{
-			Alias:     alias,
-			ObjectIDs: ids,
+		duplicates = append(duplicates, resolver.AliasCollision{
+			Alias:         alias,
+			ObjectIDs:     ids,
+			ConflictsWith: "alias",
 		})
 	}
 
