@@ -2,6 +2,7 @@ package fieldmutation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -16,6 +17,10 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
+
+// ErrRefValidationIndexRebuildRequired tells field validation that its injected
+// resolver cannot safely validate targets until the derived index is rebuilt.
+var ErrRefValidationIndexRebuildRequired = errors.New("index rebuild required for reference validation")
 
 type ValidationError struct {
 	ObjectType string
@@ -32,6 +37,7 @@ type UnknownFieldMutationError struct {
 type TargetTypeResolver func(rawReference string) (string, error)
 
 type RefValidationContext struct {
+	Prepare           func() error
 	ResolveTargetType TargetTypeResolver
 }
 
@@ -545,6 +551,14 @@ func validateRefTargets(
 ) []schema.ValidationError {
 	if refCtx == nil || refCtx.ResolveTargetType == nil {
 		return nil
+	}
+	if refCtx.Prepare != nil {
+		if err := refCtx.Prepare(); errors.Is(err, ErrRefValidationIndexRebuildRequired) {
+			return []schema.ValidationError{{
+				Field:   "reference",
+				Message: "index requires a full reindex before validating writes",
+			}}
+		}
 	}
 
 	var issues []schema.ValidationError

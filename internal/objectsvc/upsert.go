@@ -130,10 +130,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			)
 		}
 
-		refCtx, err := createRefValidationContext(rt, req.TypeName, nil)
-		if err != nil {
-			return nil, err
-		}
+		refCtx := createRefValidationContext(rt, nil)
 		validatedCreateFields, createWarnings, err := validateCreateFieldValues(
 			req.TypeName,
 			fieldValues,
@@ -226,10 +223,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		nextContent := original
 		if len(updates) > 0 {
 			var updateWarnings []string
-			refCtx, refCtxErr := createRefValidationContext(rt, req.TypeName, nil)
-			if refCtxErr != nil {
-				return nil, refCtxErr
-			}
+			refCtx := createRefValidationContext(rt, nil)
 			nextContent, updateWarnings, err = fieldmutation.PrepareValidatedFrontmatterMutationValues(
 				original,
 				fm,

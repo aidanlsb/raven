@@ -108,10 +108,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, newError(ErrorInvalidInput, err.Error(), "Use `rvn schema template list --type <type_name>` to see available template IDs", nil, err)
 	}
 
-	refCtx, err := createRefValidationContext(rt, req.TypeName, nil)
-	if err != nil {
-		return nil, newError(ErrorValidationFailed, err.Error(), "Ensure values match the schema field types for this object", nil, err)
-	}
+	refCtx := createRefValidationContext(rt, nil)
 	validatedFields, _, err := validateCreateFieldValues(req.TypeName, fieldValues, req.Schema, nil, refCtx)
 	if err != nil {
 		return nil, newError(ErrorValidationFailed, err.Error(), "Ensure values match the schema field types for this object", nil, err)

@@ -147,20 +147,10 @@ func requiredFieldGapDetails(gaps []requiredFieldGap) []map[string]interface{} {
 
 func createRefValidationContext(
 	rt *vaultruntime.Runtime,
-	objectType string,
 	parseOptions *parser.ParseOptions,
-) (*fieldmutation.RefValidationContext, error) {
+) *fieldmutation.RefValidationContext {
 	if rt == nil {
-		return nil, nil
-	}
-	if err := rt.OpenDB(); errors.Is(err, index.ErrIndexRebuildRequired) {
-		return nil, &fieldmutation.ValidationError{
-			ObjectType: objectType,
-			Issues: []schema.ValidationError{{
-				Field:   "reference",
-				Message: "index requires a full reindex before validating writes",
-			}},
-		}
+		return nil
 	}
 	if parseOptions == nil {
 		parseOptions = rt.ParseOptions
@@ -170,10 +160,16 @@ func createRefValidationContext(
 	}
 
 	return &fieldmutation.RefValidationContext{
+		Prepare: func() error {
+			if err := rt.OpenDB(); errors.Is(err, index.ErrIndexRebuildRequired) {
+				return fieldmutation.ErrRefValidationIndexRebuildRequired
+			}
+			return nil
+		},
 		ResolveTargetType: func(rawReference string) (string, error) {
 			return resolveReferenceType(rt, parseOptions, rawReference)
 		},
-	}, nil
+	}
 }
 
 func resolveReferenceType(rt *vaultruntime.Runtime, parseOptions *parser.ParseOptions, rawReference string) (string, error) {

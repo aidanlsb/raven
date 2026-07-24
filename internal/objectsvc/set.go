@@ -65,10 +65,7 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 		objectType = "page"
 	}
 
-	refCtx, err := createRefValidationContext(rt, objectType, req.ParseOptions)
-	if err != nil {
-		return nil, err
-	}
+	refCtx := createRefValidationContext(rt, req.ParseOptions)
 	newContent, warningMessages, err := fieldmutation.PrepareValidatedFrontmatterMutationValues(
 		string(content),
 		fm,

@@ -394,6 +394,18 @@ func TestValidateRefTargets(t *testing.T) {
 			context: refCtx,
 		},
 		{
+			name:   "index rebuild requirement blocks validation",
+			fields: map[string]fieldvalue.FieldValue{"owner": fieldvalue.Ref("people/alex")},
+			context: &RefValidationContext{
+				Prepare: func() error {
+					return ErrRefValidationIndexRebuildRequired
+				},
+				ResolveTargetType: refCtx.ResolveTargetType,
+			},
+			wantField:   "reference",
+			wantMessage: "index requires a full reindex before validating writes",
+		},
+		{
 			name:    "null references are ignored",
 			fields:  map[string]fieldvalue.FieldValue{"owner": fieldvalue.Null()},
 			context: refCtx,
