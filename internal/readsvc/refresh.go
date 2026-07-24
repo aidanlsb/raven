@@ -243,7 +243,7 @@ func recoverDirtyAssets(
 			report.Failures = append(report.Failures, SmartReindexFailure{
 				Path: result.RelativePath, Stage: "read", ErrMsg: result.Error.Error(),
 			})
-			return nil
+			return nil //nolint:nilerr // record and continue; caller surfaces Failures
 		}
 		if result.Asset == nil {
 			return nil
@@ -252,7 +252,7 @@ func recoverDirtyAssets(
 			report.Failures = append(report.Failures, SmartReindexFailure{
 				Path: result.RelativePath, Stage: "index", ErrMsg: err.Error(),
 			})
-			return nil
+			return nil //nolint:nilerr // record and continue; caller surfaces Failures
 		}
 		report.Indexed++
 		if err := indexjournal.ClearRecoveredPath(rt.VaultPath, pending, result.RelativePath); err != nil {

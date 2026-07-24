@@ -339,7 +339,7 @@ func withLock(vaultPath string, fn func(journalPath string) error) error {
 	if err := filelock.LockExclusive(lockFile); err != nil {
 		return fmt.Errorf("lock index dirty journal: %w", err)
 	}
-	defer filelock.Unlock(lockFile)
+	defer func() { _ = filelock.Unlock(lockFile) }()
 	return fn(filepath.Join(ravenDir, Filename))
 }
 
