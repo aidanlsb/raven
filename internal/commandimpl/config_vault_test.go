@@ -36,6 +36,9 @@ func TestHandleConfigShowReturnsEffectiveDefaults(t *testing.T) {
 	if data["state_file"] != filepath.Join(filepath.Dir(configPath), "state.toml") {
 		t.Fatalf("state_file = %#v, want resolved sibling state.toml", data["state_file"])
 	}
+	if _, exists := data["vault"]; exists {
+		t.Fatalf("config show exposed removed vault key: %#v", data)
+	}
 }
 
 func TestHandleVaultCurrentIncludesMissingActiveVaultName(t *testing.T) {

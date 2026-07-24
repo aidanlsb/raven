@@ -88,10 +88,16 @@ rvn config unset ui.markdown_style --json
 markdown_style = "/Users/you/.config/glamour/custom.json"
 ```
 
-### Legacy compatibility
+### Removed single-path migration
 
-- `vault` (single string path) is still supported for backward compatibility.
-- Prefer `default_vault` + `[vaults]` for new setups.
+The vault registry is `default_vault` plus `[vaults]`. Raven no longer exposes
+the old top-level `vault = "/path"` setting.
+
+When Raven loads an old config containing that key and no `[vaults]` entries, it
+migrates the path in memory to a real `vaults.default` entry and sets
+`default_vault = "default"`. The next successful config or vault write persists
+the canonical registry and removes the old key. If `[vaults]` already contains
+entries, Raven ignores the stale key and removes it on the next save.
 
 ### Path resolution and overrides
 

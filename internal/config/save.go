@@ -15,7 +15,6 @@ import (
 type persistedConfig struct {
 	DefaultVault *string              `toml:"default_vault,omitempty"`
 	StateFile    *string              `toml:"state_file,omitempty"`
-	Vault        *string              `toml:"vault,omitempty"`
 	Vaults       map[string]string    `toml:"vaults,omitempty"`
 	Editor       *string              `toml:"editor,omitempty"`
 	EditorMode   *string              `toml:"editor_mode,omitempty"`
@@ -46,7 +45,6 @@ func SaveTo(path string, cfg *Config) error {
 	out := persistedConfig{
 		DefaultVault: nonEmptyPtr(cfg.DefaultVault),
 		StateFile:    nonEmptyPtr(cfg.StateFile),
-		Vault:        nonEmptyPtr(cfg.Vault),
 		Editor:       nonEmptyPtr(cfg.Editor),
 		EditorMode:   nonEmptyPtr(cfg.EditorMode),
 	}

@@ -58,7 +58,8 @@ If the file already exists, no changes are made.`,
 
 Valid keys are editor, editor_mode, state_file, and ui.markdown_style.
 Use 'config unset <key>...' to clear fields.
-Set default_vault only with 'rvn vault pin <name>'.`,
+Set default_vault only with 'rvn vault pin <name>'.
+Manage vault paths with 'rvn vault add/remove'.`,
 		Args: []ArgMeta{
 			{Name: "settings", Description: "Settings in key=value form using dotted config.toml keys", Required: true, Variadic: true, Examples: []string{"editor=nvim", "editor_mode=terminal", "ui.markdown_style=dark"}},
 		},

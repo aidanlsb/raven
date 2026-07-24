@@ -19,10 +19,6 @@ type Config struct {
 	// If relative, it's resolved relative to config.toml's directory.
 	StateFile string `toml:"state_file"`
 
-	// Vault is the legacy single vault path (for backwards compatibility).
-	// Deprecated: Use DefaultVault + Vaults instead.
-	Vault string `toml:"vault"`
-
 	// Vaults is a map of vault names to paths.
 	Vaults map[string]string `toml:"vaults"`
 
@@ -51,14 +47,8 @@ func (c *Config) GetVaultPath(name string) (string, error) {
 		name = c.DefaultVault
 	}
 
-	// If still no name but legacy vault is set, use that
-	if name == "" && c.Vault != "" {
-		return c.Vault, nil
-	}
-
-	// Legacy compatibility: when only legacy vault is configured, allow "default" as the name.
-	if name == "default" && c.Vault != "" && len(c.Vaults) == 0 {
-		return c.Vault, nil
+	if name == "" {
+		return "", fmt.Errorf("no default vault configured")
 	}
 
 	// Look up named vault
@@ -66,15 +56,6 @@ func (c *Config) GetVaultPath(name string) (string, error) {
 		if path, ok := c.Vaults[name]; ok {
 			return path, nil
 		}
-	}
-
-	// If name matches default and legacy vault exists
-	if name == "" && c.Vault != "" {
-		return c.Vault, nil
-	}
-
-	if name == "" {
-		return "", fmt.Errorf("no default vault configured")
 	}
 
 	return "", fmt.Errorf("vault '%s' not found in config", name)
@@ -89,16 +70,9 @@ func (c *Config) GetDefaultVaultPath() (string, error) {
 func (c *Config) ListVaults() map[string]string {
 	result := make(map[string]string)
 
-	// Add named vaults
 	for name, path := range c.Vaults {
 		result[name] = path
 	}
-
-	// If legacy vault and no named vaults, add as "default"
-	if len(result) == 0 && c.Vault != "" {
-		result["default"] = c.Vault
-	}
-
 	return result
 }
 
@@ -120,7 +94,30 @@ func LoadFrom(path string) (*Config, error) {
 	if _, err := toml.DecodeFile(path, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config %s: %w", path, err)
 	}
+	migrateLegacyVault(path, &config)
 	return &config, nil
+}
+
+// migrateLegacyVault folds the removed top-level single-path setting into the
+// canonical named vault registry. The compatibility key is never retained on
+// Config and disappears the next time the config is saved.
+func migrateLegacyVault(path string, cfg *Config) {
+	if cfg == nil || len(cfg.Vaults) != 0 {
+		return
+	}
+
+	var raw map[string]interface{}
+	if _, err := toml.DecodeFile(path, &raw); err != nil {
+		return
+	}
+	legacyPath, ok := raw["vault"].(string)
+	legacyPath = strings.TrimSpace(legacyPath)
+	if !ok || legacyPath == "" {
+		return
+	}
+
+	cfg.Vaults = map[string]string{"default": legacyPath}
+	cfg.DefaultVault = "default"
 }
 
 // DefaultPath returns the default config file path.

@@ -1,6 +1,7 @@
 package configsvc
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -41,7 +42,7 @@ func TestSameVaultPathTreatsSymlinkAsSameVault(t *testing.T) {
 	}
 }
 
-func TestAddVaultPreservesLegacyDefault(t *testing.T) {
+func TestAddVaultPersistsLoadedSinglePathMigration(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "config.toml")
@@ -52,8 +53,8 @@ func TestAddVaultPreservesLegacyDefault(t *testing.T) {
 			t.Fatalf("mkdir vault: %v", err)
 		}
 	}
-	if err := config.SaveTo(configPath, &config.Config{Vault: legacyPath}); err != nil {
-		t.Fatalf("save legacy config: %v", err)
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("vault = %q\n", legacyPath)), 0o644); err != nil {
+		t.Fatalf("write old config: %v", err)
 	}
 
 	if _, err := AddVault(VaultAddRequest{
@@ -67,9 +68,6 @@ func TestAddVaultPreservesLegacyDefault(t *testing.T) {
 	cfg, err := config.LoadFrom(configPath)
 	if err != nil {
 		t.Fatalf("load migrated config: %v", err)
-	}
-	if cfg.Vault != "" {
-		t.Fatalf("legacy vault = %q, want cleared after migration", cfg.Vault)
 	}
 	if cfg.DefaultVault != "default" {
 		t.Fatalf("default_vault = %q, want default", cfg.DefaultVault)
@@ -200,6 +198,11 @@ func TestSetValidatesSettings(t *testing.T) {
 			code:     CodeInvalidInput,
 		},
 		{
+			name:     "removed single path key",
+			settings: []string{"vault=/path/to/notes"},
+			code:     CodeInvalidInput,
+		},
+		{
 			name:     "malformed setting",
 			settings: []string{"editor"},
 			code:     CodeInvalidInput,
@@ -232,6 +235,9 @@ func TestSetValidatesSettings(t *testing.T) {
 			}
 			if tt.name == "unknown key" && !strings.Contains(err.Error(), strings.Join(validSetKeys, ", ")) {
 				t.Fatalf("Set() error = %v, want valid key list", err)
+			}
+			if tt.name == "removed single path key" && !strings.Contains(err.Error(), "rvn vault add") {
+				t.Fatalf("Set() error = %v, want vault registry guidance", err)
 			}
 		})
 	}

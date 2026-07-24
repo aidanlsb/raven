@@ -189,7 +189,6 @@ func HandleVaultRemove(_ context.Context, req commandexec.Request) commandexec.R
 	return commandexec.Success(map[string]interface{}{
 		"name":            result.Name,
 		"removed_path":    result.RemovedPath,
-		"removed_legacy":  result.RemovedLegacy,
 		"default_cleared": result.DefaultCleared,
 		"active_cleared":  result.ActiveCleared,
 		"config_path":     result.ConfigPath,

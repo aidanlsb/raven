@@ -63,7 +63,6 @@ func (ctx *GlobalConfigContext) Data() map[string]interface{} {
 		"exists":        ctx.ConfigExists,
 		"default_vault": DefaultVaultName(ctx.Cfg),
 		"state_file":    ctx.StatePath,
-		"vault":         strings.TrimSpace(ctx.Cfg.Vault),
 		"vaults":        vaults,
 		"editor":        strings.TrimSpace(ctx.Cfg.GetEditor()),
 		"editor_mode":   effectiveValue(ctx.Cfg.EditorMode, "auto"),
@@ -180,6 +179,8 @@ func Set(req SetRequest) (*SetResult, error) {
 			ctx.Cfg.UI.MarkdownStyle = value
 		case "default_vault":
 			return nil, newError(CodeInvalidInput, "default_vault cannot be set with 'rvn config set'; use 'rvn vault pin <name>'", nil)
+		case "vault":
+			return nil, newError(CodeInvalidInput, "vault is no longer a supported config key; use 'rvn vault add <name> <path>' and 'rvn vault pin <name>'", nil)
 		default:
 			return nil, unknownConfigKeyError(key, validSetKeys)
 		}
@@ -346,13 +347,7 @@ func DefaultVaultName(cfg *config.Config) string {
 	if cfg == nil {
 		return ""
 	}
-	if strings.TrimSpace(cfg.DefaultVault) != "" {
-		return strings.TrimSpace(cfg.DefaultVault)
-	}
-	if strings.TrimSpace(cfg.Vault) != "" && len(cfg.Vaults) == 0 {
-		return "default"
-	}
-	return ""
+	return strings.TrimSpace(cfg.DefaultVault)
 }
 
 func VaultRows(cfg *config.Config, state *config.State) ([]VaultRow, string, string, bool) {
@@ -616,16 +611,6 @@ func AddVault(req VaultAddRequest) (*VaultAddResult, error) {
 	if ctx.Cfg.Vaults == nil {
 		ctx.Cfg.Vaults = make(map[string]string)
 	}
-	// Preserve the legacy single-vault fallback when adding the first named
-	// vault. Without this migration, populating [vaults] would make the legacy
-	// path unreachable and an init switch-back command could not restore it.
-	if len(ctx.Cfg.Vaults) == 0 && strings.TrimSpace(ctx.Cfg.Vault) != "" {
-		ctx.Cfg.Vaults["default"] = strings.TrimSpace(ctx.Cfg.Vault)
-		if strings.TrimSpace(ctx.Cfg.DefaultVault) == "" {
-			ctx.Cfg.DefaultVault = "default"
-		}
-		ctx.Cfg.Vault = ""
-	}
 
 	prevPath, existed := ctx.Cfg.Vaults[name]
 	if existed && !req.Replace {
@@ -662,7 +647,6 @@ type VaultRemoveRequest struct {
 type VaultRemoveResult struct {
 	Name           string `json:"name"`
 	RemovedPath    string `json:"removed_path"`
-	RemovedLegacy  bool   `json:"removed_legacy"`
 	DefaultCleared bool   `json:"default_cleared"`
 	ActiveCleared  bool   `json:"active_cleared"`
 	ConfigPath     string `json:"config_path"`
@@ -693,17 +677,11 @@ func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 	}
 
 	removedPath := ""
-	removedLegacy := false
 	if ctx.Cfg.Vaults != nil {
 		if p, ok := ctx.Cfg.Vaults[name]; ok {
 			removedPath = p
 			delete(ctx.Cfg.Vaults, name)
 		}
-	}
-	if removedPath == "" && name == "default" && strings.TrimSpace(ctx.Cfg.Vault) != "" && len(ctx.Cfg.Vaults) == 0 {
-		removedPath = strings.TrimSpace(ctx.Cfg.Vault)
-		ctx.Cfg.Vault = ""
-		removedLegacy = true
 	}
 	if removedPath == "" {
 		return nil, newError(CodeVaultNotFound, fmt.Sprintf("vault '%s' not found in config", name), nil)
@@ -735,7 +713,6 @@ func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 	return &VaultRemoveResult{
 		Name:           name,
 		RemovedPath:    removedPath,
-		RemovedLegacy:  removedLegacy,
 		DefaultCleared: defaultCleared,
 		ActiveCleared:  activeCleared,
 		ConfigPath:     ctx.ConfigPath,

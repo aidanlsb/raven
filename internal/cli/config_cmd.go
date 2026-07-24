@@ -59,7 +59,6 @@ func renderConfigShow(_ *cobra.Command, result commandexec.Result) error {
 	fmt.Printf("%s %s\n", ui.Hint("state_file:"), ui.FilePath(stringValue(data["state_file"])))
 	fmt.Printf("%s %s\n", ui.Hint("editor:"), configDisplayValue(data["editor"]))
 	fmt.Printf("%s %s\n", ui.Hint("editor_mode:"), configDisplayValue(data["editor_mode"]))
-	fmt.Printf("%s %s\n", ui.Hint("vault (legacy):"), configDisplayValue(data["vault"]))
 	uiConfig, _ := data["ui"].(map[string]interface{})
 	fmt.Printf("%s %s\n", ui.Hint("ui.markdown_style:"), configDisplayValue(uiConfig["markdown_style"]))
 	vaults := stringMap(data["vaults"])
