@@ -435,6 +435,25 @@ rvn reindex --full                               # Complete rebuild
 rvn reindex --dry-run                            # Show what would be reindexed
 ```
 
+Applied Raven mutations are guarded by a disposable changed-file journal at
+`.raven/index-dirty.json`. The guard is written before supported content
+mutations start, refined to concrete paths after the filesystem write, and
+cleared path-by-path only after successful index projection. If a process stops
+before the paths are known, the journal requests one full scan. Incremental
+`rvn reindex` consumes this journal even when mtimes are unchanged; `--dry-run`
+never clears it. With `auto_reindex: false`, entries intentionally remain until
+manual reindexing succeeds.
+
+If Raven cannot create the write-ahead guard under `.raven/`, guarded content
+commands fail before changing vault files. A failure after dispatch retains an
+unknown entry because a multi-file operation may already have written some
+files.
+
+The version-1 journal is a small JSON object containing operation IDs,
+monotonic operation revisions, and either `unknown: true` or a `paths` array of
+normalized vault-relative paths. It is internal cache state and should not be
+edited by hand.
+
 Incremental reindexing uses SQLite WAL and can run while `rvn lsp` or another
 reader holds the index open. `--full` and incompatible-schema replacement are
 destructive rebuild paths and still require exclusive access; stop the LSP or

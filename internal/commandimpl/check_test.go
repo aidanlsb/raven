@@ -34,7 +34,7 @@ owner: "[[people/freya]]"
 			},
 		},
 		ShortRefs: map[string]string{"freya": "people/freya"},
-	}, true)
+	}, true, "")
 
 	if !result.OK {
 		t.Fatalf("expected success envelope, got failure: %#v", result.Error)

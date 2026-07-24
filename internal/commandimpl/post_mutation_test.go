@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -32,6 +33,13 @@ func TestApplyChangeSetAutoReindexDisabled(t *testing.T) {
 	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none with auto-reindex disabled", warnings)
+	}
+	pending, err := indexjournal.Load(v.Path)
+	if err != nil {
+		t.Fatalf("load index journal: %v", err)
+	}
+	if got := pending.Paths(); len(got) != 1 || got[0] != "people/alice.md" {
+		t.Fatalf("pending paths = %#v, want people/alice.md", got)
 	}
 }
 
@@ -135,6 +143,11 @@ func TestApplyChangeSetProjectsMoveAndDelete(t *testing.T) {
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
+	if pending, err := indexjournal.Load(v.Path); err != nil {
+		t.Fatalf("load index journal: %v", err)
+	} else if pending.Dirty() {
+		t.Fatalf("index journal remains dirty after successful projection: %#v", pending)
+	}
 
 	ids, err := rt.DB.AllObjectIDs()
 	if err != nil {
@@ -143,6 +156,35 @@ func TestApplyChangeSetProjectsMoveAndDelete(t *testing.T) {
 	sort.Strings(ids)
 	if len(ids) != 1 || ids[0] != "archive/freya" {
 		t.Fatalf("indexed IDs = %#v, want [archive/freya]", ids)
+	}
+}
+
+func TestApplyChangeSetClearsOnlySuccessfullyProjectedFiles(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/good.md", "---\ntype: person\nname: Good\n---\n").
+		WithFile("people/broken.md", "---\ntype: person\nname: [\n---\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+
+	changes := mutation.NewChangeSet()
+	changes.AddChanged("people/good.md", "people/broken.md")
+	_, warnings := applyChangeSet(rt, changes)
+	if len(warnings) != 1 || warnings[0].Code != codes.WarnIndexUpdateFailed {
+		t.Fatalf("warnings = %#v, want one index update failure", warnings)
+	}
+
+	pending, err := indexjournal.Load(v.Path)
+	if err != nil {
+		t.Fatalf("load index journal: %v", err)
+	}
+	if got := pending.Paths(); len(got) != 1 || got[0] != "people/broken.md" {
+		t.Fatalf("pending paths = %#v, want only people/broken.md", got)
+	}
+	if _, err := rt.DB.GetObject("people/good"); err != nil {
+		t.Fatalf("successfully projected object missing: %v", err)
 	}
 }
 
@@ -214,6 +256,40 @@ func TestApplyChangeSetProjectsRecreatedMoveSource(t *testing.T) {
 	sort.Strings(ids)
 	if len(ids) != 2 || ids[0] != "a" || ids[1] != "b" {
 		t.Fatalf("indexed IDs = %#v, want [a b]", ids)
+	}
+}
+
+func TestApplyChangeSetDoesNotRemoveConcurrentlyRecreatedPath(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+	indexPostMutationFiles(t, rt, "people/freya.md")
+
+	filePath := filepath.Join(v.Path, "people", "freya.md")
+	if err := os.Remove(filePath); err != nil {
+		t.Fatalf("remove original file: %v", err)
+	}
+	changes := mutation.NewChangeSet()
+	changes.AddDeleted("people/freya.md")
+
+	if err := os.WriteFile(filePath, []byte("---\ntype: person\nname: Frigg\n---\n"), 0o644); err != nil {
+		t.Fatalf("recreate newer file: %v", err)
+	}
+	_, warnings := applyChangeSet(rt, changes)
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", warnings)
+	}
+
+	obj, err := rt.DB.GetObject("people/freya")
+	if err != nil {
+		t.Fatalf("GetObject() error = %v", err)
+	}
+	if got, ok := obj.Fields["name"].AsString(); !ok || got != "Frigg" {
+		t.Fatalf("indexed name = %q, %v; want Frigg", got, ok)
 	}
 }
 

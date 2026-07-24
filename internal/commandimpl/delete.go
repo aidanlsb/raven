@@ -33,7 +33,7 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		if len(objectIDs) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no object or asset IDs provided via stdin", nil, "Pipe object or asset IDs to stdin, one per line")
 		}
-		return runDeleteBulk(rt, objectIDs, req.Confirm)
+		return runDeleteBulk(rt, objectIDs, req.Confirm, req.IndexJournalOperation)
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
@@ -99,14 +99,14 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 			data["trash_path"] = filepath.ToSlash(relDest)
 		}
 	}
-	postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 	data = mergeDataFields(data, postData)
 	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
-func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool) commandexec.Result {
+func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journalOperation string) commandexec.Result {
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
 	fileIDs, sectionIDs := splitSectionIDs(ids)
@@ -152,7 +152,7 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool) command
 		"deleted":  summary.Deleted,
 		"behavior": summary.Behavior,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
 	data = mergeDataFields(data, postData)
 	allWarnings := appendCommandWarnings(warnings, postWarnings)
 	return commandexec.SuccessWithWarnings(data, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})

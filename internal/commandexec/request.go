@@ -20,4 +20,8 @@ type Request struct {
 	Preview        bool           `json:"preview,omitempty"`
 	Confirm        bool           `json:"confirm,omitempty"`
 	Stdin          []byte         `json:"-"`
+
+	// IndexJournalOperation identifies the write-ahead journal guard created
+	// by the shared invoker for commands that use post-mutation indexing.
+	IndexJournalOperation string `json:"-"`
 }

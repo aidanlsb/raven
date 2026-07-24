@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -31,6 +32,23 @@ func newConfigCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, comm
 
 func newConfigOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{SkipSchema: true})
+}
+
+func lockCommandIndexProjection(rt *vaultruntime.Runtime, skip bool) (*indexjournal.ProjectionLock, commandexec.Result) {
+	if skip {
+		return nil, commandexec.Result{}
+	}
+	if err := rt.OpenDB(); err != nil {
+		if failure, ok := mapIndexRebuildRequired(err); ok {
+			return nil, failure
+		}
+		return nil, commandexec.Failure(codes.ErrDatabase, "failed to open index database", nil, "Run 'rvn reindex' to rebuild the database")
+	}
+	projectionLock, err := indexjournal.LockProjection(rt.VaultPath)
+	if err != nil {
+		return nil, commandexec.Failure(codes.ErrDatabase, "failed to lock index projection", nil, "Wait for the active write or refresh to finish, then retry")
+	}
+	return projectionLock, commandexec.Result{}
 }
 
 func newSchemaOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
@@ -126,6 +144,24 @@ func autoReindexWarnings(rt *vaultruntime.Runtime, filePaths ...string) []comman
 
 func autoReindexWarning(rt *vaultruntime.Runtime, filePath string) (commandexec.Warning, bool) {
 	vaultPath := rt.VaultPath
+	if err := rt.OpenDB(); err != nil {
+		return indexUpdateWarning(vaultPath, filePath, "failed to open index database", err), true
+	}
+	projectionLock, err := indexjournal.LockProjection(vaultPath)
+	if err != nil {
+		return indexUpdateWarning(vaultPath, filePath, "failed to lock index projection", err), true
+	}
+	warning, failed := autoReindexWarningLocked(rt, filePath)
+	if err := projectionLock.Close(); err != nil && !failed {
+		return indexUpdateWarning(vaultPath, filePath, "failed to unlock index projection", err), true
+	}
+	return warning, failed
+}
+
+// autoReindexWarningLocked projects one Markdown file while the caller holds
+// the vault's projection lock.
+func autoReindexWarningLocked(rt *vaultruntime.Runtime, filePath string) (commandexec.Warning, bool) {
+	vaultPath := rt.VaultPath
 	if rt.SchemaLoadErr != nil {
 		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", rt.SchemaLoadErr), true
 	}
@@ -148,9 +184,6 @@ func autoReindexWarning(rt *vaultruntime.Runtime, filePath string) (commandexec.
 		mtime = st.ModTime().Unix()
 	}
 
-	if err := rt.OpenDB(); err != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to open index database", err), true
-	}
 	if err := rt.DB.IndexDocumentWithMtime(doc, rt.Schema, mtime); err != nil {
 		return indexUpdateWarning(vaultPath, filePath, "failed to update index", err), true
 	}

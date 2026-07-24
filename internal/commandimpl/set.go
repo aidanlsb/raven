@@ -82,7 +82,7 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		if len(allUpdates) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, true))
 		}
-		return runSetBulk(rt, objectIDs, allUpdates, req.Confirm)
+		return runSetBulk(rt, objectIDs, allUpdates, req.Confirm, req.IndexJournalOperation)
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
@@ -131,7 +131,7 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
 	)
 
-	postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 	data = mergeDataFields(data, postData)
 	warnings = appendCommandWarnings(warnings, postWarnings)
 
@@ -180,7 +180,7 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		return mapContentMutationError(err)
 	}
 
-	postData, warnings := applyChangeSet(rt, serviceResult.ChangeSet)
+	postData, warnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 
 	data := map[string]interface{}{
 		"file":            serviceResult.RelativePath,
@@ -195,7 +195,7 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
-func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]fieldvalue.FieldValue, confirm bool) commandexec.Result {
+func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]fieldvalue.FieldValue, confirm bool, journalOperation string) commandexec.Result {
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
 	sch := rt.Schema
@@ -243,7 +243,7 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 		"modified": summary.Modified,
 		"fields":   serializedUpdates,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
 	data = mergeDataFields(data, postData)
 	warnings = appendCommandWarnings(warnings, postWarnings)
 

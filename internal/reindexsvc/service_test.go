@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -147,6 +148,101 @@ func TestRunIncrementalSkipsParsingUnchangedMarkdown(t *testing.T) {
 	}
 	if len(result.StaleFiles) != 0 {
 		t.Fatalf("stale files = %#v, want none", result.StaleFiles)
+	}
+}
+
+func TestRunIncrementalForcesJournaledPathWithUnchangedMtime(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	notePath := filepath.Join(vaultPath, "note.md")
+	if err := os.WriteFile(notePath, []byte("# Original\n"), 0o644); err != nil {
+		t.Fatalf("write markdown fixture: %v", err)
+	}
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial full Run: %v", err)
+	}
+	info, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat indexed markdown: %v", err)
+	}
+	if _, err := indexjournal.SetPaths(vaultPath, "", []string{"note.md"}); err != nil {
+		t.Fatalf("record pending path: %v", err)
+	}
+	if err := os.WriteFile(notePath, []byte("# Updated\n"), 0o644); err != nil {
+		t.Fatalf("update markdown fixture: %v", err)
+	}
+	if err := os.Chtimes(notePath, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatalf("restore indexed markdown mtime: %v", err)
+	}
+
+	dryRun, err := runTest(RunRequest{VaultPath: vaultPath, DryRun: true})
+	if err != nil {
+		t.Fatalf("incremental dry Run: %v", err)
+	}
+	if dryRun.FilesIndexed != 1 {
+		t.Fatalf("dry-run indexed = %d, want 1", dryRun.FilesIndexed)
+	}
+	if pending, err := indexjournal.Load(vaultPath); err != nil {
+		t.Fatalf("load journal after dry-run: %v", err)
+	} else if !pending.Dirty() {
+		t.Fatal("dry-run cleared pending journal")
+	}
+
+	result, err := runTest(RunRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("incremental Run: %v", err)
+	}
+	if result.FilesIndexed != 1 || result.FilesSkipped != 0 {
+		t.Fatalf("indexed/skipped = %d/%d, want 1/0", result.FilesIndexed, result.FilesSkipped)
+	}
+	if pending, err := indexjournal.Load(vaultPath); err != nil {
+		t.Fatalf("load index journal: %v", err)
+	} else if pending.Dirty() {
+		t.Fatalf("journal remains dirty after reindex: %#v", pending)
+	}
+}
+
+func TestRunIncrementalRecoversUnknownInterruptedOperation(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	notePath := filepath.Join(vaultPath, "note.md")
+	if err := os.WriteFile(notePath, []byte("# Original\n"), 0o644); err != nil {
+		t.Fatalf("write markdown fixture: %v", err)
+	}
+	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial full Run: %v", err)
+	}
+	info, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat indexed markdown: %v", err)
+	}
+	operationID, err := indexjournal.Begin(vaultPath)
+	if err != nil {
+		t.Fatalf("begin write-ahead operation: %v", err)
+	}
+	if err := os.WriteFile(notePath, []byte("# Updated after guard\n"), 0o644); err != nil {
+		t.Fatalf("update markdown fixture: %v", err)
+	}
+	if err := os.Chtimes(notePath, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatalf("restore indexed markdown mtime: %v", err)
+	}
+	if err := indexjournal.Abandon(vaultPath, operationID); err != nil {
+		t.Fatalf("simulate interrupted process: %v", err)
+	}
+
+	result, err := runTest(RunRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("incremental recovery Run: %v", err)
+	}
+	if result.FilesIndexed != 1 || result.FilesSkipped != 0 {
+		t.Fatalf("indexed/skipped = %d/%d, want 1/0", result.FilesIndexed, result.FilesSkipped)
+	}
+	if pending, err := indexjournal.Load(vaultPath); err != nil {
+		t.Fatalf("load index journal: %v", err)
+	} else if pending.Dirty() {
+		t.Fatalf("unknown journal remains after successful recovery: %#v", pending)
 	}
 }
 

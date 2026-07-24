@@ -2,11 +2,14 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandimpl"
 	"github.com/aidanlsb/raven/internal/commands"
+	"github.com/aidanlsb/raven/internal/indexjournal"
 )
 
 var (
@@ -20,9 +23,27 @@ func CommandInvoker() *commandexec.Invoker {
 		registry := commandexec.NewHandlerRegistry()
 		commandimpl.RegisterAll(registry)
 		commandInvoker = commandexec.NewInvoker(registry, validateRequest).
+			WithBeforeDispatch(beginIndexJournalOperation).
 			WithResultAnnotator(annotateMutationPhase)
 	})
 	return commandInvoker
+}
+
+func beginIndexJournalOperation(_ context.Context, req commandexec.Request) (commandexec.Request, commandexec.Result, bool) {
+	if req.Preview || !commands.UsesPostMutationIndex(req.CommandID) {
+		return req, commandexec.Result{}, true
+	}
+	operationID, err := indexjournal.Begin(req.VaultPath)
+	if err != nil {
+		return req, commandexec.Failure(
+			codes.ErrDatabase,
+			"failed to establish index recovery guard",
+			map[string]interface{}{"cause": err.Error()},
+			"Restore write access to .raven and retry; no vault content was changed",
+		), false
+	}
+	req.IndexJournalOperation = operationID
+	return req, commandexec.Result{}, true
 }
 
 // annotateMutationPhase attaches the standard meta.mutation.phase signal to
@@ -34,19 +55,53 @@ func CommandInvoker() *commandexec.Invoker {
 // move awaiting confirmation writes nothing); that explicit phase is preserved.
 func annotateMutationPhase(_ context.Context, req commandexec.Request, result commandexec.Result) commandexec.Result {
 	if !result.OK {
+		if err := indexjournal.Abandon(req.VaultPath, req.IndexJournalOperation); err != nil {
+			result.Warnings = append(result.Warnings, commandexec.Warning{
+				Code:    codes.WarnIndexUpdateFailed,
+				Message: fmt.Sprintf("failed to release index recovery guard after mutation failure: %v", err),
+				Ref:     "Run 'rvn reindex' before relying on index-backed results",
+			})
+		}
 		return result
 	}
-	if result.Meta != nil && result.Meta.Mutation != nil {
+	if result.Meta == nil || result.Meta.Mutation == nil {
+		if commands.EmitsMutationPhase(req.CommandID) {
+			phase := commandexec.MutationPhaseApplied
+			if req.Preview {
+				phase = commandexec.MutationPhasePreview
+			}
+			result = result.WithMutationPhase(phase)
+		}
+	}
+	if !surfacesIndexDirtyWarning(req.CommandID) {
 		return result
 	}
-	if !commands.EmitsMutationPhase(req.CommandID) {
+	snapshot, err := indexjournal.Load(req.VaultPath)
+	if err != nil {
+		result.Warnings = append(result.Warnings, commandexec.Warning{
+			Code:    codes.WarnDatabaseOutdated,
+			Message: fmt.Sprintf("failed to inspect pending index work: %v", err),
+			Ref:     "Run 'rvn reindex' before relying on index-backed results",
+		})
 		return result
 	}
-	phase := commandexec.MutationPhaseApplied
-	if req.Preview {
-		phase = commandexec.MutationPhasePreview
+	if snapshot.Dirty() {
+		result.Warnings = append(result.Warnings, commandexec.Warning{
+			Code:    codes.WarnDatabaseOutdated,
+			Message: "the derived index has pending updates from an interrupted or deferred mutation",
+			Ref:     "Run 'rvn reindex' before relying on index-backed results",
+		})
 	}
-	return result.WithMutationPhase(phase)
+	return result
+}
+
+func surfacesIndexDirtyWarning(commandID string) bool {
+	switch commandID {
+	case "query", "search", "read", "resolve", "backlinks", "outlinks", "open", "date", "check", "vault_stats":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Request, commandexec.Result, bool) {

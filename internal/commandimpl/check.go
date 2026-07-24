@@ -50,7 +50,7 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 
 	switch {
 	case boolArg(req.Args, "fix"):
-		return handleCheckFix(rt, vaultCfg, sch, result, req.Confirm)
+		return handleCheckFix(rt, vaultCfg, sch, result, req.Confirm, req.IndexJournalOperation)
 	case boolArg(req.Args, "create-missing"):
 		return handleCheckCreateMissing(vaultPath, vaultCfg, sch, result, req.Confirm)
 	default:
@@ -77,7 +77,7 @@ func HandleCheckCreateMissing(ctx context.Context, req commandexec.Request) comm
 	return HandleCheck(ctx, req)
 }
 
-func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
+func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool, journalOperation string) commandexec.Result {
 	vaultPath := rt.VaultPath
 	fixes := checkfixsvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch, vaultCfg)
 	grouped := checkfixsvc.GroupFixesByFile(fixes)
@@ -112,7 +112,7 @@ func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch 
 		"error_count":    result.ErrorCount,
 		"warning_count":  result.WarningCount,
 	}
-	postData, postWarnings := applyChangeSet(rt, applied.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, applied.ChangeSet, journalOperation)
 	data = mergeDataFields(data, postData)
 	if len(applied.Skipped) > 0 {
 		postWarnings = appendCommandWarnings(postWarnings, []commandexec.Warning{

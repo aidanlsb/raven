@@ -113,7 +113,7 @@ For trait queries (trait:...):
 			{Name: "query_string", Description: "Query string (e.g., 'type:project .status==active', 'asset .extension==pdf', or saved query name) optionally followed by saved-query inputs.", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "refresh", Description: "Refresh stale files before query (auto-reindex changed files)", Type: FlagTypeBool},
+			{Name: "refresh", Description: "Refresh stale and journaled pending files before query", Type: FlagTypeBool},
 			{Name: "ids", Description: "Output only object/trait IDs, one per line (for piping)", Type: FlagTypeBool},
 			{Name: "limit", Description: "Maximum number of query results to return (0 means no limit)", Type: FlagTypeInt},
 			{Name: "offset", Description: "Zero-based offset for query results", Type: FlagTypeInt},

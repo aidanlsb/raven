@@ -184,10 +184,36 @@ var mutationPhaseCommandIDs = map[string]struct{}{
 	"skill_remove":  {},
 }
 
+// postMutationIndexCommandIDs enumerates commands whose durable file writes
+// return a mutation.ChangeSet and are projected by commandimpl.applyChangeSet.
+// The shared invoker uses this policy to install a write-ahead journal guard
+// before dispatch.
+var postMutationIndexCommandIDs = map[string]struct{}{
+	"new":        {},
+	"upsert":     {},
+	"add":        {},
+	"set":        {},
+	"unset":      {},
+	"delete":     {},
+	"move":       {},
+	"reclassify": {},
+	"update":     {},
+	"edit":       {},
+	"import":     {},
+	"check_fix":  {},
+}
+
 // EmitsMutationPhase reports whether a command carries the standard
 // meta.mutation.phase signal on successful responses.
 func EmitsMutationPhase(commandID string) bool {
 	_, ok := mutationPhaseCommandIDs[commandID]
+	return ok
+}
+
+// UsesPostMutationIndex reports whether commandID uses the shared ChangeSet
+// projection coordinator.
+func UsesPostMutationIndex(commandID string) bool {
+	_, ok := postMutationIndexCommandIDs[commandID]
 	return ok
 }
 

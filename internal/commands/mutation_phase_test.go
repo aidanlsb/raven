@@ -48,3 +48,17 @@ func TestEmitsMutationPhaseExcludesReadsAndMaintenance(t *testing.T) {
 		}
 	}
 }
+
+func TestPostMutationIndexCommandsAreAppliedWrites(t *testing.T) {
+	t.Parallel()
+
+	for commandID := range postMutationIndexCommandIDs {
+		if !EmitsMutationPhase(commandID) {
+			t.Fatalf("%s uses post-mutation indexing but does not emit a mutation phase", commandID)
+		}
+		meta, ok := EffectiveMeta(commandID)
+		if !ok || meta.Access != AccessWrite {
+			t.Fatalf("%s uses post-mutation indexing but is not a registered write command", commandID)
+		}
+	}
+}

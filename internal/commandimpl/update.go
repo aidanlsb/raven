@@ -110,7 +110,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		"skipped":  summary.Skipped,
 		"errors":   summary.Errors,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, req.IndexJournalOperation)
 	data = mergeDataFields(data, postData)
 	return commandexec.SuccessWithWarnings(data, postWarnings, &commandexec.Meta{Count: summary.Modified})
 }

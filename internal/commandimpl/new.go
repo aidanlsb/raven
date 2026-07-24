@@ -73,7 +73,7 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 		"title": title,
 		"type":  typeName,
 	}
-	postData, postWarnings := applyChangeSet(rt, result.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
 	data = mergeDataFields(data, postData)
 
 	return commandexec.SuccessWithWarnings(data, postWarnings, nil)
@@ -161,7 +161,7 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 		"type":   typeName,
 		"title":  title,
 	}
-	postData, postWarnings := applyChangeSet(rt, result.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
 	data = mergeDataFields(data, postData)
 	warnings = appendCommandWarnings(warnings, postWarnings)
 

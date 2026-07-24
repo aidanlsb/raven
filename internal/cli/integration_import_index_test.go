@@ -155,7 +155,7 @@ func TestIntegration_ImportRespectsProtectedPathsOnUpdate(t *testing.T) {
 	v.AssertFileNotContains("people/freya.md", "email: freya@example.com")
 }
 
-func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *testing.T) {
+func TestIntegration_IndexJournalGuardFailuresBlockWrites(t *testing.T) {
 	t.Parallel()
 
 	breakIndex := func(t *testing.T, v *testutil.TestVault) {
@@ -169,15 +169,14 @@ func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *tes
 		}
 	}
 
-	assertIndexWarning := func(t *testing.T, result *testutil.CLIResult) {
+	assertGuardFailure := func(t *testing.T, result *testutil.CLIResult) {
 		t.Helper()
-		result.AssertHasWarning(t, "INDEX_UPDATE_FAILED")
-		for _, warning := range result.Warnings {
-			if warning.Code == "INDEX_UPDATE_FAILED" && strings.Contains(warning.Message, "failed to open index database") {
-				return
-			}
+		if result.OK {
+			t.Fatalf("expected guard failure, got success: %s", result.RawJSON)
 		}
-		t.Fatalf("expected index warning mentioning database open failure, got warnings: %+v", result.Warnings)
+		if result.Error == nil || result.Error.Code != "DATABASE_ERROR" {
+			t.Fatalf("expected DATABASE_ERROR guard failure, got: %#v", result.Error)
+		}
 	}
 
 	tests := []struct {
@@ -191,7 +190,7 @@ func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *tes
 				return v.RunCLI("new", "person", "Freya")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
-				v.AssertFileExists("people/freya.md")
+				v.AssertFileNotExists("people/freya.md")
 			},
 		},
 		{
@@ -200,8 +199,7 @@ func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *tes
 				return v.RunCLI("upsert", "person", "Frigg", "--field", "email=frigg@example.com")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
-				v.AssertFileExists("people/frigg.md")
-				v.AssertFileContains("people/frigg.md", "email: frigg@example.com")
+				v.AssertFileNotExists("people/frigg.md")
 			},
 		},
 		{
@@ -210,7 +208,7 @@ func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *tes
 				return v.RunCLI("set", "people/alice", "email=alice@newdomain.com")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
-				v.AssertFileContains("people/alice.md", "email: alice@newdomain.com")
+				v.AssertFileNotContains("people/alice.md", "email: alice@newdomain.com")
 			},
 		},
 		{
@@ -219,7 +217,7 @@ func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *tes
 				return v.RunCLI("add", "Follow up note", "--to", "people/alice")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
-				v.AssertFileContains("people/alice.md", "Follow up note")
+				v.AssertFileNotContains("people/alice.md", "Follow up note")
 			},
 		},
 		{
@@ -228,7 +226,7 @@ func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *tes
 				return v.RunCLI("edit", "people/alice", "Body", "Updated body")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
-				v.AssertFileContains("people/alice.md", "Updated body")
+				v.AssertFileNotContains("people/alice.md", "Updated body")
 			},
 		},
 		{
@@ -237,7 +235,7 @@ func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *tes
 				return v.RunCLIWithStdin(`[{"name":"Thor"}]`, "import", "person")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
-				v.AssertFileExists("people/thor.md")
+				v.AssertFileNotExists("people/thor.md")
 			},
 		},
 		{
@@ -246,7 +244,7 @@ func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *tes
 				return v.RunCLI("template", "write", "meeting.md", "--content", "# {{title}}\n")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
-				v.AssertFileExists("templates/meeting.md")
+				v.AssertFileNotExists("templates/meeting.md")
 			},
 		},
 	}
@@ -266,8 +264,7 @@ Body
 
 			breakIndex(t, v)
 			result := tc.run(v)
-			result.MustSucceed(t)
-			assertIndexWarning(t, result)
+			assertGuardFailure(t, result)
 			tc.assert(t, v)
 		})
 	}

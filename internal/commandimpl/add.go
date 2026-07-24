@@ -50,16 +50,16 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 	defer rt.Close()
 
 	if !stdinMode {
-		return runAddSingle(rt, text, strings.TrimSpace(stringArg(req.Args, "to")))
+		return runAddSingle(rt, text, strings.TrimSpace(stringArg(req.Args, "to")), req.IndexJournalOperation)
 	}
 	if len(objectIDs) == 0 {
 		return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
 	}
 
-	return runAddBulk(rt, objectIDs, text, req.Confirm)
+	return runAddBulk(rt, objectIDs, text, req.Confirm, req.IndexJournalOperation)
 }
 
-func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm bool) commandexec.Result {
+func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm bool, journalOperation string) commandexec.Result {
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
 	// Section IDs (file#slug) are passed through: bulk add appends within the
@@ -105,13 +105,13 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 		"added":   summary.Added,
 		"content": text,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
 	data = mergeDataFields(data, postData)
 	warnings = appendCommandWarnings(warnings, postWarnings)
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 
-func runAddSingle(rt *vaultruntime.Runtime, text, toRef string) commandexec.Result {
+func runAddSingle(rt *vaultruntime.Runtime, text, toRef, journalOperation string) commandexec.Result {
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
 	captureCfg := vaultCfg.GetCaptureConfig()
@@ -164,7 +164,7 @@ func runAddSingle(rt *vaultruntime.Runtime, text, toRef string) commandexec.Resu
 		"line":    appendResult.Line,
 		"content": text,
 	}
-	postData, postWarnings := applyChangeSet(rt, appendResult.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, appendResult.ChangeSet, journalOperation)
 	data = mergeDataFields(data, postData)
 	return commandexec.SuccessWithWarnings(data, postWarnings, nil)
 }

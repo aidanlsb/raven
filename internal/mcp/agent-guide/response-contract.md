@@ -220,6 +220,8 @@ active. To be certain which vault a write hits, pass `vault` or `vault_path`.
 - Warnings are action items, not noise.
 - Surface warnings that affect correctness or safety.
 - If warnings indicate stale state, run corrective steps such as `reindex` before continuing.
+- `DATABASE_OUTDATED` means `.raven/index-dirty.json` contains pending
+  post-mutation projection work. Run `reindex`, then retry the read.
 - `REF_TARGET_MISSING` on a successful write means the object was created/modified but a
   reference points at a target that does not exist yet. This benign write-time warning is
   intentionally distinct from the fatal `REF_NOT_FOUND` error (returned when a read/resolve

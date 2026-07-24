@@ -2,9 +2,13 @@ package readsvc
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexjournal"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -27,7 +31,7 @@ func CheckStaleness(rt *Runtime) (bool, []string, error) {
 // SmartReindexFailure records a file that could not be refreshed.
 type SmartReindexFailure struct {
 	Path   string
-	Stage  string // "parse" or "index"
+	Stage  string // "parse", "read", "index", or "journal"
 	ErrMsg string
 }
 
@@ -63,17 +67,37 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 	}
 	sch := rt.Schema
 
-	if _, err := rt.DB.RemoveDeletedFiles(rt.VaultPath); err != nil {
+	projectionLock, err := indexjournal.LockProjection(rt.VaultPath)
+	if err != nil {
 		return SmartReindexReport{}, err
 	}
+	defer func() { _ = projectionLock.Close() }()
+
+	pending, err := indexjournal.Load(rt.VaultPath)
+	if err != nil {
+		return SmartReindexReport{}, fmt.Errorf("load index dirty journal: %w", err)
+	}
+	report := SmartReindexReport{}
+
 	matcher, err := excludeMatcher(rt)
 	if err != nil {
+		return SmartReindexReport{}, err
+	}
+	if err := recoverRemovedDirtyPaths(rt, pending, matcher); err != nil {
+		return SmartReindexReport{}, err
+	}
+	if _, err := rt.DB.RemoveDeletedFiles(rt.VaultPath); err != nil {
 		return SmartReindexReport{}, err
 	}
 	if err := removeExcludedIndexedFiles(rt, matcher); err != nil {
 		return SmartReindexReport{}, err
 	}
 
+	dirtyPaths := make(map[string]struct{})
+	for _, relPath := range pending.Paths() {
+		dirtyPaths[relPath] = struct{}{}
+	}
+	forceFullScan := pending.RequiresFullScan()
 	indexedMtimes, err := rt.DB.GetFileMtimes()
 	if err != nil {
 		// The mtime lookup is only an optimization. Parse all files if it fails
@@ -85,11 +109,16 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 		ParseOptions:   rt.ParseOptions,
 		ExcludeMatcher: matcher,
 		ShouldParse: func(relativePath string, fileMtime int64) bool {
+			if forceFullScan {
+				return true
+			}
+			if _, dirty := dirtyPaths[relativePath]; dirty {
+				return true
+			}
 			indexedMtime := indexedMtimes[relativePath]
 			return indexedMtime <= 0 || fileMtime > indexedMtime
 		},
 	}
-	report := SmartReindexReport{}
 	err = vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(result vault.WalkResult) error {
 		if result.ParseSkipped {
 			return nil
@@ -121,13 +150,118 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 		}
 
 		report.Indexed++
+		if err := indexjournal.ClearRecoveredPath(rt.VaultPath, pending, result.RelativePath); err != nil {
+			report.Failures = append(report.Failures, SmartReindexFailure{
+				Path:   result.RelativePath,
+				Stage:  "journal",
+				ErrMsg: err.Error(),
+			})
+		}
 		return nil
 	})
 	if err != nil {
 		return report, err
 	}
 
+	if err := recoverDirtyAssets(rt, pending, matcher, forceFullScan, &report); err != nil {
+		return report, err
+	}
+	if forceFullScan && len(report.Failures) == 0 {
+		if err := indexjournal.CompleteRecoveredUnknown(rt.VaultPath, pending); err != nil {
+			report.Failures = append(report.Failures, SmartReindexFailure{
+				Path:   filepath.ToSlash(filepath.Join(".raven", indexjournal.Filename)),
+				Stage:  "journal",
+				ErrMsg: err.Error(),
+			})
+		}
+	}
+
 	return report, nil
+}
+
+func recoverRemovedDirtyPaths(rt *Runtime, pending indexjournal.Snapshot, matcher *ravenignore.Matcher) error {
+	for _, relPath := range pending.Paths() {
+		fullPath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
+		_, statErr := os.Stat(fullPath)
+		missing := os.IsNotExist(statErr)
+		excluded := matcher.Match(relPath, false)
+		if !missing && !excluded {
+			continue
+		}
+		if statErr != nil && !missing {
+			return fmt.Errorf("inspect pending index path %s: %w", relPath, statErr)
+		}
+		if err := rt.DB.RemoveFile(relPath); err != nil {
+			return fmt.Errorf("remove pending index path %s: %w", relPath, err)
+		}
+		if err := indexjournal.ClearRecoveredPath(rt.VaultPath, pending, relPath); err != nil {
+			return fmt.Errorf("clear pending index path %s: %w", relPath, err)
+		}
+	}
+	return nil
+}
+
+func recoverDirtyAssets(
+	rt *Runtime,
+	pending indexjournal.Snapshot,
+	matcher *ravenignore.Matcher,
+	forceFullScan bool,
+	report *SmartReindexReport,
+) error {
+	knownAssets := make(map[string]struct{})
+	for _, relPath := range pending.Paths() {
+		if !paths.HasMDExtension(relPath) && !matcher.Match(relPath, false) {
+			knownAssets[relPath] = struct{}{}
+		}
+	}
+	if !forceFullScan {
+		for relPath := range knownAssets {
+			fullPath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
+			info, err := os.Stat(fullPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				report.Failures = append(report.Failures, SmartReindexFailure{Path: relPath, Stage: "read", ErrMsg: err.Error()})
+				continue
+			}
+			asset := vault.BuildAsset(relPath, info, rt.VaultCfg)
+			if err := rt.DB.IndexAsset(asset); err != nil {
+				report.Failures = append(report.Failures, SmartReindexFailure{Path: relPath, Stage: "index", ErrMsg: err.Error()})
+				continue
+			}
+			report.Indexed++
+			if err := indexjournal.ClearRecoveredPath(rt.VaultPath, pending, relPath); err != nil {
+				report.Failures = append(report.Failures, SmartReindexFailure{Path: relPath, Stage: "journal", ErrMsg: err.Error()})
+			}
+		}
+		return nil
+	}
+
+	return vault.WalkAssetFilesWithOptions(rt.VaultPath, rt.VaultCfg, &vault.AssetWalkOptions{ExcludeMatcher: matcher}, func(result vault.AssetWalkResult) error {
+		if result.Error != nil {
+			report.Failures = append(report.Failures, SmartReindexFailure{
+				Path: result.RelativePath, Stage: "read", ErrMsg: result.Error.Error(),
+			})
+			return nil //nolint:nilerr // record and continue; caller surfaces Failures
+		}
+		if result.Asset == nil {
+			return nil
+		}
+		if err := rt.DB.IndexAsset(result.Asset); err != nil {
+			report.Failures = append(report.Failures, SmartReindexFailure{
+				Path: result.RelativePath, Stage: "index", ErrMsg: err.Error(),
+			})
+			return nil //nolint:nilerr // record and continue; caller surfaces Failures
+		}
+		report.Indexed++
+		if err := indexjournal.ClearRecoveredPath(rt.VaultPath, pending, result.RelativePath); err != nil {
+			report.Failures = append(report.Failures, SmartReindexFailure{
+				Path: result.RelativePath, Stage: "journal", ErrMsg: err.Error(),
+			})
+		}
+		return nil
+	})
 }
 
 func excludeMatcher(rt *Runtime) (*ravenignore.Matcher, error) {
