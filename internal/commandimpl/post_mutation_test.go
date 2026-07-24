@@ -182,6 +182,41 @@ func TestApplyChangeSetProjectsReusedMoveDestination(t *testing.T) {
 	}
 }
 
+func TestApplyChangeSetProjectsRecreatedMoveSource(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("a.md", "Original A\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+	indexPostMutationFiles(t, rt, "a.md")
+
+	if err := os.Rename(filepath.Join(v.Path, "a.md"), filepath.Join(v.Path, "b.md")); err != nil {
+		t.Fatalf("move a to b: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(v.Path, "a.md"), []byte("Recreated A\n"), 0o644); err != nil {
+		t.Fatalf("recreate a: %v", err)
+	}
+
+	changes := mutation.NewChangeSet()
+	changes.AddMoved("a.md", "b.md")
+	changes.AddChanged("a.md")
+	_, warnings := applyChangeSet(rt, changes)
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", warnings)
+	}
+
+	ids, err := rt.DB.AllObjectIDs()
+	if err != nil {
+		t.Fatalf("AllObjectIDs() error = %v", err)
+	}
+	sort.Strings(ids)
+	if len(ids) != 2 || ids[0] != "a" || ids[1] != "b" {
+		t.Fatalf("indexed IDs = %#v, want [a b]", ids)
+	}
+}
+
 func indexPostMutationFiles(t *testing.T, rt *vaultruntime.Runtime, relPaths ...string) {
 	t.Helper()
 	if err := rt.OpenDB(); err != nil {

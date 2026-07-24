@@ -37,6 +37,7 @@ func TestChangeSetMergeAndProjectionPaths(t *testing.T) {
 		"notes/one.md",
 		"notes/two.md",
 		"people/new.md",
+		"assets/old.pdf",
 		"assets/new.pdf",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("IndexPaths() = %#v, want %#v", got, want)
@@ -72,6 +73,18 @@ func TestChangeSetIndexPathsIncludesReusedMoveDestination(t *testing.T) {
 	changes.AddMoved("a.md", "b.md")
 
 	if got, want := changes.IndexPaths(), []string{"c.md", "b.md"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("IndexPaths() = %#v, want %#v", got, want)
+	}
+}
+
+func TestChangeSetIndexPathsIncludesRecreatedMoveSource(t *testing.T) {
+	t.Parallel()
+
+	changes := NewChangeSet()
+	changes.AddMoved("a.md", "b.md")
+	changes.AddChanged("a.md")
+
+	if got, want := changes.IndexPaths(), []string{"a.md", "b.md"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("IndexPaths() = %#v, want %#v", got, want)
 	}
 }

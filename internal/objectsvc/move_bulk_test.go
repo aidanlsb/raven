@@ -61,9 +61,7 @@ func TestApplyMoveBulkRewritesRefsBetweenMovedFiles(t *testing.T) {
 		t.Fatalf("beta ref was not rewritten to moved alpha:\n%s", beta)
 	}
 
-	for _, relPath := range summary.ChangeSet.IndexPaths() {
-		if strings.HasPrefix(relPath, "people/") {
-			t.Fatalf("IndexPaths() contains moved-away path %q: %#v", relPath, summary.ChangeSet.IndexPaths())
-		}
+	if len(summary.ChangeSet.Moved) != 2 {
+		t.Fatalf("ChangeSet.Moved = %#v, want two moves", summary.ChangeSet.Moved)
 	}
 }

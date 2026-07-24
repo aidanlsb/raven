@@ -92,30 +92,14 @@ func (c ChangeSet) Empty() bool {
 	return len(c.Changed) == 0 && len(c.Deleted) == 0 && len(c.Moved) == 0
 }
 
-// IndexPaths returns existing files whose current contents should be projected
-// into the index. Move destinations are included.
+// IndexPaths returns candidate files whose current contents should be
+// projected into the index. Move destinations are included. The coordinator
+// filters moved-away candidates against the filesystem so path reuse remains
+// representable without coupling this transport-neutral type to I/O.
 func (c ChangeSet) IndexPaths() []string {
-	movedSources := make(map[string]struct{}, len(c.Moved))
-	finalMoveDestinations := make(map[string]struct{}, len(c.Moved))
+	result := append([]string(nil), c.Changed...)
 	for _, move := range c.Moved {
-		movedSources[move.From] = struct{}{}
-		delete(finalMoveDestinations, move.From)
-		finalMoveDestinations[move.To] = struct{}{}
-	}
-
-	result := make([]string, 0, len(c.Changed)+len(c.Moved))
-	for _, relPath := range c.Changed {
-		_, wasMoved := movedSources[relPath]
-		_, isFinalDestination := finalMoveDestinations[relPath]
-		if wasMoved && !isFinalDestination {
-			continue
-		}
-		result = appendUnique(result, relPath)
-	}
-	for _, move := range c.Moved {
-		if _, isFinalDestination := finalMoveDestinations[move.To]; isFinalDestination {
-			result = appendUnique(result, move.To)
-		}
+		result = appendUnique(result, move.To)
 	}
 	return result
 }
