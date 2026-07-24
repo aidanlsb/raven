@@ -38,7 +38,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		if len(objectIDs) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Provide object IDs when using bulk move")
 		}
-		return runMoveBulk(rt, objectIDs, destination, boolArgDefault(req.Args, "update-refs", true), req.Confirm)
+		return runMoveBulk(rt, objectIDs, destination, boolArgDefault(req.Args, "update-refs", true), req.Confirm, req.IndexJournalOperation)
 	}
 
 	source := strings.TrimSpace(stringArg(req.Args, "source"))
@@ -65,6 +65,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	if serviceResult.NeedsConfirm && serviceResult.TypeMismatch != nil {
 		mismatch := serviceResult.TypeMismatch
+		_, journalWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 		// Nothing was written: the move is blocked pending confirmation, so
 		// report a preview phase regardless of the normalized apply resolution.
 		return commandexec.SuccessWithWarnings(map[string]interface{}{
@@ -73,12 +74,12 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 			"preview":       req.Preview,
 			"needs_confirm": true,
 			"reason":        serviceResult.Reason,
-		}, []commandexec.Warning{{
+		}, appendCommandWarnings([]commandexec.Warning{{
 			Code: codes.WarnTypeMismatch,
 			Message: fmt.Sprintf("Moving to '%s/' which is the default directory for type '%s', but file has type '%s'",
 				mismatch.DestinationDir, mismatch.ExpectedType, mismatch.ActualType),
 			Ref: fmt.Sprintf("Use --skip-type-check to proceed, or change the file's type to '%s'", mismatch.ExpectedType),
-		}}, nil).WithMutationPhase(commandexec.MutationPhasePreview)
+		}}, journalWarnings), nil).WithMutationPhase(commandexec.MutationPhasePreview)
 	}
 
 	warnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, indexUpdateFailedWarningCode)
@@ -94,7 +95,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		data["updated_refs"] = serviceResult.UpdatedRefs
 	}
 	if !req.Preview {
-		postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet)
+		postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 		data = mergeDataFields(data, postData)
 		warnings = appendCommandWarnings(warnings, postWarnings)
 	}
@@ -102,7 +103,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
-func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, updateRefs bool, confirm bool) commandexec.Result {
+func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, updateRefs bool, confirm bool, journalOperation string) commandexec.Result {
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
 	sch := rt.Schema
@@ -158,7 +159,7 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 		"moved":       summary.Moved,
 		"destination": summary.Destination,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
 	data = mergeDataFields(data, postData)
 	allWarnings := appendCommandWarnings(
 		warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode),

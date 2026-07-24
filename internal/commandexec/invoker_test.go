@@ -73,6 +73,27 @@ func TestInvokerExecuteRunsValidatorBeforeDispatch(t *testing.T) {
 	}
 }
 
+func TestInvokerExecuteRunsBeforeDispatch(t *testing.T) {
+	t.Parallel()
+
+	registry := NewHandlerRegistry()
+	registry.Register("new", func(_ context.Context, req Request) Result {
+		return Success(req.IndexJournalOperation, nil)
+	})
+	invoker := NewInvoker(registry, nil).WithBeforeDispatch(func(_ context.Context, req Request) (Request, []Warning) {
+		req.IndexJournalOperation = "operation-id"
+		return req, []Warning{{Code: "BEFORE_WARNING", Message: "before dispatch"}}
+	})
+
+	result := invoker.Execute(context.Background(), Request{CommandID: "new"})
+	if result.Data != "operation-id" {
+		t.Fatalf("result.Data = %#v, want operation-id", result.Data)
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0].Code != "BEFORE_WARNING" {
+		t.Fatalf("result.Warnings = %#v, want before-dispatch warning", result.Warnings)
+	}
+}
+
 func TestInvokerExecuteReturnsValidationFailure(t *testing.T) {
 	t.Parallel()
 	invoker := NewInvoker(NewHandlerRegistry(), func(_ context.Context, req Request) (Request, Result, bool) {

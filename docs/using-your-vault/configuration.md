@@ -281,7 +281,11 @@ Automatically reindex after CLI commands that modify vault content.
 |------|---------|
 | boolean | `true` |
 
-When disabled, run `rvn reindex` manually.
+When disabled, Raven still records changed paths in
+`.raven/index-dirty.json`, but it intentionally leaves their derived index work
+pending. Index-backed reads emit `DATABASE_OUTDATED` while work is pending.
+Run `rvn reindex` to project those paths and clear the journal. The journal is
+disposable cache metadata, not durable knowledge.
 
 ### `directories`
 

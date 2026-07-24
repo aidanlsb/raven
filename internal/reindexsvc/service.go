@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -164,6 +165,15 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	if err != nil {
 		return nil, newError(CodeConfigInvalid, fmt.Sprintf("invalid exclude config: %v", err), "Fix raven.yaml exclude patterns and try again", err)
 	}
+	pending, err := indexjournal.Load(vaultPath)
+	if err != nil {
+		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to load index dirty journal: %v", err), "Run 'rvn reindex --full' after repairing or removing disposable .raven metadata", err)
+	}
+	dirtyPaths := make(map[string]struct{})
+	for _, relPath := range pending.Paths() {
+		dirtyPaths[relPath] = struct{}{}
+	}
+	forceFullScan := pending.RequiresFullScan()
 
 	result := &RunResult{
 		SchemaRebuilt:   wasRebuilt,
@@ -189,11 +199,13 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	dryRunFileStats := make(map[string]index.IndexStats)
 	dryRunAssetFiles := make(map[string]struct{})
 	dryRunStats := index.IndexStats{}
+	recoveryComplete := true
 
 	if !req.DryRun {
 		trashRemoved, err := db.RemoveFilesWithPrefix(".trash/")
 		if err != nil {
 			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clean up trash files from index: %v", err))
+			recoveryComplete = false
 		}
 		if trashRemoved > 0 {
 			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Cleaned up %d files from .trash/ in index", trashRemoved))
@@ -204,12 +216,14 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		excludedFiles, excludedErr := indexedExcludedFiles(db, excludeMatcher)
 		if excludedErr != nil {
 			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to check for excluded files: %v", excludedErr))
+			recoveryComplete = false
 		} else {
 			result.ExcludedFiles = excludedFiles
 			result.FilesExcluded = len(excludedFiles)
 			if !req.DryRun {
 				if removeErr := db.RemoveFiles(excludedFiles); removeErr != nil {
 					result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clean up excluded files: %v", removeErr))
+					recoveryComplete = false
 				}
 			}
 		}
@@ -231,9 +245,36 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 			deletedFiles, delErr := db.RemoveDeletedFiles(vaultPath)
 			if delErr != nil {
 				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clean up deleted files: %v", delErr))
+				recoveryComplete = false
 			}
 			result.DeletedFiles = deletedFiles
 			result.FilesDeleted = len(deletedFiles)
+		}
+
+		if !req.DryRun {
+			for _, relPath := range pending.Paths() {
+				fullPath := filepath.Join(vaultPath, filepath.FromSlash(relPath))
+				_, statErr := os.Stat(fullPath)
+				missing := os.IsNotExist(statErr)
+				excluded := excludeMatcher.Match(relPath, false)
+				if !missing && !excluded {
+					continue
+				}
+				if statErr != nil && !missing {
+					result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", relPath, statErr))
+					recoveryComplete = false
+					continue
+				}
+				if removeErr := db.RemoveFile(relPath); removeErr != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", relPath, removeErr))
+					recoveryComplete = false
+					continue
+				}
+				if clearErr := indexjournal.ClearRecoveredPath(vaultPath, pending, relPath); clearErr != nil {
+					result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index path %s: %v", relPath, clearErr))
+					recoveryComplete = false
+				}
+			}
 		}
 	}
 
@@ -252,6 +293,12 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	walkOpts := &vault.WalkOptions{ParseOptions: rt.ParseOptions, ExcludeMatcher: excludeMatcher}
 	if incremental {
 		walkOpts.ShouldParse = func(relativePath string, fileMtime int64) bool {
+			if forceFullScan {
+				return true
+			}
+			if _, dirty := dirtyPaths[relativePath]; dirty {
+				return true
+			}
 			indexedMtime := indexedMtimes[relativePath]
 			return indexedMtime <= 0 || fileMtime > indexedMtime
 		}
@@ -295,6 +342,12 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		result.WarningMessages = append(result.WarningMessages, index.UnknownFrontmatterWarnings(walkResult.Document, sch)...)
 
 		result.FilesIndexed++
+		if incremental {
+			if clearErr := indexjournal.ClearRecoveredPath(vaultPath, pending, walkResult.RelativePath); clearErr != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index path %s: %v", walkResult.RelativePath, clearErr))
+				recoveryComplete = false
+			}
+		}
 		return nil
 	})
 	if walkErr != nil {
@@ -333,6 +386,12 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 			return nil
 		}
 		result.FilesIndexed++
+		if incremental {
+			if clearErr := indexjournal.ClearRecoveredPath(vaultPath, pending, walkResult.RelativePath); clearErr != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index path %s: %v", walkResult.RelativePath, clearErr))
+				recoveryComplete = false
+			}
+		}
 		return nil
 	})
 	if assetWalkErr != nil {
@@ -405,6 +464,18 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	if rebuildSession != nil {
 		if err := rebuildSession.Complete(); err != nil {
 			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to complete index rebuild: %v", err), "Run 'rvn reindex --full' to rebuild the database", err)
+		}
+	}
+	if !req.DryRun {
+		switch {
+		case !incremental:
+			if err := indexjournal.CompleteRecoveredSnapshot(vaultPath, pending); err != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index journal: %v", err))
+			}
+		case forceFullScan && recoveryComplete && len(result.Errors) == 0:
+			if err := indexjournal.CompleteRecoveredUnknown(vaultPath, pending); err != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index journal: %v", err))
+			}
 		}
 	}
 

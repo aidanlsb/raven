@@ -92,11 +92,9 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 			Message: warning,
 		})
 	}
-	if !result.NeedsConfirm {
-		postData, postWarnings := applyChangeSet(rt, result.ChangeSet)
-		data = mergeDataFields(data, postData)
-		warnings = appendCommandWarnings(warnings, postWarnings)
-	}
+	postData, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
+	data = mergeDataFields(data, postData)
+	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	res := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	if result.NeedsConfirm {
@@ -159,7 +157,7 @@ func runReclassifyBulk(
 		"errors":       summary.Errors,
 		"reclassified": summary.Reclassified,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, req.IndexJournalOperation)
 	data = mergeDataFields(data, postData)
 	warnings := warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)
 	warnings = appendCommandWarnings(warnings, postWarnings)

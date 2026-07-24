@@ -21,6 +21,11 @@ resolves Markdown links/images to those assets.
 Paths matched by raven.yaml exclude patterns are skipped and removed from the
 index during incremental reindexing.
 
+Raven records interrupted or intentionally deferred post-mutation index work in
+.raven/index-dirty.json. Incremental reindex forces those paths even when file
+mtimes are unchanged and clears each entry only after successful projection. An
+operation interrupted before its paths were known triggers one full vault scan.
+
 Use --full to force a complete rebuild of the entire index.
 
 Incremental reindexing uses SQLite WAL and can run while readers such as rvn lsp

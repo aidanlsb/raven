@@ -5,6 +5,11 @@ import "context"
 // ValidateFunc can normalize or reject a request before handler dispatch.
 type ValidateFunc func(context.Context, Request) (Request, Result, bool)
 
+// BeforeDispatchFunc runs after validation and handler lookup, immediately
+// before dispatch. It may attach invocation-scoped state to the request and
+// return non-fatal warnings.
+type BeforeDispatchFunc func(context.Context, Request) (Request, []Warning)
+
 // AnnotateFunc post-processes a handler result before it is returned. It runs
 // only for dispatched handlers (not validation/lookup failures) and is used to
 // attach cross-cutting metadata such as the standard mutation-phase signal.
@@ -13,9 +18,10 @@ type AnnotateFunc func(context.Context, Request, Result) Result
 // Invoker executes canonical Raven commands through a shared validation and
 // dispatch pipeline.
 type Invoker struct {
-	handlers *HandlerRegistry
-	validate ValidateFunc
-	annotate AnnotateFunc
+	handlers       *HandlerRegistry
+	validate       ValidateFunc
+	beforeDispatch BeforeDispatchFunc
+	annotate       AnnotateFunc
 }
 
 // NewInvoker constructs an invoker with the provided registry and validator.
@@ -33,6 +39,13 @@ func NewInvoker(handlers *HandlerRegistry, validate ValidateFunc) *Invoker {
 // returns the invoker for chaining.
 func (i *Invoker) WithResultAnnotator(annotate AnnotateFunc) *Invoker {
 	i.annotate = annotate
+	return i
+}
+
+// WithBeforeDispatch sets an optional hook that runs immediately before the
+// selected handler.
+func (i *Invoker) WithBeforeDispatch(before BeforeDispatchFunc) *Invoker {
+	i.beforeDispatch = before
 	return i
 }
 
@@ -58,7 +71,14 @@ func (i *Invoker) Execute(ctx context.Context, req Request) Result {
 		)
 	}
 
+	var beforeWarnings []Warning
+	if i.beforeDispatch != nil {
+		req, beforeWarnings = i.beforeDispatch(ctx, req)
+	}
 	result := handler(ctx, req)
+	if len(beforeWarnings) > 0 {
+		result.Warnings = append(append([]Warning(nil), beforeWarnings...), result.Warnings...)
+	}
 	if i.annotate != nil {
 		result = i.annotate(ctx, req, result)
 	}

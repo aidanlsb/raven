@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -15,31 +16,57 @@ import (
 // applyChangeSet coordinates derived post-write work for an applied mutation.
 // Markdown files remain the durable source of truth: projection failures are
 // returned as warnings and never turn a successful write into a failed command.
-func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet) (map[string]interface{}, []commandexec.Warning) {
-	if rt == nil || changes.Empty() {
+func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journalOperations ...string) (map[string]interface{}, []commandexec.Warning) {
+	if rt == nil {
 		return nil, nil
+	}
+	journalOperation := ""
+	if len(journalOperations) > 0 {
+		journalOperation = journalOperations[0]
 	}
 
 	indexPaths := existingIndexPaths(rt, changes)
-	autoReindexEnabled := rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled()
+	affectedPaths := uniquePostMutationPaths(changes.RemovedPaths(), indexPaths)
 	var warnings []commandexec.Warning
+	trackedOperation, journalErr := indexjournal.SetPaths(rt.VaultPath, journalOperation, affectedPaths)
+	if journalErr != nil {
+		warnings = append(warnings, indexJournalWarning("failed to record pending index updates", journalErr))
+		trackedOperation = ""
+	}
+	if changes.Empty() {
+		return nil, warnings
+	}
+
+	autoReindexEnabled := rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled()
+	failedPaths := make(map[string]struct{})
 	if autoReindexEnabled {
 		for _, relPath := range changes.RemovedPaths() {
 			if warning, ok := removeIndexPathWarning(rt, relPath); ok {
 				warnings = append(warnings, warning)
+				failedPaths[relPath] = struct{}{}
 			}
 		}
 		for _, relPath := range indexPaths {
 			if warning, ok := projectIndexPathWarning(rt, relPath); ok {
 				warnings = append(warnings, warning)
+				failedPaths[relPath] = struct{}{}
 			}
+		}
+		successfulPaths := make([]string, 0, len(affectedPaths))
+		for _, relPath := range affectedPaths {
+			if _, failed := failedPaths[relPath]; !failed {
+				successfulPaths = append(successfulPaths, relPath)
+			}
+		}
+		if err := indexjournal.ClearPaths(rt.VaultPath, trackedOperation, successfulPaths...); err != nil {
+			warnings = append(warnings, indexJournalWarning("failed to clear completed index updates", err))
 		}
 	}
 
 	// Missing-reference detection relies on a current resolver. If projection
-	// failed, or a move was intentionally not projected, stale IDs can produce
+	// failed, or indexing was intentionally deferred, stale IDs can produce
 	// false REF_TARGET_MISSING remediation for files that exist on disk.
-	if len(warnings) > 0 || (!autoReindexEnabled && len(changes.Moved) > 0) {
+	if len(warnings) > 0 || !autoReindexEnabled {
 		return nil, warnings
 	}
 
@@ -51,6 +78,29 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet) (map[s
 	}
 	missingData, missingWarnings := missingRefEnvelope(rt, missingPaths...)
 	return missingData, appendCommandWarnings(warnings, missingWarnings)
+}
+
+func uniquePostMutationPaths(groups ...[]string) []string {
+	seen := make(map[string]struct{})
+	var result []string
+	for _, group := range groups {
+		for _, relPath := range group {
+			if _, ok := seen[relPath]; ok {
+				continue
+			}
+			seen[relPath] = struct{}{}
+			result = append(result, relPath)
+		}
+	}
+	return result
+}
+
+func indexJournalWarning(message string, err error) commandexec.Warning {
+	return commandexec.Warning{
+		Code:    indexUpdateFailedWarningCode,
+		Message: fmt.Sprintf("%s: %v", message, err),
+		Ref:     indexUpdateFailedWarningRef,
+	}
 }
 
 func existingIndexPaths(rt *vaultruntime.Runtime, changes mutation.ChangeSet) []string {

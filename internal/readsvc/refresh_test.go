@@ -8,8 +8,10 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestSmartReindexReportsParseFailures(t *testing.T) {
@@ -107,6 +109,61 @@ func TestSmartReindexSkipsParsingUnchangedMarkdown(t *testing.T) {
 	}
 	if len(report.Failures) != 0 {
 		t.Fatalf("failures = %#v, want none because unchanged file must not be parsed", report.Failures)
+	}
+}
+
+func TestSmartReindexRecoversUnknownCrashWindow(t *testing.T) {
+	t.Parallel()
+
+	testVault := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, testVault.Path, vaultruntime.Options{OpenDB: true})
+
+	if report, err := SmartReindex(rt); err != nil {
+		t.Fatalf("initial SmartReindex: %v", err)
+	} else if len(report.Failures) != 0 {
+		t.Fatalf("initial failures = %#v", report.Failures)
+	}
+
+	filePath := filepath.Join(testVault.Path, "people", "freya.md")
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("stat indexed markdown: %v", err)
+	}
+	journalPath := filepath.Join(testVault.Path, ".raven", indexjournal.Filename)
+	if err := os.WriteFile(journalPath, []byte("{\n  \"version\": 1,\n  \"operations\": {\n    \"00000000000000000000000000000000\": {\"id\": \"00000000000000000000000000000000\", \"unknown\": true}\n  }\n}\n"), 0o644); err != nil {
+		t.Fatalf("write interrupted journal fixture: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("---\ntype: person\nname: Frigg\n---\n"), 0o644); err != nil {
+		t.Fatalf("mutate markdown: %v", err)
+	}
+	if err := os.Chtimes(filePath, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatalf("restore indexed markdown mtime: %v", err)
+	}
+
+	report, err := SmartReindex(rt)
+	if err != nil {
+		t.Fatalf("recovery SmartReindex: %v", err)
+	}
+	if len(report.Failures) != 0 {
+		t.Fatalf("recovery failures = %#v", report.Failures)
+	}
+	if report.Indexed != 1 {
+		t.Fatalf("recovery indexed = %d, want 1", report.Indexed)
+	}
+	obj, err := rt.DB.GetObject("people/freya")
+	if err != nil {
+		t.Fatalf("GetObject: %v", err)
+	}
+	if got, ok := obj.Fields["name"].AsString(); !ok || got != "Frigg" {
+		t.Fatalf("indexed name = %q, %v; want Frigg", got, ok)
+	}
+	if pending, err := indexjournal.Load(testVault.Path); err != nil {
+		t.Fatalf("load index journal: %v", err)
+	} else if pending.Dirty() {
+		t.Fatalf("journal remains dirty after recovery: %#v", pending)
 	}
 }
 

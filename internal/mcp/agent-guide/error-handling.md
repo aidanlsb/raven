@@ -61,7 +61,20 @@ A missing `schema.yaml` or `raven.yaml` is not a failure — Raven falls back to
 
 Treat either signal as a prompt to repair `schema.yaml`/`raven.yaml` before relying on validation, missing-reference warnings, or delete safety.
 
-## 7. Index rebuild failures
+## 7. Pending index updates
+
+`DATABASE_OUTDATED` means Raven found pending derived index work recorded after
+an interrupted mutation, a projection failure, or a write made while
+`auto_reindex` was disabled. Run:
+
+```text
+raven_invoke(command="reindex")
+```
+
+Then retry the read. The journal lives under `.raven/` and is disposable cache
+metadata; do not treat it as vault knowledge or edit it as a recovery method.
+
+## 8. Index rebuild failures
 
 `DATABASE_VERSION_MISMATCH` means the derived SQLite index has an incompatible
 schema or a required full rebuild was interrupted. Raven blocks index-backed
@@ -75,7 +88,7 @@ Retry the original command only after reindex succeeds. `reindex` uses
 wipe-and-rebuild for index schema upgrades; `dry-run` reports the required work
 without replacing the on-disk index.
 
-## 8. Recovery loop for check/repair tasks
+## 9. Recovery loop for check/repair tasks
 
 ```text
 raven_invoke(command="check")

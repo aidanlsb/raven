@@ -114,7 +114,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err != nil {
 		return mapEditFailure(err)
 	}
-	postData, warnings := applyChangeSet(rt, writeResult.ChangeSet)
+	postData, warnings := applyChangeSet(rt, writeResult.ChangeSet, req.IndexJournalOperation)
 
 	if batchMode {
 		applied := make([]map[string]interface{}, 0, len(results))

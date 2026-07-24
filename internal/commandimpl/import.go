@@ -78,7 +78,7 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 			"errors":  errored,
 			"items":   serviceResult.Results,
 		}
-		postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet)
+		postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 		data = mergeDataFields(data, postData)
 		serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField)
 		return commandexec.SuccessWithWarnings(data, appendCommandWarnings(serviceWarnings, postWarnings), nil)

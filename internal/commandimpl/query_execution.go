@@ -91,8 +91,6 @@ func prepareQueryExecution(req commandexec.Request) (execution *queryExecution, 
 			return nil, commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to refresh index: %v", err), nil, "Run 'rvn reindex' to rebuild the database")
 		}
 		refreshWarnings = append(refreshFailureWarnings(report), refreshUnknownFieldWarnings(report)...)
-	} else {
-		_, _, _ = readsvc.CheckStaleness(rt)
 	}
 
 	execution = &queryExecution{
