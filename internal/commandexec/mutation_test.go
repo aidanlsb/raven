@@ -41,6 +41,48 @@ func TestWithMutationPhaseNoOpOnFailure(t *testing.T) {
 	}
 }
 
+func TestWithAttemptedIDsAddsOrderedInputsAndPreservesDetails(t *testing.T) {
+	t.Parallel()
+
+	originalDetails := map[string]interface{}{"field": "done"}
+	ids := []string{"tasks/b.md:trait:1", "tasks/a.md:trait:0"}
+	result := Failure("VALIDATION_FAILED", "invalid value", originalDetails, "").
+		WithAttemptedIDs("trait_ids", ids)
+
+	details, ok := result.Error.Details.(map[string]interface{})
+	if !ok {
+		t.Fatalf("details = %#v, want map", result.Error.Details)
+	}
+	if details["field"] != "done" {
+		t.Fatalf("existing details were not preserved: %#v", details)
+	}
+	gotIDs, ok := details["trait_ids"].([]string)
+	if !ok {
+		t.Fatalf("trait_ids = %#v, want []string", details["trait_ids"])
+	}
+	if len(gotIDs) != 2 || gotIDs[0] != ids[0] || gotIDs[1] != ids[1] {
+		t.Fatalf("trait_ids = %#v, want %#v", gotIDs, ids)
+	}
+	if details["total"] != 2 {
+		t.Fatalf("total = %#v, want 2", details["total"])
+	}
+
+	ids[0] = "changed"
+	originalDetails["field"] = "changed"
+	if gotIDs[0] != "tasks/b.md:trait:1" || details["field"] != "done" {
+		t.Fatalf("result details alias caller data: %#v", details)
+	}
+}
+
+func TestWithAttemptedIDsNoOpOnSuccess(t *testing.T) {
+	t.Parallel()
+
+	result := Success("data", nil).WithAttemptedIDs("references", []string{"notes/a"})
+	if result.Error != nil {
+		t.Fatalf("success envelope gained error: %#v", result.Error)
+	}
+}
+
 func TestInvokerRunsResultAnnotator(t *testing.T) {
 	t.Parallel()
 

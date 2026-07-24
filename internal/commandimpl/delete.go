@@ -20,15 +20,19 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
+	references := commandIDsArg(req.Args, "references")
+	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
+
 	rt, failure := newConfigCommandVaultRuntime(vaultPath)
 	if failure.Error != nil {
+		if stdinMode {
+			return failure.WithAttemptedIDs("references", references)
+		}
 		return failure
 	}
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
 
-	references := commandIDsArg(req.Args, "references")
-	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
 	if stdinMode {
 		if len(references) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe object or asset references to stdin, one per line")
@@ -124,7 +128,7 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 	if !confirm {
 		preview, err := objectsvc.PreviewDeleteBulk(request)
 		if err != nil {
-			return mapContentMutationError(err)
+			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
 		return commandexec.Success(map[string]interface{}{
 			"preview":  true,
@@ -139,7 +143,7 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 
 	summary, err := objectsvc.ApplyDeleteBulk(request)
 	if err != nil {
-		return mapContentMutationError(err)
+		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 	}
 
 	data := map[string]interface{}{
