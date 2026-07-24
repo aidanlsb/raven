@@ -259,6 +259,40 @@ func TestApplyChangeSetProjectsRecreatedMoveSource(t *testing.T) {
 	}
 }
 
+func TestApplyChangeSetDoesNotRemoveConcurrentlyRecreatedPath(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+	indexPostMutationFiles(t, rt, "people/freya.md")
+
+	filePath := filepath.Join(v.Path, "people", "freya.md")
+	if err := os.Remove(filePath); err != nil {
+		t.Fatalf("remove original file: %v", err)
+	}
+	changes := mutation.NewChangeSet()
+	changes.AddDeleted("people/freya.md")
+
+	if err := os.WriteFile(filePath, []byte("---\ntype: person\nname: Frigg\n---\n"), 0o644); err != nil {
+		t.Fatalf("recreate newer file: %v", err)
+	}
+	_, warnings := applyChangeSet(rt, changes)
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", warnings)
+	}
+
+	obj, err := rt.DB.GetObject("people/freya")
+	if err != nil {
+		t.Fatalf("GetObject() error = %v", err)
+	}
+	if got, ok := obj.Fields["name"].AsString(); !ok || got != "Frigg" {
+		t.Fatalf("indexed name = %q, %v; want Frigg", got, ok)
+	}
+}
+
 func indexPostMutationFiles(t *testing.T, rt *vaultruntime.Runtime, relPaths ...string) {
 	t.Helper()
 	if err := rt.OpenDB(); err != nil {

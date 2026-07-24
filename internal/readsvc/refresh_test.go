@@ -133,7 +133,7 @@ func TestSmartReindexRecoversUnknownCrashWindow(t *testing.T) {
 		t.Fatalf("stat indexed markdown: %v", err)
 	}
 	journalPath := filepath.Join(testVault.Path, ".raven", indexjournal.Filename)
-	if err := os.WriteFile(journalPath, []byte("{\n  \"version\": 1,\n  \"operations\": {\n    \"00000000000000000000000000000000\": {\"id\": \"00000000000000000000000000000000\", \"unknown\": true}\n  }\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(journalPath, []byte("{\n  \"version\": 1,\n  \"operations\": {\n    \"00000000000000000000000000000000\": {\"id\": \"00000000000000000000000000000000\", \"revision\": 1, \"unknown\": true}\n  }\n}\n"), 0o644); err != nil {
 		t.Fatalf("write interrupted journal fixture: %v", err)
 	}
 	if err := os.WriteFile(filePath, []byte("---\ntype: person\nname: Frigg\n---\n"), 0o644); err != nil {

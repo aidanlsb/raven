@@ -65,7 +65,9 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journa
 				failedPaths[relPath] = struct{}{}
 			}
 		} else {
-			for _, relPath := range changes.RemovedPaths() {
+			removedPaths, currentIndexPaths := currentPostMutationPlan(rt, changes)
+			indexPaths = currentIndexPaths
+			for _, relPath := range removedPaths {
 				if warning, ok := removeIndexPathWarning(rt, relPath); ok {
 					warnings = append(warnings, warning)
 					failedPaths[relPath] = struct{}{}
@@ -126,6 +128,30 @@ func uniquePostMutationPaths(groups ...[]string) []string {
 	return result
 }
 
+// currentPostMutationPlan rechecks removed paths while projection is
+// serialized. A newer concurrent mutation may have recreated a deleted/moved
+// path after this ChangeSet was produced; project that current file instead of
+// letting an older removal erase its newer index row.
+func currentPostMutationPlan(rt *vaultruntime.Runtime, changes mutation.ChangeSet) (removedPaths, indexPaths []string) {
+	indexPaths = existingIndexPaths(rt, changes)
+	indexed := make(map[string]struct{}, len(indexPaths))
+	for _, relPath := range indexPaths {
+		indexed[relPath] = struct{}{}
+	}
+	for _, relPath := range changes.RemovedPaths() {
+		filePath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
+		if _, err := os.Stat(filePath); err == nil || !os.IsNotExist(err) {
+			if _, exists := indexed[relPath]; !exists {
+				indexPaths = append(indexPaths, relPath)
+				indexed[relPath] = struct{}{}
+			}
+			continue
+		}
+		removedPaths = append(removedPaths, relPath)
+	}
+	return removedPaths, indexPaths
+}
+
 func indexJournalWarning(message string, err error) commandexec.Warning {
 	return commandexec.Warning{
 		Code:    indexUpdateFailedWarningCode,
@@ -167,7 +193,7 @@ func removeIndexPathWarning(rt *vaultruntime.Runtime, relPath string) (commandex
 func projectIndexPathWarning(rt *vaultruntime.Runtime, relPath string) (commandexec.Warning, bool) {
 	filePath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
 	if paths.HasMDExtension(relPath) {
-		return autoReindexWarning(rt, filePath)
+		return autoReindexWarningLocked(rt, filePath)
 	}
 
 	if rt.VaultCfg == nil {

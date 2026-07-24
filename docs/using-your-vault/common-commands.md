@@ -444,9 +444,15 @@ before the paths are known, the journal requests one full scan. Incremental
 never clears it. With `auto_reindex: false`, entries intentionally remain until
 manual reindexing succeeds.
 
-The version-1 journal is a small JSON object containing operation IDs and
-either `unknown: true` or a `paths` array of normalized vault-relative paths.
-It is internal cache state and should not be edited by hand.
+If Raven cannot create the write-ahead guard under `.raven/`, guarded content
+commands fail before changing vault files. A failure after dispatch retains an
+unknown entry because a multi-file operation may already have written some
+files.
+
+The version-1 journal is a small JSON object containing operation IDs,
+monotonic operation revisions, and either `unknown: true` or a `paths` array of
+normalized vault-relative paths. It is internal cache state and should not be
+edited by hand.
 
 Incremental reindexing uses SQLite WAL and can run while `rvn lsp` or another
 reader holds the index open. `--full` and incompatible-schema replacement are

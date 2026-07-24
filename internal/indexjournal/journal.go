@@ -39,9 +39,10 @@ var activeOperations = struct {
 // Unknown is true between the write-ahead guard and the point where the
 // mutation's concrete changed paths are known.
 type Operation struct {
-	ID      string   `json:"id"`
-	Unknown bool     `json:"unknown,omitempty"`
-	Paths   []string `json:"paths,omitempty"`
+	ID       string   `json:"id"`
+	Revision uint64   `json:"revision"`
+	Unknown  bool     `json:"unknown,omitempty"`
+	Paths    []string `json:"paths,omitempty"`
 }
 
 // Snapshot is an immutable view of the pending journal.
@@ -92,7 +93,7 @@ func Begin(vaultPath string) (string, error) {
 		return "", err
 	}
 	err = update(vaultPath, func(journal *journalFile) error {
-		journal.Operations[operationID] = Operation{ID: operationID, Unknown: true}
+		journal.Operations[operationID] = Operation{ID: operationID, Revision: 1, Unknown: true}
 		return nil
 	})
 	if err != nil {
@@ -128,9 +129,14 @@ func SetPaths(vaultPath, operationID string, relPaths []string) (string, error) 
 			delete(journal.Operations, operationID)
 			return nil
 		}
+		revision := uint64(1)
+		if current, ok := journal.Operations[operationID]; ok {
+			revision = current.Revision + 1
+		}
 		journal.Operations[operationID] = Operation{
-			ID:    operationID,
-			Paths: normalized,
+			ID:       operationID,
+			Revision: revision,
+			Paths:    normalized,
 		}
 		return nil
 	})
@@ -205,7 +211,16 @@ func Abandon(vaultPath, operationID string) error {
 	if operationID == "" {
 		return nil
 	}
-	return releaseActiveOperation(vaultPath, operationID)
+	updateErr := update(vaultPath, func(journal *journalFile) error {
+		operation, ok := journal.Operations[operationID]
+		if ok {
+			operation.Revision++
+			journal.Operations[operationID] = operation
+		}
+		return nil
+	})
+	releaseErr := releaseActiveOperation(vaultPath, operationID)
+	return errors.Join(updateErr, releaseErr)
 }
 
 // CompleteIfUnchanged removes an operation only if it still matches a recovery
@@ -365,7 +380,7 @@ func readJournal(journalPath string) (journalFile, error) {
 		journal.Operations = make(map[string]Operation)
 	}
 	for operationID, operation := range journal.Operations {
-		if !validOperationID(operationID) || operation.ID != operationID {
+		if !validOperationID(operationID) || operation.ID != operationID || operation.Revision == 0 {
 			return journalFile{}, fmt.Errorf("invalid index dirty journal operation %q", operationID)
 		}
 		if operation.Unknown && len(operation.Paths) > 0 {
@@ -482,7 +497,7 @@ func releaseOperationGuard(vaultPath, operationID string, lockFile *os.File) err
 }
 
 func operationsEqual(left, right Operation) bool {
-	if left.ID != right.ID || left.Unknown != right.Unknown || len(left.Paths) != len(right.Paths) {
+	if left.ID != right.ID || left.Revision != right.Revision || left.Unknown != right.Unknown || len(left.Paths) != len(right.Paths) {
 		return false
 	}
 	for i := range left.Paths {

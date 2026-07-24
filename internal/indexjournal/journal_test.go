@@ -95,6 +95,35 @@ func TestRecoveryDoesNotClearActiveUnknownOperation(t *testing.T) {
 	}
 }
 
+func TestAbandonInvalidatesOverlappingRecoverySnapshot(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	operationID, err := Begin(vaultPath)
+	if err != nil {
+		t.Fatalf("Begin() error = %v", err)
+	}
+	beforeFailure := loadSnapshot(t, vaultPath)
+	if err := Abandon(vaultPath, operationID); err != nil {
+		t.Fatalf("Abandon() error = %v", err)
+	}
+
+	if err := CompleteRecoveredUnknown(vaultPath, beforeFailure); err != nil {
+		t.Fatalf("complete overlapping snapshot: %v", err)
+	}
+	afterFailure := loadSnapshot(t, vaultPath)
+	if !afterFailure.Dirty() || afterFailure.Operations[0].Revision == beforeFailure.Operations[0].Revision {
+		t.Fatalf("snapshot after abandon = %#v, want newer pending revision", afterFailure)
+	}
+
+	if err := CompleteRecoveredUnknown(vaultPath, afterFailure); err != nil {
+		t.Fatalf("complete current snapshot: %v", err)
+	}
+	if loadSnapshot(t, vaultPath).Dirty() {
+		t.Fatal("current abandoned operation did not recover")
+	}
+}
+
 func TestSetPathsWithoutGuardCreatesConcreteOperation(t *testing.T) {
 	t.Parallel()
 

@@ -685,6 +685,11 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 			return commandexec.Failure(codes.ErrInvalidInput, "template write --edit is only available in the interactive CLI", nil, "Use --content when invoking template_write non-interactively")
 		}
 	}
+	projectionLock, lockFailure := lockCommandIndexProjection(rt, false)
+	if lockFailure.Error != nil {
+		return lockFailure
+	}
+	defer func() { _ = projectionLock.Close() }()
 
 	result, err := templatesvc.Write(rt, templatesvc.WriteRequest{
 		VaultPath:   req.VaultPath,
@@ -698,7 +703,9 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 
 	var warnings []commandexec.Warning
 	if result.Changed && result.ChangedPath != "" {
-		warnings = autoReindexWarnings(rt, filepath.Clean(result.ChangedPath))
+		if warning, failed := autoReindexWarningLocked(rt, filepath.Clean(result.ChangedPath)); failed {
+			warnings = append(warnings, warning)
+		}
 	}
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
@@ -717,6 +724,11 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 	}
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
+	projectionLock, lockFailure := lockCommandIndexProjection(rt, false)
+	if lockFailure.Error != nil {
+		return lockFailure
+	}
+	defer func() { _ = projectionLock.Close() }()
 
 	result, err := templatesvc.Delete(rt, templatesvc.DeleteRequest{
 		VaultPath:   req.VaultPath,
