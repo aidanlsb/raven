@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
 // TestMCPIntegration_ToolsList tests that the MCP server returns tool schemas.
@@ -112,7 +112,7 @@ func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
 		t.Fatalf("initialize missing serverInfo: %#v", initResp.Result)
 	}
 	version, _ := serverInfo["version"].(string)
-	wantVersion := maintsvc.CurrentVersionInfoFromExecutable(binary).Version
+	wantVersion := versioninfo.CurrentVersionInfoFromExecutable(binary).Version
 	if version != wantVersion {
 		t.Fatalf("initialize serverInfo.version=%q, want %q", version, wantVersion)
 	}

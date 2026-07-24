@@ -14,7 +14,6 @@ import (
 	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/datesvc"
 	"github.com/aidanlsb/raven/internal/initsvc"
-	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/shellquote"
 	"github.com/aidanlsb/raven/internal/slugs"
@@ -28,7 +27,7 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("MISSING_ARGUMENT", "path is required", nil, "Usage: rvn init <path>")
 	}
 
-	version := maintsvc.CurrentVersionInfo().Version
+	version := versioninfo.CurrentVersionInfo().Version
 	result, err := initsvc.Initialize(initsvc.InitializeRequest{
 		Path:       path,
 		ConfigPath: req.ConfigPath,
@@ -188,7 +187,7 @@ func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
 func HandleVersion(_ context.Context, req commandexec.Request) commandexec.Result {
 	info := versioninfo.Current()
 	if strings.TrimSpace(req.ExecutablePath) != "" {
-		info = maintsvc.CurrentVersionInfoFromExecutable(req.ExecutablePath)
+		info = versioninfo.CurrentVersionInfoFromExecutable(req.ExecutablePath)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"version":     info.Version,

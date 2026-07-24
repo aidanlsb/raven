@@ -6,13 +6,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
 const defaultModulePath = "github.com/aidanlsb/raven" // Kept for test compatibility.
 
-type versionInfo = maintsvc.VersionInfo
+type versionInfo = versioninfo.VersionInfo
 
 var versionCmd = newCanonicalLeafCommand("version", canonicalLeafOptions{
 	RenderHuman: renderVersion,
