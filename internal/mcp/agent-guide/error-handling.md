@@ -42,10 +42,9 @@ boundary. Excluded files are not Raven-managed; ask whether to change
 
 ## 5. Vault targeting failures
 
-- `VAULT_AMBIGUOUS`: the call did not specify a vault (no `vault`/`vault_path`
-  and no server-pinned vault). Retry with an explicit `vault` (configured name)
-  or `vault_path` (absolute directory). MCP never falls back to active/default
-  vault state.
+- `VAULT_AMBIGUOUS`: the call has no per-call `vault`/`vault_path`, session
+  focus, or server launch pin. Retry with an explicit target or invoke
+  `vault_focus`. MCP never falls back to `active_vault` or `default_vault`.
 - `VAULT_NOT_FOUND` / `VAULT_RESOLUTION_FAILED`: the requested vault could not be
   resolved. Verify the name/path and that the vault exists.
 
