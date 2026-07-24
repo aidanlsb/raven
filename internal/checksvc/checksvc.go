@@ -129,7 +129,7 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 
 	// Check staleness + pull aliases from index when available.
 	var aliases map[string]string
-	var duplicateAliases []index.DuplicateAlias
+	var duplicateAliases []resolver.AliasCollision
 	var canonicalResolver *resolver.Resolver
 	recordIncomplete := func(subsystem string, cause error) {
 		issue := check.Issue{
