@@ -61,6 +61,8 @@ raven_invoke(command="section_move", args={"section_id":"project/website#notes",
 raven_invoke(command="section_rename", args={"section_id":"project/website#tasks", "new_heading_text":"Completed Tasks"})
 raven_invoke(command="reclassify", args={"object":"pages/draft", "new-type":"project"})
 raven_invoke(command="reclassify", args={"object":"person/freya", "new-type":"company", "fields-json":{"legal_name":"false"}})
+raven_invoke(command="reclassify", args={"object_ids":["pages/one","pages/two"], "new-type":"project"})
+raven_invoke(command="reclassify", args={"object_ids":["pages/one","pages/two"], "new-type":"project", "confirm":true})
 ```
 
 Deletion flow:
@@ -70,11 +72,13 @@ raven_invoke(command="backlinks", args={"target":"project/old-project"})
 raven_invoke(command="delete", args={"object_id":"project/old-project"})
 ```
 
-Single-object `delete`, `move`, `section_create`, `section_move`, and
-`section_rename` apply immediately. Run the backlinks check first for delete
-when impact is not already clear, or call a write with `dry-run=true` to
+Single-object `delete`, `move`, `section_create`, `section_move`,
+`section_rename`, and `reclassify` apply immediately. Run the backlinks check
+first for delete when impact is not already clear, or use `dry-run=true` on
+commands that expose it to
 preview. Bulk delete/move remain preview-first and require `confirm=true`; bulk
-object move rejects section IDs.
+object move rejects section IDs. Bulk reclassify follows the same preview/apply
+flow and reports required-field or dropped-field blockers per object.
 
 ## 5. Bulk mutation flow
 

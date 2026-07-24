@@ -453,9 +453,15 @@ Use --force to skip this confirmation.
 
 The file is automatically moved to the new type's default_path unless
 --no-move is specified or no default_path is defined for the new type.
-References are updated when the file moves (controlled by --update-refs).`,
+References are updated when the file moves (controlled by --update-refs).
+
+Bulk operations:
+Use --stdin to read object IDs from stdin (one per line), with the target type
+as the only positional argument. Bulk reclassification previews moves, field
+changes, required-field failures, and reference updates by default. Use
+--confirm to apply. Items that would drop fields still require --force.`,
 		Args: []ArgMeta{
-			{Name: "object", Description: "Object reference (prefer canonical ID; other resolvable forms are accepted)", Required: true},
+			{Name: "object", Description: "Object reference (prefer canonical ID; other resolvable forms are accepted)", Required: false},
 			{Name: "new-type", Description: "Target type name", Required: true, DynamicComp: "types"},
 		},
 		Flags: []FlagMeta{
@@ -464,19 +470,25 @@ References are updated when the file moves (controlled by --update-refs).`,
 			{Name: "no-move", Description: "Skip moving file to new type's default_path", Type: FlagTypeBool},
 			{Name: "update-refs", Description: "Update references when file moves", Type: FlagTypeBool, Default: "true"},
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk reclassification (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 		},
+		BulkStdinArgName: "object_ids",
 		Examples: []string{
 			"rvn reclassify inbox/note book --json",
 			"rvn reclassify people/freya company --field industry=tech --json",
 			`rvn reclassify people/freya company --fields-json '{"legal_name":"false"}' --json`,
 			"rvn reclassify pages/draft project --no-move --json",
 			"rvn reclassify inbox/note book --force --json",
+			"rvn query 'type:note' --ids | rvn reclassify doc --stdin --json",
+			"rvn query 'type:note' --ids | rvn reclassify doc --stdin --confirm --force --json",
 		},
 		UseCases: []string{
 			"Change an object's type after creation",
 			"Reclassify a page to a specific schema type",
 			"Move an object to the correct type directory automatically",
 			"Convert between custom types with field mapping",
+			"Bulk reclassify objects from stdin with preview and confirmation",
 		},
 	},
 	"set": {

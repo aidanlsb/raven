@@ -80,7 +80,7 @@ func TestValidateArgumentsStrictNormalizesUpdateBulkAliases(t *testing.T) {
 func TestBuildCommandContractBulkPreviewModes(t *testing.T) {
 	t.Parallel()
 
-	for _, commandID := range []string{"add", "delete", "move", "set", "update"} {
+	for _, commandID := range []string{"add", "delete", "move", "reclassify", "set", "update"} {
 		t.Run(commandID, func(t *testing.T) {
 			t.Parallel()
 
@@ -95,6 +95,24 @@ func TestBuildCommandContractBulkPreviewModes(t *testing.T) {
 				t.Fatalf("%s policy preview mode=%q, want %q", commandID, got, PreviewModeBulkPreviewDefault)
 			}
 		})
+	}
+}
+
+func TestBuildCommandContractReclassifyBulkArguments(t *testing.T) {
+	t.Parallel()
+
+	contract, ok := BuildCommandContract("reclassify")
+	if !ok {
+		t.Fatal("expected reclassify contract")
+	}
+	if contract.Parameters["object"].Required {
+		t.Fatal("reclassify object should be optional for object_ids bulk mode")
+	}
+	if !contract.Parameters["new-type"].Required {
+		t.Fatal("reclassify new-type should remain required")
+	}
+	if got := contract.Parameters["object_ids"].Type; got != ParameterTypeStringArray {
+		t.Fatalf("reclassify object_ids type=%q, want %q", got, ParameterTypeStringArray)
 	}
 }
 
