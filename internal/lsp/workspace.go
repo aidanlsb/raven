@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,30 +9,20 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/readsvc"
-	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-const maxCacheRebuildAttempts = 3
-
-var errIndexChanging = errors.New("index changed while rebuilding LSP caches")
-
-// workspace holds the resolved vault, its open index handle, and caches
-// derived from the index. Caches are rebuilt on save and when another database
-// handle changes resolver-relevant index state.
+// workspace holds the resolved vault and a read-side catalog. The catalog is
+// rebuilt on save and when another database handle changes resolver-relevant
+// index state.
 type workspace struct {
 	rt *readsvc.Runtime
 
-	resolver        *resolver.Resolver
-	objectInfos     []check.ObjectInfo
-	objects         []model.Object
-	aliases         map[string]string
-	cacheGeneration int64
+	catalog     readsvc.CatalogSnapshot
+	objectInfos []check.ObjectInfo
 }
 
 // isVaultDir reports whether dir looks like a Raven vault root.
@@ -106,10 +95,6 @@ func (ws *workspace) schema() *schema.Schema {
 	return schema.New()
 }
 
-func (ws *workspace) db() *index.Database {
-	return ws.rt.DB
-}
-
 // refresh reloads vault config and schema from disk, incrementally reindexes
 // changed files, and rebuilds derived caches. Called after didSave.
 func (ws *workspace) refresh() error {
@@ -136,71 +121,47 @@ func (ws *workspace) refresh() error {
 // resolver-relevant changes. It deliberately avoids a filesystem walk: the
 // external writer has already brought the on-disk index up to date.
 func (ws *workspace) ensureCachesFresh() error {
-	generation, err := ws.db().ResolverGeneration()
+	current, err := readsvc.Catalog(ws.rt, readsvc.CatalogOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to read index generation: %w", err)
 	}
-	if generation == ws.cacheGeneration {
+	if current.Generation == ws.catalog.Generation {
 		return nil
 	}
 	return ws.rebuildCaches()
 }
 
 func (ws *workspace) rebuildCaches() error {
-	db := ws.db()
+	catalog, err := readsvc.Catalog(ws.rt, readsvc.CatalogOptions{
+		Objects:    true,
+		Sections:   true,
+		Aliases:    true,
+		Resolver:   true,
+		Consistent: true,
+	})
+	if err != nil {
+		return err
+	}
+	sort.Slice(catalog.Objects, func(i, j int) bool { return catalog.Objects[i].ID < catalog.Objects[j].ID })
 
-	for range maxCacheRebuildAttempts {
-		generationBefore, err := db.ResolverGeneration()
-		if err != nil {
-			return fmt.Errorf("failed to read index generation: %w", err)
-		}
-
-		res, err := db.Resolver(index.ResolverOptions{
-			DailyDirectory: ws.vaultConfig().GetDailyDirectory(),
-			Schema:         ws.schema(),
-		})
-		if err != nil {
-			return fmt.Errorf("failed to build resolver: %w", err)
-		}
-
-		objects, err := db.AllObjects()
-		if err != nil {
-			return fmt.Errorf("failed to list objects: %w", err)
-		}
-		sort.Slice(objects, func(i, j int) bool { return objects[i].ID < objects[j].ID })
-
-		aliases, err := db.AllAliases()
-		if err != nil {
-			return fmt.Errorf("failed to list aliases: %w", err)
-		}
-
-		generationAfter, err := db.ResolverGeneration()
-		if err != nil {
-			return fmt.Errorf("failed to read index generation: %w", err)
-		}
-		if generationBefore != generationAfter {
-			continue
-		}
-
-		infos := make([]check.ObjectInfo, 0, len(objects))
-		for _, obj := range objects {
-			infos = append(infos, check.ObjectInfo{ID: obj.ID, Type: obj.Type})
-		}
-
-		ws.resolver = res
-		ws.objects = objects
-		ws.objectInfos = infos
-		ws.aliases = aliases
-		ws.cacheGeneration = generationAfter
-		return nil
+	infos := make([]check.ObjectInfo, 0, len(catalog.Objects))
+	for _, obj := range catalog.Objects {
+		infos = append(infos, check.ObjectInfo{ID: obj.ID, Type: obj.Type})
 	}
 
-	return errIndexChanging
+	ws.catalog = catalog
+	ws.objectInfos = infos
+	return nil
 }
 
 // newValidator builds a document validator backed by the cached index state.
 func (ws *workspace) newValidator() *check.Validator {
-	validator := check.NewValidatorWithTypesAliasesAndResolver(ws.schema(), ws.objectInfos, ws.aliases, ws.resolver)
+	validator := check.NewValidatorWithTypesAliasesAndResolver(
+		ws.schema(),
+		ws.objectInfos,
+		ws.catalog.Aliases,
+		ws.catalog.Resolver,
+	)
 	validator.SetDailyDirectoryForInference(ws.vaultConfig().GetDailyDirectory())
 	if ws.vaultConfig().HasDirectoriesConfig() {
 		validator.SetDirectoryRoots(ws.vaultConfig().GetObjectsRoot(), ws.vaultConfig().GetPagesRoot())

@@ -44,6 +44,28 @@ func newTestVault(t *testing.T) string {
 	return vault.Path
 }
 
+func TestOpenWorkspacePreservesDegradedSchemaBehavior(t *testing.T) {
+	vault := testutil.NewTestVault(t).
+		WithSchema("version: 1\ntypes: [unterminated\n").
+		Build()
+
+	ws, err := openWorkspace(vault.Path)
+	if err != nil {
+		t.Fatalf("openWorkspace() error = %v", err)
+	}
+	t.Cleanup(ws.close)
+
+	if ws.rt.SchemaLoadErr == nil {
+		t.Fatal("SchemaLoadErr = nil, want recorded schema load failure")
+	}
+	if ws.schema() == nil {
+		t.Fatal("workspace schema = nil, want built-in degraded schema")
+	}
+	if ws.catalog.Resolver == nil {
+		t.Fatal("catalog resolver = nil in degraded schema mode")
+	}
+}
+
 func startTestServer(t *testing.T, vaultPath string) *testClient {
 	t.Helper()
 
