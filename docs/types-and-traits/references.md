@@ -56,6 +56,34 @@ When Raven encounters a reference, it resolves it to a canonical object or asset
 
 If multiple candidates match, the reference is ambiguous and is not resolved automatically.
 
+### Command reference arguments
+
+Commands that act on existing vault content use the positional argument name
+`reference`; their MCP contracts use `reference` for one input and `references`
+for bulk input. Bulk CLI commands read the same references from `--stdin`, one
+per line.
+
+The shared reference grammar accepts canonical object IDs, vault-relative
+Markdown paths (with or without `.md`), section IDs (`object#fragment`), full
+asset paths, aliases, name-field values, and unambiguous short forms. Date-aware
+commands also accept ISO dates and documented dynamic dates such as `today`.
+Prefer canonical object IDs, section IDs, and full asset paths for automation.
+
+Each command narrows that grammar to the targets it can safely handle:
+
+| Command | Accepted reference scope |
+|---------|--------------------------|
+| `resolve` | Objects, sections, and indexed assets |
+| `open` | Objects, sections, and indexed assets; also accepts bulk `references` |
+| `read` | Managed Markdown files and sections |
+| `set`, `unset` | File-level typed objects; sections and assets are rejected |
+| `delete` | File-backed objects and assets; sections are rejected |
+| `reclassify` | File-level typed objects; sections and assets are rejected; also accepts bulk `references` |
+| `edit` | Managed Markdown files and section subtrees; config, schema, templates, excluded files, and assets are rejected |
+| `check`, `check fix` | A file, directory, or object reference; omit it to check the entire vault |
+| `backlinks` | Objects, sections, and indexed assets; also accepts bulk `references` |
+| `outlinks` | Objects and sections; also accepts bulk `references` |
+
 ### Canonical references
 
 Prefer canonical object IDs and full asset paths when authoring references:

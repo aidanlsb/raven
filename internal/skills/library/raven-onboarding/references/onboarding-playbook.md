@@ -136,7 +136,7 @@ Teach this once, clearly, while proposing the model. The decision rule: **Is thi
 | How many per object | usually one | many |
 | Where it lives | frontmatter (YAML) | inline in the body |
 | Written as | `status: active` | `@todo`, `@due(2026-02-01)` |
-| Set / updated with | `rvn set <id> status=active --json` | `rvn add "@todo ..." --json` |
+| Set / updated with | `rvn set <reference> status=active --json` | `rvn add "@todo ..." --json` |
 | Good for | status, owner, stage, date, category | tasks, decisions, highlights, priorities |
 | Example | a project's `status`, a meeting's `date` | `- @todo(...) email the vendor` on a bullet |
 

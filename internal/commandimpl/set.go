@@ -19,11 +19,11 @@ func setFieldsJSONHint(caller commandexec.Caller) string {
 	return `Provide a JSON object, e.g. --fields-json '{"status":"active"}'`
 }
 
-func setMissingBulkObjectIDs(caller commandexec.Caller) (string, string) {
+func setMissingBulkReferences(caller commandexec.Caller) (string, string) {
 	if caller == commandexec.CallerMCP {
-		return "no object_ids provided for bulk set", "Provide object_ids for the bulk update and retry"
+		return "no references provided for bulk set", "Provide references for the bulk update and retry"
 	}
-	return "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line"
+	return "no references provided via stdin", "Pipe references to stdin, one per line"
 }
 
 func setMissingFields(caller commandexec.Caller, bulk bool) string {
@@ -31,19 +31,19 @@ func setMissingFields(caller commandexec.Caller, bulk bool) string {
 		if bulk {
 			return "Provide fields or fields-json in args"
 		}
-		return "Provide object_id plus fields or fields-json in args"
+		return "Provide reference plus fields or fields-json in args"
 	}
 	if bulk {
 		return "Usage: rvn set --stdin field=value... or --fields-json '{...}'"
 	}
-	return "Usage: rvn set <object-id> field=value... or --fields-json '{...}'"
+	return "Usage: rvn set <reference> field=value... or --fields-json '{...}'"
 }
 
-func setMissingObjectID(caller commandexec.Caller) (string, string) {
+func setMissingReference(caller commandexec.Caller) (string, string) {
 	if caller == commandexec.CallerMCP {
-		return "requires object_id", "Provide object_id and retry"
+		return "requires reference", "Provide reference and retry"
 	}
-	return "requires object-id", "Usage: rvn set <object-id> field=value..."
+	return "requires reference", "Usage: rvn set <reference> field=value..."
 }
 
 // HandleSet executes the canonical `set` command.
@@ -72,22 +72,22 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	allUpdates := mergeFieldInputs(updates, typedUpdates)
 
-	objectIDs := commandIDsArg(req.Args, "object_ids")
-	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
+	references := commandIDsArg(req.Args, "references")
+	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
 	if stdinMode {
-		if len(objectIDs) == 0 {
-			message, suggestion := setMissingBulkObjectIDs(req.Caller)
+		if len(references) == 0 {
+			message, suggestion := setMissingBulkReferences(req.Caller)
 			return commandexec.Failure("MISSING_ARGUMENT", message, nil, suggestion)
 		}
 		if len(allUpdates) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, true))
 		}
-		return runSetBulk(rt, objectIDs, allUpdates, req.Confirm, req.IndexJournalOperation)
+		return runSetBulk(rt, references, allUpdates, req.Confirm, req.IndexJournalOperation)
 	}
 
-	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
+	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
 	if reference == "" {
-		message, suggestion := setMissingObjectID(req.Caller)
+		message, suggestion := setMissingReference(req.Caller)
 		return commandexec.Failure("MISSING_ARGUMENT", message, nil, suggestion)
 	}
 	if len(allUpdates) == 0 {
@@ -157,14 +157,14 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 	vaultCfg := rt.VaultCfg
 	sch := rt.Schema
 
-	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
+	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
 	if reference == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "requires object-id", nil, "Usage: rvn unset <object-id> <field>...")
+		return commandexec.Failure("MISSING_ARGUMENT", "requires reference", nil, "Usage: rvn unset <reference> <field>...")
 	}
 
 	fields := stringSliceArg(req.Args["fields"])
 	if len(fields) == 0 {
-		return commandexec.Failure("MISSING_ARGUMENT", "no fields to unset", nil, "Usage: rvn unset <object-id> <field>...")
+		return commandexec.Failure("MISSING_ARGUMENT", "no fields to unset", nil, "Usage: rvn unset <reference> <field>...")
 	}
 
 	serviceResult, err := objectsvc.UnsetByReference(objectsvc.UnsetByReferenceRequest{

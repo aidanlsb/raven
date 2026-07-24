@@ -41,23 +41,23 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 	newTypeName := strings.TrimSpace(stringArg(req.Args, "new-type"))
 
-	objectIDs := commandIDsArg(req.Args, "object_ids")
-	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
+	references := commandIDsArg(req.Args, "references")
+	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
 	if stdinMode {
-		if len(objectIDs) == 0 {
-			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
+		if len(references) == 0 {
+			return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe references to stdin, one per line")
 		}
 		if newTypeName == "" {
 			return commandexec.Failure("MISSING_ARGUMENT", "no target type provided", nil, "Usage: rvn reclassify <new-type> --stdin")
 		}
-		return runReclassifyBulk(rt, objectIDs, newTypeName, allFieldValues, req)
+		return runReclassifyBulk(rt, references, newTypeName, allFieldValues, req)
 	}
 
 	result, err := objectsvc.ReclassifyByReference(objectsvc.ReclassifyByReferenceRequest{
 		VaultPath:    vaultPath,
 		VaultConfig:  vaultCfg,
 		Schema:       sch,
-		Reference:    strings.TrimSpace(stringArg(req.Args, "object")),
+		Reference:    strings.TrimSpace(stringArg(req.Args, "reference")),
 		NewTypeName:  newTypeName,
 		FieldValues:  allFieldValues,
 		NoMove:       boolArg(req.Args, "no-move"),

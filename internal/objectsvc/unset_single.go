@@ -45,7 +45,7 @@ func UnsetByReference(req UnsetByReferenceRequest) (*UnsetByReferenceResult, err
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
 	if strings.TrimSpace(req.Reference) == "" {
-		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn unset <object-id> <field>...", nil, nil)
+		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn unset <reference> <field>...", nil, nil)
 	}
 	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {

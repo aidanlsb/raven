@@ -74,7 +74,7 @@ func buildOpenArgs(cmd *cobra.Command, args []string) (map[string]interface{}, e
 			return nil, err
 		}
 		if len(ids) == 0 && len(sectionIDs) == 0 {
-			return nil, fmt.Errorf("no object IDs provided on stdin")
+			return nil, fmt.Errorf("no references provided on stdin")
 		}
 
 		allRefs := make([]string, 0, len(ids)+len(sectionIDs))
@@ -82,7 +82,7 @@ func buildOpenArgs(cmd *cobra.Command, args []string) (map[string]interface{}, e
 		allRefs = append(allRefs, sectionIDs...)
 		return map[string]interface{}{
 			"stdin":      true,
-			"object_ids": allRefs,
+			"references": allRefs,
 		}, nil
 	}
 

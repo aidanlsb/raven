@@ -100,7 +100,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		return nil, newError(ErrorInvalidInput, "object ID is required", "", nil, nil)
 	}
 	if strings.TrimSpace(req.NewTypeName) == "" {
-		return nil, newError(ErrorInvalidInput, "new type is required", "Usage: rvn reclassify <object> <new-type>", nil, nil)
+		return nil, newError(ErrorInvalidInput, "new type is required", "Usage: rvn reclassify <reference> <new-type>", nil, nil)
 	}
 
 	contentBytes, err := os.ReadFile(req.FilePath)
@@ -304,7 +304,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 
 func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult, error) {
 	if strings.TrimSpace(req.Reference) == "" {
-		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn reclassify <object> <new-type>", nil, nil)
+		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn reclassify <reference> <new-type>", nil, nil)
 	}
 
 	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)

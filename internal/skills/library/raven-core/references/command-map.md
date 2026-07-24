@@ -8,24 +8,24 @@
 
 ## Reading content
 
-- Inspect exact file text before editing: `rvn read <path-or-ref> --raw --json`
+- Inspect exact file text before editing: `rvn read <reference> --raw --json`
 - Resolve any accepted reference input to its canonical object ID:
   `rvn resolve <reference> --json`. Use the returned ID when authoring links.
 
 ## Updating content
 
-- Update frontmatter fields: `rvn set <object_id> key=value --json` (applies immediately; add `--dry-run` to preview)
-- Surgical body replacement: `rvn edit <path> <old> <new> --json` (applies immediately; add `--dry-run` to preview)
+- Update frontmatter fields: `rvn set <reference> key=value --json` (applies immediately; add `--dry-run` to preview)
+- Surgical body replacement: `rvn edit <reference> <old> <new> --json` (applies immediately; add `--dry-run` to preview)
 - Update a trait value by trait ID: `rvn update <trait_id> <new_value> --json` (applies immediately; add `--dry-run` to preview)
 
 ## Organizing content
 
-- Change an object's type safely: `rvn reclassify <object> <new-type> --json`
+- Change an object's type safely: `rvn reclassify <reference> <new-type> --json`
 - Safe move or rename with ref updates: `rvn move <source> <dest> --json` (applies immediately; add `--dry-run` to preview). Bulk `--stdin` moves require `--confirm`.
 - Create a section: `rvn section create <file> "<title>" --level N [--after|--before|--under <section>] --json`.
 - Reorder/reparent a complete section subtree: `rvn section move <file#section> [--after|--before|--under <section>] --json`.
 - Rename a section heading with ref updates: `rvn section rename <file#section> "<new heading text>" --json`.
-- Safe delete with backlink warnings: `rvn delete <object_id> --json` (applies immediately; add `--dry-run` to preview). Bulk `--stdin` deletes require `--confirm`.
+- Safe delete with backlink warnings: `rvn delete <reference> --json` (applies immediately; add `--dry-run` to preview). Bulk `--stdin` deletes require `--confirm`.
 
 ## Daily notes
 

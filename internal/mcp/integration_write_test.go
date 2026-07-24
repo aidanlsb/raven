@@ -82,7 +82,7 @@ func TestMCPIntegration_SetFields(t *testing.T) {
 
 	// Update the email field
 	result := server.callTool("set", map[string]interface{}{
-		"object_id": "people/carol",
+		"reference": "people/carol",
 		"fields": map[string]interface{}{
 			"email": "carol@example.com",
 		},
@@ -164,7 +164,7 @@ types:
 
 	// Key-value map provided as a single "k=v" string is rejected.
 	setInvalid := server.callTool("set", map[string]interface{}{
-		"object_id": "projects/mcp-compat-project",
+		"reference": "projects/mcp-compat-project",
 		"fields":    "status=done",
 	})
 	setInvalidEnv := parseMCPEnvelope(t, setInvalid.Text)
@@ -177,7 +177,7 @@ types:
 
 	// Typed object for fields succeeds.
 	setValid := server.callTool("set", map[string]interface{}{
-		"object_id": "projects/mcp-compat-project",
+		"reference": "projects/mcp-compat-project",
 		"fields":    map[string]interface{}{"status": "done"},
 	})
 	if setValid.IsError {
@@ -204,9 +204,9 @@ type: page
 	server := newTestServer(t, v.Path, binary)
 
 	result := server.callTool("edit", map[string]interface{}{
-		"path":    "daily/2026-01-02.md",
-		"old_str": "- old task",
-		"new_str": "",
+		"reference": "daily/2026-01-02.md",
+		"old_str":   "- old task",
+		"new_str":   "",
 	})
 
 	if result.IsError {
@@ -235,7 +235,7 @@ func TestMCPIntegration_DeleteObject(t *testing.T) {
 
 	// Single-object MCP delete applies immediately when invoked.
 	result := server.callTool("delete", map[string]interface{}{
-		"object_id": "people/dave",
+		"reference": "people/dave",
 	})
 	if result.IsError {
 		t.Fatalf("delete failed: %s", result.Text)

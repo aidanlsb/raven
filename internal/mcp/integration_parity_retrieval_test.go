@@ -114,7 +114,7 @@ Line two
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("read", map[string]interface{}{
-			"path":       "people/read-target",
+			"reference":  "people/read-target",
 			"raw":        true,
 			"lines":      true,
 			"start_line": 1,
@@ -205,14 +205,14 @@ Owner [[people/eve]]
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
 		mcpResult := server.callTool("backlinks", map[string]interface{}{
-			"target": "people/eve",
+			"reference": "people/eve",
 		})
 		cliResult := vCLI.RunCLI("backlinks", "people/eve")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"target", "items"})
 
 		grouped := server.callTool("backlinks", map[string]interface{}{
-			"targets": []interface{}{"people/eve"},
+			"references": []interface{}{"people/eve"},
 		})
 		groupedEnv := parseMCPEnvelope(t, grouped.Text)
 		if !groupedEnv.OK {
@@ -266,14 +266,14 @@ Owner [[people/eve]]
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
 		mcpResult := server.callTool("outlinks", map[string]interface{}{
-			"source": "projects/security",
+			"reference": "projects/security",
 		})
 		cliResult := vCLI.RunCLI("outlinks", "projects/security")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"source", "items"})
 
 		grouped := server.callTool("outlinks", map[string]interface{}{
-			"sources": []interface{}{"projects/security"},
+			"references": []interface{}{"projects/security"},
 		})
 		groupedEnv := parseMCPEnvelope(t, grouped.Text)
 		if !groupedEnv.OK {

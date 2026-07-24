@@ -91,9 +91,9 @@ func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Res
 		return handleBacklinksStdin(rt, req, start)
 	}
 
-	reference := stringArg(req.Args, "target")
+	reference := stringArg(req.Args, "reference")
 	if strings.TrimSpace(reference) == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "requires target argument", nil, "Usage: rvn backlinks <target> or rvn backlinks --stdin")
+		return commandexec.Failure("MISSING_ARGUMENT", "requires reference argument", nil, "Usage: rvn backlinks <reference> or rvn backlinks --stdin")
 	}
 	resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
 	if err != nil {
@@ -125,9 +125,9 @@ func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Resu
 		return handleOutlinksStdin(rt, req, start)
 	}
 
-	reference := stringArg(req.Args, "source")
+	reference := stringArg(req.Args, "reference")
 	if strings.TrimSpace(reference) == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "requires source argument", nil, "Usage: rvn outlinks <source> or rvn outlinks --stdin")
+		return commandexec.Failure("MISSING_ARGUMENT", "requires reference argument", nil, "Usage: rvn outlinks <reference> or rvn outlinks --stdin")
 	}
 	resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
 	if err != nil {
@@ -146,27 +146,27 @@ func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Resu
 }
 
 func handleBacklinksStdin(rt *readsvc.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
-	targets := stringSliceArg(req.Args["targets"])
-	if len(targets) == 0 {
-		return commandexec.Failure("MISSING_ARGUMENT", "no targets provided via stdin", nil, "Pipe targets to stdin, one per line")
+	references := stringSliceArg(req.Args["references"])
+	if len(references) == 0 {
+		return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe references to stdin, one per line")
 	}
 
-	groups := make([]model.BacklinksGroup, 0, len(targets))
+	groups := make([]model.BacklinksGroup, 0, len(references))
 	errors := make([]model.ReferenceInputError, 0)
 	total := 0
-	for _, target := range targets {
-		resolved, err := readsvc.ResolveReferenceWithDynamicDates(target, rt, true)
+	for _, reference := range references {
+		resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
 		if err != nil {
-			errors = append(errors, referenceInputError(target, mapResolveFailure(err, target)))
+			errors = append(errors, referenceInputError(reference, mapResolveFailure(err, reference)))
 			continue
 		}
 		links, err := readsvc.Backlinks(rt, resolved.ObjectID)
 		if err != nil {
-			errors = append(errors, referenceInputError(target, commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to read backlinks: %v", err), nil, "")))
+			errors = append(errors, referenceInputError(reference, commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to read backlinks: %v", err), nil, "")))
 			continue
 		}
 		groups = append(groups, model.BacklinksGroup{
-			Input:  target,
+			Input:  reference,
 			Target: resolved.ObjectID,
 			Items:  referenceItems(links),
 			Count:  len(links),
@@ -178,37 +178,37 @@ func handleBacklinksStdin(rt *readsvc.Runtime, req commandexec.Request, start ti
 		"stdin":           true,
 		"items_by_target": groups,
 		"errors":          errors,
-		"total_inputs":    len(targets),
+		"total_inputs":    len(references),
 		"resolved":        len(groups),
 	}, &commandexec.Meta{Count: total, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 func backlinksStdinMode(args map[string]interface{}) bool {
-	return boolArg(args, "stdin") || len(stringSliceArg(args["targets"])) > 0
+	return boolArg(args, "stdin") || len(stringSliceArg(args["references"])) > 0
 }
 
 func handleOutlinksStdin(rt *readsvc.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
-	sources := stringSliceArg(req.Args["sources"])
-	if len(sources) == 0 {
-		return commandexec.Failure("MISSING_ARGUMENT", "no sources provided via stdin", nil, "Pipe sources to stdin, one per line")
+	references := stringSliceArg(req.Args["references"])
+	if len(references) == 0 {
+		return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe references to stdin, one per line")
 	}
 
-	groups := make([]model.OutlinksGroup, 0, len(sources))
+	groups := make([]model.OutlinksGroup, 0, len(references))
 	errors := make([]model.ReferenceInputError, 0)
 	total := 0
-	for _, source := range sources {
-		resolved, err := readsvc.ResolveReferenceWithDynamicDates(source, rt, true)
+	for _, reference := range references {
+		resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
 		if err != nil {
-			errors = append(errors, referenceInputError(source, mapResolveFailure(err, source)))
+			errors = append(errors, referenceInputError(reference, mapResolveFailure(err, reference)))
 			continue
 		}
 		links, err := readsvc.Outlinks(rt, resolved.ObjectID)
 		if err != nil {
-			errors = append(errors, referenceInputError(source, commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to read outlinks: %v", err), nil, "")))
+			errors = append(errors, referenceInputError(reference, commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to read outlinks: %v", err), nil, "")))
 			continue
 		}
 		groups = append(groups, model.OutlinksGroup{
-			Input:  source,
+			Input:  reference,
 			Source: resolved.ObjectID,
 			Items:  referenceItems(links),
 			Count:  len(links),
@@ -220,13 +220,13 @@ func handleOutlinksStdin(rt *readsvc.Runtime, req commandexec.Request, start tim
 		"stdin":           true,
 		"items_by_source": groups,
 		"errors":          errors,
-		"total_inputs":    len(sources),
+		"total_inputs":    len(references),
 		"resolved":        len(groups),
 	}, &commandexec.Meta{Count: total, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 func outlinksStdinMode(args map[string]interface{}) bool {
-	return boolArg(args, "stdin") || len(stringSliceArg(args["sources"])) > 0
+	return boolArg(args, "stdin") || len(stringSliceArg(args["references"])) > 0
 }
 
 func referenceInputError(input string, result commandexec.Result) model.ReferenceInputError {
@@ -330,7 +330,7 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 // HandleRead executes the canonical `read` command.
 func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	reference := stringArg(req.Args, "path")
+	reference := stringArg(req.Args, "reference")
 	raw := boolArg(req.Args, "raw")
 	lines := boolArg(req.Args, "lines")
 	startLine, _ := intArg(req.Args, "start-line")
@@ -446,10 +446,10 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 		editor = cfg.GetEditor()
 	}
 
-	if boolArg(req.Args, "stdin") {
-		references := stringSliceArg(req.Args["object_ids"])
+	references := stringSliceArg(req.Args["references"])
+	if boolArg(req.Args, "stdin") || len(references) > 0 {
 		if len(references) == 0 {
-			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Provide object IDs via stdin or object_ids")
+			return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Provide references via stdin or references")
 		}
 
 		targets, failures := readsvc.ResolveOpenTargets(rt, references)

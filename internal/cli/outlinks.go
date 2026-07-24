@@ -22,7 +22,7 @@ var outlinksCmd = newCanonicalLeafCommand("outlinks", canonicalLeafOptions{
 func validateOutlinksArgs(cmd *cobra.Command, args []string) error {
 	stdin, _ := cmd.Flags().GetBool("stdin")
 	if stdin && len(args) > 0 {
-		return fmt.Errorf("cannot specify source when using --stdin")
+		return fmt.Errorf("cannot specify reference when using --stdin")
 	}
 	if len(args) > 1 {
 		return fmt.Errorf("accepts at most 1 argument")
@@ -38,33 +38,33 @@ func prepareOutlinksArgs(cmd *cobra.Command, args []string) ([]string, bool, err
 	if stdin {
 		return args, false, nil
 	}
-	return prepareInteractiveReferenceArgs(args, "outlinks", "source", "outlinks> ", "Select a source for outlinks (Esc to cancel)", interactiveReferencePickerOptions{})
+	return prepareInteractiveReferenceArgs(args, "outlinks", "reference", "outlinks> ", "Select a reference for outlinks (Esc to cancel)", interactiveReferencePickerOptions{})
 }
 
 func buildOutlinksArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	stdin, _ := cmd.Flags().GetBool("stdin")
 	if stdin {
-		sources, err := ReadReferencesFromStdin()
+		references, err := ReadReferencesFromStdin()
 		if err != nil {
 			return nil, err
 		}
-		if len(sources) == 0 {
-			return nil, fmt.Errorf("no sources provided on stdin")
+		if len(references) == 0 {
+			return nil, fmt.Errorf("no references provided on stdin")
 		}
 		return map[string]interface{}{
-			"stdin":   true,
-			"sources": sources,
+			"stdin":      true,
+			"references": references,
 		}, nil
 	}
 	return map[string]interface{}{
-		"source": args[0],
+		"reference": args[0],
 	}, nil
 }
 
 func handleOutlinksFailure(cmd *cobra.Command, result commandexec.Result) error {
 	return handleAmbiguousReferenceRetry(cmd, result, ambiguousReferenceRetryOptions{
 		CommandID: "outlinks",
-		ArgKey:    "source",
+		ArgKey:    "reference",
 		Prompt:    "outlinks/ref> ",
 		Render:    renderOutlinks,
 	})

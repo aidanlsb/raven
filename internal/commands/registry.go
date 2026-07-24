@@ -87,7 +87,7 @@ const (
 	FlagTypeBool        FlagType = "bool"
 	FlagTypeInt         FlagType = "int"
 	FlagTypeKeyValue    FlagType = "key=value"     // For repeatable flags: --field name=value, --input name=value
-	FlagTypePosKeyValue FlagType = "pos-key=value" // For positional key=value args (e.g., `set <id> field=value...`)
+	FlagTypePosKeyValue FlagType = "pos-key=value" // For positional key=value args (e.g., `set <reference> field=value...`)
 	FlagTypeStringSlice FlagType = "stringSlice"   // For repeatable string flags
 	FlagTypeJSON        FlagType = "json"          // JSON object payloads
 )

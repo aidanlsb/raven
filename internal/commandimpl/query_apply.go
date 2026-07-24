@@ -85,12 +85,12 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, result *read
 		return invokeNestedCommand(ctx, req, "set", map[string]interface{}{
 			"stdin":      true,
 			"fields":     plan.SetUpdates,
-			"object_ids": stringsToInterfaces(plan.IDs),
+			"references": stringsToInterfaces(plan.IDs),
 		}, queryTimeMs)
 	case bulkops.ObjectApplyDelete:
 		return invokeNestedCommand(ctx, req, "delete", map[string]interface{}{
 			"stdin":      true,
-			"object_ids": stringsToInterfaces(plan.IDs),
+			"references": stringsToInterfaces(plan.IDs),
 		}, queryTimeMs)
 	case bulkops.ObjectApplyAdd:
 		return invokeNestedCommand(ctx, req, "add", map[string]interface{}{

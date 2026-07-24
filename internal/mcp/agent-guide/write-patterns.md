@@ -33,7 +33,7 @@ Rules:
 - `add` rejects Markdown heading content. Its removed `heading` and `create-heading` args are invalid; use `section_create`, then `add` to the returned section ID.
 - Bulk-append into sections: pipe section IDs from a `section` query into `add` with `stdin=true` (`query "section .title==Tasks" --ids`).
 - Rename a heading safely: `section_rename` with `section_id="file#section"` and `new_heading_text` set to plain heading text. Never rename headings with `move` (it rejects section sources) or `edit` (it leaves `stale_fragment` refs when other files link to the section).
-- Edit inside a section: `edit` with `path="file#section"` scopes replacements to the section's subtree (section plus child sections).
+- Edit inside a section: `edit` with `reference="file#section"` scopes replacements to the section's subtree (section plus child sections).
 
 ## Recommended sequences
 
@@ -65,7 +65,7 @@ Metadata update:
 
 ```text
 raven_invoke(command="set", args={
-  "object_id":"project/website-redesign",
+  "reference":"project/website-redesign",
   "fields":{"status":"active"}
 })
 ```
@@ -77,14 +77,14 @@ Edit applies immediately; preview only when you need to verify the diff first:
 ```text
 # Applies on the first call:
 raven_invoke(command="edit", args={
-  "path":"project/website-redesign.md",
+  "reference":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active"
 })
 
 # Optional dry run to inspect the before/after without writing:
 raven_invoke(command="edit", args={
-  "path":"project/website-redesign.md",
+  "reference":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active",
   "dry-run":true
@@ -94,14 +94,14 @@ raven_invoke(command="edit", args={
 Immediate single-object delete:
 
 ```text
-raven_invoke(command="backlinks", args={"target":"project/old-project"})
-raven_invoke(command="delete", args={"object_id":"project/old-project"})
+raven_invoke(command="backlinks", args={"reference":"project/old-project"})
+raven_invoke(command="delete", args={"reference":"project/old-project"})
 ```
 
 Asset IDs returned by an `asset` query use the same delete path:
 
 ```text
-raven_invoke(command="delete", args={"object_id":"assets/pdfs/old-paper.pdf", "dry-run":true})
+raven_invoke(command="delete", args={"reference":"assets/pdfs/old-paper.pdf", "dry-run":true})
 ```
 
 Single-object `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
@@ -110,7 +110,7 @@ after clear user approval or an unambiguous request, and use `dry-run=true` when
 the command exposes it and you want to confirm the effect first. Bulk operations (`stdin=true`) stay
 preview-first and require `confirm=true`.
 
-For bulk reclassification, pass `object_ids` plus `new-type`. The preview reports
+For bulk reclassification, pass `references` plus `new-type`. The preview reports
 planned moves, dropped/added fields, required-field failures, and reference
 rewrites. Applying requires `confirm=true`; items that drop fields also require
 `force=true`.

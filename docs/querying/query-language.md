@@ -23,9 +23,9 @@ Retrieval commands overlap. When several could work, this table picks the sharpe
 |--------|--------|----------------------|
 | Find files mentioning a word | `rvn search "word"` | `rvn query 'type:<t> content("word")'` scopes the text match to a type/section/trait root; use it when you know the structure |
 | Find **real** todo/due traits (not prose) | `rvn query 'trait:todo'` | `rvn search "@todo"` matches the literal text `@todo` and cannot tell a real trait from a mention |
-| What links here (incoming refs) | `rvn backlinks <id>` | `rvn query '... refd(...)'` for structured/bulk use; `rvn read <id>` appends backlinks after content |
-| What does this link to (outgoing) | `rvn outlinks <id>` | `rvn query '... refs(...)'` when you need structured filtering |
-| Resolve an alias, date, or other reference input | `rvn resolve <ref>` | Use the returned canonical ID when authoring references; `rvn read <ref>` also resolves, but returns full content |
+| What links here (incoming refs) | `rvn backlinks <reference>` | `rvn query '... refd(...)'` for structured/bulk use; `rvn read <reference>` appends backlinks after content |
+| What does this link to (outgoing) | `rvn outlinks <reference>` | `rvn query '... refs(...)'` when you need structured filtering |
+| Resolve an alias, date, or other reference input | `rvn resolve <reference>` | Use the returned canonical ID when authoring references; `rvn read <reference>` also resolves, but returns full content |
 | Everything on a date | `rvn date <date>` / `rvn daily <date>` | `rvn query 'type:date .date==<date>'` for the daily-note object; `rvn query 'trait:due .value==<date>'` for items due that date |
 
 ### Choose Query Type

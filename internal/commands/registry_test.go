@@ -230,7 +230,7 @@ func TestUsageForMetaUsesExplicitUsageWhenPresent(t *testing.T) {
 	t.Parallel()
 
 	meta := Registry["set"]
-	if got := UsageForMeta("set", meta); got != "set <object-id> <field=value>..." {
+	if got := UsageForMeta("set", meta); got != "set <reference> <field=value>..." {
 		t.Errorf("UsageForMeta(set) = %q, want explicit set usage", got)
 	}
 }

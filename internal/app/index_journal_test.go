@@ -118,7 +118,7 @@ func TestAutoReindexDisabledMutationWarnsUntilReindex(t *testing.T) {
 	reindexPhaseVault(t, vault.Path)
 
 	edit := runInvoked(t, vault.Path, "edit", map[string]any{
-		"path": "projects/roadmap", "old_str": "Old body.", "new_str": "New body.",
+		"reference": "projects/roadmap", "old_str": "Old body.", "new_str": "New body.",
 	}, nil)
 	if !edit.OK {
 		t.Fatalf("edit failed: %#v", edit.Error)

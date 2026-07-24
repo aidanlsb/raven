@@ -61,7 +61,7 @@ Returns structured issues with:
 The summary groups issues by type with counts and top values, making it easy to prioritize fixes.
 
 Scoping:
-- Pass a file path, directory, or reference to check a subset of the vault
+- Pass a reference to a file, directory, or object to check a subset of the vault
 - Use --type to check all objects of a specific type
 - Use --trait to check all usages of a specific trait
 - Use --issues to check only specific issue types
@@ -75,7 +75,7 @@ For missing_reference summaries, preview generated pages with 'rvn check create-
 before applying with 'rvn check create-missing --confirm --json'.
 Ask the user for clarification when needed (e.g., which type to use for missing references).`,
 		Args: []ArgMeta{
-			{Name: "path", Description: "File, directory, or reference to check (optional, defaults to entire vault)", Required: false},
+			{Name: "reference", Description: "File, directory, or object reference to check (optional, defaults to entire vault)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "strict", Description: "Treat warnings as errors", Type: FlagTypeBool},
@@ -122,7 +122,7 @@ Auto-fixable issue types include:
 - non_canonical_path: move file under the configured directory root for its type
   and rewrite all references that point at it`,
 		Args: []ArgMeta{
-			{Name: "path", Description: "File, directory, or reference to check before fixing (optional, defaults to entire vault)", Required: false},
+			{Name: "reference", Description: "File, directory, or object reference to check before fixing (optional, defaults to entire vault)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "strict", Description: "Treat warnings as errors", Type: FlagTypeBool},

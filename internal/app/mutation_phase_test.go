@@ -83,7 +83,7 @@ func TestMutationPhaseSingleObjectWrites(t *testing.T) {
 		t.Parallel()
 		v := buildPhaseVault(t)
 		res := runInvoked(t, v.Path, "edit", map[string]any{
-			"path": "projects/roadmap", "old_str": "Body line one.", "new_str": "Body line two.",
+			"reference": "projects/roadmap", "old_str": "Body line one.", "new_str": "Body line two.",
 		}, nil)
 		requirePhase(t, res, commandexec.MutationPhaseApplied)
 	})
@@ -92,7 +92,7 @@ func TestMutationPhaseSingleObjectWrites(t *testing.T) {
 		t.Parallel()
 		v := buildPhaseVault(t)
 		res := runInvoked(t, v.Path, "edit", map[string]any{
-			"path": "projects/roadmap", "old_str": "Body line one.", "new_str": "Body line two.",
+			"reference": "projects/roadmap", "old_str": "Body line one.", "new_str": "Body line two.",
 		}, withDryRun)
 		requirePhase(t, res, commandexec.MutationPhasePreview)
 	})
@@ -101,7 +101,7 @@ func TestMutationPhaseSingleObjectWrites(t *testing.T) {
 		t.Parallel()
 		v := buildPhaseVault(t)
 		res := runInvoked(t, v.Path, "set", map[string]any{
-			"object_id": "projects/roadmap", "fields": map[string]any{"status": "paused"},
+			"reference": "projects/roadmap", "fields": map[string]any{"status": "paused"},
 		}, nil)
 		requirePhase(t, res, commandexec.MutationPhaseApplied)
 	})
@@ -110,7 +110,7 @@ func TestMutationPhaseSingleObjectWrites(t *testing.T) {
 		t.Parallel()
 		v := buildPhaseVault(t)
 		res := runInvoked(t, v.Path, "set", map[string]any{
-			"object_id": "projects/roadmap", "fields": map[string]any{"status": "paused"},
+			"reference": "projects/roadmap", "fields": map[string]any{"status": "paused"},
 		}, withDryRun)
 		requirePhase(t, res, commandexec.MutationPhasePreview)
 	})
@@ -118,14 +118,14 @@ func TestMutationPhaseSingleObjectWrites(t *testing.T) {
 	t.Run("delete applies immediately for JSON/agent callers", func(t *testing.T) {
 		t.Parallel()
 		v := buildPhaseVault(t)
-		res := runInvoked(t, v.Path, "delete", map[string]any{"object_id": "projects/scratch"}, nil)
+		res := runInvoked(t, v.Path, "delete", map[string]any{"reference": "projects/scratch"}, nil)
 		requirePhase(t, res, commandexec.MutationPhaseApplied)
 	})
 
 	t.Run("delete dry-run previews", func(t *testing.T) {
 		t.Parallel()
 		v := buildPhaseVault(t)
-		res := runInvoked(t, v.Path, "delete", map[string]any{"object_id": "projects/scratch"}, withDryRun)
+		res := runInvoked(t, v.Path, "delete", map[string]any{"reference": "projects/scratch"}, withDryRun)
 		requirePhase(t, res, commandexec.MutationPhasePreview)
 	})
 
@@ -152,11 +152,11 @@ func TestMutationPhaseBulkWrites(t *testing.T) {
 		commandID string
 		args      map[string]any
 	}{
-		{"delete", "delete", map[string]any{"stdin": true, "object_ids": []any{"projects/scratch"}}},
-		{"set", "set", map[string]any{"stdin": true, "object_ids": []any{"projects/roadmap"}, "fields": map[string]any{"status": "done"}}},
+		{"delete", "delete", map[string]any{"stdin": true, "references": []any{"projects/scratch"}}},
+		{"set", "set", map[string]any{"stdin": true, "references": []any{"projects/roadmap"}, "fields": map[string]any{"status": "done"}}},
 		{"add", "add", map[string]any{"stdin": true, "object_ids": []any{"projects/roadmap"}, "text": "- bulk line"}},
 		{"move", "move", map[string]any{"stdin": true, "object_ids": []any{"projects/scratch"}, "destination": "archive/"}},
-		{"reclassify", "reclassify", map[string]any{"stdin": true, "object_ids": []any{"projects/scratch"}, "new-type": "person", "field": map[string]any{"name": "Scratch"}, "no-move": true, "force": true}},
+		{"reclassify", "reclassify", map[string]any{"stdin": true, "references": []any{"projects/scratch"}, "new-type": "person", "field": map[string]any{"name": "Scratch"}, "no-move": true, "force": true}},
 	}
 
 	for _, tc := range cases {
@@ -182,7 +182,7 @@ func TestMutationPhaseBulkReclassifyAllBlockedPreviews(t *testing.T) {
 	v := buildPhaseVault(t)
 	res := runInvoked(t, v.Path, "reclassify", map[string]any{
 		"stdin":      true,
-		"object_ids": []any{"projects/scratch"},
+		"references": []any{"projects/scratch"},
 		"new-type":   "person",
 	}, withConfirm)
 	requirePhase(t, res, commandexec.MutationPhasePreview)
@@ -239,14 +239,14 @@ types:
 		t.Parallel()
 		v := build(t)
 		// Dropping the 'note' field requires --force; without it nothing is written.
-		res := runInvoked(t, v.Path, "reclassify", map[string]any{"object": "alpha/one", "new-type": "beta"}, nil)
+		res := runInvoked(t, v.Path, "reclassify", map[string]any{"reference": "alpha/one", "new-type": "beta"}, nil)
 		requirePhase(t, res, commandexec.MutationPhasePreview)
 	})
 
 	t.Run("applies with force", func(t *testing.T) {
 		t.Parallel()
 		v := build(t)
-		res := runInvoked(t, v.Path, "reclassify", map[string]any{"object": "alpha/one", "new-type": "beta", "force": true}, nil)
+		res := runInvoked(t, v.Path, "reclassify", map[string]any{"reference": "alpha/one", "new-type": "beta", "force": true}, nil)
 		requirePhase(t, res, commandexec.MutationPhaseApplied)
 	})
 }
@@ -427,7 +427,7 @@ func TestMutationPhaseAbsentForReads(t *testing.T) {
 	requireNoPhase(t, runInvoked(t, v.Path, "query", map[string]any{"query_string": "type:project"}, nil))
 	// Discovery/read commands never carry a mutation phase.
 	requireNoPhase(t, runInvoked(t, v.Path, "schema", map[string]any{}, nil))
-	requireNoPhase(t, runInvoked(t, v.Path, "read", map[string]any{"path": "projects/roadmap"}, nil))
+	requireNoPhase(t, runInvoked(t, v.Path, "read", map[string]any{"reference": "projects/roadmap"}, nil))
 }
 
 func cloneArgs(args map[string]any) map[string]any {

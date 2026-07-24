@@ -37,7 +37,7 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 	sch := rt.Schema
 
 	result, err := checksvc.Run(rt, checksvc.Options{
-		PathArg:     strings.TrimSpace(stringArg(req.Args, "path")),
+		PathArg:     strings.TrimSpace(stringArg(req.Args, "reference")),
 		TypeFilter:  strings.TrimSpace(stringArg(req.Args, "type")),
 		TraitFilter: strings.TrimSpace(stringArg(req.Args, "trait")),
 		Issues:      strings.TrimSpace(stringArg(req.Args, "issues")),

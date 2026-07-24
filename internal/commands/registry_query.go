@@ -19,11 +19,11 @@ Choose the right retrieval tool:
 - search — free-text discovery when you do not know the structure yet. Returns
   file/snippet matches only. search "@todo" finds the text "@todo", NOT real
   todo traits; use query 'trait:todo' for real traits.
-- backlinks <id> — all incoming references to one specific object or asset.
+- backlinks <reference> — all incoming references to one specific object or asset.
   (Equivalent query: refd(...); read also appends backlinks.)
-- outlinks <id> — all outgoing references from one specific object.
-- read <ref> — full file content after you already identified the object.
-- resolve <ref> — turn an accepted reference input into its canonical target ID
+- outlinks <reference> — all outgoing references from one specific object.
+- read <reference> — full file content after you already identified the object.
+- resolve <reference> — turn an accepted reference input into its canonical target ID
   without reading content; use that ID when authoring references.
 - date <date> / daily <date> — everything for one date. In queries, use
   type:date .date==<date> for daily-note objects, or trait:due .value==<date>
@@ -212,24 +212,24 @@ For trait queries (trait:...):
 	},
 	"backlinks": {
 		Name:        "backlinks",
-		Use:         "backlinks [target]",
+		Use:         "backlinks [reference]",
 		Description: "Find objects that reference a target object or asset",
 		LongDesc: `Find objects that reference a target object or asset.
 
 In an interactive terminal, bare 'rvn backlinks' launches Raven's picker
 over indexed object, section, and asset references.
-When an interactive backlinks target is ambiguous, Raven prompts you to choose the target.
+When an interactive backlinks reference is ambiguous, Raven prompts you to choose the reference.
 Use --browse to browse incoming references interactively and open the selected reference location.
-Use --stdin to read targets from stdin and return grouped results for each target.
-Non-interactive use requires either a target or --stdin input.` + barePickerInsertModeHelp,
+Use --stdin to read references from stdin and return grouped results for each reference.
+Non-interactive use requires either a reference or --stdin input.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
-			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: false, CLIOptional: true},
+			{Name: "reference", Description: "Object or asset reference (e.g., people/freya, assets/pdfs/file.pdf)", Required: false, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "browse", Description: "Interactively browse backlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
-			{Name: "stdin", Description: "Read targets from stdin and return grouped backlinks", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read references from stdin and return grouped backlinks", Type: FlagTypeBool},
 		},
-		BulkStdinArgName: "targets",
+		BulkStdinArgName: "references",
 		Examples: []string{
 			"rvn backlinks people/freya --json",
 			"rvn backlinks people/freya --browse",
@@ -238,33 +238,33 @@ Non-interactive use requires either a target or --stdin input.` + barePickerInse
 		},
 		UseCases: []string{
 			"Find all files that reference an object or asset",
-			"Interactively pick a target in Raven's picker",
-			"Interactively disambiguate backlinks targets in Raven's picker",
+			"Interactively pick a reference in Raven's picker",
+			"Interactively disambiguate backlinks references in Raven's picker",
 			"Browse incoming references and open one at the reference line",
-			"Traverse backlinks for multiple targets with grouped output",
+			"Traverse backlinks for multiple references with grouped output",
 			"Audit incoming links before moving or deleting content",
 		},
 	},
 	"outlinks": {
 		Name:        "outlinks",
-		Use:         "outlinks [source]",
+		Use:         "outlinks [reference]",
 		Description: "Find object and asset links referenced by an object",
 		LongDesc: `Find object and asset links referenced by an object.
 
 In an interactive terminal, bare 'rvn outlinks' launches Raven's picker
 over indexed object and section references.
-When an interactive outlinks source is ambiguous, Raven prompts you to choose the source.
+When an interactive outlinks reference is ambiguous, Raven prompts you to choose the reference.
 Use --browse to browse outgoing references interactively and open the selected reference location.
-Use --stdin to read sources from stdin and return grouped results for each source.
-Non-interactive use requires either a source or --stdin input.` + barePickerInsertModeHelp,
+Use --stdin to read references from stdin and return grouped results for each reference.
+Non-interactive use requires either a reference or --stdin input.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
-			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: false, CLIOptional: true},
+			{Name: "reference", Description: "Object reference (e.g., projects/bifrost)", Required: false, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "browse", Description: "Interactively browse outlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
-			{Name: "stdin", Description: "Read sources from stdin and return grouped outlinks", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read references from stdin and return grouped outlinks", Type: FlagTypeBool},
 		},
-		BulkStdinArgName: "sources",
+		BulkStdinArgName: "references",
 		Examples: []string{
 			"rvn outlinks projects/bifrost --json",
 			"rvn outlinks projects/bifrost --browse",
@@ -272,10 +272,10 @@ Non-interactive use requires either a source or --stdin input.` + barePickerInse
 		},
 		UseCases: []string{
 			"Inspect the outgoing links from an object",
-			"Interactively pick a source in Raven's picker",
-			"Interactively disambiguate outlinks sources in Raven's picker",
+			"Interactively pick a reference in Raven's picker",
+			"Interactively disambiguate outlinks references in Raven's picker",
 			"Browse outgoing references and open one at the reference line",
-			"Traverse outlinks for multiple sources with grouped output",
+			"Traverse outlinks for multiple references with grouped output",
 			"Follow references from a file to related objects and assets",
 		},
 	},
@@ -298,8 +298,8 @@ the structure.
 When to use which:
 - search — you only have a text fragment ("find files mentioning pricing").
 - query ... content("term") — text match scoped to a type/section/trait root.
-- backlinks <id> / query ... refd(...) — what references a specific object/asset.
-- resolve <ref> — map an accepted reference input to its canonical object ID.
+- backlinks <reference> / query ... refd(...) — what references a specific object/asset.
+- resolve <reference> — map an accepted reference input to its canonical object ID.
 
 Uses full-text search with relevance ranking. Supports:
   - Simple words: "meeting notes" (finds pages containing both words)

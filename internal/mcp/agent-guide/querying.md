@@ -22,10 +22,10 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 
 - `query` — real Raven items, real trait instances, or indexed asset rows; filter by type/section/trait/asset, fields, scope, and references.
 - `search` — you only know a text fragment and do not yet know the type, trait, or structure. Returns file/snippet matches; it does NOT distinguish a real `@todo` trait from prose that mentions `@todo`. For real traits use `query "trait:todo"`.
-- `backlinks <id>` — incoming references to one object/asset (structured equivalent: `query "... refd(...)"`; `read` also appends backlinks).
-- `outlinks <id>` — outgoing references from one object (structured equivalent: `query "... refs(...)"`).
-- `resolve <ref>` — map an accepted reference input to its canonical object ID without reading content; use that ID in authored references.
-- `read <ref>` — full file content once you have identified the object.
+- `backlinks <reference>` — incoming references to one object/asset (structured equivalent: `query "... refd(...)"`; `read` also appends backlinks).
+- `outlinks <reference>` — outgoing references from one object (structured equivalent: `query "... refs(...)"`).
+- `resolve <reference>` — map an accepted reference input to its canonical object ID without reading content; use that ID in authored references.
+- `read <reference>` — full file content once you have identified the object.
 - `date <date>` — everything for a date; in RQL use `type:date .date==<date>` for the daily-note object or `trait:due .value==<date>` for items due that day.
 - If the user asks for actual open tasks, due items, briefs, or typed items, start with `query`.
 

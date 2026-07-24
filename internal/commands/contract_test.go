@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -21,15 +20,15 @@ func TestBuildCommandContractUpdateUsesTraitIDsForBulkStdin(t *testing.T) {
 	if _, ok := contract.Parameters["object_ids"]; ok {
 		t.Fatalf("did not expect object_ids to remain canonical for update: %#v", contract.Parameters)
 	}
-	if !reflect.DeepEqual(spec.Aliases, []string{"object_ids", "ids"}) {
-		t.Fatalf("trait_ids aliases = %#v, want object_ids + ids", spec.Aliases)
+	if len(spec.Aliases) != 0 {
+		t.Fatalf("trait_ids aliases = %#v, want none", spec.Aliases)
 	}
 	if !containsString(contract.ParameterOrder, "trait_ids") {
 		t.Fatalf("parameter order %v does not include trait_ids", contract.ParameterOrder)
 	}
 }
 
-func TestValidateArgumentsStrictNormalizesUpdateBulkAliases(t *testing.T) {
+func TestValidateArgumentsStrictRejectsRetiredUpdateBulkAliases(t *testing.T) {
 	t.Parallel()
 
 	contract, ok := BuildCommandContract("update")
@@ -38,40 +37,29 @@ func TestValidateArgumentsStrictNormalizesUpdateBulkAliases(t *testing.T) {
 	}
 	spec := BuildInvokeParamSpec(contract)
 
-	cases := []struct {
-		name string
-		key  string
-	}{
-		{name: "legacy object_ids alias", key: "object_ids"},
-		{name: "hyphenated canonical key", key: "trait-ids"},
-		{name: "legacy ids alias", key: "ids"},
+	normalized, issues := ValidateArgumentsStrict(spec, map[string]interface{}{
+		"stdin":     true,
+		"value":     "done",
+		"trait-ids": []interface{}{"tasks/task1.md:trait:0", "tasks/task1.md:trait:1"},
+	})
+	if len(issues) > 0 {
+		t.Fatalf("expected hyphenated canonical key to validate, got issues: %#v", issues)
+	}
+	if got := len(normalized["trait_ids"].([]interface{})); got != 2 {
+		t.Fatalf("trait_ids length = %d, want 2", got)
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, key := range []string{"object_ids", "ids"} {
+		t.Run(key, func(t *testing.T) {
 			t.Parallel()
 
-			normalized, issues := ValidateArgumentsStrict(spec, map[string]interface{}{
+			_, issues := ValidateArgumentsStrict(spec, map[string]interface{}{
 				"stdin": true,
 				"value": "done",
-				tc.key:  []interface{}{"tasks/task1.md:trait:0", "tasks/task1.md:trait:1"},
+				key:     []interface{}{"tasks/task1.md:trait:0", "tasks/task1.md:trait:1"},
 			})
-			if len(issues) > 0 {
-				t.Fatalf("expected alias %q to validate, got issues: %#v", tc.key, issues)
-			}
-
-			rawIDs, ok := normalized["trait_ids"].([]interface{})
-			if !ok {
-				t.Fatalf("trait_ids missing or wrong type: %#v", normalized)
-			}
-			if len(rawIDs) != 2 {
-				t.Fatalf("trait_ids = %#v, want 2 entries", rawIDs)
-			}
-			if _, ok := normalized["object_ids"]; ok {
-				t.Fatalf("expected object_ids alias to normalize away, got %#v", normalized)
-			}
-			if _, ok := normalized["ids"]; ok {
-				t.Fatalf("expected ids alias to normalize away, got %#v", normalized)
+			if len(issues) == 0 || issues[0].Code != "UNKNOWN_ARGUMENT" {
+				t.Fatalf("expected %q to be rejected as unknown, got %#v", key, issues)
 			}
 		})
 	}
@@ -105,14 +93,75 @@ func TestBuildCommandContractReclassifyBulkArguments(t *testing.T) {
 	if !ok {
 		t.Fatal("expected reclassify contract")
 	}
-	if contract.Parameters["object"].Required {
-		t.Fatal("reclassify object should be optional for object_ids bulk mode")
+	if contract.Parameters["reference"].Required {
+		t.Fatal("reclassify reference should be optional for references bulk mode")
 	}
 	if !contract.Parameters["new-type"].Required {
 		t.Fatal("reclassify new-type should remain required")
 	}
-	if got := contract.Parameters["object_ids"].Type; got != ParameterTypeStringArray {
-		t.Fatalf("reclassify object_ids type=%q, want %q", got, ParameterTypeStringArray)
+	if got := contract.Parameters["references"].Type; got != ParameterTypeStringArray {
+		t.Fatalf("reclassify references type=%q, want %q", got, ParameterTypeStringArray)
+	}
+	for _, retired := range []string{"object", "object_ids"} {
+		if _, ok := contract.Parameters[retired]; ok {
+			t.Fatalf("reclassify contract still exposes retired argument %q", retired)
+		}
+	}
+}
+
+func TestTargetCommandsUseReferenceArguments(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		commandID string
+		retired   []string
+		bulk      bool
+	}{
+		{commandID: "open", retired: []string{"object_ids"}, bulk: true},
+		{commandID: "resolve"},
+		{commandID: "read", retired: []string{"path"}},
+		{commandID: "set", retired: []string{"object_id", "object_ids"}, bulk: true},
+		{commandID: "unset", retired: []string{"object_id"}},
+		{commandID: "delete", retired: []string{"object_id", "object_ids"}, bulk: true},
+		{commandID: "reclassify", retired: []string{"object", "object_ids"}, bulk: true},
+		{commandID: "edit", retired: []string{"path"}},
+		{commandID: "check", retired: []string{"path"}},
+		{commandID: "check_fix", retired: []string{"path"}},
+		{commandID: "backlinks", retired: []string{"target", "targets"}, bulk: true},
+		{commandID: "outlinks", retired: []string{"source", "sources"}, bulk: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.commandID, func(t *testing.T) {
+			t.Parallel()
+
+			meta := Registry[tt.commandID]
+			if len(meta.Args) == 0 || meta.Args[0].Name != "reference" {
+				t.Fatalf("%s first positional = %#v, want reference", tt.commandID, meta.Args)
+			}
+			contract, ok := BuildCommandContract(tt.commandID)
+			if !ok {
+				t.Fatalf("expected %s contract", tt.commandID)
+			}
+			if _, ok := contract.Parameters["reference"]; !ok {
+				t.Fatalf("%s contract missing reference parameter", tt.commandID)
+			}
+			if tt.bulk {
+				if got := contract.Parameters["references"].Type; got != ParameterTypeStringArray {
+					t.Fatalf("%s references type = %q, want %q", tt.commandID, got, ParameterTypeStringArray)
+				}
+			}
+			for _, retired := range tt.retired {
+				if _, ok := contract.Parameters[retired]; ok {
+					t.Fatalf("%s contract still exposes retired argument %q", tt.commandID, retired)
+				}
+				for name, parameter := range contract.Parameters {
+					if containsString(parameter.Aliases, retired) {
+						t.Fatalf("%s parameter %q still aliases retired argument %q", tt.commandID, name, retired)
+					}
+				}
+			}
+		})
 	}
 }
 
@@ -170,12 +219,10 @@ func TestBacklinksOutlinksExposeStdinReplacementContracts(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		commandID   string
-		positional  string
-		replacement string
+		commandID string
 	}{
-		{commandID: "backlinks", positional: "target", replacement: "targets"},
-		{commandID: "outlinks", positional: "source", replacement: "sources"},
+		{commandID: "backlinks"},
+		{commandID: "outlinks"},
 	}
 
 	for _, tt := range tests {
@@ -186,13 +233,13 @@ func TestBacklinksOutlinksExposeStdinReplacementContracts(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected %s contract", tt.commandID)
 			}
-			if containsString(contract.Required, tt.positional) {
-				t.Fatalf("%s should not unconditionally require %s when --stdin is available", tt.commandID, tt.positional)
+			if containsString(contract.Required, "reference") {
+				t.Fatalf("%s should not unconditionally require reference when --stdin is available", tt.commandID)
 			}
-			if _, ok := contract.Parameters[tt.replacement]; !ok {
-				t.Fatalf("%s contract missing stdin replacement parameter %q", tt.commandID, tt.replacement)
+			if _, ok := contract.Parameters["references"]; !ok {
+				t.Fatalf("%s contract missing stdin replacement parameter references", tt.commandID)
 			}
-			if got := contract.Parameters[tt.replacement].Type; got != ParameterTypeStringArray {
+			if got := contract.Parameters["references"].Type; got != ParameterTypeStringArray {
 				t.Fatalf("%s replacement type = %q, want string array", tt.commandID, got)
 			}
 			if !Registry[tt.commandID].Args[0].CLIOptional {
@@ -273,16 +320,16 @@ func TestSchemaConvertRequiresMapJSON(t *testing.T) {
 func TestShouldPreviewByDefaultOnlyEnablesBulkPolicyForBulkInputs(t *testing.T) {
 	t.Parallel()
 
-	if ShouldPreviewByDefault("set", map[string]interface{}{"object_id": "people/alice"}) {
+	if ShouldPreviewByDefault("set", map[string]interface{}{"reference": "people/alice"}) {
 		t.Fatal("single set should not request preview by default")
 	}
 	if !ShouldPreviewByDefault("set", map[string]interface{}{
 		"stdin":      true,
-		"object_ids": []interface{}{"people/alice"},
+		"references": []interface{}{"people/alice"},
 	}) {
 		t.Fatal("bulk set should request preview by default")
 	}
-	if ShouldPreviewByDefault("edit", map[string]interface{}{"path": "note/example"}) {
+	if ShouldPreviewByDefault("edit", map[string]interface{}{"reference": "note/example"}) {
 		t.Fatal("edit applies by default and should not request preview")
 	}
 	if ShouldPreviewByDefault("query_saved_set", map[string]interface{}{"confirm": true}) {

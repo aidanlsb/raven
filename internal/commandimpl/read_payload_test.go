@@ -91,7 +91,7 @@ func TestHandleReadTypedContentResult(t *testing.T) {
 	t.Parallel()
 	v := newReadPayloadVault(t)
 
-	result := runReadHandler(t, v.Path, map[string]any{"path": "projects/raven"})
+	result := runReadHandler(t, v.Path, map[string]any{"reference": "projects/raven"})
 
 	payload, ok := result.Data.(commandpayload.ReadContentResult)
 	if !ok {
@@ -116,7 +116,7 @@ func TestHandleReadTypedRawResult(t *testing.T) {
 	v := newReadPayloadVault(t)
 
 	result := runReadHandler(t, v.Path, map[string]any{
-		"path":       "projects/raven",
+		"reference":  "projects/raven",
 		"raw":        true,
 		"lines":      true,
 		"start-line": 1,
@@ -143,8 +143,8 @@ func TestHandleReadTypedRawResultFullFile(t *testing.T) {
 	v := newReadPayloadVault(t)
 
 	result := runReadHandler(t, v.Path, map[string]any{
-		"path": "projects/raven",
-		"raw":  true,
+		"reference": "projects/raven",
+		"raw":       true,
 	})
 
 	payload, ok := result.Data.(commandpayload.ReadRawResult)
@@ -162,8 +162,8 @@ func TestHandleReadTypedSectionsResult(t *testing.T) {
 	v := newReadPayloadVault(t)
 
 	result := runReadHandler(t, v.Path, map[string]any{
-		"path":     "projects/raven",
-		"sections": true,
+		"reference": "projects/raven",
+		"sections":  true,
 	})
 
 	payload, ok := result.Data.(commandpayload.ReadSectionsResult)

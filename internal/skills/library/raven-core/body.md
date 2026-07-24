@@ -22,7 +22,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Create a brand-new object identity: `rvn new`
 - Append a log entry or capture text: `rvn add`
 - Idempotent generated output (briefs, reports): `rvn upsert`
-- Update frontmatter fields only: `rvn set <object_id> field=value --json`
+- Update frontmatter fields only: `rvn set <reference> field=value --json`
 - Exact body text replacement: `rvn edit`
 - Update a trait value by trait ID: `rvn update`
 - Create/reorder/rename headings: `rvn section create` / `rvn section move` / `rvn section rename`

@@ -136,21 +136,21 @@ Examples:
 
 ```text
 # Applies immediately (single-object):
-raven_invoke(command="edit", args={"path":"project/website.md", "old_str":"A", "new_str":"B"})
-raven_invoke(command="delete", args={"object_id":"project/old"})
+raven_invoke(command="edit", args={"reference":"project/website.md", "old_str":"A", "new_str":"B"})
+raven_invoke(command="delete", args={"reference":"project/old"})
 raven_invoke(command="section_create", args={"file":"project/website", "title":"Notes", "level":2})
 raven_invoke(command="section_move", args={"section_id":"project/website#notes", "after":"project/website#tasks"})
 raven_invoke(command="section_rename", args={"section_id":"project/website#tasks", "new_heading_text":"Completed Tasks"})
 
 # Preview a single-object write first (optional):
-raven_invoke(command="edit", args={"path":"project/website.md", "old_str":"A", "new_str":"B", "dry-run":true})
+raven_invoke(command="edit", args={"reference":"project/website.md", "old_str":"A", "new_str":"B", "dry-run":true})
 
 # Preview-first; apply only after explicit approval with confirm=true:
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "apply":["update done"]})
 raven_invoke(command="delete", args={"stdin":true, "confirm":true})
 raven_invoke(command="move", args={"stdin":true, "destination":"archive/", "confirm":true})
-raven_invoke(command="reclassify", args={"object_ids":["page/one","page/two"], "new-type":"note"})
-raven_invoke(command="reclassify", args={"object_ids":["page/one","page/two"], "new-type":"note", "confirm":true})
+raven_invoke(command="reclassify", args={"references":["page/one","page/two"], "new-type":"note"})
+raven_invoke(command="reclassify", args={"references":["page/one","page/two"], "new-type":"note", "confirm":true})
 ```
 
 Because single-object writes apply on the first call, only invoke them when the
