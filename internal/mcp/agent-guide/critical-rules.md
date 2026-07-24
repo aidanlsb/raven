@@ -6,6 +6,7 @@ These rules are non-negotiable.
 
 | Intent | Command ID | Do not use |
 |--------|------------|------------|
+| Import external non-Markdown files | `asset_import` | `cp`, `mv` |
 | Move or rename files, including assets | `move` | `mv`, `git mv` |
 | Create section headings | `section_create` | `add`, manual heading edits |
 | Reorder/reparent sections | `section_move` | `move`, manual cut/paste |
@@ -17,6 +18,7 @@ These rules are non-negotiable.
 | Update frontmatter | `set` | manual YAML edits |
 
 Why:
+- `asset_import` confines new assets to `directories.assets`, handles collisions explicitly, and updates the index.
 - `move` updates references, including Markdown links/images that point at assets.
 - `section_create` validates levels and slug stability; `add` is body-only.
 - `section_move` preserves heading identity and moves the complete subtree.
@@ -30,7 +32,7 @@ use it after clear user intent; if deletion impact is uncertain, inspect the
 object, run `backlinks`, or call with `dry-run=true` first. Bulk delete still
 previews unless `confirm=true`.
 
-If you bypass Raven and mutate files directly, reindex and repair before continuing. This also applies to adding, moving, or deleting files under the configured asset root.
+If you bypass Raven and mutate files directly, reindex and repair before continuing. This also applies to adding, moving, or deleting files under the configured asset root. Use `asset_import` for external files and `move` for files already in the vault.
 
 ## Confirm the target vault before writing
 

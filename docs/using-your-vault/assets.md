@@ -50,6 +50,32 @@ rvn reindex --json
 
 Run `rvn reindex --json` after changing `directories.assets` so cached asset metadata is refreshed.
 
+## Importing Assets
+
+Use `rvn asset import` to bring a host filesystem file into the vault. The
+source must be an absolute or `~`-relative regular file outside the vault. The
+destination is vault-relative and must stay under `directories.assets`.
+
+```bash
+rvn asset import ~/Downloads/paper.pdf assets/pdfs/ --json
+rvn asset import /tmp/diagram.png assets/images/system.png --json
+rvn asset import /tmp/recording.wav assets/audio/ --move --json
+```
+
+A destination ending with `/`, or an existing destination directory, preserves
+the source basename. The final path must include a file extension. Raven creates
+missing parent directories and updates the asset index through the same guarded
+post-mutation path as other writes.
+
+Imports copy by default. `--move` removes the source only after the vault write
+and index handoff succeed. Existing destinations fail with `FILE_EXISTS`; pass
+`--force` to overwrite one explicitly. Use `--dry-run` to validate and preview
+the resolved path without writing or removing anything.
+
+Markdown files are not assets and are rejected. For a file already inside the
+vault, use `rvn move` so Raven can update references and both sides of the index
+mutation.
+
 ## Checks, Moves, And Deletes
 
 `rvn check` reports:

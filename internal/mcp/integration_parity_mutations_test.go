@@ -11,6 +11,30 @@ import (
 )
 
 func runMCPParityMutationTests(t *testing.T, binary string) {
+	t.Run("asset_import", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpSource := filepath.Join(t.TempDir(), "parity.pdf")
+		cliSource := filepath.Join(t.TempDir(), "parity.pdf")
+		for _, source := range []string{mcpSource, cliSource} {
+			if err := os.WriteFile(source, []byte("%PDF parity"), 0o644); err != nil {
+				t.Fatalf("write asset source: %v", err)
+			}
+		}
+
+		mcpResult := server.callTool("asset_import", map[string]interface{}{
+			"source":      mcpSource,
+			"destination": "assets/pdfs/",
+		})
+		cliResult := vCLI.RunCLI("asset", "import", cliSource, "assets/pdfs/")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"id", "path", "file_path", "media_type", "size_bytes", "mode", "items"})
+		vMCP.AssertFileExists("assets/pdfs/parity.pdf")
+		vCLI.AssertFileExists("assets/pdfs/parity.pdf")
+	})
+
 	t.Run("new", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()

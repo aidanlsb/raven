@@ -55,6 +55,7 @@ raven_invoke(command="edit", args={
 ## 4. Move, reclassify, and delete
 
 ```text
+raven_invoke(command="asset_import", args={"source":"/tmp/paper.pdf", "destination":"assets/pdfs/"})
 raven_invoke(command="move", args={"source":"person/loki", "destination":"person/loki-archived"})
 raven_invoke(command="move", args={"source":"assets/downloads/paper.pdf", "destination":"assets/pdfs/paper.pdf"})
 raven_invoke(command="section_move", args={"section_id":"project/website#notes", "after":"project/website#tasks"})
@@ -72,7 +73,13 @@ raven_invoke(command="backlinks", args={"reference":"project/old-project"})
 raven_invoke(command="delete", args={"reference":"project/old-project"})
 ```
 
-Single-object `delete`, `move`, `section_create`, `section_move`,
+`asset_import` copies an external non-Markdown file by default; pass
+`move=true` to remove the source after the write and index handoff,
+`force=true` to overwrite a collision, or `dry-run=true` to preview. Its
+destination must remain under `directories.assets`. Use `move` for sources
+already inside the vault.
+
+Single-object `asset_import`, `delete`, `move`, `section_create`, `section_move`,
 `section_rename`, and `reclassify` apply immediately. Run the backlinks check
 first for delete when impact is not already clear, or use `dry-run=true` on
 commands that expose it to
