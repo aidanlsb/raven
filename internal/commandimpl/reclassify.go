@@ -144,15 +144,7 @@ func runReclassifyBulk(
 		}, warnings, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	var reindexWarnings []commandexec.Warning
-	affectedFiles := make([]string, 0, len(ids))
-	summary, err := objectsvc.ApplyReclassifyBulk(request, func(result *objectsvc.ReclassifyResult) {
-		if result.ChangedFilePath == "" {
-			return
-		}
-		reindexWarnings = appendCommandWarnings(reindexWarnings, autoReindexWarnings(rt, result.ChangedFilePath))
-		affectedFiles = append(affectedFiles, result.File)
-	})
+	summary, err := objectsvc.ApplyReclassifyBulk(request, nil)
 	if err != nil {
 		return mapContentMutationError(err)
 	}
@@ -167,10 +159,10 @@ func runReclassifyBulk(
 		"errors":       summary.Errors,
 		"reclassified": summary.Reclassified,
 	}
-	missingData, missingWarnings := missingRefEnvelope(rt, affectedFiles...)
-	data = mergeDataFields(data, missingData)
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	data = mergeDataFields(data, postData)
 	warnings := warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)
-	warnings = appendCommandWarnings(warnings, reindexWarnings, missingWarnings)
+	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	result := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Reclassified})
 	if summary.Reclassified == 0 {

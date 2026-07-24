@@ -7,6 +7,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -84,6 +85,7 @@ type ReclassifyBulkSummary struct {
 	Reclassified    int
 	NewType         string
 	WarningMessages []string
+	ChangeSet       mutation.ChangeSet
 }
 
 type reclassifyBulkPlan struct {
@@ -130,6 +132,7 @@ func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*Reclass
 	reclassifiedCount := 0
 	skippedCount := 0
 	errorCount := 0
+	changes := mutation.NewChangeSet()
 
 	for _, plan := range planReclassifyBulk(req) {
 		if plan.err != nil {
@@ -165,6 +168,7 @@ func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*Reclass
 		item := reclassifyBulkApplyResult(plan.id, result)
 		item.Status = "reclassified"
 		reclassifiedCount++
+		changes.Merge(result.ChangeSet)
 		if onReclassified != nil {
 			onReclassified(result)
 		}
@@ -181,6 +185,7 @@ func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*Reclass
 		Reclassified:    reclassifiedCount,
 		NewType:         req.NewTypeName,
 		WarningMessages: warnings,
+		ChangeSet:       changes,
 	}, nil
 }
 
