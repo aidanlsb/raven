@@ -6,9 +6,15 @@ import (
 )
 
 func ValidateContentMutationFilePath(vaultPath string, vaultCfg *config.VaultConfig, filePath string) error {
-	return mutationguard.ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath)
+	if err := mutationguard.ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
+		return err
+	}
+	return nil
 }
 
 func ValidateContentMutationRelPath(vaultCfg *config.VaultConfig, relPath string) error {
-	return mutationguard.ValidateContentMutationRelPath(vaultCfg, relPath)
+	if err := mutationguard.ValidateContentMutationRelPath(vaultCfg, relPath); err != nil {
+		return err
+	}
+	return nil
 }
