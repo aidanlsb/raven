@@ -7,8 +7,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/aidanlsb/raven/internal/config"
 )
+
+func resetBoolFlag(cmd *cobra.Command, name string) {
+	if err := cmd.Flags().Set(name, "false"); err != nil {
+		panic(err)
+	}
+	if flag := cmd.Flags().Lookup(name); flag != nil {
+		flag.Changed = false
+	}
+}
 
 func TestVaultRows(t *testing.T) {
 	cfg := &config.Config{
