@@ -100,7 +100,9 @@ Clearing default_vault is supported here; set it with
 		LongDesc: `Manage configured vaults and active selection.
 
 The active vault is stored in state.toml.
-The default vault is stored in config.toml and used as fallback.`,
+The default vault is stored in config.toml and used when no active vault is set.
+If the active vault name is not configured, CLI vault resolution fails until it
+is switched or cleared.`,
 		Examples: []string{
 			"rvn vault --json",
 			"rvn vault list --json",
@@ -118,7 +120,7 @@ The default vault is stored in config.toml and used as fallback.`,
 			"List configured vaults and inspect active/default markers",
 			"Inspect or mutate structured raven.yaml settings via 'vault config'",
 			"Register named vault paths in config.toml",
-			"Switch active vault for subsequent CLI and MCP commands",
+			"Switch active vault for subsequent CLI commands",
 			"Pin a default fallback vault in config.toml",
 		},
 	},

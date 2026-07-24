@@ -116,7 +116,11 @@ For commands that operate on a vault:
 3. `active_vault` from `state.toml`
 4. `default_vault` from `config.toml`
 
-If `active_vault` is set but missing from config, Raven falls back to `default_vault` and emits a warning in non-JSON mode.
+If `active_vault` is set but its name is missing from `[vaults]`, CLI vault
+resolution fails instead of falling back to `default_vault`. Run
+`rvn vault list` to inspect configured names, then use `rvn vault use <name>` to
+replace the active selection or `rvn vault clear` to clear it and resume using
+`default_vault`. An explicit `--vault` or `--vault-path` still takes priority.
 
 An additional `rvn init` updates `active_vault` to the newly initialized vault and reports
 the previous routing plus an exact switch-back command. The existing `default_vault` is

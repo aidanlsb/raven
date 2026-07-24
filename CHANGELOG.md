@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- CLI vault resolution now fails when `active_vault` names an unconfigured vault instead of warning and falling back to `default_vault`; clear or replace the stale active selection, or target a vault explicitly.
 - **Breaking:** `rvn config set` now accepts one or more dotted `key=value` arguments, and `rvn config unset` accepts the same dotted keys as positional arguments. Setting `default_vault` is exclusive to `rvn vault pin`; it can still be cleared with `rvn config unset default_vault`.
 - `rvn config show` now reports the full effective global configuration, including resolved defaults for editor mode, state path, and Markdown style.
 - Vault-scoped MCP operations now always require a per-call `vault`/`vault_path` or a server-pinned vault. MCP no longer falls back to active/default vault state.

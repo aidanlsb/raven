@@ -82,17 +82,11 @@ who gathered knowledge from across the world.`,
 			if activeVaultName != "" {
 				resolvedVaultPath, err = cfg.GetVaultPath(activeVaultName)
 				if err != nil {
-					resolvedVaultPath, err = cfg.GetDefaultVaultPath()
-					if err != nil {
-						return handleStartupError(
-							ErrVaultNotFound,
-							fmt.Sprintf("active vault '%s' not found in config and no default vault configured", activeVaultName),
-							"Run 'rvn vault use <name>' or 'rvn vault pin <name>'",
-						)
-					}
-					if !jsonOutput {
-						fmt.Fprintf(os.Stderr, "warning: active vault '%s' not found in config, falling back to default\n", activeVaultName)
-					}
+					return handleStartupError(
+						ErrVaultNotFound,
+						fmt.Sprintf("active vault '%s' not found in config", activeVaultName),
+						"Run 'rvn vault list' to see configured vaults, then 'rvn vault use <name>' to replace active_vault or 'rvn vault clear' to use default_vault; pass --vault or --vault-path to override routing for this command",
+					)
 				}
 			} else {
 				// Default vault

@@ -42,7 +42,9 @@ var vaultCmd = &cobra.Command{
 	Long: `Manage configured vaults and active selection.
 
 The active vault is stored in state.toml.
-The default vault is stored in config.toml and used as fallback.`,
+The default vault is stored in config.toml and used when no active vault is set.
+If the active vault name is not configured, CLI vault resolution fails until it
+is switched or cleared.`,
 	Args: cobra.NoArgs,
 	RunE: canonicalGroupDefaultRunE("vault_list", nil, renderVaultList),
 }
@@ -140,9 +142,6 @@ func renderVaultCurrent(_ *cobra.Command, result commandexec.Result) error {
 	fmt.Printf("%s %s\n", ui.Hint("current:"), ui.Bold.Render(stringValue(data["name"])))
 	fmt.Printf("%s %s\n", ui.Hint("path:"), ui.FilePath(stringValue(data["path"])))
 	fmt.Printf("%s %s\n", ui.Hint("source:"), stringValue(data["source"]))
-	if boolValue(data["active_missing"]) {
-		fmt.Println(ui.Warningf("active vault '%s' is missing; using default", stringValue(data["active_vault"])))
-	}
 	return nil
 }
 
