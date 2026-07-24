@@ -120,3 +120,33 @@ func Failure(code codes.ErrorCode, message string, details interface{}, suggesti
 		},
 	}
 }
+
+// WithAttemptedIDs adds the ordered inputs for a failed bulk mutation to its
+// structured details. Existing detail fields are preserved.
+func (r Result) WithAttemptedIDs(field string, ids []string) Result {
+	if r.OK || r.Error == nil || field == "" || len(ids) == 0 {
+		return r
+	}
+
+	details := make(map[string]interface{})
+	switch existing := r.Error.Details.(type) {
+	case nil:
+	case map[string]interface{}:
+		for key, value := range existing {
+			details[key] = value
+		}
+	default:
+		// Failure details are conventionally objects. Preserve an unexpected
+		// non-object payload rather than discarding it while adding bulk context.
+		details["original_details"] = existing
+	}
+
+	attempted := append([]string(nil), ids...)
+	details[field] = attempted
+	details["total"] = len(attempted)
+
+	errorInfo := *r.Error
+	errorInfo.Details = details
+	r.Error = &errorInfo
+	return r
+}

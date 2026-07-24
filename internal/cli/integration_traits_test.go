@@ -263,6 +263,58 @@ type: page
 	v.AssertFileContains("tasks/task1.md", "@priority(low) First task")
 }
 
+func TestIntegration_TraitBulkUpdateValidationFailureIncludesAttemptedIDs(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types: {}
+traits:
+  todo:
+    type: bool
+`).
+		WithFile("tasks/first.md", "- First @todo(false)\n- Second @todo(false)\n").
+		WithFile("tasks/second.md", "- Third @todo(false)\n").
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	attempted := []string{
+		"tasks/second.md:trait:0",
+		"tasks/first.md:trait:1",
+		"tasks/first.md:trait:0",
+	}
+	result := v.RunCLIWithStdin(
+		attempted[0]+"\n"+attempted[1]+"\n"+attempted[2]+"\n",
+		"update",
+		"--stdin",
+		"done",
+		"--confirm",
+	)
+	result.MustFail(t, "VALIDATION_FAILED")
+	if result.Error == nil {
+		t.Fatalf("missing error envelope: %s", result.RawJSON)
+	}
+
+	gotIDs, ok := result.Error.Details["trait_ids"].([]interface{})
+	if !ok {
+		t.Fatalf("trait_ids = %#v, want ordered array; raw: %s", result.Error.Details["trait_ids"], result.RawJSON)
+	}
+	if len(gotIDs) != len(attempted) {
+		t.Fatalf("trait_ids count = %d, want %d; raw: %s", len(gotIDs), len(attempted), result.RawJSON)
+	}
+	for i, want := range attempted {
+		if gotIDs[i] != want {
+			t.Fatalf("trait_ids[%d] = %#v, want %q; raw: %s", i, gotIDs[i], want, result.RawJSON)
+		}
+	}
+	if total, ok := result.Error.Details["total"].(float64); !ok || int(total) != len(attempted) {
+		t.Fatalf("total = %#v, want %d; raw: %s", result.Error.Details["total"], len(attempted), result.RawJSON)
+	}
+
+	v.AssertFileContains("tasks/first.md", "@todo(false)")
+	v.AssertFileContains("tasks/second.md", "@todo(false)")
+}
+
 func TestIntegration_TraitQueryApplyRejectsInvalidEnumValue(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

@@ -18,18 +18,22 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
+	objectIDs := commandIDsArg(req.Args, "object_ids")
+	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
+
 	// Move resolves references and rewrites backlinks using the schema, so
 	// require a valid schema on this safety-sensitive path.
 	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
 	if failure.Error != nil {
+		if stdinMode {
+			return failure.WithAttemptedIDs("object_ids", objectIDs)
+		}
 		return failure
 	}
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
 	sch := rt.Schema
 
-	objectIDs := commandIDsArg(req.Args, "object_ids")
-	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
 	if stdinMode {
 		destination := strings.TrimSpace(stringArg(req.Args, "destination"))
 		if destination == "" {
@@ -108,15 +112,17 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 	vaultCfg := rt.VaultCfg
 	sch := rt.Schema
 	if strings.TrimSpace(destination) == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "no destination provided", nil, "Usage: rvn move --stdin <destination-directory/>")
+		return commandexec.Failure("MISSING_ARGUMENT", "no destination provided", nil, "Usage: rvn move --stdin <destination-directory/>").
+			WithAttemptedIDs("object_ids", ids)
 	}
 	if !strings.HasSuffix(destination, "/") {
-		return commandexec.Failure("INVALID_INPUT", "destination must be a directory (end with /)", nil, "Example: rvn move --stdin archive/projects/")
+		return commandexec.Failure("INVALID_INPUT", "destination must be a directory (end with /)", nil, "Example: rvn move --stdin archive/projects/").
+			WithAttemptedIDs("object_ids", ids)
 	}
 
 	fileIDs, sectionIDs := splitSectionIDs(ids)
 	if len(sectionIDs) > 0 {
-		return moveSectionSourceFailure(sectionIDs)
+		return moveSectionSourceFailure(sectionIDs).WithAttemptedIDs("object_ids", ids)
 	}
 	request := objectsvc.MoveBulkRequest{
 		VaultPath:      vaultPath,
@@ -132,7 +138,7 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 	if !confirm {
 		preview, err := objectsvc.PreviewMoveBulk(request)
 		if err != nil {
-			return mapContentMutationError(err)
+			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
 		return commandexec.Success(map[string]interface{}{
 			"preview":     true,
@@ -146,7 +152,7 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 
 	summary, err := objectsvc.ApplyMoveBulk(request)
 	if err != nil {
-		return mapContentMutationError(err)
+		return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 	}
 
 	data := map[string]interface{}{

@@ -53,8 +53,14 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
+	references := commandIDsArg(req.Args, "references")
+	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
+
 	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
 	if failure.Error != nil {
+		if stdinMode {
+			return failure.WithAttemptedIDs("references", references)
+		}
 		return failure
 	}
 	defer rt.Close()
@@ -63,24 +69,31 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	updates, err := parseKeyValueArgs(req.Args["fields"])
 	if err != nil {
-		return commandexec.Failure("INVALID_INPUT", "invalid fields payload", nil, err.Error())
+		failure := commandexec.Failure("INVALID_INPUT", "invalid fields payload", nil, err.Error())
+		if stdinMode {
+			return failure.WithAttemptedIDs("references", references)
+		}
+		return failure
 	}
 
 	typedUpdates, err := parseTypedFieldValues(req.Args["fields-json"])
 	if err != nil {
-		return commandexec.Failure("INVALID_INPUT", "invalid fields-json payload", nil, setFieldsJSONHint(req.Caller))
+		failure := commandexec.Failure("INVALID_INPUT", "invalid fields-json payload", nil, setFieldsJSONHint(req.Caller))
+		if stdinMode {
+			return failure.WithAttemptedIDs("references", references)
+		}
+		return failure
 	}
 	allUpdates := mergeFieldInputs(updates, typedUpdates)
 
-	references := commandIDsArg(req.Args, "references")
-	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
 	if stdinMode {
 		if len(references) == 0 {
 			message, suggestion := setMissingBulkReferences(req.Caller)
 			return commandexec.Failure("MISSING_ARGUMENT", message, nil, suggestion)
 		}
 		if len(allUpdates) == 0 {
-			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, true))
+			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, true)).
+				WithAttemptedIDs("references", references)
 		}
 		return runSetBulk(rt, references, allUpdates, req.Confirm, req.IndexJournalOperation)
 	}
@@ -215,7 +228,7 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 	if !confirm {
 		preview, err := objectsvc.PreviewSetBulk(request)
 		if err != nil {
-			return mapContentMutationError(err)
+			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
 		return commandexec.Success(map[string]interface{}{
 			"preview":  true,
@@ -230,7 +243,7 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 
 	summary, err := objectsvc.ApplySetBulk(request)
 	if err != nil {
-		return mapContentMutationError(err)
+		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 	}
 
 	data := map[string]interface{}{

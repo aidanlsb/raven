@@ -26,25 +26,44 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	text := strings.TrimSpace(stringArg(req.Args, "text"))
-	if text == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "requires text argument", nil, "Usage: rvn add <text>")
-	}
-	if containsMarkdownHeading(text) {
-		return removedAddHeadingFailure()
-	}
-	if _, hasHeading := req.Args["heading"]; hasHeading {
-		return removedAddHeadingFailure()
-	}
-	if _, hasCreateHeading := req.Args["create-heading"]; hasCreateHeading {
-		return removedAddHeadingFailure()
-	}
-
 	objectIDs := commandIDsArg(req.Args, "object_ids")
 	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
 
+	text := strings.TrimSpace(stringArg(req.Args, "text"))
+	if text == "" {
+		failure := commandexec.Failure("MISSING_ARGUMENT", "requires text argument", nil, "Usage: rvn add <text>")
+		if stdinMode {
+			return failure.WithAttemptedIDs("object_ids", objectIDs)
+		}
+		return failure
+	}
+	if containsMarkdownHeading(text) {
+		failure := removedAddHeadingFailure()
+		if stdinMode {
+			return failure.WithAttemptedIDs("object_ids", objectIDs)
+		}
+		return failure
+	}
+	if _, hasHeading := req.Args["heading"]; hasHeading {
+		failure := removedAddHeadingFailure()
+		if stdinMode {
+			return failure.WithAttemptedIDs("object_ids", objectIDs)
+		}
+		return failure
+	}
+	if _, hasCreateHeading := req.Args["create-heading"]; hasCreateHeading {
+		failure := removedAddHeadingFailure()
+		if stdinMode {
+			return failure.WithAttemptedIDs("object_ids", objectIDs)
+		}
+		return failure
+	}
+
 	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
 	if failure.Error != nil {
+		if stdinMode {
+			return failure.WithAttemptedIDs("object_ids", objectIDs)
+		}
 		return failure
 	}
 	defer rt.Close()
@@ -77,7 +96,7 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 	if !confirm {
 		preview, err := objectsvc.PreviewAddBulk(request)
 		if err != nil {
-			return mapContentMutationError(err)
+			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
 		return commandexec.Success(map[string]interface{}{
 			"preview":  true,
@@ -92,7 +111,7 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 
 	summary, err := objectsvc.ApplyAddBulk(request)
 	if err != nil {
-		return mapContentMutationError(err)
+		return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 	}
 
 	data := map[string]interface{}{

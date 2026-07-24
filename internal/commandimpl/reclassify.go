@@ -19,36 +19,53 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
+	references := commandIDsArg(req.Args, "references")
+	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
+
 	rt, failure := newConfigCommandVaultRuntime(vaultPath)
 	if failure.Error != nil {
+		if stdinMode {
+			return failure.WithAttemptedIDs("references", references)
+		}
 		return failure
 	}
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
 	if rt.SchemaLoadErr != nil {
-		return commandexec.Failure("SCHEMA_NOT_FOUND", "failed to load schema", nil, "Run 'rvn init' to create a schema")
+		failure := commandexec.Failure("SCHEMA_NOT_FOUND", "failed to load schema", nil, "Run 'rvn init' to create a schema")
+		if stdinMode {
+			return failure.WithAttemptedIDs("references", references)
+		}
+		return failure
 	}
 	sch := rt.Schema
 
 	fieldValues, err := parseKeyValueArgs(req.Args["field"])
 	if err != nil {
-		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Use --field key=value")
+		failure := commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Use --field key=value")
+		if stdinMode {
+			return failure.WithAttemptedIDs("references", references)
+		}
+		return failure
 	}
 	typedFieldValues, err := parseTypedFieldValues(req.Args["fields-json"])
 	if err != nil {
-		return commandexec.Failure("INVALID_INPUT", "invalid --fields-json payload", nil, "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
+		failure := commandexec.Failure("INVALID_INPUT", "invalid --fields-json payload", nil, "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
+		if stdinMode {
+			return failure.WithAttemptedIDs("references", references)
+		}
+		return failure
 	}
 	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 	newTypeName := strings.TrimSpace(stringArg(req.Args, "new-type"))
 
-	references := commandIDsArg(req.Args, "references")
-	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
 	if stdinMode {
 		if len(references) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe references to stdin, one per line")
 		}
 		if newTypeName == "" {
-			return commandexec.Failure("MISSING_ARGUMENT", "no target type provided", nil, "Usage: rvn reclassify <new-type> --stdin")
+			return commandexec.Failure("MISSING_ARGUMENT", "no target type provided", nil, "Usage: rvn reclassify <new-type> --stdin").
+				WithAttemptedIDs("references", references)
 		}
 		return runReclassifyBulk(rt, references, newTypeName, allFieldValues, req)
 	}
@@ -129,7 +146,7 @@ func runReclassifyBulk(
 	if !req.Confirm {
 		preview, err := objectsvc.PreviewReclassifyBulk(request)
 		if err != nil {
-			return mapContentMutationError(err)
+			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
 		warnings := warningMessagesToCommandWarnings(preview.WarningMessages, indexUpdateFailedWarningCode)
 		return commandexec.SuccessWithWarnings(map[string]interface{}{
@@ -144,7 +161,7 @@ func runReclassifyBulk(
 
 	summary, err := objectsvc.ApplyReclassifyBulk(request, nil)
 	if err != nil {
-		return mapContentMutationError(err)
+		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 	}
 
 	data := map[string]interface{}{

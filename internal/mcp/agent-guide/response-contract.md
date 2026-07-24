@@ -54,6 +54,11 @@ For `resources/read`, the vault-scoped Raven URIs `raven://schema/current`, `rav
 3. Prefer `error.details.retry_with` when present.
 4. Ask before retrying with assumptions.
 
+Failed bulk mutations retain parsed inputs in `error.details` under the
+command's canonical input key (`trait_ids`, `references`, or `object_ids`) plus
+`total`. The inputs preserve their original order so they can be inspected or
+retried even when failure occurs before preview or apply.
+
 ## CLI process exit status
 
 When invoking the `rvn` binary with `--json`, a response with `ok=false` exits

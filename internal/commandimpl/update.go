@@ -25,13 +25,17 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	newValue := strings.TrimSpace(stringArg(req.Args, "value"))
-	if newValue == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "no value specified", nil, "Usage: rvn update <trait_id> <new_value>")
-	}
-
 	traitIDs := commandIDsArg(req.Args, "trait_ids")
 	stdinMode := boolArg(req.Args, "stdin") || len(traitIDs) > 0
+	newValue := strings.TrimSpace(stringArg(req.Args, "value"))
+	if newValue == "" {
+		failure := commandexec.Failure("MISSING_ARGUMENT", "no value specified", nil, "Usage: rvn update <trait_id> <new_value>")
+		if stdinMode {
+			return failure.WithAttemptedIDs("trait_ids", traitIDs)
+		}
+		return failure
+	}
+
 	confirm := req.Confirm
 	if !stdinMode {
 		singleID := strings.TrimSpace(stringArg(req.Args, "trait_id"))
@@ -53,6 +57,9 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 
 	rt, failure := newRequiredCommandVaultRuntime(vaultPath, true)
 	if failure.Error != nil {
+		if stdinMode {
+			return failure.WithAttemptedIDs("trait_ids", traitIDs)
+		}
 		return failure
 	}
 	defer rt.Close()
@@ -62,7 +69,11 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 
 	traits, skipped, err := traitsvc.ResolveTraitIDs(db, traitIDs)
 	if err != nil {
-		return mapTraitMutationError(err)
+		failure := mapTraitMutationError(err)
+		if stdinMode {
+			return failure.WithAttemptedIDs("trait_ids", traitIDs)
+		}
+		return failure
 	}
 	filteredTraits := make([]model.Trait, 0, len(traits))
 	for _, trait := range traits {
@@ -86,7 +97,11 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 	if !confirm {
 		preview, err := traitsvc.BuildPreview(traits, newValue, sch, skipped)
 		if err != nil {
-			return mapTraitMutationError(err)
+			failure := mapTraitMutationError(err)
+			if stdinMode {
+				return failure.WithAttemptedIDs("trait_ids", traitIDs)
+			}
+			return failure
 		}
 		return commandexec.Success(map[string]interface{}{
 			"preview": true,
@@ -99,7 +114,11 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 
 	summary, err := traitsvc.ApplyUpdates(vaultPath, traits, newValue, sch, skipped)
 	if err != nil {
-		return mapTraitMutationError(err)
+		failure := mapTraitMutationError(err)
+		if stdinMode {
+			return failure.WithAttemptedIDs("trait_ids", traitIDs)
+		}
+		return failure
 	}
 
 	data := map[string]interface{}{
