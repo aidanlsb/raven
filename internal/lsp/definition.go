@@ -60,7 +60,7 @@ func refAtPosition(ws *workspace, doc document, pos Position, encoding string) (
 // resolveTargets resolves a raw ref target to object/section IDs.
 // Ambiguous refs return all candidates.
 func resolveTargets(ws *workspace, target string) []string {
-	result := ws.resolver.Resolve(target)
+	result := ws.catalog.Resolver.Resolve(target)
 	if result.Ambiguous {
 		return result.Matches
 	}
@@ -71,7 +71,7 @@ func resolveTargets(ws *workspace, target string) []string {
 	// Unresolved section ref: the file may exist while the resolver only
 	// tracks object IDs. Resolve the base and reattach the fragment.
 	if baseRef, fragment, isSection := paths.ParseSectionID(target); isSection && fragment != "" {
-		baseResult := ws.resolver.Resolve(baseRef)
+		baseResult := ws.catalog.Resolver.Resolve(baseRef)
 		if !baseResult.Ambiguous && baseResult.TargetID != "" {
 			return []string{baseResult.TargetID + "#" + fragment}
 		}
@@ -82,7 +82,7 @@ func resolveTargets(ws *workspace, target string) []string {
 // locationForID returns the definition location of an object or section ID.
 func locationForID(ws *workspace, id string) (Location, bool) {
 	if baseID, fragment, isSection := paths.ParseSectionID(id); isSection && fragment != "" {
-		if section, err := ws.db().GetSection(id); err == nil && section != nil {
+		if section, ok := ws.catalog.SectionByID[id]; ok {
 			line := section.LineStart - 1
 			if line < 0 {
 				line = 0
@@ -96,8 +96,8 @@ func locationForID(ws *workspace, id string) (Location, bool) {
 		id = baseID
 	}
 
-	obj, err := ws.db().GetObject(id)
-	if err != nil || obj == nil {
+	obj, ok := ws.catalog.ObjectByID[id]
+	if !ok {
 		return Location{}, false
 	}
 	line := obj.LineStart - 1

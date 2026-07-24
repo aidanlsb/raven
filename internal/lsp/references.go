@@ -3,6 +3,8 @@ package lsp
 import (
 	"encoding/json"
 	"os"
+
+	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
 func (s *Server) handleReferences(raw json.RawMessage) (interface{}, *ResponseError) {
@@ -26,7 +28,10 @@ func (s *Server) handleReferences(raw json.RawMessage) (interface{}, *ResponseEr
 	}
 
 	vaultCfg := ws.vaultConfig()
-	refs, err := ws.db().BacklinksWithRoots(targetID, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
+	refs, err := readsvc.BacklinksWithOptions(ws.rt, targetID, readsvc.BacklinkOptions{
+		ObjectsRoot: vaultCfg.GetObjectsRoot(),
+		PagesRoot:   vaultCfg.GetPagesRoot(),
+	})
 	if err != nil {
 		return nil, &ResponseError{Code: codeInternalError, Message: err.Error()}
 	}

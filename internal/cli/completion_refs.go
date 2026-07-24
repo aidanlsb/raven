@@ -8,7 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
 const maxReferenceCompletionResults = 200
@@ -52,8 +52,7 @@ func completeReferenceValues(cmd *cobra.Command, toComplete string, includeDynam
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	rt, err := vaultruntime.New(vaultPath, vaultruntime.Options{
-		OpenDB:     true,
+	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{
 		SkipConfig: true,
 		SkipSchema: true,
 	})
@@ -65,14 +64,13 @@ func completeReferenceValues(cmd *cobra.Command, toComplete string, includeDynam
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 	defer rt.Close()
-	db := rt.DB
 
-	ids, err := db.AllObjectIDs()
+	catalog, err := readsvc.Catalog(rt, readsvc.CatalogOptions{ObjectIDs: true})
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	matches := referenceCompletionCandidates(ids, toComplete, includeDynamicDates)
+	matches := referenceCompletionCandidates(catalog.ObjectIDs, toComplete, includeDynamicDates)
 	if len(matches) == 0 {
 		return nil, cobra.ShellCompDirectiveDefault
 	}

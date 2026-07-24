@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -34,16 +33,4 @@ func loadSchemaSafe(vaultPath string) (*schema.Schema, error) {
 	}
 	defer rt.Close()
 	return rt.Schema, nil
-}
-
-// openDatabaseWithConfig opens the database and sets the daily directory.
-// Caller is responsible for calling db.Close().
-func openDatabaseWithConfig(vaultPath string, vaultCfg *config.VaultConfig) (*index.Database, error) {
-	rt := &vaultruntime.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
-	if err := rt.OpenDB(); err != nil {
-		return nil, err
-	}
-	db := rt.DB
-	rt.DB = nil
-	return db, nil
 }

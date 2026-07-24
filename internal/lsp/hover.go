@@ -73,8 +73,8 @@ func hoverContent(ws *workspace, id string) string {
 		fragment = frag
 	}
 
-	obj, err := ws.db().GetObject(objectID)
-	if err != nil || obj == nil {
+	obj, ok := ws.catalog.ObjectByID[objectID]
+	if !ok {
 		return ""
 	}
 
@@ -85,7 +85,7 @@ func hoverContent(ws *workspace, id string) string {
 	}
 	fmt.Fprintf(&b, " — `%s`\n", obj.Type)
 
-	if fields := formatHoverFields(obj); fields != "" {
+	if fields := formatHoverFields(&obj); fields != "" {
 		b.WriteString("\n")
 		b.WriteString(fields)
 	}

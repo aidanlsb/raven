@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/picker"
+	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
 type interactiveReferencePickerOptions struct {
@@ -47,42 +48,32 @@ func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt
 }
 
 func indexedReferenceTargetItems(vaultPath string, vaultCfg *config.VaultConfig, opts interactiveReferencePickerOptions) ([]picker.Item, error) {
-	db, err := openDatabaseWithConfig(vaultPath, vaultCfg)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
+	rt := &readsvc.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
+	defer rt.Close()
 
-	objects, err := db.AllObjects()
+	catalog, err := readsvc.Catalog(rt, readsvc.CatalogOptions{
+		Objects:  true,
+		Sections: true,
+		Assets:   opts.IncludeAssets,
+	})
 	if err != nil {
 		return nil, err
-	}
-	sections, err := db.AllSections()
-	if err != nil {
-		return nil, err
-	}
-	var assets []model.Asset
-	if opts.IncludeAssets {
-		assets, err = db.QueryAssets()
-		if err != nil {
-			return nil, err
-		}
 	}
 
-	items := make([]picker.Item, 0, len(objects)+len(sections)+len(assets))
-	for _, obj := range objects {
+	items := make([]picker.Item, 0, len(catalog.Objects)+len(catalog.Sections)+len(catalog.Assets))
+	for _, obj := range catalog.Objects {
 		if !indexedReferenceFileExists(vaultPath, obj.FilePath) {
 			continue
 		}
 		items = append(items, pickerItemForObjectReference(obj))
 	}
-	for _, section := range sections {
+	for _, section := range catalog.Sections {
 		if !indexedReferenceFileExists(vaultPath, section.FilePath) {
 			continue
 		}
 		items = append(items, pickerItemForSectionReference(section))
 	}
-	for _, asset := range assets {
+	for _, asset := range catalog.Assets {
 		if !indexedReferenceFileExists(vaultPath, asset.FilePath) {
 			continue
 		}
@@ -239,16 +230,14 @@ func ambiguousReferenceItem(match, source string) picker.Item {
 }
 
 func indexedVaultFilePaths(vaultPath string, vaultCfg *config.VaultConfig) ([]string, error) {
-	db, err := openDatabaseWithConfig(vaultPath, vaultCfg)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
+	rt := &readsvc.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
+	defer rt.Close()
 
-	paths, err := db.AllIndexedFilePaths()
+	catalog, err := readsvc.Catalog(rt, readsvc.CatalogOptions{FilePaths: true})
 	if err != nil {
 		return nil, err
 	}
+	paths := catalog.FilePaths
 	sort.Strings(paths)
 
 	out := make([]string, 0, len(paths))

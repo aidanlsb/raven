@@ -123,19 +123,19 @@ func refCompletions(ws *workspace, line string, lineIdx, startByte, endByte int,
 		kind   int
 	}
 	var candidates []candidate
-	for _, obj := range ws.objects {
+	for _, obj := range ws.catalog.Objects {
 		candidates = append(candidates, candidate{label: obj.ID, detail: obj.Type, kind: completionKindFile})
 	}
 
-	aliasNames := make([]string, 0, len(ws.aliases))
-	for alias := range ws.aliases {
+	aliasNames := make([]string, 0, len(ws.catalog.Aliases))
+	for alias := range ws.catalog.Aliases {
 		aliasNames = append(aliasNames, alias)
 	}
 	sort.Strings(aliasNames)
 	for _, alias := range aliasNames {
 		candidates = append(candidates, candidate{
 			label:  alias,
-			detail: fmt.Sprintf("alias → %s", ws.aliases[alias]),
+			detail: fmt.Sprintf("alias → %s", ws.catalog.Aliases[alias]),
 			kind:   completionKindReference,
 		})
 	}

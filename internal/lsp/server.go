@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
@@ -413,7 +414,7 @@ func (s *Server) snapshot(uri string) (*workspace, document, bool) {
 // ensureWorkspaceCachesFreshLocked refreshes LSP caches after commits made by
 // another index handle. The caller must hold s.mu.
 func (s *Server) ensureWorkspaceCachesFreshLocked(ws *workspace) {
-	if err := ws.ensureCachesFresh(); err != nil && !errors.Is(err, errIndexChanging) {
+	if err := ws.ensureCachesFresh(); err != nil && !errors.Is(err, readsvc.ErrCatalogChanging) {
 		fmt.Fprintf(os.Stderr, "rvn lsp: external index refresh failed: %v\n", err)
 	}
 }
