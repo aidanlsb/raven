@@ -3,6 +3,7 @@ package vaultconfigsvc
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -310,6 +311,222 @@ func TestDeletionSetNormalizesTrashDirAndRejectsInvalidBehavior(t *testing.T) {
 	}
 	if svcErr.Code != CodeInvalidInput {
 		t.Fatalf("expected CodeInvalidInput, got %q", svcErr.Code)
+	}
+}
+
+func TestExcludeList(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		configYAML string
+		wantExists bool
+		want       []string
+	}{
+		{
+			name:       "missing config",
+			wantExists: false,
+			want:       nil,
+		},
+		{
+			name: "normalizes configured patterns",
+			configYAML: "exclude:\n" +
+				"  - '  *.plan.md  '\n" +
+				"  - '.cursor/'\n" +
+				"  - '  '\n",
+			wantExists: true,
+			want:       []string{"*.plan.md", ".cursor/"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			vaultPath := t.TempDir()
+			if tt.configYAML != "" {
+				if err := os.WriteFile(filepath.Join(vaultPath, "raven.yaml"), []byte(tt.configYAML), 0o644); err != nil {
+					t.Fatalf("write raven.yaml: %v", err)
+				}
+			}
+
+			result, err := ListExclude(configTestRuntime(t, vaultPath), ListExcludeRequest{VaultPath: vaultPath})
+			if err != nil {
+				t.Fatalf("ListExclude() error = %v", err)
+			}
+			if result.Exists != tt.wantExists || !reflect.DeepEqual(result.Exclude, tt.want) {
+				t.Fatalf("ListExclude() = %#v, want Exists=%v Exclude=%#v", result, tt.wantExists, tt.want)
+			}
+			if result.ConfigPath != filepath.Join(vaultPath, "raven.yaml") {
+				t.Fatalf("ConfigPath = %q, want vault raven.yaml", result.ConfigPath)
+			}
+		})
+	}
+}
+
+func TestExcludeAdd(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		configYAML  string
+		pattern     string
+		wantCode    Code
+		wantCreated bool
+		wantChanged bool
+		wantPattern string
+		wantExclude []string
+	}{
+		{
+			name:        "creates config with normalized pattern",
+			pattern:     "  *.plan.md  ",
+			wantCreated: true,
+			wantChanged: true,
+			wantPattern: "*.plan.md",
+			wantExclude: []string{"*.plan.md"},
+		},
+		{
+			name:        "appends while preserving order",
+			configYAML:  "exclude:\n  - '.cursor/'\n",
+			pattern:     "*.plan.md",
+			wantChanged: true,
+			wantPattern: "*.plan.md",
+			wantExclude: []string{".cursor/", "*.plan.md"},
+		},
+		{
+			name:        "duplicate is unchanged",
+			configYAML:  "exclude:\n  - '*.plan.md'\n",
+			pattern:     " *.plan.md ",
+			wantChanged: false,
+			wantPattern: "*.plan.md",
+			wantExclude: []string{"*.plan.md"},
+		},
+		{
+			name:     "rejects empty pattern",
+			pattern:  " \n ",
+			wantCode: CodeInvalidInput,
+		},
+		{
+			name:     "rejects malformed glob",
+			pattern:  "[",
+			wantCode: CodeInvalidInput,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			vaultPath := t.TempDir()
+			if tt.configYAML != "" {
+				if err := os.WriteFile(filepath.Join(vaultPath, "raven.yaml"), []byte(tt.configYAML), 0o644); err != nil {
+					t.Fatalf("write raven.yaml: %v", err)
+				}
+			}
+
+			result, err := AddExclude(configTestRuntime(t, vaultPath), AddExcludeRequest{
+				VaultPath: vaultPath,
+				Pattern:   tt.pattern,
+			})
+			if tt.wantCode != "" {
+				requireVaultConfigCode(t, err, tt.wantCode)
+				return
+			}
+			if err != nil {
+				t.Fatalf("AddExclude() error = %v", err)
+			}
+			if result.Created != tt.wantCreated || result.Changed != tt.wantChanged ||
+				result.Pattern != tt.wantPattern || !reflect.DeepEqual(result.Exclude, tt.wantExclude) {
+				t.Fatalf("AddExclude() = %#v, want Created=%v Changed=%v Pattern=%q Exclude=%#v",
+					result, tt.wantCreated, tt.wantChanged, tt.wantPattern, tt.wantExclude)
+			}
+
+			cfg, err := config.LoadVaultConfig(vaultPath)
+			if err != nil {
+				t.Fatalf("LoadVaultConfig() error = %v", err)
+			}
+			if !reflect.DeepEqual(normalizedExcludePatterns(cfg.Exclude), tt.wantExclude) {
+				t.Fatalf("persisted exclude = %#v, want %#v", cfg.Exclude, tt.wantExclude)
+			}
+		})
+	}
+}
+
+func TestExcludeRemove(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		pattern     string
+		wantCode    Code
+		wantRemoved string
+		wantExclude []string
+	}{
+		{
+			name:        "removes normalized existing pattern",
+			pattern:     " *.plan.md ",
+			wantRemoved: "*.plan.md",
+			wantExclude: []string{".cursor/"},
+		},
+		{
+			name:     "missing pattern returns stable code",
+			pattern:  "*.missing.md",
+			wantCode: CodePrefixNotFound,
+		},
+		{
+			name:     "invalid pattern is rejected",
+			pattern:  "[",
+			wantCode: CodeInvalidInput,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			vaultPath := t.TempDir()
+			if err := os.WriteFile(
+				filepath.Join(vaultPath, "raven.yaml"),
+				[]byte("exclude:\n  - '.cursor/'\n  - '*.plan.md'\n"),
+				0o644,
+			); err != nil {
+				t.Fatalf("write raven.yaml: %v", err)
+			}
+
+			result, err := RemoveExclude(configTestRuntime(t, vaultPath), RemoveExcludeRequest{
+				VaultPath: vaultPath,
+				Pattern:   tt.pattern,
+			})
+			if tt.wantCode != "" {
+				requireVaultConfigCode(t, err, tt.wantCode)
+				return
+			}
+			if err != nil {
+				t.Fatalf("RemoveExclude() error = %v", err)
+			}
+			if !result.Changed || result.Removed != tt.wantRemoved || !reflect.DeepEqual(result.Exclude, tt.wantExclude) {
+				t.Fatalf("RemoveExclude() = %#v, want Removed=%q Exclude=%#v", result, tt.wantRemoved, tt.wantExclude)
+			}
+
+			cfg, err := config.LoadVaultConfig(vaultPath)
+			if err != nil {
+				t.Fatalf("LoadVaultConfig() error = %v", err)
+			}
+			if !reflect.DeepEqual(normalizedExcludePatterns(cfg.Exclude), tt.wantExclude) {
+				t.Fatalf("persisted exclude = %#v, want %#v", cfg.Exclude, tt.wantExclude)
+			}
+		})
+	}
+}
+
+func requireVaultConfigCode(t *testing.T, err error, want Code) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("error = nil, want %s", want)
+	}
+	svcErr, ok := svcerr.AsError(err)
+	if !ok {
+		t.Fatalf("error = %T %v, want service error", err, err)
+	}
+	if svcErr.Code != want {
+		t.Fatalf("error code = %s, want %s", svcErr.Code, want)
 	}
 }
 
