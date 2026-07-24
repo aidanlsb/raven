@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 )
 
 const recursivePredicateMaxDepth = 100
@@ -329,5 +329,5 @@ func (e *Executor) buildContentPredicateSQL(p *ContentPredicate, alias string) (
 		cond = "NOT " + cond
 	}
 
-	return cond, []interface{}{index.BuildFTSContentQuery(p.SearchTerm)}, nil
+	return cond, []interface{}{indexschema.BuildFTSContentQuery(p.SearchTerm)}, nil
 }

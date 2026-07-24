@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 )
 
 // buildTraitContentPredicateSQL builds SQL for content("search terms") predicates on traits.
@@ -225,7 +225,7 @@ func buildDateFilterConditionForCompare(value string, compareOp CompareOp, colum
 	if value == "" {
 		return "", nil, false
 	}
-	cond, args, ok, err := index.TryParseTemporalComparisonWithOptions(value, compareOpToSQL(compareOp), column, index.DateFilterOptions{
+	cond, args, ok, err := indexschema.TryParseTemporalComparisonWithOptions(value, compareOpToSQL(compareOp), column, indexschema.DateFilterOptions{
 		Now: now,
 	})
 	if err != nil {
