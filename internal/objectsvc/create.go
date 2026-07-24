@@ -44,6 +44,10 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	if strings.TrimSpace(req.Title) == "" {
 		return nil, newError(ErrorInvalidInput, "title is required", "Usage: rvn new <type> <title> --json", nil, nil)
 	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
+	if owned {
+		defer rt.Close()
+	}
 
 	typeDef, err := lookupTypeDefinitionForCreate(req.Schema, req.TypeName)
 	if err != nil {
@@ -104,7 +108,8 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, newError(ErrorInvalidInput, err.Error(), "Use `rvn schema template list --type <type_name>` to see available template IDs", nil, err)
 	}
 
-	validatedFields, _, err := validateCreateFieldValues(req.TypeName, fieldValues, req.Schema, nil, createRefValidationContext(req.Runtime, req.VaultPath, req.VaultConfig))
+	refCtx := createRefValidationContext(rt, nil)
+	validatedFields, _, err := validateCreateFieldValues(req.TypeName, fieldValues, req.Schema, nil, refCtx)
 	if err != nil {
 		return nil, newError(ErrorValidationFailed, err.Error(), "Ensure values match the schema field types for this object", nil, err)
 	}

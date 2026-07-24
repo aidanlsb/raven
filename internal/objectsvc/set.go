@@ -42,6 +42,10 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.FilePath); err != nil {
 		return nil, err
 	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
 
 	content, err := os.ReadFile(req.FilePath)
 	if err != nil {
@@ -61,6 +65,7 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 		objectType = "page"
 	}
 
+	refCtx := createRefValidationContext(rt, req.ParseOptions)
 	newContent, warningMessages, err := fieldmutation.PrepareValidatedFrontmatterMutationValues(
 		string(content),
 		fm,
@@ -68,12 +73,7 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 		req.TypedUpdates,
 		req.Schema,
 		req.AllowedFields,
-		&fieldmutation.RefValidationContext{
-			VaultPath:    req.VaultPath,
-			VaultConfig:  req.VaultConfig,
-			ParseOptions: req.ParseOptions,
-			Runtime:      req.Runtime,
-		},
+		refCtx,
 	)
 	if err != nil {
 		return nil, err

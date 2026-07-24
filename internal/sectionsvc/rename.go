@@ -16,7 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -333,10 +333,10 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	return result, nil
 }
 
-func resolveSectionReference(req RenameRequest, reference string) (*readsvc.ResolveResult, error) {
-	resolved, err := readsvc.ResolveReference(reference, req.Runtime, false)
+func resolveSectionReference(req RenameRequest, reference string) (*refresolve.ResolveResult, error) {
+	resolved, err := refresolve.Resolve(reference, req.Runtime, false)
 	if err != nil {
-		var ambiguousErr *readsvc.AmbiguousRefError
+		var ambiguousErr *refresolve.AmbiguousRefError
 		if errors.As(err, &ambiguousErr) {
 			return nil, newError(
 				codes.ErrRefAmbiguous,
@@ -346,7 +346,7 @@ func resolveSectionReference(req RenameRequest, reference string) (*readsvc.Reso
 				err,
 			)
 		}
-		var notFoundErr *readsvc.RefNotFoundError
+		var notFoundErr *refresolve.RefNotFoundError
 		if errors.As(err, &notFoundErr) {
 			return nil, newError(
 				codes.ErrRefNotFound,

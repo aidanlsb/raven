@@ -4,14 +4,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-func resolveReferenceForMutation(rt *vaultruntime.Runtime, reference string) (*readsvc.ResolveResult, error) {
-	resolved, err := readsvc.ResolveReference(reference, rt, false)
+func resolveReferenceForMutation(rt *vaultruntime.Runtime, reference string) (*refresolve.ResolveResult, error) {
+	resolved, err := refresolve.Resolve(reference, rt, false)
 	if err != nil {
-		var ambiguousErr *readsvc.AmbiguousRefError
+		var ambiguousErr *refresolve.AmbiguousRefError
 		if errors.As(err, &ambiguousErr) {
 			return nil, newError(
 				ErrorRefAmbiguous,
@@ -21,7 +21,7 @@ func resolveReferenceForMutation(rt *vaultruntime.Runtime, reference string) (*r
 				err,
 			)
 		}
-		var notFoundErr *readsvc.RefNotFoundError
+		var notFoundErr *refresolve.RefNotFoundError
 		if errors.As(err, &notFoundErr) {
 			return nil, newError(
 				ErrorRefNotFound,

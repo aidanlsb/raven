@@ -1,15 +1,20 @@
 package objectsvc
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -140,12 +145,56 @@ func requiredFieldGapDetails(gaps []requiredFieldGap) []map[string]interface{} {
 	return details
 }
 
-func createRefValidationContext(rt *vaultruntime.Runtime, vaultPath string, vaultCfg *config.VaultConfig) *fieldmutation.RefValidationContext {
-	return &fieldmutation.RefValidationContext{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-		Runtime:     rt,
+func createRefValidationContext(
+	rt *vaultruntime.Runtime,
+	parseOptions *parser.ParseOptions,
+) *fieldmutation.RefValidationContext {
+	if rt == nil {
+		return nil
 	}
+	if parseOptions == nil {
+		parseOptions = rt.ParseOptions
+	}
+	if parseOptions == nil {
+		parseOptions = parseopts.FromVaultConfig(rt.VaultCfg)
+	}
+
+	return &fieldmutation.RefValidationContext{
+		Prepare: func() error {
+			if err := rt.OpenDB(); errors.Is(err, index.ErrIndexRebuildRequired) {
+				return fieldmutation.ErrRefValidationIndexRebuildRequired
+			}
+			return nil
+		},
+		ResolveTargetType: func(rawReference string) (string, error) {
+			return resolveReferenceType(rt, parseOptions, rawReference)
+		},
+	}
+}
+
+func resolveReferenceType(rt *vaultruntime.Runtime, parseOptions *parser.ParseOptions, rawReference string) (string, error) {
+	resolved, err := refresolve.Resolve(rawReference, rt, false)
+	if err != nil {
+		return "", err
+	}
+
+	content, err := os.ReadFile(resolved.FilePath)
+	if err != nil {
+		return "", err
+	}
+
+	doc, err := parser.ParseDocumentWithOptions(string(content), resolved.FilePath, rt.VaultPath, parseOptions)
+	if err != nil {
+		return "", err
+	}
+
+	for _, obj := range doc.Objects {
+		if obj.ID == resolved.ObjectID {
+			return obj.Type, nil
+		}
+	}
+
+	return "", fmt.Errorf("resolved object %q not found in parsed document", resolved.ObjectID)
 }
 
 func validateCreateFieldValues(

@@ -213,17 +213,14 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	}
 
 	nextFieldValues := mergeReclassifyFieldValues(fm, fieldValues, droppedFields)
+	refCtx := createRefValidationContext(rt, req.ParseOptions)
 	validatedFieldValues, warningMessages, err := fieldmutation.PrepareValidatedFieldMutationValues(
 		req.NewTypeName,
 		nil,
 		nextFieldValues,
 		req.Schema,
 		map[string]bool{"type": true, "alias": true},
-		&fieldmutation.RefValidationContext{
-			VaultPath:   req.VaultPath,
-			VaultConfig: req.VaultConfig,
-			Runtime:     rt,
-		},
+		refCtx,
 	)
 	if err != nil {
 		return nil, err

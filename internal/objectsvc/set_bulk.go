@@ -63,6 +63,10 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 	if req.Schema == nil {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
+	}
 
 	items := make([]SetBulkPreviewItem, 0, len(req.ObjectIDs))
 	skipped := make([]SetBulkResult, 0)
@@ -99,18 +103,14 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 		if objectType == "" {
 			objectType = "page"
 		}
+		refCtx := createRefValidationContext(rt, req.ParseOptions)
 		validatedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
 			objectType,
 			fm.Fields,
 			req.TypedUpdates,
 			req.Schema,
 			map[string]bool{"alias": true},
-			&fieldmutation.RefValidationContext{
-				VaultPath:    req.VaultPath,
-				VaultConfig:  req.VaultConfig,
-				ParseOptions: req.ParseOptions,
-				Runtime:      req.Runtime,
-			},
+			refCtx,
 		)
 		if err != nil {
 			var validationErr *fieldmutation.ValidationError
@@ -143,6 +143,10 @@ func ApplySetBulk(req SetBulkRequest) (*SetBulkSummary, error) {
 	}
 	if req.Schema == nil {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
+	}
+	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	if owned {
+		defer rt.Close()
 	}
 
 	results := make([]SetBulkResult, 0, len(req.ObjectIDs))
@@ -180,7 +184,7 @@ func ApplySetBulk(req SetBulkRequest) (*SetBulkSummary, error) {
 			Schema:        req.Schema,
 			AllowedFields: map[string]bool{"alias": true},
 			ParseOptions:  req.ParseOptions,
-			Runtime:       req.Runtime,
+			Runtime:       rt,
 		})
 		if err != nil {
 			result.Status = "error"

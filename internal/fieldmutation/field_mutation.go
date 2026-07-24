@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,16 +11,16 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/frontmatter"
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 )
+
+// ErrRefValidationIndexRebuildRequired tells field validation that its injected
+// resolver cannot safely validate targets until the derived index is rebuilt.
+var ErrRefValidationIndexRebuildRequired = errors.New("index rebuild required for reference validation")
 
 type ValidationError struct {
 	ObjectType string
@@ -35,11 +34,11 @@ type UnknownFieldMutationError struct {
 	AllowedCount int
 }
 
+type TargetTypeResolver func(rawReference string) (string, error)
+
 type RefValidationContext struct {
-	VaultPath    string
-	VaultConfig  *config.VaultConfig
-	ParseOptions *parser.ParseOptions
-	Runtime      *readsvc.Runtime
+	Prepare           func() error
+	ResolveTargetType TargetTypeResolver
 }
 
 func (e *ValidationError) Error() string {
@@ -516,7 +515,7 @@ func validateMergedFields(objectType string, fields map[string]fieldvalue.FieldV
 	}
 	issues = filtered
 	if len(issues) == 0 {
-		issues = validateRefTargets(fields, typeDef.Fields, sch, refCtx)
+		issues = validateRefTargets(fields, typeDef.Fields, refCtx)
 	}
 	if len(issues) == 0 {
 		return nil
@@ -548,41 +547,18 @@ func normalizedUnsetFields(fields []string) []string {
 func validateRefTargets(
 	fields map[string]fieldvalue.FieldValue,
 	fieldDefs map[string]*schema.FieldDefinition,
-	sch *schema.Schema,
 	refCtx *RefValidationContext,
 ) []schema.ValidationError {
-	if refCtx == nil || strings.TrimSpace(refCtx.VaultPath) == "" || refCtx.VaultConfig == nil {
+	if refCtx == nil || refCtx.ResolveTargetType == nil {
 		return nil
 	}
-
-	rt := refCtx.Runtime
-	owned := false
-	if rt == nil {
-		rt = &readsvc.Runtime{
-			VaultPath:    refCtx.VaultPath,
-			VaultCfg:     refCtx.VaultConfig,
-			Schema:       sch,
-			ParseOptions: refCtx.ParseOptions,
+	if refCtx.Prepare != nil {
+		if err := refCtx.Prepare(); errors.Is(err, ErrRefValidationIndexRebuildRequired) {
+			return []schema.ValidationError{{
+				Field:   "reference",
+				Message: "index requires a full reindex before validating writes",
+			}}
 		}
-		owned = true
-	}
-
-	err := rt.OpenDB()
-	if errors.Is(err, index.ErrIndexRebuildRequired) {
-		return []schema.ValidationError{{
-			Field:   "reference",
-			Message: "index requires a full reindex before validating writes",
-		}}
-	}
-	if err == nil {
-		if owned {
-			defer rt.Close()
-		}
-	}
-
-	parseOpts := refCtx.ParseOptions
-	if parseOpts == nil {
-		parseOpts = parseopts.FromVaultConfig(refCtx.VaultConfig)
 	}
 
 	var issues []schema.ValidationError
@@ -603,7 +579,7 @@ func validateRefTargets(
 			AllowBareStrings: true,
 		})
 		for _, ref := range refs {
-			actualType, resolveErr := resolveReferenceType(rt, parseOpts, ref.TargetRaw)
+			actualType, resolveErr := refCtx.ResolveTargetType(ref.TargetRaw)
 			if resolveErr != nil || actualType == "" {
 				continue
 			}
@@ -618,31 +594,6 @@ func validateRefTargets(
 	}
 
 	return issues
-}
-
-func resolveReferenceType(rt *readsvc.Runtime, parseOpts *parser.ParseOptions, rawRef string) (string, error) {
-	resolved, err := readsvc.ResolveReference(rawRef, rt, false)
-	if err != nil {
-		return "", err
-	}
-
-	content, err := os.ReadFile(resolved.FilePath)
-	if err != nil {
-		return "", err
-	}
-
-	doc, err := parser.ParseDocumentWithOptions(string(content), resolved.FilePath, rt.VaultPath, parseOpts)
-	if err != nil {
-		return "", err
-	}
-
-	for _, obj := range doc.Objects {
-		if obj.ID == resolved.ObjectID {
-			return obj.Type, nil
-		}
-	}
-
-	return "", fmt.Errorf("resolved object %q not found in parsed document", resolved.ObjectID)
 }
 
 func parseJSONObject(raw string) (map[string]interface{}, error) {

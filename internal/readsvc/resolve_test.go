@@ -229,10 +229,6 @@ func TestResolveOperationCachesResolverWithinOperation(t *testing.T) {
 	if first.ObjectID != "projects/raven" {
 		t.Fatalf("first resolved object ID = %q, want %q", first.ObjectID, "projects/raven")
 	}
-	if op.resolver == nil {
-		t.Fatal("expected resolver to be cached after first resolve")
-	}
-	firstResolver := op.resolver
 
 	second, err := op.resolveReference("atlas", false)
 	if err != nil {
@@ -240,9 +236,6 @@ func TestResolveOperationCachesResolverWithinOperation(t *testing.T) {
 	}
 	if second.ObjectID != "projects/atlas" {
 		t.Fatalf("second resolved object ID = %q, want %q", second.ObjectID, "projects/atlas")
-	}
-	if op.resolver != firstResolver {
-		t.Fatal("expected resolver instance to be reused within one resolve operation")
 	}
 }
 

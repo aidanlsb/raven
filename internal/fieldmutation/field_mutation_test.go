@@ -7,11 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/testutil"
 )
 
 func TestCoerceFieldValueForDefinitionAtDateInputs(t *testing.T) {
@@ -333,19 +331,18 @@ func TestPrepareFrontmatterUnset(t *testing.T) {
 func TestValidateRefTargets(t *testing.T) {
 	t.Parallel()
 
-	vault := testutil.NewTestVault(t).
-		WithFile("people/alex.md", "---\ntype: person\nname: Alex\n---\n").
-		WithFile("companies/acme.md", "---\ntype: company\nname: Acme\n---\n").
-		Build()
-	sch := mutationTestSchema()
 	fieldDefs := map[string]*schema.FieldDefinition{
 		"owner":     {Type: schema.FieldTypeRef, Target: "person"},
 		"attendees": {Type: schema.FieldTypeRefArray, Target: "person"},
 		"label":     {Type: schema.FieldTypeString, Target: "person"},
 	}
 	refCtx := &RefValidationContext{
-		VaultPath:   vault.Path,
-		VaultConfig: &config.VaultConfig{},
+		ResolveTargetType: func(rawReference string) (string, error) {
+			return map[string]string{
+				"people/alex":    "person",
+				"companies/acme": "company",
+			}[rawReference], nil
+		},
 	}
 
 	tests := []struct {
@@ -397,6 +394,18 @@ func TestValidateRefTargets(t *testing.T) {
 			context: refCtx,
 		},
 		{
+			name:   "index rebuild requirement blocks validation",
+			fields: map[string]fieldvalue.FieldValue{"owner": fieldvalue.Ref("people/alex")},
+			context: &RefValidationContext{
+				Prepare: func() error {
+					return ErrRefValidationIndexRebuildRequired
+				},
+				ResolveTargetType: refCtx.ResolveTargetType,
+			},
+			wantField:   "reference",
+			wantMessage: "index requires a full reindex before validating writes",
+		},
+		{
 			name:    "null references are ignored",
 			fields:  map[string]fieldvalue.FieldValue{"owner": fieldvalue.Null()},
 			context: refCtx,
@@ -409,7 +418,7 @@ func TestValidateRefTargets(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		issues := validateRefTargets(tt.fields, fieldDefs, sch, tt.context)
+		issues := validateRefTargets(tt.fields, fieldDefs, tt.context)
 		if tt.wantField == "" {
 			if len(issues) != 0 {
 				t.Errorf("%s: issues = %#v, want none", tt.name, issues)

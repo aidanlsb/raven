@@ -12,7 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -552,7 +552,7 @@ func resolveScope(rt *vaultruntime.Runtime, opts Options) (*Scope, error) {
 		return scope, nil
 	}
 
-	resolved, err := readsvc.ResolveReference(pathArg, rt, false)
+	resolved, err := refresolve.Resolve(pathArg, rt, false)
 	if err != nil {
 		return nil, validationErrorf("could not resolve '%s': %w", pathArg, err)
 	}
