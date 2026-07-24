@@ -121,7 +121,6 @@ func TestConfigListVaults(t *testing.T) {
 			t.Errorf("expected 0 vaults, got %d", len(vaults))
 		}
 	})
-
 }
 
 func TestConfigGetEditor(t *testing.T) {
