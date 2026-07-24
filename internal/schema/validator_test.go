@@ -3,6 +3,8 @@ package schema
 import (
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 func TestValidationError(t *testing.T) {
@@ -17,7 +19,7 @@ func TestValidationError(t *testing.T) {
 func TestValidateFields(t *testing.T) {
 	t.Parallel()
 	t.Run("required field missing", func(t *testing.T) {
-		fields := map[string]FieldValue{}
+		fields := map[string]fieldvalue.FieldValue{}
 		defs := map[string]*FieldDefinition{
 			"name": {Type: FieldTypeString, Required: true},
 		}
@@ -32,7 +34,7 @@ func TestValidateFields(t *testing.T) {
 	})
 
 	t.Run("required field with default does not error", func(t *testing.T) {
-		fields := map[string]FieldValue{}
+		fields := map[string]fieldvalue.FieldValue{}
 		defs := map[string]*FieldDefinition{
 			"status": {Type: FieldTypeString, Required: true, Default: "active"},
 		}
@@ -44,8 +46,8 @@ func TestValidateFields(t *testing.T) {
 	})
 
 	t.Run("required field present", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"name": String("Freya"),
+		fields := map[string]fieldvalue.FieldValue{
+			"name": fieldvalue.String("Freya"),
 		}
 		defs := map[string]*FieldDefinition{
 			"name": {Type: FieldTypeString, Required: true},
@@ -58,8 +60,8 @@ func TestValidateFields(t *testing.T) {
 	})
 
 	t.Run("null required field", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"name": Null(),
+		fields := map[string]fieldvalue.FieldValue{
+			"name": fieldvalue.Null(),
 		}
 		defs := map[string]*FieldDefinition{
 			"name": {Type: FieldTypeString, Required: true},
@@ -72,9 +74,9 @@ func TestValidateFields(t *testing.T) {
 	})
 
 	t.Run("reserved fields skipped", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"type":  String("person"),
-			"alias": String("The Queen"),
+		fields := map[string]fieldvalue.FieldValue{
+			"type":  fieldvalue.String("person"),
+			"alias": fieldvalue.String("The Queen"),
 		}
 		defs := map[string]*FieldDefinition{}
 
@@ -89,8 +91,8 @@ func TestValidateFields(t *testing.T) {
 			t.Fatal("id must not be a reserved frontmatter key")
 		}
 
-		fields := map[string]FieldValue{
-			"id": String("test-id"),
+		fields := map[string]fieldvalue.FieldValue{
+			"id": fieldvalue.String("test-id"),
 		}
 		defs := map[string]*FieldDefinition{}
 
@@ -104,8 +106,8 @@ func TestValidateFields(t *testing.T) {
 	})
 
 	t.Run("unknown fields are validation errors", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"unknown": String("value"),
+		fields := map[string]fieldvalue.FieldValue{
+			"unknown": fieldvalue.String("value"),
 		}
 		defs := map[string]*FieldDefinition{}
 
@@ -122,11 +124,11 @@ func TestValidateFields(t *testing.T) {
 	})
 
 	t.Run("UnknownFrontmatterKeys sorts and skips reserved", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"zebra": String("z"),
-			"alias": String("a"),
-			"alpha": String("a"),
-			"name":  String("n"),
+		fields := map[string]fieldvalue.FieldValue{
+			"zebra": fieldvalue.String("z"),
+			"alias": fieldvalue.String("a"),
+			"alpha": fieldvalue.String("a"),
+			"name":  fieldvalue.String("n"),
 		}
 		defs := map[string]*FieldDefinition{
 			"name": {Type: FieldTypeString},
@@ -144,10 +146,10 @@ func TestValidateFields(t *testing.T) {
 	})
 
 	t.Run("IndexableFields drops unknown keys", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"name":    String("Freya"),
-			"alias":   String("queen"),
-			"unknown": String("x"),
+		fields := map[string]fieldvalue.FieldValue{
+			"name":    fieldvalue.String("Freya"),
+			"alias":   fieldvalue.String("queen"),
+			"unknown": fieldvalue.String("x"),
 		}
 		defs := map[string]*FieldDefinition{
 			"name": {Type: FieldTypeString},
@@ -165,8 +167,8 @@ func TestValidateFields(t *testing.T) {
 	})
 
 	t.Run("null field definition reports schema error", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"broken": String("value"),
+		fields := map[string]fieldvalue.FieldValue{
+			"broken": fieldvalue.String("value"),
 		}
 		defs := map[string]*FieldDefinition{
 			"broken": nil,
@@ -185,8 +187,8 @@ func TestValidateFields(t *testing.T) {
 	})
 
 	t.Run("unsupported field type reports validation error", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"broken": String("value"),
+		fields := map[string]fieldvalue.FieldValue{
+			"broken": fieldvalue.String("value"),
 		}
 		defs := map[string]*FieldDefinition{
 			"broken": {Type: FieldType("enum-ish")},
@@ -209,7 +211,7 @@ func TestValidateFieldValueString(t *testing.T) {
 	}
 
 	t.Run("valid string", func(t *testing.T) {
-		fields := map[string]FieldValue{"name": String("Freya")}
+		fields := map[string]fieldvalue.FieldValue{"name": fieldvalue.String("Freya")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -217,7 +219,7 @@ func TestValidateFieldValueString(t *testing.T) {
 	})
 
 	t.Run("invalid string (number)", func(t *testing.T) {
-		fields := map[string]FieldValue{"name": Number(42)}
+		fields := map[string]fieldvalue.FieldValue{"name": fieldvalue.Number(42)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -232,8 +234,8 @@ func TestValidateFieldValueStringArray(t *testing.T) {
 	}
 
 	t.Run("valid string array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"labels": Array([]FieldValue{String("a"), String("b")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"labels": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("a"), fieldvalue.String("b")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -242,7 +244,7 @@ func TestValidateFieldValueStringArray(t *testing.T) {
 	})
 
 	t.Run("invalid - not an array", func(t *testing.T) {
-		fields := map[string]FieldValue{"labels": String("not-array")}
+		fields := map[string]fieldvalue.FieldValue{"labels": fieldvalue.String("not-array")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -250,8 +252,8 @@ func TestValidateFieldValueStringArray(t *testing.T) {
 	})
 
 	t.Run("invalid - array with non-string", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"labels": Array([]FieldValue{String("a"), Number(42)}),
+		fields := map[string]fieldvalue.FieldValue{
+			"labels": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("a"), fieldvalue.Number(42)}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
@@ -266,7 +268,7 @@ func TestValidateFieldValueNumber(t *testing.T) {
 		defs := map[string]*FieldDefinition{
 			"age": {Type: FieldTypeNumber},
 		}
-		fields := map[string]FieldValue{"age": Number(42)}
+		fields := map[string]fieldvalue.FieldValue{"age": fieldvalue.Number(42)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -277,7 +279,7 @@ func TestValidateFieldValueNumber(t *testing.T) {
 		defs := map[string]*FieldDefinition{
 			"age": {Type: FieldTypeNumber},
 		}
-		fields := map[string]FieldValue{"age": String("42")}
+		fields := map[string]fieldvalue.FieldValue{"age": fieldvalue.String("42")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -289,7 +291,7 @@ func TestValidateFieldValueNumber(t *testing.T) {
 		defs := map[string]*FieldDefinition{
 			"level": {Type: FieldTypeNumber, Min: &min},
 		}
-		fields := map[string]FieldValue{"level": Number(-1)}
+		fields := map[string]fieldvalue.FieldValue{"level": fieldvalue.Number(-1)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error for below min, got %d", len(errors))
@@ -301,7 +303,7 @@ func TestValidateFieldValueNumber(t *testing.T) {
 		defs := map[string]*FieldDefinition{
 			"level": {Type: FieldTypeNumber, Max: &max},
 		}
-		fields := map[string]FieldValue{"level": Number(11)}
+		fields := map[string]fieldvalue.FieldValue{"level": fieldvalue.Number(11)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error for above max, got %d", len(errors))
@@ -314,7 +316,7 @@ func TestValidateFieldValueNumber(t *testing.T) {
 		defs := map[string]*FieldDefinition{
 			"level": {Type: FieldTypeNumber, Min: &min, Max: &max},
 		}
-		fields := map[string]FieldValue{"level": Number(5)}
+		fields := map[string]fieldvalue.FieldValue{"level": fieldvalue.Number(5)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -329,8 +331,8 @@ func TestValidateFieldValueNumberArray(t *testing.T) {
 	}
 
 	t.Run("valid number array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"scores": Array([]FieldValue{Number(1), Number(2), Number(3)}),
+		fields := map[string]fieldvalue.FieldValue{
+			"scores": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Number(1), fieldvalue.Number(2), fieldvalue.Number(3)}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -339,7 +341,7 @@ func TestValidateFieldValueNumberArray(t *testing.T) {
 	})
 
 	t.Run("invalid - not an array", func(t *testing.T) {
-		fields := map[string]FieldValue{"scores": Number(42)}
+		fields := map[string]fieldvalue.FieldValue{"scores": fieldvalue.Number(42)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -347,8 +349,8 @@ func TestValidateFieldValueNumberArray(t *testing.T) {
 	})
 
 	t.Run("invalid - array with non-number", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"scores": Array([]FieldValue{Number(1), String("two")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"scores": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Number(1), fieldvalue.String("two")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
@@ -364,7 +366,7 @@ func TestValidateFieldValueURL(t *testing.T) {
 	}
 
 	t.Run("valid https URL", func(t *testing.T) {
-		fields := map[string]FieldValue{"website": String("https://example.com/docs")}
+		fields := map[string]fieldvalue.FieldValue{"website": fieldvalue.String("https://example.com/docs")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -372,7 +374,7 @@ func TestValidateFieldValueURL(t *testing.T) {
 	})
 
 	t.Run("valid mailto URL", func(t *testing.T) {
-		fields := map[string]FieldValue{"website": String("mailto:hello@example.com")}
+		fields := map[string]fieldvalue.FieldValue{"website": fieldvalue.String("mailto:hello@example.com")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -380,7 +382,7 @@ func TestValidateFieldValueURL(t *testing.T) {
 	})
 
 	t.Run("invalid - missing scheme", func(t *testing.T) {
-		fields := map[string]FieldValue{"website": String("example.com")}
+		fields := map[string]fieldvalue.FieldValue{"website": fieldvalue.String("example.com")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -388,7 +390,7 @@ func TestValidateFieldValueURL(t *testing.T) {
 	})
 
 	t.Run("invalid - bad type", func(t *testing.T) {
-		fields := map[string]FieldValue{"website": Number(42)}
+		fields := map[string]fieldvalue.FieldValue{"website": fieldvalue.Number(42)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -463,8 +465,8 @@ func TestValidateFieldValueURLArray(t *testing.T) {
 	}
 
 	t.Run("valid URL array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"links": Array([]FieldValue{String("https://example.com"), String("https://example.org/path")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"links": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("https://example.com"), fieldvalue.String("https://example.org/path")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -473,7 +475,7 @@ func TestValidateFieldValueURLArray(t *testing.T) {
 	})
 
 	t.Run("invalid - not an array", func(t *testing.T) {
-		fields := map[string]FieldValue{"links": String("https://example.com")}
+		fields := map[string]fieldvalue.FieldValue{"links": fieldvalue.String("https://example.com")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -481,8 +483,8 @@ func TestValidateFieldValueURLArray(t *testing.T) {
 	})
 
 	t.Run("invalid - array with non-url", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"links": Array([]FieldValue{String("https://example.com"), String("not-a-url")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"links": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("https://example.com"), fieldvalue.String("not-a-url")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
@@ -498,7 +500,7 @@ func TestValidateFieldValueDate(t *testing.T) {
 	}
 
 	t.Run("valid date", func(t *testing.T) {
-		fields := map[string]FieldValue{"due": Date("2025-01-15")}
+		fields := map[string]fieldvalue.FieldValue{"due": fieldvalue.Date("2025-01-15")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -506,7 +508,7 @@ func TestValidateFieldValueDate(t *testing.T) {
 	})
 
 	t.Run("invalid date format", func(t *testing.T) {
-		fields := map[string]FieldValue{"due": String("01-15-2025")}
+		fields := map[string]fieldvalue.FieldValue{"due": fieldvalue.String("01-15-2025")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -514,7 +516,7 @@ func TestValidateFieldValueDate(t *testing.T) {
 	})
 
 	t.Run("invalid date - not a date", func(t *testing.T) {
-		fields := map[string]FieldValue{"due": Number(42)}
+		fields := map[string]fieldvalue.FieldValue{"due": fieldvalue.Number(42)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -522,7 +524,7 @@ func TestValidateFieldValueDate(t *testing.T) {
 	})
 
 	t.Run("invalid date - impossible date", func(t *testing.T) {
-		fields := map[string]FieldValue{"due": String("2025-13-45")}
+		fields := map[string]fieldvalue.FieldValue{"due": fieldvalue.String("2025-13-45")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error for invalid date, got %d", len(errors))
@@ -537,8 +539,8 @@ func TestValidateFieldValueDateArray(t *testing.T) {
 	}
 
 	t.Run("valid date array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"dates": Array([]FieldValue{Date("2025-01-01"), Date("2025-01-02")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"dates": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Date("2025-01-01"), fieldvalue.Date("2025-01-02")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -547,7 +549,7 @@ func TestValidateFieldValueDateArray(t *testing.T) {
 	})
 
 	t.Run("invalid - not an array", func(t *testing.T) {
-		fields := map[string]FieldValue{"dates": Date("2025-01-01")}
+		fields := map[string]fieldvalue.FieldValue{"dates": fieldvalue.Date("2025-01-01")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -555,8 +557,8 @@ func TestValidateFieldValueDateArray(t *testing.T) {
 	})
 
 	t.Run("invalid - array with invalid date", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"dates": Array([]FieldValue{Date("2025-01-01"), String("not-a-date")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"dates": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Date("2025-01-01"), fieldvalue.String("not-a-date")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
@@ -572,7 +574,7 @@ func TestValidateFieldValueDatetime(t *testing.T) {
 	}
 
 	t.Run("valid datetime RFC3339", func(t *testing.T) {
-		fields := map[string]FieldValue{"time": Datetime("2025-01-15T10:30:00Z")}
+		fields := map[string]fieldvalue.FieldValue{"time": fieldvalue.Datetime("2025-01-15T10:30:00Z")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -580,7 +582,7 @@ func TestValidateFieldValueDatetime(t *testing.T) {
 	})
 
 	t.Run("valid datetime short format", func(t *testing.T) {
-		fields := map[string]FieldValue{"time": Datetime("2025-01-15T10:30")}
+		fields := map[string]fieldvalue.FieldValue{"time": fieldvalue.Datetime("2025-01-15T10:30")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -588,7 +590,7 @@ func TestValidateFieldValueDatetime(t *testing.T) {
 	})
 
 	t.Run("valid datetime with seconds", func(t *testing.T) {
-		fields := map[string]FieldValue{"time": Datetime("2025-01-15T10:30:45")}
+		fields := map[string]fieldvalue.FieldValue{"time": fieldvalue.Datetime("2025-01-15T10:30:45")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -596,7 +598,7 @@ func TestValidateFieldValueDatetime(t *testing.T) {
 	})
 
 	t.Run("invalid datetime", func(t *testing.T) {
-		fields := map[string]FieldValue{"time": String("not-a-datetime")}
+		fields := map[string]fieldvalue.FieldValue{"time": fieldvalue.String("not-a-datetime")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -611,8 +613,8 @@ func TestValidateFieldValueDatetimeArray(t *testing.T) {
 	}
 
 	t.Run("valid datetime array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"times": Array([]FieldValue{Datetime("2025-01-15T10:30"), Datetime("2025-01-15T10:30:45")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"times": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Datetime("2025-01-15T10:30"), fieldvalue.Datetime("2025-01-15T10:30:45")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -621,8 +623,8 @@ func TestValidateFieldValueDatetimeArray(t *testing.T) {
 	})
 
 	t.Run("invalid datetime array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"times": Array([]FieldValue{String("not-a-datetime")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"times": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("not-a-datetime")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
@@ -638,7 +640,7 @@ func TestValidateFieldValueEnum(t *testing.T) {
 	}
 
 	t.Run("valid enum", func(t *testing.T) {
-		fields := map[string]FieldValue{"status": String("active")}
+		fields := map[string]fieldvalue.FieldValue{"status": fieldvalue.String("active")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -646,7 +648,7 @@ func TestValidateFieldValueEnum(t *testing.T) {
 	})
 
 	t.Run("invalid enum value", func(t *testing.T) {
-		fields := map[string]FieldValue{"status": String("invalid")}
+		fields := map[string]fieldvalue.FieldValue{"status": fieldvalue.String("invalid")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -657,7 +659,7 @@ func TestValidateFieldValueEnum(t *testing.T) {
 		defsNoValues := map[string]*FieldDefinition{
 			"status": {Type: FieldTypeEnum}, // No Values
 		}
-		fields := map[string]FieldValue{"status": String("active")}
+		fields := map[string]fieldvalue.FieldValue{"status": fieldvalue.String("active")}
 		errors := ValidateFields(fields, defsNoValues, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error for missing values, got %d", len(errors))
@@ -665,7 +667,7 @@ func TestValidateFieldValueEnum(t *testing.T) {
 	})
 
 	t.Run("enum wrong type", func(t *testing.T) {
-		fields := map[string]FieldValue{"status": Number(1)}
+		fields := map[string]fieldvalue.FieldValue{"status": fieldvalue.Number(1)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -680,8 +682,8 @@ func TestValidateFieldValueEnumArray(t *testing.T) {
 	}
 
 	t.Run("valid enum array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"states": Array([]FieldValue{String("low"), String("high")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"states": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("low"), fieldvalue.String("high")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -690,8 +692,8 @@ func TestValidateFieldValueEnumArray(t *testing.T) {
 	})
 
 	t.Run("invalid enum value in array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"states": Array([]FieldValue{String("critical")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"states": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("critical")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
@@ -703,8 +705,8 @@ func TestValidateFieldValueEnumArray(t *testing.T) {
 		defsNoValues := map[string]*FieldDefinition{
 			"states": {Type: FieldTypeEnumArray}, // No Values
 		}
-		fields := map[string]FieldValue{
-			"states": Array([]FieldValue{String("low")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"states": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("low")}),
 		}
 		errors := ValidateFields(fields, defsNoValues, nil)
 		if len(errors) != 1 {
@@ -720,7 +722,7 @@ func TestValidateFieldValueBool(t *testing.T) {
 	}
 
 	t.Run("valid bool true", func(t *testing.T) {
-		fields := map[string]FieldValue{"active": Bool(true)}
+		fields := map[string]fieldvalue.FieldValue{"active": fieldvalue.Bool(true)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -728,7 +730,7 @@ func TestValidateFieldValueBool(t *testing.T) {
 	})
 
 	t.Run("valid bool false", func(t *testing.T) {
-		fields := map[string]FieldValue{"active": Bool(false)}
+		fields := map[string]fieldvalue.FieldValue{"active": fieldvalue.Bool(false)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -736,7 +738,7 @@ func TestValidateFieldValueBool(t *testing.T) {
 	})
 
 	t.Run("invalid bool (string)", func(t *testing.T) {
-		fields := map[string]FieldValue{"active": String("true")}
+		fields := map[string]fieldvalue.FieldValue{"active": fieldvalue.String("true")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -751,8 +753,8 @@ func TestValidateFieldValueBoolArray(t *testing.T) {
 	}
 
 	t.Run("valid bool array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"flags": Array([]FieldValue{Bool(true), Bool(false)}),
+		fields := map[string]fieldvalue.FieldValue{
+			"flags": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Bool(true), fieldvalue.Bool(false)}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -761,8 +763,8 @@ func TestValidateFieldValueBoolArray(t *testing.T) {
 	})
 
 	t.Run("invalid bool array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"flags": Array([]FieldValue{String("true")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"flags": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("true")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
@@ -778,7 +780,7 @@ func TestValidateFieldValueRef(t *testing.T) {
 	}
 
 	t.Run("valid ref", func(t *testing.T) {
-		fields := map[string]FieldValue{"person": Ref("people/freya")}
+		fields := map[string]fieldvalue.FieldValue{"person": fieldvalue.Ref("people/freya")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors, got %v", errors)
@@ -786,7 +788,7 @@ func TestValidateFieldValueRef(t *testing.T) {
 	})
 
 	t.Run("string also valid as ref", func(t *testing.T) {
-		fields := map[string]FieldValue{"person": String("people/freya")}
+		fields := map[string]fieldvalue.FieldValue{"person": fieldvalue.String("people/freya")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors for string as ref, got %v", errors)
@@ -794,8 +796,8 @@ func TestValidateFieldValueRef(t *testing.T) {
 	})
 
 	t.Run("nested array from YAML is valid as ref", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"person": Array([]FieldValue{Array([]FieldValue{String("people/freya")})}),
+		fields := map[string]fieldvalue.FieldValue{
+			"person": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("people/freya")})}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -804,7 +806,7 @@ func TestValidateFieldValueRef(t *testing.T) {
 	})
 
 	t.Run("invalid ref (number)", func(t *testing.T) {
-		fields := map[string]FieldValue{"person": Number(42)}
+		fields := map[string]fieldvalue.FieldValue{"person": fieldvalue.Number(42)}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -819,8 +821,8 @@ func TestValidateFieldValueRefArray(t *testing.T) {
 	}
 
 	t.Run("valid ref array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"attendees": Array([]FieldValue{Ref("people/freya"), Ref("people/thor")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"attendees": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Ref("people/freya"), fieldvalue.Ref("people/thor")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -829,8 +831,8 @@ func TestValidateFieldValueRefArray(t *testing.T) {
 	})
 
 	t.Run("string array also valid as ref array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"attendees": Array([]FieldValue{String("people/freya"), String("people/thor")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"attendees": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("people/freya"), fieldvalue.String("people/thor")}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
@@ -839,10 +841,10 @@ func TestValidateFieldValueRefArray(t *testing.T) {
 	})
 
 	t.Run("nested arrays from YAML are valid ref array", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"attendees": Array([]FieldValue{
-				Array([]FieldValue{String("people/freya")}),
-				Array([]FieldValue{String("people/thor")}),
+		fields := map[string]fieldvalue.FieldValue{
+			"attendees": fieldvalue.Array([]fieldvalue.FieldValue{
+				fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("people/freya")}),
+				fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("people/thor")}),
 			}),
 		}
 		errors := ValidateFields(fields, defs, nil)
@@ -852,7 +854,7 @@ func TestValidateFieldValueRefArray(t *testing.T) {
 	})
 
 	t.Run("invalid - not an array", func(t *testing.T) {
-		fields := map[string]FieldValue{"attendees": Ref("people/freya")}
+		fields := map[string]fieldvalue.FieldValue{"attendees": fieldvalue.Ref("people/freya")}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
 			t.Errorf("expected 1 error, got %d", len(errors))
@@ -860,8 +862,8 @@ func TestValidateFieldValueRefArray(t *testing.T) {
 	})
 
 	t.Run("invalid - array with non-ref", func(t *testing.T) {
-		fields := map[string]FieldValue{
-			"attendees": Array([]FieldValue{Ref("people/freya"), Number(42)}),
+		fields := map[string]fieldvalue.FieldValue{
+			"attendees": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Ref("people/freya"), fieldvalue.Number(42)}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 1 {
@@ -876,7 +878,7 @@ func TestValidateNullValue(t *testing.T) {
 		"optional": {Type: FieldTypeString}, // Not required
 	}
 
-	fields := map[string]FieldValue{"optional": Null()}
+	fields := map[string]fieldvalue.FieldValue{"optional": fieldvalue.Null()}
 	errors := ValidateFields(fields, defs, nil)
 	if len(errors) != 0 {
 		t.Errorf("null value should be valid for optional field, got %v", errors)

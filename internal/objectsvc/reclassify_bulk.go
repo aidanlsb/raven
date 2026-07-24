@@ -7,6 +7,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -21,7 +22,7 @@ type ReclassifyBulkRequest struct {
 	ObjectIDs   []string
 
 	NewTypeName string
-	FieldValues map[string]schema.FieldValue
+	FieldValues map[string]fieldvalue.FieldValue
 
 	NoMove     bool
 	UpdateRefs bool

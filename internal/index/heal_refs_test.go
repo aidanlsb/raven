@@ -3,6 +3,7 @@ package index
 import (
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -34,8 +35,8 @@ func TestIndexDocumentHealsPendingInboundRefs(t *testing.T) {
 			{
 				ID:   "people/ada",
 				Type: "person",
-				Fields: map[string]schema.FieldValue{
-					"company": schema.String("cursor"),
+				Fields: map[string]fieldvalue.FieldValue{
+					"company": fieldvalue.String("cursor"),
 				},
 				LineStart: 1,
 			},
@@ -73,7 +74,7 @@ func TestIndexDocumentHealsPendingInboundRefs(t *testing.T) {
 			{
 				ID:        "companies/cursor",
 				Type:      "company",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},
@@ -126,7 +127,7 @@ func TestIndexDocumentWithoutNewCandidatesKeepsFileScope(t *testing.T) {
 	sourceDoc := &parser.ParsedDocument{
 		FilePath: "notes/source.md",
 		Objects: []*model.Object{
-			{ID: "notes/source", Type: "note", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			{ID: "notes/source", Type: "note", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 		},
 		Refs: []*model.Reference{
 			{
@@ -141,7 +142,7 @@ func TestIndexDocumentWithoutNewCandidatesKeepsFileScope(t *testing.T) {
 	otherDoc := &parser.ParsedDocument{
 		FilePath: "notes/other.md",
 		Objects: []*model.Object{
-			{ID: "notes/other", Type: "note", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			{ID: "notes/other", Type: "note", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 		},
 	}
 
@@ -171,7 +172,7 @@ func TestIndexDocumentWithoutNewCandidatesKeepsFileScope(t *testing.T) {
 	thirdDoc := &parser.ParsedDocument{
 		FilePath: "notes/third.md",
 		Objects: []*model.Object{
-			{ID: "notes/third", Type: "note", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			{ID: "notes/third", Type: "note", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 		},
 		Refs: []*model.Reference{
 			{

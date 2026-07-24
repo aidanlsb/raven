@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -134,27 +135,27 @@ func TestExtractDateString(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		value schema.FieldValue
+		value fieldvalue.FieldValue
 		want  string
 	}{
 		{
 			name:  "date value",
-			value: schema.Date("2026-04-09"),
+			value: fieldvalue.Date("2026-04-09"),
 			want:  "2026-04-09",
 		},
 		{
 			name:  "datetime value returns date prefix",
-			value: schema.Datetime("2026-04-09T12:34:56Z"),
+			value: fieldvalue.Datetime("2026-04-09T12:34:56Z"),
 			want:  "2026-04-09",
 		},
 		{
 			name:  "date-shaped junk string is rejected",
-			value: schema.String("ABCD-EF-GH trailing text"),
+			value: fieldvalue.String("ABCD-EF-GH trailing text"),
 			want:  "",
 		},
 		{
 			name:  "short string is rejected",
-			value: schema.String("2026-04"),
+			value: fieldvalue.String("2026-04"),
 			want:  "",
 		},
 	}
@@ -190,9 +191,9 @@ func TestIndexDatesUsesSchemaFieldTypes(t *testing.T) {
 			{
 				ID:   "task/a",
 				Type: "task",
-				Fields: map[string]schema.FieldValue{
-					"due":   schema.Date("2026-04-05"),
-					"title": schema.String("2026-04-05"),
+				Fields: map[string]fieldvalue.FieldValue{
+					"due":   fieldvalue.Date("2026-04-05"),
+					"title": fieldvalue.String("2026-04-05"),
 				},
 				LineStart: 1,
 			},
@@ -248,9 +249,9 @@ func TestIndexDatesIndexesDateTargetRefs(t *testing.T) {
 			{
 				ID:   "brief/a",
 				Type: "brief",
-				Fields: map[string]schema.FieldValue{
-					"date":      schema.String("2026-04-05"),
-					"next_date": schema.String("daily/2026-04-06"),
+				Fields: map[string]fieldvalue.FieldValue{
+					"date":      fieldvalue.String("2026-04-05"),
+					"next_date": fieldvalue.String("daily/2026-04-06"),
 				},
 				LineStart: 1,
 			},
@@ -309,14 +310,14 @@ func TestTraitIDConsistency(t *testing.T) {
 		Type: schema.FieldTypeDate,
 	}
 
-	dueValue := schema.Date("2025-03-15")
+	dueValue := fieldvalue.Date("2025-03-15")
 	doc := &parser.ParsedDocument{
 		FilePath: "test.md",
 		Objects: []*model.Object{
 			{
 				ID:        "test",
 				Type:      "page",
-				Fields:    make(map[string]schema.FieldValue),
+				Fields:    make(map[string]fieldvalue.FieldValue),
 				LineStart: 1,
 			},
 		},
@@ -375,16 +376,16 @@ func TestDateIndexTraitIDsTrackIndexedTraitOrder(t *testing.T) {
 	sch.Traits["review"] = &schema.TraitDefinition{Type: schema.FieldTypeDate}
 	sch.Traits["status"] = &schema.TraitDefinition{Type: schema.FieldTypeString}
 
-	dueValue := schema.Date("2025-03-15")
-	reviewValue := schema.Date("2025-03-20")
-	statusValue := schema.String("active")
+	dueValue := fieldvalue.Date("2025-03-15")
+	reviewValue := fieldvalue.Date("2025-03-20")
+	statusValue := fieldvalue.String("active")
 	doc := &parser.ParsedDocument{
 		FilePath: "notes/plan.md",
 		Objects: []*model.Object{
 			{
 				ID:        "notes/plan",
 				Type:      "note",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},

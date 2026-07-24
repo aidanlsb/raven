@@ -6,6 +6,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -23,10 +24,10 @@ type UnsetObjectFileRequest struct {
 type UnsetObjectFileResult struct {
 	ObjectID       string
 	ObjectType     string
-	RemovedFields  map[string]schema.FieldValue
+	RemovedFields  map[string]fieldvalue.FieldValue
 	MissingFields  []string
 	Modified       bool
-	PreviousFields map[string]schema.FieldValue
+	PreviousFields map[string]fieldvalue.FieldValue
 }
 
 func UnsetObjectFile(req UnsetObjectFileRequest) (*UnsetObjectFileResult, error) {
@@ -67,7 +68,7 @@ func UnsetObjectFile(req UnsetObjectFileRequest) (*UnsetObjectFileResult, error)
 		}
 	}
 
-	previousFields := make(map[string]schema.FieldValue, len(fm.Fields))
+	previousFields := make(map[string]fieldvalue.FieldValue, len(fm.Fields))
 	for key, value := range fm.Fields {
 		previousFields[key] = value
 	}

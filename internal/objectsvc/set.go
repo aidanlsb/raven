@@ -6,6 +6,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -16,7 +17,7 @@ type SetObjectFileRequest struct {
 	VaultConfig   *config.VaultConfig
 	FilePath      string
 	ObjectID      string
-	TypedUpdates  map[string]schema.FieldValue
+	TypedUpdates  map[string]fieldvalue.FieldValue
 	Schema        *schema.Schema
 	AllowedFields map[string]bool
 	ParseOptions  *parser.ParseOptions
@@ -31,7 +32,7 @@ type SetObjectFileResult struct {
 	ObjectType      string
 	ResolvedUpdates map[string]string
 	WarningMessages []string
-	PreviousFields  map[string]schema.FieldValue
+	PreviousFields  map[string]fieldvalue.FieldValue
 }
 
 func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
@@ -97,7 +98,7 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 		}
 	}
 
-	previousFields := make(map[string]schema.FieldValue, len(fm.Fields))
+	previousFields := make(map[string]fieldvalue.FieldValue, len(fm.Fields))
 	for key, value := range fm.Fields {
 		previousFields[key] = value
 	}

@@ -3,7 +3,7 @@ package index
 import "github.com/aidanlsb/raven/internal/indexschema"
 
 // DateFilterOptions is retained as an index-package compatibility alias.
-type DateFilterOptions = indexschema.DateFilterOptions
+type DateFilterOptions = indexfieldvalue.DateFilterOptions
 
 // TryParseTemporalComparisonWithOptions parses date, relative-date, and datetime
 // filter values and returns a SQLite temporal comparison. Date and relative-date

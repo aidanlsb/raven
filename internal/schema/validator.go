@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 // MsgUnknownFrontmatterKey is the stable ValidationError.Message for undeclared keys.
@@ -41,7 +42,7 @@ func IsReservedFrontmatterKey(name string) bool {
 // nor declared on the type. allowedExtra skips additional keys (e.g. mutation
 // allowlists). This is the single strictness gate for object frontmatter keys.
 func UnknownFrontmatterKeys(
-	fields map[string]FieldValue,
+	fields map[string]fieldvalue.FieldValue,
 	fieldDefs map[string]*FieldDefinition,
 	allowedExtra map[string]bool,
 ) []string {
@@ -69,12 +70,12 @@ func UnknownFrontmatterKeys(
 // IndexableFields returns the subset of fields that should be stored in the
 // index for a known type: reserved keys plus schema-defined fields. When
 // fieldDefs is nil (unknown type), all fields are returned unchanged.
-func IndexableFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDefinition) map[string]FieldValue {
+func IndexableFields(fields map[string]fieldvalue.FieldValue, fieldDefs map[string]*FieldDefinition) map[string]fieldvalue.FieldValue {
 	if fields == nil || fieldDefs == nil {
 		return fields
 	}
 
-	out := make(map[string]FieldValue, len(fields))
+	out := make(map[string]fieldvalue.FieldValue, len(fields))
 	for name, value := range fields {
 		if IsReservedFrontmatterKey(name) {
 			out[name] = value
@@ -89,7 +90,7 @@ func IndexableFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDe
 
 // ValidateFields validates a set of fields against a type's field definitions.
 // Unknown (non-reserved) frontmatter keys are validation errors.
-func ValidateFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDefinition, schema *Schema) []ValidationError {
+func ValidateFields(fields map[string]fieldvalue.FieldValue, fieldDefs map[string]*FieldDefinition, schema *Schema) []ValidationError {
 	var errors []ValidationError
 	invalidDefs := make(map[string]struct{})
 
@@ -150,7 +151,7 @@ func ValidateFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDef
 	return errors
 }
 
-func validateFieldValue(name string, value FieldValue, def *FieldDefinition) error {
+func validateFieldValue(name string, value fieldvalue.FieldValue, def *FieldDefinition) error {
 	if value.IsNull() {
 		return nil // Null is always valid (required check handles missing fields)
 	}
@@ -345,7 +346,7 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 	return nil
 }
 
-func refTargetFromFieldValue(value FieldValue) (string, bool) {
+func refTargetFromFieldValue(value fieldvalue.FieldValue) (string, bool) {
 	if r, ok := value.AsRef(); ok && r != "" {
 		return r, true
 	}

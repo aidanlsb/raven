@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -157,7 +158,7 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:        "test",
 					Type:      "page",
-					Fields:    make(map[string]schema.FieldValue),
+					Fields:    make(map[string]fieldvalue.FieldValue),
 					LineStart: 1,
 				},
 			},
@@ -203,10 +204,10 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:   "people/freya",
 					Type: "person",
-					Fields: map[string]schema.FieldValue{
-						"name":    schema.String("Freya"),
-						"alias":   schema.String("queen"),
-						"unknown": schema.String("should-not-index"),
+					Fields: map[string]fieldvalue.FieldValue{
+						"name":    fieldvalue.String("Freya"),
+						"alias":   fieldvalue.String("queen"),
+						"unknown": fieldvalue.String("should-not-index"),
 					},
 					LineStart: 1,
 				},
@@ -246,14 +247,14 @@ func TestDatabase(t *testing.T) {
 		}
 		defer db.Close()
 
-		value := schema.Array([]schema.FieldValue{schema.String("raven"), schema.String("skills")})
+		value := fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("raven"), fieldvalue.String("skills")})
 		doc := &parser.ParsedDocument{
 			FilePath: "test.md",
 			Objects: []*model.Object{
 				{
 					ID:        "test",
 					Type:      "page",
-					Fields:    make(map[string]schema.FieldValue),
+					Fields:    make(map[string]fieldvalue.FieldValue),
 					LineStart: 1,
 				},
 			},
@@ -297,7 +298,7 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:        "daily/2026-05-23",
 					Type:      "date",
-					Fields:    make(map[string]schema.FieldValue),
+					Fields:    make(map[string]fieldvalue.FieldValue),
 					LineStart: 1,
 				},
 			},
@@ -334,7 +335,7 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:        "test",
 					Type:      "page",
-					Fields:    make(map[string]schema.FieldValue),
+					Fields:    make(map[string]fieldvalue.FieldValue),
 					LineStart: 1,
 				},
 			},
@@ -370,7 +371,7 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:        "test",
 					Type:      "page",
-					Fields:    make(map[string]schema.FieldValue),
+					Fields:    make(map[string]fieldvalue.FieldValue),
 					LineStart: 1,
 				},
 			},
@@ -421,7 +422,7 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:        "test",
 					Type:      "page",
-					Fields:    make(map[string]schema.FieldValue),
+					Fields:    make(map[string]fieldvalue.FieldValue),
 					LineStart: 1,
 				},
 			},
@@ -472,7 +473,7 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:        "test",
 					Type:      "page",
-					Fields:    make(map[string]schema.FieldValue),
+					Fields:    make(map[string]fieldvalue.FieldValue),
 					LineStart: 1,
 				},
 			},
@@ -522,15 +523,15 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:        "people/freya",
 					Type:      "person",
-					Fields:    map[string]schema.FieldValue{},
+					Fields:    map[string]fieldvalue.FieldValue{},
 					LineStart: 1,
 				},
 				{
 					ID:   "people/freya#notes",
 					Type: "section",
-					Fields: map[string]schema.FieldValue{
-						"title": schema.String("Notes"),
-						"level": schema.Number(2),
+					Fields: map[string]fieldvalue.FieldValue{
+						"title": fieldvalue.String("Notes"),
+						"level": fieldvalue.Number(2),
 					},
 					LineStart: 5,
 				},
@@ -617,15 +618,15 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:        "people/freya",
 					Type:      "person",
-					Fields:    map[string]schema.FieldValue{},
+					Fields:    map[string]fieldvalue.FieldValue{},
 					LineStart: 1,
 				},
 				{
 					ID:   "people/freya#notes",
 					Type: "section",
-					Fields: map[string]schema.FieldValue{
-						"title": schema.String("Notes"),
-						"level": schema.Number(2),
+					Fields: map[string]fieldvalue.FieldValue{
+						"title": fieldvalue.String("Notes"),
+						"level": fieldvalue.Number(2),
 					},
 					LineStart: 5,
 				},
@@ -716,8 +717,8 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:   "projects/website",
 					Type: "project",
-					Fields: map[string]schema.FieldValue{
-						"alias": schema.String("WebSiteAlias"),
+					Fields: map[string]fieldvalue.FieldValue{
+						"alias": fieldvalue.String("WebSiteAlias"),
 					},
 					LineStart: 1,
 				},
@@ -764,8 +765,8 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:   "books/first",
 					Type: "book",
-					Fields: map[string]schema.FieldValue{
-						"title": schema.String("Shared Display Name"),
+					Fields: map[string]fieldvalue.FieldValue{
+						"title": fieldvalue.String("Shared Display Name"),
 					},
 					LineStart: 1,
 				},
@@ -777,8 +778,8 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:   "books/second",
 					Type: "book",
-					Fields: map[string]schema.FieldValue{
-						"title": schema.String("Shared Display Name"),
+					Fields: map[string]fieldvalue.FieldValue{
+						"title": fieldvalue.String("Shared Display Name"),
 					},
 					LineStart: 1,
 				},
@@ -830,7 +831,7 @@ func TestDatabase(t *testing.T) {
 				{
 					ID:        "test",
 					Type:      "page",
-					Fields:    make(map[string]schema.FieldValue),
+					Fields:    make(map[string]fieldvalue.FieldValue),
 					LineStart: 1,
 				},
 			},

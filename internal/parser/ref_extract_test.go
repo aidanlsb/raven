@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -29,10 +30,10 @@ func TestExtractSchemaFieldRefs(t *testing.T) {
 		ID:        "person/ada",
 		Type:      "person",
 		LineStart: 3,
-		Fields: map[string]schema.FieldValue{
-			"name":    schema.String("Ada"),
-			"company": schema.String("cursor"),
-			"tags":    schema.Array([]schema.FieldValue{schema.String("ai"), schema.String("tools")}),
+		Fields: map[string]fieldvalue.FieldValue{
+			"name":    fieldvalue.String("Ada"),
+			"company": fieldvalue.String("cursor"),
+			"tags":    fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("ai"), fieldvalue.String("tools")}),
 		},
 	}}
 

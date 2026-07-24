@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -17,7 +18,7 @@ type CreateRequest struct {
 	TypeName    string
 	Title       string
 	TargetPath  string
-	FieldValues map[string]schema.FieldValue
+	FieldValues map[string]fieldvalue.FieldValue
 	VaultConfig *config.VaultConfig
 	Schema      *schema.Schema
 	ObjectsRoot string

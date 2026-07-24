@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -26,9 +27,9 @@ func TestAliasIndexing(t *testing.T) {
 				{
 					ID:   "people/freya",
 					Type: "person",
-					Fields: map[string]schema.FieldValue{
-						"name":  schema.String("Freya"),
-						"alias": schema.String("goddess"),
+					Fields: map[string]fieldvalue.FieldValue{
+						"name":  fieldvalue.String("Freya"),
+						"alias": fieldvalue.String("goddess"),
 					},
 					LineStart: 1,
 				},
@@ -65,8 +66,8 @@ func TestAliasIndexing(t *testing.T) {
 					{
 						ID:   "people/freya",
 						Type: "person",
-						Fields: map[string]schema.FieldValue{
-							"alias": schema.String("goddess"),
+						Fields: map[string]fieldvalue.FieldValue{
+							"alias": fieldvalue.String("goddess"),
 						},
 						LineStart: 1,
 					},
@@ -78,8 +79,8 @@ func TestAliasIndexing(t *testing.T) {
 					{
 						ID:   "people/thor",
 						Type: "person",
-						Fields: map[string]schema.FieldValue{
-							"alias": schema.String("thunder"),
+						Fields: map[string]fieldvalue.FieldValue{
+							"alias": fieldvalue.String("thunder"),
 						},
 						LineStart: 1,
 					},
@@ -91,7 +92,7 @@ func TestAliasIndexing(t *testing.T) {
 					{
 						ID:        "people/loki",
 						Type:      "person",
-						Fields:    map[string]schema.FieldValue{}, // No alias
+						Fields:    map[string]fieldvalue.FieldValue{}, // No alias
 						LineStart: 1,
 					},
 				},
@@ -133,8 +134,8 @@ func TestAliasIndexing(t *testing.T) {
 				{
 					ID:   "people/freya",
 					Type: "person",
-					Fields: map[string]schema.FieldValue{
-						"alias": schema.String("goddess"),
+					Fields: map[string]fieldvalue.FieldValue{
+						"alias": fieldvalue.String("goddess"),
 					},
 					LineStart: 1,
 				},
@@ -151,7 +152,7 @@ func TestAliasIndexing(t *testing.T) {
 				{
 					ID:        "notes/meeting",
 					Type:      "page",
-					Fields:    map[string]schema.FieldValue{},
+					Fields:    map[string]fieldvalue.FieldValue{},
 					LineStart: 1,
 				},
 			},
@@ -198,8 +199,8 @@ func TestAliasIndexing(t *testing.T) {
 					{
 						ID:   "people/freya",
 						Type: "person",
-						Fields: map[string]schema.FieldValue{
-							"alias": schema.String("goddess"), // Same alias
+						Fields: map[string]fieldvalue.FieldValue{
+							"alias": fieldvalue.String("goddess"), // Same alias
 						},
 						LineStart: 1,
 					},
@@ -211,8 +212,8 @@ func TestAliasIndexing(t *testing.T) {
 					{
 						ID:   "people/frigg",
 						Type: "person",
-						Fields: map[string]schema.FieldValue{
-							"alias": schema.String("goddess"), // Same alias!
+						Fields: map[string]fieldvalue.FieldValue{
+							"alias": fieldvalue.String("goddess"), // Same alias!
 						},
 						LineStart: 1,
 					},
@@ -262,8 +263,8 @@ func TestAliasIndexing(t *testing.T) {
 					{
 						ID:   "people/frigg",
 						Type: "person",
-						Fields: map[string]schema.FieldValue{
-							"alias": schema.String("goddess"),
+						Fields: map[string]fieldvalue.FieldValue{
+							"alias": fieldvalue.String("goddess"),
 						},
 						LineStart: 1,
 					},
@@ -275,8 +276,8 @@ func TestAliasIndexing(t *testing.T) {
 					{
 						ID:   "people/freya",
 						Type: "person",
-						Fields: map[string]schema.FieldValue{
-							"alias": schema.String("goddess"),
+						Fields: map[string]fieldvalue.FieldValue{
+							"alias": fieldvalue.String("goddess"),
 						},
 						LineStart: 1,
 					},
@@ -316,8 +317,8 @@ func TestAliasIndexing(t *testing.T) {
 					{
 						ID:   "people/freya",
 						Type: "person",
-						Fields: map[string]schema.FieldValue{
-							"alias": schema.String("goddess"),
+						Fields: map[string]fieldvalue.FieldValue{
+							"alias": fieldvalue.String("goddess"),
 						},
 						LineStart: 1,
 					},
@@ -329,8 +330,8 @@ func TestAliasIndexing(t *testing.T) {
 					{
 						ID:   "people/frigg",
 						Type: "person",
-						Fields: map[string]schema.FieldValue{
-							"alias": schema.String("goddess"),
+						Fields: map[string]fieldvalue.FieldValue{
+							"alias": fieldvalue.String("goddess"),
 						},
 						LineStart: 1,
 					},
@@ -371,8 +372,8 @@ func TestAliasIndexing(t *testing.T) {
 				{
 					ID:   "people/freya",
 					Type: "person",
-					Fields: map[string]schema.FieldValue{
-						"alias": schema.String(""), // Empty alias
+					Fields: map[string]fieldvalue.FieldValue{
+						"alias": fieldvalue.String(""), // Empty alias
 					},
 					LineStart: 1,
 				},
@@ -446,7 +447,7 @@ func TestResolveReferencesBatched(t *testing.T) {
 			{
 				ID:        "people/freya",
 				Type:      "person",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},
@@ -471,7 +472,7 @@ func TestResolveReferencesBatched(t *testing.T) {
 			{
 				ID:        "notes/meeting",
 				Type:      "page",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},

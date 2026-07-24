@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 func TestCreateObjectSuccess(t *testing.T) {
@@ -177,8 +177,8 @@ traits: {}
 		TypeName:   "person",
 		Title:      "Freya",
 		TargetPath: "Freya",
-		FieldValues: map[string]schema.FieldValue{
-			"favorite_color": schema.String("blue"),
+		FieldValues: map[string]fieldvalue.FieldValue{
+			"favorite_color": fieldvalue.String("blue"),
 		},
 		Schema: sch,
 	})
@@ -279,8 +279,8 @@ traits: {}
 		TypeName:    "issue",
 		Title:       "Broken parent",
 		TargetPath:  "Broken parent",
-		FieldValues: map[string]schema.FieldValue{
-			"parent": schema.Ref("notes/overview"),
+		FieldValues: map[string]fieldvalue.FieldValue{
+			"parent": fieldvalue.Ref("notes/overview"),
 		},
 		Schema: sch,
 	})
@@ -323,8 +323,8 @@ traits: {}
 		TypeName:   "task",
 		Title:      "Broken schema",
 		TargetPath: "Broken schema",
-		FieldValues: map[string]schema.FieldValue{
-			"status": schema.String("open"),
+		FieldValues: map[string]fieldvalue.FieldValue{
+			"status": fieldvalue.String("open"),
 		},
 		Schema: sch,
 	})
@@ -367,8 +367,8 @@ traits: {}
 		TypeName:   "person",
 		Title:      "Typed Freya",
 		TargetPath: "Typed Freya",
-		FieldValues: map[string]schema.FieldValue{
-			"email": schema.String("true"),
+		FieldValues: map[string]fieldvalue.FieldValue{
+			"email": fieldvalue.String("true"),
 		},
 		Schema: sch,
 	})

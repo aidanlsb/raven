@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -197,8 +198,8 @@ traits: {}
 		TypeName:   "person",
 		Title:      "Typed Upsert Freya",
 		TargetPath: "Typed Upsert Freya",
-		FieldValues: map[string]schema.FieldValue{
-			"email": schema.String("true"),
+		FieldValues: map[string]fieldvalue.FieldValue{
+			"email": fieldvalue.String("true"),
 		},
 		Schema: sch,
 	})

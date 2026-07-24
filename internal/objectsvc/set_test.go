@@ -9,7 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 func TestSetObjectFileSuccess(t *testing.T) {
@@ -41,7 +41,7 @@ traits: {}
 	result, err := SetObjectFile(SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
-		TypedUpdates:  map[string]schema.FieldValue{"email": schema.String("new@example.com")},
+		TypedUpdates:  map[string]fieldvalue.FieldValue{"email": fieldvalue.String("new@example.com")},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
@@ -98,7 +98,7 @@ traits: {}
 	_, err := SetObjectFile(SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
-		TypedUpdates:  map[string]schema.FieldValue{"status": schema.String("open")},
+		TypedUpdates:  map[string]fieldvalue.FieldValue{"status": fieldvalue.String("open")},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
@@ -142,7 +142,7 @@ traits: {}
 	_, err := SetObjectFile(SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "note",
-		TypedUpdates:  map[string]schema.FieldValue{"status": schema.String("done")},
+		TypedUpdates:  map[string]fieldvalue.FieldValue{"status": fieldvalue.String("done")},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
@@ -186,7 +186,7 @@ traits: {}
 	_, err := SetObjectFile(SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
-		TypedUpdates:  map[string]schema.FieldValue{"unknown": schema.String("x")},
+		TypedUpdates:  map[string]fieldvalue.FieldValue{"unknown": fieldvalue.String("x")},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
@@ -246,8 +246,8 @@ traits: {}
 		VaultConfig: &config.VaultConfig{},
 		FilePath:    personPath,
 		ObjectID:    "people/freya",
-		TypedUpdates: map[string]schema.FieldValue{
-			"employer": schema.Ref("companies/acme"),
+		TypedUpdates: map[string]fieldvalue.FieldValue{
+			"employer": fieldvalue.Ref("companies/acme"),
 		},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},

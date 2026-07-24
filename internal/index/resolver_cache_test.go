@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -82,9 +83,9 @@ func TestIndexDocumentIncrementalResolverTracksAliasAndNameFieldChanges(t *testi
 
 	person := resolverTestDocument("people/freya.md", "people/freya")
 	person.Objects[0].Type = "person"
-	person.Objects[0].Fields = map[string]schema.FieldValue{
-		"name":  schema.String("Freya Old"),
-		"alias": schema.String("Old Queen"),
+	person.Objects[0].Fields = map[string]fieldvalue.FieldValue{
+		"name":  fieldvalue.String("Freya Old"),
+		"alias": fieldvalue.String("Old Queen"),
 	}
 	if err := db.IndexDocument(person, sch); err != nil {
 		t.Fatal(err)
@@ -101,9 +102,9 @@ func TestIndexDocumentIncrementalResolverTracksAliasAndNameFieldChanges(t *testi
 	assertIndexedRefTarget(t, db, source.FilePath, "Old Queen", "people/freya")
 	assertIndexedRefTarget(t, db, source.FilePath, "Freya Old", "people/freya")
 
-	person.Objects[0].Fields = map[string]schema.FieldValue{
-		"name":  schema.String("Freya New"),
-		"alias": schema.String("New Queen"),
+	person.Objects[0].Fields = map[string]fieldvalue.FieldValue{
+		"name":  fieldvalue.String("Freya New"),
+		"alias": fieldvalue.String("New Queen"),
 	}
 	if err := db.IndexDocument(person, sch); err != nil {
 		t.Fatal(err)
@@ -343,7 +344,7 @@ func BenchmarkIndexDocumentReferenceResolution(b *testing.B) {
 				targets.Objects = append(targets.Objects, &model.Object{
 					ID:        fmt.Sprintf("people/person-%05d", i),
 					Type:      "person",
-					Fields:    map[string]schema.FieldValue{},
+					Fields:    map[string]fieldvalue.FieldValue{},
 					LineStart: i + 2,
 				})
 			}
@@ -384,7 +385,7 @@ func resolverTestDocument(filePath, objectID string) *parser.ParsedDocument {
 		Objects: []*model.Object{{
 			ID:        objectID,
 			Type:      "page",
-			Fields:    map[string]schema.FieldValue{},
+			Fields:    map[string]fieldvalue.FieldValue{},
 			LineStart: 1,
 		}},
 	}

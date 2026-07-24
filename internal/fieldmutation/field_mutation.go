@@ -14,6 +14,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/frontmatter"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parseopts"
@@ -90,12 +91,12 @@ func (e *UnknownFieldMutationError) Details() map[string]interface{} {
 
 func PrepareValidatedFieldMutationValues(
 	objectType string,
-	existingFields map[string]schema.FieldValue,
-	updates map[string]schema.FieldValue,
+	existingFields map[string]fieldvalue.FieldValue,
+	updates map[string]fieldvalue.FieldValue,
 	sch *schema.Schema,
 	allowedUnknown map[string]bool,
 	refCtx *RefValidationContext,
-) (map[string]schema.FieldValue, []string, error) {
+) (map[string]fieldvalue.FieldValue, []string, error) {
 	normalizedType := normalizeMutationType(objectType)
 	fieldDefs := fieldDefsForObjectType(sch, normalizedType)
 	coercedUpdates := coerceFieldMutationValues(updates, fieldDefs)
@@ -103,7 +104,7 @@ func PrepareValidatedFieldMutationValues(
 		return nil, nil, unknownErr
 	}
 
-	merged := make(map[string]schema.FieldValue, len(existingFields)+len(coercedUpdates))
+	merged := make(map[string]fieldvalue.FieldValue, len(existingFields)+len(coercedUpdates))
 	for key, value := range existingFields {
 		merged[key] = value
 	}
@@ -122,12 +123,12 @@ func PrepareValidatedFrontmatterMutationValues(
 	content string,
 	fm *parser.Frontmatter,
 	objectType string,
-	updates map[string]schema.FieldValue,
+	updates map[string]fieldvalue.FieldValue,
 	sch *schema.Schema,
 	allowedUnknown map[string]bool,
 	refCtx *RefValidationContext,
 ) (string, []string, error) {
-	existingFields := make(map[string]schema.FieldValue)
+	existingFields := make(map[string]fieldvalue.FieldValue)
 	if fm != nil && fm.Fields != nil {
 		for key, value := range fm.Fields {
 			existingFields[key] = value
@@ -162,7 +163,7 @@ func PrepareFrontmatterUnset(
 	content string,
 	fields []string,
 	sch *schema.Schema,
-) (string, map[string]schema.FieldValue, []string, error) {
+) (string, map[string]fieldvalue.FieldValue, []string, error) {
 	lines := strings.Split(content, "\n")
 
 	startLine, endLine, ok := parser.FrontmatterBounds(lines)
@@ -185,7 +186,7 @@ func PrepareFrontmatterUnset(
 	objectType, _ := yamlData["type"].(string)
 	typeDef := fieldDefsForObjectType(sch, normalizeMutationType(objectType))
 
-	removed := make(map[string]schema.FieldValue)
+	removed := make(map[string]fieldvalue.FieldValue)
 	missing := make([]string, 0)
 	for _, field := range normalizedUnsetFields(fields) {
 		if field == "type" {
@@ -235,9 +236,9 @@ func DetectUnknownFieldMutationByNames(
 		return nil
 	}
 
-	fields := make(map[string]schema.FieldValue, len(fieldNames))
+	fields := make(map[string]fieldvalue.FieldValue, len(fieldNames))
 	for _, fieldName := range fieldNames {
-		fields[fieldName] = schema.Null()
+		fields[fieldName] = fieldvalue.Null()
 	}
 	unknown := schema.UnknownFrontmatterKeys(fields, typeDef.Fields, allowedUnknown)
 	if len(unknown) == 0 {
@@ -258,7 +259,7 @@ func DetectUnknownFieldMutationByNames(
 	}
 }
 
-func SerializeFieldValueLiteral(value schema.FieldValue) string {
+func SerializeFieldValueLiteral(value fieldvalue.FieldValue) string {
 	if value.IsNull() {
 		return "null"
 	}
@@ -301,7 +302,7 @@ func SerializeFieldValueLiteral(value schema.FieldValue) string {
 }
 
 // SerializeFieldValueMap renders typed field values back into Raven/YAML literals.
-func SerializeFieldValueMap(values map[string]schema.FieldValue) map[string]string {
+func SerializeFieldValueMap(values map[string]fieldvalue.FieldValue) map[string]string {
 	if len(values) == 0 {
 		return map[string]string{}
 	}
@@ -313,7 +314,7 @@ func SerializeFieldValueMap(values map[string]schema.FieldValue) map[string]stri
 	return out
 }
 
-func ParseFieldValuesJSON(raw string) (map[string]schema.FieldValue, error) {
+func ParseFieldValuesJSON(raw string) (map[string]fieldvalue.FieldValue, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, nil
@@ -322,7 +323,7 @@ func ParseFieldValuesJSON(raw string) (map[string]schema.FieldValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	values := make(map[string]schema.FieldValue, len(obj))
+	values := make(map[string]fieldvalue.FieldValue, len(obj))
 	for key, value := range obj {
 		values[key] = parser.FieldValueFromYAML(value)
 	}
@@ -330,12 +331,12 @@ func ParseFieldValuesJSON(raw string) (map[string]schema.FieldValue, error) {
 }
 
 // ParseFieldValueLiterals parses Raven-style field literals into typed values.
-func ParseFieldValueLiterals(updates map[string]string) map[string]schema.FieldValue {
+func ParseFieldValueLiterals(updates map[string]string) map[string]fieldvalue.FieldValue {
 	if len(updates) == 0 {
-		return map[string]schema.FieldValue{}
+		return map[string]fieldvalue.FieldValue{}
 	}
 
-	values := make(map[string]schema.FieldValue, len(updates))
+	values := make(map[string]fieldvalue.FieldValue, len(updates))
 	for key, value := range updates {
 		values[key] = parseFieldValueToSchema(value)
 	}
@@ -363,14 +364,14 @@ func fieldDefsForObjectType(sch *schema.Schema, objectType string) map[string]*s
 	return typeDef.Fields
 }
 
-func parseFieldValueToSchema(value string) schema.FieldValue {
+func parseFieldValueToSchema(value string) fieldvalue.FieldValue {
 	if strings.EqualFold(strings.TrimSpace(value), "null") {
-		return schema.Null()
+		return fieldvalue.Null()
 	}
 	return parser.ParseFieldValue(value)
 }
 
-func updateFrontmatterWithFieldValues(content string, updates map[string]schema.FieldValue) (string, error) {
+func updateFrontmatterWithFieldValues(content string, updates map[string]fieldvalue.FieldValue) (string, error) {
 	lines := strings.Split(content, "\n")
 
 	startLine, endLine, ok := parser.FrontmatterBounds(lines)
@@ -406,23 +407,23 @@ func updateFrontmatterWithFieldValues(content string, updates map[string]schema.
 	return newFrontmatter + strings.Join(lines[endLine+1:], "\n"), nil
 }
 
-func coerceFieldMutationValues(updates map[string]schema.FieldValue, fieldDefs map[string]*schema.FieldDefinition) map[string]schema.FieldValue {
+func coerceFieldMutationValues(updates map[string]fieldvalue.FieldValue, fieldDefs map[string]*schema.FieldDefinition) map[string]fieldvalue.FieldValue {
 	if len(updates) == 0 {
 		return updates
 	}
 
-	coerced := make(map[string]schema.FieldValue, len(updates))
+	coerced := make(map[string]fieldvalue.FieldValue, len(updates))
 	for fieldName, value := range updates {
 		coerced[fieldName] = coerceFieldValueForDefinition(value, fieldDefs[fieldName])
 	}
 	return coerced
 }
 
-func coerceFieldValueForDefinition(value schema.FieldValue, fieldDef *schema.FieldDefinition) schema.FieldValue {
+func coerceFieldValueForDefinition(value fieldvalue.FieldValue, fieldDef *schema.FieldDefinition) fieldvalue.FieldValue {
 	return coerceFieldValueForDefinitionAt(value, fieldDef, time.Now())
 }
 
-func coerceFieldValueForDefinitionAt(value schema.FieldValue, fieldDef *schema.FieldDefinition, now time.Time) schema.FieldValue {
+func coerceFieldValueForDefinitionAt(value fieldvalue.FieldValue, fieldDef *schema.FieldDefinition, now time.Time) fieldvalue.FieldValue {
 	if fieldDef == nil {
 		return value
 	}
@@ -431,24 +432,24 @@ func coerceFieldValueForDefinitionAt(value schema.FieldValue, fieldDef *schema.F
 	case schema.FieldTypeDate:
 		if raw, ok := value.AsString(); ok {
 			if resolved, resolvedOK, _ := dates.CalendarDateForInput(raw, now); resolvedOK {
-				return schema.Date(resolved)
+				return fieldvalue.Date(resolved)
 			}
 		}
 	case schema.FieldTypeDateArray:
-		if coerced, changed := coerceDateArray(value, now, schema.Date); changed {
+		if coerced, changed := coerceDateArray(value, now, fieldvalue.Date); changed {
 			return coerced
 		}
 	case schema.FieldTypeRef:
 		if fieldDef.Target == "date" {
 			if raw, ok := value.AsString(); ok {
 				if resolved, resolvedOK, _ := dates.CalendarDateForInput(raw, now); resolvedOK {
-					return schema.String(resolved)
+					return fieldvalue.String(resolved)
 				}
 			}
 		}
 	case schema.FieldTypeRefArray:
 		if fieldDef.Target == "date" {
-			if coerced, changed := coerceDateArray(value, now, schema.String); changed {
+			if coerced, changed := coerceDateArray(value, now, fieldvalue.String); changed {
 				return coerced
 			}
 		}
@@ -457,13 +458,13 @@ func coerceFieldValueForDefinitionAt(value schema.FieldValue, fieldDef *schema.F
 	return value
 }
 
-func coerceDateArray(value schema.FieldValue, now time.Time, wrap func(string) schema.FieldValue) (schema.FieldValue, bool) {
+func coerceDateArray(value fieldvalue.FieldValue, now time.Time, wrap func(string) fieldvalue.FieldValue) (fieldvalue.FieldValue, bool) {
 	arr, ok := value.AsArray()
 	if !ok {
 		return value, false
 	}
 	changed := false
-	coercedItems := make([]schema.FieldValue, len(arr))
+	coercedItems := make([]fieldvalue.FieldValue, len(arr))
 	for i, item := range arr {
 		coercedItems[i] = item
 		raw, isString := item.AsString()
@@ -478,12 +479,12 @@ func coerceDateArray(value schema.FieldValue, now time.Time, wrap func(string) s
 		changed = true
 	}
 	if changed {
-		return schema.Array(coercedItems), true
+		return fieldvalue.Array(coercedItems), true
 	}
 	return value, false
 }
 
-func fieldNamesFromValueUpdates(updates map[string]schema.FieldValue) []string {
+func fieldNamesFromValueUpdates(updates map[string]fieldvalue.FieldValue) []string {
 	names := make([]string, 0, len(updates))
 	for name := range updates {
 		names = append(names, name)
@@ -491,7 +492,7 @@ func fieldNamesFromValueUpdates(updates map[string]schema.FieldValue) []string {
 	return names
 }
 
-func validateMergedFields(objectType string, fields map[string]schema.FieldValue, sch *schema.Schema, allowedUnknown map[string]bool, refCtx *RefValidationContext) error {
+func validateMergedFields(objectType string, fields map[string]fieldvalue.FieldValue, sch *schema.Schema, allowedUnknown map[string]bool, refCtx *RefValidationContext) error {
 	if sch == nil {
 		return nil
 	}
@@ -545,7 +546,7 @@ func normalizedUnsetFields(fields []string) []string {
 }
 
 func validateRefTargets(
-	fields map[string]schema.FieldValue,
+	fields map[string]fieldvalue.FieldValue,
 	fieldDefs map[string]*schema.FieldDefinition,
 	sch *schema.Schema,
 	refCtx *RefValidationContext,

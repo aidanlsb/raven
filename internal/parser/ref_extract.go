@@ -3,6 +3,7 @@ package parser
 import (
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/wikilink"
@@ -34,7 +35,7 @@ type SchemaFieldRef struct {
 }
 
 // ExtractRefsFromFieldValue extracts refs from a FieldValue using the provided options.
-func ExtractRefsFromFieldValue(fv schema.FieldValue, opts RefExtractOptions) []ExtractedRef {
+func ExtractRefsFromFieldValue(fv fieldvalue.FieldValue, opts RefExtractOptions) []ExtractedRef {
 	var refs []ExtractedRef
 
 	if target, ok := fv.AsRef(); ok {

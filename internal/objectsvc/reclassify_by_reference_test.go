@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestReclassifyByReferenceSuccess(t *testing.T) {
@@ -44,7 +44,7 @@ traits: {}
 		Schema:      sch,
 		Reference:   "notes/my-note",
 		NewTypeName: "book",
-		FieldValues: map[string]schema.FieldValue{"author": schema.String("Tolkien")},
+		FieldValues: map[string]fieldvalue.FieldValue{"author": fieldvalue.String("Tolkien")},
 		NoMove:      true,
 		Force:       true,
 	})
@@ -135,7 +135,7 @@ traits: {}
 		Schema:      sch,
 		Reference:   "notes/my-note",
 		NewTypeName: "book",
-		FieldValues: map[string]schema.FieldValue{"status": schema.String("false")},
+		FieldValues: map[string]fieldvalue.FieldValue{"status": fieldvalue.String("false")},
 		NoMove:      true,
 		Force:       true,
 	})

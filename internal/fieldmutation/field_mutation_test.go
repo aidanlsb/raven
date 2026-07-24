@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -19,7 +20,7 @@ func TestCoerceFieldValueForDefinitionAtDateInputs(t *testing.T) {
 	now := time.Date(2026, time.April, 5, 12, 0, 0, 0, time.UTC)
 	def := &schema.FieldDefinition{Type: schema.FieldTypeDate}
 
-	got := coerceFieldValueForDefinitionAt(schema.String("today"), def, now)
+	got := coerceFieldValueForDefinitionAt(fieldvalue.String("today"), def, now)
 	if raw, _ := got.AsString(); raw != "2026-04-05" || !got.IsDate() {
 		t.Fatalf("coerced date = %q IsDate=%v, want 2026-04-05 date value", raw, got.IsDate())
 	}
@@ -31,10 +32,10 @@ func TestCoerceFieldValueForDefinitionAtDateArrayInputs(t *testing.T) {
 	now := time.Date(2026, time.April, 5, 12, 0, 0, 0, time.UTC)
 	def := &schema.FieldDefinition{Type: schema.FieldTypeDateArray}
 
-	got := coerceFieldValueForDefinitionAt(schema.Array([]schema.FieldValue{
-		schema.String("yesterday"),
-		schema.String("2026-04-05"),
-		schema.String("not-a-date"),
+	got := coerceFieldValueForDefinitionAt(fieldvalue.Array([]fieldvalue.FieldValue{
+		fieldvalue.String("yesterday"),
+		fieldvalue.String("2026-04-05"),
+		fieldvalue.String("not-a-date"),
 	}), def, now)
 
 	arr, ok := got.AsArray()
@@ -58,7 +59,7 @@ func TestCoerceFieldValueForDefinitionAtDateTargetRef(t *testing.T) {
 	now := time.Date(2026, time.April, 5, 12, 0, 0, 0, time.UTC)
 	def := &schema.FieldDefinition{Type: schema.FieldTypeRef, Target: "date"}
 
-	got := coerceFieldValueForDefinitionAt(schema.String("tomorrow"), def, now)
+	got := coerceFieldValueForDefinitionAt(fieldvalue.String("tomorrow"), def, now)
 	if raw, _ := got.AsString(); raw != "2026-04-06" || got.IsDate() || got.IsRef() {
 		t.Fatalf("coerced date ref = %q IsDate=%v IsRef=%v, want plain 2026-04-06 string", raw, got.IsDate(), got.IsRef())
 	}
@@ -70,9 +71,9 @@ func TestCoerceFieldValueForDefinitionAtDateTargetRefArray(t *testing.T) {
 	now := time.Date(2026, time.April, 5, 12, 0, 0, 0, time.UTC)
 	def := &schema.FieldDefinition{Type: schema.FieldTypeRefArray, Target: "date"}
 
-	got := coerceFieldValueForDefinitionAt(schema.Array([]schema.FieldValue{
-		schema.String("today"),
-		schema.String("daily/2026-04-06"),
+	got := coerceFieldValueForDefinitionAt(fieldvalue.Array([]fieldvalue.FieldValue{
+		fieldvalue.String("today"),
+		fieldvalue.String("daily/2026-04-06"),
 	}), def, now)
 
 	arr, ok := got.AsArray()
@@ -95,7 +96,7 @@ func TestPrepareValidatedFrontmatterMutationValues(t *testing.T) {
 		name           string
 		content        string
 		frontmatter    bool
-		updates        map[string]schema.FieldValue
+		updates        map[string]fieldvalue.FieldValue
 		allowedUnknown map[string]bool
 		wantErr        error
 		wantErrText    string
@@ -105,9 +106,9 @@ func TestPrepareValidatedFrontmatterMutationValues(t *testing.T) {
 			name:        "updates and coerces schema fields",
 			content:     baseContent,
 			frontmatter: true,
-			updates: map[string]schema.FieldValue{
-				"status": schema.String("done"),
-				"due":    schema.String("2026-07-24"),
+			updates: map[string]fieldvalue.FieldValue{
+				"status": fieldvalue.String("done"),
+				"due":    fieldvalue.String("2026-07-24"),
 			},
 			verify: func(t *testing.T, content string) {
 				t.Helper()
@@ -130,7 +131,7 @@ func TestPrepareValidatedFrontmatterMutationValues(t *testing.T) {
 			name:           "allows explicit extra field",
 			content:        baseContent,
 			frontmatter:    true,
-			updates:        map[string]schema.FieldValue{"legacy": schema.String("kept")},
+			updates:        map[string]fieldvalue.FieldValue{"legacy": fieldvalue.String("kept")},
 			allowedUnknown: map[string]bool{"legacy": true},
 			verify: func(t *testing.T, content string) {
 				t.Helper()
@@ -143,9 +144,9 @@ func TestPrepareValidatedFrontmatterMutationValues(t *testing.T) {
 			name:        "rejects unknown update",
 			content:     baseContent,
 			frontmatter: true,
-			updates: map[string]schema.FieldValue{
-				"z_unknown": schema.String("z"),
-				"a_unknown": schema.String("a"),
+			updates: map[string]fieldvalue.FieldValue{
+				"z_unknown": fieldvalue.String("z"),
+				"a_unknown": fieldvalue.String("a"),
 			},
 			wantErr: &UnknownFieldMutationError{},
 			verify: func(t *testing.T, _ string) {
@@ -156,21 +157,21 @@ func TestPrepareValidatedFrontmatterMutationValues(t *testing.T) {
 			name:        "rejects invalid schema value",
 			content:     baseContent,
 			frontmatter: true,
-			updates:     map[string]schema.FieldValue{"status": schema.String("blocked")},
+			updates:     map[string]fieldvalue.FieldValue{"status": fieldvalue.String("blocked")},
 			wantErr:     &ValidationError{},
 		},
 		{
 			name:        "validates required fields when parsed state is absent",
 			content:     baseContent,
 			frontmatter: false,
-			updates:     map[string]schema.FieldValue{"status": schema.String("done")},
+			updates:     map[string]fieldvalue.FieldValue{"status": fieldvalue.String("done")},
 			wantErr:     &ValidationError{},
 		},
 		{
 			name:        "rejects content without frontmatter",
 			content:     "# Body\n",
 			frontmatter: true,
-			updates:     map[string]schema.FieldValue{"title": schema.String("New")},
+			updates:     map[string]fieldvalue.FieldValue{"title": fieldvalue.String("New")},
 			wantErrText: "no frontmatter found",
 		},
 	}
@@ -349,41 +350,41 @@ func TestValidateRefTargets(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		fields      map[string]schema.FieldValue
+		fields      map[string]fieldvalue.FieldValue
 		context     *RefValidationContext
 		wantField   string
 		wantMessage string
 	}{
 		{
 			name:    "nil context skips filesystem validation",
-			fields:  map[string]schema.FieldValue{"owner": schema.Ref("companies/acme")},
+			fields:  map[string]fieldvalue.FieldValue{"owner": fieldvalue.Ref("companies/acme")},
 			context: nil,
 		},
 		{
 			name:    "matching scalar target",
-			fields:  map[string]schema.FieldValue{"owner": schema.Ref("people/alex")},
+			fields:  map[string]fieldvalue.FieldValue{"owner": fieldvalue.Ref("people/alex")},
 			context: refCtx,
 		},
 		{
 			name:        "wrong scalar target",
-			fields:      map[string]schema.FieldValue{"owner": schema.Ref("companies/acme")},
+			fields:      map[string]fieldvalue.FieldValue{"owner": fieldvalue.Ref("companies/acme")},
 			context:     refCtx,
 			wantField:   "owner",
 			wantMessage: "resolves to type 'company', expected 'person'",
 		},
 		{
 			name: "matching array targets",
-			fields: map[string]schema.FieldValue{
-				"attendees": schema.Array([]schema.FieldValue{schema.Ref("people/alex")}),
+			fields: map[string]fieldvalue.FieldValue{
+				"attendees": fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Ref("people/alex")}),
 			},
 			context: refCtx,
 		},
 		{
 			name: "wrong array target reports field once",
-			fields: map[string]schema.FieldValue{
-				"attendees": schema.Array([]schema.FieldValue{
-					schema.Ref("companies/acme"),
-					schema.Ref("companies/acme"),
+			fields: map[string]fieldvalue.FieldValue{
+				"attendees": fieldvalue.Array([]fieldvalue.FieldValue{
+					fieldvalue.Ref("companies/acme"),
+					fieldvalue.Ref("companies/acme"),
 				}),
 			},
 			context:     refCtx,
@@ -392,17 +393,17 @@ func TestValidateRefTargets(t *testing.T) {
 		},
 		{
 			name:    "unresolved references are ignored",
-			fields:  map[string]schema.FieldValue{"owner": schema.Ref("people/missing")},
+			fields:  map[string]fieldvalue.FieldValue{"owner": fieldvalue.Ref("people/missing")},
 			context: refCtx,
 		},
 		{
 			name:    "null references are ignored",
-			fields:  map[string]schema.FieldValue{"owner": schema.Null()},
+			fields:  map[string]fieldvalue.FieldValue{"owner": fieldvalue.Null()},
 			context: refCtx,
 		},
 		{
 			name:    "target metadata on non-reference field is ignored",
-			fields:  map[string]schema.FieldValue{"label": schema.String("companies/acme")},
+			fields:  map[string]fieldvalue.FieldValue{"label": fieldvalue.String("companies/acme")},
 			context: refCtx,
 		},
 	}
@@ -477,13 +478,13 @@ func TestFieldValueJSONAndLiteralHelpers(t *testing.T) {
 		}
 	}
 
-	literals := SerializeFieldValueMap(map[string]schema.FieldValue{
-		"null":   schema.Null(),
-		"ref":    schema.Ref("people/alex"),
-		"array":  schema.Array([]schema.FieldValue{schema.String("a"), schema.Number(2)}),
-		"quoted": schema.String("true"),
-		"number": schema.Number(2.5),
-		"bool":   schema.Bool(false),
+	literals := SerializeFieldValueMap(map[string]fieldvalue.FieldValue{
+		"null":   fieldvalue.Null(),
+		"ref":    fieldvalue.Ref("people/alex"),
+		"array":  fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("a"), fieldvalue.Number(2)}),
+		"quoted": fieldvalue.String("true"),
+		"number": fieldvalue.Number(2.5),
+		"bool":   fieldvalue.Bool(false),
 	})
 	wantLiterals := map[string]string{
 		"null":   "null",

@@ -6,7 +6,7 @@
 // stable via explicit struct tags.
 package commandpayload
 
-import "github.com/aidanlsb/raven/internal/schema"
+import "github.com/aidanlsb/raven/internal/fieldvalue"
 
 // Pagination holds the shared paging affordances emitted alongside query
 // result windows. HasMore is always present so agents can loop without
@@ -23,12 +23,12 @@ type Pagination struct {
 
 // ObjectItem is a single row in a `type:` query result.
 type ObjectItem struct {
-	Num      int                          `json:"num"`
-	ID       string                       `json:"id"`
-	Type     string                       `json:"type"`
-	Fields   map[string]schema.FieldValue `json:"fields"`
-	FilePath string                       `json:"file_path"`
-	Line     int                          `json:"line"`
+	Num      int                              `json:"num"`
+	ID       string                           `json:"id"`
+	Type     string                           `json:"type"`
+	Fields   map[string]fieldvalue.FieldValue `json:"fields"`
+	FilePath string                           `json:"file_path"`
+	Line     int                              `json:"line"`
 }
 
 // TraitItem is a single row in a `trait:` query result.

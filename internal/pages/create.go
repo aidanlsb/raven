@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/frontmatter"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -38,7 +39,7 @@ type CreateOptions struct {
 
 	// Fields are additional frontmatter fields to include.
 	// Keys are field names, values are typed field values.
-	Fields map[string]schema.FieldValue
+	Fields map[string]fieldvalue.FieldValue
 
 	// Schema is used for:
 	// 1. Resolving default_path for types
@@ -126,7 +127,7 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	}
 
 	var content strings.Builder
-	allFields := make(map[string]schema.FieldValue, len(opts.Fields))
+	allFields := make(map[string]fieldvalue.FieldValue, len(opts.Fields))
 	for key, value := range opts.Fields {
 		allFields[key] = value
 	}

@@ -161,7 +161,7 @@ func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr
 		value,
 		compareOpToSQL(compareOp),
 		fieldExpr,
-		indexschema.DateFilterOptions{
+		indexfieldvalue.DateFilterOptions{
 			Now: now,
 		},
 	)

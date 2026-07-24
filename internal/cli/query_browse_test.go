@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -29,10 +30,10 @@ func TestBrowseItemsForObjectResultsUseNameFieldAndDetails(t *testing.T) {
 			Type:      "issue",
 			FilePath:  "type/issue/check-if-queries-return-the-fields-in-the-printed-table.md",
 			LineStart: 1,
-			Fields: map[string]schema.FieldValue{
-				"title":   schema.String("Check if queries return the fields in the printed table"),
-				"project": schema.String("project/raven"),
-				"status":  schema.String("open"),
+			Fields: map[string]fieldvalue.FieldValue{
+				"title":   fieldvalue.String("Check if queries return the fields in the printed table"),
+				"project": fieldvalue.String("project/raven"),
+				"status":  fieldvalue.String("open"),
 			},
 		},
 	}, sch)

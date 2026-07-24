@@ -3,8 +3,7 @@ package parser
 import (
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/schema"
-
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 )
 
@@ -422,14 +421,14 @@ func TestIsRefOnTraitLine(t *testing.T) {
 func TestTraitAnnotationValueHelpers(t *testing.T) {
 	t.Parallel()
 
-	strVal := schema.String("todo")
-	dateVal := schema.Date("2025-06-15")
-	refVal := schema.Ref("project/website")
-	nullVal := schema.Null()
+	strVal := fieldvalue.String("todo")
+	dateVal := fieldvalue.Date("2025-06-15")
+	refVal := fieldvalue.Ref("project/website")
+	nullVal := fieldvalue.Null()
 
 	tests := []struct {
 		name         string
-		value        *schema.FieldValue
+		value        *fieldvalue.FieldValue
 		wantHasValue bool
 		wantString   string
 	}{

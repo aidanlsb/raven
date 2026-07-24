@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 func TestApplySetBulkTypedUpdatesPreservesStringType(t *testing.T) {
@@ -48,8 +48,8 @@ traits: {}
 		VaultConfig: &config.VaultConfig{},
 		Schema:      sch,
 		ObjectIDs:   []string{"people/one", "people/two"},
-		TypedUpdates: map[string]schema.FieldValue{
-			"email": schema.String("true"),
+		TypedUpdates: map[string]fieldvalue.FieldValue{
+			"email": fieldvalue.String("true"),
 		},
 	})
 	if err != nil {

@@ -7,11 +7,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 // Render serializes typed field values into a deterministic YAML frontmatter block.
-func Render(typeName string, fields map[string]schema.FieldValue, blankFields map[string]bool) (string, error) {
+func Render(typeName string, fields map[string]fieldvalue.FieldValue, blankFields map[string]bool) (string, error) {
 	yamlData := make(map[string]interface{}, len(fields)+1)
 	if strings.TrimSpace(typeName) != "" {
 		yamlData["type"] = typeName
@@ -84,7 +84,7 @@ func RenderData(yamlData map[string]interface{}, blankFields map[string]bool) (s
 }
 
 // FieldValueToYAMLValue converts a typed field value into its YAML representation.
-func FieldValueToYAMLValue(value schema.FieldValue) interface{} {
+func FieldValueToYAMLValue(value fieldvalue.FieldValue) interface{} {
 	if value.IsNull() {
 		return nil
 	}

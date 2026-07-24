@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -21,7 +22,7 @@ type SetBulkRequest struct {
 	VaultConfig  *config.VaultConfig
 	Schema       *schema.Schema
 	ObjectIDs    []string
-	TypedUpdates map[string]schema.FieldValue
+	TypedUpdates map[string]fieldvalue.FieldValue
 	ParseOptions *parser.ParseOptions
 	Runtime      *vaultruntime.Runtime
 }
@@ -225,7 +226,7 @@ func setBulkReasonFromError(err error) string {
 	}
 }
 
-func formatSetPreviewChanges(existingFields map[string]schema.FieldValue, updates map[string]schema.FieldValue) map[string]string {
+func formatSetPreviewChanges(existingFields map[string]fieldvalue.FieldValue, updates map[string]fieldvalue.FieldValue) map[string]string {
 	resolvedUpdates := fieldmutation.SerializeFieldValueMap(updates)
 	changes := make(map[string]string, len(resolvedUpdates))
 	for field, resolvedVal := range resolvedUpdates {
@@ -240,7 +241,7 @@ func formatSetPreviewChanges(existingFields map[string]schema.FieldValue, update
 	return changes
 }
 
-func previewFieldValue(value schema.FieldValue) string {
+func previewFieldValue(value fieldvalue.FieldValue) string {
 	if value.IsNull() {
 		return "null"
 	}

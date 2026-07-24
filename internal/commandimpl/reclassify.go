@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -111,7 +111,7 @@ func runReclassifyBulk(
 	rt *vaultruntime.Runtime,
 	ids []string,
 	newTypeName string,
-	fieldValues map[string]schema.FieldValue,
+	fieldValues map[string]fieldvalue.FieldValue,
 	req commandexec.Request,
 ) commandexec.Result {
 	request := objectsvc.ReclassifyBulkRequest{

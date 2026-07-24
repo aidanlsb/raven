@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
@@ -17,18 +17,18 @@ type valueParseOptions struct {
 	stripQuotes   bool
 }
 
-func parseValueWithOptions(s string, opts valueParseOptions) schema.FieldValue {
+func parseValueWithOptions(s string, opts valueParseOptions) fieldvalue.FieldValue {
 	s = strings.TrimSpace(s)
 
 	if s == "" {
-		return schema.Null()
+		return fieldvalue.Null()
 	}
 
 	// Reference [[target]] or [[target|display]] - exactly 2 opening and 2 closing brackets
 	// Use wikilink.ParseExact to correctly handle aliases
 	if !strings.HasPrefix(s, "[[[") {
 		if target, _, ok := wikilink.ParseExact(s); ok {
-			return schema.Ref(target)
+			return fieldvalue.Ref(target)
 		}
 	}
 
@@ -36,62 +36,62 @@ func parseValueWithOptions(s string, opts valueParseOptions) schema.FieldValue {
 	if opts.parseArrays && strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
 		inner := s[1 : len(s)-1]
 		items := parseArrayItems(inner, opts)
-		return schema.Array(items)
+		return fieldvalue.Array(items)
 	}
 
 	// Quoted string
 	if opts.stripQuotes && strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`) && len(s) >= 2 {
-		return schema.String(s[1 : len(s)-1])
+		return fieldvalue.String(s[1 : len(s)-1])
 	}
 
 	// Boolean
 	if opts.parseBooleans {
 		if s == "true" {
-			return schema.Bool(true)
+			return fieldvalue.Bool(true)
 		}
 		if s == "false" {
-			return schema.Bool(false)
+			return fieldvalue.Bool(false)
 		}
 	}
 
 	// Number
 	if opts.parseNumbers {
 		if n, err := strconv.ParseFloat(s, 64); err == nil {
-			return schema.Number(n)
+			return fieldvalue.Number(n)
 		}
 	}
 
 	// Date (YYYY-MM-DD) or datetime (YYYY-MM-DDTHH:MM)
 	if opts.strictDates {
 		if dates.IsValidDatetime(s) {
-			return schema.Datetime(s)
+			return fieldvalue.Datetime(s)
 		}
 		if dates.IsValidDate(s) {
-			return schema.Date(s)
+			return fieldvalue.Date(s)
 		}
 	} else if len(s) >= 10 && s[0] >= '0' && s[0] <= '9' {
 		if strings.Contains(s, "T") {
 			if dates.IsValidDatetime(s) {
-				return schema.Datetime(s)
+				return fieldvalue.Datetime(s)
 			}
 		} else if len(s) == 10 && s[4] == '-' && s[7] == '-' {
 			if dates.IsValidDate(s) {
-				return schema.Date(s)
+				return fieldvalue.Date(s)
 			}
 		}
 	}
 
 	// Time only (HH:MM) - treat as string
 	if len(s) == 5 && s[2] == ':' {
-		return schema.String(s)
+		return fieldvalue.String(s)
 	}
 
 	// Default to string
-	return schema.String(s)
+	return fieldvalue.String(s)
 }
 
 // ParseFieldValue parses a single Raven field literal.
-func ParseFieldValue(s string) schema.FieldValue {
+func ParseFieldValue(s string) fieldvalue.FieldValue {
 	return parseValueWithOptions(s, valueParseOptions{
 		parseBooleans: true,
 		parseNumbers:  true,
@@ -102,7 +102,7 @@ func ParseFieldValue(s string) schema.FieldValue {
 
 // ParseTraitValue parses a trait value using strict date/datetime validation.
 // Traits have a single value slot, but that value can be an array.
-func ParseTraitValue(s string) schema.FieldValue {
+func ParseTraitValue(s string) fieldvalue.FieldValue {
 	return parseValueWithOptions(s, valueParseOptions{
 		strictDates: true,
 		parseArrays: true,
@@ -111,8 +111,8 @@ func ParseTraitValue(s string) schema.FieldValue {
 }
 
 // parseArrayItems parses array items, handling nested references.
-func parseArrayItems(s string, opts valueParseOptions) []schema.FieldValue {
-	var items []schema.FieldValue
+func parseArrayItems(s string, opts valueParseOptions) []fieldvalue.FieldValue {
+	var items []fieldvalue.FieldValue
 	var current strings.Builder
 	bracketDepth := 0
 	inQuotes := false

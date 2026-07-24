@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/querysvc"
@@ -189,7 +190,7 @@ func formatFieldValueSimple(val interface{}) string {
 	if val == nil {
 		return ""
 	}
-	if fv, ok := val.(schema.FieldValue); ok {
+	if fv, ok := val.(fieldvalue.FieldValue); ok {
 		return formatFieldValueSimple(fv.Raw())
 	}
 	switch v := val.(type) {

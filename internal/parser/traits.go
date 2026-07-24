@@ -4,14 +4,14 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 // TraitAnnotation represents a parsed @trait() annotation.
 type TraitAnnotation struct {
 	TraitName string
 	// Value is the single trait value (nil for boolean traits like @highlight)
-	Value       *schema.FieldValue
+	Value       *fieldvalue.FieldValue
 	Content     string // Full line content with all trait annotations removed
 	Line        int
 	StartOffset int
@@ -28,11 +28,11 @@ func (t *TraitAnnotation) ValueString() string {
 	return traitValueString(t.Value)
 }
 
-func traitHasValue(value *schema.FieldValue) bool {
+func traitHasValue(value *fieldvalue.FieldValue) bool {
 	return value != nil && !value.IsNull()
 }
 
-func traitValueString(value *schema.FieldValue) string {
+func traitValueString(value *fieldvalue.FieldValue) string {
 	if value == nil {
 		return ""
 	}
@@ -40,8 +40,8 @@ func traitValueString(value *schema.FieldValue) string {
 }
 
 // FormatFieldValueLiteral renders a FieldValue using Raven's inline literal syntax.
-func FormatFieldValueLiteral(value schema.FieldValue) string {
-	return schema.FormatLiteral(value)
+func FormatFieldValueLiteral(value fieldvalue.FieldValue) string {
+	return fieldvalue.FormatLiteral(value)
 }
 
 // traitRegex matches @trait-name or @trait-name(value) for parsing.
@@ -91,7 +91,7 @@ func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 		traitName := sanitizedLine[match[4]:match[5]]
 
 		// match[6:8] is the value capture group (may be -1 if not present)
-		var value *schema.FieldValue
+		var value *fieldvalue.FieldValue
 		if match[6] >= 0 && match[7] >= 0 {
 			valueStr := strings.TrimSpace(sanitizedLine[match[6]:match[7]])
 			if valueStr != "" {

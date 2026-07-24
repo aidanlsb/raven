@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -538,7 +539,7 @@ func TestAllIndexedFilePaths(t *testing.T) {
 				{
 					ID:        file[:len(file)-3], // strip .md
 					Type:      "page",
-					Fields:    make(map[string]schema.FieldValue),
+					Fields:    make(map[string]fieldvalue.FieldValue),
 					LineStart: 1,
 				},
 			},

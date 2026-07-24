@@ -1,139 +1,143 @@
 package schema
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/aidanlsb/raven/internal/fieldvalue"
+)
 
 func TestValidateTraitValue(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name    string
 		def     *TraitDefinition
-		value   FieldValue
+		value   fieldvalue.FieldValue
 		wantErr bool
 	}{
 		{
 			name:    "boolean true string",
 			def:     &TraitDefinition{Type: FieldTypeBool},
-			value:   String("true"),
+			value:   fieldvalue.String("true"),
 			wantErr: false,
 		},
 		{
 			name:    "boolean invalid string",
 			def:     &TraitDefinition{Type: FieldTypeBool},
-			value:   String("yes"),
+			value:   fieldvalue.String("yes"),
 			wantErr: true,
 		},
 		{
 			name:    "number valid numeric string",
 			def:     &TraitDefinition{Type: FieldTypeNumber},
-			value:   String("3.5"),
+			value:   fieldvalue.String("3.5"),
 			wantErr: false,
 		},
 		{
 			name:    "number invalid",
 			def:     &TraitDefinition{Type: FieldTypeNumber},
-			value:   String("abc"),
+			value:   fieldvalue.String("abc"),
 			wantErr: true,
 		},
 		{
 			name:    "url valid",
 			def:     &TraitDefinition{Type: FieldTypeURL},
-			value:   String("https://example.com"),
+			value:   fieldvalue.String("https://example.com"),
 			wantErr: false,
 		},
 		{
 			name:    "url invalid",
 			def:     &TraitDefinition{Type: FieldTypeURL},
-			value:   String("example.com"),
+			value:   fieldvalue.String("example.com"),
 			wantErr: true,
 		},
 		{
 			name:    "date valid",
 			def:     &TraitDefinition{Type: FieldTypeDate},
-			value:   String("2026-02-21"),
+			value:   fieldvalue.String("2026-02-21"),
 			wantErr: false,
 		},
 		{
 			name:    "date invalid",
 			def:     &TraitDefinition{Type: FieldTypeDate},
-			value:   String("2026-99-99"),
+			value:   fieldvalue.String("2026-99-99"),
 			wantErr: true,
 		},
 		{
 			name:    "datetime valid",
 			def:     &TraitDefinition{Type: FieldTypeDatetime},
-			value:   String("2026-02-21T09:30"),
+			value:   fieldvalue.String("2026-02-21T09:30"),
 			wantErr: false,
 		},
 		{
 			name:    "datetime invalid",
 			def:     &TraitDefinition{Type: FieldTypeDatetime},
-			value:   String("tomorrow"),
+			value:   fieldvalue.String("tomorrow"),
 			wantErr: true,
 		},
 		{
 			name:    "enum valid",
 			def:     &TraitDefinition{Type: FieldTypeEnum, Values: []string{"low", "medium", "high"}},
-			value:   String("high"),
+			value:   fieldvalue.String("high"),
 			wantErr: false,
 		},
 		{
 			name:    "enum invalid",
 			def:     &TraitDefinition{Type: FieldTypeEnum, Values: []string{"low", "medium", "high"}},
-			value:   String("critical"),
+			value:   fieldvalue.String("critical"),
 			wantErr: true,
 		},
 		{
 			name:    "ref valid wikilink parsed",
 			def:     &TraitDefinition{Type: FieldTypeRef},
-			value:   Ref("people/freya"),
+			value:   fieldvalue.Ref("people/freya"),
 			wantErr: false,
 		},
 		{
 			name:    "ref valid bare string",
 			def:     &TraitDefinition{Type: FieldTypeRef},
-			value:   String("people/freya"),
+			value:   fieldvalue.String("people/freya"),
 			wantErr: false,
 		},
 		{
 			name:    "ref invalid empty",
 			def:     &TraitDefinition{Type: FieldTypeRef},
-			value:   String(""),
+			value:   fieldvalue.String(""),
 			wantErr: true,
 		},
 		{
 			name:    "legacy boolean alias",
 			def:     &TraitDefinition{Type: "boolean"},
-			value:   String("false"),
+			value:   fieldvalue.String("false"),
 			wantErr: false,
 		},
 		{
 			name:    "string array valid",
 			def:     &TraitDefinition{Type: FieldTypeStringArray},
-			value:   Array([]FieldValue{String("raven"), String("skills")}),
+			value:   fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("raven"), fieldvalue.String("skills")}),
 			wantErr: false,
 		},
 		{
 			name:    "number array valid numeric strings",
 			def:     &TraitDefinition{Type: FieldTypeNumberArray},
-			value:   Array([]FieldValue{String("1"), String("2.5")}),
+			value:   fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("1"), fieldvalue.String("2.5")}),
 			wantErr: false,
 		},
 		{
 			name:    "bool array valid string booleans",
 			def:     &TraitDefinition{Type: FieldTypeBoolArray},
-			value:   Array([]FieldValue{String("true"), String("false")}),
+			value:   fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("true"), fieldvalue.String("false")}),
 			wantErr: false,
 		},
 		{
 			name:    "enum array invalid member",
 			def:     &TraitDefinition{Type: FieldTypeEnumArray, Values: []string{"low", "medium", "high"}},
-			value:   Array([]FieldValue{String("high"), String("critical")}),
+			value:   fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.String("high"), fieldvalue.String("critical")}),
 			wantErr: true,
 		},
 		{
 			name:    "ref array valid",
 			def:     &TraitDefinition{Type: FieldTypeRefArray},
-			value:   Array([]FieldValue{Ref("people/freya"), String("people/loki")}),
+			value:   fieldvalue.Array([]fieldvalue.FieldValue{fieldvalue.Ref("people/freya"), fieldvalue.String("people/loki")}),
 			wantErr: false,
 		},
 	}
