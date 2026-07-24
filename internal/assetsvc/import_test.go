@@ -193,6 +193,7 @@ func TestImportUsesCustomAssetRootAndHomeExpansion(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	vaultPath := t.TempDir()
 	result, err := Import(ImportRequest{
