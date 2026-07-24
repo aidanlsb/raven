@@ -280,7 +280,9 @@ func TestSetupInitVaultDisclosesRoutingChangeFromMissingActive(t *testing.T) {
 	if data["previous_active_vault"] != nil {
 		t.Fatalf("previous_active_vault = %#v, want nil for missing active name", data["previous_active_vault"])
 	}
-	assertPostInitVaultInfo(t, data, "previous_vault", "first", firstPath)
+	if data["previous_vault"] != nil {
+		t.Fatalf("previous_vault = %#v, want nil when stale active state prevents ambient resolution", data["previous_vault"])
+	}
 	if got := data["switch_back"]; got != "rvn --json vault clear" {
 		t.Fatalf("switch_back = %#v, want vault clear", got)
 	}
