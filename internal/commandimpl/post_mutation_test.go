@@ -146,6 +146,42 @@ func TestApplyChangeSetProjectsMoveAndDelete(t *testing.T) {
 	}
 }
 
+func TestApplyChangeSetProjectsReusedMoveDestination(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("a.md", "# A\n").
+		WithFile("b.md", "# B\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+	indexPostMutationFiles(t, rt, "a.md", "b.md")
+
+	if err := os.Rename(filepath.Join(v.Path, "b.md"), filepath.Join(v.Path, "c.md")); err != nil {
+		t.Fatalf("move b to c: %v", err)
+	}
+	if err := os.Rename(filepath.Join(v.Path, "a.md"), filepath.Join(v.Path, "b.md")); err != nil {
+		t.Fatalf("move a to b: %v", err)
+	}
+
+	changes := mutation.NewChangeSet()
+	changes.AddMoved("b.md", "c.md")
+	changes.AddMoved("a.md", "b.md")
+	_, warnings := applyChangeSet(rt, changes)
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", warnings)
+	}
+
+	ids, err := rt.DB.AllObjectIDs()
+	if err != nil {
+		t.Fatalf("AllObjectIDs() error = %v", err)
+	}
+	sort.Strings(ids)
+	if len(ids) != 2 || ids[0] != "b" || ids[1] != "c" {
+		t.Fatalf("indexed IDs = %#v, want [b c]", ids)
+	}
+}
+
 func indexPostMutationFiles(t *testing.T, rt *vaultruntime.Runtime, relPaths ...string) {
 	t.Helper()
 	if err := rt.OpenDB(); err != nil {

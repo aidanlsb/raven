@@ -63,3 +63,15 @@ func TestChangeSetIgnoresInvalidPaths(t *testing.T) {
 		t.Fatalf("ChangeSet = %#v, want empty", changes)
 	}
 }
+
+func TestChangeSetIndexPathsIncludesReusedMoveDestination(t *testing.T) {
+	t.Parallel()
+
+	changes := NewChangeSet()
+	changes.AddMoved("b.md", "c.md")
+	changes.AddMoved("a.md", "b.md")
+
+	if got, want := changes.IndexPaths(), []string{"c.md", "b.md"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("IndexPaths() = %#v, want %#v", got, want)
+	}
+}

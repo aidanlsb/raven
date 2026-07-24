@@ -20,7 +20,7 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet) (map[s
 		return nil, nil
 	}
 
-	indexPaths := changes.IndexPaths()
+	indexPaths := existingIndexPaths(rt, changes)
 	autoReindexEnabled := rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled()
 	var warnings []commandexec.Warning
 	if autoReindexEnabled {
@@ -51,6 +51,26 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet) (map[s
 	}
 	missingData, missingWarnings := missingRefEnvelope(rt, missingPaths...)
 	return missingData, appendCommandWarnings(warnings, missingWarnings)
+}
+
+func existingIndexPaths(rt *vaultruntime.Runtime, changes mutation.ChangeSet) []string {
+	removed := make(map[string]struct{}, len(changes.Deleted)+len(changes.Moved))
+	for _, relPath := range changes.RemovedPaths() {
+		removed[relPath] = struct{}{}
+	}
+
+	candidates := changes.IndexPaths()
+	result := make([]string, 0, len(candidates))
+	for _, relPath := range candidates {
+		if _, wasRemoved := removed[relPath]; wasRemoved {
+			filePath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				continue
+			}
+		}
+		result = append(result, relPath)
+	}
+	return result
 }
 
 func removeIndexPathWarning(rt *vaultruntime.Runtime, relPath string) (commandexec.Warning, bool) {
