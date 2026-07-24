@@ -20,10 +20,13 @@ var (
 	reclassifyNoMove     bool
 	reclassifyUpdateRefs bool
 	reclassifyForce      bool
+	reclassifyStdin      bool
+	reclassifyConfirm    bool
 )
 
 var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
+	Args:        cobra.MaximumNArgs(2),
 	BuildArgs:   buildReclassifyArgs,
 	Invoke:      invokeReclassify,
 	RenderHuman: renderReclassifyResult,
@@ -33,6 +36,8 @@ var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 		"no-move":     &reclassifyNoMove,
 		"update-refs": &reclassifyUpdateRefs,
 		"force":       &reclassifyForce,
+		"stdin":       &reclassifyStdin,
+		"confirm":     &reclassifyConfirm,
 	},
 })
 
@@ -54,8 +59,6 @@ func buildReclassifyArgs(_ *cobra.Command, args []string) (map[string]interface{
 	}
 
 	argsMap := map[string]interface{}{
-		"object":      args[0],
-		"new-type":    args[1],
 		"field":       fieldFlags,
 		"no-move":     reclassifyNoMove,
 		"update-refs": reclassifyUpdateRefs,
@@ -64,10 +67,43 @@ func buildReclassifyArgs(_ *cobra.Command, args []string) (map[string]interface{
 	if len(fieldJSONRaw) > 0 {
 		argsMap["fields-json"] = fieldJSONRaw
 	}
+
+	if reclassifyStdin {
+		if len(args) != 1 {
+			return nil, handleErrorMsg(ErrMissingArgument, "requires one target type with --stdin", "Usage: rvn reclassify <new-type> --stdin")
+		}
+		ids, sectionIDs, err := ReadIDsFromStdin()
+		if err != nil {
+			return nil, handleError(ErrInternal, err, "")
+		}
+		ids = append(ids, sectionIDs...)
+		if len(ids) == 0 {
+			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
+		}
+		argsMap["stdin"] = true
+		argsMap["object_ids"] = stringsToAny(ids)
+		argsMap["new-type"] = args[0]
+		return argsMap, nil
+	}
+
+	if len(args) != 2 {
+		return nil, handleErrorMsg(ErrMissingArgument, "requires object and target type arguments", "Usage: rvn reclassify <object> <new-type>")
+	}
+	argsMap["object"] = args[0]
+	argsMap["new-type"] = args[1]
 	return argsMap, nil
 }
 
 func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	if boolValue(args["stdin"]) {
+		return executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			VaultPath: vaultPath,
+			Args:      args,
+			Confirm:   reclassifyConfirm,
+		})
+	}
+
 	fieldValues := cloneArgsMap(args)
 	for {
 		result := executeCanonicalRequest(commandexec.Request{
@@ -123,6 +159,9 @@ func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[st
 
 func renderReclassifyResult(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
+	if stringValue(data["action"]) == "reclassify" {
+		return renderCanonicalBulkResult(result)
+	}
 	if boolValue(data["cancelled"]) {
 		fmt.Fprintln(os.Stderr, "Cancelled.")
 		return nil
@@ -199,7 +238,7 @@ func promptMissingReclassifyFields(newTypeName string, details map[string]interf
 func init() {
 	reclassifyCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
 		IncludeDynamicDates: false,
-		DisableWhenStdin:    false,
+		DisableWhenStdin:    true,
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	})
 	rootCmd.AddCommand(reclassifyCmd)

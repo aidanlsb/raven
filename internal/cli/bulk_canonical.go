@@ -55,15 +55,16 @@ func renderCanonicalBulkResult(result commandexec.Result) error {
 	}
 
 	summary := &BulkSummary{
-		Action:   action,
-		Results:  decodeBulkResults(data["items"]),
-		Total:    intFromAny(data["total"]),
-		Modified: intFromAny(data["modified"]),
-		Deleted:  intFromAny(data["deleted"]),
-		Added:    intFromAny(data["added"]),
-		Moved:    intFromAny(data["moved"]),
-		Skipped:  intFromAny(data["skipped"]),
-		Errors:   intFromAny(data["errors"]),
+		Action:       action,
+		Results:      decodeBulkResults(data["items"]),
+		Total:        intFromAny(data["total"]),
+		Modified:     intFromAny(data["modified"]),
+		Deleted:      intFromAny(data["deleted"]),
+		Added:        intFromAny(data["added"]),
+		Moved:        intFromAny(data["moved"]),
+		Reclassified: intFromAny(data["reclassified"]),
+		Skipped:      intFromAny(data["skipped"]),
+		Errors:       intFromAny(data["errors"]),
 	}
 	PrintBulkSummary(summary)
 	for _, warning := range result.Warnings {

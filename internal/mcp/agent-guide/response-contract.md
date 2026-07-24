@@ -124,8 +124,9 @@ There are two mutation classes with different defaults:
 
 1. Single-object writes apply immediately (`meta.mutation.phase = "applied"`):
    `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
-   `section_rename`, and single-object `delete`/`move`. Pass `dry-run=true` to
-   get a preview (`meta.mutation.phase = "preview"`) without writing.
+   `section_rename`, `reclassify`, and single-object `delete`/`move`. Commands
+   that expose `dry-run` accept `dry-run=true` to get a preview
+   (`meta.mutation.phase = "preview"`) without writing.
 2. High-blast-radius operations are preview-first (`meta.mutation.phase =
    "preview"`) and require `confirm=true` to apply: any bulk write (`stdin=true`),
    `query` with `apply`, `schema rename`, `schema convert`, and the `check fix` /
@@ -148,6 +149,8 @@ raven_invoke(command="edit", args={"path":"project/website.md", "old_str":"A", "
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "apply":["update done"]})
 raven_invoke(command="delete", args={"stdin":true, "confirm":true})
 raven_invoke(command="move", args={"stdin":true, "destination":"archive/", "confirm":true})
+raven_invoke(command="reclassify", args={"object_ids":["page/one","page/two"], "new-type":"note"})
+raven_invoke(command="reclassify", args={"object_ids":["page/one","page/two"], "new-type":"note", "confirm":true})
 ```
 
 Because single-object writes apply on the first call, only invoke them when the

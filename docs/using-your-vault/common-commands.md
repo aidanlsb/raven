@@ -312,6 +312,8 @@ Change an object's type. Raven updates frontmatter, applies defaults for the new
 rvn reclassify inbox/meeting-notes meeting --field name="Q1 Planning"
 rvn reclassify person/freya company --fields-json '{"legal_name":"false"}'
 rvn reclassify page/scratch note --field title="Research Notes" --no-move
+rvn query 'type:note' --ids | rvn reclassify doc --stdin --json
+rvn query 'type:note' --ids | rvn reclassify doc --stdin --confirm --force --json
 ```
 
 Key flags:
@@ -320,6 +322,12 @@ Key flags:
 - `--no-move` — keep the file in its current location
 - `--update-refs` — update references if the file moves (default: true)
 - `--force` — skip confirmation for dropped fields
+- `--stdin` — read object IDs for a bulk reclassification; the target type is the only positional argument
+- `--confirm` — apply a bulk reclassification (bulk runs preview by default)
+
+Bulk previews include each planned move, added/dropped fields, required-field
+failures, and references that would be rewritten. `--confirm` applies eligible
+items; objects that would drop fields also require `--force`.
 
 ### `rvn delete`
 
