@@ -273,8 +273,20 @@ func TestImportRejectsInvalidSourcesAndDestinations(t *testing.T) {
 			code:        codes.ErrFileOutsideVault,
 		},
 		{
+			name:        "backslash destination escapes asset root",
+			destination: `assets\..\outside.pdf`,
+			setup:       func(t *testing.T, _ string) string { return writeSource(t, "file.pdf", "pdf") },
+			code:        codes.ErrFileOutsideVault,
+		},
+		{
 			name:        "destination has no extension",
 			destination: "assets/file",
+			setup:       func(t *testing.T, _ string) string { return writeSource(t, "file.pdf", "pdf") },
+			code:        codes.ErrInvalidInput,
+		},
+		{
+			name:        "destination has empty extension",
+			destination: "assets/file.",
 			setup:       func(t *testing.T, _ string) string { return writeSource(t, "file.pdf", "pdf") },
 			code:        codes.ErrInvalidInput,
 		},
@@ -331,6 +343,47 @@ func TestImportRejectsDestinationSymlinkEscape(t *testing.T) {
 		Destination: "assets/escape/file.pdf",
 	})
 	requireServiceCode(t, err, codes.ErrFileOutsideVault)
+}
+
+func TestImportRejectsDestinationSymlinkInsideVault(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink setup requires privileges on Windows")
+	}
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vaultPath, "assets", "real"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(vaultPath, "assets", "real"), filepath.Join(vaultPath, "assets", "linked")); err != nil {
+		t.Fatal(err)
+	}
+	source := writeSource(t, "file.pdf", "pdf")
+
+	_, err := Import(ImportRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+		Source:      source,
+		Destination: "assets/linked/file.pdf",
+	})
+	requireServiceCode(t, err, codes.ErrFileOutsideVault)
+}
+
+func TestImportRejectsBackslashTraversalInPreservedBasename(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("backslash is a path separator on Windows")
+	}
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	source := writeSource(t, `..\outside.pdf`, "pdf")
+	_, err := Import(ImportRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+		Source:      source,
+		Destination: "assets/",
+	})
+	requireServiceCode(t, err, codes.ErrInvalidInput)
 }
 
 func writeSource(t *testing.T, name, content string) string {

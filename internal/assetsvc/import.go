@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -38,6 +39,7 @@ type ImportRequest struct {
 }
 
 type ImportResult struct {
+	VaultPath      string
 	SourcePath     string
 	DestinationAbs string
 	DestinationRel string
@@ -69,8 +71,11 @@ func Import(req ImportRequest) (*ImportResult, error) {
 			WithSuggestion("Choose a destination under the configured asset root").
 			WithDetails(map[string]any{"path": plan.DestinationRel})
 	}
+	if err := rejectDestinationSymlinks(req.VaultPath, plan.DestinationAbs); err != nil {
+		return nil, err
+	}
 
-	sourceInfo, err := copyFileAtomic(plan.SourcePath, plan.DestinationAbs, req.Force)
+	sourceInfo, err := copyFileAtomic(req.VaultPath, plan.SourcePath, plan.DestinationAbs, req.Force)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +202,7 @@ func planImport(req ImportRequest) (*ImportResult, error) {
 		mode = ModeMove
 	}
 	return &ImportResult{
+		VaultPath:      vaultPath,
 		SourcePath:     sourcePath,
 		DestinationAbs: destinationAbs,
 		DestinationRel: destinationRel,
@@ -239,8 +245,8 @@ func resolveDestination(vaultPath string, vaultCfg *config.VaultConfig, destinat
 	}
 
 	directoryHint := strings.HasSuffix(destination, "/") || strings.HasSuffix(destination, "\\")
-	candidateRel := paths.NormalizeVaultRelPath(destination)
-	if !paths.IsValidVaultRelPath(candidateRel) {
+	candidateRel, ok := cleanDestinationRel(destination)
+	if !ok {
 		return "", "", svcerr.New(codes.ErrFileOutsideVault, "asset destination escapes the vault").
 			WithSuggestion("Use a vault-relative path under the configured asset root")
 	}
@@ -248,6 +254,9 @@ func resolveDestination(vaultPath string, vaultCfg *config.VaultConfig, destinat
 	if err := paths.ValidateWithinVault(vaultPath, candidateAbs); err != nil {
 		return "", "", svcerr.Wrap(codes.ErrFileOutsideVault, "asset destination resolves outside the vault", err).
 			WithSuggestion("Choose a destination under the configured asset root")
+	}
+	if err := rejectDestinationSymlinks(vaultPath, candidateAbs); err != nil {
+		return "", "", err
 	}
 
 	if info, err := os.Stat(candidateAbs); err == nil {
@@ -263,10 +272,10 @@ func resolveDestination(vaultPath string, vaultCfg *config.VaultConfig, destinat
 	}
 
 	if directoryHint {
-		if strings.TrimSpace(sourceBase) == "" || sourceBase == "." {
+		if strings.TrimSpace(sourceBase) == "" || sourceBase == "." || strings.ContainsAny(sourceBase, `/\`) {
 			return "", "", svcerr.New(codes.ErrInvalidInput, "asset source has an invalid filename")
 		}
-		candidateRel = paths.NormalizeVaultRelPath(filepath.ToSlash(filepath.Join(candidateRel, sourceBase)))
+		candidateRel = path.Join(candidateRel, sourceBase)
 		candidateAbs = filepath.Join(vaultPath, filepath.FromSlash(candidateRel))
 	}
 
@@ -275,7 +284,7 @@ func resolveDestination(vaultPath string, vaultCfg *config.VaultConfig, destinat
 	if strings.TrimSpace(base) == "" || base == "." {
 		return "", "", svcerr.New(codes.ErrInvalidInput, "asset destination has an empty filename")
 	}
-	if ext == "" {
+	if ext == "" || ext == "." {
 		return "", "", svcerr.New(codes.ErrInvalidInput, "asset destination must include a file extension").
 			WithSuggestion("Use a destination like assets/pdfs/file.pdf or a directory ending with /")
 	}
@@ -298,10 +307,13 @@ func resolveDestination(vaultPath string, vaultCfg *config.VaultConfig, destinat
 			WithSuggestion("Choose a destination under the configured asset root").
 			WithDetails(map[string]any{"path": candidateRel})
 	}
+	if err := rejectDestinationSymlinks(vaultPath, candidateAbs); err != nil {
+		return "", "", err
+	}
 	return candidateRel, candidateAbs, nil
 }
 
-func copyFileAtomic(sourcePath, destinationPath string, force bool) (os.FileInfo, error) {
+func copyFileAtomic(vaultPath, sourcePath, destinationPath string, force bool) (os.FileInfo, error) {
 	source, err := os.Open(sourcePath)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to open asset source", err).
@@ -316,6 +328,27 @@ func copyFileAtomic(sourcePath, destinationPath string, force bool) (os.FileInfo
 	if !sourceInfo.Mode().IsRegular() {
 		return nil, svcerr.New(codes.ErrInvalidInput, "asset source must be a regular file")
 	}
+	resolvedSource, err := filepath.EvalSymlinks(sourcePath)
+	if err != nil {
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to resolve asset source", err)
+	}
+	resolvedInfo, err := os.Stat(resolvedSource)
+	if err != nil {
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to verify asset source", err)
+	}
+	if !os.SameFile(sourceInfo, resolvedInfo) {
+		return nil, svcerr.New(codes.ErrFileRead, "asset source changed during import").
+			WithSuggestion("Wait for the source file to stop changing, then retry")
+	}
+	if err := paths.ValidateWithinVault(vaultPath, resolvedSource); err == nil {
+		return nil, svcerr.New(codes.ErrFileOutsideVault, "asset import source must be outside the vault").
+			WithSuggestion("Use 'rvn move' for files already inside the vault")
+	} else if !errors.Is(err, paths.ErrPathOutsideVault) {
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to validate asset source", err)
+	}
+	if err := rejectDestinationSymlinks(vaultPath, destinationPath); err != nil {
+		return nil, err
+	}
 
 	tmp, err := os.CreateTemp(filepath.Dir(destinationPath), "."+filepath.Base(destinationPath)+".tmp-*")
 	if err != nil {
@@ -329,6 +362,10 @@ func copyFileAtomic(sourcePath, destinationPath string, force bool) (os.FileInfo
 			_ = os.Remove(tmpPath)
 		}
 	}()
+	if err := paths.ValidateWithinVault(vaultPath, tmpPath); err != nil {
+		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "asset destination resolves outside the vault", err).
+			WithSuggestion("Choose a destination without symlink components")
+	}
 
 	_ = tmp.Chmod(sourceInfo.Mode().Perm())
 	if _, err := io.Copy(tmp, source); err != nil {
@@ -347,6 +384,9 @@ func copyFileAtomic(sourcePath, destinationPath string, force bool) (os.FileInfo
 	}
 	if err := tmp.Close(); err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to close imported asset", err)
+	}
+	if err := rejectDestinationSymlinks(vaultPath, destinationPath); err != nil {
+		return nil, err
 	}
 
 	if !force {
@@ -374,6 +414,42 @@ func copyFileAtomic(sourcePath, destinationPath string, force bool) (os.FileInfo
 	}
 	committed = true
 	return sourceInfo, nil
+}
+
+func cleanDestinationRel(value string) (string, bool) {
+	value = strings.ReplaceAll(strings.TrimSpace(value), "\\", "/")
+	cleaned := path.Clean(value)
+	if !paths.IsCleanRelSubpath(cleaned) {
+		return "", false
+	}
+	return cleaned, true
+}
+
+func rejectDestinationSymlinks(vaultPath, destinationPath string) error {
+	relPath, err := filepath.Rel(vaultPath, destinationPath)
+	if err != nil {
+		return svcerr.Wrap(codes.ErrFileOutsideVault, "failed to resolve asset destination", err)
+	}
+	current := filepath.Clean(vaultPath)
+	for _, component := range strings.Split(filepath.Clean(relPath), string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return svcerr.Wrap(codes.ErrFileRead, "failed to inspect asset destination", err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return svcerr.New(codes.ErrFileOutsideVault, "asset destination cannot use symlink components").
+				WithSuggestion("Choose a real directory under the configured asset root").
+				WithDetails(map[string]any{"path": current})
+		}
+	}
+	return nil
 }
 
 func replaceFile(tmpPath, destinationPath string) error {

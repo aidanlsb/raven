@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -30,6 +31,9 @@ func renderAssetImportResult(_ *cobra.Command, result commandexec.Result) error 
 	data := canonicalDataMap(result)
 	path := stringValue(data["path"])
 	mode := stringValue(data["mode"])
+	for _, warning := range result.Warnings {
+		fmt.Fprintln(os.Stderr, ui.Warning(warning.Message))
+	}
 
 	if boolValue(data["preview"]) {
 		fmt.Println(ui.Star(fmt.Sprintf("Would %s asset to %s", mode, ui.FilePath(path))))
@@ -37,6 +41,10 @@ func renderAssetImportResult(_ *cobra.Command, result commandexec.Result) error 
 		return nil
 	}
 
+	if mode == "move" && !boolValue(data["source_removed"]) {
+		fmt.Println(ui.Checkf("Imported asset to %s (source retained)", ui.FilePath(path)))
+		return nil
+	}
 	fmt.Println(ui.Checkf("Imported asset to %s (%s)", ui.FilePath(path), mode))
 	return nil
 }

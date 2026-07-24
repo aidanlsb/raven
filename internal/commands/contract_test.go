@@ -93,7 +93,7 @@ func TestBuildCommandContractAssetImport(t *testing.T) {
 	if !ok {
 		t.Fatal("expected asset_import contract")
 	}
-	if contract.CLIName != "asset import" || contract.CLIUsage != "asset import <source> <destination>" {
+	if contract.CLIName != "asset import" || contract.CLIUsage != "rvn asset import <source> <destination>" {
 		t.Fatalf("unexpected CLI contract: name=%q usage=%q", contract.CLIName, contract.CLIUsage)
 	}
 	for _, required := range []string{"source", "destination"} {
