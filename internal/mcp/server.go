@@ -17,9 +17,9 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/configsvc"
-	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
 // Server is an MCP server that wraps Raven CLI commands.
@@ -325,7 +325,7 @@ func (s *Server) handleRequest(req *Request) {
 }
 
 func (s *Server) handleInitialize(req *Request) {
-	version := maintsvc.CurrentVersionInfoFromExecutable(s.executable).Version
+	version := versioninfo.CurrentVersionInfoFromExecutable(s.executable).Version
 	result := map[string]interface{}{
 		"protocolVersion": "2024-11-05",
 		"capabilities": ServerCapabilities{

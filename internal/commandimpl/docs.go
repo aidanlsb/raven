@@ -8,7 +8,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/docssvc"
-	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
@@ -171,7 +170,7 @@ func HandleDocsFetch(_ context.Context, req commandexec.Request) commandexec.Res
 func docsCLIVersion(req commandexec.Request) string {
 	version := versioninfo.Current().Version
 	if strings.TrimSpace(req.ExecutablePath) != "" {
-		version = maintsvc.CurrentVersionInfoFromExecutable(req.ExecutablePath).Version
+		version = versioninfo.CurrentVersionInfoFromExecutable(req.ExecutablePath).Version
 	}
 	return version
 }
