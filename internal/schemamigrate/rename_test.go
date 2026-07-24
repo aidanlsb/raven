@@ -226,7 +226,7 @@ traits: {}
 	vault := testutil.NewTestVault(t).
 		WithSchema(personSchema).
 		WithRavenYAML(ravenYAML).
-		WithFile("templates/person.md", "---\ntype: person\nemail: \"{{field.email}}\"\n---\n").
+		WithFile("templates/person.md", "Email: {{field.email}}\n").
 		WithFile("people/alex.md", "---\ntype: person\nname: Alex\nemail: alex@example.com\n---\n# Alex\n").
 		WithFile("notes/email.md", "---\ntype: page\ntitle: Email\nemail: body-only\n---\n").
 		Build()
