@@ -6,7 +6,7 @@ package model
 import (
 	"encoding/json"
 
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 // Trait represents an instance of a trait annotation in the vault.
@@ -22,7 +22,7 @@ type Trait struct {
 
 	// Value is the trait's typed value, if any. Nil for boolean traits like @highlight.
 	// Query/CLI wire output should use IndexValueString() to preserve the string contract.
-	Value *schema.FieldValue `json:"-"`
+	Value *fieldvalue.FieldValue `json:"-"`
 
 	// Content is the text content of the line containing this trait,
 	// with trait annotations removed.
@@ -57,7 +57,7 @@ func (t *Trait) ValueString() string {
 	if !t.HasValue() {
 		return ""
 	}
-	return schema.FormatLiteral(*t.Value)
+	return fieldvalue.FormatLiteral(*t.Value)
 }
 
 // IndexValueString returns the index/wire string form of the trait value.
@@ -66,7 +66,7 @@ func (t *Trait) IndexValueString() *string {
 	if t == nil || t.Value == nil {
 		return nil
 	}
-	s := schema.TraitIndexString(*t.Value)
+	s := fieldvalue.TraitIndexString(*t.Value)
 	if s == "" {
 		return nil
 	}
@@ -82,7 +82,7 @@ func (t *Trait) SetIndexValueString(s *string) {
 		t.Value = nil
 		return
 	}
-	fv := schema.String(*s)
+	fv := fieldvalue.String(*s)
 	t.Value = &fv
 }
 

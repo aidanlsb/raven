@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -41,8 +42,8 @@ func TestValidatorBasic(t *testing.T) {
 				{
 					ID:   "people/freya",
 					Type: "person",
-					Fields: map[string]schema.FieldValue{
-						"name": schema.String("Freya"),
+					Fields: map[string]fieldvalue.FieldValue{
+						"name": fieldvalue.String("Freya"),
 					},
 				},
 			},
@@ -61,7 +62,7 @@ func TestValidatorBasic(t *testing.T) {
 				{
 					ID:     "people/thor",
 					Type:   "person",
-					Fields: map[string]schema.FieldValue{}, // Missing 'name'
+					Fields: map[string]fieldvalue.FieldValue{}, // Missing 'name'
 				},
 			},
 		}
@@ -151,9 +152,9 @@ func TestValidatorUnknownFrontmatterKey(t *testing.T) {
 			{
 				ID:   "people/freya",
 				Type: "person",
-				Fields: map[string]schema.FieldValue{
-					"name":          schema.String("Freya"),
-					"unknown_field": schema.String("should trigger error"),
+				Fields: map[string]fieldvalue.FieldValue{
+					"name":          fieldvalue.String("Freya"),
+					"unknown_field": fieldvalue.String("should trigger error"),
 				},
 			},
 		},
@@ -192,7 +193,7 @@ func TestValidatorTraitValidation(t *testing.T) {
 	v := NewValidator(s, objectIDs)
 
 	t.Run("valid date trait", func(t *testing.T) {
-		dueValue := schema.String("2025-02-01")
+		dueValue := fieldvalue.String("2025-02-01")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{
@@ -220,7 +221,7 @@ func TestValidatorTraitValidation(t *testing.T) {
 	})
 
 	t.Run("invalid date trait", func(t *testing.T) {
-		badValue := schema.String("not-a-date")
+		badValue := fieldvalue.String("not-a-date")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{
@@ -253,7 +254,7 @@ func TestValidatorTraitValidation(t *testing.T) {
 	})
 
 	t.Run("invalid enum trait", func(t *testing.T) {
-		badValue := schema.String("critical") // Not in enum
+		badValue := fieldvalue.String("critical") // Not in enum
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{
@@ -286,7 +287,7 @@ func TestValidatorTraitValidation(t *testing.T) {
 	})
 
 	t.Run("valid numeric trait", func(t *testing.T) {
-		scoreValue := schema.String("5")
+		scoreValue := fieldvalue.String("5")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{
@@ -314,7 +315,7 @@ func TestValidatorTraitValidation(t *testing.T) {
 	})
 
 	t.Run("invalid numeric trait", func(t *testing.T) {
-		scoreValue := schema.String("not-a-number")
+		scoreValue := fieldvalue.String("not-a-number")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{
@@ -384,7 +385,7 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 
 	t.Run("boolean trait with true value is valid", func(t *testing.T) {
 		// @done(true) - should be valid
-		trueValue := schema.String("true")
+		trueValue := fieldvalue.String("true")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{
@@ -405,7 +406,7 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 
 	t.Run("boolean trait with false value is valid", func(t *testing.T) {
 		// @toread(false) - should be valid
-		falseValue := schema.String("false")
+		falseValue := fieldvalue.String("false")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{
@@ -426,7 +427,7 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 
 	t.Run("boolean trait with invalid value is error", func(t *testing.T) {
 		// @done(maybe) - should error
-		badValue := schema.String("maybe")
+		badValue := fieldvalue.String("maybe")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{
@@ -559,8 +560,8 @@ func TestValidatorTargetTypeValidation(t *testing.T) {
 				{
 					ID:   "projects/website",
 					Type: "project",
-					Fields: map[string]schema.FieldValue{
-						"lead": schema.String("people/freya"),
+					Fields: map[string]fieldvalue.FieldValue{
+						"lead": fieldvalue.String("people/freya"),
 					},
 				},
 			},
@@ -581,8 +582,8 @@ func TestValidatorTargetTypeValidation(t *testing.T) {
 				{
 					ID:   "projects/mobile",
 					Type: "project",
-					Fields: map[string]schema.FieldValue{
-						"lead": schema.String("projects/website"), // Wrong - should be person
+					Fields: map[string]fieldvalue.FieldValue{
+						"lead": fieldvalue.String("projects/website"), // Wrong - should be person
 					},
 				},
 			},
@@ -786,7 +787,7 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 	v := NewValidator(s, objectIDs)
 
 	t.Run("valid datetime trait", func(t *testing.T) {
-		validValue := schema.String("2025-02-01T09:00")
+		validValue := fieldvalue.String("2025-02-01T09:00")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{
@@ -811,7 +812,7 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 	})
 
 	t.Run("invalid datetime trait", func(t *testing.T) {
-		badValue := schema.String("not-a-datetime")
+		badValue := fieldvalue.String("not-a-datetime")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
 			Objects: []*model.Object{

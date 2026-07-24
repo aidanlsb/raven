@@ -12,8 +12,8 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -383,15 +383,15 @@ func keyValuePairs(v any) []string {
 	}
 }
 
-func parseTypedFieldValues(raw any) (map[string]schema.FieldValue, error) {
+func parseTypedFieldValues(raw any) (map[string]fieldvalue.FieldValue, error) {
 	if raw == nil {
-		return map[string]schema.FieldValue{}, nil
+		return map[string]fieldvalue.FieldValue{}, nil
 	}
 
 	switch v := raw.(type) {
 	case string:
 		if strings.TrimSpace(v) == "" {
-			return map[string]schema.FieldValue{}, nil
+			return map[string]fieldvalue.FieldValue{}, nil
 		}
 		return fieldmutation.ParseFieldValuesJSON(v)
 	default:

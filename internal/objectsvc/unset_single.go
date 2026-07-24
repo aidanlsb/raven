@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -26,10 +27,10 @@ type UnsetByReferenceResult struct {
 	RelativePath   string
 	ObjectID       string
 	ObjectType     string
-	RemovedFields  map[string]schema.FieldValue
+	RemovedFields  map[string]fieldvalue.FieldValue
 	MissingFields  []string
 	Modified       bool
-	PreviousFields map[string]schema.FieldValue
+	PreviousFields map[string]fieldvalue.FieldValue
 	ChangeSet      mutation.ChangeSet
 }
 

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -16,7 +17,7 @@ type SetByReferenceRequest struct {
 	VaultConfig  *config.VaultConfig
 	Schema       *schema.Schema
 	Reference    string
-	TypedUpdates map[string]schema.FieldValue
+	TypedUpdates map[string]fieldvalue.FieldValue
 	ParseOptions *parser.ParseOptions
 	Runtime      *vaultruntime.Runtime
 	// Preview validates and computes the resulting fields without writing the
@@ -31,7 +32,7 @@ type SetByReferenceResult struct {
 	ObjectType      string
 	ResolvedUpdates map[string]string
 	WarningMessages []string
-	PreviousFields  map[string]schema.FieldValue
+	PreviousFields  map[string]fieldvalue.FieldValue
 	ChangeSet       mutation.ChangeSet
 }
 

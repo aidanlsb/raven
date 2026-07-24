@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
@@ -389,7 +390,7 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 					for _, obj := range objects {
 						fields := obj.Fields
 						if fields == nil {
-							fields = map[string]schema.FieldValue{}
+							fields = map[string]fieldvalue.FieldValue{}
 						}
 						if _, hasField := fields[fieldName]; !hasField {
 							missing = append(missing, obj.ID)

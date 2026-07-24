@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -162,10 +163,10 @@ func TestPrintObjectTableIncludesHeadersNameFieldDynamicFieldsAndLocation(t *tes
 				Type:      "project",
 				FilePath:  "projects/raven.md",
 				LineStart: 3,
-				Fields: map[string]schema.FieldValue{
-					"name":   schema.String("Raven Project"),
-					"owner":  schema.String("people/aidan"),
-					"status": schema.String("active"),
+				Fields: map[string]fieldvalue.FieldValue{
+					"name":   fieldvalue.String("Raven Project"),
+					"owner":  fieldvalue.String("people/aidan"),
+					"status": fieldvalue.String("active"),
 				},
 			},
 		}, sch)

@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
@@ -24,9 +24,9 @@ func scanObjectRows(rows *sql.Rows) ([]model.Object, error) {
 		if err := rows.Scan(&r.ID, &r.Type, &fieldsJSON, &r.FilePath, &r.LineStart); err != nil {
 			return model.Object{}, err
 		}
-		fields, err := schema.FieldsFromJSON([]byte(fieldsJSON))
+		fields, err := fieldvalue.FieldsFromJSON([]byte(fieldsJSON))
 		if err != nil || fields == nil {
-			fields = make(map[string]schema.FieldValue)
+			fields = make(map[string]fieldvalue.FieldValue)
 		}
 		r.Fields = fields
 		return r, nil

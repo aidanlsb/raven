@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/frontmatter"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -29,7 +30,7 @@ type ReclassifyRequest struct {
 	FilePath  string
 
 	NewTypeName string
-	FieldValues map[string]schema.FieldValue
+	FieldValues map[string]fieldvalue.FieldValue
 
 	NoMove     bool
 	UpdateRefs bool
@@ -48,7 +49,7 @@ type ReclassifyByReferenceRequest struct {
 	Reference string
 
 	NewTypeName string
-	FieldValues map[string]schema.FieldValue
+	FieldValues map[string]fieldvalue.FieldValue
 
 	NoMove     bool
 	UpdateRefs bool
@@ -342,7 +343,7 @@ func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult,
 func resolveRequiredFieldsForReclassify(
 	fm *parser.Frontmatter,
 	newTypeDef *schema.TypeDefinition,
-	fieldValues map[string]schema.FieldValue,
+	fieldValues map[string]fieldvalue.FieldValue,
 ) ([]string, []string, []map[string]interface{}) {
 	if newTypeDef == nil {
 		return nil, nil, nil
@@ -416,10 +417,10 @@ func collectDroppedFieldsForReclassify(fm *parser.Frontmatter, newTypeDef *schem
 
 func mergeReclassifyFieldValues(
 	fm *parser.Frontmatter,
-	overrides map[string]schema.FieldValue,
+	overrides map[string]fieldvalue.FieldValue,
 	droppedFields []string,
-) map[string]schema.FieldValue {
-	merged := make(map[string]schema.FieldValue)
+) map[string]fieldvalue.FieldValue {
+	merged := make(map[string]fieldvalue.FieldValue)
 	droppedSet := make(map[string]bool, len(droppedFields))
 	for _, field := range droppedFields {
 		droppedSet[field] = true
@@ -441,7 +442,7 @@ func mergeReclassifyFieldValues(
 	return merged
 }
 
-func updateFrontmatterForReclassify(content, newType string, fieldValues map[string]schema.FieldValue) (string, error) {
+func updateFrontmatterForReclassify(content, newType string, fieldValues map[string]fieldvalue.FieldValue) (string, error) {
 	lines := strings.Split(content, "\n")
 
 	_, endLine, ok := parser.FrontmatterBounds(lines)

@@ -7,8 +7,8 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -195,7 +195,7 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
-func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]schema.FieldValue, confirm bool) commandexec.Result {
+func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]fieldvalue.FieldValue, confirm bool) commandexec.Result {
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
 	sch := rt.Schema

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -172,9 +173,9 @@ func TestCreate(t *testing.T) {
 			TypeName:   "project",
 			Title:      "Website",
 			TargetPath: "projects/website",
-			Fields: map[string]schema.FieldValue{
-				"status": schema.String("active"),
-				"owner":  schema.String("freya"),
+			Fields: map[string]fieldvalue.FieldValue{
+				"status": fieldvalue.String("active"),
+				"owner":  fieldvalue.String("freya"),
 			},
 		})
 		if err != nil {
@@ -198,10 +199,10 @@ func TestCreate(t *testing.T) {
 			TypeName:   "project",
 			Title:      "Typed Website",
 			TargetPath: "projects/typed-website",
-			Fields: map[string]schema.FieldValue{
-				"status":  schema.String("false"),
-				"summary": schema.String("ready: now"),
-				"owner":   schema.Ref("people/freya"),
+			Fields: map[string]fieldvalue.FieldValue{
+				"status":  fieldvalue.String("false"),
+				"summary": fieldvalue.String("ready: now"),
+				"owner":   fieldvalue.Ref("people/freya"),
 			},
 		})
 		if err != nil {
@@ -409,7 +410,7 @@ func TestCreateWithTemplate(t *testing.T) {
 			TypeName:         "meeting",
 			Title:            "Project Review",
 			TargetPath:       "meetings/project-review",
-			Fields:           map[string]schema.FieldValue{"time": schema.String("14:00"), "location": schema.String("Room A")},
+			Fields:           map[string]fieldvalue.FieldValue{"time": fieldvalue.String("14:00"), "location": fieldvalue.String("Room A")},
 			TemplateOverride: "templates/meeting-fields.md",
 			TemplateDir:      "templates/",
 		})

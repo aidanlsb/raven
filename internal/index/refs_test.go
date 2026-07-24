@@ -3,6 +3,7 @@ package index
 import (
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -27,7 +28,7 @@ func TestResolveReferences(t *testing.T) {
 			{
 				ID:        "people/freya",
 				Type:      "person",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},
@@ -44,7 +45,7 @@ func TestResolveReferences(t *testing.T) {
 			{
 				ID:        "daily/2025-02-01",
 				Type:      "date",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},
@@ -73,7 +74,7 @@ func TestResolveReferences(t *testing.T) {
 			{
 				ID:        "people/thor",
 				Type:      "person",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},
@@ -141,7 +142,7 @@ func TestResolveReferences_DateShorthand(t *testing.T) {
 			{
 				ID:        "2025-02-01",
 				Type:      "date",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},
@@ -158,7 +159,7 @@ func TestResolveReferences_DateShorthand(t *testing.T) {
 			{
 				ID:        "projects/test",
 				Type:      "project",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},
@@ -214,7 +215,7 @@ func TestResolveReferences_UnresolvedRef(t *testing.T) {
 			{
 				ID:        "test",
 				Type:      "page",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},

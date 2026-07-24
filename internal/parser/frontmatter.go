@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/dates"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
@@ -19,7 +19,7 @@ type Frontmatter struct {
 	ObjectType string
 
 	// Fields are all other fields.
-	Fields map[string]schema.FieldValue
+	Fields map[string]fieldvalue.FieldValue
 
 	// Raw is the raw frontmatter content.
 	Raw string
@@ -76,7 +76,7 @@ func ParseFrontmatter(content string) (*Frontmatter, error) {
 	fm := &Frontmatter{
 		Raw:     frontmatterContent,
 		EndLine: endLine + 1, // +1 for 1-indexed lines
-		Fields:  make(map[string]schema.FieldValue),
+		Fields:  make(map[string]fieldvalue.FieldValue),
 	}
 
 	for key, value := range yamlData {
@@ -111,42 +111,42 @@ func validateYAMLFieldValue(value interface{}, path string) error {
 }
 
 // FieldValueFromYAML converts a YAML value to a FieldValue.
-func FieldValueFromYAML(value interface{}) schema.FieldValue {
+func FieldValueFromYAML(value interface{}) fieldvalue.FieldValue {
 	switch v := value.(type) {
 	case string:
 		// Check if it's a reference
 		if target, _, ok := wikilink.ParseExact(v); ok {
-			return schema.Ref(target)
+			return fieldvalue.Ref(target)
 		}
-		return schema.String(v)
+		return fieldvalue.String(v)
 	case int:
-		return schema.Number(float64(v))
+		return fieldvalue.Number(float64(v))
 	case int64:
-		return schema.Number(float64(v))
+		return fieldvalue.Number(float64(v))
 	case float64:
-		return schema.Number(v)
+		return fieldvalue.Number(v)
 	case bool:
-		return schema.Bool(v)
+		return fieldvalue.Bool(v)
 	case time.Time:
 		// YAML parses dates/datetimes as time.Time - preserve time if present.
 		if v.Hour() == 0 && v.Minute() == 0 && v.Second() == 0 && v.Nanosecond() == 0 {
-			return schema.Date(v.Format(dates.DateLayout))
+			return fieldvalue.Date(v.Format(dates.DateLayout))
 		}
 		if v.Second() == 0 && v.Nanosecond() == 0 {
-			return schema.Datetime(v.Format(dates.DatetimeLayout))
+			return fieldvalue.Datetime(v.Format(dates.DatetimeLayout))
 		}
-		return schema.Datetime(v.Format(dates.DatetimeSecondsLayout))
+		return fieldvalue.Datetime(v.Format(dates.DatetimeSecondsLayout))
 	case []interface{}:
-		items := make([]schema.FieldValue, 0, len(v))
+		items := make([]fieldvalue.FieldValue, 0, len(v))
 		for _, item := range v {
 			items = append(items, FieldValueFromYAML(item))
 		}
-		return schema.Array(items)
+		return fieldvalue.Array(items)
 	case nil:
-		return schema.Null()
+		return fieldvalue.Null()
 	default:
 		// Unsupported YAML structures such as nested objects are expected to be
 		// rejected by higher-level validation before reaching this conversion path.
-		return schema.Null()
+		return fieldvalue.Null()
 	}
 }

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 func TestSetByReferenceSuccess(t *testing.T) {
@@ -42,8 +42,8 @@ traits: {}
 		VaultConfig: &config.VaultConfig{},
 		Schema:      sch,
 		Reference:   "people/freya",
-		TypedUpdates: map[string]schema.FieldValue{
-			"email": schema.String("new@example.com"),
+		TypedUpdates: map[string]fieldvalue.FieldValue{
+			"email": fieldvalue.String("new@example.com"),
 		},
 	})
 	if err != nil {
@@ -89,8 +89,8 @@ traits: {}
 		VaultConfig: &config.VaultConfig{},
 		Schema:      sch,
 		Reference:   "people/missing",
-		TypedUpdates: map[string]schema.FieldValue{
-			"alias": schema.String("ghost"),
+		TypedUpdates: map[string]fieldvalue.FieldValue{
+			"alias": fieldvalue.String("ghost"),
 		},
 	})
 	if err == nil {

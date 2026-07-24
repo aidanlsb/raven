@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -57,7 +58,7 @@ type UpsertRequest struct {
 	TargetPath  string
 	ReplaceBody bool
 	Content     string
-	FieldValues map[string]schema.FieldValue
+	FieldValues map[string]fieldvalue.FieldValue
 	VaultConfig *config.VaultConfig
 	Schema      *schema.Schema
 	ObjectsRoot string
@@ -201,9 +202,9 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			)
 		}
 
-		updates := make(map[string]schema.FieldValue, len(fieldValues)+1)
+		updates := make(map[string]fieldvalue.FieldValue, len(fieldValues)+1)
 		if fm.ObjectType == "" {
-			updates["type"] = schema.String(req.TypeName)
+			updates["type"] = fieldvalue.String(req.TypeName)
 		}
 		for key, value := range fieldValues {
 			if fm.Fields != nil {

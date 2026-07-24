@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -343,8 +344,8 @@ func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schem
 	return nil
 }
 
-func traitValueForIndex(value schema.FieldValue) string {
-	return schema.TraitIndexString(value)
+func traitValueForIndex(value fieldvalue.FieldValue) string {
+	return fieldvalue.TraitIndexString(value)
 }
 
 type indexedTrait struct {
@@ -504,7 +505,7 @@ func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) erro
 	return nil
 }
 
-func extractDateStringsForField(fv schema.FieldValue, def *schema.FieldDefinition, allowHeuristic bool) []string {
+func extractDateStringsForField(fv fieldvalue.FieldValue, def *schema.FieldDefinition, allowHeuristic bool) []string {
 	if def == nil {
 		if allowHeuristic {
 			return oneDateString(extractDateString(fv))
@@ -529,7 +530,7 @@ func extractDateStringsForField(fv schema.FieldValue, def *schema.FieldDefinitio
 	return nil
 }
 
-func extractDateStringsForTrait(fv schema.FieldValue, def *schema.TraitDefinition, allowHeuristic bool) []string {
+func extractDateStringsForTrait(fv fieldvalue.FieldValue, def *schema.TraitDefinition, allowHeuristic bool) []string {
 	if def == nil {
 		if allowHeuristic {
 			return oneDateString(extractDateString(fv))
@@ -545,7 +546,7 @@ func extractDateStringsForTrait(fv schema.FieldValue, def *schema.TraitDefinitio
 	return nil
 }
 
-func extractDateStringsFromArray(fv schema.FieldValue, extract func(schema.FieldValue) string) []string {
+func extractDateStringsFromArray(fv fieldvalue.FieldValue, extract func(fieldvalue.FieldValue) string) []string {
 	arr, ok := fv.AsArray()
 	if !ok {
 		return nil
@@ -566,7 +567,7 @@ func oneDateString(dateStr string) []string {
 	return []string{dateStr}
 }
 
-func extractDateRefString(fv schema.FieldValue) string {
+func extractDateRefString(fv fieldvalue.FieldValue) string {
 	raw, ok := fv.AsString()
 	if !ok {
 		return ""
@@ -679,7 +680,7 @@ func generatedDateObjectDate(obj *model.Object) string {
 // resolved value would become stale on reindex. Instead, relative dates are
 // handled at query time.
 // Returns empty string if not a date.
-func extractDateString(fv schema.FieldValue) string {
+func extractDateString(fv fieldvalue.FieldValue) string {
 	if s, ok := fv.AsString(); ok {
 		if len(s) >= 10 {
 			candidate := s[:10] // Return just the date part (in case of datetime)

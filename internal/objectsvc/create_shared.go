@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -41,7 +42,7 @@ type createPageRequest struct {
 	TypeName         string
 	Title            string
 	TargetPath       string
-	Fields           map[string]schema.FieldValue
+	Fields           map[string]fieldvalue.FieldValue
 	Schema           *schema.Schema
 	TemplateOverride string
 	TemplateDir      string
@@ -71,13 +72,13 @@ func lookupTypeDefinitionForCreate(sch *schema.Schema, typeName string) (*schema
 	)
 }
 
-func normalizedCreateFieldValues(values map[string]schema.FieldValue, typeDef *schema.TypeDefinition, title string) map[string]schema.FieldValue {
+func normalizedCreateFieldValues(values map[string]fieldvalue.FieldValue, typeDef *schema.TypeDefinition, title string) map[string]fieldvalue.FieldValue {
 	fieldValues := cloneFieldValues(values)
 	ensureNameFieldValue(fieldValues, typeDef, title)
 	return fieldValues
 }
 
-func requiredFieldGaps(typeDef *schema.TypeDefinition, fields map[string]schema.FieldValue) []requiredFieldGap {
+func requiredFieldGaps(typeDef *schema.TypeDefinition, fields map[string]fieldvalue.FieldValue) []requiredFieldGap {
 	if typeDef == nil {
 		return nil
 	}
@@ -149,11 +150,11 @@ func createRefValidationContext(rt *vaultruntime.Runtime, vaultPath string, vaul
 
 func validateCreateFieldValues(
 	typeName string,
-	fields map[string]schema.FieldValue,
+	fields map[string]fieldvalue.FieldValue,
 	sch *schema.Schema,
 	allowedUnknown map[string]bool,
 	refCtx *fieldmutation.RefValidationContext,
-) (map[string]schema.FieldValue, []string, error) {
+) (map[string]fieldvalue.FieldValue, []string, error) {
 	return fieldmutation.PrepareValidatedFieldMutationValues(typeName, nil, fields, sch, allowedUnknown, refCtx)
 }
 

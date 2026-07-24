@@ -2,16 +2,16 @@ package commandimpl
 
 import (
 	"github.com/aidanlsb/raven/internal/fieldmutation"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
-func mergeFieldInputs(literalUpdates map[string]string, typedUpdates map[string]schema.FieldValue) map[string]schema.FieldValue {
+func mergeFieldInputs(literalUpdates map[string]string, typedUpdates map[string]fieldvalue.FieldValue) map[string]fieldvalue.FieldValue {
 	merged := fieldmutation.ParseFieldValueLiterals(literalUpdates)
 	if len(typedUpdates) == 0 {
 		return merged
 	}
 	if len(merged) == 0 {
-		merged = make(map[string]schema.FieldValue, len(typedUpdates))
+		merged = make(map[string]fieldvalue.FieldValue, len(typedUpdates))
 	}
 	for key, value := range typedUpdates {
 		merged[key] = value

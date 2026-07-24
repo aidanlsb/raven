@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
 // ValidateTraitValue validates a single trait value against the trait definition.
 // It assumes a value is present (non-bare trait usage).
-func ValidateTraitValue(def *TraitDefinition, value FieldValue) error {
+func ValidateTraitValue(def *TraitDefinition, value fieldvalue.FieldValue) error {
 	if def == nil {
 		return nil
 	}
@@ -94,7 +95,7 @@ func ValidateTraitValue(def *TraitDefinition, value FieldValue) error {
 	}
 }
 
-func validateTraitArrayValue(def *TraitDefinition, value FieldValue, traitType FieldType) error {
+func validateTraitArrayValue(def *TraitDefinition, value fieldvalue.FieldValue, traitType FieldType) error {
 	items, ok := value.AsArray()
 	if !ok {
 		return fmt.Errorf("expected array value")
@@ -143,7 +144,7 @@ func normalizedTraitType(fieldType FieldType, isBoolean bool) FieldType {
 	return normalizeFieldType(fieldType)
 }
 
-func traitValueDisplay(value FieldValue) string {
+func traitValueDisplay(value fieldvalue.FieldValue) string {
 	if s, ok := value.AsString(); ok {
 		return s
 	}

@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // ParsedDocument represents a fully parsed document.
@@ -220,8 +220,8 @@ func frontmatterBody(content string, frontmatter *Frontmatter) (contentStartLine
 	return contentStartLine, bodyContent
 }
 
-func copyFrontmatterFields(frontmatter *Frontmatter) map[string]schema.FieldValue {
-	fileFields := make(map[string]schema.FieldValue)
+func copyFrontmatterFields(frontmatter *Frontmatter) map[string]fieldvalue.FieldValue {
+	fileFields := make(map[string]fieldvalue.FieldValue)
 	if frontmatter == nil {
 		return fileFields
 	}

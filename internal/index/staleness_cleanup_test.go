@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -48,19 +49,19 @@ func TestCheckStaleness(t *testing.T) {
 	staleDoc := &parser.ParsedDocument{
 		FilePath: "notes/stale.md",
 		Objects: []*model.Object{
-			{ID: "notes/stale", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			{ID: "notes/stale", Type: "page", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 		},
 	}
 	freshDoc := &parser.ParsedDocument{
 		FilePath: "notes/fresh.md",
 		Objects: []*model.Object{
-			{ID: "notes/fresh", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			{ID: "notes/fresh", Type: "page", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 		},
 	}
 	missingDoc := &parser.ParsedDocument{
 		FilePath: "notes/missing.md",
 		Objects: []*model.Object{
-			{ID: "notes/missing", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			{ID: "notes/missing", Type: "page", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 		},
 	}
 
@@ -135,7 +136,7 @@ func TestGetFileMtimes(t *testing.T) {
 				{
 					ID:        filePath[:len(filePath)-len(".md")],
 					Type:      "page",
-					Fields:    map[string]schema.FieldValue{},
+					Fields:    map[string]fieldvalue.FieldValue{},
 					LineStart: 1,
 				},
 			},
@@ -185,14 +186,14 @@ func TestRemoveDeletedFiles(t *testing.T) {
 		FilePath:   "notes/exists.md",
 		RawContent: "ok",
 		Objects: []*model.Object{
-			{ID: "notes/exists", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			{ID: "notes/exists", Type: "page", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 		},
 	}
 	missingDoc := &parser.ParsedDocument{
 		FilePath:   "notes/missing.md",
 		RawContent: "missing",
 		Objects: []*model.Object{
-			{ID: "notes/missing", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			{ID: "notes/missing", Type: "page", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 		},
 		Traits: []*model.Trait{
 			{TraitType: "flag", Value: nil, Content: "x", ParentScopeID: "notes/missing", Line: 2},
@@ -205,7 +206,7 @@ func TestRemoveDeletedFiles(t *testing.T) {
 		FilePath:   "notes/also-missing.md",
 		RawContent: "also missing",
 		Objects: []*model.Object{
-			{ID: "notes/also-missing", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+			{ID: "notes/also-missing", Type: "page", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 		},
 		Traits: []*model.Trait{
 			{TraitType: "flag", Value: nil, Content: "y", ParentScopeID: "notes/also-missing", Line: 2},
@@ -279,19 +280,19 @@ func TestRemoveFilesWithPrefix(t *testing.T) {
 		{
 			FilePath: ".trash/a.md",
 			Objects: []*model.Object{
-				{ID: ".trash/a", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+				{ID: ".trash/a", Type: "page", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 			},
 		},
 		{
 			FilePath: ".trash/b.md",
 			Objects: []*model.Object{
-				{ID: ".trash/b", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+				{ID: ".trash/b", Type: "page", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 			},
 		},
 		{
 			FilePath: "keep/c.md",
 			Objects: []*model.Object{
-				{ID: "keep/c", Type: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+				{ID: "keep/c", Type: "page", Fields: map[string]fieldvalue.FieldValue{}, LineStart: 1},
 			},
 		},
 	}
@@ -347,8 +348,8 @@ func TestAllNameFieldValues(t *testing.T) {
 			{
 				ID:   "books/the-prose-edda",
 				Type: "book",
-				Fields: map[string]schema.FieldValue{
-					"title": schema.String("The Prose Edda"),
+				Fields: map[string]fieldvalue.FieldValue{
+					"title": fieldvalue.String("The Prose Edda"),
 				},
 				LineStart: 1,
 			},

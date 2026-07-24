@@ -3,6 +3,7 @@ package index
 import (
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -31,7 +32,7 @@ func TestFieldRefsResolveUnambiguous(t *testing.T) {
 			{
 				ID:        "companies/cursor",
 				Type:      "company",
-				Fields:    map[string]schema.FieldValue{},
+				Fields:    map[string]fieldvalue.FieldValue{},
 				LineStart: 1,
 			},
 		},
@@ -46,8 +47,8 @@ func TestFieldRefsResolveUnambiguous(t *testing.T) {
 			{
 				ID:   "people/ada",
 				Type: "person",
-				Fields: map[string]schema.FieldValue{
-					"company": schema.String("cursor"),
+				Fields: map[string]fieldvalue.FieldValue{
+					"company": fieldvalue.String("cursor"),
 				},
 				LineStart: 1,
 			},
@@ -102,7 +103,7 @@ func TestFieldRefsResolveAmbiguous(t *testing.T) {
 				{
 					ID:        "companies/cursor",
 					Type:      "company",
-					Fields:    map[string]schema.FieldValue{},
+					Fields:    map[string]fieldvalue.FieldValue{},
 					LineStart: 1,
 				},
 			},
@@ -113,7 +114,7 @@ func TestFieldRefsResolveAmbiguous(t *testing.T) {
 				{
 					ID:        "orgs/cursor",
 					Type:      "company",
-					Fields:    map[string]schema.FieldValue{},
+					Fields:    map[string]fieldvalue.FieldValue{},
 					LineStart: 1,
 				},
 			},
@@ -131,8 +132,8 @@ func TestFieldRefsResolveAmbiguous(t *testing.T) {
 			{
 				ID:   "people/ada",
 				Type: "person",
-				Fields: map[string]schema.FieldValue{
-					"company": schema.String("cursor"),
+				Fields: map[string]fieldvalue.FieldValue{
+					"company": fieldvalue.String("cursor"),
 				},
 				LineStart: 1,
 			},

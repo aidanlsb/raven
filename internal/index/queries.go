@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // GetSection returns a heading-derived section by ID.
@@ -57,9 +57,9 @@ func (d *Database) AllObjects() ([]model.Object, error) {
 		if err := rows.Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart); err != nil {
 			return nil, err
 		}
-		fields, err := schema.FieldsFromJSON([]byte(fieldsJSON))
+		fields, err := fieldvalue.FieldsFromJSON([]byte(fieldsJSON))
 		if err != nil || fields == nil {
-			fields = make(map[string]schema.FieldValue)
+			fields = make(map[string]fieldvalue.FieldValue)
 		}
 		result.Fields = fields
 		results = append(results, result)
@@ -250,9 +250,9 @@ func (d *Database) GetObject(id string) (*model.Object, error) {
 		return nil, err
 	}
 
-	fields, err := schema.FieldsFromJSON([]byte(fieldsJSON))
+	fields, err := fieldvalue.FieldsFromJSON([]byte(fieldsJSON))
 	if err != nil || fields == nil {
-		fields = make(map[string]schema.FieldValue)
+		fields = make(map[string]fieldvalue.FieldValue)
 	}
 	result.Fields = fields
 

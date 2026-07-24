@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/frontmatter"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/model"
@@ -59,7 +60,7 @@ type valueConvertPlan struct {
 type conversionMapper struct {
 	sourceType schema.FieldType
 	targetType schema.FieldType
-	values     map[string]schema.FieldValue
+	values     map[string]fieldvalue.FieldValue
 }
 
 func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertResult, error) {
@@ -91,7 +92,7 @@ func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertRe
 		return nil, err
 	}
 
-	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, traitMappingOrder(traitDef, sourceType), func(value schema.FieldValue, element bool, enumValues []string) error {
+	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, traitMappingOrder(traitDef, sourceType), func(value fieldvalue.FieldValue, element bool, enumValues []string) error {
 		targetDef := *traitDef
 		targetDef.Type = targetType
 		targetDef.Values = enumValues
@@ -231,7 +232,7 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 	}
 
 	order := fieldMappingOrder(fieldDef, sourceType)
-	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, order, func(value schema.FieldValue, element bool, enumValues []string) error {
+	mapper, newValues, err := buildConversionMapper(req.Mapping, sourceType, targetType, order, func(value fieldvalue.FieldValue, element bool, enumValues []string) error {
 		targetDef := *fieldDef
 		targetDef.Type = targetType
 		targetDef.Values = enumValues
@@ -242,7 +243,7 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 			targetDef.Type = arrayElementType(targetType)
 		}
 		errors := schema.ValidateFields(
-			map[string]schema.FieldValue{fieldName: value},
+			map[string]fieldvalue.FieldValue{fieldName: value},
 			map[string]*schema.FieldDefinition{fieldName: &targetDef},
 			schemaDoc.Schema(),
 		)
@@ -376,7 +377,7 @@ func buildConversionMapper(
 	rawMapping map[string]interface{},
 	sourceType, targetType schema.FieldType,
 	order []string,
-	validate func(schema.FieldValue, bool, []string) error,
+	validate func(fieldvalue.FieldValue, bool, []string) error,
 ) (*conversionMapper, []string, error) {
 	if rawMapping == nil {
 		return nil, nil, newError(
@@ -394,7 +395,7 @@ func buildConversionMapper(
 	mapper := &conversionMapper{
 		sourceType: sourceType,
 		targetType: targetType,
-		values:     make(map[string]schema.FieldValue, len(rawMapping)),
+		values:     make(map[string]fieldvalue.FieldValue, len(rawMapping)),
 	}
 	orderedKeys := orderedMappingKeys(rawMapping, order)
 	elementMapping := isArrayConversionType(sourceType) && isArrayConversionType(targetType)
@@ -432,13 +433,13 @@ func invalidMappingValueError(key string, targetType schema.FieldType, cause err
 	)
 }
 
-func (m *conversionMapper) convert(value schema.FieldValue, missing map[string]struct{}) (schema.FieldValue, bool) {
+func (m *conversionMapper) convert(value fieldvalue.FieldValue, missing map[string]struct{}) (fieldvalue.FieldValue, bool) {
 	if isArrayConversionType(m.sourceType) && isArrayConversionType(m.targetType) {
 		items, ok := value.AsArray()
 		if !ok {
-			items = []schema.FieldValue{value}
+			items = []fieldvalue.FieldValue{value}
 		}
-		converted := make([]schema.FieldValue, 0, len(items))
+		converted := make([]fieldvalue.FieldValue, 0, len(items))
 		complete := true
 		for _, item := range items {
 			key := conversionMapKey(item)
@@ -450,14 +451,14 @@ func (m *conversionMapper) convert(value schema.FieldValue, missing map[string]s
 			}
 			converted = append(converted, mapped)
 		}
-		return schema.Array(converted), complete
+		return fieldvalue.Array(converted), complete
 	}
 
 	key := conversionMapKey(value)
 	mapped, ok := m.values[key]
 	if !ok {
 		missing[key] = struct{}{}
-		return schema.Null(), false
+		return fieldvalue.Null(), false
 	}
 	return mapped, true
 }
@@ -569,7 +570,7 @@ func stageTraitConversions(
 	return []byte(strings.Join(lines, "\n")), converted
 }
 
-func effectiveTraitAnnotationValue(value *schema.FieldValue, def *schema.TraitDefinition) schema.FieldValue {
+func effectiveTraitAnnotationValue(value *fieldvalue.FieldValue, def *schema.TraitDefinition) fieldvalue.FieldValue {
 	if value != nil {
 		return *value
 	}
@@ -577,9 +578,9 @@ func effectiveTraitAnnotationValue(value *schema.FieldValue, def *schema.TraitDe
 		return parser.FieldValueFromYAML(def.Default)
 	}
 	if def != nil && normalizedConversionType(def.Type, true) == schema.FieldTypeBool {
-		return schema.Bool(true)
+		return fieldvalue.Bool(true)
 	}
-	return schema.Null()
+	return fieldvalue.Null()
 }
 
 func resolveConversionTarget(sourceType schema.FieldType, requested string, trait bool) (schema.FieldType, bool, error) {
@@ -640,7 +641,7 @@ func normalizedConversionType(fieldType schema.FieldType, trait bool) schema.Fie
 
 func addFiniteRequiredValues(
 	missing map[string]struct{},
-	mapping map[string]schema.FieldValue,
+	mapping map[string]fieldvalue.FieldValue,
 	sourceType schema.FieldType,
 	enumValues []string,
 ) {
@@ -686,7 +687,7 @@ func quotedValues(values []string) []string {
 	return out
 }
 
-func conversionMapKey(value schema.FieldValue) string {
+func conversionMapKey(value fieldvalue.FieldValue) string {
 	if value.IsNull() {
 		return "null"
 	}
@@ -716,7 +717,7 @@ func conversionMapKey(value schema.FieldValue) string {
 	return fmt.Sprintf("%v", value.Raw())
 }
 
-func validateTraitLiteralValue(value schema.FieldValue) error {
+func validateTraitLiteralValue(value fieldvalue.FieldValue) error {
 	if array, ok := value.AsArray(); ok {
 		for _, item := range array {
 			if err := validateTraitLiteralValue(item); err != nil {
@@ -740,7 +741,7 @@ func validateTraitLiteralValue(value schema.FieldValue) error {
 	return nil
 }
 
-func serializeTraitConversionLiteral(value schema.FieldValue, inArray bool) string {
+func serializeTraitConversionLiteral(value fieldvalue.FieldValue, inArray bool) string {
 	if ref, ok := value.AsRef(); ok {
 		return "[[" + ref + "]]"
 	}
@@ -819,7 +820,7 @@ func orderedMappingKeys(mapping map[string]interface{}, preferred []string) []st
 }
 
 func newEnumValues(
-	mapping map[string]schema.FieldValue,
+	mapping map[string]fieldvalue.FieldValue,
 	order []string,
 	sourceType, targetType schema.FieldType,
 ) []string {
@@ -828,7 +829,7 @@ func newEnumValues(
 	}
 	seen := make(map[string]struct{})
 	values := make([]string, 0)
-	appendValue := func(value schema.FieldValue) {
+	appendValue := func(value fieldvalue.FieldValue) {
 		if value.IsNull() {
 			return
 		}
@@ -857,7 +858,7 @@ func newEnumValues(
 	return values
 }
 
-func mappingValueForTarget(raw interface{}, targetType schema.FieldType, elementMapping bool) (schema.FieldValue, error) {
+func mappingValueForTarget(raw interface{}, targetType schema.FieldType, elementMapping bool) (fieldvalue.FieldValue, error) {
 	effectiveType := targetType
 	if elementMapping {
 		effectiveType = arrayElementType(targetType)
@@ -866,78 +867,78 @@ func mappingValueForTarget(raw interface{}, targetType schema.FieldType, element
 		elementType := arrayElementType(effectiveType)
 		switch values := raw.(type) {
 		case []interface{}:
-			items := make([]schema.FieldValue, 0, len(values))
+			items := make([]fieldvalue.FieldValue, 0, len(values))
 			for _, item := range values {
 				converted, err := mappingScalarForTarget(item, elementType)
 				if err != nil {
-					return schema.Null(), err
+					return fieldvalue.Null(), err
 				}
 				items = append(items, converted)
 			}
-			return schema.Array(items), nil
+			return fieldvalue.Array(items), nil
 		case []string:
-			items := make([]schema.FieldValue, 0, len(values))
+			items := make([]fieldvalue.FieldValue, 0, len(values))
 			for _, item := range values {
 				converted, err := mappingScalarForTarget(item, elementType)
 				if err != nil {
-					return schema.Null(), err
+					return fieldvalue.Null(), err
 				}
 				items = append(items, converted)
 			}
-			return schema.Array(items), nil
+			return fieldvalue.Array(items), nil
 		default:
-			return schema.Null(), fmt.Errorf("expected a JSON array")
+			return fieldvalue.Null(), fmt.Errorf("expected a JSON array")
 		}
 	}
 	if _, isArray := raw.([]interface{}); isArray {
-		return schema.Null(), fmt.Errorf("expected a scalar JSON value")
+		return fieldvalue.Null(), fmt.Errorf("expected a scalar JSON value")
 	}
 	if _, isArray := raw.([]string); isArray {
-		return schema.Null(), fmt.Errorf("expected a scalar JSON value")
+		return fieldvalue.Null(), fmt.Errorf("expected a scalar JSON value")
 	}
 	return mappingScalarForTarget(raw, effectiveType)
 }
 
-func mappingScalarForTarget(raw interface{}, targetType schema.FieldType) (schema.FieldValue, error) {
+func mappingScalarForTarget(raw interface{}, targetType schema.FieldType) (fieldvalue.FieldValue, error) {
 	if raw == nil {
-		return schema.Null(), fmt.Errorf("null is not a schema value type")
+		return fieldvalue.Null(), fmt.Errorf("null is not a schema value type")
 	}
 	switch targetType {
 	case schema.FieldTypeString, schema.FieldTypeURL, schema.FieldTypeDate, schema.FieldTypeDatetime:
 		value, ok := raw.(string)
 		if !ok {
-			return schema.Null(), fmt.Errorf("expected a JSON string")
+			return fieldvalue.Null(), fmt.Errorf("expected a JSON string")
 		}
-		return schema.String(value), nil
+		return fieldvalue.String(value), nil
 	case schema.FieldTypeEnum:
 		value, ok := raw.(string)
 		if !ok {
-			return schema.Null(), fmt.Errorf("expected a JSON string")
+			return fieldvalue.Null(), fmt.Errorf("expected a JSON string")
 		}
 		if parser.FieldValueFromYAML(value).IsRef() {
-			return schema.Null(), fmt.Errorf("enum values cannot use wikilink syntax")
+			return fieldvalue.Null(), fmt.Errorf("enum values cannot use wikilink syntax")
 		}
-		return schema.String(value), nil
+		return fieldvalue.String(value), nil
 	case schema.FieldTypeRef:
 		value, ok := raw.(string)
 		if !ok {
-			return schema.Null(), fmt.Errorf("expected a JSON string containing a reference")
+			return fieldvalue.Null(), fmt.Errorf("expected a JSON string containing a reference")
 		}
 		return parser.FieldValueFromYAML(value), nil
 	case schema.FieldTypeBool:
 		value, ok := raw.(bool)
 		if !ok {
-			return schema.Null(), fmt.Errorf("expected a JSON boolean")
+			return fieldvalue.Null(), fmt.Errorf("expected a JSON boolean")
 		}
-		return schema.Bool(value), nil
+		return fieldvalue.Bool(value), nil
 	case schema.FieldTypeNumber:
 		number, ok := jsonNumber(raw)
 		if !ok {
-			return schema.Null(), fmt.Errorf("expected a JSON number")
+			return fieldvalue.Null(), fmt.Errorf("expected a JSON number")
 		}
-		return schema.Number(number), nil
+		return fieldvalue.Number(number), nil
 	default:
-		return schema.Null(), fmt.Errorf("unsupported target type '%s'", targetType)
+		return fieldvalue.Null(), fmt.Errorf("unsupported target type '%s'", targetType)
 	}
 }
 

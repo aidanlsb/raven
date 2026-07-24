@@ -14,6 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/pages"
@@ -510,8 +511,8 @@ func importActionForUpsertStatus(status string) string {
 	return "updated"
 }
 
-func fieldsToSchemaValues(fields map[string]interface{}) map[string]schema.FieldValue {
-	values := make(map[string]schema.FieldValue, len(fields))
+func fieldsToSchemaValues(fields map[string]interface{}) map[string]fieldvalue.FieldValue {
+	values := make(map[string]fieldvalue.FieldValue, len(fields))
 	for key, value := range fields {
 		values[key] = parser.FieldValueFromYAML(value)
 	}

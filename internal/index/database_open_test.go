@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/filelock"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -262,7 +263,7 @@ func TestRebuildSessionKeepsWipedIndexUnavailableUntilComplete(t *testing.T) {
 		Objects: []*model.Object{{
 			ID:        "rebuilt",
 			Type:      "page",
-			Fields:    map[string]schema.FieldValue{},
+			Fields:    map[string]fieldvalue.FieldValue{},
 			LineStart: 1,
 		}},
 	}
