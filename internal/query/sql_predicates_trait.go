@@ -225,7 +225,7 @@ func buildDateFilterConditionForCompare(value string, compareOp CompareOp, colum
 	if value == "" {
 		return "", nil, false
 	}
-	cond, args, ok, err := indexschema.TryParseTemporalComparisonWithOptions(value, compareOpToSQL(compareOp), column, indexfieldvalue.DateFilterOptions{
+	cond, args, ok, err := indexschema.TryParseTemporalComparisonWithOptions(value, compareOpToSQL(compareOp), column, indexschema.DateFilterOptions{
 		Now: now,
 	})
 	if err != nil {
