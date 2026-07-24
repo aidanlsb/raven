@@ -66,10 +66,6 @@ func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string][]string, 
 	return indexschema.AllNameFieldValues(d.db, sch)
 }
 
-func allObjectIDsFromDB(db resolverQuerier) ([]string, error) {
-	return indexschema.AllObjectIDs(db)
-}
-
 func allAliasesFromDB(db resolverQuerier) (map[string]string, error) {
 	return indexschema.AllAliases(db)
 }
