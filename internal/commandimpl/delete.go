@@ -86,9 +86,8 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		return mapContentMutationError(err)
 	}
 
-	warnings := make([]commandexec.Warning, 0, len(serviceResult.WarningMessages)+1)
+	warnings := make([]commandexec.Warning, 0, 1)
 	warnings = append(warnings, deleteBacklinkCommandWarnings(serviceResult.Backlinks)...)
-	warnings = append(warnings, warningMessagesToCommandWarnings(serviceResult.WarningMessages, indexUpdateFailedWarningCode)...)
 
 	data := map[string]interface{}{
 		"deleted":  serviceResult.ObjectID,
@@ -100,6 +99,9 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 			data["trash_path"] = filepath.ToSlash(relDest)
 		}
 	}
+	postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet)
+	data = mergeDataFields(data, postData)
+	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
@@ -140,9 +142,7 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool) command
 		return mapContentMutationError(err)
 	}
 
-	allWarnings := append([]commandexec.Warning{}, warnings...)
-	allWarnings = append(allWarnings, warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)...)
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
+	data := map[string]interface{}{
 		"ok":       summary.Errors == 0,
 		"action":   summary.Action,
 		"items":    canonicalDeleteResults(summary.Results),
@@ -151,7 +151,11 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool) command
 		"errors":   summary.Errors,
 		"deleted":  summary.Deleted,
 		"behavior": summary.Behavior,
-	}, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
+	}
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	data = mergeDataFields(data, postData)
+	allWarnings := appendCommandWarnings(warnings, postWarnings)
+	return commandexec.SuccessWithWarnings(data, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 
 func deleteBacklinkCommandWarnings(backlinks []model.Reference) []commandexec.Warning {

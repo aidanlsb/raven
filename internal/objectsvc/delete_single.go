@@ -1,13 +1,11 @@
 package objectsvc
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -23,11 +21,11 @@ type DeleteByReferenceRequest struct {
 }
 
 type DeleteByReferenceResult struct {
-	ObjectID        string
-	Behavior        string
-	TrashPath       string
-	Backlinks       []model.Reference
-	WarningMessages []string
+	ObjectID  string
+	Behavior  string
+	TrashPath string
+	Backlinks []model.Reference
+	ChangeSet mutation.ChangeSet
 }
 
 func PreviewDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
@@ -102,25 +100,14 @@ func DeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, 
 		return nil, err
 	}
 
-	warnings := make([]string, 0)
-	if err := req.Runtime.OpenDB(); err != nil {
-		warnings = append(warnings, fmt.Sprintf("Failed to open index database while removing deleted object: %v", err))
-	} else {
-		removeErr := removeDeleteTargetFromIndex(req.Runtime.DB, target)
-		if removeErr != nil {
-			if errors.Is(removeErr, index.ErrObjectNotFound) {
-				warnings = append(warnings, "Object not found in index; consider running 'rvn reindex'")
-			} else {
-				warnings = append(warnings, fmt.Sprintf("Failed to remove deleted file from index: %v", removeErr))
-			}
-		}
-	}
+	changes := mutation.NewChangeSet()
+	changes.AddDeleted(target.RelativePath)
 
 	return &DeleteByReferenceResult{
-		ObjectID:        preview.ObjectID,
-		Behavior:        delResult.Behavior,
-		TrashPath:       delResult.TrashPath,
-		Backlinks:       preview.Backlinks,
-		WarningMessages: warnings,
+		ObjectID:  preview.ObjectID,
+		Behavior:  delResult.Behavior,
+		TrashPath: delResult.TrashPath,
+		Backlinks: preview.Backlinks,
+		ChangeSet: changes,
 	}, nil
 }

@@ -13,11 +13,40 @@ import (
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/filelock"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+// AppendResult describes an applied append and its durable file changes.
+type AppendResult struct {
+	Line      int
+	ChangeSet mutation.ChangeSet
+}
+
+// Append applies a capture append and returns its transport-neutral change set.
+func Append(
+	rt *vaultruntime.Runtime,
+	destPath string,
+	line string,
+	cfg *config.CaptureConfig,
+	isDailyNote bool,
+	targetObjectID string,
+) (*AppendResult, error) {
+	insertedLine, err := AppendToFile(rt, destPath, line, cfg, isDailyNote, targetObjectID)
+	if err != nil {
+		return nil, err
+	}
+	relPath, err := filepath.Rel(rt.VaultPath, destPath)
+	if err != nil {
+		return nil, newError(ErrorUnexpected, "failed to resolve appended file path", "", nil, err)
+	}
+	changes := mutation.NewChangeSet()
+	changes.AddChanged(relPath)
+	return &AppendResult{Line: insertedLine, ChangeSet: changes}, nil
+}
 
 // AppendToFile appends a capture line to the target file, creating daily notes when needed.
 func AppendToFile(

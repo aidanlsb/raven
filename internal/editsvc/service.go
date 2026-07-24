@@ -6,7 +6,9 @@ import (
 	"io"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -16,6 +18,7 @@ const (
 	CodeInvalidInput    Code = codes.ErrInvalidInput
 	CodeStringNotFound  Code = codes.ErrStringNotFound
 	CodeMultipleMatches Code = codes.ErrMultipleMatches
+	CodeFileWrite       Code = codes.ErrFileWrite
 )
 
 func newError(code Code, message, suggestion string, details map[string]string, err error) *svcerr.Error {
@@ -52,6 +55,22 @@ type EditResult struct {
 	Before  string
 	After   string
 	Context string
+}
+
+// WriteResult describes the durable file changes from applied edits.
+type WriteResult struct {
+	ChangeSet mutation.ChangeSet
+}
+
+// WriteAppliedEdits persists content that was already validated and transformed
+// by ApplyEditsInMemoryWithScope.
+func WriteAppliedEdits(filePath, relativePath, content string) (*WriteResult, error) {
+	if err := atomicfile.WriteFile(filePath, []byte(content), 0o644); err != nil {
+		return nil, newError(CodeFileWrite, err.Error(), "", nil, err)
+	}
+	changes := mutation.NewChangeSet()
+	changes.AddChanged(relativePath)
+	return &WriteResult{ChangeSet: changes}, nil
 }
 
 // EditScope restricts edit matching to an inclusive line range in the file.

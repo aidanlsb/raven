@@ -2,7 +2,6 @@ package commandimpl
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -130,12 +129,11 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	warnings := appendCommandWarnings(
 		warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
-		autoReindexWarnings(rt, serviceResult.FilePath),
 	)
 
-	missingData, missingWarnings := missingRefEnvelope(rt, serviceResult.RelativePath)
-	data = mergeDataFields(data, missingData)
-	warnings = appendCommandWarnings(warnings, missingWarnings)
+	postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet)
+	data = mergeDataFields(data, postData)
+	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	return commandexec.SuccessWithWarnings(
 		data,
@@ -182,12 +180,9 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		return mapContentMutationError(err)
 	}
 
-	var warnings []commandexec.Warning
-	if serviceResult.Modified {
-		warnings = autoReindexWarnings(rt, serviceResult.FilePath)
-	}
+	postData, warnings := applyChangeSet(rt, serviceResult.ChangeSet)
 
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
+	data := map[string]interface{}{
 		"file":            serviceResult.RelativePath,
 		"object_id":       serviceResult.ObjectID,
 		"type":            serviceResult.ObjectType,
@@ -195,7 +190,9 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		"missing_fields":  serviceResult.MissingFields,
 		"modified":        serviceResult.Modified,
 		"previous_fields": serviceResult.PreviousFields,
-	}, warnings, nil)
+	}
+	data = mergeDataFields(data, postData)
+	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
 func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]schema.FieldValue, confirm bool) commandexec.Result {
@@ -231,14 +228,7 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]schem
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	var reindexWarnings []commandexec.Warning
-	var affectedFiles []string
-	summary, err := objectsvc.ApplySetBulk(request, func(filePath string) {
-		reindexWarnings = appendCommandWarnings(reindexWarnings, autoReindexWarnings(rt, filePath))
-		if rel, relErr := filepath.Rel(vaultPath, filePath); relErr == nil {
-			affectedFiles = append(affectedFiles, rel)
-		}
-	})
+	summary, err := objectsvc.ApplySetBulk(request)
 	if err != nil {
 		return mapContentMutationError(err)
 	}
@@ -253,9 +243,9 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]schem
 		"modified": summary.Modified,
 		"fields":   serializedUpdates,
 	}
-	missingData, missingWarnings := missingRefEnvelope(rt, affectedFiles...)
-	data = mergeDataFields(data, missingData)
-	warnings = appendCommandWarnings(warnings, reindexWarnings, missingWarnings)
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	data = mergeDataFields(data, postData)
+	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }

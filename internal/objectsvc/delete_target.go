@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -14,7 +13,6 @@ type deleteTarget struct {
 	ObjectID     string
 	FilePath     string
 	RelativePath string
-	IsAsset      bool
 }
 
 func deleteTargetFromFilePath(vaultPath string, vaultCfg *config.VaultConfig, filePath, objectID string) (*deleteTarget, error) {
@@ -37,7 +35,6 @@ func deleteTargetFromFilePath(vaultPath string, vaultCfg *config.VaultConfig, fi
 		ObjectID:     objectID,
 		FilePath:     filePath,
 		RelativePath: relPath,
-		IsAsset:      isAsset,
 	}, nil
 }
 
@@ -58,11 +55,4 @@ func resolveBulkDeleteTarget(vaultPath string, vaultCfg *config.VaultConfig, ref
 		return nil, err
 	}
 	return deleteTargetFromFilePath(vaultPath, vaultCfg, filePath, "")
-}
-
-func removeDeleteTargetFromIndex(db *index.Database, target *deleteTarget) error {
-	if target.IsAsset {
-		return db.RemoveFile(target.RelativePath)
-	}
-	return db.RemoveDocument(target.ObjectID)
 }

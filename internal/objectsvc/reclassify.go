@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/frontmatter"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -70,8 +71,8 @@ type ReclassifyResult struct {
 	NeedsConfirm  bool     `json:"needs_confirm,omitempty"`
 	Reason        string   `json:"reason,omitempty"`
 
-	ChangedFilePath string   `json:"-"`
-	WarningMessages []string `json:"-"`
+	ChangeSet       mutation.ChangeSet `json:"-"`
+	WarningMessages []string           `json:"-"`
 }
 
 func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
@@ -261,7 +262,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		if err := atomicfile.WriteFile(req.FilePath, []byte(newContent), 0o644); err != nil {
 			return nil, newError(ErrorFileWrite, "failed to write file", "", nil, err)
 		}
-		result.ChangedFilePath = req.FilePath
+		result.ChangeSet.AddChanged(relPath)
 		return result, nil
 	}
 
@@ -274,7 +275,6 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		DestinationObject:  destinationObjectID,
 		ReplacementContent: []byte(newContent),
 		UpdateRefs:         req.UpdateRefs,
-		FailOnIndexError:   false,
 		VaultConfig:        req.VaultConfig,
 		Schema:             req.Schema,
 		ParseOptions:       req.ParseOptions,
@@ -291,7 +291,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	result.ObjectID = destinationObjectID
 	result.UpdatedRefs = moveResult.UpdatedRefs
 	result.WarningMessages = append(result.WarningMessages, moveResult.WarningMessages...)
-	result.ChangedFilePath = moveDestAbsPath
+	result.ChangeSet = moveResult.ChangeSet
 
 	return result, nil
 }

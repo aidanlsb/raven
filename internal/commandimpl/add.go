@@ -90,14 +90,7 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	var reindexWarnings []commandexec.Warning
-	var affectedFiles []string
-	summary, err := objectsvc.ApplyAddBulk(request, func(filePath string) {
-		reindexWarnings = appendCommandWarnings(reindexWarnings, autoReindexWarnings(rt, filePath))
-		if rel, relErr := filepath.Rel(vaultPath, filePath); relErr == nil {
-			affectedFiles = append(affectedFiles, rel)
-		}
-	})
+	summary, err := objectsvc.ApplyAddBulk(request)
 	if err != nil {
 		return mapContentMutationError(err)
 	}
@@ -112,9 +105,9 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 		"added":   summary.Added,
 		"content": text,
 	}
-	missingData, missingWarnings := missingRefEnvelope(rt, affectedFiles...)
-	data = mergeDataFields(data, missingData)
-	warnings = appendCommandWarnings(warnings, reindexWarnings, missingWarnings)
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	data = mergeDataFields(data, postData)
+	warnings = appendCommandWarnings(warnings, postWarnings)
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 
@@ -160,22 +153,20 @@ func runAddSingle(rt *vaultruntime.Runtime, text, toRef string) commandexec.Resu
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
 	}
-	line, err := objectsvc.AppendToFile(rt, destPath, text, captureCfg, isDailyNote, targetObjectID)
+	appendResult, err := objectsvc.Append(rt, destPath, text, captureCfg, isDailyNote, targetObjectID)
 	if err != nil {
 		return mapContentMutationError(err)
 	}
 
-	warnings := autoReindexWarnings(rt, destPath)
 	relPath, _ := filepath.Rel(vaultPath, destPath)
 	data := map[string]interface{}{
 		"file":    filepath.ToSlash(relPath),
-		"line":    line,
+		"line":    appendResult.Line,
 		"content": text,
 	}
-	missingData, missingWarnings := missingRefEnvelope(rt, relPath)
-	data = mergeDataFields(data, missingData)
-	warnings = appendCommandWarnings(warnings, missingWarnings)
-	return commandexec.SuccessWithWarnings(data, warnings, nil)
+	postData, postWarnings := applyChangeSet(rt, appendResult.ChangeSet)
+	data = mergeDataFields(data, postData)
+	return commandexec.SuccessWithWarnings(data, postWarnings, nil)
 }
 
 func removedAddHeadingFailure() commandexec.Result {

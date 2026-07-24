@@ -77,11 +77,10 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 			Message: warning,
 		})
 	}
-	if result.ChangedFilePath != "" {
-		warnings = appendCommandWarnings(
-			warnings,
-			autoReindexWarnings(rt, result.ChangedFilePath),
-		)
+	if !result.NeedsConfirm {
+		postData, postWarnings := applyChangeSet(rt, result.ChangeSet)
+		data = mergeDataFields(data, postData)
+		warnings = appendCommandWarnings(warnings, postWarnings)
 	}
 
 	res := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})

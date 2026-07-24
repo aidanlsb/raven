@@ -102,16 +102,17 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		return mapTraitMutationError(err)
 	}
 
-	warnings := autoReindexWarnings(rt, summary.ChangedFilePaths...)
-
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
+	data := map[string]interface{}{
 		"action":   summary.Action,
 		"items":    summary.Results,
 		"total":    summary.Total,
 		"modified": summary.Modified,
 		"skipped":  summary.Skipped,
 		"errors":   summary.Errors,
-	}, warnings, &commandexec.Meta{Count: summary.Modified})
+	}
+	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet)
+	data = mergeDataFields(data, postData)
+	return commandexec.SuccessWithWarnings(data, postWarnings, &commandexec.Meta{Count: summary.Modified})
 }
 
 func mapTraitMutationError(err error) commandexec.Result {

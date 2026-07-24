@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -14,17 +15,16 @@ import (
 )
 
 type MoveByReferenceRequest struct {
-	VaultPath      string
-	VaultConfig    *config.VaultConfig
-	Schema         *schema.Schema
-	Reference      string
-	Destination    string
-	UpdateRefs     bool
-	SkipTypeCheck  bool
-	Preview        bool
-	ParseOptions   *parser.ParseOptions
-	FailOnIndexErr bool
-	Runtime        *vaultruntime.Runtime
+	VaultPath     string
+	VaultConfig   *config.VaultConfig
+	Schema        *schema.Schema
+	Reference     string
+	Destination   string
+	UpdateRefs    bool
+	SkipTypeCheck bool
+	Preview       bool
+	ParseOptions  *parser.ParseOptions
+	Runtime       *vaultruntime.Runtime
 }
 
 type MoveTypeMismatch struct {
@@ -44,6 +44,7 @@ type MoveByReferenceResult struct {
 	Reason            string
 	TypeMismatch      *MoveTypeMismatch
 	ResolvedDestInput string
+	ChangeSet         mutation.ChangeSet
 }
 
 func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error) {
@@ -158,7 +159,6 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 			DestinationObject: destPath,
 			UpdateRefs:        req.UpdateRefs,
 			Preview:           req.Preview,
-			FailOnIndexError:  req.FailOnIndexErr,
 			VaultConfig:       req.VaultConfig,
 			Schema:            req.Schema,
 			ParseOptions:      req.ParseOptions,
@@ -175,6 +175,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 			DestinationRel:  destPath,
 			UpdatedRefs:     serviceResult.UpdatedRefs,
 			WarningMessages: serviceResult.WarningMessages,
+			ChangeSet:       serviceResult.ChangeSet,
 		}, nil
 	}
 
@@ -228,7 +229,6 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		DestinationObject: req.VaultConfig.FilePathToObjectID(destPath),
 		UpdateRefs:        req.UpdateRefs,
 		Preview:           req.Preview,
-		FailOnIndexError:  req.FailOnIndexErr,
 		VaultConfig:       req.VaultConfig,
 		Schema:            sch,
 		ParseOptions:      req.ParseOptions,
@@ -246,5 +246,6 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		DestinationRel:  destPath,
 		UpdatedRefs:     serviceResult.UpdatedRefs,
 		WarningMessages: serviceResult.WarningMessages,
+		ChangeSet:       serviceResult.ChangeSet,
 	}, nil
 }

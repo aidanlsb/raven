@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
@@ -29,6 +30,7 @@ type CreateRequest struct {
 type CreateResult struct {
 	FilePath     string
 	RelativePath string
+	ChangeSet    mutation.ChangeSet
 }
 
 func Create(req CreateRequest) (*CreateResult, error) {
@@ -123,9 +125,12 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, err
 	}
 
+	changes := mutation.NewChangeSet()
+	changes.AddChanged(result.RelativePath)
 	return &CreateResult{
 		FilePath:     result.FilePath,
 		RelativePath: result.RelativePath,
+		ChangeSet:    changes,
 	}, nil
 }
 

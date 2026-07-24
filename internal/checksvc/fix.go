@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -43,6 +44,7 @@ type FixResult struct {
 	FileCount  int
 	IssueCount int
 	Skipped    []SkippedFix
+	ChangeSet  mutation.ChangeSet
 }
 
 type SkippedFix struct {
@@ -127,8 +129,8 @@ func GroupFixesByFile(fixes []FixableIssue) []FileFixes {
 
 // ApplyFixes applies the given fixes to the vault. Text fixes (wikilink,
 // trait) are batched per file and replaced in place. File moves are applied
-// one at a time via objectsvc.MoveFile with reference updates and a per-file
-// re-index. Failures are collected as Skipped entries and processing continues
+// one at a time via objectsvc.MoveFile with reference updates. Failures are
+// collected as Skipped entries and processing continues
 // past them; an error is returned only for unrecoverable I/O issues against
 // known-good files.
 func ApplyFixes(vaultPath string, fixes []FixableIssue, vaultCfg *config.VaultConfig, sch *schema.Schema) (FixResult, error) {
@@ -151,11 +153,13 @@ func ApplyFixes(vaultPath string, fixes []FixableIssue, vaultCfg *config.VaultCo
 	result.FileCount += textResult.FileCount
 	result.IssueCount += textResult.IssueCount
 	result.Skipped = append(result.Skipped, textResult.Skipped...)
+	result.ChangeSet.Merge(textResult.ChangeSet)
 
 	moveResult := applyMoveFixes(vaultPath, vaultCfg, sch, moveFixes)
 	result.FileCount += moveResult.FileCount
 	result.IssueCount += moveResult.IssueCount
 	result.Skipped = append(result.Skipped, moveResult.Skipped...)
+	result.ChangeSet.Merge(moveResult.ChangeSet)
 
 	return result, nil
 }
@@ -220,6 +224,7 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 			}
 			result.FileCount++
 			result.IssueCount += fixedCount
+			result.ChangeSet.AddChanged(filePath)
 		}
 	}
 
@@ -256,14 +261,13 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 			continue
 		}
 
-		_, err := objectsvc.MoveFile(objectsvc.MoveFileRequest{
+		moveResult, err := objectsvc.MoveFile(objectsvc.MoveFileRequest{
 			VaultPath:         vaultPath,
 			SourceFile:        sourceAbs,
 			DestinationFile:   destAbs,
 			SourceObjectID:    fix.SourceObjectID,
 			DestinationObject: fix.DestObjectID,
 			UpdateRefs:        true,
-			FailOnIndexError:  true,
 			VaultConfig:       vaultCfg,
 			Schema:            sch,
 			ParseOptions:      parseOpts,
@@ -275,6 +279,7 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 
 		result.FileCount++
 		result.IssueCount++
+		result.ChangeSet.Merge(moveResult.ChangeSet)
 	}
 
 	return result

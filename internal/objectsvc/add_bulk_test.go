@@ -1,7 +1,6 @@
 package objectsvc
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -54,14 +53,11 @@ func TestApplyAddBulk(t *testing.T) {
 		t.Fatalf("load vault config: %v", err)
 	}
 
-	var reindexed []string
 	summary, err := ApplyAddBulk(AddBulkRequest{
 		VaultPath:   v.Path,
 		VaultConfig: vaultCfg,
 		ObjectIDs:   []string{"people/alice", "people/missing"},
 		Line:        "bulk apply line",
-	}, func(filePath string) {
-		reindexed = append(reindexed, filePath)
 	})
 	if err != nil {
 		t.Fatalf("ApplyAddBulk() error = %v", err)
@@ -70,8 +66,8 @@ func TestApplyAddBulk(t *testing.T) {
 	if summary.Added != 1 || summary.Skipped != 1 || summary.Errors != 0 {
 		t.Fatalf("summary = %#v, want added=1 skipped=1 errors=0", summary)
 	}
-	if len(reindexed) != 1 || !strings.HasSuffix(filepath.ToSlash(reindexed[0]), "people/alice.md") {
-		t.Fatalf("reindex callbacks = %#v, want one callback for people/alice.md", reindexed)
+	if got := summary.ChangeSet.Changed; len(got) != 1 || got[0] != "people/alice.md" {
+		t.Fatalf("ChangeSet.Changed = %#v, want [people/alice.md]", got)
 	}
 	content := v.ReadFile("people/alice.md")
 	if !strings.Contains(content, "bulk apply line\n") {

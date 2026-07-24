@@ -81,7 +81,6 @@ func TestMoveFileUpdatesMarkdownAssetLinks(t *testing.T) {
 		SourceObjectID:    "assets/pdfs/paper.pdf",
 		DestinationObject: "assets/pdfs/archive/paper.pdf",
 		UpdateRefs:        true,
-		FailOnIndexError:  true,
 		IsAsset:           true,
 	})
 	if err != nil {
@@ -247,7 +246,7 @@ func TestMoveFileRollsBackWhenRefRewriteWriteFails(t *testing.T) {
 	}
 }
 
-func TestMoveFileRollsBackOnStrictIndexFailure(t *testing.T) {
+func TestMoveFileReturnsChangeSetBeforeIndexProjection(t *testing.T) {
 	t.Parallel()
 
 	v := testutil.NewTestVault(t).
@@ -258,7 +257,7 @@ func TestMoveFileRollsBackOnStrictIndexFailure(t *testing.T) {
 	sch := loadTestSchema(t, v.Path)
 	indexVaultFiles(t, v.Path, sch, "people/freya.md")
 
-	_, err := MoveFile(MoveFileRequest{
+	result, err := MoveFile(MoveFileRequest{
 		VaultPath:          v.Path,
 		VaultConfig:        &config.VaultConfig{},
 		Schema:             sch,
@@ -268,25 +267,22 @@ func TestMoveFileRollsBackOnStrictIndexFailure(t *testing.T) {
 		DestinationObject:  "archive/freya",
 		ReplacementContent: []byte("---\ntype: person\nname: [\n---\n"),
 		UpdateRefs:         true,
-		FailOnIndexError:   true,
 	})
-	if err == nil {
-		t.Fatal("expected MoveFile() to fail")
+	if err != nil {
+		t.Fatalf("MoveFile() error = %v", err)
+	}
+	if len(result.ChangeSet.Moved) != 1 {
+		t.Fatalf("ChangeSet.Moved = %#v, want one move", result.ChangeSet.Moved)
+	}
+	if move := result.ChangeSet.Moved[0]; move.From != "people/freya.md" || move.To != "archive/freya.md" {
+		t.Fatalf("ChangeSet.Moved[0] = %#v, want people/freya.md -> archive/freya.md", move)
 	}
 
-	var svcErr *Error
-	if !errors.As(err, &svcErr) {
-		t.Fatalf("expected *Error, got %T", err)
+	if _, err := os.Stat(filepath.Join(v.Path, "people/freya.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected source file to be removed, got %v", err)
 	}
-	if svcErr.Code != ErrorValidationFailed {
-		t.Fatalf("error code = %s, want %s", svcErr.Code, ErrorValidationFailed)
-	}
-
-	if _, err := os.Stat(filepath.Join(v.Path, "people/freya.md")); err != nil {
-		t.Fatalf("expected source file to be restored: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(v.Path, "archive/freya.md")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected destination file to be removed, got %v", err)
+	if _, err := os.Stat(filepath.Join(v.Path, "archive/freya.md")); err != nil {
+		t.Fatalf("expected destination file to remain durable before index projection: %v", err)
 	}
 }
 

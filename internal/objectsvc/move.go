@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -29,7 +30,6 @@ type MoveFileRequest struct {
 	ReplacementContent []byte
 	UpdateRefs         bool
 	Preview            bool
-	FailOnIndexError   bool
 	VaultConfig        *config.VaultConfig
 	Schema             *schema.Schema
 	ParseOptions       *parser.ParseOptions
@@ -40,6 +40,7 @@ type MoveFileRequest struct {
 type MoveFileResult struct {
 	UpdatedRefs     []string
 	WarningMessages []string
+	ChangeSet       mutation.ChangeSet
 }
 
 type refUpdatePlan struct {
@@ -100,9 +101,6 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	}
 	var db *index.Database
 	if err := rt.OpenDB(); err != nil {
-		if req.FailOnIndexError || errors.Is(err, index.ErrIndexRebuildRequired) {
-			return nil, newError(ErrorValidationFailed, "failed to open index database for move", "Run 'rvn reindex' to rebuild the database", nil, err)
-		}
 		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for move update: %v", err))
 	} else {
 		db = rt.DB
@@ -156,84 +154,14 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	}
 	result.UpdatedRefs = append(result.UpdatedRefs, writePlan.updatedRefs...)
 
-	if db == nil {
-		return result, nil
+	sourceRel, sourceRelErr := filepath.Rel(req.VaultPath, req.SourceFile)
+	destRel, destRelErr := filepath.Rel(req.VaultPath, req.DestinationFile)
+	if sourceRelErr == nil && destRelErr == nil {
+		result.ChangeSet.AddMoved(sourceRel, destRel)
 	}
-
-	if req.IsAsset {
-		oldRel, _ := filepath.Rel(req.VaultPath, req.SourceFile)
-		newRel, _ := filepath.Rel(req.VaultPath, req.DestinationFile)
-		oldRel = paths.NormalizeVaultRelPath(oldRel)
-		newRel = paths.NormalizeVaultRelPath(newRel)
-		if err := db.RemoveFiles([]string{oldRel}); err != nil {
-			if req.FailOnIndexError {
-				rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
-				return nil, moveRollbackError("failed to remove old asset index entry", err, rollbackErr)
-			}
-			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to remove old asset index entry: %v", err))
-		}
-		if info, statErr := os.Stat(req.DestinationFile); statErr == nil {
-			asset := vault.BuildAsset(newRel, info, req.VaultConfig)
-			if err := db.IndexAsset(asset); err != nil {
-				if req.FailOnIndexError {
-					rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
-					return nil, moveRollbackError("failed to index moved asset", err, rollbackErr)
-				}
-				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to index moved asset: %v", err))
-			}
-		}
-		return result, nil
-	}
-
-	finalContent := sourceSnapshot.content
-	if len(writePlan.destinationContent) > 0 {
-		finalContent = writePlan.destinationContent
-	}
-
-	newDoc, err := parser.ParseDocumentWithOptions(string(finalContent), req.DestinationFile, req.VaultPath, req.ParseOptions)
-	if err != nil {
-		if req.FailOnIndexError {
-			rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
-			return nil, moveRollbackError("failed to parse moved file for indexing", err, rollbackErr)
-		}
-		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to parse moved file for indexing: %v", err))
-		return result, nil
-	}
-	if newDoc == nil {
-		if req.FailOnIndexError {
-			rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
-			return nil, moveRollbackError("failed to parse moved file for indexing", errors.New("got nil document"), rollbackErr)
-		}
-		result.WarningMessages = append(result.WarningMessages, "Failed to parse moved file for indexing: got nil document")
-		return result, nil
-	}
-
-	oldIndexRemoved := false
-	if err := db.RemoveDocument(req.SourceObjectID); err != nil {
-		if errors.Is(err, index.ErrObjectNotFound) {
-			result.WarningMessages = append(result.WarningMessages, "Object not found in index while updating move; consider running 'rvn reindex'")
-		} else if req.FailOnIndexError {
-			rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
-			restoreErr := restoreSourceIndex(db, req, sourceSnapshot)
-			return nil, moveRollbackError("failed to remove old index entry", err, errors.Join(rollbackErr, restoreErr))
-		} else {
-			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to remove old index entry: %v", err))
-		}
-	} else {
-		oldIndexRemoved = true
-	}
-
-	if req.Schema != nil {
-		if err := db.IndexDocument(newDoc, req.Schema); err != nil {
-			if req.FailOnIndexError {
-				rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
-				restoreErr := error(nil)
-				if oldIndexRemoved {
-					restoreErr = restoreSourceIndex(db, req, sourceSnapshot)
-				}
-				return nil, moveRollbackError("failed to index moved file", err, errors.Join(rollbackErr, restoreErr))
-			}
-			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to index moved file: %v", err))
+	for _, rewrite := range appliedRewrites {
+		if relPath, relErr := filepath.Rel(req.VaultPath, rewrite.path); relErr == nil {
+			result.ChangeSet.AddChanged(relPath)
 		}
 	}
 
@@ -372,24 +300,6 @@ func rollbackMovedFiles(req MoveFileRequest, sourceSnapshot *fileSnapshot, rewri
 	}
 
 	return rollbackErr
-}
-
-func restoreSourceIndex(db *index.Database, req MoveFileRequest, sourceSnapshot *fileSnapshot) error {
-	if db == nil || req.Schema == nil || sourceSnapshot == nil {
-		return nil
-	}
-
-	doc, err := parser.ParseDocumentWithOptions(string(sourceSnapshot.content), req.SourceFile, req.VaultPath, req.ParseOptions)
-	if err != nil {
-		return fmt.Errorf("restore source index parse failed: %w", err)
-	}
-	if doc == nil {
-		return errors.New("restore source index parse failed: got nil document")
-	}
-	if err := db.IndexDocument(doc, req.Schema); err != nil {
-		return fmt.Errorf("restore source index write failed: %w", err)
-	}
-	return nil
 }
 
 func moveRollbackError(message string, cause, rollbackErr error) error {

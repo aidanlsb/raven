@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestHandleCheckFix_WarnsWhenPlannedFixIsSkipped(t *testing.T) {
@@ -21,7 +22,8 @@ owner: "[[people/freya]]"
 ---`).
 		Build()
 
-	result := handleCheckFix(vault.Path, nil, nil, &checksvc.RunResult{
+	rt := testutil.NewVaultRuntime(t, vault.Path, vaultruntime.Options{})
+	result := handleCheckFix(rt, nil, nil, &checksvc.RunResult{
 		Issues: []check.Issue{
 			{
 				Type:     check.IssueShortRefCouldBeFullPath,
