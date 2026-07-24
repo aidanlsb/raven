@@ -15,26 +15,36 @@ import (
 type BulkOperation string
 
 const (
-	BulkOpSet    BulkOperation = "set"
-	BulkOpDelete BulkOperation = "delete"
-	BulkOpAdd    BulkOperation = "add"
-	BulkOpMove   BulkOperation = "move"
+	BulkOpSet        BulkOperation = "set"
+	BulkOpDelete     BulkOperation = "delete"
+	BulkOpAdd        BulkOperation = "add"
+	BulkOpMove       BulkOperation = "move"
+	BulkOpReclassify BulkOperation = "reclassify"
 )
 
 // BulkResult represents the result of a single bulk operation on one object.
 type BulkResult struct {
 	ID      string `json:"id"`
-	Status  string `json:"status"` // "modified", "deleted", "added", "moved", "skipped", "error"
+	Status  string `json:"status"` // "modified", "deleted", "added", "moved", "reclassified", "skipped", "error"
 	Reason  string `json:"reason,omitempty"`
 	Details string `json:"details,omitempty"`
 }
 
 // BulkPreviewItem represents a single item in a bulk operation preview.
 type BulkPreviewItem struct {
-	ID      string            `json:"id"`
-	Changes map[string]string `json:"changes,omitempty"` // field -> "new_value (was: old_value)"
-	Action  string            `json:"action"`            // "set", "delete", "add", "move"
-	Details string            `json:"details,omitempty"` // Additional info like destination for move
+	ID            string            `json:"id"`
+	Changes       map[string]string `json:"changes,omitempty"` // field -> "new_value (was: old_value)"
+	Action        string            `json:"action"`            // "set", "delete", "add", "move", "reclassify"
+	Details       string            `json:"details,omitempty"` // Additional info like destination for move
+	OldType       string            `json:"old_type,omitempty"`
+	NewType       string            `json:"new_type,omitempty"`
+	Moved         bool              `json:"moved,omitempty"`
+	OldPath       string            `json:"old_path,omitempty"`
+	NewPath       string            `json:"new_path,omitempty"`
+	UpdatedRefs   []string          `json:"updated_refs,omitempty"`
+	AddedFields   []string          `json:"added_fields,omitempty"`
+	DroppedFields []string          `json:"dropped_fields,omitempty"`
+	NeedsConfirm  bool              `json:"needs_confirm,omitempty"`
 }
 
 // BulkPreview represents a preview of bulk operations before confirmation.
@@ -48,15 +58,16 @@ type BulkPreview struct {
 
 // BulkSummary represents the summary of a completed bulk operation.
 type BulkSummary struct {
-	Action   string       `json:"action"`
-	Results  []BulkResult `json:"items"`
-	Total    int          `json:"total"`
-	Modified int          `json:"modified,omitempty"`
-	Deleted  int          `json:"deleted,omitempty"`
-	Added    int          `json:"added,omitempty"`
-	Moved    int          `json:"moved,omitempty"`
-	Skipped  int          `json:"skipped,omitempty"`
-	Errors   int          `json:"errors,omitempty"`
+	Action       string       `json:"action"`
+	Results      []BulkResult `json:"items"`
+	Total        int          `json:"total"`
+	Modified     int          `json:"modified,omitempty"`
+	Deleted      int          `json:"deleted,omitempty"`
+	Added        int          `json:"added,omitempty"`
+	Moved        int          `json:"moved,omitempty"`
+	Reclassified int          `json:"reclassified,omitempty"`
+	Skipped      int          `json:"skipped,omitempty"`
+	Errors       int          `json:"errors,omitempty"`
 }
 
 // ReadIDsFromStdin reads object/trait IDs from stdin, one per line.
@@ -147,6 +158,24 @@ func PrintBulkPreview(preview *BulkPreview) {
 		for field, change := range item.Changes {
 			fmt.Println(ui.Indent(2, fmt.Sprintf("%s: %s", field, change)))
 		}
+		if item.Action == "reclassify" {
+			fmt.Println(ui.Indent(2, fmt.Sprintf("type: %s → %s", item.OldType, item.NewType)))
+			if item.Moved {
+				fmt.Println(ui.Indent(2, ui.Hint(fmt.Sprintf("move: %s → %s", item.OldPath, item.NewPath))))
+			}
+			if len(item.AddedFields) > 0 {
+				fmt.Println(ui.Indent(2, ui.Hint("add fields: "+strings.Join(item.AddedFields, ", "))))
+			}
+			if len(item.DroppedFields) > 0 {
+				fmt.Println(ui.Indent(2, ui.Warning("drop fields: "+strings.Join(item.DroppedFields, ", "))))
+			}
+			if len(item.UpdatedRefs) > 0 {
+				fmt.Println(ui.Indent(2, ui.Hint(fmt.Sprintf("update references in: %s", strings.Join(item.UpdatedRefs, ", ")))))
+			}
+			if item.NeedsConfirm {
+				fmt.Println(ui.Indent(2, ui.Warning("requires --force to drop fields")))
+			}
+		}
 	}
 
 	if len(preview.Skipped) > 0 {
@@ -174,6 +203,8 @@ func PrintBulkSummary(summary *BulkSummary) {
 		fmt.Println(ui.Checkf("Added content to %d objects", summary.Added))
 	case "move":
 		fmt.Println(ui.Checkf("Moved %d objects", summary.Moved))
+	case "reclassify":
+		fmt.Println(ui.Checkf("Reclassified %d objects", summary.Reclassified))
 	}
 
 	if summary.Skipped > 0 {
@@ -195,6 +226,8 @@ func getActionVerb(action string) string {
 		return "updated"
 	case "move":
 		return "moved"
+	case "reclassify":
+		return "reclassified"
 	default:
 		return "processed"
 	}

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/dates"
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -157,11 +157,11 @@ func (e *Executor) buildDateVirtualFieldPredicateSQL(p *FieldPredicate, alias st
 }
 
 func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr string, jsonPath string, now time.Time) (string, []interface{}, bool, error) {
-	cond, dateArgs, ok, err := index.TryParseTemporalComparisonWithOptions(
+	cond, dateArgs, ok, err := indexschema.TryParseTemporalComparisonWithOptions(
 		value,
 		compareOpToSQL(compareOp),
 		fieldExpr,
-		index.DateFilterOptions{
+		indexschema.DateFilterOptions{
 			Now: now,
 		},
 	)

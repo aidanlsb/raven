@@ -156,6 +156,7 @@ func TestMutationPhaseBulkWrites(t *testing.T) {
 		{"set", "set", map[string]any{"stdin": true, "object_ids": []any{"projects/roadmap"}, "fields": map[string]any{"status": "done"}}},
 		{"add", "add", map[string]any{"stdin": true, "object_ids": []any{"projects/roadmap"}, "text": "- bulk line"}},
 		{"move", "move", map[string]any{"stdin": true, "object_ids": []any{"projects/scratch"}, "destination": "archive/"}},
+		{"reclassify", "reclassify", map[string]any{"stdin": true, "object_ids": []any{"projects/scratch"}, "new-type": "person", "field": map[string]any{"name": "Scratch"}, "no-move": true, "force": true}},
 	}
 
 	for _, tc := range cases {
@@ -173,6 +174,18 @@ func TestMutationPhaseBulkWrites(t *testing.T) {
 			requirePhase(t, res, commandexec.MutationPhaseApplied)
 		})
 	}
+}
+
+func TestMutationPhaseBulkReclassifyAllBlockedPreviews(t *testing.T) {
+	t.Parallel()
+
+	v := buildPhaseVault(t)
+	res := runInvoked(t, v.Path, "reclassify", map[string]any{
+		"stdin":      true,
+		"object_ids": []any{"projects/scratch"},
+		"new-type":   "person",
+	}, withConfirm)
+	requirePhase(t, res, commandexec.MutationPhasePreview)
 }
 
 func TestMutationPhaseMoveNeedsConfirmPreviews(t *testing.T) {

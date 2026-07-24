@@ -88,7 +88,7 @@ var nonInvokableCommandIDs = map[string]struct{}{
 
 // previewModeByCommandID controls default preview behavior.
 //
-// Single-object reversible writes (edit, single set/add/update/delete/move)
+// Single-object reversible writes (edit, single set/add/update/delete/move/reclassify)
 // apply immediately and only preview when the caller passes `dry-run`; these
 // are either absent (PreviewModeNone) or use PreviewModeBulkPreviewDefault,
 // which previews only when a bulk input (stdin/object_ids/trait_ids) is
@@ -96,11 +96,12 @@ var nonInvokableCommandIDs = map[string]struct{}{
 // rename, check fixes, skill install/sync/remove) preview by default and require
 // `confirm` to apply.
 var previewModeByCommandID = map[string]PreviewMode{
-	"add":    PreviewModeBulkPreviewDefault,
-	"delete": PreviewModeBulkPreviewDefault,
-	"move":   PreviewModeBulkPreviewDefault,
-	"set":    PreviewModeBulkPreviewDefault,
-	"update": PreviewModeBulkPreviewDefault,
+	"add":        PreviewModeBulkPreviewDefault,
+	"delete":     PreviewModeBulkPreviewDefault,
+	"move":       PreviewModeBulkPreviewDefault,
+	"reclassify": PreviewModeBulkPreviewDefault,
+	"set":        PreviewModeBulkPreviewDefault,
+	"update":     PreviewModeBulkPreviewDefault,
 
 	"check create-missing": PreviewModePreviewDefault,
 	"check_fix":            PreviewModePreviewDefault,

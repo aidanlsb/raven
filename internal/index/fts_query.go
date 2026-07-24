@@ -1,6 +1,6 @@
 package index
 
-import "strings"
+import "github.com/aidanlsb/raven/internal/indexschema"
 
 // BuildFTSSearchQuery builds a safe FTS5 MATCH query that searches both the
 // `title` and `content` columns. It is intended for rvn search (the general
@@ -9,11 +9,7 @@ import "strings"
 //
 // The returned string is meant to be passed as the RHS of `fts_content MATCH ?`.
 func BuildFTSSearchQuery(userQuery string) string {
-	q := strings.TrimSpace(userQuery)
-	if q == "" {
-		return `{title content}:""`
-	}
-	return "{title content}: (" + sanitizeFTSQuery(q) + ")"
+	return indexschema.BuildFTSSearchQuery(userQuery)
 }
 
 // BuildFTSContentQuery builds a safe FTS5 MATCH query that scopes to the `content`
@@ -24,121 +20,5 @@ func BuildFTSSearchQuery(userQuery string) string {
 //
 // The returned string is meant to be passed as the RHS of `fts_content MATCH ?`.
 func BuildFTSContentQuery(userQuery string) string {
-	q := strings.TrimSpace(userQuery)
-	if q == "" {
-		// Match nothing (FTS phrase query for empty string).
-		return `content:""`
-	}
-
-	// Wrap the entire expression so the column scope applies to boolean ops.
-	// (Without parentheses, `content: a OR b` scopes only `a` to the column.)
-	return "content: (" + sanitizeFTSQuery(q) + ")"
-}
-
-// sanitizeFTSQuery quotes unquoted tokens containing FTS-special punctuation
-// to prevent SQLite FTS from interpreting them as query syntax.
-//
-// This keeps quoted phrases intact and preserves boolean operators/parentheses.
-func sanitizeFTSQuery(q string) string {
-	var b strings.Builder
-	b.Grow(len(q) + 8)
-
-	inQuotes := false
-	i := 0
-	for i < len(q) {
-		c := q[i]
-
-		// Toggle quoted phrase state; keep the quote.
-		if c == '"' {
-			inQuotes = !inQuotes
-			b.WriteByte(c)
-			i++
-			continue
-		}
-
-		if inQuotes {
-			b.WriteByte(c)
-			i++
-			continue
-		}
-
-		// Preserve whitespace as-is.
-		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
-			b.WriteByte(c)
-			i++
-			continue
-		}
-
-		// Preserve grouping punctuation.
-		if c == '(' || c == ')' {
-			b.WriteByte(c)
-			i++
-			continue
-		}
-
-		// Consume a token until whitespace or grouping punctuation. Parentheses
-		// attached to a token (for example `content()`) are treated as literal
-		// punctuation so users can search for code-like strings.
-		start := i
-		hasLiteralParen := false
-		for i < len(q) {
-			cc := q[i]
-			if cc == '"' || cc == ' ' || cc == '\t' || cc == '\n' || cc == '\r' {
-				break
-			}
-			if cc == '(' {
-				if i == start {
-					break
-				}
-				hasLiteralParen = true
-				i++
-				continue
-			}
-			if cc == ')' {
-				if hasLiteralParen {
-					i++
-					continue
-				}
-				break
-			}
-			i++
-		}
-		tok := q[start:i]
-
-		upper := strings.ToUpper(tok)
-		switch upper {
-		case "AND", "OR", "NOT", "NEAR":
-			b.WriteString(tok)
-			continue
-		}
-
-		// Don't rewrite column-scoped tokens like `content:foo`.
-		if strings.Contains(tok, ":") {
-			b.WriteString(tok)
-			continue
-		}
-
-		// Quote punctuation-bearing literal tokens (but avoid treating unary NOT
-		// `-foo` as a phrase).
-		if shouldQuoteFTSLiteralToken(tok) {
-			b.WriteByte('"')
-			b.WriteString(strings.ReplaceAll(tok, `"`, `""`))
-			b.WriteByte('"')
-			continue
-		}
-
-		b.WriteString(tok)
-	}
-
-	return b.String()
-}
-
-func shouldQuoteFTSLiteralToken(tok string) bool {
-	if strings.Contains(tok, ".") {
-		return true
-	}
-	if strings.Contains(tok, "/") || strings.Contains(tok, "(") || strings.Contains(tok, ")") {
-		return true
-	}
-	return strings.Contains(tok, "-") && !strings.HasPrefix(tok, "-")
+	return indexschema.BuildFTSContentQuery(userQuery)
 }

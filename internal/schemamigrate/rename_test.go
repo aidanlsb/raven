@@ -1,6 +1,7 @@
 package schemamigrate
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -201,4 +202,244 @@ func TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs(t *testing.T) {
 	vault.AssertFileContains("schema.yaml", "meeting:")
 	vault.AssertFileContains("schema.yaml", "default_path: meetings/")
 	vault.AssertFileContains("schema.yaml", "target: meeting")
+}
+
+func TestRenameField_PreviewAndApplyUpdateAllPlannedSurfaces(t *testing.T) {
+	t.Parallel()
+
+	const personSchema = `version: 2
+types:
+  person:
+    name_field: name
+    template: templates/person.md
+    fields:
+      name: { type: string }
+      email: { type: string }
+traits: {}
+`
+	const ravenYAML = `queries:
+  contacts:
+    query: 'type:person .email=="alex@example.com"'
+  unrelated:
+    query: 'type:page .title=="Email"'
+`
+	vault := testutil.NewTestVault(t).
+		WithSchema(personSchema).
+		WithRavenYAML(ravenYAML).
+		WithFile("templates/person.md", "Email: {{field.email}}\n").
+		WithFile("people/alex.md", "---\ntype: person\nname: Alex\nemail: alex@example.com\n---\n# Alex\n").
+		WithFile("notes/email.md", "---\ntype: page\ntitle: Email\nemail: body-only\n---\n").
+		Build()
+
+	beforeSchema := vault.ReadFile("schema.yaml")
+	beforeTemplate := vault.ReadFile("templates/person.md")
+	beforeConfig := vault.ReadFile("raven.yaml")
+	beforePerson := vault.ReadFile("people/alex.md")
+	beforePage := vault.ReadFile("notes/email.md")
+
+	preview, err := RenameField(migrationTestRuntime(t, vault.Path), RenameFieldRequest{
+		VaultPath: vault.Path,
+		TypeName:  "person",
+		OldField:  "email",
+		NewField:  "contact",
+	})
+	if err != nil {
+		t.Fatalf("preview RenameField() error = %v", err)
+	}
+	if !preview.Preview || preview.TotalChanges != 4 {
+		t.Fatalf("preview = %#v, want four planned changes", preview)
+	}
+	for _, changeType := range []string{"schema_field", "template_file", "saved_query", "frontmatter"} {
+		if countFieldChanges(preview.Changes, changeType) != 1 {
+			t.Fatalf("preview changes missing one %q: %#v", changeType, preview.Changes)
+		}
+	}
+	if vault.ReadFile("schema.yaml") != beforeSchema ||
+		vault.ReadFile("templates/person.md") != beforeTemplate ||
+		vault.ReadFile("raven.yaml") != beforeConfig ||
+		vault.ReadFile("people/alex.md") != beforePerson {
+		t.Fatalf("preview mutated one or more vault files")
+	}
+
+	applied, err := RenameField(migrationTestRuntime(t, vault.Path), RenameFieldRequest{
+		VaultPath: vault.Path,
+		TypeName:  "person",
+		OldField:  "email",
+		NewField:  "contact",
+		Confirm:   true,
+	})
+	if err != nil {
+		t.Fatalf("apply RenameField() error = %v", err)
+	}
+	if applied.Preview || applied.ChangesApplied != preview.TotalChanges {
+		t.Fatalf("apply = %#v, want preview count %d", applied, preview.TotalChanges)
+	}
+	vault.AssertFileContains("schema.yaml", "contact:")
+	vault.AssertFileNotContains("schema.yaml", "email:")
+	vault.AssertFileContains("templates/person.md", "{{field.contact}}")
+	vault.AssertFileNotContains("templates/person.md", "{{field.email}}")
+	vault.AssertFileContains("raven.yaml", ".contact==")
+	vault.AssertFileNotContains("raven.yaml", ".email==")
+	vault.AssertFileContains("people/alex.md", "contact: alex@example.com")
+	vault.AssertFileNotContains("people/alex.md", "email: alex@example.com")
+	if got := vault.ReadFile("notes/email.md"); got != beforePage {
+		t.Fatalf("rename changed a different object type:\n%s", got)
+	}
+}
+
+func TestRenameField_ConflictBlocksAllWrites(t *testing.T) {
+	t.Parallel()
+
+	const personSchema = `version: 2
+types:
+  person:
+    fields:
+      name: { type: string }
+      email: { type: string }
+traits: {}
+`
+	vault := testutil.NewTestVault(t).
+		WithSchema(personSchema).
+		WithFile("people/alex.md", "---\ntype: person\nname: Alex\nemail: old@example.com\ncontact: new@example.com\n---\n").
+		Build()
+	beforeSchema := vault.ReadFile("schema.yaml")
+	beforePerson := vault.ReadFile("people/alex.md")
+
+	_, err := RenameField(migrationTestRuntime(t, vault.Path), RenameFieldRequest{
+		VaultPath: vault.Path,
+		TypeName:  "person",
+		OldField:  "email",
+		NewField:  "contact",
+		Confirm:   true,
+	})
+	requireMigrationCode(t, err, schemasvc.ErrorDataIntegrity)
+	if got := vault.ReadFile("schema.yaml"); got != beforeSchema {
+		t.Fatalf("conflicted rename changed schema:\n%s", got)
+	}
+	if got := vault.ReadFile("people/alex.md"); got != beforePerson {
+		t.Fatalf("conflicted rename changed object:\n%s", got)
+	}
+}
+
+func TestRenameType_DestinationConflictBlocksAllWrites(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).
+		WithSchema(eventProjectSchema).
+		WithFile("events/kickoff.md", "---\ntype: event\ntitle: Kickoff\n---\n").
+		WithFile("meetings/kickoff.md", "---\ntype: page\ntitle: Existing\n---\n").
+		WithFile("projects/roadmap.md", "---\ntype: project\nkickoff: events/kickoff\n---\n[[events/kickoff]]\n").
+		Build()
+	beforeSchema := vault.ReadFile("schema.yaml")
+	beforeSource := vault.ReadFile("events/kickoff.md")
+	beforeDestination := vault.ReadFile("meetings/kickoff.md")
+	beforeReference := vault.ReadFile("projects/roadmap.md")
+
+	_, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{
+		VaultPath:         vault.Path,
+		OldName:           "event",
+		NewName:           "meeting",
+		Confirm:           true,
+		RenameDefaultPath: true,
+	})
+	requireMigrationCode(t, err, schemasvc.ErrorValidation)
+	if vault.ReadFile("schema.yaml") != beforeSchema ||
+		vault.ReadFile("events/kickoff.md") != beforeSource ||
+		vault.ReadFile("meetings/kickoff.md") != beforeDestination ||
+		vault.ReadFile("projects/roadmap.md") != beforeReference {
+		t.Fatalf("destination conflict mutated one or more vault files")
+	}
+}
+
+func TestValidateTypeDirectoryMoves(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		files     []string
+		moves     []typeDirectoryMove
+		wantError string
+	}{
+		{name: "no moves"},
+		{
+			name:  "valid move",
+			files: []string{"events/a.md"},
+			moves: []typeDirectoryMove{{SourceRelPath: "events/a.md", DestinationRelPath: "meetings/a.md"}},
+		},
+		{
+			name:      "missing source",
+			moves:     []typeDirectoryMove{{SourceRelPath: "events/missing.md", DestinationRelPath: "meetings/missing.md"}},
+			wantError: "source file does not exist",
+		},
+		{
+			name:  "multiple sources share destination",
+			files: []string{"events/a.md", "events/b.md"},
+			moves: []typeDirectoryMove{
+				{SourceRelPath: "events/a.md", DestinationRelPath: "meetings/same.md"},
+				{SourceRelPath: "events/b.md", DestinationRelPath: "meetings/same.md"},
+			},
+			wantError: "multiple files would move",
+		},
+		{
+			name:  "destination exists",
+			files: []string{"events/a.md", "meetings/a.md"},
+			moves: []typeDirectoryMove{
+				{SourceRelPath: "events/a.md", DestinationRelPath: "meetings/a.md"},
+			},
+			wantError: "destination already exists",
+		},
+		{
+			name:  "destination that is also a source is allowed",
+			files: []string{"events/a.md", "meetings/a.md"},
+			moves: []typeDirectoryMove{
+				{SourceRelPath: "events/a.md", DestinationRelPath: "meetings/a.md"},
+				{SourceRelPath: "meetings/a.md", DestinationRelPath: "archive/a.md"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			vault := testutil.NewTestVault(t).Build()
+			for _, filePath := range tt.files {
+				vault.WriteFile(filePath, "content")
+			}
+
+			err := validateTypeDirectoryMoves(vault.Path, tt.moves)
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatalf("validateTypeDirectoryMoves() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("error = %v, want containing %q", err, tt.wantError)
+			}
+		})
+	}
+}
+
+func countFieldChanges(changes []schemasvc.FieldRenameChange, changeType string) int {
+	count := 0
+	for _, change := range changes {
+		if change.ChangeType == changeType {
+			count++
+		}
+	}
+	return count
+}
+
+func requireMigrationCode(t *testing.T, err error, want schemasvc.ErrorCode) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("error = nil, want %s", want)
+	}
+	var svcErr *schemasvc.Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("error = %T %v, want service error", err, err)
+	}
+	if svcErr.Code != want {
+		t.Fatalf("error code = %s, want %s", svcErr.Code, want)
+	}
 }

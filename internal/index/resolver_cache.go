@@ -2,12 +2,12 @@ package index
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -178,7 +178,7 @@ func (d *Database) getReferenceResolverLocked(dailyDirectory string, sch *schema
 	return res, nil
 }
 
-const resolverGenerationMetaKey = "resolver_generation"
+const resolverGenerationMetaKey = indexschema.ResolverGenerationMetaKey
 
 // ResolverGeneration returns the durable generation for resolver-relevant
 // index state. It changes when objects, sections, or assets are mutated,
@@ -188,24 +188,7 @@ func (d *Database) ResolverGeneration() (int64, error) {
 }
 
 func resolverGeneration(db resolverQuerier) (int64, error) {
-	var raw string
-	err := db.QueryRow(`SELECT value FROM meta WHERE key = ?`, resolverGenerationMetaKey).Scan(&raw)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
-	}
-	if err != nil {
-		// BuildResolver also supports the simplified legacy/test databases used
-		// by query callers, which may not include Raven's meta table.
-		if strings.Contains(err.Error(), "no such table: meta") {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("read resolver generation: %w", err)
-	}
-	generation, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("parse resolver generation %q: %w", raw, err)
-	}
-	return generation, nil
+	return indexschema.ResolverGeneration(db)
 }
 
 func bumpResolverGeneration(tx *sql.Tx) (int64, error) {

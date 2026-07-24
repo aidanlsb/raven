@@ -34,6 +34,7 @@ type ReclassifyRequest struct {
 	NoMove     bool
 	UpdateRefs bool
 	Force      bool
+	Preview    bool
 
 	ParseOptions *parser.ParseOptions
 	Runtime      *vaultruntime.Runtime
@@ -52,6 +53,7 @@ type ReclassifyByReferenceRequest struct {
 	NoMove     bool
 	UpdateRefs bool
 	Force      bool
+	Preview    bool
 
 	ParseOptions *parser.ParseOptions
 	Runtime      *vaultruntime.Runtime
@@ -204,7 +206,9 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	if len(droppedFields) > 0 && !req.Force {
 		result.NeedsConfirm = true
 		result.Reason = fmt.Sprintf("Fields not defined on type '%s' will be dropped: %s", req.NewTypeName, strings.Join(droppedFields, ", "))
-		return result, nil
+		if !req.Preview {
+			return result, nil
+		}
 	}
 
 	nextFieldValues := mergeReclassifyFieldValues(fm, fieldValues, droppedFields)
@@ -259,6 +263,9 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	}
 
 	if moveDestAbsPath == "" {
+		if req.Preview {
+			return result, nil
+		}
 		if err := atomicfile.WriteFile(req.FilePath, []byte(newContent), 0o644); err != nil {
 			return nil, newError(ErrorFileWrite, "failed to write file", "", nil, err)
 		}
@@ -275,6 +282,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		DestinationObject:  destinationObjectID,
 		ReplacementContent: []byte(newContent),
 		UpdateRefs:         req.UpdateRefs,
+		Preview:            req.Preview,
 		VaultConfig:        req.VaultConfig,
 		Schema:             req.Schema,
 		ParseOptions:       req.ParseOptions,
@@ -325,6 +333,7 @@ func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult,
 		NoMove:       req.NoMove,
 		UpdateRefs:   req.UpdateRefs,
 		Force:        req.Force,
+		Preview:      req.Preview,
 		ParseOptions: req.ParseOptions,
 		Runtime:      rt,
 	})

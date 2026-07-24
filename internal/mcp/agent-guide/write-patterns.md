@@ -10,6 +10,7 @@ Use this guide to choose the right mutation primitive.
 | Append a note/log entry | `add` | Intentional append-only capture |
 | Deterministic create-or-update | `upsert` | Idempotent convergence for generated artifacts |
 | Update frontmatter fields | `set` | Schema-validated metadata updates |
+| Change object types | `reclassify` | Applies target-type fields/defaults and safely moves files |
 | Replace body text safely | `edit` | Unique-string replacement in content markdown (applies immediately; `dry-run` to preview) |
 | Move or rename an asset | `move` | Updates Markdown links/images and refreshes the asset index |
 | Create a section heading | `section_create` | Plain title + required level; returns canonical `file#slug` |
@@ -104,10 +105,15 @@ raven_invoke(command="delete", args={"object_id":"assets/pdfs/old-paper.pdf", "d
 ```
 
 Single-object `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
-`section_rename`, `delete`, and `move` all apply immediately. Only call them
+`section_rename`, `delete`, `move`, and `reclassify` all apply immediately. Only call them
 after clear user approval or an unambiguous request, and use `dry-run=true` when
-you want to confirm the effect first. Bulk operations (`stdin=true`) stay
+the command exposes it and you want to confirm the effect first. Bulk operations (`stdin=true`) stay
 preview-first and require `confirm=true`.
+
+For bulk reclassification, pass `object_ids` plus `new-type`. The preview reports
+planned moves, dropped/added fields, required-field failures, and reference
+rewrites. Applying requires `confirm=true`; items that drop fields also require
+`force=true`.
 
 Regardless of command or flags, read `meta.mutation.phase` to confirm what
 happened: `"applied"` means the change was written, `"preview"` means nothing was

@@ -41,6 +41,8 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 	prevNoMove := reclassifyNoMove
 	prevUpdateRefs := reclassifyUpdateRefs
 	prevForce := reclassifyForce
+	prevStdin := reclassifyStdin
+	prevConfirm := reclassifyConfirm
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
@@ -49,6 +51,8 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 		reclassifyNoMove = prevNoMove
 		reclassifyUpdateRefs = prevUpdateRefs
 		reclassifyForce = prevForce
+		reclassifyStdin = prevStdin
+		reclassifyConfirm = prevConfirm
 	})
 
 	resolvedVaultPath = vaultPath
@@ -58,6 +62,8 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 	reclassifyNoMove = false
 	reclassifyUpdateRefs = true
 	reclassifyForce = false
+	reclassifyStdin = false
+	reclassifyConfirm = false
 }
 
 func runReclassifyCommand(t *testing.T, args ...string) string {
