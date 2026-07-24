@@ -224,6 +224,7 @@ type initPostInitState struct {
 	previousVaultPath   string
 	previousVaultSource string
 	previousDefaultName string
+	previousDefaultPath string
 	switchBack          string
 	configPath          string
 	statePath           string
@@ -303,6 +304,9 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 	existingVaults := ctx.Cfg.ListVaults()
 	defaultName := configsvc.DefaultVaultName(ctx.Cfg)
 	state.previousDefaultName = defaultName
+	if defaultPath, defaultErr := ctx.Cfg.GetDefaultVaultPath(); defaultErr == nil {
+		state.previousDefaultPath = defaultPath
+	}
 	activeName := strings.TrimSpace(ctx.State.ActiveVault)
 	if activeName != "" {
 		if activePath, activeErr := ctx.Cfg.GetVaultPath(activeName); activeErr == nil {
@@ -395,7 +399,7 @@ func setInitSwitchBack(state *initPostInitState) {
 		state.switchBack = "rvn --json vault use -- " + shellquote.Quote(state.previousActiveName)
 		return
 	}
-	if state.previousVaultName == "" && state.previousDefaultName != "" {
+	if state.previousVaultName == "" && state.previousDefaultName != "" && state.previousDefaultPath == "" {
 		state.switchBack = "rvn --json config unset default_vault && rvn --json vault clear"
 		return
 	}
@@ -479,7 +483,7 @@ func buildInitPostInitPayload(s initPostInitState) map[string]interface{} {
 	case !s.isActive:
 		guidance = fmt.Sprintf("Vault %q was registered at %s but could not be activated. Repair global state access and rerun init; until then, target it explicitly with --vault %s.", s.registeredName, s.registeredPath, shellquote.Quote(s.registeredName))
 	case s.activated:
-		guidance = fmt.Sprintf("Activated newly initialized vault %q at %s. Ambient CLI and MCP commands now target it.", s.registeredName, s.registeredPath)
+		guidance = fmt.Sprintf("Activated newly initialized vault %q at %s. Ambient CLI commands now target it.", s.registeredName, s.registeredPath)
 		if s.previousActiveName != "" {
 			guidance += fmt.Sprintf(" The previously active vault was %q at %s.", s.previousActiveName, s.previousActivePath)
 		} else if s.previousVaultName != "" {
