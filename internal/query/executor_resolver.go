@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/resolver"
 )
 
@@ -26,7 +26,7 @@ func (e *Executor) getResolver() (*resolver.Resolver, error) {
 		return e.resolver, nil
 	}
 
-	res, err := index.BuildResolver(e.db, index.ResolverOptions{
+	res, err := indexschema.BuildResolver(e.db, indexschema.ResolverOptions{
 		DailyDirectory: e.dailyDirectory,
 		Schema:         e.schema,
 	})
