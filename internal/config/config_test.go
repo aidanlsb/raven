@@ -186,9 +186,6 @@ markdown_style = "dark"
 	if cfg.DefaultVault != "work" {
 		t.Errorf("expected default_vault 'work', got %q", cfg.DefaultVault)
 	}
-	if cfg.StateFile != "state.toml" {
-		t.Errorf("expected state_file 'state.toml', got %q", cfg.StateFile)
-	}
 	if cfg.Editor != "code" {
 		t.Errorf("expected editor 'code', got %q", cfg.Editor)
 	}
@@ -197,6 +194,17 @@ markdown_style = "dark"
 	}
 	if cfg.UI.MarkdownStyle != "dark" {
 		t.Errorf("expected ui.markdown_style 'dark', got %q", cfg.UI.MarkdownStyle)
+	}
+
+	if err := SaveTo(configPath, cfg); err != nil {
+		t.Fatalf("SaveTo() error = %v", err)
+	}
+	saved, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read saved config: %v", err)
+	}
+	if strings.Contains(string(saved), "state_file") {
+		t.Fatalf("saved config retained removed state_file key:\n%s", saved)
 	}
 }
 

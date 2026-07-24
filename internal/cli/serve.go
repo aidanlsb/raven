@@ -37,9 +37,6 @@ For use with Claude Desktop, add to your config:
 		if strings.TrimSpace(configPath) != "" {
 			baseArgs = append(baseArgs, "--config", configPath)
 		}
-		if strings.TrimSpace(statePathFlag) != "" {
-			baseArgs = append(baseArgs, "--state", statePathFlag)
-		}
 		if strings.TrimSpace(vaultPathFlag) != "" {
 			baseArgs = append(baseArgs, "--vault-path", vaultPathFlag)
 		} else if strings.TrimSpace(vaultName) != "" {

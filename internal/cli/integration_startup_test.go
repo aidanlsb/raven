@@ -19,10 +19,9 @@ func TestIntegration_InitFirstVaultAutoRegisters(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	root := t.TempDir()
 	configFile := filepath.Join(root, "config.toml")
-	stateFile := filepath.Join(root, "state.toml")
 	vaultPath := filepath.Join(root, "New Notes")
 
-	postInit := runInitPostInit(t, binary, configFile, stateFile, vaultPath)
+	postInit := runInitPostInit(t, binary, configFile, vaultPath)
 
 	if got := postInit["suggested_name"]; got != "new-notes" {
 		t.Fatalf("suggested_name = %#v, want %q", got, "new-notes")
@@ -52,7 +51,7 @@ func TestIntegration_InitFirstVaultAutoRegisters(t *testing.T) {
 	}
 
 	// The new vault now resolves via active_vault without any explicit flag.
-	current := runVaultCurrent(t, binary, configFile, stateFile)
+	current := runVaultCurrent(t, binary, configFile)
 	if got := current["name"]; got != "new-notes" {
 		t.Fatalf("vault current name = %#v, want %q", got, "new-notes")
 	}
@@ -66,17 +65,16 @@ func TestIntegration_InitSecondVaultRegistersAndActivates(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	root := t.TempDir()
 	configFile := filepath.Join(root, "config.toml")
-	stateFile := filepath.Join(root, "state.toml")
 
 	firstPath := filepath.Join(root, "first")
 	secondPath := filepath.Join(root, "second")
 
 	// The first vault becomes the machine default + active vault.
-	first := runInitPostInit(t, binary, configFile, stateFile, firstPath)
+	first := runInitPostInit(t, binary, configFile, firstPath)
 	mustPostInitBool(t, first, "is_first_vault", true)
 
 	// The second vault is registered and becomes active; the default stays first.
-	second := runInitPostInit(t, binary, configFile, stateFile, secondPath)
+	second := runInitPostInit(t, binary, configFile, secondPath)
 	if got := second["registered_name"]; got != "second" {
 		t.Fatalf("registered_name = %#v, want %q", got, "second")
 	}
@@ -112,7 +110,7 @@ func TestIntegration_InitSecondVaultRegistersAndActivates(t *testing.T) {
 	}
 
 	// Ambient routing now points at the newly initialized vault.
-	current := runVaultCurrent(t, binary, configFile, stateFile)
+	current := runVaultCurrent(t, binary, configFile)
 	if got := current["name"]; got != "second" {
 		t.Fatalf("vault current name = %#v, want %q", got, "second")
 	}
@@ -123,13 +121,12 @@ func TestIntegration_InitSecondVaultHumanOutputDisclosesSwitch(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	root := t.TempDir()
 	configFile := filepath.Join(root, "config.toml")
-	stateFile := filepath.Join(root, "state.toml")
 	firstPath := filepath.Join(root, "first")
 	secondPath := filepath.Join(root, "second")
 
-	runInitPostInit(t, binary, configFile, stateFile, firstPath)
+	runInitPostInit(t, binary, configFile, firstPath)
 
-	cmd := exec.Command(binary, "--config", configFile, "--state", stateFile, "init", secondPath)
+	cmd := exec.Command(binary, "--config", configFile, "init", secondPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("human init failed: %v\n%s", err, output)
@@ -152,12 +149,11 @@ func TestIntegration_InitSecondVaultRoutesAmbientWritesToNewActiveVault(t *testi
 	binary := testutil.BuildCLI(t)
 	root := t.TempDir()
 	configFile := filepath.Join(root, "config.toml")
-	stateFile := filepath.Join(root, "state.toml")
 	firstPath := filepath.Join(root, "first")
 	secondPath := filepath.Join(root, "second")
 
-	runInitPostInit(t, binary, configFile, stateFile, firstPath)
-	second := runInitPostInit(t, binary, configFile, stateFile, secondPath)
+	runInitPostInit(t, binary, configFile, firstPath)
+	second := runInitPostInit(t, binary, configFile, secondPath)
 	if got := second["switch_back"]; got != `rvn --json vault use -- 'first'` {
 		t.Fatalf("switch_back = %#v, want exact restore command", got)
 	}
@@ -165,7 +161,6 @@ func TestIntegration_InitSecondVaultRoutesAmbientWritesToNewActiveVault(t *testi
 	ambient := exec.Command(
 		binary,
 		"--config", configFile,
-		"--state", stateFile,
 		"--json",
 		"schema", "add", "type", "ambient-second", "--name-field", "title",
 	)
@@ -191,7 +186,6 @@ func TestIntegration_InitSecondVaultRoutesAmbientWritesToNewActiveVault(t *testi
 	explicit := exec.Command(
 		binary,
 		"--config", configFile,
-		"--state", stateFile,
 		"--vault", "second",
 		"--json",
 		"schema", "add", "type", "explicit-second", "--name-field", "title",
@@ -208,14 +202,13 @@ func TestIntegration_InitSecondVaultRoutesAmbientWritesToNewActiveVault(t *testi
 		t.Fatalf("explicit write did not reach second vault:\n%s", secondSchema)
 	}
 
-	use := exec.Command(binary, "--config", configFile, "--state", stateFile, "--json", "vault", "use", "--", "first")
+	use := exec.Command(binary, "--config", configFile, "--json", "vault", "use", "--", "first")
 	if useOutput, useErr := use.CombinedOutput(); useErr != nil {
 		t.Fatalf("switch back to first vault: %v\n%s", useErr, useOutput)
 	}
 	afterUse := exec.Command(
 		binary,
 		"--config", configFile,
-		"--state", stateFile,
 		"--json",
 		"schema", "add", "type", "restored-first", "--name-field", "title",
 	)
@@ -231,9 +224,9 @@ func TestIntegration_InitSecondVaultRoutesAmbientWritesToNewActiveVault(t *testi
 	}
 }
 
-func runInitPostInit(t *testing.T, binary, configFile, stateFile, vaultPath string) map[string]interface{} {
+func runInitPostInit(t *testing.T, binary, configFile, vaultPath string) map[string]interface{} {
 	t.Helper()
-	cmd := exec.Command(binary, "--config", configFile, "--state", stateFile, "--json", "init", vaultPath)
+	cmd := exec.Command(binary, "--config", configFile, "--json", "init", vaultPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("init failed: %v\n%s", err, output)
@@ -256,9 +249,9 @@ func runInitPostInit(t *testing.T, binary, configFile, stateFile, vaultPath stri
 	return postInit
 }
 
-func runVaultCurrent(t *testing.T, binary, configFile, stateFile string) map[string]interface{} {
+func runVaultCurrent(t *testing.T, binary, configFile string) map[string]interface{} {
 	t.Helper()
-	cmd := exec.Command(binary, "--config", configFile, "--state", stateFile, "--json", "vault", "current")
+	cmd := exec.Command(binary, "--config", configFile, "--json", "vault", "current")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("vault current failed: %v\n%s", err, output)

@@ -284,7 +284,7 @@ rvn config show --json
 rvn vault config show --json
 ```
 
-- Global config tracks named vaults, default vault, editor, UI, and state file location.
+- Global config tracks named vaults, default vault, editor, and Markdown style; `state.toml` always lives beside `config.toml`.
 - Vault-local config in `raven.yaml` controls directories, capture settings, auto-reindex, deletion policy, protected prefixes, and exclude patterns.
 
 ## Handoff checklist

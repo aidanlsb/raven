@@ -33,11 +33,14 @@ func TestHandleConfigShowReturnsEffectiveDefaults(t *testing.T) {
 	if !ok || uiData["markdown_style"] != "auto" || len(uiData) != 1 {
 		t.Fatalf("ui = %#v, want only markdown_style=auto", data["ui"])
 	}
-	if data["state_file"] != filepath.Join(filepath.Dir(configPath), "state.toml") {
-		t.Fatalf("state_file = %#v, want resolved sibling state.toml", data["state_file"])
+	if data["state_path"] != filepath.Join(filepath.Dir(configPath), "state.toml") {
+		t.Fatalf("state_path = %#v, want resolved sibling state.toml", data["state_path"])
 	}
 	if _, exists := data["vault"]; exists {
 		t.Fatalf("config show exposed removed vault key: %#v", data)
+	}
+	if _, exists := data["state_file"]; exists {
+		t.Fatalf("config show exposed removed state_file key: %#v", data)
 	}
 }
 

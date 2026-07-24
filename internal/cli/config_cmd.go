@@ -47,16 +47,15 @@ func init() {
 func renderConfigShow(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	configFile := stringValue(data["config_path"])
-	stateFile := stringValue(data["state_path"])
+	statePath := stringValue(data["state_path"])
 	if !boolValue(data["exists"]) {
 		fmt.Printf("%s %s\n", ui.Warning("Config file does not exist:"), ui.FilePath(configFile))
 		fmt.Println(ui.Hint("Run 'rvn config init' to create it."))
 	}
 
 	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(configFile))
-	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(stateFile))
+	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(statePath))
 	fmt.Printf("%s %s\n", ui.Hint("default_vault:"), configDisplayValue(data["default_vault"]))
-	fmt.Printf("%s %s\n", ui.Hint("state_file:"), ui.FilePath(stringValue(data["state_file"])))
 	fmt.Printf("%s %s\n", ui.Hint("editor:"), configDisplayValue(data["editor"]))
 	fmt.Printf("%s %s\n", ui.Hint("editor_mode:"), configDisplayValue(data["editor_mode"]))
 	uiConfig, _ := data["ui"].(map[string]interface{})

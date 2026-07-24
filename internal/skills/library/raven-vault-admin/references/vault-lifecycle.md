@@ -47,7 +47,7 @@ rvn config set editor=code editor_mode=auto --json
 rvn config unset editor editor_mode --json
 ```
 
-`rvn config` is machine-level. Use it for editor/Markdown settings and state file location. Manage named vault paths with `rvn vault add/remove`, and set `default_vault` with `rvn vault pin`. Do not use it for vault-local behavior.
+`rvn config` is machine-level. Use it for editor/Markdown settings. Manage named vault paths with `rvn vault add/remove`, and set `default_vault` with `rvn vault pin`. `state.toml` always lives beside `config.toml`. Do not use global config for vault-local behavior.
 
 ## Vault-local config lifecycle
 

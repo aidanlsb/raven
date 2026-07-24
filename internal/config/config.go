@@ -15,10 +15,6 @@ type Config struct {
 	// DefaultVault is the name of the default vault (from Vaults map).
 	DefaultVault string `toml:"default_vault"`
 
-	// StateFile is an optional path to state.toml.
-	// If relative, it's resolved relative to config.toml's directory.
-	StateFile string `toml:"state_file"`
-
 	// Vaults is a map of vault names to paths.
 	Vaults map[string]string `toml:"vaults"`
 
@@ -172,9 +168,6 @@ func CreateDefaultAt(path string) (string, error) {
 # Default vault name (must exist in [vaults] below).
 # Set this with: rvn vault pin <name>
 # default_vault = "personal"
-
-# Optional state file location (default: sibling state.toml next to config.toml)
-# state_file = "state.toml"
 
 # Named vaults
 # [vaults]

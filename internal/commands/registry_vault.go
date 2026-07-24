@@ -8,7 +8,7 @@ var vaultRegistry = map[string]Meta{
 		LongDesc: `Manage global Raven config.toml settings.
 
 Use this command group to initialize, inspect, and edit machine-level configuration
-such as editor settings, state file location, and Markdown rendering style.
+such as editor settings and Markdown rendering style.
 Use 'rvn vault pin <name>' to set default_vault.`,
 		Examples: []string{
 			"rvn config --json",
@@ -30,9 +30,8 @@ Use 'rvn vault pin <name>' to set default_vault.`,
 		LongDesc: `Show the full effective global configuration.
 
 Defaults are resolved in the output: editor_mode and ui.markdown_style are
-"auto" when unset, editor reflects $EDITOR when no editor is configured, and
-state_file is shown as its resolved path. Removed legacy theming and MCP keys
-are not included.`,
+"auto" when unset, and editor reflects $EDITOR when no editor is configured.
+Removed legacy keys are not included.`,
 		Examples: []string{
 			"rvn config show --json",
 		},
@@ -56,7 +55,7 @@ If the file already exists, no changes are made.`,
 		VaultScope:  VaultScopeNone,
 		LongDesc: `Set one or more global config fields using dotted TOML key=value syntax.
 
-Valid keys are editor, editor_mode, state_file, and ui.markdown_style.
+Valid keys are editor, editor_mode, and ui.markdown_style.
 Use 'config unset <key>...' to clear fields.
 Set default_vault only with 'rvn vault pin <name>'.
 Manage vault paths with 'rvn vault add/remove'.`,
@@ -66,13 +65,11 @@ Manage vault paths with 'rvn vault add/remove'.`,
 		Examples: []string{
 			"rvn config set editor=code --json",
 			"rvn config set editor_mode=terminal --json",
-			"rvn config set state_file=state.toml --json",
 			"rvn config set ui.markdown_style=dark --json",
 			"rvn config set editor=nvim editor_mode=terminal ui.markdown_style=auto --json",
 		},
 		UseCases: []string{
 			"Configure global editor behavior",
-			"Set the resolved state file location",
 			"Select a Glamour built-in or custom Markdown style",
 		},
 	},
@@ -83,8 +80,8 @@ Manage vault paths with 'rvn vault add/remove'.`,
 		VaultScope:  VaultScopeNone,
 		LongDesc: `Clear one or more global config fields using dotted config.toml keys.
 
-Valid keys are default_vault, editor, editor_mode, state_file, and
-ui.markdown_style. Clearing default_vault is supported here; set it with
+Valid keys are default_vault, editor, editor_mode, and ui.markdown_style.
+Clearing default_vault is supported here; set it with
 'rvn vault pin <name>'.`,
 		Args: []ArgMeta{
 			{Name: "keys", Description: "Dotted config.toml keys to clear", Required: true, Variadic: true, Examples: []string{"editor", "default_vault", "ui.markdown_style"}},

@@ -22,11 +22,6 @@ func (s *Server) directConfigContextOptions() configsvc.ContextOptions {
 			i++
 		case strings.HasPrefix(arg, "--config="):
 			opts.ConfigPathOverride = strings.TrimSpace(strings.TrimPrefix(arg, "--config="))
-		case arg == "--state" && i+1 < len(s.baseArgs):
-			opts.StatePathOverride = strings.TrimSpace(s.baseArgs[i+1])
-			i++
-		case strings.HasPrefix(arg, "--state="):
-			opts.StatePathOverride = strings.TrimSpace(strings.TrimPrefix(arg, "--state="))
 		}
 	}
 	return opts

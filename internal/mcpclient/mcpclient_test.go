@@ -53,7 +53,7 @@ func TestConfigPath(t *testing.T) {
 
 func TestBuildServerEntry(t *testing.T) {
 	t.Run("no vault", func(t *testing.T) {
-		e := BuildServerEntry("", "", "", "")
+		e := BuildServerEntry("", "", "")
 		if e.Command == "" {
 			t.Fatal("expected non-empty command")
 		}
@@ -63,29 +63,29 @@ func TestBuildServerEntry(t *testing.T) {
 	})
 
 	t.Run("vault name", func(t *testing.T) {
-		e := BuildServerEntry("", "", "work", "")
+		e := BuildServerEntry("", "work", "")
 		if len(e.Args) != 3 || e.Args[1] != "--vault" || e.Args[2] != "work" {
 			t.Fatalf("expected [serve --vault work], got %v", e.Args)
 		}
 	})
 
 	t.Run("vault path", func(t *testing.T) {
-		e := BuildServerEntry("", "", "", "/my/vault")
+		e := BuildServerEntry("", "", "/my/vault")
 		if len(e.Args) != 3 || e.Args[1] != "--vault-path" || e.Args[2] != "/my/vault" {
 			t.Fatalf("expected [serve --vault-path /my/vault], got %v", e.Args)
 		}
 	})
 
 	t.Run("vault path takes precedence", func(t *testing.T) {
-		e := BuildServerEntry("", "", "work", "/my/vault")
+		e := BuildServerEntry("", "work", "/my/vault")
 		if len(e.Args) != 3 || e.Args[1] != "--vault-path" {
 			t.Fatalf("expected vault-path to take precedence, got %v", e.Args)
 		}
 	})
 
-	t.Run("config and state", func(t *testing.T) {
-		e := BuildServerEntry("/tmp/config.toml", "/tmp/state.toml", "", "")
-		want := []string{"serve", "--config", "/tmp/config.toml", "--state", "/tmp/state.toml"}
+	t.Run("config", func(t *testing.T) {
+		e := BuildServerEntry("/tmp/config.toml", "", "")
+		want := []string{"serve", "--config", "/tmp/config.toml"}
 		if len(e.Args) != len(want) {
 			t.Fatalf("expected %v, got %v", want, e.Args)
 		}
@@ -156,7 +156,7 @@ func TestInstallFreshFile(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.json")
 
-	entry := BuildServerEntry("", "", "", "")
+	entry := BuildServerEntry("", "", "")
 	result, err := Install(ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatal(err)
@@ -188,7 +188,7 @@ func TestInstallPreservesExistingKeys(t *testing.T) {
 	}
 	writeJSON(t, cfgPath, initial)
 
-	entry := BuildServerEntry("", "", "", "")
+	entry := BuildServerEntry("", "", "")
 	result, err := Install(ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatal(err)
@@ -214,7 +214,7 @@ func TestInstallIdempotent(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.json")
 
-	entry := BuildServerEntry("", "", "", "")
+	entry := BuildServerEntry("", "", "")
 	if _, err := Install(ClaudeCode, cfgPath, entry); err != nil {
 		t.Fatal(err)
 	}
@@ -232,12 +232,12 @@ func TestInstallUpdate(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.json")
 
-	entry1 := BuildServerEntry("", "", "", "")
+	entry1 := BuildServerEntry("", "", "")
 	if _, err := Install(ClaudeCode, cfgPath, entry1); err != nil {
 		t.Fatal(err)
 	}
 
-	entry2 := BuildServerEntry("", "", "work", "")
+	entry2 := BuildServerEntry("", "work", "")
 	result, err := Install(ClaudeCode, cfgPath, entry2)
 	if err != nil {
 		t.Fatal(err)
@@ -259,7 +259,7 @@ func TestInstallCreatesParentDirs(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "deep", "nested", "config.json")
 
-	entry := BuildServerEntry("", "", "", "")
+	entry := BuildServerEntry("", "", "")
 	result, err := Install(ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatal(err)
@@ -277,7 +277,7 @@ func TestRemove(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.json")
 
-	entry := BuildServerEntry("", "", "", "")
+	entry := BuildServerEntry("", "", "")
 	if _, err := Install(ClaudeCode, cfgPath, entry); err != nil {
 		t.Fatal(err)
 	}
@@ -383,7 +383,7 @@ func TestStatusInstalled(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.json")
 
-	entry := BuildServerEntry("", "", "work", "")
+	entry := BuildServerEntry("", "work", "")
 	if _, err := Install(ClaudeCode, cfgPath, entry); err != nil {
 		t.Fatal(err)
 	}
@@ -428,7 +428,7 @@ func TestInstallTOMLFreshFile(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 
-	entry := BuildServerEntry("", "", "", "")
+	entry := BuildServerEntry("", "", "")
 	result, err := Install(Codex, cfgPath, entry)
 	if err != nil {
 		t.Fatal(err)
@@ -470,7 +470,7 @@ func TestInstallTOMLPreservesExistingConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entry := BuildServerEntry("", "", "work", "")
+	entry := BuildServerEntry("", "work", "")
 	result, err := Install(Codex, cfgPath, entry)
 	if err != nil {
 		t.Fatal(err)
@@ -499,12 +499,12 @@ func TestInstallTOMLUpdate(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 
-	entry1 := BuildServerEntry("", "", "", "")
+	entry1 := BuildServerEntry("", "", "")
 	if _, err := Install(Codex, cfgPath, entry1); err != nil {
 		t.Fatal(err)
 	}
 
-	entry2 := BuildServerEntry("", "", "work", "")
+	entry2 := BuildServerEntry("", "work", "")
 	result, err := Install(Codex, cfgPath, entry2)
 	if err != nil {
 		t.Fatal(err)

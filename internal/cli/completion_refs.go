@@ -178,7 +178,6 @@ func completionVaultPath(cmd *cobra.Command) string {
 	}
 
 	cfgPath := strings.TrimSpace(getFlagString(cmd, "config"))
-	statePath := strings.TrimSpace(getFlagString(cmd, "state"))
 	namedVault := strings.TrimSpace(getFlagString(cmd, "vault"))
 
 	resolvedConfigPath := config.ResolveConfigPath(cfgPath)
@@ -204,7 +203,7 @@ func completionVaultPath(cmd *cobra.Command) string {
 		return ""
 	}
 
-	resolvedStatePath := config.ResolveStatePath(statePath, resolvedConfigPath, cfg)
+	resolvedStatePath := config.ResolveStatePath("", resolvedConfigPath)
 	state, err := config.LoadState(resolvedStatePath)
 	if err == nil {
 		activeVaultName := strings.TrimSpace(state.ActiveVault)

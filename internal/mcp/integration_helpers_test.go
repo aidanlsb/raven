@@ -195,7 +195,7 @@ func seedGlobalDocsConfig(t *testing.T, files map[string]string) string {
 }
 
 func baseArgsForConfig(configPath string) []string {
-	return []string{"--config", configPath, "--state", filepath.Join(filepath.Dir(configPath), "state.toml")}
+	return []string{"--config", configPath}
 }
 
 func runCLIWithConfig(t *testing.T, binary, configPath string, args ...string) *testutil.CLIResult {

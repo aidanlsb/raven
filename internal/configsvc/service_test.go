@@ -103,7 +103,6 @@ func TestSetAndUnsetGlobalFields(t *testing.T) {
 		Settings: []string{
 			"editor= code --wait ",
 			"editor_mode= GUI ",
-			"state_file=runtime/state.toml",
 			"ui.markdown_style= dark ",
 		},
 	})
@@ -113,7 +112,6 @@ func TestSetAndUnsetGlobalFields(t *testing.T) {
 	wantSetChanged := []string{
 		"editor",
 		"editor_mode",
-		"state_file",
 		"ui.markdown_style",
 	}
 	if !reflect.DeepEqual(result.Changed, wantSetChanged) {
@@ -127,7 +125,7 @@ func TestSetAndUnsetGlobalFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load set config: %v", err)
 	}
-	if loaded.Editor != "code --wait" || loaded.EditorMode != "gui" || loaded.StateFile != "runtime/state.toml" || loaded.DefaultVault != "personal" {
+	if loaded.Editor != "code --wait" || loaded.EditorMode != "gui" || loaded.DefaultVault != "personal" {
 		t.Fatalf("set global fields = %#v", loaded)
 	}
 	if loaded.UI.MarkdownStyle != "dark" {
@@ -136,12 +134,12 @@ func TestSetAndUnsetGlobalFields(t *testing.T) {
 
 	unset, err := Unset(UnsetRequest{
 		ContextOptions: ContextOptions{ConfigPathOverride: configPath, StatePathOverride: statePath},
-		Keys:           []string{"editor", "editor_mode", "state_file", "default_vault", "ui.markdown_style"},
+		Keys:           []string{"editor", "editor_mode", "default_vault", "ui.markdown_style"},
 	})
 	if err != nil {
 		t.Fatalf("Unset() error = %v", err)
 	}
-	wantUnsetChanged := []string{"editor", "editor_mode", "state_file", "default_vault", "ui.markdown_style"}
+	wantUnsetChanged := []string{"editor", "editor_mode", "default_vault", "ui.markdown_style"}
 	if !reflect.DeepEqual(unset.Changed, wantUnsetChanged) {
 		t.Fatalf("Unset() Changed = %#v, want %#v", unset.Changed, wantUnsetChanged)
 	}
@@ -150,7 +148,7 @@ func TestSetAndUnsetGlobalFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load unset config: %v", err)
 	}
-	if loaded.Editor != "" || loaded.EditorMode != "" || loaded.StateFile != "" || loaded.DefaultVault != "" || loaded.UI != (config.UIConfig{}) {
+	if loaded.Editor != "" || loaded.EditorMode != "" || loaded.DefaultVault != "" || loaded.UI != (config.UIConfig{}) {
 		t.Fatalf("Unset() persisted uncleared values: %#v", loaded)
 	}
 }
@@ -178,11 +176,6 @@ func TestSetValidatesSettings(t *testing.T) {
 			code:     CodeInvalidInput,
 		},
 		{
-			name:     "empty state file",
-			settings: []string{"state_file="},
-			code:     CodeInvalidInput,
-		},
-		{
 			name:     "default vault must use pin",
 			settings: []string{"default_vault=personal"},
 			code:     CodeInvalidInput,
@@ -200,6 +193,11 @@ func TestSetValidatesSettings(t *testing.T) {
 		{
 			name:     "removed single path key",
 			settings: []string{"vault=/path/to/notes"},
+			code:     CodeInvalidInput,
+		},
+		{
+			name:     "removed state file key",
+			settings: []string{"state_file=runtime/state.toml"},
 			code:     CodeInvalidInput,
 		},
 		{
@@ -264,6 +262,12 @@ func TestUnsetValidatesSelectionAndConfigPresence(t *testing.T) {
 			request:    UnsetRequest{Keys: []string{"editor"}},
 			code:       CodeFileNotFound,
 		},
+		{
+			name:       "removed state file key",
+			createFile: true,
+			request:    UnsetRequest{Keys: []string{"state_file"}},
+			code:       CodeInvalidInput,
+		},
 	}
 
 	for _, tt := range tests {
@@ -299,8 +303,11 @@ func TestConfigPathOverrides(t *testing.T) {
 		t.Fatalf("ShowContext() = %#v, want missing override paths", ctx)
 	}
 	data := ctx.Data()
-	if data["editor_mode"] != "auto" || data["state_file"] != statePath {
+	if data["editor_mode"] != "auto" || data["state_path"] != statePath {
 		t.Fatalf("ShowContext().Data() defaults = %#v", data)
+	}
+	if _, exists := data["state_file"]; exists {
+		t.Fatalf("ShowContext().Data() exposed removed state_file: %#v", data)
 	}
 	uiData, ok := data["ui"].(map[string]interface{})
 	if !ok || uiData["markdown_style"] != "auto" || len(uiData) != 1 {

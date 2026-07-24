@@ -62,7 +62,6 @@ func (ctx *GlobalConfigContext) Data() map[string]interface{} {
 		"state_path":    ctx.StatePath,
 		"exists":        ctx.ConfigExists,
 		"default_vault": DefaultVaultName(ctx.Cfg),
-		"state_file":    ctx.StatePath,
 		"vaults":        vaults,
 		"editor":        strings.TrimSpace(ctx.Cfg.GetEditor()),
 		"editor_mode":   effectiveValue(ctx.Cfg.EditorMode, "auto"),
@@ -167,11 +166,6 @@ func Set(req SetRequest) (*SetResult, error) {
 				return nil, newError(CodeInvalidInput, "editor_mode must be one of: auto, terminal, gui", nil)
 			}
 			ctx.Cfg.EditorMode = mode
-		case "state_file":
-			if value == "" {
-				return nil, emptySetValueError(key)
-			}
-			ctx.Cfg.StateFile = value
 		case "ui.markdown_style":
 			if value == "" {
 				return nil, emptySetValueError(key)
@@ -191,7 +185,7 @@ func Set(req SetRequest) (*SetResult, error) {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
 	ctx.ConfigExists = true
-	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath, ctx.Cfg)
+	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath)
 
 	return &SetResult{
 		Context: ctx,
@@ -199,9 +193,9 @@ func Set(req SetRequest) (*SetResult, error) {
 	}, nil
 }
 
-var validSetKeys = []string{"editor", "editor_mode", "state_file", "ui.markdown_style"}
+var validSetKeys = []string{"editor", "editor_mode", "ui.markdown_style"}
 
-var validUnsetKeys = []string{"default_vault", "editor", "editor_mode", "state_file", "ui.markdown_style"}
+var validUnsetKeys = []string{"default_vault", "editor", "editor_mode", "ui.markdown_style"}
 
 func emptySetValueError(key string) *svcerr.Error {
 	return newError(CodeInvalidInput, fmt.Sprintf("%s cannot be empty; use 'rvn config unset %s' to clear it", key, key), nil)
@@ -251,8 +245,6 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 			ctx.Cfg.Editor = ""
 		case "editor_mode":
 			ctx.Cfg.EditorMode = ""
-		case "state_file":
-			ctx.Cfg.StateFile = ""
 		case "default_vault":
 			ctx.Cfg.DefaultVault = ""
 		case "ui.markdown_style":
@@ -266,7 +258,7 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
-	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath, ctx.Cfg)
+	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath)
 
 	return &UnsetResult{
 		Context: ctx,
@@ -325,7 +317,7 @@ func LoadVaultContext(opts ContextOptions) (*VaultContext, error) {
 		loadedCfg = &config.Config{}
 	}
 
-	resolvedStatePath := config.ResolveStatePath(opts.StatePathOverride, resolvedConfigPath, loadedCfg)
+	resolvedStatePath := config.ResolveStatePath(opts.StatePathOverride, resolvedConfigPath)
 	state, err := config.LoadState(resolvedStatePath)
 	if err != nil {
 		return &VaultContext{
@@ -761,7 +753,7 @@ func loadGlobalConfigAllowMissing(opts ContextOptions) (*GlobalConfigContext, er
 		return &GlobalConfigContext{
 			Cfg:          loadedCfg,
 			ConfigPath:   resolvedPath,
-			StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath, loadedCfg),
+			StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath),
 			ConfigExists: statErr == nil,
 		}, nil
 	}
@@ -773,7 +765,7 @@ func loadGlobalConfigAllowMissing(opts ContextOptions) (*GlobalConfigContext, er
 			return &GlobalConfigContext{
 				Cfg:          loadedCfg,
 				ConfigPath:   resolvedPath,
-				StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath, loadedCfg),
+				StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath),
 				ConfigExists: false,
 			}, nil
 		}
@@ -791,7 +783,7 @@ func loadGlobalConfigAllowMissing(opts ContextOptions) (*GlobalConfigContext, er
 	return &GlobalConfigContext{
 		Cfg:          loadedCfg,
 		ConfigPath:   resolvedPath,
-		StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath, loadedCfg),
+		StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath),
 		ConfigExists: true,
 	}, nil
 }

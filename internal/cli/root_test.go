@@ -9,6 +9,18 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
+func TestStatePathOverrideIsNotUserFacing(t *testing.T) {
+	if flag := rootCmd.PersistentFlags().Lookup("state"); flag != nil {
+		t.Fatal("root command unexpectedly exposes --state")
+	}
+	if flag := mcpInstallCmd.Flags().Lookup("state"); flag != nil {
+		t.Fatal("mcp install unexpectedly exposes --state")
+	}
+	if flag := mcpShowCmd.Flags().Lookup("state"); flag != nil {
+		t.Fatal("mcp show unexpectedly exposes --state")
+	}
+}
+
 func TestPersistentPreRunEAppliesMarkdownStyleForNonVaultCommands(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 

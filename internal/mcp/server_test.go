@@ -319,7 +319,7 @@ func TestResourcesReadSavedQueriesUsesNamedVaultOverrideAgainstPinnedVault(t *te
 
 	s := &Server{
 		vaultPath: pinnedVault,
-		baseArgs:  []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+		baseArgs:  []string{"--config", configPath},
 	}
 	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
 		"uri":   "raven://queries/saved",
@@ -502,7 +502,7 @@ func TestResourcesReadRejectsAmbientFallback(t *testing.T) {
 	}
 
 	s := &Server{
-		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+		baseArgs: []string{"--config", configPath},
 	}
 	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
 		"uri": "raven://schema/current",
@@ -712,7 +712,7 @@ work = %q
 	}
 
 	s := &Server{
-		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml"), "--vault", "work"},
+		baseArgs: []string{"--config", configPath, "--vault", "work"},
 	}
 
 	got, err := s.resolveVaultPath()
@@ -757,7 +757,7 @@ work = %q
 	}
 
 	s := &Server{
-		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+		baseArgs: []string{"--config", configPath},
 	}
 
 	res, err := s.resolveVaultForInvocation("work", "")
@@ -822,7 +822,7 @@ func TestResolveVaultForInvocationRejectsAmbientFallback(t *testing.T) {
 	}
 
 	s := &Server{
-		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+		baseArgs: []string{"--config", configPath},
 	}
 
 	_, err := s.resolveVaultForInvocation("", "")

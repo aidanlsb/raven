@@ -279,7 +279,7 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 		suggestedName: suggestedName,
 		configPath:    config.ResolveConfigPath(configPathOverride),
 	}
-	state.statePath = config.ResolveStatePath(statePathOverride, state.configPath, &config.Config{})
+	state.statePath = config.ResolveStatePath(statePathOverride, state.configPath)
 
 	opts := configsvc.ContextOptions{
 		ConfigPathOverride: configPathOverride,

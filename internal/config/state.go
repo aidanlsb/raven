@@ -40,11 +40,9 @@ func ResolveGlobalDir(explicitConfigPath string) string {
 	return dir
 }
 
-// ResolveStatePath resolves the state.toml path with precedence:
-//  1. explicitStatePath flag
-//  2. cfg.StateFile from config.toml (relative to config file dir when not absolute)
-//  3. sibling state.toml next to config.toml
-func ResolveStatePath(explicitStatePath, configPath string, cfg *Config) string {
+// ResolveStatePath returns the state.toml sibling of config.toml. The explicit
+// override is retained for internal callers and test isolation only.
+func ResolveStatePath(explicitStatePath, configPath string) string {
 	if strings.TrimSpace(explicitStatePath) != "" {
 		return explicitStatePath
 	}
@@ -52,24 +50,7 @@ func ResolveStatePath(explicitStatePath, configPath string, cfg *Config) string 
 	resolvedConfigPath := ResolveConfigPath(configPath)
 	configDir := filepath.Dir(resolvedConfigPath)
 
-	if cfg != nil {
-		if fromConfig := strings.TrimSpace(cfg.StateFile); fromConfig != "" {
-			if isAbsoluteStatePath(fromConfig) {
-				return filepath.Clean(filepath.FromSlash(fromConfig))
-			}
-			return filepath.Join(configDir, filepath.FromSlash(fromConfig))
-		}
-	}
-
 	return filepath.Join(configDir, "state.toml")
-}
-
-func isAbsoluteStatePath(p string) bool {
-	if filepath.IsAbs(p) {
-		return true
-	}
-	// Treat slash-rooted config values as absolute on every OS.
-	return strings.HasPrefix(filepath.ToSlash(strings.TrimSpace(p)), "/")
 }
 
 // LoadState loads state.toml from a specific path.

@@ -11,7 +11,6 @@ func TestSaveToPersistsConfigFields(t *testing.T) {
 
 	cfg := &Config{
 		DefaultVault: "work",
-		StateFile:    "state.toml",
 		Editor:       "code",
 		EditorMode:   "gui",
 		Vaults: map[string]string{
@@ -31,9 +30,6 @@ func TestSaveToPersistsConfigFields(t *testing.T) {
 		t.Fatalf("LoadFrom returned error: %v", err)
 	}
 
-	if loaded.StateFile != "state.toml" {
-		t.Fatalf("expected state_file=state.toml, got %q", loaded.StateFile)
-	}
 	if loaded.Editor != "code" {
 		t.Fatalf("expected editor=code, got %q", loaded.Editor)
 	}

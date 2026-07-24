@@ -20,7 +20,7 @@ var (
 	vaultName     string // Named vault from config
 	vaultPathFlag string // Explicit path (rare)
 	configPath    string
-	statePathFlag string
+	statePathFlag string // Internal/test-only state path override; not exposed as a flag.
 
 	// Resolved values
 	resolvedVaultPath  string
@@ -50,7 +50,7 @@ who gathered knowledge from across the world.`,
 		if cfg == nil {
 			cfg = &config.Config{}
 		}
-		resolvedStatePath = config.ResolveStatePath(statePathFlag, resolvedConfigPath, cfg)
+		resolvedStatePath = config.ResolveStatePath(statePathFlag, resolvedConfigPath)
 		ui.ConfigureStyles()
 		ui.ConfigureMarkdownStyle(cfg.UI.MarkdownStyle)
 
@@ -160,7 +160,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&vaultName, "vault", "v", "", "Named vault from config")
 	rootCmd.PersistentFlags().StringVar(&vaultPathFlag, "vault-path", "", "Explicit path to vault directory")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to config file")
-	rootCmd.PersistentFlags().StringVar(&statePathFlag, "state", "", "Path to state file (overrides state_file in config)")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format (for agent/script use)")
 }
 

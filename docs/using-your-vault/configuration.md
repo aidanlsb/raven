@@ -32,7 +32,6 @@ Rule of thumb:
 ```toml
 # Managed by: rvn vault pin work
 default_vault = "work"
-state_file = "state.toml"
 editor = "cursor"
 editor_mode = "auto"
 
@@ -49,7 +48,6 @@ markdown_style = "auto"
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
 | `default_vault` | string | none | Name from `[vaults]` used as fallback when no explicit vault is provided |
-| `state_file` | string | `state.toml` next to `config.toml` | Relative paths are resolved relative to the config directory |
 | `editor` | string | `$EDITOR` | Used by commands that open files |
 | `editor_mode` | string | `auto` behavior in caller logic | One of `auto`, `terminal`, `gui` |
 | `[vaults]` | table | empty | Name -> absolute path mapping |
@@ -99,15 +97,16 @@ migrates the path in memory to a real `vaults.default` entry and sets
 the canonical registry and removes the old key. If `[vaults]` already contains
 entries, Raven ignores the stale key and removes it on the next save.
 
-### Path resolution and overrides
+Old configs may also contain `state_file`. Raven ignores that key;
+`state.toml` always lives beside `config.toml`, and the stale key disappears on
+the next config save.
+
+### Path resolution
 
 - Config path:
   - `--config` flag wins if provided.
   - Otherwise Raven uses its default config location.
-- State path:
-  - `--state` flag wins if provided.
-  - Else `state_file` from `config.toml`.
-  - Else `state.toml` beside `config.toml`.
+- `state.toml` always lives beside the resolved `config.toml`.
 
 ### Vault resolution order at runtime
 
@@ -142,8 +141,7 @@ rvn vault remove personal --clear-default --clear-active --json
 
 Use dotted `config.toml` keys with `rvn config set key=value` and
 `rvn config unset key`. Multiple settings can be changed in one invocation.
-The supported set keys are `editor`, `editor_mode`, `state_file`, and
-`ui.markdown_style`.
+The supported set keys are `editor`, `editor_mode`, and `ui.markdown_style`.
 
 ```bash
 rvn config init --json
@@ -155,8 +153,8 @@ rvn config unset editor ui.markdown_style --json
 
 `rvn config show` returns resolved/effective values in both human and JSON
 output. In particular, unset `editor_mode` and `ui.markdown_style` appear as
-`auto`, `editor` falls back to `$EDITOR`, and `state_file` is shown as its
-resolved path.
+`auto`, `editor` falls back to `$EDITOR`, and `state_path` shows the fixed
+`state.toml` sibling path.
 
 ---
 

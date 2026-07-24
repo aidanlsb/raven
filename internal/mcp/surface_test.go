@@ -356,7 +356,7 @@ func TestCompactInvokeUsesWrapperVaultNameOverride(t *testing.T) {
 		t.Fatalf("write state: %v", err)
 	}
 
-	server := NewServerWithBaseArgs([]string{"--config", configPath, "--state", statePath})
+	server := NewServerWithBaseArgs([]string{"--config", configPath})
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "new",
 		"vault":   "work",
@@ -640,5 +640,5 @@ func newServerWithoutDefaultVault(t *testing.T) *Server {
 		t.Fatalf("write state: %v", err)
 	}
 
-	return NewServerWithBaseArgs([]string{"--config", configPath, "--state", statePath})
+	return NewServerWithBaseArgs([]string{"--config", configPath})
 }
