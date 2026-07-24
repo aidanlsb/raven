@@ -116,7 +116,7 @@ func (c ChangeSet) RemovedPaths() []string {
 
 func normalizedPath(filePath string) string {
 	filePath = strings.TrimSpace(filePath)
-	if filepath.IsAbs(filePath) {
+	if isAbsoluteOrRootedPath(filePath) {
 		return ""
 	}
 	normalized := paths.NormalizeVaultRelPath(filePath)
@@ -124,6 +124,17 @@ func normalizedPath(filePath string) string {
 		return ""
 	}
 	return normalized
+}
+
+func isAbsoluteOrRootedPath(filePath string) bool {
+	if filepath.IsAbs(filePath) || strings.HasPrefix(filePath, "/") || strings.HasPrefix(filePath, `\`) {
+		return true
+	}
+	return len(filePath) >= 2 && isASCIILetter(filePath[0]) && filePath[1] == ':'
+}
+
+func isASCIILetter(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
 }
 
 func appendUnique(values []string, value string) []string {

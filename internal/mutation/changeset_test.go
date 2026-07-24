@@ -56,12 +56,36 @@ func TestChangeSetIgnoresInvalidPaths(t *testing.T) {
 	t.Parallel()
 
 	changes := NewChangeSet()
-	changes.AddChanged("", ".", "../outside.md", "/absolute.md")
+	changes.AddChanged("", ".", "../outside.md")
 	changes.AddDeleted(" ")
 	changes.AddMoved("valid.md", "../outside.md")
 
 	if !changes.Empty() {
 		t.Fatalf("ChangeSet = %#v, want empty", changes)
+	}
+}
+
+func TestChangeSetRejectsCrossPlatformAbsolutePaths(t *testing.T) {
+	t.Parallel()
+
+	tests := []string{
+		"/absolute.md",
+		`\absolute.md`,
+		`C:\absolute.md`,
+		"C:/absolute.md",
+		`\\server\share\file.md`,
+		"//server/share/file.md",
+	}
+	for _, filePath := range tests {
+		t.Run(filePath, func(t *testing.T) {
+			t.Parallel()
+
+			changes := NewChangeSet()
+			changes.AddChanged(filePath)
+			if !changes.Empty() {
+				t.Fatalf("ChangeSet = %#v, want empty for absolute path %q", changes, filePath)
+			}
+		})
 	}
 }
 
