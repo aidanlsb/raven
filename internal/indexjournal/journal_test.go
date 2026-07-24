@@ -95,6 +95,37 @@ func TestRecoveryDoesNotClearActiveUnknownOperation(t *testing.T) {
 	}
 }
 
+func TestRecoverySnapshotDoesNotClearOperationThatCrashesMidScan(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	operationID, err := Begin(vaultPath)
+	if err != nil {
+		t.Fatalf("Begin() error = %v", err)
+	}
+	duringMutation := loadSnapshot(t, vaultPath)
+	if !duringMutation.Operations[0].Active {
+		t.Fatal("snapshot did not record active operation")
+	}
+	if err := releaseActiveOperation(vaultPath, operationID); err != nil {
+		t.Fatalf("simulate process crash: %v", err)
+	}
+
+	if err := CompleteRecoveredUnknown(vaultPath, duringMutation); err != nil {
+		t.Fatalf("complete overlapping recovery: %v", err)
+	}
+	afterCrash := loadSnapshot(t, vaultPath)
+	if !afterCrash.Dirty() {
+		t.Fatal("overlapping recovery cleared operation that crashed after its scan began")
+	}
+	if err := CompleteRecoveredUnknown(vaultPath, afterCrash); err != nil {
+		t.Fatalf("complete post-crash recovery: %v", err)
+	}
+	if loadSnapshot(t, vaultPath).Dirty() {
+		t.Fatal("post-crash recovery did not clear operation")
+	}
+}
+
 func TestAbandonInvalidatesOverlappingRecoverySnapshot(t *testing.T) {
 	t.Parallel()
 

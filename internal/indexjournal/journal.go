@@ -43,6 +43,9 @@ type Operation struct {
 	Revision uint64   `json:"revision"`
 	Unknown  bool     `json:"unknown,omitempty"`
 	Paths    []string `json:"paths,omitempty"`
+	// Active is snapshot-only state: the originating process held the
+	// operation lock when Load observed this entry.
+	Active bool `json:"-"`
 }
 
 // Snapshot is an immutable view of the pending journal.
@@ -219,8 +222,12 @@ func Abandon(vaultPath, operationID string) error {
 		}
 		return nil
 	})
-	releaseErr := releaseActiveOperation(vaultPath, operationID)
-	return errors.Join(updateErr, releaseErr)
+	if updateErr != nil {
+		// Keep the operation lock held. Releasing an unchanged unknown revision
+		// could let an overlapping older recovery scan clear partial writes.
+		return updateErr
+	}
+	return releaseActiveOperation(vaultPath, operationID)
 }
 
 // CompleteIfUnchanged removes an operation only if it still matches a recovery
@@ -257,7 +264,7 @@ func ClearRecoveredPath(vaultPath string, snapshot Snapshot, relPath string) err
 // supplied snapshot after a successful full scan.
 func CompleteRecoveredUnknown(vaultPath string, snapshot Snapshot) error {
 	for _, operation := range snapshot.Operations {
-		if !operation.Unknown {
+		if !operation.Unknown || operation.Active {
 			continue
 		}
 		if err := completeUnknownIfInactive(vaultPath, operation); err != nil {
@@ -272,9 +279,9 @@ func CompleteRecoveredUnknown(vaultPath string, snapshot Snapshot) error {
 func CompleteRecoveredSnapshot(vaultPath string, snapshot Snapshot) error {
 	for _, operation := range snapshot.Operations {
 		var err error
-		if operation.Unknown {
+		if operation.Unknown && !operation.Active {
 			err = completeUnknownIfInactive(vaultPath, operation)
-		} else {
+		} else if !operation.Unknown {
 			err = CompleteIfUnchanged(vaultPath, operation)
 		}
 		if err != nil {
@@ -295,6 +302,13 @@ func Load(vaultPath string) (Snapshot, error) {
 		snapshot.Operations = make([]Operation, 0, len(journal.Operations))
 		for _, operation := range journal.Operations {
 			operation.Paths = append([]string(nil), operation.Paths...)
+			if operation.Unknown {
+				active, err := operationIsActive(vaultPath, operation.ID)
+				if err != nil {
+					return err
+				}
+				operation.Active = active
+			}
 			snapshot.Operations = append(snapshot.Operations, operation)
 		}
 		sort.Slice(snapshot.Operations, func(i, j int) bool {
@@ -467,6 +481,29 @@ func completeUnknownIfInactive(vaultPath string, operation Operation) error {
 	completeErr := CompleteIfUnchanged(vaultPath, operation)
 	releaseErr := releaseOperationGuard(vaultPath, operation.ID, lockFile)
 	return errors.Join(completeErr, releaseErr)
+}
+
+func operationIsActive(vaultPath, operationID string) (bool, error) {
+	lockDir := filepath.Join(vaultPath, ".raven", operationDir)
+	if err := os.MkdirAll(lockDir, 0o755); err != nil {
+		return false, fmt.Errorf("create index dirty operation lock directory: %w", err)
+	}
+	lockPath := filepath.Join(lockDir, operationID+".lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return false, fmt.Errorf("open index dirty operation lock: %w", err)
+	}
+	if err := filelock.TryLockExclusive(lockFile); err != nil {
+		_ = lockFile.Close()
+		if filelock.IsWouldBlock(err) {
+			return true, nil
+		}
+		return false, fmt.Errorf("inspect index dirty operation lock: %w", err)
+	}
+	if err := releaseOperationGuard(vaultPath, operationID, lockFile); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func releaseActiveOperation(vaultPath, operationID string) error {
