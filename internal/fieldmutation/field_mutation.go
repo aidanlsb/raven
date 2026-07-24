@@ -509,7 +509,7 @@ func validateMergedFields(objectType string, fields map[string]fieldvalue.FieldV
 	}
 	issues = filtered
 	if len(issues) == 0 {
-		issues = validateRefTargets(fields, typeDef.Fields, sch, refCtx)
+		issues = validateRefTargets(fields, typeDef.Fields, refCtx)
 	}
 	if len(issues) == 0 {
 		return nil
@@ -541,7 +541,6 @@ func normalizedUnsetFields(fields []string) []string {
 func validateRefTargets(
 	fields map[string]fieldvalue.FieldValue,
 	fieldDefs map[string]*schema.FieldDefinition,
-	sch *schema.Schema,
 	refCtx *RefValidationContext,
 ) []schema.ValidationError {
 	if refCtx == nil || refCtx.ResolveTargetType == nil {

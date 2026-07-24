@@ -104,17 +104,19 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 			objectType = "page"
 		}
 		refCtx, refCtxErr := createRefValidationContext(rt, objectType, req.ParseOptions)
-		if refCtxErr != nil {
-			return nil, refCtxErr
+		var validatedUpdates map[string]fieldvalue.FieldValue
+		if refCtxErr == nil {
+			validatedUpdates, _, err = fieldmutation.PrepareValidatedFieldMutationValues(
+				objectType,
+				fm.Fields,
+				req.TypedUpdates,
+				req.Schema,
+				map[string]bool{"alias": true},
+				refCtx,
+			)
+		} else {
+			err = refCtxErr
 		}
-		validatedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
-			objectType,
-			fm.Fields,
-			req.TypedUpdates,
-			req.Schema,
-			map[string]bool{"alias": true},
-			refCtx,
-		)
 		if err != nil {
 			var validationErr *fieldmutation.ValidationError
 			if errors.As(err, &validationErr) {

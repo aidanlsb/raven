@@ -331,7 +331,6 @@ func TestPrepareFrontmatterUnset(t *testing.T) {
 func TestValidateRefTargets(t *testing.T) {
 	t.Parallel()
 
-	sch := mutationTestSchema()
 	fieldDefs := map[string]*schema.FieldDefinition{
 		"owner":     {Type: schema.FieldTypeRef, Target: "person"},
 		"attendees": {Type: schema.FieldTypeRefArray, Target: "person"},
@@ -407,7 +406,7 @@ func TestValidateRefTargets(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		issues := validateRefTargets(tt.fields, fieldDefs, sch, tt.context)
+		issues := validateRefTargets(tt.fields, fieldDefs, tt.context)
 		if tt.wantField == "" {
 			if len(issues) != 0 {
 				t.Errorf("%s: issues = %#v, want none", tt.name, issues)
