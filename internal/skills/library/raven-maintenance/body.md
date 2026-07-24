@@ -19,7 +19,7 @@ Use `rvn vault stats --json` for a quick count of indexed files, objects, traits
 `rvn check` validates vault content against the schema. It reports structured issues with suggested fixes.
 
 - Full vault check: `rvn check --json`
-- Check a specific file or directory: `rvn check <path> --json`
+- Check a specific file, directory, or object: `rvn check <reference> --json`
 - Check all objects of a type: `rvn check --type project --json`
 - Check all usages of a trait: `rvn check --trait due --json`
 - Only specific issue types: `rvn check --issues missing_reference,unknown_type --json`

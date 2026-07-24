@@ -106,10 +106,10 @@ old task
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("edit", map[string]interface{}{
-			"path":    "daily/2026-02-15.md",
-			"old_str": "old task",
-			"new_str": "done task",
-			"dry-run": true,
+			"reference": "daily/2026-02-15.md",
+			"old_str":   "old task",
+			"new_str":   "done task",
+			"dry-run":   true,
 		})
 		cliResult := vCLI.RunCLI("edit", "daily/2026-02-15.md", "old task", "done task", "--dry-run")
 
@@ -139,9 +139,9 @@ old task
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("edit", map[string]interface{}{
-			"path":    "daily/2026-02-15.md",
-			"old_str": "old task",
-			"new_str": "done task",
+			"reference": "daily/2026-02-15.md",
+			"old_str":   "old task",
+			"new_str":   "done task",
 		})
 		cliResult := vCLI.RunCLI("edit", "daily/2026-02-15.md", "old task", "done task")
 
@@ -207,7 +207,7 @@ old task
 		vCLI.RunCLI("new", "person", "Parity Set").MustSucceed(t)
 
 		mcpResult := server.callTool("set", map[string]interface{}{
-			"object_id": "people/parity-set",
+			"reference": "people/parity-set",
 			"fields": map[string]interface{}{
 				"email": "set@example.com",
 			},
@@ -229,7 +229,7 @@ old task
 
 		mcpResult := server.callTool("set", map[string]interface{}{
 			"stdin":      true,
-			"object_ids": []interface{}{"people/set-bulk-one", "people/set-bulk-two"},
+			"references": []interface{}{"people/set-bulk-one", "people/set-bulk-two"},
 			"fields": map[string]interface{}{
 				"email": "bulk@example.com",
 			},
@@ -256,7 +256,7 @@ old task
 		mcpResult := server.callTool("set", map[string]interface{}{
 			"stdin":      true,
 			"confirm":    true,
-			"object_ids": []interface{}{"people/set-apply-one", "people/set-apply-two"},
+			"references": []interface{}{"people/set-apply-one", "people/set-apply-two"},
 			"fields": map[string]interface{}{
 				"email": "apply@example.com",
 			},
@@ -386,7 +386,7 @@ type: page
 		vCLI.RunCLI("new", "person", "Parity Delete").MustSucceed(t)
 
 		mcpResult := server.callTool("delete", map[string]interface{}{
-			"object_id": "people/parity-delete",
+			"reference": "people/parity-delete",
 			"confirm":   true,
 		})
 		cliResult := vCLI.RunCLI("delete", "people/parity-delete", "--confirm")
@@ -406,7 +406,7 @@ type: page
 		vCLI.RunCLI("new", "person", "Delete Now").MustSucceed(t)
 
 		mcpResult := server.callTool("delete", map[string]interface{}{
-			"object_id": "people/delete-now",
+			"reference": "people/delete-now",
 		})
 		cliResult := vCLI.RunCLI("delete", "people/delete-now")
 
@@ -433,7 +433,7 @@ type: page
 		vCLI.RunCLI("new", "person", "Delete Dry").MustSucceed(t)
 
 		mcpResult := server.callTool("delete", map[string]interface{}{
-			"object_id": "people/delete-dry",
+			"reference": "people/delete-dry",
 			"dry-run":   true,
 		})
 		cliResult := vCLI.RunCLI("delete", "people/delete-dry", "--dry-run")
@@ -455,7 +455,7 @@ type: page
 
 		mcpResult := server.callTool("delete", map[string]interface{}{
 			"stdin":      true,
-			"object_ids": []interface{}{"people/delete-bulk-one", "people/delete-bulk-two"},
+			"references": []interface{}{"people/delete-bulk-one", "people/delete-bulk-two"},
 		})
 		cliResult := vCLI.RunCLIWithStdin("people/delete-bulk-one\npeople/delete-bulk-two\n", "delete", "--stdin")
 
@@ -479,7 +479,7 @@ type: page
 		mcpResult := server.callTool("delete", map[string]interface{}{
 			"stdin":      true,
 			"confirm":    true,
-			"object_ids": []interface{}{"people/delete-apply-one", "people/delete-apply-two"},
+			"references": []interface{}{"people/delete-apply-one", "people/delete-apply-two"},
 		})
 		cliResult := vCLI.RunCLIWithStdin("people/delete-apply-one\npeople/delete-apply-two\n", "delete", "--stdin", "--confirm")
 

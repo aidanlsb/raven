@@ -31,9 +31,9 @@ unique phrase
 		VaultPath: v.Path,
 		Confirm:   true,
 		Args: map[string]any{
-			"path":    "note/example#target",
-			"old_str": "unique phrase",
-			"new_str": "changed phrase",
+			"reference": "note/example#target",
+			"old_str":   "unique phrase",
+			"new_str":   "changed phrase",
 		},
 	})
 	if !result.OK {
@@ -78,9 +78,9 @@ repeat me
 		VaultPath: v.Path,
 		Confirm:   true,
 		Args: map[string]any{
-			"path":    "note/example#target",
-			"old_str": "repeat me",
-			"new_str": "changed",
+			"reference": "note/example#target",
+			"old_str":   "repeat me",
+			"new_str":   "changed",
 		},
 	})
 	if result.OK {

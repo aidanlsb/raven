@@ -211,7 +211,7 @@ title: Example
 		VaultPath: v.Path,
 		Args: map[string]any{
 			"stdin":      true,
-			"object_ids": []interface{}{"note/example", "note/example#tasks"},
+			"references": []interface{}{"note/example", "note/example#tasks"},
 			"fields":     []string{"title=Renamed"},
 		},
 	})

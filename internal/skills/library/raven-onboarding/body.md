@@ -63,8 +63,8 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
    - Only fall back to a placeholder like "Demo User" if the user truly cannot name anything real yet.
 8. **Teach by doing — against their data.** Keep mechanics attached to their content instead of a separate feature tour.
    - Query what you just seeded: `rvn query 'type:<their type>' --json` and `rvn query 'trait:todo' --json`. Narrate that this is the schema-to-query loop — they wrote Markdown, and Raven made it retrievable by structure.
-   - Show the graph: `rvn backlinks <their object id> --json` (and `rvn outlinks <id> --json`) so they see references without maintaining them by hand.
-   - Contrast the two write homes concretely: update a field with `rvn set <id> status=... --json`; mark a line with a trait via `rvn add "@todo ..." --json`.
+   - Show the graph: `rvn backlinks <reference> --json` (and `rvn outlinks <reference> --json`) so they see references without maintaining them by hand.
+   - Contrast the two write homes concretely: update a field with `rvn set <reference> status=... --json`; mark a line with a trait via `rvn add "@todo ..." --json`.
    - Run `rvn check --json` and explain a clean result (or walk any issues), using `rvn reindex --json` only if the index is stale.
 9. **Handoff.** Close with a short, concrete summary:
    - Which vault is active and where it lives.
@@ -91,7 +91,7 @@ Teach these once, clearly, while proposing the model — not as an abstract lect
 - **Field** = a fact about the **whole object**. Stable, usually one value per object, lives in frontmatter. Examples: a project's `status`, a project's `owner`, a meeting's `date`.
 - **Trait** = a fact about **one line** of prose. Many per object, lives inline in the body, written `@name` or `@name(value)`. Examples: `@todo` on a bullet, `@due(2026-02-01)` on a task.
 - Decision rule: *Is this about the whole file, or about one line among many in it?* Whole file → field. One line → trait.
-- Update a field with `rvn set <id> field=value --json`; add a trait by writing a line with `rvn add "@trait ..." --json`.
+- Update a field with `rvn set <reference> field=value --json`; add a trait by writing a line with `rvn add "@trait ..." --json`.
 - Avoid giving one concept both homes in a starter schema (for example, a `due` **field** *and* a `@due` **trait**). Pick one home per concept so queries stay unambiguous.
 
 ### Keep it small

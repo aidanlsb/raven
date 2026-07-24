@@ -24,9 +24,9 @@ old body
 	result := HandleEdit(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
 		Args: map[string]any{
-			"path":    "note/example",
-			"old_str": "old body",
-			"new_str": "new body",
+			"reference": "note/example",
+			"old_str":   "old body",
+			"new_str":   "new body",
 		},
 	})
 	if !result.OK {
@@ -56,9 +56,9 @@ old body
 		VaultPath: v.Path,
 		Preview:   true,
 		Args: map[string]any{
-			"path":    "note/example",
-			"old_str": "old body",
-			"new_str": "new body",
+			"reference": "note/example",
+			"old_str":   "old body",
+			"new_str":   "new body",
 		},
 	})
 	if !result.OK {

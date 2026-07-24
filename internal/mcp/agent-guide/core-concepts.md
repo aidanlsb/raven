@@ -38,3 +38,22 @@ Assets are scanned from `directories.assets` in `raven.yaml`, not modeled in
 under the configured asset root and link with full Markdown paths such as
 `[PDF](assets/pdfs/file.pdf)`. Use `[[assets/pdfs/file.pdf]]` for a semantic-only
 graph reference.
+
+## Command reference arguments
+
+Commands that target existing vault content use `reference` for one input and
+`references` for bulk input. The shared grammar accepts canonical object IDs,
+vault-relative Markdown paths, section IDs (`object#fragment`), full asset
+paths, aliases, name-field values, and unambiguous short forms. Date-aware
+commands also accept ISO and documented dynamic dates. Agents should pass
+canonical IDs, section IDs, or full asset paths.
+
+Restrictions still apply by command:
+- `resolve` and `open`: objects, sections, or indexed assets.
+- `read`: managed Markdown files or sections.
+- `set`, `unset`, and `reclassify`: file-level typed objects only.
+- `delete`: file-backed objects or assets, never sections.
+- `edit`: managed Markdown files or section subtrees, not config/schema/templates/assets.
+- `check` and `check fix`: file, directory, or object scope; omit `reference` for the whole vault.
+- `backlinks`: objects, sections, or indexed assets.
+- `outlinks`: objects or sections.

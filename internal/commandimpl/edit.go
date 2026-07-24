@@ -32,10 +32,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
 
-	reference := strings.TrimSpace(stringArg(req.Args, "path"))
-	if reference == "" {
-		reference = strings.TrimSpace(stringArg(req.Args, "reference"))
-	}
+	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
 	if reference == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires reference argument", nil, "Usage: rvn edit <reference> <old_str> <new_str> or --edits-json")
 	}

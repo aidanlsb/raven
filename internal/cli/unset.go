@@ -22,7 +22,7 @@ var unsetCmd = newCanonicalLeafCommand("unset", canonicalLeafOptions{
 
 func buildUnsetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	if len(args) < 1 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires object-id", "Usage: rvn unset <object-id> <field>...")
+		return nil, handleErrorMsg(ErrMissingArgument, "requires reference", "Usage: rvn unset <reference> <field>...")
 	}
 
 	fields := append([]string{}, args[1:]...)
@@ -30,11 +30,11 @@ func buildUnsetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, 
 	fields = append(fields, flagFields...)
 	fields = normalizedUnsetCLIFields(fields)
 	if len(fields) == 0 {
-		return nil, handleErrorMsg(ErrMissingArgument, "no fields to unset", "Usage: rvn unset <object-id> <field>...")
+		return nil, handleErrorMsg(ErrMissingArgument, "no fields to unset", "Usage: rvn unset <reference> <field>...")
 	}
 
 	return map[string]interface{}{
-		"object_id": args[0],
+		"reference": args[0],
 		"fields":    stringsToAny(fields),
 	}, nil
 }

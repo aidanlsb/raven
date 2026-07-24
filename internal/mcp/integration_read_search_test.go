@@ -32,7 +32,7 @@ Bob is a developer.
 
 	// Read the object
 	result := server.callTool("read", map[string]interface{}{
-		"path": "people/bob.md",
+		"reference": "people/bob.md",
 	})
 
 	if result.IsError {
@@ -120,7 +120,7 @@ Eve's secret project.
 
 	// Get backlinks for Eve
 	result := server.callTool("backlinks", map[string]interface{}{
-		"target": "people/eve",
+		"reference": "people/eve",
 	})
 
 	if result.IsError {

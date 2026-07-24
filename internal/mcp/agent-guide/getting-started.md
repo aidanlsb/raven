@@ -31,7 +31,7 @@ Use this guide after quickstart when you need an operational first pass through 
 create = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
 notes = raven_invoke(command="section_create", args={"file":create.data.id, "title":"Notes", "level":2})
 raven_invoke(command="add", args={"text":"- Kickoff next week", "to":notes.data.section})
-raven_invoke(command="set", args={"object_id":create.data.id, "fields":{"status":"active"}})
+raven_invoke(command="set", args={"reference":create.data.id, "fields":{"status":"active"}})
 ```
 
 If the output should converge on reruns, prefer:

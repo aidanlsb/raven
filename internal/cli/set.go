@@ -52,12 +52,12 @@ func buildSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 		}
 		ids := append(fileIDs, sectionIDs...)
 		if len(ids) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
+			return nil, handleErrorMsg(ErrMissingArgument, "no references provided via stdin", "Pipe references to stdin, one per line")
 		}
 
 		argsMap := map[string]interface{}{
 			"stdin":      true,
-			"object_ids": stringsToAny(ids),
+			"references": stringsToAny(ids),
 		}
 		if len(updates) > 0 {
 			argsMap["fields"] = stringMapToAny(updates)
@@ -69,10 +69,10 @@ func buildSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 	}
 
 	if len(args) < 1 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires object-id", "Usage: rvn set <object-id> field=value...")
+		return nil, handleErrorMsg(ErrMissingArgument, "requires reference", "Usage: rvn set <reference> field=value...")
 	}
 
-	objectID := args[0]
+	reference := args[0]
 	fieldArgs := args[1:]
 	updates, err := parseSetFieldArgs(fieldArgs)
 	if err != nil {
@@ -89,11 +89,11 @@ func buildSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 	}
 
 	if len(updates) == 0 && len(typedUpdates) == 0 {
-		return nil, handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set <object-id> field=value... or --fields-json '{...}'")
+		return nil, handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set <reference> field=value... or --fields-json '{...}'")
 	}
 
 	argsMap := map[string]interface{}{
-		"object_id": objectID,
+		"reference": reference,
 	}
 	if len(updates) > 0 {
 		argsMap["fields"] = stringMapToAny(updates)

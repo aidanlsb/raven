@@ -163,7 +163,7 @@ Command arguments must be nested under `args`.
 {
   "command": "read",
   "args": {
-    "path": "project/website.md",
+    "reference": "project/website.md",
     "raw": true
   }
 }
@@ -386,7 +386,7 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 {
   "command": "read",
   "args": {
-    "path": "project/website.md",
+    "reference": "project/website.md",
     "raw": true,
     "start_line": 10,
     "end_line": 40
@@ -402,7 +402,7 @@ Use `backlinks` to find notes that reference a vault-local asset. Use `move` ins
 {
   "command": "backlinks",
   "args": {
-    "target": "assets/pdfs/paper.pdf"
+    "reference": "assets/pdfs/paper.pdf"
   }
 }
 ```
@@ -463,7 +463,7 @@ invocation:
 {
   "command": "edit",
   "args": {
-    "path": "project/website.md",
+    "reference": "project/website.md",
     "old_str": "Status: draft",
     "new_str": "Status: published"
   }
@@ -476,7 +476,7 @@ Pass `dry-run` to preview a single-object write without applying it:
 {
   "command": "edit",
   "args": {
-    "path": "project/website.md",
+    "reference": "project/website.md",
     "old_str": "Status: draft",
     "new_str": "Status: published",
     "dry-run": true

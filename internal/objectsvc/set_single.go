@@ -47,7 +47,7 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
 	if strings.TrimSpace(req.Reference) == "" {
-		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn set <object-id> field=value...", nil, nil)
+		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn set <reference> field=value...", nil, nil)
 	}
 	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {

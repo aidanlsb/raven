@@ -19,7 +19,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("read", map[string]interface{}{
-			"path": "people/missing",
+			"reference": "people/missing",
 		})
 		cliResult := vCLI.RunCLI("read", "people/missing")
 
@@ -32,7 +32,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("set", map[string]interface{}{
-			"object_id": "people/missing",
+			"reference": "people/missing",
 			"fields": map[string]interface{}{
 				"alias": "ghost",
 			},
@@ -57,7 +57,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
 		mcpResult := server.callTool("set", map[string]interface{}{
-			"object_id": "alice",
+			"reference": "alice",
 			"fields": map[string]interface{}{
 				"alias": "ambiguous",
 			},
@@ -88,10 +88,10 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		if strings.Contains(env.Error.Message, "stdin") {
 			t.Fatalf("expected MCP error message to avoid stdin wording, got: %q", env.Error.Message)
 		}
-		if env.Error.Message != "no object_ids provided for bulk set" {
+		if env.Error.Message != "no references provided for bulk set" {
 			t.Fatalf("unexpected MCP error message: %q", env.Error.Message)
 		}
-		if env.Error.Suggestion != "Provide object_ids for the bulk update and retry" {
+		if env.Error.Suggestion != "Provide references for the bulk update and retry" {
 			t.Fatalf("unexpected MCP suggestion: %q", env.Error.Suggestion)
 		}
 	})
@@ -131,7 +131,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 
 		mcpResult := server.callTool("set", map[string]interface{}{
 			"stdin":      true,
-			"object_ids": []interface{}{"people/set-bulk-missing-fields"},
+			"references": []interface{}{"people/set-bulk-missing-fields"},
 		})
 
 		env := parseMCPEnvelope(t, mcpResult.Text)
@@ -162,7 +162,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		mcpResult := server.callTool("set", map[string]interface{}{
 			"stdin":      true,
 			"confirm":    true,
-			"object_ids": []interface{}{"people/set-json-one", "people/set-json-two"},
+			"references": []interface{}{"people/set-json-one", "people/set-json-two"},
 			"fields_json": map[string]interface{}{
 				"email": "true",
 			},
@@ -255,7 +255,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("delete", map[string]interface{}{
-			"object_id": "people/missing",
+			"reference": "people/missing",
 			"force":     true,
 		})
 		cliResult := vCLI.RunCLI("delete", "people/missing", "--force")
@@ -277,7 +277,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
 		mcpResult := server.callTool("delete", map[string]interface{}{
-			"object_id": "robin",
+			"reference": "robin",
 			"force":     true,
 		})
 		cliResult := vCLI.RunCLI("delete", "robin", "--force")
@@ -438,7 +438,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("backlinks", map[string]interface{}{
-			"target": "people/missing",
+			"reference": "people/missing",
 		})
 		cliResult := vCLI.RunCLI("backlinks", "people/missing")
 
@@ -482,7 +482,7 @@ status: active
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
 		mcpResult := server.callTool("outlinks", map[string]interface{}{
-			"source": "sam",
+			"reference": "sam",
 		})
 		cliResult := vCLI.RunCLI("outlinks", "sam")
 

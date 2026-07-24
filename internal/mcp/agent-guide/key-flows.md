@@ -11,7 +11,7 @@ For detailed tool semantics, see:
 
 ```text
 raven_invoke(command="check", args={"errors_only":true})
-raven_invoke(command="check", args={"path":"project/"})
+raven_invoke(command="check", args={"reference":"project/"})
 raven_invoke(command="check", args={"issues":"missing_reference,missing_asset,unknown_type"})
 ```
 
@@ -28,24 +28,24 @@ Raven management.
 create = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
 notes = raven_invoke(command="section_create", args={"file":create.data.id, "title":"Notes", "level":2})
 raven_invoke(command="add", args={"text":"- Kickoff next week", "to":notes.data.section})
-raven_invoke(command="set", args={"object_id":"project/website-redesign", "fields":{"status":"active"}})
+raven_invoke(command="set", args={"reference":"project/website-redesign", "fields":{"status":"active"}})
 ```
 
 ## 3. Edit safely
 
 ```text
-raven_invoke(command="read", args={"path":"project/website-redesign.md", "raw":true})
+raven_invoke(command="read", args={"reference":"project/website-redesign.md", "raw":true})
 
 # Applies immediately
 raven_invoke(command="edit", args={
-  "path":"project/website-redesign.md",
+  "reference":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active"
 })
 
 # Optional dry run to inspect the diff first
 raven_invoke(command="edit", args={
-  "path":"project/website-redesign.md",
+  "reference":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active",
   "dry-run":true
@@ -59,17 +59,17 @@ raven_invoke(command="move", args={"source":"person/loki", "destination":"person
 raven_invoke(command="move", args={"source":"assets/downloads/paper.pdf", "destination":"assets/pdfs/paper.pdf"})
 raven_invoke(command="section_move", args={"section_id":"project/website#notes", "after":"project/website#tasks"})
 raven_invoke(command="section_rename", args={"section_id":"project/website#tasks", "new_heading_text":"Completed Tasks"})
-raven_invoke(command="reclassify", args={"object":"pages/draft", "new-type":"project"})
-raven_invoke(command="reclassify", args={"object":"person/freya", "new-type":"company", "fields-json":{"legal_name":"false"}})
-raven_invoke(command="reclassify", args={"object_ids":["pages/one","pages/two"], "new-type":"project"})
-raven_invoke(command="reclassify", args={"object_ids":["pages/one","pages/two"], "new-type":"project", "confirm":true})
+raven_invoke(command="reclassify", args={"reference":"pages/draft", "new-type":"project"})
+raven_invoke(command="reclassify", args={"reference":"person/freya", "new-type":"company", "fields-json":{"legal_name":"false"}})
+raven_invoke(command="reclassify", args={"references":["pages/one","pages/two"], "new-type":"project"})
+raven_invoke(command="reclassify", args={"references":["pages/one","pages/two"], "new-type":"project", "confirm":true})
 ```
 
 Deletion flow:
 
 ```text
-raven_invoke(command="backlinks", args={"target":"project/old-project"})
-raven_invoke(command="delete", args={"object_id":"project/old-project"})
+raven_invoke(command="backlinks", args={"reference":"project/old-project"})
+raven_invoke(command="delete", args={"reference":"project/old-project"})
 ```
 
 Single-object `delete`, `move`, `section_create`, `section_move`,

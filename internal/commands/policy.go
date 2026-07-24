@@ -91,7 +91,7 @@ var nonInvokableCommandIDs = map[string]struct{}{
 // Single-object reversible writes (edit, single set/add/update/delete/move/reclassify)
 // apply immediately and only preview when the caller passes `dry-run`; these
 // are either absent (PreviewModeNone) or use PreviewModeBulkPreviewDefault,
-// which previews only when a bulk input (stdin/object_ids/trait_ids) is
+// which previews only when a bulk input (stdin/references/object_ids/trait_ids) is
 // present. High-blast-radius operations (bulk writes, query --apply, schema
 // rename, check fixes, skill install/sync/remove) preview by default and require
 // `confirm` to apply.
@@ -224,7 +224,7 @@ func hasBulkPreviewInput(args map[string]interface{}) bool {
 	if value, ok := args["stdin"].(bool); ok && value {
 		return true
 	}
-	for _, key := range []string{"object_ids", "trait_ids"} {
+	for _, key := range []string{"references", "object_ids", "trait_ids"} {
 		if lenInterfaceSlice(args[key]) > 0 {
 			return true
 		}

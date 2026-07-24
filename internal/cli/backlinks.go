@@ -22,7 +22,7 @@ var backlinksCmd = newCanonicalLeafCommand("backlinks", canonicalLeafOptions{
 func validateBacklinksArgs(cmd *cobra.Command, args []string) error {
 	stdin, _ := cmd.Flags().GetBool("stdin")
 	if stdin && len(args) > 0 {
-		return fmt.Errorf("cannot specify target when using --stdin")
+		return fmt.Errorf("cannot specify reference when using --stdin")
 	}
 	if len(args) > 1 {
 		return fmt.Errorf("accepts at most 1 argument")
@@ -38,33 +38,33 @@ func prepareBacklinksArgs(cmd *cobra.Command, args []string) ([]string, bool, er
 	if stdin {
 		return args, false, nil
 	}
-	return prepareInteractiveReferenceArgs(args, "backlinks", "target", "backlinks> ", "Select a target for backlinks (Esc to cancel)", interactiveReferencePickerOptions{IncludeAssets: true})
+	return prepareInteractiveReferenceArgs(args, "backlinks", "reference", "backlinks> ", "Select a reference for backlinks (Esc to cancel)", interactiveReferencePickerOptions{IncludeAssets: true})
 }
 
 func buildBacklinksArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	stdin, _ := cmd.Flags().GetBool("stdin")
 	if stdin {
-		targets, err := ReadReferencesFromStdin()
+		references, err := ReadReferencesFromStdin()
 		if err != nil {
 			return nil, err
 		}
-		if len(targets) == 0 {
-			return nil, fmt.Errorf("no targets provided on stdin")
+		if len(references) == 0 {
+			return nil, fmt.Errorf("no references provided on stdin")
 		}
 		return map[string]interface{}{
-			"stdin":   true,
-			"targets": targets,
+			"stdin":      true,
+			"references": references,
 		}, nil
 	}
 	return map[string]interface{}{
-		"target": args[0],
+		"reference": args[0],
 	}, nil
 }
 
 func handleBacklinksFailure(cmd *cobra.Command, result commandexec.Result) error {
 	return handleAmbiguousReferenceRetry(cmd, result, ambiguousReferenceRetryOptions{
 		CommandID: "backlinks",
-		ArgKey:    "target",
+		ArgKey:    "reference",
 		Prompt:    "backlinks/ref> ",
 		Render:    renderBacklinks,
 	})

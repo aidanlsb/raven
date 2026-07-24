@@ -60,7 +60,7 @@ func TestHandleDeleteFatalOnSchemaLoadFailure(t *testing.T) {
 
 	result := HandleDelete(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
-		Args:      map[string]any{"object_id": "note/example"},
+		Args:      map[string]any{"reference": "note/example"},
 	})
 
 	if result.OK {
@@ -83,9 +83,9 @@ func TestHandleEditFatalOnSchemaLoadFailure(t *testing.T) {
 		VaultPath: v.Path,
 		Confirm:   true,
 		Args: map[string]any{
-			"path":    "note/example",
-			"old_str": "unique phrase",
-			"new_str": "changed phrase",
+			"reference": "note/example",
+			"old_str":   "unique phrase",
+			"new_str":   "changed phrase",
 		},
 	})
 
@@ -107,7 +107,7 @@ func TestHandleReadWarnsOnSchemaLoadFailure(t *testing.T) {
 
 	result := HandleRead(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
-		Args:      map[string]any{"path": "note/example"},
+		Args:      map[string]any{"reference": "note/example"},
 	})
 
 	if !result.OK {

@@ -418,8 +418,8 @@ func TestCompactInvokeHintsForTopLevelCommandArgs(t *testing.T) {
 	t.Parallel()
 	server := NewServer("")
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
-		"command": "read",
-		"path":    "daily/2026-03-17.md",
+		"command":   "read",
+		"reference": "daily/2026-03-17.md",
 	})
 	if !isErr {
 		t.Fatalf("expected invoke error, got: %s", out)
@@ -460,14 +460,14 @@ func TestCompactInvokeHintsForTopLevelCommandArgs(t *testing.T) {
 	if envelope.Error.Detail.InvokeShape.Wrapper != "args" {
 		t.Fatalf("invoke_shape.wrapper=%q, want args; response=%s", envelope.Error.Detail.InvokeShape.Wrapper, out)
 	}
-	if _, ok := envelope.Error.Detail.ArgsSchema.Properties["path"]; !ok {
-		t.Fatalf("expected path property in INVALID_ARGS args_schema: %s", out)
+	if _, ok := envelope.Error.Detail.ArgsSchema.Properties["reference"]; !ok {
+		t.Fatalf("expected reference property in INVALID_ARGS args_schema: %s", out)
 	}
 	issue := envelope.Error.Detail.Issues[0]
-	if issue.Field != "path" {
-		t.Fatalf("issue.field=%q, want path; response=%s", issue.Field, out)
+	if issue.Field != "reference" {
+		t.Fatalf("issue.field=%q, want reference; response=%s", issue.Field, out)
 	}
-	if issue.Hint != "Did you mean args.path? Command-specific parameters must be nested under args." {
+	if issue.Hint != "Did you mean args.reference? Command-specific parameters must be nested under args." {
 		t.Fatalf("issue.hint=%q; response=%s", issue.Hint, out)
 	}
 }

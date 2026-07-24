@@ -27,18 +27,18 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
 
-	objectIDs := commandIDsArg(req.Args, "object_ids")
-	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
+	references := commandIDsArg(req.Args, "references")
+	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
 	if stdinMode {
-		if len(objectIDs) == 0 {
-			return commandexec.Failure("MISSING_ARGUMENT", "no object or asset IDs provided via stdin", nil, "Pipe object or asset IDs to stdin, one per line")
+		if len(references) == 0 {
+			return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe object or asset references to stdin, one per line")
 		}
-		return runDeleteBulk(rt, objectIDs, req.Confirm, req.IndexJournalOperation)
+		return runDeleteBulk(rt, references, req.Confirm, req.IndexJournalOperation)
 	}
 
-	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
+	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
 	if reference == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "requires object or asset ID argument", nil, "Usage: rvn delete <object-or-asset-id>")
+		return commandexec.Failure("MISSING_ARGUMENT", "requires reference argument", nil, "Usage: rvn delete <reference>")
 	}
 
 	// Delete resolves the target reference (which is schema-aware) before

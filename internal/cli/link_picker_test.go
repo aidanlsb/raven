@@ -59,7 +59,7 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return buildBacklinksArgs(backlinksCmd, args)
 			},
 			prompt:    "backlinks> ",
-			argKey:    "target",
+			argKey:    "reference",
 			wantArgs:  []string{"notes/alpha#details"},
 			wantAsset: true,
 		},
@@ -72,7 +72,7 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return buildOutlinksArgs(outlinksCmd, args)
 			},
 			prompt:    "outlinks> ",
-			argKey:    "source",
+			argKey:    "reference",
 			wantArgs:  []string{"notes/alpha#details"},
 			wantAsset: false,
 		},

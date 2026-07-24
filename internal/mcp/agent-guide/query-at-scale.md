@@ -35,7 +35,7 @@ raven_invoke(command="query", args={"query_string":"type:project .status==archiv
 
 ```text
 raven_invoke(command="query", args={"query_string":"type:meeting refs([[project/website]])", "limit":20})
-raven_invoke(command="read", args={"path":"meeting/team-sync", "raw":true})
+raven_invoke(command="read", args={"reference":"meeting/team-sync", "raw":true})
 ```
 
 ## Practical rules

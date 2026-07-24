@@ -41,7 +41,7 @@ var checkCreateMissingCmd = newCanonicalLeafCommand("check create-missing", cano
 func checkScopeArgs(cmd *cobra.Command, args []string) map[string]interface{} {
 	argsMap := map[string]interface{}{}
 	if len(args) > 0 {
-		argsMap["path"] = args[0]
+		argsMap["reference"] = args[0]
 	}
 	if value, _ := cmd.Flags().GetString("type"); value != "" {
 		argsMap["type"] = value

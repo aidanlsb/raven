@@ -217,18 +217,19 @@ show a confirmation prompt unless --force is set. Only call delete after user in
 is clear; when unsure, inspect the object and run backlinks first.
 
 Bulk operations:
-Use --stdin to read object or asset IDs from stdin (one per line).
+Use --stdin to read object or asset references from stdin (one per line).
 IMPORTANT:
 - Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
-			{Name: "object_id", Description: "Object or asset ID to delete (e.g., people/freya or assets/pdfs/paper.pdf)", Required: false},
+			{Name: "reference", Description: "Object or asset reference to delete (e.g., people/freya or assets/pdfs/paper.pdf)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompt", Type: FlagTypeBool},
-			{Name: "stdin", Description: "Read object or asset IDs from stdin (one per line)", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read object or asset references from stdin (one per line)", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk delete (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 			{Name: "dry-run", Description: "Preview a single-file delete without applying it", Type: FlagTypeBool},
 		},
+		BulkStdinArgName: "references",
 		Examples: []string{
 			"rvn delete people/freya --json",
 			"rvn delete people/freya --dry-run --json",
@@ -456,12 +457,12 @@ The file is automatically moved to the new type's default_path unless
 References are updated when the file moves (controlled by --update-refs).
 
 Bulk operations:
-Use --stdin to read object IDs from stdin (one per line), with the target type
+Use --stdin to read references from stdin (one per line), with the target type
 as the only positional argument. Bulk reclassification previews moves, field
 changes, required-field failures, and reference updates by default. Use
 --confirm to apply. Items that would drop fields still require --force.`,
 		Args: []ArgMeta{
-			{Name: "object", Description: "Object reference (prefer canonical ID; other resolvable forms are accepted)", Required: false},
+			{Name: "reference", Description: "Object reference (prefer canonical ID; other resolvable forms are accepted)", Required: false},
 			{Name: "new-type", Description: "Target type name", Required: true, DynamicComp: "types"},
 		},
 		Flags: []FlagMeta{
@@ -470,10 +471,10 @@ changes, required-field failures, and reference updates by default. Use
 			{Name: "no-move", Description: "Skip moving file to new type's default_path", Type: FlagTypeBool},
 			{Name: "update-refs", Description: "Update references when file moves", Type: FlagTypeBool, Default: "true"},
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
-			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read references from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk reclassification (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 		},
-		BulkStdinArgName: "object_ids",
+		BulkStdinArgName: "references",
 		Examples: []string{
 			"rvn reclassify inbox/note book --json",
 			"rvn reclassify people/freya company --field industry=tech --json",
@@ -493,7 +494,7 @@ changes, required-field failures, and reference updates by default. Use
 	},
 	"set": {
 		Name:        "set",
-		Use:         "set <object-id> <field=value>...",
+		Use:         "set <reference> <field=value>...",
 		Description: "Set frontmatter fields on an object",
 		LongDesc: `Set one or more frontmatter fields on an existing object.
 
@@ -512,7 +513,7 @@ Single-object set applies immediately. Pass --dry-run to preview the resulting
 field changes (including previous values) without writing.
 
 Bulk operations:
-Use --stdin to read object IDs from stdin (one per line). Bulk updates accept
+Use --stdin to read references from stdin (one per line). Bulk updates accept
 both field=value literals and --fields-json typed values.
 IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.
 
@@ -520,15 +521,16 @@ Permissive writes: if a ref field is set to a target that does not exist yet, th
 update still succeeds. The response adds data.missing_refs, data.missing_ref_items,
 and a REF_TARGET_MISSING warning per missing target.`,
 		Args: []ArgMeta{
-			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: false},
+			{Name: "reference", Description: "Object reference to update (e.g., people/freya)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "fields", Description: "Fields to update using Raven field literals (key=value semantics)", Type: FlagTypePosKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
 			{Name: "fields-json", Description: "Fields to update as a JSON object with exact typed values", Type: FlagTypeJSON},
-			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read references from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 			{Name: "dry-run", Description: "Preview a single-object set without applying it", Type: FlagTypeBool},
 		},
+		BulkStdinArgName: "references",
 		Examples: []string{
 			"rvn set people/freya email=freya@asgard.realm --json",
 			`rvn set people/freya --fields-json '{"email":"true"}' --json`,
@@ -545,7 +547,7 @@ and a REF_TARGET_MISSING warning per missing target.`,
 	},
 	"unset": {
 		Name:        "unset",
-		Use:         "unset <object-id> <field>...",
+		Use:         "unset <reference> <field>...",
 		Description: "Remove frontmatter fields from an object",
 		LongDesc: `Remove one or more frontmatter fields from an existing file-level object.
 
@@ -560,7 +562,7 @@ objects and appear as unknown_frontmatter_key issues in rvn check.
 
 The reserved type field cannot be unset; use reclassify to change object type.`,
 		Args: []ArgMeta{
-			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: true},
+			{Name: "reference", Description: "Object reference to update (e.g., people/freya)", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "fields", Description: "Frontmatter field names to remove (repeatable; MCP should pass an array)", Type: FlagTypeStringSlice, Examples: []string{`["date", "link"]`}},
@@ -601,8 +603,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 			{Name: "dry-run", Description: "Preview a single-object update without applying it", Type: FlagTypeBool},
 		},
-		BulkStdinArgName:    "trait_ids",
-		BulkStdinArgAliases: []string{"object_ids", "ids"},
+		BulkStdinArgName: "trait_ids",
 		Examples: []string{
 			"rvn update daily/2026-01-25.md:trait:0 done --json",
 			"rvn update daily/2026-01-25.md:trait:0 done --dry-run --json",
@@ -640,14 +641,14 @@ Whitespace matters—old_str must match exactly including indentation.
 For multi-line replacements, include newlines in both old_str and new_str.
 
 Supports two input modes:
-  - Single edit (backward compatible): <path> <old_str> <new_str>
-  - Batch edits via JSON: <path> --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'
+  - Single edit: <reference> <old_str> <new_str>
+  - Batch edits via JSON: <reference> --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'
 
 Permissive writes: if an applied edit introduces a [[ref]] whose target does not
 exist yet, the edit still succeeds. The response adds data.missing_refs,
 data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 		Args: []ArgMeta{
-			{Name: "path", Description: "File path, object reference, or section reference relative to vault root", Required: true},
+			{Name: "reference", Description: "File path, object reference, or section reference relative to vault root", Required: true},
 			{Name: "old_str", Description: "String to replace (must be unique in target scope, single-edit mode)", Required: false},
 			{Name: "new_str", Description: "Replacement string (can be empty to delete, single-edit mode)", Required: false},
 		},

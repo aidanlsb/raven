@@ -25,12 +25,12 @@ func TestAdaptCanonicalResultForMCPRewritesValidationSuggestion(t *testing.T) {
 }
 
 func TestAdaptCanonicalResultForMCPKeepsStructuredValidationSuggestion(t *testing.T) {
-	result := adaptCanonicalResultForMCP("set", nil, commandexec.Failure("MISSING_ARGUMENT", "no object_ids provided for bulk set", nil, "Provide object_ids for the bulk update and retry"))
+	result := adaptCanonicalResultForMCP("set", nil, commandexec.Failure("MISSING_ARGUMENT", "no references provided for bulk set", nil, "Provide references for the bulk update and retry"))
 
 	if result.Error == nil {
 		t.Fatal("expected error")
 	}
-	want := "Provide object_ids for the bulk update and retry"
+	want := "Provide references for the bulk update and retry"
 	if result.Error.Suggestion != want {
 		t.Fatalf("suggestion = %q, want %q", result.Error.Suggestion, want)
 	}

@@ -78,18 +78,18 @@ func buildReclassifyArgs(_ *cobra.Command, args []string) (map[string]interface{
 		}
 		ids = append(ids, sectionIDs...)
 		if len(ids) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
+			return nil, handleErrorMsg(ErrMissingArgument, "no references provided via stdin", "Pipe references to stdin, one per line")
 		}
 		argsMap["stdin"] = true
-		argsMap["object_ids"] = stringsToAny(ids)
+		argsMap["references"] = stringsToAny(ids)
 		argsMap["new-type"] = args[0]
 		return argsMap, nil
 	}
 
 	if len(args) != 2 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires object and target type arguments", "Usage: rvn reclassify <object> <new-type>")
+		return nil, handleErrorMsg(ErrMissingArgument, "requires reference and target type arguments", "Usage: rvn reclassify <reference> <new-type>")
 	}
-	argsMap["object"] = args[0]
+	argsMap["reference"] = args[0]
 	argsMap["new-type"] = args[1]
 	return argsMap, nil
 }

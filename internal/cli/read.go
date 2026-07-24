@@ -64,7 +64,7 @@ func buildReadArgs(cmd *cobra.Command, args []string) (map[string]interface{}, e
 		raw = true
 	}
 	return map[string]interface{}{
-		"path":       args[0],
+		"reference":  args[0],
 		"raw":        raw,
 		"lines":      lines,
 		"start-line": startLine,

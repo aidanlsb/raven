@@ -14,7 +14,7 @@ func TestValidateRequestNormalizesConfirmArg(t *testing.T) {
 		CommandID: "delete",
 		Args: map[string]any{
 			"stdin":      true,
-			"object_ids": []interface{}{"note/one"},
+			"references": []interface{}{"note/one"},
 			"confirm":    true,
 		},
 	})
@@ -91,9 +91,9 @@ func TestValidateRequestEditAppliesByDefault(t *testing.T) {
 	req, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "edit",
 		Args: map[string]any{
-			"path":    "note/example",
-			"old_str": "old",
-			"new_str": "new",
+			"reference": "note/example",
+			"old_str":   "old",
+			"new_str":   "new",
 		},
 	})
 	if !ok {
@@ -113,10 +113,10 @@ func TestValidateRequestDryRunForcesPreviewAndOverridesConfirm(t *testing.T) {
 	req, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "edit",
 		Args: map[string]any{
-			"path":    "note/example",
-			"old_str": "old",
-			"new_str": "new",
-			"dry-run": true,
+			"reference": "note/example",
+			"old_str":   "old",
+			"new_str":   "new",
+			"dry-run":   true,
 		},
 	})
 	if !ok {
@@ -131,7 +131,7 @@ func TestValidateRequestDryRunForcesPreviewAndOverridesConfirm(t *testing.T) {
 		CommandID: "delete",
 		Args: map[string]any{
 			"stdin":      true,
-			"object_ids": []interface{}{"note/one"},
+			"references": []interface{}{"note/one"},
 			"confirm":    true,
 			"dry-run":    true,
 		},

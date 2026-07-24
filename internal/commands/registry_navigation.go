@@ -39,7 +39,7 @@ When an interactive read reference is ambiguous, Raven prompts you to choose the
 For long files, you can request a specific range with --start-line/--end-line, and/or
 ask for structured line output with --lines for copy-paste-safe anchors.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
-			{Name: "path", Description: "Canonical object ID or other accepted reference input", Required: true, CLIOptional: true},
+			{Name: "reference", Description: "Canonical object ID or other accepted reference input", Required: true, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "raw", Description: "Output only raw file content (no backlinks, no rendered links)", Type: FlagTypeBool},
@@ -114,14 +114,15 @@ When an interactive open reference is ambiguous, Raven prompts you to choose the
 target. Non-interactive and JSON output still return REF_AMBIGUOUS with the
 candidate matches.
 
-Use --stdin to read object IDs from stdin (one per line) and open them all.
+Use --stdin to read references from stdin (one per line) and open them all.
 This is useful for piping query results to open multiple files at once.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
 			{Name: "reference", Description: "Canonical object ID or other accepted reference input", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "stdin", Description: "Read object IDs from stdin for bulk open", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read references from stdin for bulk open", Type: FlagTypeBool},
 		},
+		BulkStdinArgName: "references",
 		Examples: []string{
 			"rvn open companies/cursor --json",
 			"rvn query 'type:project .status==active' --ids | rvn open --stdin --json",

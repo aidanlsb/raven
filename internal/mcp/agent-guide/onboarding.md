@@ -82,7 +82,7 @@ raven_invoke(command="query", args={"query_string":"type:<most-populated-type>",
 Pick an object that likely has connections (meeting notes, project pages) and show its backlinks:
 
 ```text
-raven_invoke(command="backlinks", args={"target":"<well-connected object ID>"})
+raven_invoke(command="backlinks", args={"reference":"<well-connected object ID>"})
 ```
 
 **Tell the user:** Backlinks show everything that links *to* this object — you don't have to maintain these manually. Raven builds the graph from wiki-link references in your content and frontmatter ref fields.
