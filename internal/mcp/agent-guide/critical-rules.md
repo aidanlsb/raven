@@ -36,16 +36,13 @@ If you bypass Raven and mutate files directly, reindex and repair before continu
 
 ## Confirm the target vault before writing
 
-Every vault-scoped result includes `meta.vault_context`. Before a write in a
-multi-vault setup, confirm `vault_context` points at the intended vault.
+Every vault-scoped result includes `meta.vault_context`. Confirm it points at the
+intended vault before writing.
 
 - Pass an explicit `vault` (configured name) or `vault_path` (absolute directory)
-  whenever the target is not already unambiguous.
-- A `VAULT_FALLBACK` warning means the vault came from ambient state
-  (active/default) while multiple vaults are configured — treat it as a prompt to
-  verify or re-issue with an explicit vault.
-- If the server enforces strict vault mode, calls without an explicit vault fail
-  with `VAULT_AMBIGUOUS`; supply `vault`/`vault_path` and retry.
+  on each call, or use a server pinned to one vault.
+- Calls without an explicit or server-pinned vault fail with `VAULT_AMBIGUOUS`;
+  supply `vault`/`vault_path` and retry. MCP never uses active/default vault state.
 - After `init` creates an additional vault, it becomes active immediately. Surface
   the returned active/previous vault details and `switch_back` command.
 

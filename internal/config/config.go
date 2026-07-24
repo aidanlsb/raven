@@ -15,14 +15,6 @@ type Config struct {
 	// DefaultVault is the name of the default vault (from Vaults map).
 	DefaultVault string `toml:"default_vault"`
 
-	// StateFile is an optional path to state.toml.
-	// If relative, it's resolved relative to config.toml's directory.
-	StateFile string `toml:"state_file"`
-
-	// Vault is the legacy single vault path (for backwards compatibility).
-	// Deprecated: Use DefaultVault + Vaults instead.
-	Vault string `toml:"vault"`
-
 	// Vaults is a map of vault names to paths.
 	Vaults map[string]string `toml:"vaults"`
 
@@ -32,31 +24,12 @@ type Config struct {
 	// EditorMode controls how the editor is launched: auto, terminal, or gui.
 	EditorMode string `toml:"editor_mode"`
 
-	// UI controls optional CLI theming preferences.
+	// UI controls optional Markdown rendering preferences.
 	UI UIConfig `toml:"ui"`
-
-	// MCP controls MCP server behavior.
-	MCP MCPConfig `toml:"mcp"`
-}
-
-// MCPConfig represents optional MCP server behavior settings.
-type MCPConfig struct {
-	// StrictVault, when true, makes the MCP server require an explicit vault for
-	// vault-scoped operations. Calls that would otherwise fall back to ambient
-	// global state (active/default vault) fail with VAULT_AMBIGUOUS instead.
-	StrictVault bool `toml:"strict_vault"`
 }
 
 // UIConfig represents optional CLI theming preferences.
 type UIConfig struct {
-	// Accent is an optional accent color for CLI output and markdown rendering.
-	// Supported values are ANSI color codes ("0" to "255") or hex colors ("#RRGGBB").
-	Accent string `toml:"accent"`
-
-	// CodeTheme sets the Glamour/Chroma theme used for rendered markdown code blocks.
-	// Example values: "monokai", "dracula", "github", "nord".
-	CodeTheme string `toml:"code_theme"`
-
 	// MarkdownStyle sets the full Glamour markdown style.
 	// Empty or "auto" uses Glamour's automatic light/dark style.
 	MarkdownStyle string `toml:"markdown_style"`
@@ -70,14 +43,8 @@ func (c *Config) GetVaultPath(name string) (string, error) {
 		name = c.DefaultVault
 	}
 
-	// If still no name but legacy vault is set, use that
-	if name == "" && c.Vault != "" {
-		return c.Vault, nil
-	}
-
-	// Legacy compatibility: when only legacy vault is configured, allow "default" as the name.
-	if name == "default" && c.Vault != "" && len(c.Vaults) == 0 {
-		return c.Vault, nil
+	if name == "" {
+		return "", fmt.Errorf("no default vault configured")
 	}
 
 	// Look up named vault
@@ -85,15 +52,6 @@ func (c *Config) GetVaultPath(name string) (string, error) {
 		if path, ok := c.Vaults[name]; ok {
 			return path, nil
 		}
-	}
-
-	// If name matches default and legacy vault exists
-	if name == "" && c.Vault != "" {
-		return c.Vault, nil
-	}
-
-	if name == "" {
-		return "", fmt.Errorf("no default vault configured")
 	}
 
 	return "", fmt.Errorf("vault '%s' not found in config", name)
@@ -108,16 +66,9 @@ func (c *Config) GetDefaultVaultPath() (string, error) {
 func (c *Config) ListVaults() map[string]string {
 	result := make(map[string]string)
 
-	// Add named vaults
 	for name, path := range c.Vaults {
 		result[name] = path
 	}
-
-	// If legacy vault and no named vaults, add as "default"
-	if len(result) == 0 && c.Vault != "" {
-		result["default"] = c.Vault
-	}
-
 	return result
 }
 
@@ -139,7 +90,30 @@ func LoadFrom(path string) (*Config, error) {
 	if _, err := toml.DecodeFile(path, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config %s: %w", path, err)
 	}
+	migrateLegacyVault(path, &config)
 	return &config, nil
+}
+
+// migrateLegacyVault folds the removed top-level single-path setting into the
+// canonical named vault registry. The compatibility key is never retained on
+// Config and disappears the next time the config is saved.
+func migrateLegacyVault(path string, cfg *Config) {
+	if cfg == nil || len(cfg.Vaults) != 0 {
+		return
+	}
+
+	var raw map[string]interface{}
+	if _, err := toml.DecodeFile(path, &raw); err != nil {
+		return
+	}
+	legacyPath, ok := raw["vault"].(string)
+	legacyPath = strings.TrimSpace(legacyPath)
+	if !ok || legacyPath == "" {
+		return
+	}
+
+	cfg.Vaults = map[string]string{"default": legacyPath}
+	cfg.DefaultVault = "default"
 }
 
 // DefaultPath returns the default config file path.
@@ -191,11 +165,9 @@ func CreateDefaultAt(path string) (string, error) {
 	defaultConfig := `# Raven Configuration
 # See: https://github.com/aidanlsb/raven
 
-# Default vault name (must exist in [vaults] below)
+# Default vault name (must exist in [vaults] below).
+# Set this with: rvn vault pin <name>
 # default_vault = "personal"
-
-# Optional state file location (default: sibling state.toml next to config.toml)
-# state_file = "state.toml"
 
 # Named vaults
 # [vaults]
@@ -211,20 +183,10 @@ func CreateDefaultAt(path string) (string, error) {
 #   gui      - always run in the background (non-blocking)
 # editor_mode = "auto"
 #
-# Optional UI accent color for headers/links in terminal output.
-# Supports ANSI color codes (0-255) or hex (#RRGGBB).
+# Optional Glamour markdown style. Use "auto", a stock built-in style name
+# (such as "dark", "light", "notty", or "ascii"), or a style JSON path.
 # [ui]
-# accent = "39"
-# code_theme = "monokai"
 # markdown_style = "auto"
-#
-# MCP server behavior.
-# When strict_vault is true, vault-scoped MCP calls must specify a vault
-# explicitly (per-call vault/vault_path or a server-pinned vault); otherwise
-# they fail with VAULT_AMBIGUOUS instead of silently falling back to the
-# active/default vault.
-# [mcp]
-# strict_vault = true
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {

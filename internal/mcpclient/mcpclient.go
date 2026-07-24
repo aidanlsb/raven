@@ -147,15 +147,12 @@ func resolveInvokedCommand(raw string) string {
 }
 
 // BuildServerEntry creates a ServerEntry for the raven MCP server.
-// configPath/statePath preserve CLI config resolution context; vaultName and
-// vaultPath are optional vault pinning args.
-func BuildServerEntry(configPath, statePath, vaultName, vaultPath string) ServerEntry {
+// configPath preserves CLI config resolution context; vaultName and vaultPath
+// are optional vault pinning args.
+func BuildServerEntry(configPath, vaultName, vaultPath string) ServerEntry {
 	args := []string{"serve"}
 	if configPath != "" {
 		args = append(args, "--config", configPath)
-	}
-	if statePath != "" {
-		args = append(args, "--state", statePath)
 	}
 	if vaultPath != "" {
 		args = append(args, "--vault-path", vaultPath)

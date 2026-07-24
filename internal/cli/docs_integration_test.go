@@ -141,8 +141,7 @@ func seedGlobalDocsConfig(t *testing.T, files map[string]string) string {
 func runDocsCLI(t *testing.T, configPath string, args ...string) *testutil.CLIResult {
 	t.Helper()
 	binary := testutil.BuildCLI(t)
-	statePath := filepath.Join(filepath.Dir(configPath), "state.toml")
-	cmdArgs := []string{"--config", configPath, "--state", statePath, "--json"}
+	cmdArgs := []string{"--config", configPath, "--json"}
 	cmdArgs = append(cmdArgs, args...)
 
 	cmd := exec.Command(binary, cmdArgs...)

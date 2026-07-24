@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -42,34 +43,6 @@ func TestConfigGetVaultPath(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy vault fallback", func(t *testing.T) {
-		cfg := &Config{
-			Vault: "/legacy/vault/path",
-		}
-
-		path, err := cfg.GetVaultPath("")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if path != "/legacy/vault/path" {
-			t.Errorf("expected '/legacy/vault/path', got %q", path)
-		}
-	})
-
-	t.Run("legacy vault supports default alias", func(t *testing.T) {
-		cfg := &Config{
-			Vault: "/legacy/vault/path",
-		}
-
-		path, err := cfg.GetVaultPath("default")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if path != "/legacy/vault/path" {
-			t.Errorf("expected '/legacy/vault/path', got %q", path)
-		}
-	})
-
 	t.Run("vault not found", func(t *testing.T) {
 		cfg := &Config{
 			Vaults: map[string]string{
@@ -80,6 +53,15 @@ func TestConfigGetVaultPath(t *testing.T) {
 		_, err := cfg.GetVaultPath("nonexistent")
 		if err == nil {
 			t.Error("expected error for nonexistent vault")
+		}
+	})
+
+	t.Run("default name requires registry entry", func(t *testing.T) {
+		cfg := &Config{DefaultVault: "default"}
+
+		_, err := cfg.GetVaultPath("")
+		if err == nil {
+			t.Error("expected error when default is not present in vaults")
 		}
 	})
 
@@ -131,43 +113,12 @@ func TestConfigListVaults(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy vault as default", func(t *testing.T) {
-		cfg := &Config{
-			Vault: "/legacy/path",
-		}
-
-		vaults := cfg.ListVaults()
-		if len(vaults) != 1 {
-			t.Errorf("expected 1 vault, got %d", len(vaults))
-		}
-		if vaults["default"] != "/legacy/path" {
-			t.Error("expected legacy vault as 'default'")
-		}
-	})
-
 	t.Run("empty config", func(t *testing.T) {
 		cfg := &Config{}
 
 		vaults := cfg.ListVaults()
 		if len(vaults) != 0 {
 			t.Errorf("expected 0 vaults, got %d", len(vaults))
-		}
-	})
-
-	t.Run("named vaults take precedence over legacy", func(t *testing.T) {
-		cfg := &Config{
-			Vault: "/legacy/path",
-			Vaults: map[string]string{
-				"main": "/named/path",
-			},
-		}
-
-		vaults := cfg.ListVaults()
-		if len(vaults) != 1 {
-			t.Errorf("expected 1 vault, got %d", len(vaults))
-		}
-		if _, ok := vaults["default"]; ok {
-			t.Error("legacy vault should not appear when named vaults exist")
 		}
 	})
 }
@@ -221,8 +172,6 @@ work = "/path/to/work"
 personal = "/path/to/personal"
 
 [ui]
-accent = "39"
-code_theme = "dracula"
 markdown_style = "dark"
 `
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
@@ -237,23 +186,80 @@ markdown_style = "dark"
 	if cfg.DefaultVault != "work" {
 		t.Errorf("expected default_vault 'work', got %q", cfg.DefaultVault)
 	}
-	if cfg.StateFile != "state.toml" {
-		t.Errorf("expected state_file 'state.toml', got %q", cfg.StateFile)
-	}
 	if cfg.Editor != "code" {
 		t.Errorf("expected editor 'code', got %q", cfg.Editor)
 	}
 	if len(cfg.Vaults) != 2 {
 		t.Errorf("expected 2 vaults, got %d: %v", len(cfg.Vaults), cfg.Vaults)
 	}
-	if cfg.UI.Accent != "39" {
-		t.Errorf("expected ui.accent '39', got %q", cfg.UI.Accent)
-	}
-	if cfg.UI.CodeTheme != "dracula" {
-		t.Errorf("expected ui.code_theme 'dracula', got %q", cfg.UI.CodeTheme)
-	}
 	if cfg.UI.MarkdownStyle != "dark" {
 		t.Errorf("expected ui.markdown_style 'dark', got %q", cfg.UI.MarkdownStyle)
+	}
+
+	if err := SaveTo(configPath, cfg); err != nil {
+		t.Fatalf("SaveTo() error = %v", err)
+	}
+	saved, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read saved config: %v", err)
+	}
+	if strings.Contains(string(saved), "state_file") {
+		t.Fatalf("saved config retained removed state_file key:\n%s", saved)
+	}
+}
+
+func TestLoadFromMigratesRemovedSinglePathToVaultRegistry(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte(`vault = "/path/to/notes"`+"\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := LoadFrom(configPath)
+	if err != nil {
+		t.Fatalf("LoadFrom() error = %v", err)
+	}
+	if cfg.DefaultVault != "default" || cfg.Vaults["default"] != "/path/to/notes" {
+		t.Fatalf("migrated config = %#v, want default registry entry", cfg)
+	}
+
+	if err := SaveTo(configPath, cfg); err != nil {
+		t.Fatalf("SaveTo() error = %v", err)
+	}
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read saved config: %v", err)
+	}
+	if strings.Contains(string(content), "\nvault = ") || strings.HasPrefix(string(content), "vault = ") {
+		t.Fatalf("saved config retained removed key:\n%s", content)
+	}
+	if !strings.Contains(string(content), `default_vault = "default"`) ||
+		!strings.Contains(string(content), `default = "/path/to/notes"`) {
+		t.Fatalf("saved config did not persist canonical registry:\n%s", content)
+	}
+}
+
+func TestLoadFromIgnoresRemovedSinglePathWhenRegistryExists(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	content := `vault = "/path/to/old"
+default_vault = "work"
+
+[vaults]
+work = "/path/to/work"
+`
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := LoadFrom(configPath)
+	if err != nil {
+		t.Fatalf("LoadFrom() error = %v", err)
+	}
+	if cfg.DefaultVault != "work" || len(cfg.Vaults) != 1 || cfg.Vaults["work"] != "/path/to/work" {
+		t.Fatalf("loaded config = %#v, want existing registry unchanged", cfg)
 	}
 }
 

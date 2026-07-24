@@ -61,18 +61,21 @@ func (ctx *GlobalConfigContext) Data() map[string]interface{} {
 		"config_path":   ctx.ConfigPath,
 		"state_path":    ctx.StatePath,
 		"exists":        ctx.ConfigExists,
-		"default_vault": strings.TrimSpace(ctx.Cfg.DefaultVault),
-		"state_file":    strings.TrimSpace(ctx.Cfg.StateFile),
-		"vault":         strings.TrimSpace(ctx.Cfg.Vault),
+		"default_vault": DefaultVaultName(ctx.Cfg),
 		"vaults":        vaults,
-		"editor":        strings.TrimSpace(ctx.Cfg.Editor),
-		"editor_mode":   strings.TrimSpace(ctx.Cfg.EditorMode),
+		"editor":        strings.TrimSpace(ctx.Cfg.GetEditor()),
+		"editor_mode":   effectiveValue(ctx.Cfg.EditorMode, "auto"),
 		"ui": map[string]interface{}{
-			"accent":         strings.TrimSpace(ctx.Cfg.UI.Accent),
-			"code_theme":     strings.TrimSpace(ctx.Cfg.UI.CodeTheme),
-			"markdown_style": strings.TrimSpace(ctx.Cfg.UI.MarkdownStyle),
+			"markdown_style": effectiveValue(ctx.Cfg.UI.MarkdownStyle, "auto"),
 		},
 	}
+}
+
+func effectiveValue(value, fallback string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func ShowContext(opts ContextOptions) (*GlobalConfigContext, error) {
@@ -119,13 +122,7 @@ func NormalizeEditorMode(raw string) (string, bool) {
 
 type SetRequest struct {
 	ContextOptions
-	Editor          *string
-	EditorMode      *string
-	StateFile       *string
-	DefaultVault    *string
-	UIAccent        *string
-	UICodeTheme     *string
-	UIMarkdownStyle *string
+	Settings []string
 }
 
 type SetResult struct {
@@ -139,83 +136,56 @@ func Set(req SetRequest) (*SetResult, error) {
 		return nil, err
 	}
 
-	changed := make([]string, 0, 6)
-
-	if req.Editor != nil {
-		value := strings.TrimSpace(*req.Editor)
-		if value == "" {
-			return nil, newError(CodeInvalidInput, "editor cannot be empty; use 'rvn config unset --editor' to clear it", nil)
-		}
-		ctx.Cfg.Editor = value
-		changed = append(changed, "editor")
+	if len(req.Settings) == 0 {
+		return nil, newError(CodeMissingArgument, "no settings provided; use key=value (valid keys: "+strings.Join(validSetKeys, ", ")+")", nil)
 	}
 
-	if req.EditorMode != nil {
-		value, ok := NormalizeEditorMode(*req.EditorMode)
-		if !ok {
-			return nil, newError(CodeInvalidInput, "editor-mode must be one of: auto, terminal, gui", nil)
+	changed := make([]string, 0, len(req.Settings))
+	seen := make(map[string]struct{}, len(req.Settings))
+	for _, setting := range req.Settings {
+		key, value, ok := strings.Cut(setting, "=")
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if !ok || key == "" {
+			return nil, newError(CodeInvalidInput, fmt.Sprintf("invalid config setting %q; expected key=value", setting), nil)
 		}
-		ctx.Cfg.EditorMode = value
-		changed = append(changed, "editor_mode")
-	}
+		if _, duplicate := seen[key]; duplicate {
+			return nil, newError(CodeInvalidInput, fmt.Sprintf("duplicate config key %q", key), nil)
+		}
+		seen[key] = struct{}{}
 
-	if req.StateFile != nil {
-		value := strings.TrimSpace(*req.StateFile)
-		if value == "" {
-			return nil, newError(CodeInvalidInput, "state-file cannot be empty; use 'rvn config unset --state-file' to clear it", nil)
+		switch key {
+		case "editor":
+			if value == "" {
+				return nil, emptySetValueError(key)
+			}
+			ctx.Cfg.Editor = value
+		case "editor_mode":
+			mode, valid := NormalizeEditorMode(value)
+			if !valid {
+				return nil, newError(CodeInvalidInput, "editor_mode must be one of: auto, terminal, gui", nil)
+			}
+			ctx.Cfg.EditorMode = mode
+		case "ui.markdown_style":
+			if value == "" {
+				return nil, emptySetValueError(key)
+			}
+			ctx.Cfg.UI.MarkdownStyle = value
+		case "default_vault":
+			return nil, newError(CodeInvalidInput, "default_vault cannot be set with 'rvn config set'; use 'rvn vault pin <name>'", nil)
+		case "vault":
+			return nil, newError(CodeInvalidInput, "vault is no longer a supported config key; use 'rvn vault add <name> <path>' and 'rvn vault pin <name>'", nil)
+		default:
+			return nil, unknownConfigKeyError(key, validSetKeys)
 		}
-		ctx.Cfg.StateFile = value
-		changed = append(changed, "state_file")
-	}
-
-	if req.DefaultVault != nil {
-		value := strings.TrimSpace(*req.DefaultVault)
-		if value == "" {
-			return nil, newError(CodeInvalidInput, "default-vault cannot be empty; use 'rvn config unset --default-vault' to clear it", nil)
-		}
-		if _, err := ctx.Cfg.GetVaultPath(value); err != nil {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("default-vault '%s' is not configured", value), nil)
-		}
-		ctx.Cfg.DefaultVault = value
-		changed = append(changed, "default_vault")
-	}
-
-	if req.UIAccent != nil {
-		value := strings.TrimSpace(*req.UIAccent)
-		if value == "" {
-			return nil, newError(CodeInvalidInput, "ui-accent cannot be empty; use 'rvn config unset --ui-accent' to clear it", nil)
-		}
-		ctx.Cfg.UI.Accent = value
-		changed = append(changed, "ui.accent")
-	}
-
-	if req.UICodeTheme != nil {
-		value := strings.TrimSpace(*req.UICodeTheme)
-		if value == "" {
-			return nil, newError(CodeInvalidInput, "ui-code-theme cannot be empty; use 'rvn config unset --ui-code-theme' to clear it", nil)
-		}
-		ctx.Cfg.UI.CodeTheme = value
-		changed = append(changed, "ui.code_theme")
-	}
-
-	if req.UIMarkdownStyle != nil {
-		value := strings.TrimSpace(*req.UIMarkdownStyle)
-		if value == "" {
-			return nil, newError(CodeInvalidInput, "ui-markdown-style cannot be empty; use 'rvn config unset --ui-markdown-style' to clear it", nil)
-		}
-		ctx.Cfg.UI.MarkdownStyle = value
-		changed = append(changed, "ui.markdown_style")
-	}
-
-	if len(changed) == 0 {
-		return nil, newError(CodeMissingArgument, "no fields provided; set at least one --editor/--editor-mode/--state-file/--default-vault/--ui-accent/--ui-code-theme/--ui-markdown-style", nil)
+		changed = append(changed, key)
 	}
 
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
 	ctx.ConfigExists = true
-	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath, ctx.Cfg)
+	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath)
 
 	return &SetResult{
 		Context: ctx,
@@ -223,15 +193,21 @@ func Set(req SetRequest) (*SetResult, error) {
 	}, nil
 }
 
+var validSetKeys = []string{"editor", "editor_mode", "ui.markdown_style"}
+
+var validUnsetKeys = []string{"default_vault", "editor", "editor_mode", "ui.markdown_style"}
+
+func emptySetValueError(key string) *svcerr.Error {
+	return newError(CodeInvalidInput, fmt.Sprintf("%s cannot be empty; use 'rvn config unset %s' to clear it", key, key), nil)
+}
+
+func unknownConfigKeyError(key string, validKeys []string) *svcerr.Error {
+	return newError(CodeInvalidInput, fmt.Sprintf("unknown config key %q; valid keys: %s", key, strings.Join(validKeys, ", ")), nil)
+}
+
 type UnsetRequest struct {
 	ContextOptions
-	Editor          bool
-	EditorMode      bool
-	StateFile       bool
-	DefaultVault    bool
-	UIAccent        bool
-	UICodeTheme     bool
-	UIMarkdownStyle bool
+	Keys []string
 }
 
 type UnsetResult struct {
@@ -248,44 +224,41 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 		return nil, newError(CodeFileNotFound, fmt.Sprintf("config file not found: %s", ctx.ConfigPath), nil)
 	}
 
-	changed := make([]string, 0, 6)
-	if req.Editor {
-		ctx.Cfg.Editor = ""
-		changed = append(changed, "editor")
-	}
-	if req.EditorMode {
-		ctx.Cfg.EditorMode = ""
-		changed = append(changed, "editor_mode")
-	}
-	if req.StateFile {
-		ctx.Cfg.StateFile = ""
-		changed = append(changed, "state_file")
-	}
-	if req.DefaultVault {
-		ctx.Cfg.DefaultVault = ""
-		changed = append(changed, "default_vault")
-	}
-	if req.UIAccent {
-		ctx.Cfg.UI.Accent = ""
-		changed = append(changed, "ui.accent")
-	}
-	if req.UICodeTheme {
-		ctx.Cfg.UI.CodeTheme = ""
-		changed = append(changed, "ui.code_theme")
-	}
-	if req.UIMarkdownStyle {
-		ctx.Cfg.UI.MarkdownStyle = ""
-		changed = append(changed, "ui.markdown_style")
+	if len(req.Keys) == 0 {
+		return nil, newError(CodeMissingArgument, "no keys provided; valid keys: "+strings.Join(validUnsetKeys, ", "), nil)
 	}
 
-	if len(changed) == 0 {
-		return nil, newError(CodeMissingArgument, "no fields selected; pass one or more unset flags", nil)
+	changed := make([]string, 0, len(req.Keys))
+	seen := make(map[string]struct{}, len(req.Keys))
+	for _, rawKey := range req.Keys {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			return nil, unknownConfigKeyError(key, validUnsetKeys)
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return nil, newError(CodeInvalidInput, fmt.Sprintf("duplicate config key %q", key), nil)
+		}
+		seen[key] = struct{}{}
+
+		switch key {
+		case "editor":
+			ctx.Cfg.Editor = ""
+		case "editor_mode":
+			ctx.Cfg.EditorMode = ""
+		case "default_vault":
+			ctx.Cfg.DefaultVault = ""
+		case "ui.markdown_style":
+			ctx.Cfg.UI.MarkdownStyle = ""
+		default:
+			return nil, unknownConfigKeyError(key, validUnsetKeys)
+		}
+		changed = append(changed, key)
 	}
 
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
 		return nil, newError(CodeFileWriteError, "", err)
 	}
-	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath, ctx.Cfg)
+	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath)
 
 	return &UnsetResult{
 		Context: ctx,
@@ -344,7 +317,7 @@ func LoadVaultContext(opts ContextOptions) (*VaultContext, error) {
 		loadedCfg = &config.Config{}
 	}
 
-	resolvedStatePath := config.ResolveStatePath(opts.StatePathOverride, resolvedConfigPath, loadedCfg)
+	resolvedStatePath := config.ResolveStatePath(opts.StatePathOverride, resolvedConfigPath)
 	state, err := config.LoadState(resolvedStatePath)
 	if err != nil {
 		return &VaultContext{
@@ -366,13 +339,7 @@ func DefaultVaultName(cfg *config.Config) string {
 	if cfg == nil {
 		return ""
 	}
-	if strings.TrimSpace(cfg.DefaultVault) != "" {
-		return strings.TrimSpace(cfg.DefaultVault)
-	}
-	if strings.TrimSpace(cfg.Vault) != "" && len(cfg.Vaults) == 0 {
-		return "default"
-	}
-	return ""
+	return strings.TrimSpace(cfg.DefaultVault)
 }
 
 func VaultRows(cfg *config.Config, state *config.State) ([]VaultRow, string, string, bool) {
@@ -636,16 +603,6 @@ func AddVault(req VaultAddRequest) (*VaultAddResult, error) {
 	if ctx.Cfg.Vaults == nil {
 		ctx.Cfg.Vaults = make(map[string]string)
 	}
-	// Preserve the legacy single-vault fallback when adding the first named
-	// vault. Without this migration, populating [vaults] would make the legacy
-	// path unreachable and an init switch-back command could not restore it.
-	if len(ctx.Cfg.Vaults) == 0 && strings.TrimSpace(ctx.Cfg.Vault) != "" {
-		ctx.Cfg.Vaults["default"] = strings.TrimSpace(ctx.Cfg.Vault)
-		if strings.TrimSpace(ctx.Cfg.DefaultVault) == "" {
-			ctx.Cfg.DefaultVault = "default"
-		}
-		ctx.Cfg.Vault = ""
-	}
 
 	prevPath, existed := ctx.Cfg.Vaults[name]
 	if existed && !req.Replace {
@@ -682,7 +639,6 @@ type VaultRemoveRequest struct {
 type VaultRemoveResult struct {
 	Name           string `json:"name"`
 	RemovedPath    string `json:"removed_path"`
-	RemovedLegacy  bool   `json:"removed_legacy"`
 	DefaultCleared bool   `json:"default_cleared"`
 	ActiveCleared  bool   `json:"active_cleared"`
 	ConfigPath     string `json:"config_path"`
@@ -713,17 +669,11 @@ func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 	}
 
 	removedPath := ""
-	removedLegacy := false
 	if ctx.Cfg.Vaults != nil {
 		if p, ok := ctx.Cfg.Vaults[name]; ok {
 			removedPath = p
 			delete(ctx.Cfg.Vaults, name)
 		}
-	}
-	if removedPath == "" && name == "default" && strings.TrimSpace(ctx.Cfg.Vault) != "" && len(ctx.Cfg.Vaults) == 0 {
-		removedPath = strings.TrimSpace(ctx.Cfg.Vault)
-		ctx.Cfg.Vault = ""
-		removedLegacy = true
 	}
 	if removedPath == "" {
 		return nil, newError(CodeVaultNotFound, fmt.Sprintf("vault '%s' not found in config", name), nil)
@@ -755,7 +705,6 @@ func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 	return &VaultRemoveResult{
 		Name:           name,
 		RemovedPath:    removedPath,
-		RemovedLegacy:  removedLegacy,
 		DefaultCleared: defaultCleared,
 		ActiveCleared:  activeCleared,
 		ConfigPath:     ctx.ConfigPath,
@@ -804,7 +753,7 @@ func loadGlobalConfigAllowMissing(opts ContextOptions) (*GlobalConfigContext, er
 		return &GlobalConfigContext{
 			Cfg:          loadedCfg,
 			ConfigPath:   resolvedPath,
-			StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath, loadedCfg),
+			StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath),
 			ConfigExists: statErr == nil,
 		}, nil
 	}
@@ -816,7 +765,7 @@ func loadGlobalConfigAllowMissing(opts ContextOptions) (*GlobalConfigContext, er
 			return &GlobalConfigContext{
 				Cfg:          loadedCfg,
 				ConfigPath:   resolvedPath,
-				StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath, loadedCfg),
+				StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath),
 				ConfigExists: false,
 			}, nil
 		}
@@ -834,7 +783,7 @@ func loadGlobalConfigAllowMissing(opts ContextOptions) (*GlobalConfigContext, er
 	return &GlobalConfigContext{
 		Cfg:          loadedCfg,
 		ConfigPath:   resolvedPath,
-		StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath, loadedCfg),
+		StatePath:    config.ResolveStatePath(opts.StatePathOverride, resolvedPath),
 		ConfigExists: true,
 	}, nil
 }

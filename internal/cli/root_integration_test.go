@@ -73,7 +73,6 @@ func TestIntegration_JSONStartupErrorsUseEnvelope(t *testing.T) {
 
 		root := t.TempDir()
 		configFile := filepath.Join(root, "config.toml")
-		stateFile := filepath.Join(root, "state.toml")
 		vaultPath := filepath.Join(root, "notes")
 		if err := os.MkdirAll(vaultPath, 0o755); err != nil {
 			t.Fatalf("mkdir vault: %v", err)
@@ -87,7 +86,7 @@ main = "` + vaultPath + `"
 			t.Fatalf("write config: %v", err)
 		}
 
-		resp := run(t, "--config", configFile, "--state", stateFile, "--vault", "missing", "--json", "vault", "path")
+		resp := run(t, "--config", configFile, "--vault", "missing", "--json", "vault", "path")
 		if resp.Error.Code != "VAULT_NOT_FOUND" {
 			t.Fatalf("expected VAULT_NOT_FOUND, got %q", resp.Error.Code)
 		}
@@ -101,12 +100,11 @@ main = "` + vaultPath + `"
 
 		root := t.TempDir()
 		configFile := filepath.Join(root, "config.toml")
-		stateFile := filepath.Join(root, "state.toml")
 		if err := os.WriteFile(configFile, []byte(""), 0o644); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
 
-		resp := run(t, "--config", configFile, "--state", stateFile, "--json", "vault", "path")
+		resp := run(t, "--config", configFile, "--json", "vault", "path")
 		if resp.Error.Code != "VAULT_NOT_SPECIFIED" {
 			t.Fatalf("expected VAULT_NOT_SPECIFIED, got %q", resp.Error.Code)
 		}

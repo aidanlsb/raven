@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `rvn config set` now accepts one or more dotted `key=value` arguments, and `rvn config unset` accepts the same dotted keys as positional arguments. Setting `default_vault` is exclusive to `rvn vault pin`; it can still be cleared with `rvn config unset default_vault`.
+- `rvn config show` now reports the full effective global configuration, including resolved defaults for editor mode, state path, and Markdown style.
+- Vault-scoped MCP operations now always require a per-call `vault`/`vault_path` or a server-pinned vault. MCP no longer falls back to active/default vault state.
+- Old global configs with only the removed single-path `vault` key are migrated in memory to a real `vaults.default` registry entry; the next config write persists the canonical shape.
+- `state.toml` now always lives beside `config.toml`; stale `state_file` keys in old configs are ignored and dropped on the next save.
+
+### Removed
+- **Breaking:** the global `ui.accent` and `ui.code_theme` settings, Raven's built-in Markdown style, and their CLI flags and rendering hooks were removed. Use a stock Glamour built-in style or a Glamour style JSON via `ui.markdown_style`.
+- **Breaking:** the MCP strict-vault setting and `rvn serve --strict-vault` flag were removed because explicit vault targeting is now always enforced.
+- **Breaking:** the top-level single-path `vault` config field and its synthetic resolution behavior were removed. Use `[vaults]` plus `default_vault`, managed through `rvn vault` commands.
+- **Breaking:** the global `state_file` setting and user-facing `--state` overrides were removed.
+
 ## [v0.0.30] - 2026-07-21
 
 ### Added

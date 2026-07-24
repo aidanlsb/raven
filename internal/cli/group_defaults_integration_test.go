@@ -43,12 +43,12 @@ archive = %q
 		t.Fatalf("write config: %v", err)
 	}
 
-	statePath := filepath.Join(t.TempDir(), "state.toml")
+	statePath := filepath.Join(filepath.Dir(configPath), "state.toml")
 	if err := os.WriteFile(statePath, []byte("active_vault = \"work\"\n"), 0o644); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
 
-	rootFlags := []string{"--config", configPath, "--state", statePath}
+	rootFlags := []string{"--config", configPath}
 	cases := []struct {
 		name       string
 		parentArgs []string

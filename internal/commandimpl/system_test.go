@@ -347,7 +347,7 @@ func TestSetupInitVaultRepairsStaleDefaultWithEffectiveSwitchBack(t *testing.T) 
 		t.Fatalf("warnings = %#v, want none", warnings)
 	}
 	assertPostInitBool(t, data, "activated", true)
-	if got := data["switch_back"]; got != "rvn --json config unset --default-vault && rvn --json vault clear" {
+	if got := data["switch_back"]; got != "rvn --json config unset default_vault && rvn --json vault clear" {
 		t.Fatalf("switch_back = %#v, want command that restores no-selection behavior", got)
 	}
 }
@@ -427,12 +427,12 @@ func TestSetupInitVaultFailsWhenGlobalStateCannotLoad(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "config.toml")
-	statePath := filepath.Join(root, "broken-state.toml")
+	statePath := filepath.Join(root, "state.toml")
 	vaultPath := filepath.Join(root, "notes")
 	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
 		t.Fatalf("mkdir vault: %v", err)
 	}
-	if err := config.SaveTo(configPath, &config.Config{StateFile: filepath.Base(statePath)}); err != nil {
+	if err := config.SaveTo(configPath, &config.Config{}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 	if err := os.WriteFile(statePath, []byte("active_vault = [\n"), 0o644); err != nil {

@@ -46,11 +46,14 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 		Name:        "serve",
 		Description: "Run Raven as an MCP server",
 		VaultScope:  VaultScopeNone,
-		LongDesc:    "Run Raven as an MCP server over stdio.",
+		LongDesc: `Run Raven as an MCP server over stdio.
+
+Vault-scoped calls must provide vault or vault_path unless the server is pinned
+with --vault or --vault-path.`,
 		Examples: []string{
 			"rvn serve",
 			"rvn serve --vault personal",
-			"rvn serve --strict-vault",
+			"rvn serve --vault-path /path/to/vault",
 		},
 		UseCases: []string{
 			"Launch Raven MCP server for local clients",
@@ -77,7 +80,6 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 		Flags: []FlagMeta{
 			{Name: "client", Description: "MCP client (codex, claude-code, claude-desktop, cursor)", Type: FlagTypeString, Default: "claude-code"},
 			{Name: "config", Description: "Path to config file", Type: FlagTypeString},
-			{Name: "state", Description: "Path to state file (overrides state_file in config)", Type: FlagTypeString},
 			{Name: "vault", Description: "Pin a named vault", Type: FlagTypeString},
 			{Name: "vault-path", Description: "Pin an explicit vault path", Type: FlagTypeString},
 		},
@@ -85,7 +87,7 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 			"rvn mcp install --client codex",
 			"rvn mcp install --client claude-code",
 			"rvn mcp install --client claude-desktop --vault work",
-			"rvn mcp install --client cursor --config ~/.config/raven/work.toml --state ~/.config/raven/work-state.toml",
+			"rvn mcp install --client cursor --config ~/.config/raven/work.toml",
 		},
 		UseCases: []string{
 			"Install Raven MCP entry into a client config",
@@ -128,7 +130,6 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 		Flags: []FlagMeta{
 			{Name: "client", Description: "MCP client (codex, claude-code, claude-desktop, cursor)", Type: FlagTypeString},
 			{Name: "config", Description: "Path to config file", Type: FlagTypeString},
-			{Name: "state", Description: "Path to state file (overrides state_file in config)", Type: FlagTypeString},
 			{Name: "vault", Description: "Pin a named vault", Type: FlagTypeString},
 			{Name: "vault-path", Description: "Pin an explicit vault path", Type: FlagTypeString},
 		},
@@ -136,7 +137,7 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 			"rvn mcp show --client codex",
 			"rvn mcp show --client claude-code",
 			"rvn mcp show --client cursor --vault work",
-			"rvn mcp show --client claude-code --config ~/.config/raven/work.toml --state ~/.config/raven/work-state.toml",
+			"rvn mcp show --client claude-code --config ~/.config/raven/work.toml",
 		},
 		UseCases: []string{
 			"Generate manual MCP configuration snippet",

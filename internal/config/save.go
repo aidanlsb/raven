@@ -14,8 +14,6 @@ import (
 
 type persistedConfig struct {
 	DefaultVault *string              `toml:"default_vault,omitempty"`
-	StateFile    *string              `toml:"state_file,omitempty"`
-	Vault        *string              `toml:"vault,omitempty"`
 	Vaults       map[string]string    `toml:"vaults,omitempty"`
 	Editor       *string              `toml:"editor,omitempty"`
 	EditorMode   *string              `toml:"editor_mode,omitempty"`
@@ -23,8 +21,6 @@ type persistedConfig struct {
 }
 
 type persistedUISettings struct {
-	Accent        *string `toml:"accent,omitempty"`
-	CodeTheme     *string `toml:"code_theme,omitempty"`
 	MarkdownStyle *string `toml:"markdown_style,omitempty"`
 }
 
@@ -47,8 +43,6 @@ func SaveTo(path string, cfg *Config) error {
 
 	out := persistedConfig{
 		DefaultVault: nonEmptyPtr(cfg.DefaultVault),
-		StateFile:    nonEmptyPtr(cfg.StateFile),
-		Vault:        nonEmptyPtr(cfg.Vault),
 		Editor:       nonEmptyPtr(cfg.Editor),
 		EditorMode:   nonEmptyPtr(cfg.EditorMode),
 	}
@@ -56,13 +50,9 @@ func SaveTo(path string, cfg *Config) error {
 		out.Vaults = cfg.Vaults
 	}
 
-	accent := nonEmptyPtr(cfg.UI.Accent)
-	codeTheme := nonEmptyPtr(cfg.UI.CodeTheme)
 	markdownStyle := nonEmptyPtr(cfg.UI.MarkdownStyle)
-	if accent != nil || codeTheme != nil || markdownStyle != nil {
+	if markdownStyle != nil {
 		out.UI = &persistedUISettings{
-			Accent:        accent,
-			CodeTheme:     codeTheme,
 			MarkdownStyle: markdownStyle,
 		}
 	}

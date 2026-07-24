@@ -53,7 +53,7 @@ Examples:
 			return handleError(ErrInternal, err, "")
 		}
 
-		entry := mcpclient.BuildServerEntry(configPath, statePathFlag, mcpVaultName, mcpVaultPathFlag)
+		entry := mcpclient.BuildServerEntry(configPath, mcpVaultName, mcpVaultPathFlag)
 		result, err := mcpclient.Install(client, cfgPath, entry)
 		if err != nil {
 			return handleError(ErrMCPConfigWrite, err, "")
@@ -235,7 +235,7 @@ Examples:
 		}
 
 		client := mcpclient.Client(mcpClientFlag)
-		entry := mcpclient.BuildServerEntry(configPath, statePathFlag, mcpVaultName, mcpVaultPathFlag)
+		entry := mcpclient.BuildServerEntry(configPath, mcpVaultName, mcpVaultPathFlag)
 
 		if isJSONOutput() {
 			if mcpclient.IsTOMLClient(client) {
@@ -286,7 +286,6 @@ func init() {
 	mcpInstallCmd.Flags().StringVar(&mcpVaultName, "vault", "", "Pin a named vault")
 	mcpInstallCmd.Flags().StringVar(&mcpVaultPathFlag, "vault-path", "", "Pin an explicit vault path")
 	mcpInstallCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
-	mcpInstallCmd.Flags().StringVar(&statePathFlag, "state", "", "Path to state file (overrides state_file in config)")
 	_ = mcpInstallCmd.MarkFlagRequired("client")
 
 	mcpRemoveCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (codex, claude-code, claude-desktop, cursor)")
@@ -296,7 +295,6 @@ func init() {
 	mcpShowCmd.Flags().StringVar(&mcpVaultName, "vault", "", "Pin a named vault")
 	mcpShowCmd.Flags().StringVar(&mcpVaultPathFlag, "vault-path", "", "Pin an explicit vault path")
 	mcpShowCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
-	mcpShowCmd.Flags().StringVar(&statePathFlag, "state", "", "Path to state file (overrides state_file in config)")
 
 	mcpCmd.AddCommand(mcpInstallCmd)
 	mcpCmd.AddCommand(mcpRemoveCmd)

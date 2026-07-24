@@ -12,38 +12,15 @@ func TestResolveStatePath(t *testing.T) {
 
 	t.Run("explicit state path wins", func(t *testing.T) {
 		explicit := filepath.FromSlash("/tmp/custom/state.toml")
-		got := ResolveStatePath(explicit, configPath, &Config{
-			StateFile: "state-from-config.toml",
-		})
+		got := ResolveStatePath(explicit, configPath)
 		if got != explicit {
 			t.Fatalf("expected explicit state path, got %q", got)
 		}
 	})
 
-	t.Run("config state_file absolute", func(t *testing.T) {
-		got := ResolveStatePath("", configPath, &Config{
-			StateFile: "/var/tmp/raven-state.toml",
-		})
-		want := filepath.Clean(filepath.FromSlash("/var/tmp/raven-state.toml"))
-		if got != want {
-			t.Fatalf("expected absolute state path, got %q", got)
-		}
-	})
-
-	t.Run("config state_file relative to config dir", func(t *testing.T) {
+	t.Run("state is sibling of config", func(t *testing.T) {
 		cfgPath := filepath.FromSlash("/Users/me/.config/raven/config.toml")
-		got := ResolveStatePath("", cfgPath, &Config{
-			StateFile: "runtime/state.toml",
-		})
-		want := filepath.Join(filepath.Dir(cfgPath), "runtime", "state.toml")
-		if got != want {
-			t.Fatalf("expected %q, got %q", want, got)
-		}
-	})
-
-	t.Run("fallback sibling state.toml", func(t *testing.T) {
-		cfgPath := filepath.FromSlash("/Users/me/.config/raven/config.toml")
-		got := ResolveStatePath("", cfgPath, &Config{})
+		got := ResolveStatePath("", cfgPath)
 		want := filepath.Join(filepath.Dir(cfgPath), "state.toml")
 		if got != want {
 			t.Fatalf("expected %q, got %q", want, got)
@@ -96,7 +73,6 @@ func TestSaveToWritesConfiguredFields(t *testing.T) {
 
 	err := SaveTo(path, &Config{
 		DefaultVault: "work",
-		StateFile:    "state.toml",
 		Vaults: map[string]string{
 			"work": "/vault/work",
 		},
@@ -112,9 +88,6 @@ func TestSaveToWritesConfiguredFields(t *testing.T) {
 	content := string(data)
 	if !strings.Contains(content, `default_vault = "work"`) {
 		t.Fatalf("expected default_vault in output, got:\n%s", content)
-	}
-	if !strings.Contains(content, `state_file = "state.toml"`) {
-		t.Fatalf("expected state_file in output, got:\n%s", content)
 	}
 	if !strings.Contains(content, "[vaults]") {
 		t.Fatalf("expected vaults table in output, got:\n%s", content)

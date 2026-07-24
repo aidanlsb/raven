@@ -38,7 +38,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 3. **Set up the editor (once a vault exists).** Keep this short — it is one onboarding step, not an editor deep-dive.
    - Inspect current settings with `rvn config show --json` (and note `$EDITOR` if it is relevant to the user's choice).
    - If `editor` is unset, or the user wants to change it, ask which editor they use (common: `cursor`, `code`, `nvim`).
-   - Apply with `rvn config set --editor <cmd> --editor-mode auto --json`. Ask before changing machine-wide config, consistent with the rule about global/default vault routing.
+   - Apply with `rvn config set editor=<cmd> editor_mode=auto --json`. Ask before changing machine-wide config, consistent with the rule about global/default vault routing.
    - Confirm with `rvn config show --json`.
    - **LSP pointer (awareness only).** Mention that Raven ships a built-in LSP (`rvn lsp`) that gives diagnostics, completion, go-to-definition, and find-references in any editor with an LSP client, and point at `docs/using-your-vault/editor-integration.md` (or the `rvn docs` equivalent). Do not auto-configure nvim/vscode plugins here — make the user aware and hand off.
 4. **Discover intent.** This is the heart of the session — do it before touching the schema.

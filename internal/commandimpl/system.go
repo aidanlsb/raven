@@ -279,7 +279,7 @@ func setupInitVault(path, configPathOverride, statePathOverride string) (map[str
 		suggestedName: suggestedName,
 		configPath:    config.ResolveConfigPath(configPathOverride),
 	}
-	state.statePath = config.ResolveStatePath(statePathOverride, state.configPath, &config.Config{})
+	state.statePath = config.ResolveStatePath(statePathOverride, state.configPath)
 
 	opts := configsvc.ContextOptions{
 		ConfigPathOverride: configPathOverride,
@@ -396,7 +396,7 @@ func setInitSwitchBack(state *initPostInitState) {
 		return
 	}
 	if state.previousVaultName == "" && state.previousDefaultName != "" {
-		state.switchBack = "rvn --json config unset --default-vault && rvn --json vault clear"
+		state.switchBack = "rvn --json config unset default_vault && rvn --json vault clear"
 		return
 	}
 	state.switchBack = "rvn --json vault clear"
