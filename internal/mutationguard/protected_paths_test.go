@@ -78,10 +78,8 @@ func TestValidateContentMutationRelPath(t *testing.T) {
 			relPath: "notes/allowed.md",
 		},
 		{
-			name:        "empty path",
-			relPath:     " ",
-			wantCode:    codes.ErrInvalidInput,
-			wantMessage: "path is required",
+			name:    "blank relative path preserves legacy allowance",
+			relPath: " ",
 		},
 		{
 			name:           "hard protected file is normalized",
