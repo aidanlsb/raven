@@ -1,4 +1,4 @@
-package checksvc
+package checkfixsvc
 
 import (
 	"path"

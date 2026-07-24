@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/checksvc"
+	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
@@ -99,7 +99,7 @@ func TestCollectTraitDecisionsKeepsInteractiveOptions(t *testing.T) {
 	}}
 
 	got := collectTraitDecisions(traits, interaction)
-	want := checksvc.TraitResolution{
+	want := checkfixsvc.TraitResolution{
 		TraitName:    "priority",
 		TraitType:    "enum",
 		EnumValues:   []string{"low", "medium", "high"},

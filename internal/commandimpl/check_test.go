@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -56,7 +57,7 @@ owner: "[[people/freya]]"
 		t.Fatalf("skipped_issues = %#v, want 1", data["skipped_issues"])
 	}
 
-	skipped, ok := data["skipped_items"].([]checksvc.SkippedFix)
+	skipped, ok := data["skipped_items"].([]checkfixsvc.SkippedFix)
 	if !ok || len(skipped) != 1 {
 		t.Fatalf("skipped_items = %#v, want 1 skipped item", data["skipped_items"])
 	}
@@ -99,7 +100,7 @@ func TestHandleCheckCreateMissing_WarnsWhenPageCreationFails(t *testing.T) {
 		t.Fatalf("failed_pages = %#v, want 1", data["failed_pages"])
 	}
 
-	failed, ok := data["failed_page_items"].([]checksvc.CreateMissingFailure)
+	failed, ok := data["failed_page_items"].([]checkfixsvc.CreateMissingFailure)
 	if !ok || len(failed) != 1 {
 		t.Fatalf("failed_page_items = %#v, want 1 failure", data["failed_page_items"])
 	}

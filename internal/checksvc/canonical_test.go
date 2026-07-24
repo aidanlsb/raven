@@ -232,58 +232,6 @@ func TestCanonicalDestinationPath_TypedObjectMissingDefaultPathInPath(t *testing
 	}
 }
 
-func TestCollectFixableIssues_NonCanonicalPath_BuildsMoveFix(t *testing.T) {
-	t.Parallel()
-
-	cfg := configWithDirs("type/", "page/")
-	issues := []check.Issue{
-		{
-			Type:     check.IssueNonCanonicalPath,
-			FilePath: "objects/person/john.md",
-			Value:    "objects/person/john.md -> type/person/john.md",
-		},
-	}
-	fixes := CollectFixableIssues(issues, nil, schemaWithPerson(), cfg)
-	if len(fixes) != 1 {
-		t.Fatalf("expected 1 move fix, got %#v", fixes)
-	}
-	fix := fixes[0]
-	if fix.FixType != FixTypeMoveFile {
-		t.Fatalf("fix_type = %v, want move_file", fix.FixType)
-	}
-	if fix.NewFilePath != "type/person/john.md" {
-		t.Fatalf("new_file_path = %q, want type/person/john.md", fix.NewFilePath)
-	}
-	if fix.SourceObjectID == "" || fix.DestObjectID == "" {
-		t.Fatalf("expected resolved source/dest object IDs, got src=%q dest=%q", fix.SourceObjectID, fix.DestObjectID)
-	}
-}
-
-func TestCollectFixableIssues_NonCanonicalRef_BuildsWikilinkFix(t *testing.T) {
-	t.Parallel()
-
-	cfg := configWithDirs("type/", "page/")
-	issues := []check.Issue{
-		{
-			Type:     check.IssueNonCanonicalRef,
-			FilePath: "type/notes/today.md",
-			Line:     5,
-			Value:    "type/person/john",
-		},
-	}
-	fixes := CollectFixableIssues(issues, nil, schemaWithPerson(), cfg)
-	if len(fixes) != 1 {
-		t.Fatalf("expected 1 ref fix, got %#v", fixes)
-	}
-	fix := fixes[0]
-	if fix.FixType != FixTypeWikilink {
-		t.Fatalf("fix_type = %v, want wikilink", fix.FixType)
-	}
-	if fix.OldValue != "type/person/john" || fix.NewValue != "person/john" {
-		t.Fatalf("old/new = %q/%q, want type/person/john -> person/john", fix.OldValue, fix.NewValue)
-	}
-}
-
 func filterByType(issues []check.Issue, t check.IssueType) []check.Issue {
 	var out []check.Issue
 	for _, issue := range issues {

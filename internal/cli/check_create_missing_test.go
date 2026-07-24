@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/checksvc"
+	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -50,7 +50,7 @@ types:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := checksvc.CreateMissingPage(vaultPath, s, tc.targetPath, "meeting", "objects/", "", "daily", "templates/", nil); err != nil {
+			if err := checkfixsvc.CreateMissingPage(vaultPath, s, tc.targetPath, "meeting", "objects/", "", "daily", "templates/", nil); err != nil {
 				t.Fatalf("createMissingPage failed: %v", err)
 			}
 
@@ -81,7 +81,7 @@ types: {}
 		t.Fatalf("load schema: %v", err)
 	}
 
-	if err := checksvc.CreateMissingPage(vaultPath, s, "journal/2026-06-30", "date", "objects/", "", "journal", "templates/", nil); err != nil {
+	if err := checkfixsvc.CreateMissingPage(vaultPath, s, "journal/2026-06-30", "date", "objects/", "", "journal", "templates/", nil); err != nil {
 		t.Fatalf("createMissingPage failed: %v", err)
 	}
 
