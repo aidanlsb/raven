@@ -15,7 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/buildinfo"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
 func newTestServerWithVault(t *testing.T) *Server {
@@ -137,6 +139,42 @@ func hasResourceURI(resources []Resource, uri string) bool {
 		}
 	}
 	return false
+}
+
+func TestInitializeVersionMatchesCLIInjectedVersion(t *testing.T) {
+	previousVersion := buildinfo.Version
+	t.Cleanup(func() {
+		buildinfo.Version = previousVersion
+	})
+	buildinfo.Version = "v1.2.3"
+
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+
+	var output bytes.Buffer
+	server := NewServerWithExecutable("", executable)
+	server.SetIO(strings.NewReader(""), &output)
+	server.HandleRequest(&Request{JSONRPC: "2.0", ID: 1, Method: "initialize"})
+
+	var response struct {
+		Result struct {
+			ServerInfo ServerInfo `json:"serverInfo"`
+		} `json:"result"`
+		Error *RPCError `json:"error,omitempty"`
+	}
+	if err := json.NewDecoder(&output).Decode(&response); err != nil {
+		t.Fatalf("decode initialize response: %v", err)
+	}
+	if response.Error != nil {
+		t.Fatalf("initialize returned error: %s", response.Error.Message)
+	}
+
+	want := versioninfo.Current().Version
+	if response.Result.ServerInfo.Version != want {
+		t.Fatalf("initialize serverInfo.version = %q, want CLI version %q", response.Result.ServerInfo.Version, want)
+	}
 }
 
 func TestResourcesListIncludesGuideIndexAndTopics(t *testing.T) {

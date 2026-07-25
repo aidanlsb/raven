@@ -60,15 +60,14 @@ func CurrentVersionInfoWithReader(reader BuildInfoReader) VersionInfo {
 
 func CurrentVersionInfoFromExecutable(executablePath string) VersionInfo {
 	info := defaultVersionInfo()
-	if strings.TrimSpace(executablePath) == "" {
-		return info
+	if strings.TrimSpace(executablePath) != "" {
+		buildInfo, err := stdbuildinfo.ReadFile(executablePath)
+		if err == nil && buildInfo != nil {
+			info = versionInfoFromBuildInfo(buildInfo, info)
+		}
 	}
-
-	buildInfo, err := stdbuildinfo.ReadFile(executablePath)
-	if err != nil || buildInfo == nil {
-		return info
-	}
-	return versionInfoFromBuildInfo(buildInfo, info)
+	applyLdflagsMetadata(&info)
+	return info
 }
 
 func defaultVersionInfo() VersionInfo {
