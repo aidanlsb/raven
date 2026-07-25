@@ -398,7 +398,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.31...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.32...HEAD
+[v0.0.32]: https://github.com/aidanlsb/raven/compare/v0.0.31...v0.0.32
 [v0.0.31]: https://github.com/aidanlsb/raven/compare/v0.0.30...v0.0.31
 [v0.0.30]: https://github.com/aidanlsb/raven/compare/v0.0.29...v0.0.30
 [v0.0.29]: https://github.com/aidanlsb/raven/compare/v0.0.28...v0.0.29

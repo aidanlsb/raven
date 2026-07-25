@@ -21,7 +21,7 @@ Every release publishes prebuilt binaries for Linux, macOS, and Windows (amd64 a
 Download the archive for your platform, verify it against `checksums.txt` if you like, and place the `rvn` binary somewhere on your `PATH`. For example, on Linux (x86_64), substituting the current version number:
 
 ```bash
-VERSION=0.0.31   # See the releases page for the latest version
+VERSION=0.0.32   # See the releases page for the latest version
 curl -LO "https://github.com/aidanlsb/raven/releases/download/v${VERSION}/raven_${VERSION}_linux_x86_64.tar.gz"
 tar -xzf "raven_${VERSION}_linux_x86_64.tar.gz" rvn
 sudo install rvn /usr/local/bin/rvn
@@ -121,7 +121,7 @@ Use `docs fetch` to force a refresh or pin another ref:
 
 ```bash
 rvn docs fetch                       # Force-refresh from the default ref
-rvn docs fetch --ref v0.0.31         # Pin a specific tag
+rvn docs fetch --ref v0.0.32         # Pin a specific tag
 ```
 
 A missing cache is not fetched implicitly; run `rvn docs fetch` to create it.
