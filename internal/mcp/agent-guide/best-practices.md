@@ -22,7 +22,7 @@
 - If user-supplied or existing reference sugar is ambiguous, or destructive intent is unclear, ask a focused clarifying question.
 
 6. Prefer one strong query over many weak queries.
-- Compose with predicates and relationships (`within`, `has`, `refs`, `ancestor`).
+- Compose with predicates and relationships (`within`, `contains`, `refs`, `refd`).
 - Use `count-only` to size large sets, then `limit`/`offset` to page; loop while `has_more` is `true`, advancing `offset` to the returned `next_offset`.
 
 7. Use issue-driven repair loops.

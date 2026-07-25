@@ -60,14 +60,14 @@ check failures.
 ```text
 raven_invoke(command="check", args={"issues":"missing_reference,unknown_type,missing_required_field"})
 raven_invoke(command="check", args={"exclude":"unused_type,unused_trait,short_ref_could_be_full_path"})
-raven_invoke(command="check", args={"errors_only":true})
+raven_invoke(command="check", args={"errors-only":true})
 raven_invoke(command="check create-missing", args={})
 raven_invoke(command="check create-missing", args={"confirm":true})
 ```
 
 ## Practical repair loop
 
-1. Run a scoped check (`path`, `type`, or `trait` when possible).
+1. Run a scoped check (`reference`, `type`, or `trait` when possible).
 2. Group by `issue_type` and frequency.
 3. Apply fixes using `fix_command` where supplied.
 4. Re-run the same scoped check.

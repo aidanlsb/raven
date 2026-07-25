@@ -122,6 +122,10 @@ directories:
 
 Raven derives asset metadata such as path, extension, media type, size, and modification time. If you need authored metadata about an asset, create a Markdown object that references it.
 
+Bring external files into the managed asset root with `rvn asset import`; use
+`rvn move` for assets already inside the vault so references stay in sync. See
+`using-your-vault/assets.md` for the managed import and organization flow.
+
 ## Traits
 
 Traits are inline annotations that add structured, queryable metadata to your content:
@@ -179,6 +183,9 @@ rvn add "@todo Review PR"              # Capture to today's note
 
 Daily notes are `date`-typed items. They support templates, structured headings, and all the same query/trait features as any other item. See `using-your-vault/daily-notes.md` for the full guide.
 
+Their canonical object ID is always the bare ISO date (`YYYY-MM-DD`), regardless
+of `directories.daily`; author links as `[[2026-03-15]]`.
+
 ## Queries
 
 Raven Query Language (RQL) lets you retrieve objects and traits by structure, not just text:
@@ -194,7 +201,9 @@ rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review
 rvn query 'trait:due .value<today'
 ```
 
-Queries return either objects or traits, can nest arbitrarily, and support boolean composition (`AND`, `OR`, `NOT`). See `querying/query-language.md` for the full syntax.
+Queries return exactly one result kind—objects, sections, traits, or assets—can
+nest arbitrarily, and support boolean composition (`AND`, `OR`, `NOT`). See
+`querying/query-language.md` for the full syntax.
 
 ## Agent-friendly descriptions
 

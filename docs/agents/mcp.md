@@ -109,6 +109,8 @@ through `raven_invoke` on the running server.
 - **Post-init activation disclosure:** after `init` creates an additional vault,
   it becomes active immediately. Inspect and surface `post_init.active_vault`,
   `previous_active_vault` / `previous_vault`, and `switch_back` before continuing.
+  This CLI activation does not focus the MCP session; invoke `vault_focus` or
+  pass `vault`/`vault_path` on later vault-scoped calls.
 - **`VAULT_AMBIGUOUS`:** when no explicit `vault`/`vault_path` is given and the
   server has neither session focus nor a launch pin, the call fails with this stable error code.
   Single-vault users who pin a vault (for example via
@@ -163,6 +165,10 @@ collections are `[]`, not `null`. Specialized or secondary collections retain
 descriptive keys, such as `ids`, `issues`, `sections`, `items_by_target`, and
 `items_by_source`; ambiguity failures retain candidate IDs in
 `error.details.matches`.
+
+Failed bulk mutations preserve the attempted inputs in their original order
+under the command's bulk argument key in `error.details`, together with
+`total`, so callers can inspect or retry the exact selection.
 
 ### Discovery Flow
 
@@ -259,6 +265,18 @@ MCP:
   }
 }
 ```
+
+Flag arguments keep their registry names, including hyphens: use `dry-run`,
+`start-line`, `count-only`, and `fields-json`, not underscore spellings. Named
+positional arguments such as `query_string`, `old_str`, and `section_id` keep
+their underscores. Use `raven_describe` as the authority for each command.
+
+Commands that target one existing vault item use `reference`; the retired
+`object` / `object_id` spellings are not aliases. Bulk target keys are
+`references` for commands such as `set`, `delete`, `reclassify`, `open`,
+`backlinks`, and `outlinks`; `object_ids` for bulk `add` and `move`; and
+`trait_ids` for bulk `update`. MCP does not receive a stdin byte stream—pass the
+array named by `raven_describe`.
 
 ### Key-value flags become JSON objects or arrays
 
@@ -417,8 +435,8 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
   "args": {
     "reference": "project/website.md",
     "raw": true,
-    "start_line": 10,
-    "end_line": 40
+    "start-line": 10,
+    "end-line": 40
   }
 }
 ```
@@ -478,14 +496,25 @@ and wikilinks are rewritten.
 }
 ```
 
-Then append content:
+Create the heading explicitly, then append body content to the returned section:
+
+```json
+{
+  "command": "section_create",
+  "args": {
+    "file": "project/website-redesign",
+    "title": "Notes",
+    "level": 2
+  }
+}
+```
 
 ```json
 {
   "command": "add",
   "args": {
-    "text": "## Notes\n- Kickoff next week",
-    "to": "project/website-redesign.md"
+    "text": "- Kickoff next week",
+    "to": "project/website-redesign#notes"
   }
 }
 ```
@@ -504,9 +533,10 @@ Then append content:
 
 ### Preview/apply flow
 
-Single-object writes (`set`, `add`, `update`, `edit`, and single-object
-`delete`/`move`) apply immediately. The call below writes on the first
-invocation:
+Single-object writes (`asset_import`, `set`, `add`, `update`, `edit`,
+`section_create`, `section_move`, `section_rename`, `reclassify`, and
+single-object `delete`/`move`) apply immediately. The call below writes on the
+first invocation:
 
 ```json
 {
@@ -534,14 +564,14 @@ Pass `dry-run` to preview a single-object write without applying it:
 ```
 
 High-blast-radius operations stay preview-first and require `confirm` to apply:
-bulk writes (`stdin`), `query` with `apply`, `schema rename`, `schema convert`,
-and `check` fixes.
+bulk writes (bulk ID arrays), `query` with `apply`, `schema rename`, `schema
+convert`, and `check` fixes.
 
 ```json
 {
   "command": "delete",
   "args": {
-    "stdin": true,
+    "references": ["project/old-one", "project/old-two"],
     "confirm": true
   }
 }

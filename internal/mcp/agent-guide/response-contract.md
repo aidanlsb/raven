@@ -4,17 +4,19 @@ Use this guide to interpret Raven MCP results safely and consistently.
 
 ## Standard JSON envelope
 
-All commands return:
+Every command returns `ok`. Other envelope fields are present only when
+applicable (`omitempty` on the wire). A typical success is:
 
 ```json
 {
   "ok": true,
-  "data": {},
-  "error": null,
-  "warnings": [],
-  "meta": {}
+  "data": {}
 }
 ```
+
+Failures carry `error`; non-empty `warnings` and applicable `meta` are added to
+successful responses. Do not require absent fields to be serialized as `null`
+or `[]`.
 
 ## Collection keys
 
@@ -41,6 +43,9 @@ Important:
 - Top-level keys are only `command`, `args`, `vault`, `vault_path`, `schema_hash`, `strict_schema`.
 - Use `vault` for a configured vault name or `vault_path` for an explicit vault directory on a single invocation.
 - Do not pass both `vault` and `vault_path`.
+- Registry flags keep hyphens in `args` (`dry-run`, `errors-only`,
+  `fields-json`); named positional arguments keep their declared underscores
+  (`query_string`, `old_str`, `section_id`).
 
 For `resources/read`, the vault-scoped Raven URIs `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional top-level `vault` or `vault_path` params.
 - Use one or the other for that read.
@@ -128,14 +133,14 @@ a `Created <file>` line followed by a `link as <id>` hint.
 There are two mutation classes with different defaults:
 
 1. Single-object writes apply immediately (`meta.mutation.phase = "applied"`):
-   `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
-   `section_rename`, `reclassify`, and single-object `delete`/`move`. Commands
-   that expose `dry-run` accept `dry-run=true` to get a preview
-   (`meta.mutation.phase = "preview"`) without writing.
+   `asset_import`, `set`, `add`, `update`, `edit`, `section_create`,
+   `section_move`, `section_rename`, `reclassify`, and single-object
+   `delete`/`move`. Commands that expose `dry-run` accept `dry-run=true` to get
+   a preview (`meta.mutation.phase = "preview"`) without writing.
 2. High-blast-radius operations are preview-first (`meta.mutation.phase =
-   "preview"`) and require `confirm=true` to apply: any bulk write (`stdin=true`),
-   `query` with `apply`, `schema rename`, `schema convert`, and the `check fix` /
-   `check create-missing` repair subcommands.
+   "preview"`) and require `confirm=true` to apply: any bulk write (an MCP bulk
+   ID array or CLI `--stdin`), `query` with `apply`, `schema rename`, `schema
+   convert`, and the `check fix` / `check create-missing` repair subcommands.
 
 Examples:
 
@@ -152,11 +157,16 @@ raven_invoke(command="edit", args={"reference":"project/website.md", "old_str":"
 
 # Preview-first; apply only after explicit approval with confirm=true:
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "apply":["update done"]})
-raven_invoke(command="delete", args={"stdin":true, "confirm":true})
-raven_invoke(command="move", args={"stdin":true, "destination":"archive/", "confirm":true})
+raven_invoke(command="delete", args={"references":["project/one","project/two"], "confirm":true})
+raven_invoke(command="move", args={"object_ids":["project/one","project/two"], "destination":"archive/", "confirm":true})
 raven_invoke(command="reclassify", args={"references":["page/one","page/two"], "new-type":"note"})
 raven_invoke(command="reclassify", args={"references":["page/one","page/two"], "new-type":"note", "confirm":true})
 ```
+
+MCP bulk mode takes an ID array rather than stdin bytes. Use the key from
+`raven_describe`: generally `references`, with `object_ids` for bulk `add` and
+`move`, and `trait_ids` for bulk `update`. Failed bulk responses retain that
+same ordered array in `error.details`.
 
 Because single-object writes apply on the first call, only invoke them when the
 user intent is clear. When unsure about a `delete`/`move`, inspect the object

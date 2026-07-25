@@ -6,7 +6,9 @@ The goal is a hands-on walkthrough that teaches Raven's model through real actio
 
 ## Step 1: Inspect the vault
 
-Start by understanding what the user has.
+Start by confirming the MCP session has a per-call target, session focus, or
+server launch pin. MCP does not use CLI `active_vault` or `default_vault`.
+Then understand what the user has.
 
 ```text
 raven_invoke(command="schema", args={"subcommand":"types"})

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Corrected MCP docs, embedded agent guides, and packaged skills for explicit post-`init` vault targeting, canonical hyphenated flag names, bulk argument arrays and retry details, and the body-only `add` contract.
+- Corrected user docs for import mapping-file keys, core-type template placement, bulk reclassification, stale active-vault failures, managed asset imports, and bare daily-note IDs.
+
 ## [v0.0.32] - 2026-07-25
 
 ### Fixed
@@ -394,7 +398,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.27...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.32...HEAD
+[v0.0.32]: https://github.com/aidanlsb/raven/compare/v0.0.31...v0.0.32
+[v0.0.31]: https://github.com/aidanlsb/raven/compare/v0.0.30...v0.0.31
+[v0.0.30]: https://github.com/aidanlsb/raven/compare/v0.0.29...v0.0.30
+[v0.0.29]: https://github.com/aidanlsb/raven/compare/v0.0.28...v0.0.29
+[v0.0.28]: https://github.com/aidanlsb/raven/compare/v0.0.27...v0.0.28
 [v0.0.27]: https://github.com/aidanlsb/raven/compare/v0.0.26...v0.0.27
 [v0.0.26]: https://github.com/aidanlsb/raven/compare/v0.0.25...v0.0.26
 [v0.0.25]: https://github.com/aidanlsb/raven/compare/v0.0.24...v0.0.25

@@ -25,6 +25,10 @@ Raven is plain markdown + schema + query:
 
 ## First commands to run
 
+Before a vault-scoped call, provide a per-call `vault`/`vault_path`, set session
+focus with `vault_focus`, or use a server launch pin. MCP never falls back to
+CLI `active_vault` or config `default_vault`.
+
 ```text
 raven_invoke(command="schema", args={"subcommand":"types"})
 raven_invoke(command="schema", args={"subcommand":"traits"})
@@ -37,7 +41,8 @@ Then fetch:
 - `raven://queries/saved`
 - `raven://vault/agent-instructions`
 
-If you are working against a non-default vault, pass the same `vault` or `vault_path` on `resources/read` for those vault-scoped URIs.
+Pass the same `vault` or `vault_path` on `resources/read` for those vault-scoped
+URIs unless the session already has focus or a server launch pin.
 
 ## Recommended first create flow
 
