@@ -7,22 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.31] - 2026-07-24
+
 ### Added
-- `rvn vault focus` sets or clears an MCP server's in-memory session vault pin, allowing agents to switch the default vault for subsequent calls without changing CLI `active_vault` or config `default_vault`.
+- `rvn asset import <source> <destination>` copies (or `--move`s) an external non-Markdown file into the vault asset root, with `--force`, `--dry-run`, collision failure by default, and shared ChangeSet/post-mutation indexing.
+- `rvn vault focus` sets or clears an MCP server's in-memory session vault pin, so agents can switch the default vault for subsequent calls without changing CLI `active_vault` or config `default_vault`.
+- Bulk `rvn reclassify` supports `--stdin` preview and `--confirm` apply.
+- Failed bulk mutation responses now retain the attempted input IDs (ordered) so agents can retry without losing the selection.
+- LSP quick-fix code actions for reference diagnostics, and go-to-definition / navigation for frontmatter `[[refs]]` / ref field values.
+- Incremental reindex can run under a shared index lock alongside the LSP (full rebuilds still take the exclusive lock).
+- Index dirty-state journal tracks interrupted post-write projection work and heals on startup.
+- Shared `mutation.ChangeSet` / post-mutation path, `internal/fieldvalue`, `internal/refresolve`, read-side catalog snapshots, and related import-graph cleanups for a clearer service layer.
 
 ### Changed
-- CLI vault resolution now fails when `active_vault` names an unconfigured vault instead of warning and falling back to `default_vault`; clear or replace the stale active selection, or target a vault explicitly.
+- **Breaking:** CLI/MCP target arguments standardize on `reference` / `references` (drop `object` / `object_id` from the surface). `trait_id` and move `source`/`destination` are unchanged. No aliases.
 - **Breaking:** `rvn config set` now accepts one or more dotted `key=value` arguments, and `rvn config unset` accepts the same dotted keys as positional arguments. Setting `default_vault` is exclusive to `rvn vault pin`; it can still be cleared with `rvn config unset default_vault`.
-- `rvn config show` now reports the full effective global configuration, including resolved defaults for editor mode, state path, and Markdown style.
-- Vault-scoped MCP operations now always require a per-call `vault`/`vault_path` or a server-pinned vault. MCP no longer falls back to active/default vault state.
-- Old global configs with only the removed single-path `vault` key are migrated in memory to a real `vaults.default` registry entry; the next config write persists the canonical shape.
-- `state.toml` now always lives beside `config.toml`; stale `state_file` keys in old configs are ignored and dropped on the next save.
+- `rvn config show` now reports the full effective global configuration, including resolved defaults.
+- Vault-scoped MCP operations always require a per-call `vault`/`vault_path`, a session focus, or a server launch pin. MCP no longer falls back to active/default vault state.
+- CLI vault resolution fails when `active_vault` names an unconfigured vault instead of warning and falling back to `default_vault`.
+- Old global configs with only the removed single-path `vault` key are migrated in memory to `vaults.default`; the next config write persists the canonical shape.
+- `state.toml` always lives beside `config.toml`; stale `state_file` keys are ignored and dropped on the next save.
 
 ### Removed
-- **Breaking:** the global `ui.accent` and `ui.code_theme` settings, Raven's built-in Markdown style, and their CLI flags and rendering hooks were removed. Use a stock Glamour built-in style or a Glamour style JSON via `ui.markdown_style`.
-- **Breaking:** the MCP strict-vault setting and `rvn serve --strict-vault` flag were removed because explicit vault targeting is now always enforced.
-- **Breaking:** the top-level single-path `vault` config field and its synthetic resolution behavior were removed. Use `[vaults]` plus `default_vault`, managed through `rvn vault` commands.
-- **Breaking:** the global `state_file` setting and user-facing `--state` overrides were removed.
+- **Breaking:** the global `ui.accent` and `ui.code_theme` settings, Raven's built-in Markdown style, and their CLI flags and rendering hooks. Use a stock Glamour built-in style or a Glamour style JSON via `ui.markdown_style`.
+- **Breaking:** the MCP `strict_vault` setting and `rvn serve --strict-vault` flag (explicit vault targeting is always enforced).
+- **Breaking:** the top-level single-path `vault` config field and its synthetic resolution behavior. Use `[vaults]` plus `default_vault` via `rvn vault` commands.
+- **Breaking:** the global `state_file` setting and user-facing `--state` overrides.
 
 ## [v0.0.30] - 2026-07-21
 
