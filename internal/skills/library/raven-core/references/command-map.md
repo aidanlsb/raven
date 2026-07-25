@@ -21,6 +21,7 @@
 ## Organizing content
 
 - Change an object's type safely: `rvn reclassify <reference> <new-type> --json`
+- Import an external non-Markdown file under `directories.assets`: `rvn asset import /absolute/source assets/destination/ --json` (copy by default; `--move` removes the source after success)
 - Safe move or rename with ref updates: `rvn move <source> <dest> --json` (applies immediately; add `--dry-run` to preview). Bulk `--stdin` moves require `--confirm`.
 - Create a section: `rvn section create <file> "<title>" --level N [--after|--before|--under <section>] --json`.
 - Reorder/reparent a complete section subtree: `rvn section move <file#section> [--after|--before|--under <section>] --json`.

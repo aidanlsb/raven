@@ -40,7 +40,7 @@ For complex or reusable mappings, use a YAML mapping file:
 ```yaml
 # mappings/contacts.yaml
 type: person
-mappings:
+map:
   full_name: name
   mail: email
   org: company
@@ -49,6 +49,9 @@ mappings:
 ```bash
 rvn import --mapping mappings/contacts.yaml --file contacts.json
 ```
+
+Mapping files use `map` for external-to-schema field mappings. They can also set
+`key` and `content_field`, matching the equivalent CLI flags.
 
 ### Heterogeneous imports
 
@@ -59,18 +62,21 @@ When the input contains multiple types, use a `type_field` to tell Raven which f
 type_field: kind
 types:
   contact:
-    target_type: person
-    mappings:
+    type: person
+    map:
       full_name: name
   proj:
-    target_type: project
-    mappings:
+    type: project
+    map:
       title: name
 ```
 
 ```bash
 rvn import --mapping mappings/mixed.yaml --file mixed-data.json
 ```
+
+Each entry under `types` uses `type` for the Raven target type and can set its
+own `map`, `key`, and `content_field`.
 
 ## Import modes
 

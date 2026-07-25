@@ -40,7 +40,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
    - If `editor` is unset, or the user wants to change it, ask which editor they use (common: `cursor`, `code`, `nvim`).
    - Apply with `rvn config set editor=<cmd> editor_mode=auto --json`. Ask before changing machine-wide config, consistent with the rule about global/default vault routing.
    - Confirm with `rvn config show --json`.
-   - **LSP pointer (awareness only).** Mention that Raven ships a built-in LSP (`rvn lsp`) that gives diagnostics, completion, go-to-definition, and find-references in any editor with an LSP client, and point at `docs/using-your-vault/editor-integration.md` (or the `rvn docs` equivalent). Do not auto-configure nvim/vscode plugins here — make the user aware and hand off.
+   - **LSP pointer (awareness only).** Mention that Raven ships a built-in LSP (`rvn lsp`) with diagnostics, quick-fix code actions, completion, hover, go-to-definition (including frontmatter ref values), and find-references in any editor with an LSP client. Point at `docs/using-your-vault/editor-integration.md` (or the `rvn docs` equivalent). Do not auto-configure nvim/vscode plugins here — make the user aware and hand off.
 4. **Discover intent.** This is the heart of the session — do it before touching the schema.
    - Ask about their world, not Raven's features: "What are you trying to keep track of?", "What keeps slipping through the cracks?", "What do you look up or write down over and over?"
    - Listen for the nouns (projects, clients, papers, meetings, recipes, workouts) and the verbs (follow up, review, decide, remember). The recurring nouns are candidate types; the recurring verbs are candidate traits.

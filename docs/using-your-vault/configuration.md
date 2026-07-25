@@ -136,10 +136,17 @@ rvn vault use personal --json
 rvn vault pin personal --json
 rvn vault list --json
 rvn vault remove personal --clear-default --clear-active --json
+rvn vault focus personal --json
 ```
 
 `rvn vault pin <name>` is the only command that sets `default_vault`.
 `rvn config unset default_vault` can clear it.
+
+In `rvn vault list --json`, `active_missing: true` means `active_vault` no
+longer names a configured vault; repair it with `rvn vault use <name>` or `rvn
+vault clear`. `rvn vault focus` invoked directly in a shell only validates and
+describes an MCP focus target. To change a running server's in-memory focus,
+invoke the `vault_focus` command through that server's `raven_invoke`.
 
 ### Manage global config fields via CLI
 

@@ -59,9 +59,11 @@ If multiple candidates match, the reference is ambiguous and is not resolved aut
 ### Command reference arguments
 
 Commands that act on existing vault content use the positional argument name
-`reference`; their MCP contracts use `reference` for one input and `references`
-for bulk input. Bulk CLI commands read the same references from `--stdin`, one
-per line.
+`reference`; their MCP contracts use `reference` for one input and usually
+`references` for bulk input. The command-specific exceptions are bulk
+`add`/`move` (`object_ids`), bulk `update` (`trait_ids`), and `move`'s unchanged
+single-item `source`/`destination` pair. Bulk CLI commands read IDs from
+`--stdin`, one per line. Use `raven_describe` for the exact MCP array key.
 
 The shared reference grammar accepts canonical object IDs, vault-relative
 Markdown paths (with or without `.md`), section IDs (`object#fragment`), full
@@ -76,9 +78,10 @@ Each command narrows that grammar to the targets it can safely handle:
 | `resolve` | Objects, sections, and indexed assets |
 | `open` | Objects, sections, and indexed assets; also accepts bulk `references` |
 | `read` | Managed Markdown files and sections |
-| `set`, `unset` | File-level typed objects; sections and assets are rejected |
+| `set`, `unset` | File-level Markdown objects; sections and assets are rejected |
 | `delete` | File-backed objects and assets; sections are rejected |
-| `reclassify` | File-level typed objects; sections and assets are rejected; also accepts bulk `references` |
+| `move` | File-backed objects and assets; section sources are rejected |
+| `reclassify` | File-level Markdown objects; sections and assets are rejected; also accepts bulk `references` |
 | `edit` | Managed Markdown files and section subtrees; config, schema, templates, excluded files, and assets are rejected |
 | `check`, `check fix` | A file, directory, or object reference; omit it to check the entire vault |
 | `backlinks` | Objects, sections, and indexed assets; also accepts bulk `references` |

@@ -1,6 +1,8 @@
 # Bulk Operations Reference
 
-Bulk operations let you act on many objects found by a query. All bulk operations preview by default—add `--confirm` to apply changes.
+Bulk operations let you act on many objects, sections, assets, or trait
+instances selected by a query. Bulk writes preview by default—add `--confirm`
+to apply changes.
 
 Use `querying/query-language.md` for query syntax and `using-your-vault/configuration.md` for saved query definitions.
 
@@ -200,13 +202,17 @@ rvn query "type:project .status==active" --ids | rvn set --stdin priority=high -
 rvn query "trait:todo .value==todo" --ids | rvn update --stdin done --confirm
 
 # Update explicit trait IDs without stdin
-rvn update --trait-id daily/today.md:trait:0 --trait-id daily/tomorrow.md:trait:0 done --confirm
+rvn update --trait-id daily/2026-03-15.md:trait:0 --trait-id daily/2026-03-16.md:trait:0 done --confirm
 
 # Delete via pipe
 rvn query "type:project .status==archived" --ids | rvn delete --stdin --confirm
 
 # Move via pipe
 rvn query "type:project .status==archived" --ids | rvn move --stdin archive/project/ --confirm
+
+# Preview a bulk reclassification, then apply it
+rvn query "type:page" --ids | rvn reclassify note --stdin
+rvn query "type:page" --ids | rvn reclassify note --stdin --confirm
 ```
 
 ### Combining with Shell Tools
@@ -230,6 +236,7 @@ rvn query "type:person" --ids | grep "team-" | rvn set --stdin department=engine
 | `rvn add` | Append text to each file or section (section IDs append inside the section) |
 | `rvn delete` | Delete each object or asset (file-level only) |
 | `rvn move` | Move each object (file-level only) |
+| `rvn reclassify` | Change each file-level Markdown object to the positional target type |
 | `rvn backlinks` | Read-only grouped incoming references for each target |
 | `rvn outlinks` | Read-only grouped outgoing references for each source |
 
@@ -283,6 +290,13 @@ Updated: project/gamma (status=invalid-value) [ERROR: invalid enum value]
 
 3 errors occurred. See above for details.
 ```
+
+If a bulk mutation fails before it can produce a preview or apply result, JSON
+output preserves the parsed inputs in `error.details` in their original order,
+plus `total`. The input key follows the command contract: `references` for
+`set`, `delete`, and `reclassify`; `trait_ids` for `update`; and `object_ids`
+for bulk `add` and `move`. Use that retained list to inspect or retry the exact
+selection.
 
 ### Rollback
 

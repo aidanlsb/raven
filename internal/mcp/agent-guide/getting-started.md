@@ -7,10 +7,13 @@ Use this guide after quickstart when you need an operational first pass through 
 0. If no vault exists yet, initialize one:
    `raven_invoke(command="init", args={"path":"/path/to/vault"})`
    Init auto-registers the new vault. Read the `post_init` object in the response:
-   - `is_first_vault=true` means it is now the default and active vault; you can proceed.
+   - `is_first_vault=true` means it is now the CLI default and active vault.
    - `is_first_vault=false` means the additional vault was registered and made active.
      Surface `active_vault`, `previous_active_vault` / `previous_vault`, and the exact
      `switch_back` command before continuing. Changing the default remains an explicit choice.
+   CLI activation does not target MCP calls. Invoke
+   `raven_invoke(command="vault_focus", args={"path":"/path/to/vault"})`, pass
+   `vault_path` per call, or restart the server with a launch pin before step 1.
 1. Understand the schema:
    `raven_invoke(command="schema", args={"subcommand":"types"})`
    `raven_invoke(command="schema", args={"subcommand":"traits"})`
@@ -49,10 +52,10 @@ raven_invoke(command="upsert", args={
 Preview first:
 
 ```text
-raven_invoke(command="import", args={"type":"project", "file":"projects.json", "dry_run":true})
+raven_invoke(command="import", args={"type":"project", "file":"projects.json", "dry-run":true})
 ```
 
-Apply by re-running without `dry_run` (import has no `confirm` flag):
+Apply by re-running without `dry-run` (import has no `confirm` flag):
 
 ```text
 raven_invoke(command="import", args={"type":"project", "file":"projects.json"})

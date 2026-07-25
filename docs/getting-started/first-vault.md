@@ -20,7 +20,13 @@ cd ~/notes
 
 ```text
 notes/
+├── .gitignore
 ├── .raven/
+├── assets/
+├── daily/
+├── page/
+├── templates/
+├── type/
 ├── raven.yaml
 └── schema.yaml
 ```
@@ -28,8 +34,10 @@ notes/
 ## What each file is for
 
 - `.raven/` is derived vault state such as the local index
+- `.gitignore` excludes Raven's derived index and trash directories
 - `raven.yaml` is vault-local operational configuration
 - `schema.yaml` is the vault data model
+- the content directories match the defaults in `raven.yaml`
 
 Markdown files are still the durable source of truth. `.raven/` can be rebuilt with `rvn reindex`.
 Raven's long-form docs cache is global and lives next to global config, not inside each vault.
@@ -116,6 +124,10 @@ When a command needs a vault, Raven resolves in this order:
 3. `active_vault` from `state.toml`
 4. `default_vault` from `config.toml`
 
+If `active_vault` is set but does not name an entry in `[vaults]`, CLI
+resolution fails instead of falling back to `default_vault`. Repair it with
+`rvn vault use <name>` or clear it with `rvn vault clear`.
+
 If you mostly work in one vault, setting `default_vault` and `active_vault` makes the CLI much less noisy.
 
 ## What belongs in `raven.yaml` vs `config.toml`
@@ -124,7 +136,7 @@ Use `config.toml` for machine preferences and vault registry:
 - editor
 - default vault
 - named vault paths
-- UI preferences
+- terminal Markdown rendering (`ui.markdown_style`)
 
 Use `raven.yaml` for vault behavior that should travel with the vault:
 - directory layout

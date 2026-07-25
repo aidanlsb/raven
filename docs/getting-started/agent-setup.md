@@ -34,7 +34,8 @@ In non-interactive or `--json` runs it never prompts — agents cannot answer a
 `y/N` prompt. Pass `--yes` to apply; without it the command returns a preview
 and sets `needs_confirm: true`. The preview lists each skill with its planned
 action (`install`, `update`, or `up to date`) so an agent can tell whether a
-confirm is still required. After `--yes`, the response reports
+confirm is still required. `--confirm` is accepted as an alias for `--yes`.
+After confirmation, the response reports
 `mode: "applied"` and the number of file changes made:
 
 ```bash
@@ -171,18 +172,23 @@ MCP tool). Init applies Raven's first-run vault policy:
 
 - The new vault is auto-registered in global config.
 - If it is the first vault on the machine, it is also set as the default and active vault,
-  so later commands resolve to it automatically.
+  so later CLI commands resolve to it automatically.
 - If another vault already exists, init registers and activates the new vault while leaving
   the existing default unchanged.
 
 Agents should read the `post_init` object in the response:
 
-- On the first vault, `is_first_vault` is `true`, `post_init.actions` is empty, and routing is
-  already applied — the agent can proceed immediately, no further setup needed.
+- On the first vault, `is_first_vault` is `true`, `post_init.actions` is empty, and CLI
+  routing is already applied.
 - When another vault already exists, `activated=true` and `active_vault` identify the new
   target. `previous_active_vault` / `previous_vault` and `switch_back` disclose the routing
   change and exact restore command. The agent should surface that switch before continuing;
   changing the default remains a separate explicit choice.
+
+MCP intentionally ignores both `active_vault` and `default_vault`. After `init`
+over MCP, invoke `vault_focus` with the new name/path, pass `vault`/`vault_path`
+on each vault-scoped call, or restart the server with a launch pin. CLI-based
+agents can use the active/default routing described above.
 
 ## Recommended first prompt
 

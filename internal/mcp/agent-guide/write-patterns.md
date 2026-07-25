@@ -32,7 +32,9 @@ Rules:
 - `after` uses the anchor's complete subtree boundary; `before` uses its heading line; `under` inserts as its last direct child. Sibling levels must match, and a direct child must be exactly one level deeper. Depth mismatches are hard errors—never retry with an inferred level.
 - Append body content inside a section: `add` with `to="file#section"`. Insertion happens at the end of the section's direct content, before any child headings.
 - `add` rejects Markdown heading content. Its removed `heading` and `create-heading` args are invalid; use `section_create`, then `add` to the returned section ID.
-- Bulk-append into sections: pipe section IDs from a `section` query into `add` with `stdin=true` (`query "section .title==Tasks" --ids`).
+- Bulk-append into sections: in MCP, call `add` with `text`, an `object_ids`
+  array of section IDs, and `confirm=true`; in the CLI, pipe a `section` query's
+  `--ids` output into `rvn add --stdin --confirm`.
 - Rename a heading safely: `section_rename` with `section_id="file#section"` and `new_heading_text` set to plain heading text. Never rename headings with `move` (it rejects section sources) or `edit` (it leaves `stale_fragment` refs when other files link to the section).
 - Edit inside a section: `edit` with `reference="file#section"` scopes replacements to the section's subtree (section plus child sections).
 

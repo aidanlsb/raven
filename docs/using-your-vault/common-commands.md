@@ -339,7 +339,7 @@ Key flags:
 - `--no-move` — keep the file in its current location
 - `--update-refs` — update references if the file moves (default: true)
 - `--force` — skip confirmation for dropped fields
-- `--stdin` — read object IDs for a bulk reclassification; the target type is the only positional argument
+- `--stdin` — read references (one per line) for a bulk reclassification; the target type is the only positional argument
 - `--confirm` — apply a bulk reclassification (bulk runs preview by default)
 
 Bulk previews include each planned move, added/dropped fields, required-field
@@ -375,7 +375,10 @@ rvn backlinks project/old-project
 
 ### `rvn check`
 
-Validate managed vault files against the schema and asset graph. Reports issues like unknown types, missing required fields, broken references, missing assets, orphaned assets, non-canonical asset locations, and undefined traits. Paths matched by `raven.yaml` `exclude` patterns are not checked.
+Validate managed vault files against the schema and asset graph. Reports issues
+like unknown types, missing required fields, broken references, missing assets,
+orphaned assets, and undefined traits. Paths matched by `raven.yaml` `exclude`
+patterns are not checked.
 
 ```bash
 rvn check                                       # Entire vault
@@ -442,7 +445,7 @@ Rebuild the SQLite index from managed vault files, including Markdown objects an
 
 - Editing files outside of Raven (e.g., in your editor or with git)
 - Adding, moving, or deleting assets outside of Raven
-- Changing asset root or kind rules in `raven.yaml`
+- Changing the asset root in `raven.yaml`
 - Schema changes that affect indexing
 - Recovering from index corruption
 
@@ -497,7 +500,7 @@ rvn docs getting-started                         # List topics in a section
 rvn docs search "saved query"                    # Full-text search across docs
 rvn docs search "exclude" --section using-your-vault --limit 10
 rvn docs fetch                                   # Force-refresh the global docs cache
-rvn docs fetch --ref v0.0.27                     # Pin docs to a specific ref
+rvn docs fetch --ref v0.0.31                     # Pin docs to a specific ref
 ```
 
 Docs are cached in a global directory (fetched during `rvn init`). After an

@@ -67,7 +67,9 @@ rvn config show --json                                    # confirm
 
 ### LSP pointer (awareness only)
 
-Raven ships a built-in LSP (`rvn lsp`) that any LSP-capable editor can use for diagnostics, completion, go-to-definition, and find-references over vault files:
+Raven ships a built-in LSP (`rvn lsp`) that any LSP-capable editor can use for
+diagnostics, quick-fix code actions, completion, hover, go-to-definition
+(including frontmatter ref values), and find-references over vault files:
 
 ```bash
 rvn lsp   # LSP server over stdio; part of the rvn binary, nothing extra to install

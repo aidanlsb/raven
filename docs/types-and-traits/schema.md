@@ -45,6 +45,7 @@ types:
       time: { type: datetime }
       attendees: { type: ref[], target: person }
 
+core:
   date:
     templates: [daily_default]
     default_template: daily_default
@@ -91,7 +92,8 @@ This file has no type, so it's a "page".
 
 **Behavior:**
 - Any markdown file without `type:` becomes a `page`
-- Has no defined fields (all frontmatter keys are allowed but not validated)
+- Has the built-in optional `title` field; other frontmatter keys are reported
+  as `unknown_frontmatter_key`
 - When directory organization is enabled, pages go to the directory configured under `directories.page` (defaults to `directories.type` when only `type` is set)
 
 ### `section`
@@ -135,7 +137,7 @@ type: date
 
 **Behavior:**
 - Created automatically by `rvn daily`
-- Has no defined fields (use traits for metadata)
+- Has no authored fields (use traits for metadata)
 - Exposes a generated query-only `.date` value derived from the daily note ID
 - Date references (`[[2026-01-10]]`) resolve to daily notes
 - Files are stored under `directories.daily` (from `raven.yaml`)
@@ -697,7 +699,6 @@ Checks schema.yaml for internal consistency:
 - Valid trait types
 - Enum fields have `values` defined
 - Ref fields have valid `target` types
-- No circular dependencies
 
 ### `rvn check`
 

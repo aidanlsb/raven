@@ -29,6 +29,10 @@ When a command needs a vault, Raven resolves in this order:
 3. `active_vault` from `state.toml`
 4. `default_vault` from `config.toml`
 
+If `active_vault` is set but missing from `[vaults]`, resolution fails instead
+of falling back to `default_vault`. Repair the selection with `rvn vault use
+<name>` or `rvn vault clear`.
+
 ## Inspect resolved vault path
 
 ```bash

@@ -47,8 +47,9 @@ intended vault before writing.
   focus to restore the server's launch pin.
 - Calls without a per-call target, session focus, or server launch pin fail with
   `VAULT_AMBIGUOUS`. MCP never uses `active_vault` or `default_vault`.
-- After `init` creates an additional vault, it becomes active immediately. Surface
-  the returned active/previous vault details and `switch_back` command.
+- After `init` creates an additional vault, it becomes active for CLI routing.
+  Surface the returned active/previous vault details and `switch_back` command,
+  then explicitly target or focus it for MCP calls.
 
 ## Respect managed-content boundaries
 

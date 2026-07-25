@@ -23,7 +23,7 @@ return `VAULT_AMBIGUOUS` again.
 ## 1. Vault health and cleanup
 
 ```text
-raven_invoke(command="check", args={"errors_only":true})
+raven_invoke(command="check", args={"errors-only":true})
 raven_invoke(command="check", args={"reference":"project/"})
 raven_invoke(command="check", args={"issues":"missing_reference,missing_asset,unknown_type"})
 ```
@@ -147,8 +147,8 @@ response's `next_offset` as the next request's `offset`. See `raven://guide/quer
 ## 8. Import and template setup
 
 ```text
-# Preview first with dry_run, then re-run without dry_run to apply.
-raven_invoke(command="import", args={"type":"person", "file":"contacts.json", "dry_run":true})
+# Preview first with dry-run, then re-run without dry-run to apply.
+raven_invoke(command="import", args={"type":"person", "file":"contacts.json", "dry-run":true})
 raven_invoke(command="import", args={"type":"person", "file":"contacts.json"})
 raven_invoke(command="template_write", args={"path":"meeting.md", "content":"# {{title}}\n\n## Notes"})
 raven_invoke(command="schema_template_set", args={"template_id":"meeting_standard", "file":"templates/meeting.md"})
