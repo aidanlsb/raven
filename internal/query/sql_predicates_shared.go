@@ -106,7 +106,7 @@ func buildRefTargetVariantsCondition(refAlias, resolvedTarget, rawTarget string)
 	return "(" + strings.Join(clauses, " OR ") + ")", args
 }
 
-// buildRefdPredicateSQL builds SQL for refd:{...} predicates.
+// buildRefdPredicateSQL builds SQL for refd(...) predicates.
 // Matches objects/traits that are referenced by the subquery matches.
 // isTrait indicates if we're building for a trait query (uses different columns).
 func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait bool) (string, []interface{}, error) {
@@ -140,13 +140,13 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		}
 		cond := fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
-			WHERE r.source_id = ?
+			WHERE (r.source_id = ? OR r.source_id LIKE ? || '#%%')
 			  AND (r.target_id = %s.id OR r.target_raw = %s.id)
 		)`, alias, alias)
 		if p.Negated() {
 			cond = "NOT " + cond
 		}
-		return cond, []interface{}{sourceID}, nil
+		return cond, []interface{}{sourceID, sourceID}, nil
 	}
 
 	// Subquery - referenced by objects/traits matching the subquery
@@ -168,7 +168,7 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 
 		cond := fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
-			JOIN objects src ON r.source_id = src.id
+			JOIN objects src ON (r.source_id = src.id OR r.source_id LIKE src.id || '#%%')
 			WHERE (r.target_id = %s.id OR r.target_raw = %s.id)
 			  AND %s
 		)`, alias, alias, strings.Join(sourceConditions, " AND "))

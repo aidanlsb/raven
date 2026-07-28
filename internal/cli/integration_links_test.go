@@ -31,6 +31,47 @@ func TestIntegration_ReferencesAndBacklinks(t *testing.T) {
 	result.AssertResultCount(t, "items", 1)
 }
 
+func TestIntegration_RefdIncludesReferencesFromSourceSections(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+# Alice
+`).
+		WithFile("projects/site.md", `---
+type: project
+title: Site
+status: active
+---
+# Site
+
+## Tasks
+
+Follow up with [[people/alice]].
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	backlinks := v.RunCLI("backlinks", "people/alice").MustSucceed(t)
+	backlinks.AssertResultCount(t, "items", 1)
+
+	for _, query := range []string{
+		"type:person refd([[projects/site]])",
+		"type:person refd(type:project)",
+	} {
+		t.Run(query, func(t *testing.T) {
+			result := v.RunCLI("query", query).MustSucceed(t)
+			if got, want := len(result.DataList("items")), len(backlinks.DataList("items")); got != want {
+				t.Fatalf("refd result count = %d, backlinks count = %d\nQuery: %s\nRaw: %s", got, want, query, result.RawJSON)
+			}
+		})
+	}
+}
+
 func TestIntegration_QueryLinksPredicate(t *testing.T) {
 	t.Parallel()
 

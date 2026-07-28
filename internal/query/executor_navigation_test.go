@@ -253,6 +253,16 @@ func TestRefdPredicate(t *testing.T) {
 			wantCount: 1, // website is referenced by standup (via resolver)
 		},
 		{
+			name:      "refd by file source includes its sections",
+			query:     "type:project refd([[daily/2025-02-01]])",
+			wantCount: 2, // website and mobile are referenced by sections in the daily note
+		},
+		{
+			name:      "refd by object subquery includes source sections",
+			query:     "type:project refd(type:date)",
+			wantCount: 2, // website and mobile are referenced by sections in the daily note
+		},
+		{
 			name:      "refd by sections",
 			query:     "type:project refd(section)",
 			wantCount: 2, // website referenced by standup, mobile by planning
