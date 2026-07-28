@@ -45,6 +45,23 @@ func Analyze(raw, sourceFile, vaultPath string) Info {
 	return info
 }
 
+// AnalyzeAuthored derives target metadata from both the verbatim authored
+// destination and its Markdown-decoded semantic value. The authored form is
+// needed to distinguish escaped filename delimiters (\# and \?) from actual
+// query/fragment suffixes.
+func AnalyzeAuthored(rawTarget, semanticTarget, sourceFile, vaultPath string) Info {
+	info := Analyze(semanticTarget, sourceFile, vaultPath)
+	if info.Scheme != SchemeFile ||
+		(!strings.Contains(rawTarget, `\#`) && !strings.Contains(rawTarget, `\?`)) {
+		return info
+	}
+
+	filePath := normalizeFileDestinationPath(AuthoredFilePath(rawTarget))
+	info.Ext = fileExtension(filePath)
+	info.NormalizedKey = normalizeFile(filePath, sourceFile, vaultPath)
+	return info
+}
+
 // Classify maps a target to the broad category used by the link index.
 func Classify(raw string) Scheme {
 	target := strings.TrimSpace(raw)
@@ -101,6 +118,17 @@ func ResolveFileKey(normalizedKey, vaultPath string) string {
 		return filepath.Clean(target)
 	}
 	return filepath.Clean(filepath.Join(vaultPath, target))
+}
+
+// AuthoredFilePath returns the Markdown-semantic path portion of an authored
+// file destination, without angle brackets or a query/fragment suffix.
+func AuthoredFilePath(rawTarget string) string {
+	target := strings.TrimSpace(rawTarget)
+	if len(target) >= 2 && target[0] == '<' && target[len(target)-1] == '>' {
+		target = target[1 : len(target)-1]
+	}
+	authoredPath, _ := splitFileSuffix(target)
+	return unescapePathStyle(authoredPath)
 }
 
 // RetargetFile preserves the authored style of a file-link destination while
@@ -203,6 +231,12 @@ func preservePathEscapes(authored, replacement string) string {
 		escaped['('] = true
 		escaped[')'] = true
 	}
+	// replacement is the path portion only; literal suffix delimiters in a
+	// filename must be escaped before the original suffix is reattached.
+	if strings.ContainsAny(replacement, "#?") {
+		escaped['#'] = true
+		escaped['?'] = true
+	}
 
 	var b strings.Builder
 	b.Grow(len(replacement))
@@ -223,6 +257,13 @@ func isMarkdownEscapable(c byte) bool {
 }
 
 func fileDestinationPath(target string) string {
+	if idx := strings.IndexAny(target, "?#"); idx >= 0 {
+		target = target[:idx]
+	}
+	return normalizeFileDestinationPath(target)
+}
+
+func normalizeFileDestinationPath(target string) string {
 	if scheme, ok := uriScheme(target); ok && strings.EqualFold(scheme, "file") {
 		target = target[len(scheme)+1:]
 		if strings.HasPrefix(target, "///") && isWindowsAbsolute(target[3:]) {
@@ -233,9 +274,6 @@ func fileDestinationPath(target string) string {
 		if !strings.HasPrefix(target, "/") && !isWindowsAbsolute(target) {
 			target = "/" + target
 		}
-	}
-	if idx := strings.IndexAny(target, "?#"); idx >= 0 {
-		target = target[:idx]
 	}
 	return strings.ReplaceAll(target, "\\", "/")
 }

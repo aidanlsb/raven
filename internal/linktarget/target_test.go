@@ -77,6 +77,27 @@ func TestAnalyzeKeepsAbsolutePathsOutsideVaultAbsolute(t *testing.T) {
 	}
 }
 
+func TestAnalyzeAuthoredPreservesEscapedFilenameDelimiters(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	tests := []struct {
+		raw      string
+		semantic string
+		want     string
+	}{
+		{raw: `../assets/a\#1.pdf`, semantic: "../assets/a#1.pdf", want: "assets/a#1.pdf"},
+		{raw: `../assets/a\?1.pdf`, semantic: "../assets/a?1.pdf", want: "assets/a?1.pdf"},
+		{raw: `../assets/a.pdf#page=2`, semantic: "../assets/a.pdf#page=2", want: "assets/a.pdf"},
+	}
+	for _, tt := range tests {
+		got := AnalyzeAuthored(tt.raw, tt.semantic, "notes/source.md", vaultPath)
+		if got.NormalizedKey != tt.want {
+			t.Errorf("AnalyzeAuthored(%q) key = %q, want %q", tt.raw, got.NormalizedKey, tt.want)
+		}
+	}
+}
+
 func TestAnalyzeNormalizesURLsConservatively(t *testing.T) {
 	t.Parallel()
 
@@ -176,6 +197,13 @@ func TestRetargetFilePreservesAuthoredStyle(t *testing.T) {
 		{
 			name:       "escaped fragment delimiter",
 			raw:        `../assets/a\#1.pdf`,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a#1.pdf",
+			want:       `../assets/archive/a\#1.pdf`,
+		},
+		{
+			name:       "new fragment delimiter is escaped",
+			raw:        `../assets/a.pdf`,
 			sourceFile: "notes/source.md",
 			newKey:     "assets/archive/a#1.pdf",
 			want:       `../assets/archive/a\#1.pdf`,
