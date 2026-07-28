@@ -6,6 +6,7 @@
 |-------|---------|-------------|
 | `unknown_type` | File declares a type not in schema | `rvn reclassify` or `rvn schema add type` |
 | `missing_reference` | `[[ref]]` target doesn't exist | Create the target or fix the reference |
+| `broken_file_link` | Indexed Markdown file-link target is missing on disk | Restore the file or update/remove the link; URLs are not checked |
 | `missing_asset` | Markdown link/image points to a missing asset | Restore the asset or fix the link |
 | `orphaned_asset` | Indexed asset has no incoming references | Link it from content or remove/archive it |
 | `unknown_frontmatter_key` | Field not defined on the type | `rvn schema add field` or remove the key |
@@ -29,7 +30,7 @@ rvn check --type project --json
 rvn check --trait todo --json
 
 # Focus on specific issues
-rvn check --issues missing_reference,unknown_type --json
+rvn check --issues missing_reference,broken_file_link,unknown_type --json
 
 # Exclude noisy warnings
 rvn check --exclude unused_type,unused_trait --json

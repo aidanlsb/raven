@@ -80,6 +80,8 @@ mutation.
 
 `rvn check` reports:
 
+- `broken_file_link` when any indexed Markdown file-link target is missing on
+  disk. This is evaluated when check runs; URL targets are never fetched.
 - `missing_asset` when a Markdown asset link points to a file Raven cannot find.
 - `orphaned_asset` when an indexed asset has no incoming references.
 
