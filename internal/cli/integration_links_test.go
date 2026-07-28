@@ -31,6 +31,70 @@ func TestIntegration_ReferencesAndBacklinks(t *testing.T) {
 	result.AssertResultCount(t, "items", 1)
 }
 
+func TestIntegration_QueryLinksPredicate(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  project:
+    default_path: projects/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+  meeting:
+    default_path: meetings/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+traits:
+  todo:
+    type: string
+`).
+		WithFile("projects/site.md", `---
+type: project
+title: Site
+---
+# Site
+
+## Resources
+
+- Review [spec](../assets/spec.pdf) @todo(open)
+- Visit [vendor](https://example.com)
+`).
+		WithFile("meetings/sync.md", `---
+type: meeting
+title: Sync
+---
+# Sync
+
+![board](../assets/board.png)
+`).
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	queries := []string{
+		"type:project links(.ext==pdf)",
+		"type:meeting links(.is_image==true)",
+		"trait:todo links(.ext==pdf)",
+		"section links(.scheme==url)",
+	}
+	for _, queryStr := range queries {
+		t.Run(queryStr, func(t *testing.T) {
+			result := v.RunCLI("query", queryStr)
+			result.MustSucceed(t)
+			result.AssertResultCount(t, "items", 1)
+		})
+	}
+
+	v.RunCLI("query", "asset links(.ext==pdf)").
+		MustFailWithMessage(t, "links() predicate is only valid for type, trait, and section queries")
+}
+
 func TestIntegration_BacklinksOutlinksStdinGroupedOutput(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

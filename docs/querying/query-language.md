@@ -60,6 +60,7 @@ Which predicates are legal depends on the query root. Predicates rejected for a 
 | `within(...)` — recursive upward scope | no | yes | yes | no |
 | `at(trait:...)` — co-located trait | no | no | yes | no |
 | `refs(...)` — outgoing reference | yes | yes | yes | no |
+| `links(...)` — outgoing external/file/URL link | yes | yes | yes | no |
 | `refd(...)` — incoming reference | yes | yes | no | yes |
 | `content("term")` — full-text | yes | yes | yes | no |
 
@@ -68,6 +69,11 @@ Reading the scope rows:
 - **Downward** predicates (`has`, `contains`) look from a container to what it holds, so they live on the container roots `type:` and `section`.
 - **Upward** predicates (`in`, `within`) look from an inner item to the scope around it, so they live on the contained roots `trait:` and `section`.
 - `has`/`in` match the **direct** relationship only; `contains`/`within` match **recursively** through the section tree.
+
+`links(...)` uses the link fields `.ext`, `.is_image`, `.scheme`, `.raw_target`,
+`.display`, and `.normalized_key`, for example `type:project links(.ext==pdf)`.
+It is outgoing-only: unlike `refs()`/`refd()`, there is no `linkd()` because
+external files and URLs are leaf targets that cannot link back.
 
 ### Common Mistake: Todos Under a Heading
 

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added a lightweight link-edge index for Markdown links and images targeting external files and URLs, with source positions, conservative target normalization, and no duplication of Raven object or section references.
 - `rvn check` now reports indexed file links missing on disk as `broken_file_link` without fetching URLs, and `rvn move` rewrites normalized-key-matched inbound file links while preserving their authored destination style.
+- Added `links(...)` predicates for type, trait, and section queries, using the shared link-field grammar to filter outgoing non-Raven file and URL links.
 
 ### Fixed
 - Corrected MCP docs, embedded agent guides, and packaged skills for explicit post-`init` vault targeting, canonical hyphenated flag names, bulk argument arrays and retry details, and the body-only `add` contract.

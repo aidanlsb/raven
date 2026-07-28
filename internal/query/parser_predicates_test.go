@@ -172,6 +172,33 @@ func TestParseRefsPredicate(t *testing.T) {
 		})
 	}
 }
+
+func TestParseLinksPredicate(t *testing.T) {
+	t.Parallel()
+
+	q, err := Parse(`type:project links(.ext==pdf | .is_image==true)`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	linksPred, ok := q.Predicate.(*LinksPredicate)
+	if !ok {
+		t.Fatalf("expected LinksPredicate, got %T", q.Predicate)
+	}
+	inner, ok := linksPred.LinkPredicate.(*OrPredicate)
+	if !ok || len(inner.Predicates) != 2 {
+		t.Fatalf("expected two link field predicates, got %#v", linksPred.LinkPredicate)
+	}
+
+	negated, err := Parse(`trait:todo !links(includes(.display, "spec"))`)
+	if err != nil {
+		t.Fatalf("unexpected negated parse error: %v", err)
+	}
+	linksPred, ok = negated.Predicate.(*LinksPredicate)
+	if !ok || !linksPred.Negated() {
+		t.Fatalf("expected negated LinksPredicate, got %#v", negated.Predicate)
+	}
+}
+
 func TestParseContentPredicate(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

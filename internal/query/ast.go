@@ -112,6 +112,15 @@ type RefsPredicate struct {
 
 func (RefsPredicate) predicateNode() {}
 
+// LinksPredicate filters scoped query results by their outgoing non-Raven links.
+// Syntax: links(.ext==pdf), links(.is_image==true)
+type LinksPredicate struct {
+	basePredicate
+	LinkPredicate Predicate
+}
+
+func (LinksPredicate) predicateNode() {}
+
 // ContentPredicate filters type-query results by full-text search on their content.
 // Syntax: content("search terms"), content("exact phrase")
 type ContentPredicate struct {

@@ -62,6 +62,22 @@ func setupTestDB(t *testing.T) *sql.DB {
 			position_end INTEGER
 		);
 
+		CREATE TABLE links (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source_id TEXT NOT NULL,
+			source_type TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			line_number INTEGER NOT NULL,
+			position_start INTEGER NOT NULL,
+			position_end INTEGER NOT NULL,
+			raw_target TEXT NOT NULL,
+			display TEXT NOT NULL,
+			is_image INTEGER NOT NULL,
+			scheme TEXT NOT NULL,
+			ext TEXT NOT NULL,
+			normalized_key TEXT NOT NULL
+		);
+
 		CREATE TABLE field_refs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			source_id TEXT NOT NULL,
@@ -115,12 +131,12 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('daily/2025-02-01', 'daily/2025-02-01.md', 'date', '{}', 1);
 
 		-- Heading-derived sections.
-		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, parent_section_id) VALUES
-			('projects/website#tasks', 'projects/website', 'projects/website.md', 'tasks', 'Tasks', 2, 20, NULL),
-			('projects/website#design', 'projects/website', 'projects/website.md', 'design', 'Design', 2, 50, NULL),
-			('projects/mobile#tasks', 'projects/mobile', 'projects/mobile.md', 'tasks', 'Tasks', 2, 15, NULL),
-			('daily/2025-02-01#standup', 'daily/2025-02-01', 'daily/2025-02-01.md', 'standup', 'Standup', 2, 10, NULL),
-			('daily/2025-02-01#planning', 'daily/2025-02-01', 'daily/2025-02-01.md', 'planning', 'Planning', 2, 30, NULL);
+		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, line_end, subtree_line_end, parent_section_id) VALUES
+			('projects/website#tasks', 'projects/website', 'projects/website.md', 'tasks', 'Tasks', 2, 20, 49, 49, NULL),
+			('projects/website#design', 'projects/website', 'projects/website.md', 'design', 'Design', 2, 50, NULL, NULL, NULL),
+			('projects/mobile#tasks', 'projects/mobile', 'projects/mobile.md', 'tasks', 'Tasks', 2, 15, NULL, NULL, NULL),
+			('daily/2025-02-01#standup', 'daily/2025-02-01', 'daily/2025-02-01.md', 'standup', 'Standup', 2, 10, 29, 29, NULL),
+			('daily/2025-02-01#planning', 'daily/2025-02-01', 'daily/2025-02-01.md', 'planning', 'Planning', 2, 30, NULL, NULL, NULL);
 
 		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number) VALUES
 			('trait1', 'projects/website.md', 'projects/website', 'due', '2025-06-30', 'projects/website', 1),
@@ -150,6 +166,15 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('trait5', 'assets/images/diagram.png', 'assets/images/diagram.png', 'projects/website.md', 25),
 			-- Unresolved ref (target_id is NULL) - tests fallback to target_raw matching
 			('projects/mobile#tasks', NULL, 'projects/website', 'projects/mobile.md', 30);
+
+		INSERT INTO links (
+			source_id, source_type, file_path, line_number, position_start, position_end,
+			raw_target, display, is_image, scheme, ext, normalized_key
+		) VALUES
+			('projects/website', 'project', 'projects/website.md', 6, 0, 30, '../assets/report.pdf', 'report', 0, 'file', 'pdf', 'assets/report.pdf'),
+			('projects/website', 'project', 'projects/website.md', 25, 0, 32, '../assets/diagram.png', 'diagram', 1, 'file', 'png', 'assets/diagram.png'),
+			('projects/website', 'project', 'projects/website.md', 55, 0, 28, 'https://example.com', 'site', 0, 'url', '', 'https://example.com/'),
+			('projects/mobile', 'project', 'projects/mobile.md', 20, 0, 30, '../assets/spec.pdf', 'spec', 0, 'file', 'pdf', 'assets/spec.pdf');
 
 		INSERT INTO assets (id, file_path, media_type, extension, filename, size_bytes, file_mtime, indexed_at) VALUES
 			('assets/images/diagram.png', 'assets/images/diagram.png', 'image/png', 'png', 'diagram.png', 2048, 100, 200),
