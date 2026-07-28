@@ -86,6 +86,110 @@ func TestStarterSchemaBareTodoIndexesAsOpen(t *testing.T) {
 	}
 }
 
+func TestIndexDocumentStoresAndReplacesLinkEdges(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	doc, err := parser.ParseDocument(`---
+type: page
+---
+
+[report](../assets/Report.PDF)
+
+## Media
+
+![diagram](../assets/diagram.png)
+[site](https://EXAMPLE.COM:443/Case?Q=Value#Frag)
+[note](../other.md#section)
+[[other]]
+`, filepath.Join(vaultPath, "notes", "source.md"), vaultPath)
+	if err != nil {
+		t.Fatalf("parse document: %v", err)
+	}
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("open in-memory database: %v", err)
+	}
+	defer db.Close()
+	if err := db.IndexDocument(doc, schema.New()); err != nil {
+		t.Fatalf("index document: %v", err)
+	}
+
+	rows, err := db.db.Query(`
+		SELECT source_id, source_type, file_path, line_number, position_start, position_end,
+		       raw_target, display, is_image, scheme, ext, normalized_key
+		FROM links
+		ORDER BY line_number
+	`)
+	if err != nil {
+		t.Fatalf("query links: %v", err)
+	}
+	defer rows.Close()
+
+	var got []*model.Link
+	for rows.Next() {
+		link := &model.Link{}
+		if err := rows.Scan(
+			&link.SourceID,
+			&link.SourceType,
+			&link.FilePath,
+			&link.Line,
+			&link.PositionStart,
+			&link.PositionEnd,
+			&link.RawTarget,
+			&link.Display,
+			&link.IsImage,
+			&link.Scheme,
+			&link.Ext,
+			&link.NormalizedKey,
+		); err != nil {
+			t.Fatalf("scan link: %v", err)
+		}
+		got = append(got, link)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate links: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("indexed links = %#v, want 3", got)
+	}
+
+	if got[0].SourceID != "notes/source" || got[0].SourceType != "page" ||
+		got[0].FilePath != "notes/source.md" || got[0].RawTarget != "../assets/Report.PDF" ||
+		got[0].Display != "report" || got[0].IsImage || got[0].Scheme != "file" ||
+		got[0].Ext != "pdf" || got[0].NormalizedKey != "assets/Report.PDF" {
+		t.Errorf("report row = %#v", got[0])
+	}
+	if got[0].Line != 5 || got[0].PositionStart != 0 || got[0].PositionEnd <= got[0].PositionStart {
+		t.Errorf("report location = line %d [%d,%d)", got[0].Line, got[0].PositionStart, got[0].PositionEnd)
+	}
+
+	if got[1].SourceID != "notes/source" || got[1].SourceType != "page" ||
+		!got[1].IsImage || got[1].Display != "diagram" || got[1].Ext != "png" {
+		t.Errorf("image row = %#v", got[1])
+	}
+	if got[2].Scheme != "url" || got[2].Ext != "" ||
+		got[2].NormalizedKey != "https://example.com/Case?Q=Value#Frag" {
+		t.Errorf("URL row = %#v", got[2])
+	}
+
+	replacement, err := parser.ParseDocument("[only](../assets/only.txt)\n", filepath.Join(vaultPath, "notes", "source.md"), vaultPath)
+	if err != nil {
+		t.Fatalf("parse replacement: %v", err)
+	}
+	if err := db.IndexDocument(replacement, schema.New()); err != nil {
+		t.Fatalf("index replacement: %v", err)
+	}
+	var count int
+	if err := db.db.QueryRow(`SELECT COUNT(*) FROM links WHERE file_path = ?`, "notes/source.md").Scan(&count); err != nil {
+		t.Fatalf("count replacement links: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("replacement link count = %d, want 1", count)
+	}
+}
+
 func TestDatabase(t *testing.T) {
 	t.Parallel()
 	// Create a minimal schema for testing

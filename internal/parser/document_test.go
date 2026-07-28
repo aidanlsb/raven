@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/model"
@@ -786,5 +788,114 @@ func TestParseDocument_TraitOffsets(t *testing.T) {
 				t.Errorf("offsets = [%d, %d), want [%d, %d)", trait.PositionStart, trait.PositionEnd, tt.wantStart, tt.wantEnd)
 			}
 		})
+	}
+}
+
+func TestParseDocumentBuildsNonRavenLinkEdges(t *testing.T) {
+	t.Parallel()
+
+	content := `---
+type: project
+title: Link Index
+---
+
+Read [report](../assets/Report.PDF).
+
+## Resources
+
+![diagram](../assets/diagram.PNG)
+[site](https://EXAMPLE.COM:443/Case?Q=Value#Frag)
+[license](../assets/LICENSE)
+[email](mailto:team@example.com)
+[Raven note](../notes/other.md#details)
+[[people/freya]]
+`
+	doc, err := ParseDocument(content, "/vault/notes/source.md", "/vault")
+	if err != nil {
+		t.Fatalf("ParseDocument: %v", err)
+	}
+
+	if len(doc.Links) != 5 {
+		t.Fatalf("links = %#v, want 5 non-Raven link edges", doc.Links)
+	}
+
+	report := doc.Links[0]
+	if report.SourceID != "notes/source" || report.SourceType != "project" {
+		t.Errorf("report source = %q/%q, want notes/source/project", report.SourceID, report.SourceType)
+	}
+	if report.RawTarget != "../assets/Report.PDF" || report.Display != "report" || report.IsImage {
+		t.Errorf("report authored fields = %#v", report)
+	}
+	if report.Scheme != "file" || report.Ext != "pdf" || report.NormalizedKey != "assets/Report.PDF" {
+		t.Errorf("report target fields = %#v", report)
+	}
+
+	image := doc.Links[1]
+	if image.SourceID != "notes/source" || image.SourceType != "project" {
+		t.Errorf("image source = %q/%q, want notes/source/project", image.SourceID, image.SourceType)
+	}
+	if !image.IsImage || image.Ext != "png" || image.Display != "diagram" {
+		t.Errorf("image fields = %#v", image)
+	}
+
+	site := doc.Links[2]
+	if site.Scheme != "url" || site.Ext != "" ||
+		site.NormalizedKey != "https://example.com/Case?Q=Value#Frag" {
+		t.Errorf("site fields = %#v", site)
+	}
+
+	license := doc.Links[3]
+	if license.Scheme != "file" || license.Ext != "" || license.NormalizedKey != "assets/LICENSE" {
+		t.Errorf("license fields = %#v", license)
+	}
+
+	email := doc.Links[4]
+	if email.Scheme != "other" || email.Ext != "" || email.NormalizedKey != "mailto:team@example.com" {
+		t.Errorf("email fields = %#v", email)
+	}
+
+	for _, link := range doc.Links {
+		if link.RawTarget == "../notes/other.md#details" || link.RawTarget == "people/freya" {
+			t.Fatalf("Raven target was duplicated as link edge: %#v", link)
+		}
+	}
+	if len(doc.Refs) != 1 || doc.Refs[0].TargetRaw != "people/freya" {
+		t.Fatalf("wikilink refs = %#v, want unchanged people/freya ref", doc.Refs)
+	}
+}
+
+func TestParseDocumentKeepsExternalMarkdownAndNormalizesMarkdownEscapes(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	externalMarkdown := filepath.Join(filepath.Dir(vaultPath), "external", "readme.md")
+	content := fmt.Sprintf(`[external](%s)
+[internal](inside.md)
+[escaped](assets/a\(1\).pdf)
+[plain](assets/a(1).pdf)
+[angle](<assets/report final.pdf>)
+`, filepath.ToSlash(externalMarkdown))
+
+	doc, err := ParseDocument(content, filepath.Join(vaultPath, "source.md"), vaultPath)
+	if err != nil {
+		t.Fatalf("ParseDocument: %v", err)
+	}
+	if len(doc.Links) != 4 {
+		t.Fatalf("links = %#v, want external markdown and three asset edges", doc.Links)
+	}
+
+	external := doc.Links[0]
+	if external.RawTarget != filepath.ToSlash(externalMarkdown) || external.Scheme != "file" ||
+		external.Ext != "md" || external.NormalizedKey != filepath.ToSlash(filepath.Clean(externalMarkdown)) {
+		t.Errorf("external markdown edge = %#v", external)
+	}
+	if doc.Links[1].NormalizedKey != "assets/a(1).pdf" ||
+		doc.Links[2].NormalizedKey != doc.Links[1].NormalizedKey {
+		t.Errorf("escaped/plain keys = %q/%q, want identical semantic path",
+			doc.Links[1].NormalizedKey, doc.Links[2].NormalizedKey)
+	}
+	if doc.Links[3].RawTarget != "<assets/report final.pdf>" ||
+		doc.Links[3].NormalizedKey != "assets/report final.pdf" {
+		t.Errorf("angle-delimited edge = %#v", doc.Links[3])
 	}
 }

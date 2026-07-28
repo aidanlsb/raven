@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added a lightweight link-edge index for Markdown links and images targeting external files and URLs, with source positions, conservative target normalization, and no duplication of Raven object or section references.
+
 ### Fixed
 - Corrected MCP docs, embedded agent guides, and packaged skills for explicit post-`init` vault targeting, canonical hyphenated flag names, bulk argument arrays and retry details, and the body-only `add` contract.
 - Corrected user docs for import mapping-file keys, core-type template placement, bulk reclassification, stale active-vault failures, managed asset imports, and bare daily-note IDs.

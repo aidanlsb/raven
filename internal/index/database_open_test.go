@@ -59,6 +59,56 @@ func TestAssetsTableSchemaHasOnlyDerivedColumns(t *testing.T) {
 		}
 	}
 }
+
+func TestLinksTableSchema(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	rows, err := db.db.Query(`PRAGMA table_info(links)`)
+	if err != nil {
+		t.Fatalf("query links schema: %v", err)
+	}
+	defer rows.Close()
+
+	var columns []string
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			colType   string
+			notNull   int
+			defaultV  sql.NullString
+			primaryID int
+		)
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultV, &primaryID); err != nil {
+			t.Fatalf("scan links schema: %v", err)
+		}
+		columns = append(columns, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate links schema: %v", err)
+	}
+
+	want := []string{
+		"id", "source_id", "source_type", "file_path", "line_number",
+		"position_start", "position_end", "raw_target", "display", "is_image",
+		"scheme", "ext", "normalized_key",
+	}
+	if len(columns) != len(want) {
+		t.Fatalf("links columns = %#v, want %#v", columns, want)
+	}
+	for i := range want {
+		if columns[i] != want[i] {
+			t.Fatalf("links columns = %#v, want %#v", columns, want)
+		}
+	}
+}
+
 func TestDatabaseConfiguresSQLiteConcurrency(t *testing.T) {
 	t.Parallel()
 

@@ -11,7 +11,7 @@ type execer interface {
 
 // filePathTables is the single source of truth for indexed data tables keyed
 // by file_path. Metadata is intentionally excluded.
-var filePathTables = []string{"objects", "sections", "traits", "refs", "field_refs", "date_index", "fts_content", "assets"}
+var filePathTables = []string{"objects", "sections", "traits", "refs", "links", "field_refs", "date_index", "fts_content", "assets"}
 
 func deleteAllFilePathData(e execer) error {
 	for _, table := range filePathTables {

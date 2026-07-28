@@ -67,6 +67,9 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	if err := indexRefs(tx, doc, sch); err != nil {
 		return err
 	}
+	if err := indexLinks(tx, doc); err != nil {
+		return err
+	}
 	if err := indexFieldRefs(tx, doc, sch); err != nil {
 		return err
 	}
@@ -399,6 +402,45 @@ func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error
 			ref.LineOrZero(),
 			ref.PositionStartOrZero(),
 			ref.PositionEndOrZero(),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func indexLinks(tx *sql.Tx, doc *parser.ParsedDocument) error {
+	stmt, err := tx.Prepare(`
+		INSERT INTO links (
+			source_id, source_type, file_path, line_number, position_start, position_end,
+			raw_target, display, is_image, scheme, ext, normalized_key
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, link := range doc.Links {
+		if link == nil {
+			continue
+		}
+		_, err = stmt.Exec(
+			link.SourceID,
+			link.SourceType,
+			doc.FilePath,
+			link.Line,
+			link.PositionStart,
+			link.PositionEnd,
+			link.RawTarget,
+			link.Display,
+			link.IsImage,
+			link.Scheme,
+			link.Ext,
+			link.NormalizedKey,
 		)
 		if err != nil {
 			return err

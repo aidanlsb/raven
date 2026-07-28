@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/linktarget"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/paths"
 )
@@ -20,6 +21,7 @@ type ParsedDocument struct {
 	Sections   []*model.Section   // All sections in this document
 	Traits     []*model.Trait     // All traits in this document
 	Refs       []*model.Reference // All references in this document
+	Links      []*model.Link      // Markdown links to non-Raven targets
 }
 
 // ParseOptions contains options for parsing documents.
@@ -52,6 +54,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	var sections []*model.Section
 	var traits []*model.Trait
 	var refs []*model.Reference
+	var links []*model.Link
 
 	// Parse frontmatter
 	frontmatter, err := ParseFrontmatter(content)
@@ -166,6 +169,30 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		refs = append(refs, ref)
 	}
 
+	// Process direct Markdown links and images as lightweight edges. Markdown
+	// object/section targets stay out of this index, while legacy asset refs
+	// above remain intact until the asset entity is removed separately.
+	for _, astLink := range astContent.Links {
+		if linktarget.IsRavenTarget(astLink.Target, relativePath, vaultPath) {
+			continue
+		}
+		targetInfo := linktarget.Analyze(astLink.Target, relativePath, vaultPath)
+		links = append(links, &model.Link{
+			SourceID:      fileID,
+			SourceType:    fileType,
+			FilePath:      relativePath,
+			Line:          astLink.Line,
+			PositionStart: astLink.PositionStart,
+			PositionEnd:   astLink.PositionEnd,
+			RawTarget:     astLink.RawTarget,
+			Display:       astLink.Display,
+			IsImage:       astLink.IsImage,
+			Scheme:        string(targetInfo.Scheme),
+			Ext:           targetInfo.Ext,
+			NormalizedKey: targetInfo.NormalizedKey,
+		})
+	}
+
 	computeSectionLineEnds(sections)
 
 	return &ParsedDocument{
@@ -176,6 +203,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		Sections:   sections,
 		Traits:     traits,
 		Refs:       refs,
+		Links:      links,
 	}, nil
 }
 
