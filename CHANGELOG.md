@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the `link` RQL root for querying indexed outgoing link/image edges by target metadata and source type/section scope.
 
 ### Fixed
+- `trait ... within(...)` now includes traits attached directly to the matching object or section scope, including heading-free preamble traits.
 - Fixed nested section containment queries returning no matches when a `section` query used `contains(section ...)`.
 - `refd([[file]])` and `refd(type:...)` queries now include references originating in sections of matching source files, consistent with `refs(...)` and `rvn backlinks`.
 - Corrected MCP docs, embedded agent guides, and packaged skills for explicit post-`init` vault targeting, canonical hyphenated flag names, bulk argument arrays and retry details, and the body-only `add` contract.

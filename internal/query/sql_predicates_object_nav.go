@@ -117,6 +117,12 @@ func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string, roo
 	if err != nil {
 		return "", nil, err
 	}
+	depthCondition := "anc.depth > 0"
+	if root == QueryTypeTrait {
+		// A trait's seed is its attachment scope, not the trait itself, so it
+		// participates in within(). Section seeds remain self-excluding.
+		depthCondition = "anc.depth >= 0"
+	}
 	sql := fmt.Sprintf(`EXISTS (
 		WITH RECURSIVE subtree AS (
 			SELECT %s AS id, 0 AS depth
@@ -126,8 +132,8 @@ func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string, roo
 			JOIN sections sec ON sec.id = subtree.id
 			WHERE subtree.depth < ? AND COALESCE(sec.parent_section_id, sec.file_object_id) IS NOT NULL
 		)
-		SELECT 1 FROM subtree anc WHERE anc.depth > 0 AND %s
-	)`, scopeID, targetCond)
+		SELECT 1 FROM subtree anc WHERE %s AND %s
+	)`, scopeID, depthCondition, targetCond)
 	args := append([]interface{}{recursivePredicateMaxDepth}, targetArgs...)
 	if p.Negated() {
 		sql = "NOT " + sql
