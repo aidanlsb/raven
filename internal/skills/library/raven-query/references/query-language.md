@@ -167,8 +167,9 @@ trait:todo links(.is_image==true)
 ```
 
 `links(...)` and the bare `link` root share exactly these filter fields:
-`.ext`, `.is_image`, `.scheme`, `.raw_target`, `.display`, and
-`.normalized_key`. There is no inverse `linkd()` predicate.
+`.source_id`, `.source_type`, `.file_path`, `.line`, `.position_start`,
+`.position_end`, `.raw_target`, `.display`, `.is_image`, `.scheme`, `.ext`,
+and `.normalized_key`. There is no inverse `linkd()` predicate.
 
 ## Link-query predicates
 
@@ -183,11 +184,11 @@ link .is_image==true within(section .title==Resources)
 link .scheme==url includes(.display, "documentation")
 ```
 
-Use the same six filter fields as `links(...)`; source/location fields are
-output metadata. `within(type:...)` filters the source file object;
-`within(section ...)` filters by the indexed link line in a matching section
-subtree. Link rows are outgoing-only and do not support `in()`, `refs()`,
-`links()`, `refd()`, `content()`, structural containment, or arrays.
+All result fields use the same predicate grammar as `links(...)`; line and
+position fields compare numerically. `within(type:...)` filters the source file
+object; `within(section ...)` filters by the indexed link line in a matching
+section subtree. Link rows are outgoing-only and do not support `in()`,
+`refs()`, `links()`, `refd()`, `content()`, structural containment, or arrays.
 `link --ids` projects `source_id` once per matching edge, and link queries do
 not support `--apply`.
 

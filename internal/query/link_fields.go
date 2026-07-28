@@ -11,12 +11,18 @@ import (
 // linkFieldTypes is the single field vocabulary for predicates over link rows.
 // It is shared by links(...) and the link query root.
 var linkFieldTypes = map[string]schema.FieldType{
-	"display":        schema.FieldTypeString,
-	"ext":            schema.FieldTypeString,
-	"is_image":       schema.FieldTypeBool,
-	"normalized_key": schema.FieldTypeString,
+	"source_id":      schema.FieldTypeString,
+	"source_type":    schema.FieldTypeString,
+	"file_path":      schema.FieldTypeString,
+	"line":           schema.FieldTypeNumber,
+	"position_start": schema.FieldTypeNumber,
+	"position_end":   schema.FieldTypeNumber,
 	"raw_target":     schema.FieldTypeString,
+	"display":        schema.FieldTypeString,
+	"is_image":       schema.FieldTypeBool,
 	"scheme":         schema.FieldTypeString,
+	"ext":            schema.FieldTypeString,
+	"normalized_key": schema.FieldTypeString,
 }
 
 func availableLinkFields() []string {
@@ -29,10 +35,34 @@ func availableLinkFields() []string {
 }
 
 func linkColumnExpr(alias, field string) (string, bool) {
-	if _, ok := linkFieldTypes[field]; !ok {
+	switch field {
+	case "source_id":
+		return alias + ".source_id", true
+	case "source_type":
+		return alias + ".source_type", true
+	case "file_path":
+		return alias + ".file_path", true
+	case "line":
+		return alias + ".line_number", true
+	case "position_start":
+		return alias + ".position_start", true
+	case "position_end":
+		return alias + ".position_end", true
+	case "raw_target":
+		return alias + ".raw_target", true
+	case "display":
+		return alias + ".display", true
+	case "is_image":
+		return alias + ".is_image", true
+	case "scheme":
+		return alias + ".scheme", true
+	case "ext":
+		return alias + ".ext", true
+	case "normalized_key":
+		return alias + ".normalized_key", true
+	default:
 		return "", false
 	}
-	return alias + "." + field, true
 }
 
 // validateLinkPredicate validates the shared predicate grammar over link rows.
@@ -96,14 +126,14 @@ func validateLinkPredicate(pred Predicate) error {
 		if fieldType != schema.FieldTypeString {
 			return &ValidationError{
 				Message:    fmt.Sprintf("string function predicates are not valid for link field '.%s'", p.Field),
-				Suggestion: "Use .is_image==true or .is_image==false",
+				Suggestion: "Use comparison predicates for non-string link fields",
 			}
 		}
 		return validateRegexPattern(p)
 	default:
 		return &ValidationError{
 			Message:    fmt.Sprintf("unsupported link predicate %T", pred),
-			Suggestion: "Filter links with .ext, .is_image, .scheme, .raw_target, .display, or .normalized_key",
+			Suggestion: fmt.Sprintf("Filter links with one of: %s", strings.Join(availableLinkFields(), ", ")),
 		}
 	}
 }

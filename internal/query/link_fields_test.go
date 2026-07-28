@@ -14,6 +14,12 @@ func TestValidator_LinkPredicates(t *testing.T) {
 		"link .ext==pdf",
 		"link .is_image==true",
 		"link .scheme==url",
+		`link .source_id=="projects/raven"`,
+		"link .source_type==project",
+		`link startswith(.file_path, "projects/")`,
+		"link .line>=10",
+		"link .position_start>=0",
+		"link .position_end>0",
 		`link includes(.raw_target, "docs/")`,
 		`link matches(.display, "guide|manual")`,
 		"link within(type:project)",
@@ -36,8 +42,7 @@ func TestValidator_LinkPredicates(t *testing.T) {
 		message string
 	}{
 		{"link .unknown==x", "link has no field 'unknown'"},
-		{`link .source_id=="projects/raven"`, "link has no field 'source_id'"},
-		{`link includes(.line, "1")`, "link has no field 'line'"},
+		{`link includes(.line, "1")`, "string function predicates are not valid for link field '.line'"},
 		{"link in(type:project)", "in() predicate is not valid for link queries"},
 		{"link refs([[project/raven]])", "refs() predicate is not valid for link queries"},
 		{"link links(.ext==pdf)", "links() predicate is not valid for link queries"},
@@ -76,13 +81,8 @@ func TestValidator_LinkRootAndLinksPredicateShareFieldGrammar(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Parse(%q): %v", queryStr, err)
 		}
-		err = v.Validate(q)
-		var validationErr *ValidationError
-		if !errors.As(err, &validationErr) {
-			t.Fatalf("Validate(%q) error = %T %v, want *ValidationError", queryStr, err, err)
-		}
-		if !strings.Contains(validationErr.Message, "link has no field 'source_id'") {
-			t.Fatalf("Validate(%q) message = %q", queryStr, validationErr.Message)
+		if err := v.Validate(q); err != nil {
+			t.Fatalf("Validate(%q): %v", queryStr, err)
 		}
 	}
 }

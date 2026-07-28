@@ -30,9 +30,10 @@ Quick reference for common Raven Query Language (RQL) patterns.
 
 **Scope is root-dependent, and traits attach to the nearest section.** Lead with the forgiving forms: `type:project contains(trait:todo ...)` (not `has`) and `trait:todo within(type:project)` (not `in`). A `@todo` under `## Tasks` is not directly on the project object, so `has`/`in` (direct-only) usually return nothing.
 
-`links(...)` and the bare `link` root share `.ext`, `.is_image`, `.scheme`,
-`.raw_target`, `.display`, and `.normalized_key`. The root returns edge rows;
-`links(...)` filters type/section/trait source rows.
+`links(...)` and the bare `link` root share `.source_id`, `.source_type`,
+`.file_path`, `.line`, `.position_start`, `.position_end`, `.raw_target`,
+`.display`, `.is_image`, `.scheme`, `.ext`, and `.normalized_key`. The root
+returns edge rows; `links(...)` filters type/section/trait source rows.
 
 ## Sub-queries
 

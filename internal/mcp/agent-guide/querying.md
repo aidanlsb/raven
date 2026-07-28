@@ -70,14 +70,15 @@ links, for example `type:project links(.ext==pdf)` or
 `trait:todo links(.is_image==true)`.
 
 The bare `link` root returns outgoing Markdown link/image edges to non-Raven
-file and URL targets. Both surfaces use the same filter fields: `.ext`,
-`.is_image`, `.scheme`, `.raw_target`, `.display`, and `.normalized_key`.
-Root rows additionally return `.source_id`, `.source_type`, `.file_path`,
-`.line`, `.position_start`, and `.position_end` as edge metadata. Use
-`within(type:...)` or `within(section ...)` for source scope. `link --ids`
-projects `source_id` once per edge. Link rows are outgoing-only and do not
-support `refs()`, `refd()`, `in()`, `content()`, arrays, or `--apply`; there is
-no `linkd()` inverse because external files and URLs are leaf targets.
+file and URL targets. Both surfaces use the same complete field grammar:
+`.source_id`, `.source_type`, `.file_path`, `.line`, `.position_start`,
+`.position_end`, `.raw_target`, `.display`, `.is_image`, `.scheme`, `.ext`,
+and `.normalized_key`. Line and position fields compare numerically. Use
+`within(type:...)` or `within(section ...)` for root source scope.
+`link --ids` projects `source_id` once per edge. Link rows are outgoing-only
+and do not support `refs()`, `refd()`, `in()`, `content()`, arrays, or
+`--apply`; there is no `linkd()` inverse because external files and URLs are
+leaf targets.
 
 If you see SQLite/FTS errors during full-text search, treat them as query-syntax issues and simplify or quote punctuation-heavy terms.
 

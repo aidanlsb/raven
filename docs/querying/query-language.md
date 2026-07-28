@@ -72,8 +72,10 @@ Reading the scope rows:
 - `has`/`in` match the **direct** relationship only; `contains`/`within` match **recursively** through the section tree.
 - Link edges support only `within(...)`: `within(type:...)` matches the source file object, while `within(section ...)` matches sections whose subtree contains the link line.
 
-`links(...)` uses the link fields `.ext`, `.is_image`, `.scheme`, `.raw_target`,
-`.display`, and `.normalized_key`, for example `type:project links(.ext==pdf)`.
+`links(...)` and the bare `link` root use the same link fields: `.source_id`,
+`.source_type`, `.file_path`, `.line`, `.position_start`, `.position_end`,
+`.raw_target`, `.display`, `.is_image`, `.scheme`, `.ext`, and
+`.normalized_key`. For example: `type:project links(.ext==pdf)`.
 It is outgoing-only: unlike `refs()`/`refd()`, there is no `linkd()` because
 external files and URLs are leaf targets that cannot link back.
 
@@ -265,6 +267,7 @@ type:project none(.tags, _ == "deprecated")
 | `contains(trait:...)` | Object recursively contains matching trait in its section tree |
 | `contains(section...)` | Object recursively contains matching section in its section tree |
 | `refs(...)` | Object references a target or query match |
+| `links(...)` | Object has an outgoing non-Raven link matching link fields |
 | `refd(...)` | Object is referenced by a source or query match |
 | `content("term")` | Full-text term in object content |
 
@@ -281,6 +284,7 @@ type:project contains(trait:todo .value==todo)
 type:meeting refs([[project/website]])
 type:paper-notes refs([[assets/pdfs/paper.pdf]])
 type:meeting refs(type:project .status==active)
+type:project links(.ext==pdf)
 type:project refd(type:meeting)
 ```
 
@@ -345,12 +349,10 @@ and does not re-parse Markdown. Result rows expose:
 | `.ext` | string | Lowercase target extension without the dot |
 | `.normalized_key` | string | Canonical target key used by the index |
 
-The `link` root and `links(...)` predicate share one filter vocabulary:
-`.ext`, `.is_image`, `.scheme`, `.raw_target`, `.display`, and
-`.normalized_key`. These fields support scalar comparisons, and the
-string-valued fields support string functions. Source/location fields are
-returned as edge metadata rather than a separate predicate grammar; filter
-source scope with `within(...)`:
+The `link` root and `links(...)` predicate share this complete field
+vocabulary. All fields support scalar comparisons, string-valued fields support
+string functions, and `.line` / `.position_start` / `.position_end` use numeric
+comparison semantics. The root also supports source scoping with `within(...)`:
 
 ```text
 link .ext==pdf within(type:project)

@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/schema"
@@ -54,20 +55,27 @@ func buildLinkFieldPredicateSQL(p *FieldPredicate, alias string) (string, []inte
 		return cond, nil, nil
 	}
 
+	fieldType := linkFieldTypes[p.Field]
+	op := compareOpToSQL(p.CompareOp)
 	var cond string
 	var args []interface{}
-	if linkFieldTypes[p.Field] == schema.FieldTypeBool {
-		value := 0
-		if strings.EqualFold(p.Value, "true") {
-			value = 1
+	switch fieldType {
+	case schema.FieldTypeNumber:
+		n, err := strconv.ParseFloat(strings.TrimSpace(p.Value), 64)
+		if err != nil {
+			return "", nil, fmt.Errorf("link field '.%s' requires a numeric value", p.Field)
 		}
-		cond = fmt.Sprintf("%s %s ?", column, compareOpToSQL(p.CompareOp))
-		args = []interface{}{value}
-	} else if p.CompareOp == CompareEq || p.CompareOp == CompareNeq {
-		cond = fmt.Sprintf("LOWER(%s) %s LOWER(?)", column, compareOpToSQL(p.CompareOp))
-		args = []interface{}{p.Value}
-	} else {
-		cond = fmt.Sprintf("%s %s ?", column, compareOpToSQL(p.CompareOp))
+		cond = fmt.Sprintf("%s %s ?", column, op)
+		args = []interface{}{n}
+	case schema.FieldTypeBool:
+		cond = fmt.Sprintf("%s %s ?", column, op)
+		args = []interface{}{strings.EqualFold(p.Value, "true")}
+	default:
+		if p.CompareOp == CompareEq || p.CompareOp == CompareNeq {
+			cond = fmt.Sprintf("LOWER(%s) %s LOWER(?)", column, op)
+		} else {
+			cond = fmt.Sprintf("%s %s ?", column, op)
+		}
 		args = []interface{}{p.Value}
 	}
 

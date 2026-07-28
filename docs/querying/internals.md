@@ -27,7 +27,7 @@ The root kind determines which predicates are legal, which SQL builder runs, and
 
 The `link` root and `links(...)` predicate must consume the single link-field
 vocabulary and SQL compiler in `link_fields.go` / `sql_predicates_link.go`.
-Source/location columns returned by the root are not a second field grammar.
+That vocabulary includes target, source, and numeric location columns.
 
 ## Layer Boundaries
 

@@ -19,22 +19,22 @@ func TestExecuteLinkQuery(t *testing.T) {
 		{
 			name:       "extension equality within type",
 			query:      "link .ext==pdf within(type:project)",
-			wantTarget: []string{"../assets/spec.pdf", "../assets/report.pdf"},
+			wantTarget: []string{"../assets/spec.pdf", "../manual.pdf", "../assets/report.pdf", "docs/brief.pdf", "https://example.com/Guide.PDF"},
 		},
 		{
 			name:       "boolean image field",
 			query:      "link .is_image==true",
-			wantTarget: []string{"../assets/diagram.png"},
+			wantTarget: []string{"../assets/diagram.png", "assets/wireframe.png"},
 		},
 		{
 			name:       "URL scheme",
 			query:      "link .scheme==url",
-			wantTarget: []string{"https://example.com"},
+			wantTarget: []string{"https://example.com", "https://example.com", "https://example.com/Guide.PDF"},
 		},
 		{
 			name:       "raw target string function",
 			query:      `link endswith(.raw_target, ".pdf")`,
-			wantTarget: []string{"../assets/spec.pdf", "../assets/report.pdf"},
+			wantTarget: []string{"../assets/spec.pdf", "../manual.pdf", "../assets/report.pdf", "docs/brief.pdf", "https://example.com/Guide.PDF"},
 		},
 		{
 			name:       "display string function",
@@ -44,17 +44,32 @@ func TestExecuteLinkQuery(t *testing.T) {
 		{
 			name:       "section scope",
 			query:      "link within(section .title==Tasks)",
-			wantTarget: []string{"../assets/spec.pdf", "../assets/diagram.png"},
+			wantTarget: []string{"../assets/spec.pdf", "../manual.pdf", "../assets/diagram.png", "assets/wireframe.png"},
 		},
 		{
 			name:       "section scope and extension",
 			query:      "link .ext==pdf within(section .title==Tasks)",
-			wantTarget: []string{"../assets/spec.pdf"},
+			wantTarget: []string{"../assets/spec.pdf", "../manual.pdf"},
 		},
 		{
 			name:       "nested type predicate",
 			query:      "link within(type:project .status==active)",
-			wantTarget: []string{"../assets/report.pdf", "../assets/diagram.png", "https://example.com"},
+			wantTarget: []string{"../assets/report.pdf", "docs/brief.pdf", "../assets/diagram.png", "assets/wireframe.png", "https://example.com", "https://example.com/Guide.PDF"},
+		},
+		{
+			name:       "source type field",
+			query:      "link .source_type==person",
+			wantTarget: []string{"https://example.com"},
+		},
+		{
+			name:       "numeric line field",
+			query:      "link .line>=50",
+			wantTarget: []string{"https://example.com", "https://example.com/Guide.PDF"},
+		},
+		{
+			name:       "numeric position field",
+			query:      "link .position_start>=8",
+			wantTarget: []string{"https://example.com/Guide.PDF"},
 		},
 	}
 
@@ -94,7 +109,7 @@ func TestExecuteLinkQueryModes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecuteLinkIDQuery(): %v", err)
 	}
-	if want := []string{"projects/mobile", "projects/website"}; !reflect.DeepEqual(ids, want) {
+	if want := []string{"projects/mobile", "projects/mobile"}; !reflect.DeepEqual(ids, want) {
 		t.Fatalf("source IDs = %#v, want %#v", ids, want)
 	}
 
@@ -102,15 +117,15 @@ func TestExecuteLinkQueryModes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecuteLinkCountQuery(): %v", err)
 	}
-	if count != 2 {
-		t.Fatalf("count = %d, want 2", count)
+	if count != 5 {
+		t.Fatalf("count = %d, want 5", count)
 	}
 
 	page, err := executor.ExecuteLinkPageQuery(q, 1, 1)
 	if err != nil {
 		t.Fatalf("ExecuteLinkPageQuery(): %v", err)
 	}
-	if len(page) != 1 || page[0].RawTarget != "../assets/report.pdf" {
-		t.Fatalf("page = %#v, want report PDF edge", page)
+	if len(page) != 1 || page[0].RawTarget != "../manual.pdf" {
+		t.Fatalf("page = %#v, want manual PDF edge", page)
 	}
 }

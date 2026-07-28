@@ -39,7 +39,7 @@ rvn query 'link .ext==pdf within(type:project)' --json
 
 Use `links(...)` when the results should remain source entities; use the bare
 `link` root when the results should be individual edge rows. Both use the same
-six link filter fields.
+complete link-field grammar.
 
 ## Trait-centric work
 

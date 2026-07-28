@@ -16,8 +16,8 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
   ambiguous.
 - Scope predicates are root-dependent and traits attach to the nearest section: prefer the forgiving forms `contains(...)`/`within(...)` over `has(...)`/`in(...)` for inline traits under headings. `type:project has(trait:todo)` usually returns nothing; use `type:project contains(trait:todo .value==todo)`.
 - Use `links(...)` to filter type/section/trait rows by outgoing links; use the
-  bare `link` root when the result should be edge rows. Both share the same six
-  target filter fields.
+  bare `link` root when the result should be edge rows. Both share the same
+  complete link-field grammar.
 - Count or sample before pulling large result sets into context.
 - For `--apply`, always preview first, then add `--confirm` only when the user approves.
 

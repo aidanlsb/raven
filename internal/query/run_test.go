@@ -38,7 +38,7 @@ func TestRun_AllRootsCountIDsPageFull(t *testing.T) {
 		{"trait", "trait:due", 3},
 		{"asset", "asset", 3},
 		{"section", "section", 5},
-		{"link", "link", 4},
+		{"link", "link", 9},
 	}
 
 	for _, tc := range cases {
