@@ -33,7 +33,9 @@ Query syntax:
 - Type queries: type:<type> [predicates...]
   Examples: type:project .status==active, type:meeting refs([[people/freya]])
 - Section queries: section [predicates...]
-  Examples: section .title==Tasks, section within(type:project)
+  Examples: section .title==Tasks, section within(type:project),
+  section refs([[people/freya]])
+  The section root is always bare; type:section is invalid.
 - Trait queries: trait:<name> [predicates...]
   Examples: trait:due .value<today, trait:highlight in(type:book)
 - Link queries: link [predicates...]
@@ -51,6 +53,9 @@ Common predicates:
   matching the shared link fields (links(.ext==pdf)). Unlike refs()/refd(),
   links() is outgoing-only: external files and URLs are leaves, so there is no
   linkd() inverse.
+- refs()/links() scope follows the source root: type queries inspect the whole
+  file, section queries inspect the complete section subtree, and trait queries
+  inspect only the trait's source line.
 - Prefer canonical object IDs in direct reference targets; bare short forms are
   resolution sugar and can become ambiguous.
 - .value==X — Trait value equals X (.value==today, .value==high)
@@ -62,9 +67,14 @@ Link rows are outgoing Markdown links/images to non-Raven targets. They expose
 .source_id, .source_type, .file_path, .line, .position_start, .position_end,
 .raw_target, .display, .is_image, .scheme, .ext, and .normalized_key.
 The link root and links(...) share this complete field vocabulary, including
-numeric comparisons for line and positions. Use within(type:...) or
-within(section ...) to filter where a link occurs. Link queries do not support
-links(), refs(), refd(), content(), in(), or arrays.
+numeric comparisons for line and positions. Equality on .normalized_key and
+.raw_target is case-sensitive; equality on other string link fields is
+case-insensitive. Every link field is present, so exists()/!exists() are
+invalid; use an empty-value comparison such as .ext=="" when appropriate.
+Use within(type:...) or within(section ...) to filter where a link occurs. Link
+queries do not support links(), refs(), refd(), content(), in(), or arrays. To
+find trait lines with matching links, use trait:<name> links(...), not
+link within(trait:<name>).
 
 Scope predicates are root-dependent, and traits attach to the nearest section:
 - Prefer the forgiving forms contains(...) and within(...) unless you specifically

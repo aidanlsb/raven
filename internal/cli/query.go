@@ -59,16 +59,25 @@ Predicates for section queries:
   .title==Tasks        Section field equals value
   within(type:...)     Any containing scope matches nested query
   contains(trait:...)  Recursively contains a matching trait
+  refs([[target]])     Subtree contains a reference to target
   links(.ext==pdf)     Subtree contains a matching file or URL link
 
 Predicates for link queries:
   .ext==pdf              Link target extension equals value
   .is_image==true        Link is an image
   .scheme==url           Link target scheme is file, url, or other
+  .normalized_key=="..." Case-sensitive canonical target equality
+  .raw_target=="..."     Case-sensitive authored target equality
   includes(.raw_target, "text") String match on the authored target
   includes(.display, "text") String match on the display or alt text
   within(type:...)       Source file matches a type query
   within(section ...)    Link occurs in a matching section subtree
+
+For refs() and links(), type roots inspect the whole file, section roots inspect
+the complete subtree, and trait roots inspect only the trait's source line.
+All link fields are present, so exists()/!exists() are invalid; use an empty
+comparison such as .ext=="" when appropriate. Link has no in(); use
+trait:<name> links(...) rather than link within(trait:<name>).
 
 Boolean operators:
   !pred            NOT
