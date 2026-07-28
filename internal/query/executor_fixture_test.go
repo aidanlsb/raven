@@ -121,7 +121,9 @@ func setupTestDB(t *testing.T) *sql.DB {
 
 		-- Heading-derived sections.
 		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, line_end, subtree_line_end, parent_section_id) VALUES
-			('projects/website#tasks', 'projects/website', 'projects/website.md', 'tasks', 'Tasks', 2, 20, 49, 49, NULL),
+			('projects/website#tasks', 'projects/website', 'projects/website.md', 'tasks', 'Tasks', 2, 20, 44, 49, NULL),
+			('projects/website#implementation', 'projects/website', 'projects/website.md', 'implementation', 'Implementation', 3, 45, 47, 49, 'projects/website#tasks'),
+			('projects/website#verification', 'projects/website', 'projects/website.md', 'verification', 'Verification', 4, 48, 49, 49, 'projects/website#implementation'),
 			('projects/website#design', 'projects/website', 'projects/website.md', 'design', 'Design', 2, 50, NULL, NULL, NULL),
 			('projects/mobile#tasks', 'projects/mobile', 'projects/mobile.md', 'tasks', 'Tasks', 2, 15, NULL, NULL, NULL),
 			('daily/2025-02-01#standup', 'daily/2025-02-01', 'daily/2025-02-01.md', 'standup', 'Standup', 2, 10, 29, 29, NULL),

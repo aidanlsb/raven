@@ -136,6 +136,36 @@ func TestDirectTargetPredicates(t *testing.T) {
 		})
 	}
 }
+
+func TestSectionContainsNestedSection(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	q, err := Parse("section contains(section .title==Verification)")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	results, err := NewExecutor(db).executeSectionQuery(q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := map[string]bool{
+		"projects/website#tasks":          true,
+		"projects/website#implementation": true,
+	}
+	if len(results) != len(want) {
+		t.Fatalf("got %d results, want %d: %+v", len(results), len(want), results)
+	}
+	for _, result := range results {
+		if !want[result.ID] {
+			t.Errorf("unexpected section result %q", result.ID)
+		}
+	}
+}
+
 func TestAtPredicate(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
