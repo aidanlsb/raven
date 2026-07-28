@@ -146,6 +146,11 @@ trait:todo links(.is_image==true)
 `.position_end`, `.raw_target`, `.display`, `.is_image`, `.scheme`, `.ext`,
 and `.normalized_key`. There is no inverse `linkd()` predicate.
 
+For `.normalized_key`, URLs lowercase the host and strip only default ports
+(`:80` for HTTP and `:443` for HTTPS), preserving path case, query, trailing
+slash, and fragment. Files inside the vault use vault-relative POSIX keys;
+absolute targets outside the vault remain absolute.
+
 ## Link-query predicates
 
 The bare `link` root returns one indexed outgoing Markdown link/image edge per

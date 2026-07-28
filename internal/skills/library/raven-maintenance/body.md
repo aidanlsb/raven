@@ -64,9 +64,10 @@ For complex imports, use a YAML mapping file. After applying, verify with `rvn c
 ## External non-Markdown files
 
 Copy an external non-Markdown file into the vault with normal filesystem tools,
-then run `rvn reindex --json`. Link to it with standard Markdown. Use `rvn
-move` when the source is already inside the vault so inbound file links are
-rewritten.
+then run `rvn reindex --json`. Link to it with standard Markdown so it renders
+portably when converted to HTML. `[[...]]` is reserved for Raven object and
+section references and does not render as a file link or image. Use `rvn move`
+when the source is already inside the vault so inbound file links are rewritten.
 
 ## Cross-references
 

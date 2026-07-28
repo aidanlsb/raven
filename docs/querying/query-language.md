@@ -288,6 +288,11 @@ and does not re-parse Markdown. Result rows expose:
 | `.ext` | string | Lowercase target extension without the dot |
 | `.normalized_key` | string | Canonical target key used by the index |
 
+For URL targets, `.normalized_key` lowercases the host and strips only default
+ports (`:80` for HTTP and `:443` for HTTPS). Path case, the query string,
+trailing slash, and fragment are preserved. File targets inside the vault use a
+vault-relative POSIX key; absolute targets outside the vault remain absolute.
+
 The `link` root and `links(...)` predicate share this complete field
 vocabulary. All fields support scalar comparisons, string-valued fields support
 string functions, and `.line` / `.position_start` / `.position_end` use numeric

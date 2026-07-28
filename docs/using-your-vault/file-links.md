@@ -17,8 +17,10 @@ Use standard Markdown links and images:
 ![System diagram](../files/system.png)
 ```
 
-Do not use a wikilink for a file. `[[...]]` resolves only Raven objects and
-sections.
+These forms render correctly when Markdown is converted to HTML, so they remain
+portable across viewers. Do not use a wikilink for a file: `[[...]]` is
+reserved for Raven object and section references and does not render as a file
+link or image.
 
 ## Querying Links
 
@@ -36,6 +38,12 @@ Or filter objects, sections, and traits by their outgoing links:
 rvn query 'type:project links(.ext==pdf)' --json
 rvn query 'section links(.scheme==url)' --json
 ```
+
+The `.normalized_key` field is intentionally conservative. For URLs, Raven
+lowercases the host and strips only default ports (`:80` for HTTP and `:443`
+for HTTPS); path case, the query string, trailing slash, and fragment are
+preserved. File targets inside the vault use a vault-relative POSIX key;
+absolute targets outside the vault remain absolute.
 
 ## Checking And Moving Files
 
