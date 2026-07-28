@@ -23,9 +23,9 @@ reserved for Raven object and section references and does not render as a file
 link or image.
 
 Use `[[...]]` object or section references for Markdown notes inside the vault.
-`rvn check` flags standard Markdown links or images targeting in-vault `.md`
-notes as `markdown_link_to_vault_note` because Raven cannot track them as
-references for backlinks or rewrites.
+`rvn check` flags inline Markdown links or images (`[]()` / `![]()`) targeting
+in-vault `.md` notes as `markdown_link_to_vault_note` because Raven cannot track
+them as references for backlinks or rewrites.
 
 ## Querying Links
 

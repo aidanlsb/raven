@@ -176,12 +176,14 @@ func TestRun_ReportsMarkdownLinksAndImagesToVaultNotes(t *testing.T) {
 		WithFile("notes/source.md", strings.Join([]string{
 			"[note](../type/foo.md)",
 			"![note image](../type/foo.md#details)",
+			`[escaped note](../type/foo\#draft.md)`,
 			"[file](../files/manual.pdf)",
 			"[url](https://example.com/foo.md)",
 			"[[type/foo]]",
 			"",
 		}, "\n")).
 		WithFile("type/foo.md", "# Foo\n\n## Details\n").
+		WithFile("type/foo#draft.md", "# Foo draft\n").
 		WithFile("files/manual.pdf", "present\n").
 		Build()
 
@@ -200,14 +202,17 @@ func TestRun_ReportsMarkdownLinksAndImagesToVaultNotes(t *testing.T) {
 			issues = append(issues, issue)
 		}
 	}
-	if len(issues) != 2 {
-		t.Fatalf("markdown_link_to_vault_note issues = %#v, want link and image only", issues)
+	if len(issues) != 3 {
+		t.Fatalf("markdown_link_to_vault_note issues = %#v, want link, image, and escaped-filename link only", issues)
 	}
 	if issues[0].Value != "../type/foo.md" || issues[0].Line != 1 {
 		t.Errorf("link issue = %#v, want target on line 1", issues[0])
 	}
 	if issues[1].Value != "../type/foo.md#details" || issues[1].Line != 2 {
 		t.Errorf("image issue = %#v, want target on line 2", issues[1])
+	}
+	if issues[2].Value != `../type/foo\#draft.md` || issues[2].Line != 3 {
+		t.Errorf("escaped-filename issue = %#v, want target on line 3", issues[2])
 	}
 	for _, issue := range issues {
 		if issue.Level != check.LevelError {

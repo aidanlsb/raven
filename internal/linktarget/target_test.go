@@ -167,6 +167,31 @@ func TestIsRavenTarget(t *testing.T) {
 	}
 }
 
+func TestIsRavenTargetAuthoredPreservesEscapedDelimiters(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	tests := []struct {
+		name     string
+		raw      string
+		semantic string
+		want     bool
+	}{
+		{name: "escaped hash in markdown filename", raw: `../next\#draft.md`, semantic: "../next#draft.md", want: true},
+		{name: "escaped hash in non-markdown filename", raw: `../report\#draft.pdf`, semantic: "../report#draft.pdf", want: false},
+		{name: "ordinary fragment", raw: "../next.md#details", semantic: "../next.md#details", want: true},
+		{name: "local fragment", raw: "#details", semantic: "#details", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsRavenTargetAuthored(tt.raw, tt.semantic, "notes/source.md", vaultPath); got != tt.want {
+				t.Errorf("IsRavenTargetAuthored(%q, %q) = %v, want %v", tt.raw, tt.semantic, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRetargetFilePreservesAuthoredStyle(t *testing.T) {
 	t.Parallel()
 

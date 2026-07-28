@@ -97,17 +97,38 @@ func Classify(raw string) Scheme {
 // ordinary file link targets. Wikilinks are parsed separately.
 func IsRavenTarget(raw, sourceFile, vaultPath string) bool {
 	target := strings.TrimSpace(raw)
-	if target == "" || strings.HasPrefix(target, "#") {
+	if target == "" || isAuthoredLocalFragment(target) {
 		return true
 	}
-	if Classify(target) != SchemeFile {
+	return isRavenTargetInfo(Analyze(target, sourceFile, vaultPath))
+}
+
+// IsRavenTargetAuthored reports whether a direct Markdown destination names a
+// Raven target while preserving escaped filename delimiters from the authored
+// form. semanticTarget is the Markdown-decoded destination.
+func IsRavenTargetAuthored(rawTarget, semanticTarget, sourceFile, vaultPath string) bool {
+	if strings.TrimSpace(semanticTarget) == "" || isAuthoredLocalFragment(rawTarget) {
+		return true
+	}
+	return isRavenTargetInfo(AnalyzeAuthored(rawTarget, semanticTarget, sourceFile, vaultPath))
+}
+
+func isRavenTargetInfo(info Info) bool {
+	if info.Scheme != SchemeFile {
 		return false
 	}
-	info := Analyze(target, sourceFile, vaultPath)
 	if !strings.EqualFold(info.Ext, "md") {
 		return false
 	}
 	return !filepath.IsAbs(filepath.FromSlash(info.NormalizedKey)) && !isWindowsAbsolute(info.NormalizedKey)
+}
+
+func isAuthoredLocalFragment(raw string) bool {
+	target := strings.TrimSpace(raw)
+	if len(target) >= 2 && target[0] == '<' && target[len(target)-1] == '>' {
+		target = target[1 : len(target)-1]
+	}
+	return strings.HasPrefix(target, "#")
 }
 
 // ResolveFileKey turns a normalized file-link key into an OS path. Keys inside
