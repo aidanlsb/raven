@@ -219,7 +219,8 @@ rvn move person/freya person/freya-odinsdottir
 # All [[person/freya]] references are updated to [[person/freya-odinsdottir]]
 
 rvn move assets/downloads/paper.pdf assets/pdfs/paper.pdf
-# Markdown links/images and wikilinks pointing at the asset are updated
+# Indexed Markdown file links/images (matched by normalized target path) and
+# wikilinks pointing at the asset are updated
 ```
 
 Disable with `--update-refs=false` if needed.
@@ -228,6 +229,7 @@ Disable with `--update-refs=false` if needed.
 
 ```bash
 rvn check --issues missing_reference
+rvn check --issues broken_file_link  # filesystem only; URLs are not fetched
 rvn check --issues missing_asset
 rvn check --issues ambiguous_reference,id_collision,alias_collision
 ```

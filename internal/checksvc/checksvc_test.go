@@ -9,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
 	vaultpkg "github.com/aidanlsb/raven/internal/vault"
@@ -126,6 +127,62 @@ func TestRun_ReportsMissingAssetReference(t *testing.T) {
 	}
 	if !hasIssue(result.Issues, check.IssueMissingAsset) {
 		t.Fatalf("issues = %#v, want missing_asset", result.Issues)
+	}
+}
+
+func TestRun_ReportsBrokenFileLinksAndSkipsURLs(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("notes/source.md", strings.Join([]string{
+			"[existing](../files/existing.txt)",
+			"[missing](../files/missing.txt)",
+			"[site](https://example.com/files/missing.txt)",
+			"",
+		}, "\n")).
+		WithFile("files/existing.txt", "present\n").
+		Build()
+
+	sch, err := schema.Load(vault.Path)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+	content := vault.ReadFile("notes/source.md")
+	doc, err := parser.ParseDocument(content, filepath.Join(vault.Path, "notes", "source.md"), vault.Path)
+	if err != nil {
+		t.Fatalf("parse source: %v", err)
+	}
+	db, err := index.Open(vault.Path)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	if err := db.IndexDocument(doc, sch); err != nil {
+		_ = db.Close()
+		t.Fatalf("index source: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close index: %v", err)
+	}
+
+	result, err := runCheckTest(t, vault.Path, config.DefaultVaultConfig(), sch, Options{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	var broken []check.Issue
+	for _, issue := range result.Issues {
+		if issue.Type == check.IssueBrokenFileLink {
+			broken = append(broken, issue)
+		}
+	}
+	if len(broken) != 1 {
+		t.Fatalf("broken_file_link issues = %#v, want one missing file only", broken)
+	}
+	if broken[0].Value != "../files/missing.txt" || broken[0].Line != 2 {
+		t.Fatalf("broken issue = %#v, want missing target on line 2", broken[0])
+	}
+	if !strings.Contains(broken[0].FixHint, "Restore") {
+		t.Fatalf("fix hint = %q, want restore/update guidance", broken[0].FixHint)
 	}
 }
 

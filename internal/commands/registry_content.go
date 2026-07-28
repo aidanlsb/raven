@@ -251,14 +251,15 @@ IMPORTANT:
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
 Using 'mv' directly will NOT update references to the file, causing broken links
 throughout the vault. The raven_move command automatically updates [[references]]
-and Markdown asset links/images that point to the moved file.
+and indexed Markdown file links/images that point to the moved file.
 
 SECURITY: Both source and destination must be within the vault.
 Files cannot be moved outside the vault, and external files cannot be moved in.
 
 This command:
 - Validates paths are within the vault
-- Updates all references to the moved file (--update-refs, default: true)
+- Updates all references and normalized-key-matched file links to the moved file
+  (--update-refs, default: true)
 - Preserves non-Markdown asset filenames/extensions when moving assets
 - Warns if moving to a type's default directory with mismatched type
 - Creates destination directories if needed

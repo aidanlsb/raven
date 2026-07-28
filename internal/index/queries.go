@@ -136,6 +136,62 @@ func (d *Database) QueryAssets() ([]model.Asset, error) {
 	return results, rows.Err()
 }
 
+// FileLinks returns all indexed Markdown links and images whose target is a
+// local file. Existence is intentionally not part of the index and must be
+// checked by callers against the current filesystem.
+func (d *Database) FileLinks() ([]model.Link, error) {
+	return d.queryLinks(`
+		SELECT source_id, source_type, file_path, line_number, position_start, position_end,
+		       raw_target, display, is_image, scheme, ext, normalized_key
+		FROM links
+		WHERE scheme = 'file'
+		ORDER BY file_path, line_number, position_start, id
+	`)
+}
+
+// FileLinksByNormalizedKey returns inbound file links for one canonical target
+// identity. This is the matching primitive used by move rewrites.
+func (d *Database) FileLinksByNormalizedKey(normalizedKey string) ([]model.Link, error) {
+	return d.queryLinks(`
+		SELECT source_id, source_type, file_path, line_number, position_start, position_end,
+		       raw_target, display, is_image, scheme, ext, normalized_key
+		FROM links
+		WHERE scheme = 'file' AND normalized_key = ?
+		ORDER BY file_path, line_number, position_start, id
+	`, normalizedKey)
+}
+
+func (d *Database) queryLinks(query string, args ...interface{}) ([]model.Link, error) {
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.Link
+	for rows.Next() {
+		var result model.Link
+		if err := rows.Scan(
+			&result.SourceID,
+			&result.SourceType,
+			&result.FilePath,
+			&result.Line,
+			&result.PositionStart,
+			&result.PositionEnd,
+			&result.RawTarget,
+			&result.Display,
+			&result.IsImage,
+			&result.Scheme,
+			&result.Ext,
+			&result.NormalizedKey,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	return results, rows.Err()
+}
+
 // Backlinks returns all objects that reference the given target.
 func (d *Database) Backlinks(targetID string) ([]model.Reference, error) {
 	return d.BacklinksWithRoots(targetID, "", "")

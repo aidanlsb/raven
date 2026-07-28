@@ -2,6 +2,7 @@ package index
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
@@ -484,6 +485,45 @@ func TestAllObjects(t *testing.T) {
 	}
 	if got, ok := results[0].Fields["name"].AsString(); !ok || got != "Freya" {
 		t.Fatalf("first object name = %#v, want Freya", results[0].Fields["name"])
+	}
+}
+
+func TestFileLinkQueries(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	doc, err := parser.ParseDocument(
+		"[report](../assets/report.pdf)\n[site](https://example.com/report.pdf)\n",
+		filepath.Join(vaultPath, "notes", "source.md"),
+		vaultPath,
+	)
+	if err != nil {
+		t.Fatalf("ParseDocument() error = %v", err)
+	}
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("OpenInMemory() error = %v", err)
+	}
+	defer db.Close()
+	if err := db.IndexDocument(doc, schema.New()); err != nil {
+		t.Fatalf("IndexDocument() error = %v", err)
+	}
+
+	fileLinks, err := db.FileLinks()
+	if err != nil {
+		t.Fatalf("FileLinks() error = %v", err)
+	}
+	if len(fileLinks) != 1 || fileLinks[0].RawTarget != "../assets/report.pdf" {
+		t.Fatalf("FileLinks() = %#v, want only local file target", fileLinks)
+	}
+
+	inbound, err := db.FileLinksByNormalizedKey("assets/report.pdf")
+	if err != nil {
+		t.Fatalf("FileLinksByNormalizedKey() error = %v", err)
+	}
+	if len(inbound) != 1 || inbound[0].FilePath != "notes/source.md" {
+		t.Fatalf("FileLinksByNormalizedKey() = %#v, want source link", inbound)
 	}
 }
 
