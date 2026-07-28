@@ -112,7 +112,9 @@ func fileExtension(target string) string {
 
 func normalizeFile(target, sourceFile, vaultPath string) string {
 	target = strings.ReplaceAll(target, "\\", "/")
-	if isWindowsAbsolute(target) {
+	// filepath understands drive-qualified paths on Windows. On other hosts,
+	// retain a clean portable key rather than treating the drive as relative.
+	if isWindowsAbsolute(target) && !filepath.IsAbs(filepath.FromSlash(target)) {
 		return path.Clean(target)
 	}
 
