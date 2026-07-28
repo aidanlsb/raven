@@ -48,6 +48,20 @@ func looksLikeShellPipeCommand(tok Token) bool {
 	return ok
 }
 
+func startsQueryRoot(curr, peek Token) bool {
+	if curr.Type != TokenIdent {
+		return false
+	}
+	switch strings.ToLower(curr.Value) {
+	case "section", "link":
+		return true
+	case "type", "trait":
+		return peek.Type == TokenColon
+	default:
+		return false
+	}
+}
+
 // Parse parses a query string and returns a Query AST.
 func Parse(input string) (*Query, error) {
 	p := &Parser{lexer: NewLexer(input)}
@@ -455,8 +469,7 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 	}
 
 	if p.curr.Type == TokenIdent {
-		ident := strings.ToLower(p.curr.Value)
-		if ident != "section" && (ident != "type" || p.peek.Type != TokenColon) {
+		if !startsQueryRoot(p.curr, p.peek) {
 			target := p.curr.Value
 			p.advance()
 			if err := p.expect(TokenRParen); err != nil {
@@ -476,9 +489,6 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 	subq, err := p.parseQuery()
 	if err != nil {
 		return navFuncArgument{}, err
-	}
-	if subq.Type != QueryTypeObject && subq.Type != QueryTypeSection {
-		return navFuncArgument{}, fmt.Errorf("expected type or section subquery in %s()", kind)
 	}
 	if err := p.expect(TokenRParen); err != nil {
 		return navFuncArgument{}, err
@@ -533,8 +543,7 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected target or type subquery in refs()")
 	}
-	ident := strings.ToLower(p.curr.Value)
-	if ident != "section" && (ident != "type" || p.peek.Type != TokenColon) {
+	if !startsQueryRoot(p.curr, p.peek) {
 		target := p.curr.Value
 		p.advance()
 		if err := p.expect(TokenRParen); err != nil {
@@ -545,9 +554,6 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 	subq, err := p.parseQuery()
 	if err != nil {
 		return nil, err
-	}
-	if subq.Type != QueryTypeObject && subq.Type != QueryTypeSection {
-		return nil, fmt.Errorf("refs() subquery must be a type or section query")
 	}
 	if err := p.expect(TokenRParen); err != nil {
 		return nil, err

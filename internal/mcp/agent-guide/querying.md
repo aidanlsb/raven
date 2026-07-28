@@ -60,6 +60,9 @@ and `read` with `sections=true` returns a file's outline directly.
 Use `links(...)` on type, section, or trait roots to filter by outgoing non-Raven
 links, for example `type:project links(.ext==pdf)` or
 `trait:todo links(.is_image==true)`.
+For both `refs(...)` and `links(...)`, a type root covers the whole file, a
+section root covers the complete section subtree, and a trait root covers only
+the trait's source line.
 
 The bare `link` root returns outgoing Markdown link/image edges to non-Raven
 file and URL targets. Both surfaces use the same complete field grammar:
@@ -71,10 +74,15 @@ For `.normalized_key`, URLs lowercase the host and strip only default ports
 (`:80` for HTTP and `:443` for HTTPS), preserving path case, query, trailing
 slash, and fragment. Files inside the vault use vault-relative POSIX keys;
 absolute targets outside the vault remain absolute.
+Equality on `.normalized_key` and `.raw_target` is case-sensitive; equality on
+other string link fields remains case-insensitive. Every link field is present,
+so `exists()`/`!exists()` are rejected; use `.ext==""` for an empty extension.
 `link --ids` projects `source_id` once per edge. Link rows are outgoing-only
 and do not support `refs()`, `refd()`, `in()`, `content()`, arrays, or
 `--apply`; there is no `linkd()` inverse because external files and URLs are
 leaf targets.
+The `link` root has no `in()`. Use `trait:<name> links(...)` to find trait lines
+with matching links, not `link within(trait:<name>)`.
 
 If you see SQLite/FTS errors during full-text search, treat them as query-syntax issues and simplify or quote punctuation-heavy terms.
 

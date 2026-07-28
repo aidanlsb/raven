@@ -26,7 +26,7 @@ Scope/structural predicates are root-dependent. Predicates rejected for a root p
 
 | Predicate / family | `type:<t>` | `section` | `trait:<name>` | `link` |
 |--------------------|:----------:|:---------:|:--------------:|:------:|
-| Field compares, `exists(.field)` | yes | yes (built-in fields) | yes (`.value`) | yes |
+| Field compares, `exists(.field)` | yes | yes (built-in fields) | yes (`.value`) | compares only; `exists()` is rejected |
 | `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes |
 | String funcs (`includes`/`startswith`/`endswith`/`matches`) | yes | yes (non-numeric) | yes (`.value`) | yes (string fields) |
 | `any`/`all`/`none` | yes (array fields) | no | yes (array `.value`) | no |
@@ -43,6 +43,10 @@ Scope/structural predicates are root-dependent. Predicates rejected for a root p
 Scope shortcuts: downward (`has`/`contains`) live on container roots (`type:`/`section`); upward (`in`/`within`) live on contained roots (`trait:`/`section`). `has`/`in` are direct-only; `contains`/`within` are recursive.
 
 Traits attach to the nearest section, so lead with the forgiving forms: use `type:project contains(trait:todo ...)` (not `has`) and `trait:todo within(type:project)` (not `in`). `in(...)` is containment scope, not set membership — for value-in-a-set use `oneof(.field, [...])`.
+
+For both `refs(...)` and `links(...)`, type roots inspect the whole file,
+section roots inspect the complete section subtree, and trait roots inspect
+only the trait's source line. The bare `link` root supports neither predicate.
 
 ## Scalar predicates
 
@@ -150,6 +154,10 @@ For `.normalized_key`, URLs lowercase the host and strip only default ports
 (`:80` for HTTP and `:443` for HTTPS), preserving path case, query, trailing
 slash, and fragment. Files inside the vault use vault-relative POSIX keys;
 absolute targets outside the vault remain absolute.
+Equality on `.normalized_key` and `.raw_target` is case-sensitive; other string
+link fields retain case-insensitive equality. Link columns are always present,
+so `exists()`/`!exists()` are rejected; use `.ext==""` to match an empty
+extension.
 
 ## Link-query predicates
 
@@ -170,7 +178,8 @@ object; `within(section ...)` filters by the indexed link line in a matching
 section subtree. Link rows are outgoing-only and do not support `in()`,
 `refs()`, `links()`, `refd()`, `content()`, structural containment, or arrays.
 `link --ids` projects `source_id` once per matching edge, and link queries do
-not support `--apply`.
+not support `--apply`. Use `trait:<name> links(...)` to find trait lines with
+matching links, not `link within(trait:<name>)`.
 
 ## Boolean composition
 

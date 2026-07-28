@@ -72,7 +72,11 @@ func buildLinkFieldPredicateSQL(p *FieldPredicate, alias string) (string, []inte
 		args = []interface{}{strings.EqualFold(p.Value, "true")}
 	default:
 		if p.CompareOp == CompareEq || p.CompareOp == CompareNeq {
-			cond = fmt.Sprintf("LOWER(%s) %s LOWER(?)", column, op)
+			if isCaseSensitiveLinkEqualityField(p.Field) {
+				cond = fmt.Sprintf("%s %s ?", column, op)
+			} else {
+				cond = fmt.Sprintf("LOWER(%s) %s LOWER(?)", column, op)
+			}
 		} else {
 			cond = fmt.Sprintf("%s %s ?", column, op)
 		}
@@ -83,6 +87,10 @@ func buildLinkFieldPredicateSQL(p *FieldPredicate, alias string) (string, []inte
 		cond = "NOT (" + cond + ")"
 	}
 	return cond, args, nil
+}
+
+func isCaseSensitiveLinkEqualityField(field string) bool {
+	return field == "raw_target" || field == "normalized_key"
 }
 
 func buildLinkStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {

@@ -129,3 +129,47 @@ func TestExecuteLinkQueryModes(t *testing.T) {
 		t.Fatalf("page = %#v, want manual PDF edge", page)
 	}
 }
+
+func TestExecuteLinkQuery_CaseSensitiveIdentityFields(t *testing.T) {
+	t.Parallel()
+
+	db := setupTestDB(t)
+	defer db.Close()
+	_, err := db.Exec(`
+		INSERT INTO links (
+			source_id, source_type, file_path, line_number, position_start, position_end,
+			raw_target, display, is_image, scheme, ext, normalized_key
+		) VALUES (
+			'projects/website', 'project', 'projects/website.md', 56, 0, 51,
+			'https://example.com/guide.pdf', 'lowercase guide', 0, 'url', 'pdf',
+			'https://example.com/guide.pdf'
+		)
+	`)
+	if err != nil {
+		t.Fatalf("insert case-variant link: %v", err)
+	}
+
+	executor := NewExecutor(db)
+	tests := []struct {
+		field string
+		value string
+	}{
+		{field: "normalized_key", value: "https://example.com/Guide.PDF"},
+		{field: "raw_target", value: "https://example.com/Guide.PDF"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.field, func(t *testing.T) {
+			q, parseErr := Parse(`link .` + tt.field + `=="` + tt.value + `"`)
+			if parseErr != nil {
+				t.Fatalf("Parse(): %v", parseErr)
+			}
+			rows, execErr := executor.ExecuteLinkQuery(q)
+			if execErr != nil {
+				t.Fatalf("ExecuteLinkQuery(): %v", execErr)
+			}
+			if len(rows) != 1 || rows[0].RawTarget != "https://example.com/Guide.PDF" {
+				t.Fatalf("rows = %#v, want only path-case-exact URL", rows)
+			}
+		})
+	}
+}
