@@ -321,6 +321,61 @@ func TestValidator_AssetQueryRules(t *testing.T) {
 	}
 }
 
+func TestValidator_LinksPredicateRootsAndFields(t *testing.T) {
+	t.Parallel()
+
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {Fields: map[string]*schema.FieldDefinition{}},
+			"meeting": {Fields: map[string]*schema.FieldDefinition{}},
+		},
+		Traits: map[string]*schema.TraitDefinition{"todo": {}},
+	}
+	v := NewValidator(sch)
+
+	allowed := []string{
+		"type:project links(.ext==pdf)",
+		"type:meeting links(.is_image==true)",
+		"trait:todo links(.ext==pdf)",
+		"section links(.scheme==url)",
+		`section links(includes(.display, "diagram"))`,
+		`type:project links(.normalized_key=="assets/report.pdf")`,
+	}
+	for _, queryStr := range allowed {
+		t.Run("allowed/"+queryStr, func(t *testing.T) {
+			q, err := Parse(queryStr)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if err := v.Validate(q); err != nil {
+				t.Fatalf("validate: %v", err)
+			}
+		})
+	}
+
+	rejected := []struct {
+		query   string
+		wantMsg string
+	}{
+		{"asset links(.ext==pdf)", "links() predicate is only valid for type, trait, and section queries"},
+		{"type:project links(.extension==pdf)", "link has no field 'extension'"},
+		{"type:project links(.is_image==yes)", "link field '.is_image' requires true or false"},
+		{"type:project links(refs([[people/freya]]))", "unsupported link predicate"},
+	}
+	for _, tt := range rejected {
+		t.Run("rejected/"+tt.query, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			err = v.Validate(q)
+			if err == nil || !strings.Contains(err.Error(), tt.wantMsg) {
+				t.Fatalf("error = %v, want substring %q", err, tt.wantMsg)
+			}
+		})
+	}
+}
+
 func TestValidator_TraitRefdRejected(t *testing.T) {
 	t.Parallel()
 	sch := &schema.Schema{

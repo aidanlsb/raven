@@ -36,6 +36,7 @@ Predicates for type queries:
   contains(section...) Recursively contains a matching section
   refs([[target]])      References a specific target
   refs(type:...)      References an item matching nested type query
+  links(.ext==pdf)      Contains a matching outgoing file or URL link
   refd([[source]])      Referenced by a specific source
   refd(type:...)      Referenced by an item matching nested type query
   refd(trait:...)       Referenced by a trait matching nested trait query
@@ -51,7 +52,14 @@ Predicates for trait queries:
   at(trait:...)        Co-located with trait matching nested trait query
   refs([[target]])     Line contains reference to target
   refs(type:...)     Line references an item matching nested type query
+  links(.ext==pdf)     Line contains a matching file or URL link
   content("term")      Line content contains term
+
+Predicates for section queries:
+  .title==Tasks        Section field equals value
+  within(type:...)     Any containing scope matches nested query
+  contains(trait:...)  Recursively contains a matching trait
+  links(.ext==pdf)     Subtree contains a matching file or URL link
 
 Predicates for asset queries:
   .extension==pdf       Asset field equals value

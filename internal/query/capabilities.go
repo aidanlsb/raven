@@ -29,6 +29,7 @@ const (
 	predKindIn
 	predKindWithin
 	predKindRefs
+	predKindLinks
 	predKindRefd
 	predKindContent
 	predKindValue
@@ -54,6 +55,8 @@ func predicateKindOf(pred Predicate) predKind {
 		return predKindWithin
 	case *RefsPredicate:
 		return predKindRefs
+	case *LinksPredicate:
+		return predKindLinks
 	case *RefdPredicate:
 		return predKindRefd
 	case *ContentPredicate:
@@ -116,6 +119,10 @@ var disallowedPredicates = map[QueryType]map[predKind]predicateCapability{
 		predKindRefs: {
 			message:    "refs() predicate is not valid for asset queries",
 			suggestion: "Assets do not have outbound references; use asset refd(...) to find assets referenced by objects or traits",
+		},
+		predKindLinks: {
+			message:    "links() predicate is only valid for type, trait, and section queries",
+			suggestion: "External files and URLs are outgoing leaves, so links(...) has no inverse linkd() predicate",
 		},
 		predKindArray: {
 			message:    "array predicates are not valid for asset queries",

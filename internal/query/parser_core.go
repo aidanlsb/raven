@@ -335,6 +335,9 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 			case "refs":
 				p.advance()
 				return p.parseRefsFuncPredicate(negated)
+			case "links":
+				p.advance()
+				return p.parseLinksFuncPredicate(negated)
 			case "refd":
 				p.advance()
 				return p.parseRefdFuncPredicate(negated)
@@ -550,6 +553,36 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 		return nil, err
 	}
 	return &RefsPredicate{basePredicate: basePredicate{negated: negated}, SubQuery: subq}, nil
+}
+
+// parseLinkPredicateExpression is the shared parser entry point for predicates
+// over link rows. links(...) uses it now; the link query root uses the same
+// expression grammar rather than maintaining a second field parser.
+func (p *Parser) parseLinkPredicateExpression() (Predicate, error) {
+	return p.parseOrPredicate(QueryTypeObject)
+}
+
+func (p *Parser) parseLinksFuncPredicate(negated bool) (Predicate, error) {
+	if err := p.expect(TokenLParen); err != nil {
+		return nil, err
+	}
+	if p.curr.Type == TokenRParen {
+		return nil, fmt.Errorf("links() requires a link field predicate")
+	}
+	linkPred, err := p.parseLinkPredicateExpression()
+	if err != nil {
+		return nil, err
+	}
+	if linkPred == nil {
+		return nil, fmt.Errorf("links() requires a link field predicate")
+	}
+	if err := p.expect(TokenRParen); err != nil {
+		return nil, err
+	}
+	return &LinksPredicate{
+		basePredicate: basePredicate{negated: negated},
+		LinkPredicate: linkPred,
+	}, nil
 }
 
 func (p *Parser) parseRefdFuncPredicate(negated bool) (Predicate, error) {
