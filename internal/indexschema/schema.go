@@ -14,7 +14,8 @@ package indexschema
 // v12: Added first-class sections table
 // v13: Removed object hierarchy/heading columns; objects are file-backed only
 // v14: Added subtree line ranges for heading-derived sections
-const CurrentDBVersion = 14
+// v15: Added lightweight outgoing link edges for non-Raven targets
+const CurrentDBVersion = 15
 
 // SchemaSQL is the authoritative SQLite schema shared by the index writer and
 // SQL-generating consumers.
@@ -84,6 +85,23 @@ const SchemaSQL = `
 		line_number INTEGER,
 		position_start INTEGER,
 		position_end INTEGER
+	);
+
+	-- Outgoing Markdown links to non-Raven file and URL targets
+	CREATE TABLE IF NOT EXISTS links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		source_id TEXT NOT NULL,
+		source_type TEXT NOT NULL,
+		file_path TEXT NOT NULL,
+		line_number INTEGER NOT NULL,
+		position_start INTEGER NOT NULL,
+		position_end INTEGER NOT NULL,
+		raw_target TEXT NOT NULL,
+		display TEXT NOT NULL,
+		is_image INTEGER NOT NULL,
+		scheme TEXT NOT NULL,
+		ext TEXT NOT NULL,
+		normalized_key TEXT NOT NULL
 	);
 
 	-- References from ref-typed fields (schema-aware)
@@ -176,6 +194,10 @@ const SchemaSQL = `
 	CREATE INDEX IF NOT EXISTS idx_refs_source ON refs(source_id);
 	CREATE INDEX IF NOT EXISTS idx_refs_target ON refs(target_id);
 	CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file_path);
+
+	CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id);
+	CREATE INDEX IF NOT EXISTS idx_links_file ON links(file_path);
+	CREATE INDEX IF NOT EXISTS idx_links_normalized_key ON links(normalized_key);
 
 	CREATE INDEX IF NOT EXISTS idx_field_refs_source_field ON field_refs(source_id, field_name);
 	CREATE INDEX IF NOT EXISTS idx_field_refs_field_target ON field_refs(field_name, target_id);

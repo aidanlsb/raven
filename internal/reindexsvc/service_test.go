@@ -691,6 +691,25 @@ func TestRunIndexesAssetsAndResolvesMarkdownAssetLinks(t *testing.T) {
 	if targetID != "assets/pdfs/paper.pdf" {
 		t.Fatalf("target_id = %q, want assets/pdfs/paper.pdf", targetID)
 	}
+
+	var (
+		rawTarget     string
+		scheme        string
+		ext           string
+		normalizedKey string
+	)
+	err = db.DB().QueryRow(`
+		SELECT raw_target, scheme, ext, normalized_key
+		FROM links
+		WHERE file_path = ?
+	`, "note.md").Scan(&rawTarget, &scheme, &ext, &normalizedKey)
+	if err != nil {
+		t.Fatalf("failed to query links table: %v", err)
+	}
+	if rawTarget != "assets/pdfs/paper.pdf" || scheme != "file" || ext != "pdf" ||
+		normalizedKey != "assets/pdfs/paper.pdf" {
+		t.Fatalf("link edge = raw %q scheme %q ext %q key %q", rawTarget, scheme, ext, normalizedKey)
+	}
 }
 
 func TestRunIncrementalReindexesAssetsAfterConfigChange(t *testing.T) {

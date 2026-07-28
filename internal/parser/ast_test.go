@@ -112,6 +112,40 @@ More content.
 		}
 	})
 
+	t.Run("extracts direct markdown link edge syntax", func(t *testing.T) {
+		content := "See [Paper](docs/a\\(1\\).PDF) here.\n![Diagram](images/diagram.png)\n[reference link][paper]\n\n[paper]: docs/reference.pdf\n"
+
+		result, err := ExtractFromAST([]byte(content), 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(result.Links) != 2 {
+			t.Fatalf("got %d links, want 2: %#v", len(result.Links), result.Links)
+		}
+		first := result.Links[0]
+		if first.RawTarget != `docs/a\(1\).PDF` {
+			t.Errorf("raw target = %q, want verbatim escaped destination", first.RawTarget)
+		}
+		if first.Display != "Paper" || first.IsImage {
+			t.Errorf("first link display/image = %q/%v, want Paper/false", first.Display, first.IsImage)
+		}
+		firstSyntax := `[Paper](docs/a\(1\).PDF)`
+		if first.Line != 1 || first.PositionStart != 4 || first.PositionEnd != 4+len(firstSyntax) {
+			t.Errorf("first link location = line %d [%d,%d), want line 1 [4,%d)",
+				first.Line, first.PositionStart, first.PositionEnd, 4+len(firstSyntax))
+		}
+
+		second := result.Links[1]
+		if second.RawTarget != "images/diagram.png" || second.Display != "Diagram" || !second.IsImage {
+			t.Errorf("second link = %#v, want diagram image", second)
+		}
+		if second.Line != 2 || second.PositionStart != 0 || second.PositionEnd != len("![Diagram](images/diagram.png)") {
+			t.Errorf("second link location = line %d [%d,%d), want line 2 [0,%d)",
+				second.Line, second.PositionStart, second.PositionEnd, len("![Diagram](images/diagram.png)"))
+		}
+	})
+
 	t.Run("skips refs in code blocks", func(t *testing.T) {
 		content := "# Notes\n\n[[real-ref]]\n\n```\n[[fake-ref]]\n```\n\n[[another-real]]\n"
 

@@ -24,6 +24,19 @@ type ASTContent struct {
 	Headings []Heading
 	Traits   []TraitAnnotation
 	Refs     []Reference
+	Links    []MarkdownLink
+}
+
+// MarkdownLink is a direct [label](target) or ![alt](target) extracted from
+// Markdown body content before source scope and target normalization are added.
+type MarkdownLink struct {
+	RawTarget     string
+	Target        string
+	Display       string
+	IsImage       bool
+	Line          int
+	PositionStart int
+	PositionEnd   int
 }
 
 // ExtractFromAST parses markdown content with goldmark and extracts all
@@ -107,6 +120,11 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 		return nil, err
 	}
 
+	// Direct Markdown links are native AST nodes, so extract them once from the
+	// whole document. This includes links in headings without duplicating links
+	// nested under list items.
+	result.Links = extractMarkdownLinks(doc, content, lineStarts, startLine)
+
 	return result, nil
 }
 
@@ -166,6 +184,209 @@ func extractMarkdownAssetRefs(node ast.Node, content []byte, lineStarts []int, s
 	}
 	walk(node)
 	return refs
+}
+
+func extractMarkdownLinks(node ast.Node, content []byte, lineStarts []int, startLine int) []MarkdownLink {
+	var links []MarkdownLink
+	var walk func(ast.Node)
+	walk = func(n ast.Node) {
+		switch typed := n.(type) {
+		case *ast.Link:
+			if link, ok := directMarkdownLink(typed, typed.Destination, false, content, lineStarts, startLine); ok {
+				links = append(links, link)
+			}
+		case *ast.Image:
+			if link, ok := directMarkdownLink(typed, typed.Destination, true, content, lineStarts, startLine); ok {
+				links = append(links, link)
+			}
+		case *ast.CodeSpan:
+			return
+		}
+		for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+			walk(child)
+		}
+	}
+	walk(node)
+	return links
+}
+
+func directMarkdownLink(
+	node ast.Node,
+	destination []byte,
+	isImage bool,
+	content []byte,
+	lineStarts []int,
+	startLine int,
+) (MarkdownLink, bool) {
+	switch typed := node.(type) {
+	case *ast.Link:
+		if typed.Reference != nil {
+			return MarkdownLink{}, false
+		}
+	case *ast.Image:
+		if typed.Reference != nil {
+			return MarkdownLink{}, false
+		}
+	}
+
+	start := node.Pos()
+	rawTarget, end, ok := markdownLinkSource(content, start, isImage)
+	if !ok || rawTarget == "" {
+		return MarkdownLink{}, false
+	}
+	lineIndex := offsetToLine(lineStarts, start)
+	lineStartOffset := lineStarts[lineIndex]
+	return MarkdownLink{
+		RawTarget:     rawTarget,
+		Target:        string(destination),
+		Display:       collectInlineText(node, content),
+		IsImage:       isImage,
+		Line:          startLine + lineIndex,
+		PositionStart: start - lineStartOffset,
+		PositionEnd:   end - lineStartOffset,
+	}, true
+}
+
+func markdownLinkSource(content []byte, start int, isImage bool) (rawTarget string, end int, ok bool) {
+	if start < 0 || start >= len(content) {
+		return "", 0, false
+	}
+	labelOpen := start
+	if isImage {
+		if start+1 >= len(content) || content[start] != '!' {
+			return "", 0, false
+		}
+		labelOpen++
+	}
+	if content[labelOpen] != '[' {
+		return "", 0, false
+	}
+
+	labelClose := matchingBracket(content, labelOpen, '[', ']')
+	if labelClose < 0 || labelClose+1 >= len(content) || content[labelClose+1] != '(' {
+		return "", 0, false
+	}
+	openParen := labelClose + 1
+	destinationStart := skipMarkdownSpaces(content, openParen+1)
+	if destinationStart >= len(content) {
+		return "", 0, false
+	}
+
+	destinationEnd := destinationStart
+	if content[destinationStart] == '<' {
+		destinationStart++
+		destinationEnd = escapedDelimiter(content, destinationStart, '>')
+		if destinationEnd < 0 {
+			return "", 0, false
+		}
+	} else {
+		destinationEnd = unwrappedDestinationEnd(content, destinationStart)
+	}
+	if destinationEnd < destinationStart {
+		return "", 0, false
+	}
+
+	linkEnd := markdownLinkEnd(content, destinationEnd)
+	if linkEnd < 0 {
+		return "", 0, false
+	}
+	return string(content[destinationStart:destinationEnd]), linkEnd, true
+}
+
+func matchingBracket(content []byte, start int, opener, closer byte) int {
+	depth := 0
+	for i := start; i < len(content); i++ {
+		switch content[i] {
+		case '\\':
+			i++
+		case opener:
+			depth++
+		case closer:
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func escapedDelimiter(content []byte, start int, delimiter byte) int {
+	for i := start; i < len(content); i++ {
+		if content[i] == '\\' {
+			i++
+			continue
+		}
+		if content[i] == delimiter {
+			return i
+		}
+	}
+	return -1
+}
+
+func unwrappedDestinationEnd(content []byte, start int) int {
+	opened := 0
+	for i := start; i < len(content); i++ {
+		switch content[i] {
+		case '\\':
+			i++
+		case '(':
+			opened++
+		case ')':
+			if opened == 0 {
+				return i
+			}
+			opened--
+		case ' ', '\t', '\n', '\r':
+			return i
+		}
+	}
+	return len(content)
+}
+
+func markdownLinkEnd(content []byte, destinationEnd int) int {
+	i := destinationEnd
+	if i < len(content) && content[i] == '>' {
+		i++
+	}
+	i = skipMarkdownSpaces(content, i)
+	if i >= len(content) {
+		return -1
+	}
+	if content[i] == ')' {
+		return i + 1
+	}
+
+	opener := content[i]
+	closer := opener
+	switch opener {
+	case '"', '\'':
+	case '(':
+		closer = ')'
+	default:
+		return -1
+	}
+	titleEnd := escapedDelimiter(content, i+1, closer)
+	if titleEnd < 0 {
+		return -1
+	}
+	i = skipMarkdownSpaces(content, titleEnd+1)
+	if i >= len(content) || content[i] != ')' {
+		return -1
+	}
+	return i + 1
+}
+
+func skipMarkdownSpaces(content []byte, start int) int {
+	for start < len(content) {
+		switch content[start] {
+		case ' ', '\t', '\n', '\r':
+			start++
+		default:
+			return start
+		}
+	}
+	return start
 }
 
 func markdownLinkRef(link *ast.Link, content []byte, lineStarts []int, startLine int) (Reference, bool) {
