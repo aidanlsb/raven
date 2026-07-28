@@ -81,7 +81,7 @@ title: Sync
 		"type:project links(.ext==pdf)",
 		"type:meeting links(.is_image==true)",
 		"trait:todo links(.ext==pdf)",
-		"section links(.scheme==url)",
+		"section .title==Resources links(.scheme==url)",
 	}
 	for _, queryStr := range queries {
 		t.Run(queryStr, func(t *testing.T) {
