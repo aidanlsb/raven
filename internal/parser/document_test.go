@@ -871,6 +871,7 @@ func TestParseDocumentKeepsExternalMarkdownAndNormalizesMarkdownEscapes(t *testi
 	externalMarkdown := filepath.Join(filepath.Dir(vaultPath), "external", "readme.md")
 	content := fmt.Sprintf(`[external](%s)
 [internal](inside.md)
+[escaped-internal](inside\#draft.md)
 [escaped](assets/a\(1\).pdf)
 [plain](assets/a(1).pdf)
 [angle](<assets/report final.pdf>)

@@ -173,7 +173,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	// Process direct Markdown links and images as lightweight edges. Markdown
 	// object/section targets stay out of this index.
 	for _, astLink := range astContent.Links {
-		if linktarget.IsRavenTarget(astLink.Target, relativePath, vaultPath) {
+		if linktarget.IsRavenTargetAuthored(astLink.RawTarget, astLink.Target, relativePath, vaultPath) {
 			continue
 		}
 		targetInfo := linktarget.AnalyzeAuthored(astLink.RawTarget, astLink.Target, relativePath, vaultPath)

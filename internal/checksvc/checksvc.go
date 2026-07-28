@@ -488,7 +488,7 @@ func detectMarkdownLinkToVaultNoteIssues(docs []*parser.ParsedDocument, vaultPat
 	var issues []check.Issue
 	for _, doc := range docs {
 		for _, link := range doc.MarkdownLinks {
-			if !linktarget.IsRavenTarget(link.Target, doc.FilePath, vaultPath) {
+			if !linktarget.IsRavenTargetAuthored(link.RawTarget, link.Target, doc.FilePath, vaultPath) {
 				continue
 			}
 			targetInfo := linktarget.AnalyzeAuthored(link.RawTarget, link.Target, doc.FilePath, vaultPath)

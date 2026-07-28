@@ -72,8 +72,9 @@ are not checked.
 
 File-link existence is evaluated against the current filesystem when check
 runs. URL targets are never fetched and are not reported as broken.
-Markdown links/images targeting in-vault .md notes are reported because they
-must use Raven wikilinks to participate in backlinks and reference rewrites.
+Inline Markdown links/images targeting in-vault .md notes are reported because
+they must use Raven wikilinks to participate in backlinks and reference
+rewrites.
 
 For agents: Use this tool to discover issues, then use the fix_command suggestions to resolve them.
 For missing_reference summaries, preview generated pages with 'rvn check create-missing --json'
