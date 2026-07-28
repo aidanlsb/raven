@@ -12,13 +12,13 @@ Use this guide to choose the right mutation primitive.
 | Update frontmatter fields | `set` | Schema-validated metadata updates |
 | Change object types | `reclassify` | Applies target-type fields/defaults and safely moves files |
 | Replace body text safely | `edit` | Unique-string replacement in content markdown (applies immediately; `dry-run` to preview) |
-| Import an external asset | `asset_import` | Copies/moves a host file under `directories.assets` and refreshes the asset index |
-| Move or rename an asset | `move` | Updates Markdown links/images and refreshes the asset index |
+| Add an external non-Markdown file | Copy into vault, then `reindex` | Files are not Raven entities |
+| Move or rename a non-Markdown file | `move` | Updates inbound Markdown links/images |
 | Create a section heading | `section_create` | Plain title + required level; returns canonical `file#slug` |
 | Reorder/reparent a section | `section_move` | Moves the complete subtree without changing heading identity |
 | Rename a section heading | `section_rename` | Source `file#section`, destination plain heading text; rewrites inbound `[[...#slug]]` refs |
 | Update trait value | `update` | Targeted trait mutation by trait ID |
-| Delete one object or asset | `delete` | Safe deletion behavior with backlink warnings, trash support, and index updates |
+| Delete one object or file | `delete` | Safe deletion behavior with backlink warnings for objects and trash support |
 
 Rules:
 - Use `upsert` when reruns should produce one current canonical output.
@@ -101,26 +101,14 @@ raven_invoke(command="backlinks", args={"reference":"project/old-project"})
 raven_invoke(command="delete", args={"reference":"project/old-project"})
 ```
 
-Asset IDs returned by an `asset` query use the same delete path:
+For a non-Markdown file, pass its explicit vault-relative path:
 
 ```text
-raven_invoke(command="delete", args={"reference":"assets/pdfs/old-paper.pdf", "dry-run":true})
+raven_invoke(command="delete", args={"reference":"files/old-paper.pdf", "dry-run":true})
 ```
 
-Import an external asset with an absolute or `~`-relative source path and a
-vault-relative destination under `directories.assets`:
-
-```text
-raven_invoke(command="asset_import", args={
-  "source":"/tmp/paper.pdf",
-  "destination":"assets/pdfs/"
-})
-```
-
-The default mode is copy. Set `move=true` to remove the source after the write
-and index handoff, `force=true` to overwrite an existing destination, or
-`dry-run=true` to preview. Markdown sources and destinations outside the asset
-root are rejected. Use `move` when the source is already in the vault.
+Copy an external file into the vault with the host filesystem, then invoke
+`reindex`. Use `move` when the source is already in the vault.
 
 Single-object `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
 `section_rename`, `delete`, `move`, and `reclassify` all apply immediately. Only call them
@@ -167,6 +155,6 @@ vault-health concern surfaced by `check`, not a write-time error.
 - If data should be queryable/filterable, prefer frontmatter (`set`, `new`, `upsert`).
 - If data is narrative, prefer body content (`add`, `edit`, `upsert content=...`).
 - Use `edit` only for vault content files, not `raven.yaml`, `schema.yaml`, or template files.
-- Use `move` for assets instead of shell `mv`; asset destinations must include a file extension.
-- Use `asset_import` instead of shell `cp`/`mv` to bring an external non-Markdown file under `directories.assets`.
+- Use `move` for in-vault file relocation; non-Markdown destinations must include a file extension.
+- Copy external non-Markdown files into the vault directly, then invoke `reindex`.
 - Prefer raw reads before constructing `old_str` for `edit`.

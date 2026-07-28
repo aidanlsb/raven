@@ -170,8 +170,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	}
 
 	// Process direct Markdown links and images as lightweight edges. Markdown
-	// object/section targets stay out of this index, while legacy asset refs
-	// above remain intact until the asset entity is removed separately.
+	// object/section targets stay out of this index.
 	for _, astLink := range astContent.Links {
 		if linktarget.IsRavenTarget(astLink.Target, relativePath, vaultPath) {
 			continue

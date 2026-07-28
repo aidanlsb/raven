@@ -642,16 +642,16 @@ func TestRunHealsUnresolvedRefsWhenNoFilesAreStale(t *testing.T) {
 	}
 }
 
-func TestRunIndexesAssetsAndResolvesMarkdownAssetLinks(t *testing.T) {
+func TestRunIndexesFileLinksWithoutCreatingReferences(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vaultPath, "assets", "pdfs"), 0o755); err != nil {
-		t.Fatalf("failed to create asset dir: %v", err)
+	if err := os.MkdirAll(filepath.Join(vaultPath, "files"), 0o755); err != nil {
+		t.Fatalf("failed to create file dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(vaultPath, "assets", "pdfs", "paper.pdf"), []byte("%PDF test\n"), 0o644); err != nil {
-		t.Fatalf("failed to write asset fixture: %v", err)
+	if err := os.WriteFile(filepath.Join(vaultPath, "files", "paper.pdf"), []byte("%PDF test\n"), 0o644); err != nil {
+		t.Fatalf("failed to write file fixture: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(vaultPath, "note.md"), []byte("# Note\n\nRead [paper](assets/pdfs/paper.pdf).\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(vaultPath, "note.md"), []byte("# Note\n\nRead [paper](files/paper.pdf).\n"), 0o644); err != nil {
 		t.Fatalf("failed to write markdown fixture: %v", err)
 	}
 
@@ -662,8 +662,8 @@ func TestRunIndexesAssetsAndResolvesMarkdownAssetLinks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
-	if result.Assets != 1 {
-		t.Fatalf("assets = %d, want 1", result.Assets)
+	if result.FilesIndexed != 1 || result.References != 0 {
+		t.Fatalf("result = %#v, want one Markdown file and no Raven references", result)
 	}
 
 	db, err := index.Open(vaultPath)
@@ -672,24 +672,12 @@ func TestRunIndexesAssetsAndResolvesMarkdownAssetLinks(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	assets, err := db.QueryAssets()
-	if err != nil {
-		t.Fatalf("QueryAssets returned error: %v", err)
+	var refCount int
+	if err := db.DB().QueryRow(`SELECT COUNT(*) FROM refs WHERE file_path = ?`, "note.md").Scan(&refCount); err != nil {
+		t.Fatalf("failed to count refs: %v", err)
 	}
-	if len(assets) != 1 || assets[0].ID != "assets/pdfs/paper.pdf" {
-		t.Fatalf("assets = %#v, want paper asset", assets)
-	}
-	if assets[0].Extension != "pdf" || assets[0].MediaType != "application/pdf" {
-		t.Fatalf("asset metadata = %#v, want pdf extension and media type", assets[0])
-	}
-
-	var targetID string
-	err = db.DB().QueryRow(`SELECT target_id FROM refs WHERE file_path = ?`, "note.md").Scan(&targetID)
-	if err != nil {
-		t.Fatalf("failed to query refs table: %v", err)
-	}
-	if targetID != "assets/pdfs/paper.pdf" {
-		t.Fatalf("target_id = %q, want assets/pdfs/paper.pdf", targetID)
+	if refCount != 0 {
+		t.Fatalf("refs = %d, want 0", refCount)
 	}
 
 	var (
@@ -706,67 +694,27 @@ func TestRunIndexesAssetsAndResolvesMarkdownAssetLinks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query links table: %v", err)
 	}
-	if rawTarget != "assets/pdfs/paper.pdf" || scheme != "file" || ext != "pdf" ||
-		normalizedKey != "assets/pdfs/paper.pdf" {
+	if rawTarget != "files/paper.pdf" || scheme != "file" || ext != "pdf" ||
+		normalizedKey != "files/paper.pdf" {
 		t.Fatalf("link edge = raw %q scheme %q ext %q key %q", rawTarget, scheme, ext, normalizedKey)
 	}
 }
 
-func TestRunIncrementalReindexesAssetsAfterConfigChange(t *testing.T) {
+func TestRunSkipsExcludedMarkdown(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
-	writeTestFile(t, vaultPath, "assets/raw/logo.svg", "<svg></svg>\n")
-
-	if _, err := runTest(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
-		t.Fatalf("initial Run returned error: %v", err)
-	}
-
-	writeTestFile(t, vaultPath, "raven.yaml", "directories:\n  assets: assets/\n")
-
-	result, err := runTest(RunRequest{VaultPath: vaultPath})
-	if err != nil {
-		t.Fatalf("incremental Run returned error: %v", err)
-	}
-	if result.Assets != 1 {
-		t.Fatalf("assets = %d, want 1", result.Assets)
-	}
-
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		t.Fatalf("failed to reopen index: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-
-	assets, err := db.QueryAssets()
-	if err != nil {
-		t.Fatalf("QueryAssets returned error: %v", err)
-	}
-	if len(assets) != 1 {
-		t.Fatalf("assets = %#v, want logo.svg", assets)
-	}
-	if assets[0].ID != "assets/raw/logo.svg" || assets[0].Extension != "svg" {
-		t.Fatalf("asset metadata = %#v, want svg asset", assets[0])
-	}
-}
-
-func TestRunSkipsExcludedMarkdownAndAssets(t *testing.T) {
-	t.Parallel()
-
-	vaultPath := t.TempDir()
-	writeTestFile(t, vaultPath, "raven.yaml", "exclude:\n  - AGENTS.md\n  - .cursor/\n  - assets/generated/**\n")
+	writeTestFile(t, vaultPath, "raven.yaml", "exclude:\n  - AGENTS.md\n  - .cursor/\n")
 	writeTestFile(t, vaultPath, "keep.md", "# Keep\n")
 	writeTestFile(t, vaultPath, "AGENTS.md", "# Agents\n")
 	writeTestFile(t, vaultPath, ".cursor/plans/work.plan.md", "# Plan\n")
-	writeTestFile(t, vaultPath, "assets/pdfs/keep.pdf", "%PDF keep\n")
-	writeTestFile(t, vaultPath, "assets/generated/drop.pdf", "%PDF drop\n")
 
 	result, err := runTest(RunRequest{VaultPath: vaultPath, Full: true})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
-	if result.FilesIndexed != 2 {
-		t.Fatalf("files indexed = %d, want 2", result.FilesIndexed)
+	if result.FilesIndexed != 1 {
+		t.Fatalf("files indexed = %d, want 1", result.FilesIndexed)
 	}
 
 	db, err := index.Open(vaultPath)
@@ -779,12 +727,12 @@ func TestRunSkipsExcludedMarkdownAndAssets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AllIndexedFilePaths returned error: %v", err)
 	}
-	for _, excluded := range []string{"AGENTS.md", ".cursor/plans/work.plan.md", "assets/generated/drop.pdf"} {
+	for _, excluded := range []string{"AGENTS.md", ".cursor/plans/work.plan.md"} {
 		if containsString(paths, excluded) {
 			t.Fatalf("indexed paths = %#v, did not expect excluded %s", paths, excluded)
 		}
 	}
-	for _, included := range []string{"keep.md", "assets/pdfs/keep.pdf"} {
+	for _, included := range []string{"keep.md"} {
 		if !containsString(paths, included) {
 			t.Fatalf("indexed paths = %#v, expected %s", paths, included)
 		}

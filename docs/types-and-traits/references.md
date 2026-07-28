@@ -1,6 +1,8 @@
 # References
 
-References connect objects and assets across your vault into a graph. Wiki-style links connect Raven objects and sections; normal Markdown links/images can connect notes to non-Markdown assets. References power navigation, backlinks, query predicates like `refs(...)` and `refd(...)`, and automatic link updates when you move files.
+References connect Raven objects and sections across your vault. Wiki-style
+links power navigation, backlinks, query predicates like `refs(...)` and
+`refd(...)`, and automatic updates when you move Markdown objects.
 
 ## Syntax
 
@@ -10,8 +12,6 @@ References connect objects and assets across your vault into a graph. Wiki-style
 | `[[target\|display]]` | Reference with display text | `[[person/freya\|Freya]]` |
 | `[[target#fragment]]` | Reference to a section | `[[project/website#tasks]]` |
 | `[[YYYY-MM-DD]]` | Date reference (resolves to daily note) | `[[2026-03-15]]` |
-| `[text](assets/file.pdf)` | Markdown link to an asset | `[Paper](assets/pdfs/paper.pdf)` |
-| `![alt](assets/image.png)` | Markdown image asset | `![Diagram](assets/photos/diagram.png)` |
 
 ## Where references can appear
 
@@ -35,24 +35,23 @@ collaborators:
 ---
 ```
 
-Asset references work in Markdown body content via vault-relative Markdown links/images or Raven wikilinks:
+Non-Markdown files use normal Markdown links or images, not Raven references:
 
 ```markdown
-See [paper](assets/pdfs/paper.pdf).
-![Diagram](assets/photos/system.png)
-See also [[assets/pdfs/paper.pdf]].
+See [paper](../files/paper.pdf).
+![Diagram](../files/system.png)
 ```
 
 ## Resolution
 
-When Raven encounters a reference, it resolves it to a canonical object or asset ID by checking these match sources in order:
+When Raven encounters a reference, it resolves it to a canonical object or
+section ID by checking these match sources:
 
 1. **Alias** — the `alias` frontmatter field
 2. **Name field** — the type's `name_field` value (e.g., `title`, `name`)
 3. **Date** — absolute `YYYY-MM-DD` patterns resolve to daily notes
 4. **Object ID / path** — full or suffix path match
-5. **Asset path** — indexed non-Markdown asset paths such as `assets/pdfs/paper.pdf`
-6. **Short name** — the last segment of an object or asset ID (e.g., `freya` for `person/freya`)
+5. **Short name** — the last segment of an object ID (e.g., `freya` for `person/freya`)
 
 If multiple candidates match, the reference is ambiguous and is not resolved automatically.
 
@@ -66,35 +65,34 @@ single-item `source`/`destination` pair. Bulk CLI commands read IDs from
 `--stdin`, one per line. Use `raven_describe` for the exact MCP array key.
 
 The shared reference grammar accepts canonical object IDs, vault-relative
-Markdown paths (with or without `.md`), section IDs (`object#fragment`), full
-asset paths, aliases, name-field values, and unambiguous short forms. Date-aware
+Markdown paths (with or without `.md`), section IDs (`object#fragment`),
+aliases, name-field values, and unambiguous short forms. Date-aware
 commands also accept ISO dates and documented dynamic dates such as `today`.
-Prefer canonical object IDs, section IDs, and full asset paths for automation.
+Prefer canonical object and section IDs for automation.
 
 Each command narrows that grammar to the targets it can safely handle:
 
 | Command | Accepted reference scope |
 |---------|--------------------------|
-| `resolve` | Objects, sections, and indexed assets |
-| `open` | Objects, sections, and indexed assets; also accepts bulk `references` |
+| `resolve` | Objects and sections |
+| `open` | Objects and sections; also accepts bulk `references` |
 | `read` | Managed Markdown files and sections |
-| `set`, `unset` | File-level Markdown objects; sections and assets are rejected |
-| `delete` | File-backed objects and assets; sections are rejected |
-| `move` | File-backed objects and assets; section sources are rejected |
-| `reclassify` | File-level Markdown objects; sections and assets are rejected; also accepts bulk `references` |
-| `edit` | Managed Markdown files and section subtrees; config, schema, templates, excluded files, and assets are rejected |
+| `set`, `unset` | File-level Markdown objects; sections are rejected |
+| `delete` | File-backed objects, or explicit non-Markdown file paths; sections are rejected |
+| `move` | File-backed objects, or explicit non-Markdown file paths; section sources are rejected |
+| `reclassify` | File-level Markdown objects; sections are rejected; also accepts bulk `references` |
+| `edit` | Managed Markdown files and section subtrees; config, schema, templates, excluded files, and non-Markdown files are rejected |
 | `check`, `check fix` | A file, directory, or object reference; omit it to check the entire vault |
-| `backlinks` | Objects, sections, and indexed assets; also accepts bulk `references` |
+| `backlinks` | Objects and sections; also accepts bulk `references` |
 | `outlinks` | Objects and sections; also accepts bulk `references` |
 
 ### Canonical references
 
-Prefer canonical object IDs and full asset paths when authoring references:
+Prefer canonical object IDs when authoring references:
 
 ```markdown
 [[person/freya]]
 [[project/website]]
-[[assets/pdfs/paper.pdf]]
 ```
 
 Object-creating commands (`rvn new`, `rvn upsert`, and `rvn daily`) return the
@@ -122,8 +120,8 @@ ID (`2026-03-15`) in indexes and queries. Relative inputs such as `today`,
 Raven commands.
 
 Because short forms depend on uniqueness, they become ambiguous when names
-collide (e.g., `project/notes` and `meeting/notes`, or `paper.pdf` and
-`paper.png`). Canonical IDs and full asset paths remain explicit:
+collide (e.g., `project/notes` and `meeting/notes`). Canonical IDs remain
+explicit:
 
 ```markdown
 [[project/notes]]    → unambiguous
@@ -147,11 +145,11 @@ Use `rvn resolve` to debug resolution and `rvn check` to find ambiguous referenc
 
 ## Backlinks and outlinks
 
-Backlinks are incoming references — everything that links *to* an object or asset. Outlinks are outgoing references — everything an object links *to*.
+Backlinks are incoming references to an object or section. Outlinks are Raven
+references made by an object.
 
 ```bash
 rvn backlinks person/freya
-rvn backlinks assets/pdfs/paper.pdf
 ```
 
 ```text
@@ -189,7 +187,6 @@ RQL has predicates for querying the reference graph:
 # Objects that reference a target
 rvn query 'type:meeting refs([[person/freya]])'
 rvn query 'type:meeting refs(type:project .status==active)'
-rvn query 'type:page refs([[assets/pdfs/paper.pdf]])'
 
 # Objects referenced by a source
 rvn query 'type:project refd(type:meeting)'
@@ -218,9 +215,8 @@ resolution sugar and can become ambiguous as the vault grows. See
 rvn move person/freya person/freya-odinsdottir
 # All [[person/freya]] references are updated to [[person/freya-odinsdottir]]
 
-rvn move assets/downloads/paper.pdf assets/pdfs/paper.pdf
-# Indexed Markdown file links/images (matched by normalized target path) and
-# wikilinks pointing at the asset are updated
+rvn move files/downloads/paper.pdf files/paper.pdf
+# Indexed Markdown file links/images matched by normalized target path are updated
 ```
 
 Disable with `--update-refs=false` if needed.
@@ -230,7 +226,6 @@ Disable with `--update-refs=false` if needed.
 ```bash
 rvn check --issues missing_reference
 rvn check --issues broken_file_link  # filesystem only; URLs are not fetched
-rvn check --issues missing_asset
 rvn check --issues ambiguous_reference,id_collision,alias_collision
 ```
 
@@ -304,7 +299,7 @@ and rewrites every `[[...#tasks]]` reference to the new slug. The file/object
 ## Related docs
 
 - `types-and-traits/file-format.md` — full resolution model, slug generation, and ambiguity handling
-- `using-your-vault/assets.md` — organizing and referencing non-Markdown files
+- `using-your-vault/file-links.md` — linking and moving non-Markdown files
 - `querying/query-language.md` — `refs()`, `refd()`, and other structural predicates
 - `using-your-vault/common-commands.md` — `rvn backlinks`, `rvn outlinks`, `rvn resolve`, `rvn check`
 - `types-and-traits/schema.md` — `ref` and `ref[]` field types, `alias` reserved key

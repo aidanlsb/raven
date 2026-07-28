@@ -9,13 +9,12 @@ package indexschema
 // v7: Added composite indexes for trait refs matching and performance PRAGMAs
 // v8: Added alias column to objects table for reference aliasing
 // v9: Added field_refs table for ref-typed fields
-// v10: Added assets table for first-class non-Markdown resources
-// v11: Removed user-defined asset kind/canonical metadata from assets table
 // v12: Added first-class sections table
 // v13: Removed object hierarchy/heading columns; objects are file-backed only
 // v14: Added subtree line ranges for heading-derived sections
 // v15: Added lightweight outgoing link edges for non-Raven targets
-const CurrentDBVersion = 15
+// v16: Removed the obsolete non-Markdown resource table
+const CurrentDBVersion = 16
 
 // SchemaSQL is the authoritative SQLite schema shared by the index writer and
 // SQL-generating consumers.
@@ -116,18 +115,6 @@ const SchemaSQL = `
 		line_number INTEGER
 	);
 
-	-- Non-Markdown asset resources. Assets are graph resources, not objects.
-	CREATE TABLE IF NOT EXISTS assets (
-		id TEXT PRIMARY KEY,
-		file_path TEXT NOT NULL UNIQUE,
-		media_type TEXT,
-		extension TEXT,
-		filename TEXT NOT NULL,
-		size_bytes INTEGER NOT NULL,
-		file_mtime INTEGER,
-		indexed_at INTEGER
-	);
-
 	-- Keep resolver caches on other database handles/processes coherent,
 	-- including when callers mutate resolver inputs through DB().Exec.
 	CREATE TRIGGER IF NOT EXISTS trg_objects_resolver_generation_insert
@@ -162,22 +149,6 @@ const SchemaSQL = `
 		ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
 	END;
 
-	CREATE TRIGGER IF NOT EXISTS trg_assets_resolver_generation_insert
-	AFTER INSERT ON assets BEGIN
-		INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
-		ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
-	END;
-	CREATE TRIGGER IF NOT EXISTS trg_assets_resolver_generation_update
-	AFTER UPDATE ON assets BEGIN
-		INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
-		ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
-	END;
-	CREATE TRIGGER IF NOT EXISTS trg_assets_resolver_generation_delete
-	AFTER DELETE ON assets BEGIN
-		INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
-		ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
-	END;
-
 	-- Indexes for fast queries
 	CREATE INDEX IF NOT EXISTS idx_objects_file ON objects(file_path);
 	CREATE INDEX IF NOT EXISTS idx_objects_type ON objects(type);
@@ -204,8 +175,6 @@ const SchemaSQL = `
 	CREATE INDEX IF NOT EXISTS idx_field_refs_field_raw ON field_refs(field_name, target_raw);
 	CREATE INDEX IF NOT EXISTS idx_field_refs_status ON field_refs(resolution_status);
 	CREATE INDEX IF NOT EXISTS idx_field_refs_file ON field_refs(file_path);
-
-	CREATE INDEX IF NOT EXISTS idx_assets_file ON assets(file_path);
 
 	-- Composite indexes for trait refs matching (content scope rule)
 	CREATE INDEX IF NOT EXISTS idx_traits_file_line ON traits(file_path, line_number);

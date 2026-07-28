@@ -29,10 +29,6 @@ type ResolverOptions struct {
 	// Useful for hypothetical resolution (e.g., testing if refs will
 	// resolve after a move operation).
 	ExtraIDs []string
-
-	// ExtraAssetIDs are additional asset IDs to include in the resolver.
-	// Useful for hypothetical asset moves.
-	ExtraAssetIDs []string
 }
 
 // ResolverQuerier is the database surface required to build a resolver.
@@ -79,10 +75,6 @@ func BuildResolverFromQuerier(db ResolverQuerier, opts ResolverOptions) (*resolv
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object IDs: %w", err)
 	}
-	assetIDs, err := AllAssetIDs(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get asset IDs: %w", err)
-	}
 
 	aliases, err := AllAliases(db)
 	if err != nil {
@@ -94,13 +86,11 @@ func BuildResolverFromQuerier(db ResolverQuerier, opts ResolverOptions) (*resolv
 	}
 
 	objectIDs = appendExtraIDs(objectIDs, opts.ExtraIDs)
-	assetIDs = appendExtraIDs(assetIDs, opts.ExtraAssetIDs)
 
 	resolverOpts := resolver.Options{
 		DailyDirectory: dailyDir,
 		Aliases:        aliases,
 		AliasMatches:   aliasMatches,
-		AssetIDs:       assetIDs,
 	}
 	if opts.Schema != nil {
 		nameFieldMap, err := AllNameFieldValues(db, opts.Schema)
@@ -176,33 +166,6 @@ func AllObjectIDs(db ResolverQuerier) ([]string, error) {
 		query += "\nUNION\nSELECT id FROM sections"
 	}
 	rows, err := db.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-
-	return ids, rows.Err()
-}
-
-// AllAssetIDs returns all asset IDs available to the resolver.
-func AllAssetIDs(db ResolverQuerier) ([]string, error) {
-	exists, err := TableHasColumn(db, "assets", "id")
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, nil
-	}
-	rows, err := db.Query("SELECT id FROM assets")
 	if err != nil {
 		return nil, err
 	}

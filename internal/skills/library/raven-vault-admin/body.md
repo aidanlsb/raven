@@ -39,7 +39,8 @@ Use explicit `--vault` or `--vault-path` when operating across multiple vaults o
 ## Config surfaces
 
 - `rvn config ...` manages global machine settings for the editor and Markdown rendering. Use `rvn vault add/remove/pin` for named vault paths and `default_vault`; `state.toml` always lives beside `config.toml`.
-- `rvn vault config ...` manages vault-local `raven.yaml`: directories, assets, auto-reindex, capture, deletion, protected prefixes, and exclude patterns.
+- `rvn vault config ...` manages vault-local `raven.yaml`: directories,
+  auto-reindex, capture, deletion, protected prefixes, and exclude patterns.
 
 Use structured commands for both surfaces instead of editing TOML or YAML by hand.
 

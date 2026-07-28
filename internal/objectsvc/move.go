@@ -37,7 +37,6 @@ type MoveFileRequest struct {
 	VaultConfig        *config.VaultConfig
 	Schema             *schema.Schema
 	ParseOptions       *parser.ParseOptions
-	IsAsset            bool
 	Runtime            *vaultruntime.Runtime
 }
 
@@ -120,7 +119,9 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	var refPlans []refUpdatePlan
 	var linkPlans []linkUpdatePlan
 	if req.UpdateRefs && db != nil {
-		refPlans, result.WarningMessages = prepareRefUpdatePlans(db, req, objectRoot, pageRoot, dailyDir, result.WarningMessages)
+		if paths.HasMDExtension(req.SourceFile) {
+			refPlans, result.WarningMessages = prepareRefUpdatePlans(db, req, objectRoot, pageRoot, dailyDir, result.WarningMessages)
+		}
 		linkPlans, result.WarningMessages = prepareLinkUpdatePlans(db, req, result.WarningMessages)
 	}
 
@@ -480,11 +481,9 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 		return nil, append(warnings, fmt.Sprintf("Failed to read aliases for move update: %v", err))
 	}
 
-	resolverOpts := index.ResolverOptions{DailyDirectory: dailyDir}
-	if req.IsAsset {
-		resolverOpts.ExtraAssetIDs = []string{req.DestinationObject}
-	} else {
-		resolverOpts.ExtraIDs = []string{req.DestinationObject}
+	resolverOpts := index.ResolverOptions{
+		DailyDirectory: dailyDir,
+		ExtraIDs:       []string{req.DestinationObject},
 	}
 	res, err := db.Resolver(resolverOpts)
 	if err != nil {

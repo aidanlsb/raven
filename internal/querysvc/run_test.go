@@ -65,11 +65,6 @@ func TestMatchInvocation(t *testing.T) {
 			wantMatched: false,
 		},
 		{
-			name:        "asset root is never a saved invocation",
-			raw:         "asset .extension==pdf",
-			wantMatched: false,
-		},
-		{
 			name:        "section root is never a saved invocation",
 			raw:         "section .title==Tasks",
 			wantMatched: false,

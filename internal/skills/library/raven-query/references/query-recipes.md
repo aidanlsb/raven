@@ -21,14 +21,6 @@ rvn query 'type:project contains(trait:todo .value==todo)' --json
 rvn query 'trait:todo .value==todo within(type:project .status==active)' --json
 ```
 
-## Assets
-
-```bash
-rvn query 'asset .extension==pdf' --json
-rvn query 'asset startswith(.media_type, "image/")' --json
-rvn query 'asset refd(type:project .status==active)' --json
-```
-
 ## Outgoing links
 
 ```bash
@@ -60,7 +52,9 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --json
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json
 ```
 
-In each pair, the first command previews the bulk change and the second applies it after approval. Section, asset, and link queries do not support `--apply`; for sections, pipe IDs into bulk add instead: `rvn query 'section .title==Tasks' --ids | rvn add "text" --stdin --confirm`.
+In each pair, the first command previews the bulk change and the second applies
+it after approval. Link queries do not support `--apply`; section queries
+support only `move`.
 
 ## Saved query lifecycle
 

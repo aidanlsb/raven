@@ -39,7 +39,7 @@ func buildDeleteArgs(_ *cobra.Command, args []string) (map[string]interface{}, e
 			return nil, handleError(ErrInternal, err, "")
 		}
 		if len(ids) == 0 && len(sectionIDs) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no references provided via stdin", "Pipe object or asset references to stdin, one per line")
+			return nil, handleErrorMsg(ErrMissingArgument, "no references provided via stdin", "Pipe object references or file paths to stdin, one per line")
 		}
 		return map[string]interface{}{
 			"stdin":      true,

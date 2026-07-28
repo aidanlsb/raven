@@ -7,13 +7,14 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 ## Operating rules
 
 - Use `rvn` with `--json` for deterministic machine-readable output.
-- Preview first when the command supports it. For `rvn import` and `rvn asset
-  import`, use `--dry-run` for preview and rerun without it to apply.
+- Preview first when the command supports it. For `rvn import`, use `--dry-run`
+  for preview and rerun without it to apply.
 - Run `rvn check` after schema migrations, bulk edits, or external file changes.
 
 ## Vault stats
 
-Use `rvn vault stats --json` for a quick count of indexed files, objects, traits, references, and assets before or after maintenance work.
+Use `rvn vault stats --json` for a quick count of indexed files, objects,
+traits, and references before or after maintenance work.
 
 ## Vault health: check
 
@@ -60,20 +61,12 @@ Use `--dry-run` to inspect reindex scope before applying. Use `--full` after sch
 
 For complex imports, use a YAML mapping file. After applying, verify with `rvn check --type <type> --json` and a targeted `rvn query`. See `references/import-guide.md`.
 
-## External asset files
+## External non-Markdown files
 
-Use `rvn asset import <source> <destination>` to bring an external
-non-Markdown file under `directories.assets`. It copies by default; pass
-`--move` to remove the source only after a successful vault write and index
-handoff. Preview path validation and collisions with `--dry-run`.
-
-```bash
-rvn asset import ~/Downloads/paper.pdf assets/pdfs/ --dry-run --json
-rvn asset import ~/Downloads/paper.pdf assets/pdfs/ --json
-```
-
-Use `rvn move` instead when the source is already inside the vault so references
-are rewritten.
+Copy an external non-Markdown file into the vault with normal filesystem tools,
+then run `rvn reindex --json`. Link to it with standard Markdown. Use `rvn
+move` when the source is already inside the vault so inbound file links are
+rewritten.
 
 ## Cross-references
 

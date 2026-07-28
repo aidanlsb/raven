@@ -9,7 +9,6 @@ import (
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -195,20 +194,7 @@ func projectIndexPathWarning(rt *vaultruntime.Runtime, relPath string) (commande
 	if paths.HasMDExtension(relPath) {
 		return autoReindexWarningLocked(rt, filePath)
 	}
-
-	if rt.VaultCfg == nil {
-		return indexUpdateWarning(rt.VaultPath, filePath, "failed to index asset", fmt.Errorf("vault config is required")), true
-	}
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return indexUpdateWarning(rt.VaultPath, filePath, "failed to read file", err), true
-	}
-	if err := rt.OpenDB(); err != nil {
-		return indexUpdateWarning(rt.VaultPath, filePath, "failed to open index database", err), true
-	}
-	asset := vault.BuildAsset(relPath, info, rt.VaultCfg)
-	if err := rt.DB.IndexAsset(asset); err != nil {
-		return indexUpdateWarning(rt.VaultPath, filePath, "failed to update index", err), true
-	}
+	// Non-Markdown files have no derived entity row. Any Markdown files whose
+	// link edges were rewritten are separate ChangeSet entries and are indexed.
 	return commandexec.Warning{}, false
 }

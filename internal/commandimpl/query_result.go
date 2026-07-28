@@ -27,7 +27,7 @@ func shapeQueryResult(result *readsvc.ExecuteQueryResult, options queryResultSha
 		switch result.QueryKind {
 		case "trait":
 			payload.Trait = result.TypeName
-		case "asset", "section", "link":
+		case "section", "link":
 			// Bare-root counts carry no type/trait discriminator.
 		default:
 			payload.Type = result.TypeName
@@ -55,17 +55,6 @@ func shapeQueryResult(result *readsvc.ExecuteQueryResult, options queryResultSha
 			payload.SavedQuery = options.SavedQueryName
 		} else {
 			payload.Type = result.TypeName
-		}
-		return commandexec.Success(payload, meta)
-	case "asset":
-		meta.Count = result.Returned
-		payload := commandpayload.QueryAssetResult{
-			QueryKind:  "asset",
-			Items:      assetQueryItems(result),
-			Pagination: queryPagination(result),
-		}
-		if options.IsSavedQuery && options.SavedQueryName != "" {
-			payload.SavedQuery = options.SavedQueryName
 		}
 		return commandexec.Success(payload, meta)
 	case "section":
@@ -153,22 +142,6 @@ func traitQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.TraitI
 			FilePath:  row.FilePath,
 			Line:      row.Line,
 			ScopeID:   row.ParentScopeID,
-		}
-	}
-	return items
-}
-
-func assetQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.AssetItem {
-	items := make([]commandpayload.AssetItem, len(result.Assets))
-	for i, row := range result.Assets {
-		items[i] = commandpayload.AssetItem{
-			Num:       result.Offset + i + 1,
-			ID:        row.ID,
-			FilePath:  row.FilePath,
-			Filename:  row.Filename,
-			Extension: row.Extension,
-			MediaType: row.MediaType,
-			SizeBytes: row.SizeBytes,
 		}
 	}
 	return items

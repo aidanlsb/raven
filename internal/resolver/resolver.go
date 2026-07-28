@@ -13,9 +13,7 @@ import (
 
 // Resolver resolves short references to full object IDs.
 type Resolver struct {
-	objectIDs      map[string]struct{} // Set of all known object and asset IDs
-	baseObjectIDs  map[string]struct{} // Set of object and section IDs
-	assetIDs       map[string]struct{} // Set of asset IDs
+	objectIDs      map[string]struct{} // Set of all known object and section IDs
 	shortMap       map[string][]string // Map from short name to full IDs
 	slugMap        map[string]string   // Map from slugified ID to original ID
 	slugMatches    map[string][]string // All IDs for each slug, used by incremental updates
@@ -43,11 +41,6 @@ type Options struct {
 	// the same display name.
 	// For example: {"The Prose Edda": {"books/the-prose-edda"}}
 	NameFieldMap map[string][]string
-
-	// AssetIDs are vault-local non-Markdown asset resource IDs.
-	// They participate in normal path/short-name resolution, plus extensionless
-	// short-name matching when unambiguous (e.g., "paper" -> "assets/paper.pdf").
-	AssetIDs []string
 }
 
 // New creates a new Resolver with the given object IDs and options.
@@ -56,32 +49,19 @@ func New(objectIDs []string, opts Options) *Resolver {
 	if dailyDir == "" {
 		dailyDir = "daily"
 	}
-	allIDs, assetSet := resolverIDs(objectIDs, opts.AssetIDs)
-
 	r := &Resolver{
-		objectIDs:      make(map[string]struct{}, len(allIDs)),
-		baseObjectIDs:  make(map[string]struct{}, len(objectIDs)),
-		assetIDs:       make(map[string]struct{}, len(opts.AssetIDs)),
-		shortMap:       make(map[string][]string, len(allIDs)*2),
-		slugMap:        make(map[string]string, len(allIDs)),
-		slugMatches:    make(map[string][]string, len(allIDs)),
-		suffixMap:      make(map[string][]string, len(allIDs)*2),
+		objectIDs:      make(map[string]struct{}, len(objectIDs)),
+		shortMap:       make(map[string][]string, len(objectIDs)*2),
+		slugMap:        make(map[string]string, len(objectIDs)),
+		slugMatches:    make(map[string][]string, len(objectIDs)),
+		suffixMap:      make(map[string][]string, len(objectIDs)*2),
 		aliasMap:       make(map[string][]string, len(opts.Aliases)*2+len(opts.AliasMatches)*2),
 		nameFieldMap:   make(map[string][]string, len(opts.NameFieldMap)*3),
 		dailyDirectory: dailyDir,
 	}
 
-	for _, id := range allIDs {
-		if _, isAsset := assetSet[id]; isAsset {
-			r.addAssetID(id)
-			continue
-		}
-		r.addObjectID(id)
-	}
 	for _, id := range objectIDs {
-		if _, isAsset := assetSet[id]; isAsset {
-			r.addObjectID(id)
-		}
+		r.addObjectID(id)
 	}
 
 	// Copy aliases (skip empty ones)
@@ -102,49 +82,6 @@ func New(objectIDs []string, opts Options) *Resolver {
 	}
 
 	return r
-}
-
-func resolverIDs(objectIDs, assetIDs []string) ([]string, map[string]struct{}) {
-	assetSet := make(map[string]struct{}, len(assetIDs))
-	seen := make(map[string]struct{}, len(objectIDs)+len(assetIDs))
-	allIDs := make([]string, 0, len(objectIDs)+len(assetIDs))
-	add := func(id string) {
-		if id == "" {
-			return
-		}
-		if _, ok := seen[id]; ok {
-			return
-		}
-		seen[id] = struct{}{}
-		allIDs = append(allIDs, id)
-	}
-	for _, id := range objectIDs {
-		add(id)
-	}
-	for _, id := range assetIDs {
-		if id == "" {
-			continue
-		}
-		assetSet[id] = struct{}{}
-		add(id)
-	}
-	return allIDs, assetSet
-}
-
-func addAssetShortNames(shortMap map[string][]string, id, shortName string) {
-	ext := path.Ext(shortName)
-	if ext == "" || ext == ".md" {
-		return
-	}
-	base := strings.TrimSuffix(shortName, ext)
-	if base == "" || base == shortName {
-		return
-	}
-	addShortMapEntry(shortMap, base, id)
-	slugged := slugs.ComponentSlug(base)
-	if slugged != "" && slugged != base {
-		addShortMapEntry(shortMap, slugged, id)
-	}
 }
 
 func addShortMapEntry(shortMap map[string][]string, key, id string) {

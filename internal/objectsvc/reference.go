@@ -3,7 +3,11 @@ package objectsvc
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -45,4 +49,40 @@ func resolveReferenceForMutation(rt *vaultruntime.Runtime, reference string) (*r
 	}
 
 	return resolved, nil
+}
+
+// resolveLiteralNonMarkdownFileForMutation recognizes an explicit
+// vault-relative file path for file operations such as move and delete. This is
+// deliberately separate from Raven reference resolution: non-Markdown files
+// are never object or wikilink identities.
+func resolveLiteralNonMarkdownFileForMutation(rt *vaultruntime.Runtime, input string) (filePath, relPath string, ok bool, err error) {
+	if rt == nil {
+		return "", "", false, nil
+	}
+	input = strings.TrimSpace(input)
+	if input == "" || filepath.IsAbs(input) {
+		return "", "", false, nil
+	}
+	relPath = paths.NormalizeVaultRelPath(input)
+	if !paths.IsValidVaultRelPath(relPath) || paths.HasMDExtension(relPath) {
+		return "", "", false, nil
+	}
+	filePath = filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
+	if err := paths.ValidateWithinVault(rt.VaultPath, filePath); err != nil {
+		return "", "", false, err
+	}
+	info, statErr := os.Stat(filePath)
+	if statErr != nil {
+		if os.IsNotExist(statErr) {
+			return "", "", false, nil
+		}
+		return "", "", false, statErr
+	}
+	if info.IsDir() {
+		return "", "", false, nil
+	}
+	if err := ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
+		return "", "", false, err
+	}
+	return filePath, relPath, true, nil
 }

@@ -108,7 +108,7 @@ but short forms are not the preferred input for automation.
 The editor is determined by the 'editor' setting in config.toml or $EDITOR.
 
 In an interactive terminal, bare 'rvn open' launches Raven's picker
-over indexed object, section, and asset references.
+over indexed object and section references.
 
 When an interactive open reference is ambiguous, Raven prompts you to choose the
 target. Non-interactive and JSON output still return REF_AMBIGUOUS with the

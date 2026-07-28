@@ -3,7 +3,7 @@
 ## No matches returned
 
 - Check type and field names with `rvn schema`.
-- Validate query mode: `type:<type>` vs `section` vs `trait:<name>` vs `asset`.
+- Validate query mode: `type:<type>` vs `section` vs `trait:<name>` vs `link`.
 - Remove predicates one-by-one to isolate the failing constraint.
 - Scope trap: traits attach to the nearest section, so `type:project has(trait:todo)` (direct-only) usually returns nothing. Use `contains(trait:todo ...)` from the object side or `within(type:project)` from the trait side.
 
@@ -28,14 +28,9 @@
 - Confirm query type:
   - type query: `set`, `add`, `delete`, `move`
   - trait query: `update <value>`
-  - section or asset query: no `--apply` support
+  - section query: only `move` is supported
+  - link query: no `--apply` support
 - Re-run without `--confirm` first to inspect preview.
-
-## Asset query errors
-
-- Use bare `asset`, not `asset:<kind>`.
-- Filter only derived asset fields: `.id`, `.file_path`, `.filename`, `.extension`, `.media_type`, `.size_bytes`.
-- Use `asset refd(...)` to find referenced assets; assets do not support `refs(...)`, `has(...)`, `content(...)`, or hierarchy predicates.
 
 ## Saved query input errors
 

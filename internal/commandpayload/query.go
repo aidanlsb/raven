@@ -43,17 +43,6 @@ type TraitItem struct {
 	ScopeID   string  `json:"object_id"` // JSON name retained for compatibility.
 }
 
-// AssetItem is a single row in an `asset` query result.
-type AssetItem struct {
-	Num       int    `json:"num"`
-	ID        string `json:"id"`
-	FilePath  string `json:"file_path"`
-	Filename  string `json:"filename"`
-	Extension string `json:"extension"`
-	MediaType string `json:"media_type"`
-	SizeBytes int64  `json:"size_bytes"`
-}
-
 // SectionItem is a single row in a `section` query result.
 type SectionItem struct {
 	Num             int     `json:"num"`
@@ -105,14 +94,6 @@ type QueryTraitResult struct {
 	Pagination
 }
 
-// QueryAssetResult is the success payload for an `asset` query.
-type QueryAssetResult struct {
-	QueryKind  string      `json:"query_kind"`
-	SavedQuery string      `json:"saved_query,omitempty"`
-	Items      []AssetItem `json:"items"`
-	Pagination
-}
-
 // QuerySectionResult is the success payload for a `section` query.
 type QuerySectionResult struct {
 	QueryKind  string        `json:"query_kind"`
@@ -136,7 +117,7 @@ type QueryIDsResult struct {
 }
 
 // QueryCountResult is the success payload for any query run with --count-only.
-// Type and Trait are mutually exclusive discriminators; asset, section, and link
+// Type and Trait are mutually exclusive discriminators; section and link
 // count responses omit both.
 type QueryCountResult struct {
 	QueryKind string `json:"query_kind"`

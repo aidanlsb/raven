@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -48,7 +49,6 @@ type RunResult struct {
 	Objects       int
 	Traits        int
 	References    int
-	Assets        int
 	SchemaRebuilt bool
 	Incremental   bool
 	DryRun        bool
@@ -74,7 +74,6 @@ func (r *RunResult) Data() map[string]interface{} {
 		"objects":        r.Objects,
 		"traits":         r.Traits,
 		"references":     r.References,
-		"assets":         r.Assets,
 		"schema_rebuilt": r.SchemaRebuilt,
 		"incremental":    r.Incremental,
 		"dry_run":        r.DryRun,
@@ -202,10 +201,8 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		Objects:         0,
 		Traits:          0,
 		References:      0,
-		Assets:          0,
 	}
 	dryRunFileStats := make(map[string]index.IndexStats)
-	dryRunAssetFiles := make(map[string]struct{})
 	dryRunStats := index.IndexStats{}
 	recoveryComplete := true
 
@@ -362,48 +359,16 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		return nil, newError(CodeFileReadError, fmt.Sprintf("error walking vault: %v", walkErr), "", walkErr)
 	}
 
-	assetWalkErr := vault.WalkAssetFilesWithOptions(vaultPath, vaultCfg, &vault.AssetWalkOptions{ExcludeMatcher: excludeMatcher}, func(walkResult vault.AssetWalkResult) error {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		if walkResult.Error != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", walkResult.RelativePath, walkResult.Error))
-			return nil //nolint:nilerr // keep walking to collect all per-file errors
-		}
-		if walkResult.Asset == nil {
-			return nil
-		}
-
-		if incremental {
-			// Asset metadata depends on raven.yaml kind/default-path rules, so
-			// unchanged file mtimes do not prove the indexed row is fresh.
-			result.StaleFiles = append(result.StaleFiles, walkResult.RelativePath)
-		}
-
-		if req.DryRun {
-			result.FilesIndexed++
-			result.Assets++
-			dryRunAssetFiles[walkResult.RelativePath] = struct{}{}
-			return nil
-		}
-		if idxErr := db.IndexAsset(walkResult.Asset); idxErr != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", walkResult.RelativePath, idxErr))
-			return nil
-		}
-		result.FilesIndexed++
-		if incremental {
-			if clearErr := indexjournal.ClearRecoveredPath(vaultPath, pending, walkResult.RelativePath); clearErr != nil {
-				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index path %s: %v", walkResult.RelativePath, clearErr))
+	if incremental && !req.DryRun {
+		for _, relPath := range pending.Paths() {
+			if paths.HasMDExtension(relPath) {
+				continue
+			}
+			if clearErr := indexjournal.ClearRecoveredPath(vaultPath, pending, relPath); clearErr != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear unindexed file path %s: %v", relPath, clearErr))
 				recoveryComplete = false
 			}
 		}
-		return nil
-	})
-	if assetWalkErr != nil {
-		return nil, newError(CodeFileReadError, fmt.Sprintf("error walking asset files: %v", assetWalkErr), "", assetWalkErr)
 	}
 
 	if !req.DryRun && !incremental && len(result.Errors) > 0 {
@@ -426,11 +391,6 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 			result.Objects = projected.ObjectCount
 			result.Traits = projected.TraitCount
 			result.References = projected.RefCount
-			assetCount, err := projectedDryRunAssetCount(db, removedFiles, dryRunAssetFiles)
-			if err != nil {
-				return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to project dry-run asset stats: %v", err), "", err)
-			}
-			result.Assets = assetCount
 		} else {
 			result.Objects = dryRunStats.ObjectCount
 			result.Traits = dryRunStats.TraitCount
@@ -467,7 +427,6 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	result.Objects = stats.ObjectCount
 	result.Traits = stats.TraitCount
 	result.References = stats.RefCount
-	result.Assets = stats.AssetCount
 
 	if rebuildSession != nil {
 		if err := rebuildSession.Complete(); err != nil {
@@ -547,24 +506,6 @@ func projectedDryRunStats(db *index.Database, deletedFiles []string, reindexedFi
 	}
 
 	return &projected, nil
-}
-
-func projectedDryRunAssetCount(db *index.Database, deletedFiles []string, reindexedAssets map[string]struct{}) (int, error) {
-	assets, err := db.QueryAssets()
-	if err != nil {
-		return 0, err
-	}
-	current := make(map[string]struct{}, len(assets))
-	for _, asset := range assets {
-		current[asset.FilePath] = struct{}{}
-	}
-	for _, filePath := range deletedFiles {
-		delete(current, filePath)
-	}
-	for filePath := range reindexedAssets {
-		current[filePath] = struct{}{}
-	}
-	return len(current), nil
 }
 
 func indexedExcludedFiles(db *index.Database, matcher *ravenignore.Matcher) ([]string, error) {

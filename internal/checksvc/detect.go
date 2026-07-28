@@ -17,8 +17,8 @@ import (
 // resulting *check.MissingRef items carry the same type inference: certain from
 // typed ref fields, inferred from path matching default_path, or unknown.
 //
-// Ambiguous references, stale fragments, and missing assets are intentionally
-// not reported here, matching trackMissingRef semantics in the check validator.
+// Ambiguous references and stale fragments are intentionally not reported here,
+// matching trackMissingRef semantics in the check validator.
 //
 // Detection requires the index to resolve reference targets. If the index is
 // unavailable, detection is skipped (returns nil) rather than reporting false

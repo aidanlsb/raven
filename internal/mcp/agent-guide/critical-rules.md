@@ -2,12 +2,12 @@
 
 These rules are non-negotiable.
 
-## Use Raven commands, not shell file mutations
+## Use Raven commands for managed mutations
 
 | Intent | Command ID | Do not use |
 |--------|------------|------------|
-| Import external non-Markdown files | `asset_import` | `cp`, `mv` |
-| Move or rename files, including assets | `move` | `mv`, `git mv` |
+| Add external non-Markdown files | Copy into vault, then `reindex` | `[[...]]` file identities |
+| Move or rename vault files | `move` | `mv`, `git mv` |
 | Create section headings | `section_create` | `add`, manual heading edits |
 | Reorder/reparent sections | `section_move` | `move`, manual cut/paste |
 | Rename section headings | `section_rename` | `section_move`, `move`, manual heading edits |
@@ -18,8 +18,8 @@ These rules are non-negotiable.
 | Update frontmatter | `set` | manual YAML edits |
 
 Why:
-- `asset_import` confines new assets to `directories.assets`, handles collisions explicitly, and updates the index.
-- `move` updates references, including Markdown links/images that point at assets.
+- Non-Markdown files are ordinary files; standard Markdown links represent them.
+- `move` updates references and Markdown links/images that point at moved files.
 - `section_create` validates levels and slug stability; `add` is body-only.
 - `section_move` preserves heading identity and moves the complete subtree.
 - `section_rename` updates inbound fragment references; object `move` rejects section sources.
@@ -32,7 +32,10 @@ use it after clear user intent; if deletion impact is uncertain, inspect the
 object, run `backlinks`, or call with `dry-run=true` first. Bulk delete still
 previews unless `confirm=true`.
 
-If you bypass Raven and mutate files directly, reindex and repair before continuing. This also applies to adding, moving, or deleting files under the configured asset root. Use `asset_import` for external files and `move` for files already in the vault.
+Copying a new non-Markdown file into the vault is intentionally a normal
+filesystem operation; run `reindex` afterward. Use `move` for files already in
+the vault so inbound file links are rewritten. For other out-of-band Markdown
+mutations, reindex and repair before continuing.
 
 ## Confirm the target vault before writing
 

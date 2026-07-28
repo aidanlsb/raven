@@ -13,6 +13,7 @@ type deleteTarget struct {
 	ObjectID     string
 	FilePath     string
 	RelativePath string
+	RavenObject  bool
 }
 
 func deleteTargetFromFilePath(vaultPath string, vaultCfg *config.VaultConfig, filePath, objectID string) (*deleteTarget, error) {
@@ -22,10 +23,8 @@ func deleteTargetFromFilePath(vaultPath string, vaultCfg *config.VaultConfig, fi
 	}
 	relPath = paths.NormalizeVaultRelPath(relPath)
 
-	isAsset := !paths.HasMDExtension(relPath)
-	if isAsset {
-		// Asset IDs are stable vault-relative file paths. Do not apply object
-		// directory-root mappings to them.
+	ravenObject := paths.HasMDExtension(relPath)
+	if !ravenObject {
 		objectID = relPath
 	} else if objectID == "" {
 		objectID = vaultCfg.FilePathToObjectID(relPath)
@@ -35,13 +34,13 @@ func deleteTargetFromFilePath(vaultPath string, vaultCfg *config.VaultConfig, fi
 		ObjectID:     objectID,
 		FilePath:     filePath,
 		RelativePath: relPath,
+		RavenObject:  ravenObject,
 	}, nil
 }
 
 func resolveBulkDeleteTarget(vaultPath string, vaultCfg *config.VaultConfig, reference string) (*deleteTarget, error) {
-	// Object resolution only considers Markdown candidates. Asset IDs are
-	// vault-relative paths, so resolve an existing non-Markdown file literally
-	// before using the object resolver.
+	// Non-Markdown files are accepted only as explicit vault-relative paths;
+	// they are not Raven references.
 	relReference := paths.NormalizeVaultRelPath(reference)
 	literalPath := filepath.Join(vaultPath, filepath.FromSlash(relReference))
 	if err := paths.ValidateWithinVault(vaultPath, literalPath); err == nil {

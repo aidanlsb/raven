@@ -103,8 +103,8 @@ func ReadIDsFromStdin() (ids []string, sectionIDs []string, err error) {
 
 // ReadReferencesFromStdin reads references from stdin, one per line.
 // Pipe-friendly rows use the second tab-separated field, matching ReadIDsFromStdin,
-// but section IDs and asset paths are preserved because reference commands can
-// resolve them directly.
+// and section IDs are preserved because reference commands can resolve them
+// directly.
 func ReadReferencesFromStdin() ([]string, error) {
 	scanner := bufio.NewScanner(os.Stdin)
 	refs := make([]string, 0)

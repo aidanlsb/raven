@@ -90,14 +90,6 @@ func TestReplaceAllRefVariants(t *testing.T) {
 			want:    "See [[person/tido]] for details",
 		},
 		{
-			name:    "markdown link destination",
-			content: "Read [paper](assets/pdfs/paper.pdf).",
-			oldID:   "assets/pdfs/paper.pdf",
-			oldBase: "assets/pdfs/paper.pdf",
-			newRef:  "assets/archive/paper.pdf",
-			want:    "Read [paper](assets/archive/paper.pdf).",
-		},
-		{
 			name:    "bare frontmatter ref scalar",
 			content: "---\ntype: project\nowner: people/tido\n---\n",
 			oldID:   "people/tido",

@@ -35,7 +35,7 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 
 	if stdinMode {
 		if len(references) == 0 {
-			return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe object or asset references to stdin, one per line")
+			return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe object references or file paths to stdin, one per line")
 		}
 		return runDeleteBulk(rt, references, req.Confirm, req.IndexJournalOperation)
 	}

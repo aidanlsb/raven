@@ -16,7 +16,6 @@ var refIssueTypes = map[check.IssueType]struct{}{
 	check.IssueLocalFragmentRef:        {},
 	check.IssueShortRefCouldBeFullPath: {},
 	check.IssueWrongTargetType:         {},
-	check.IssueMissingAsset:            {},
 	check.IssueNonCanonicalRef:         {},
 }
 

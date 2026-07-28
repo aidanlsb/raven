@@ -7,7 +7,6 @@ type QueryType int
 const (
 	QueryTypeObject QueryType = iota
 	QueryTypeTrait
-	QueryTypeAsset
 	QueryTypeSection
 	QueryTypeLink
 )
@@ -15,7 +14,7 @@ const (
 // Query represents a parsed query.
 type Query struct {
 	Type      QueryType
-	TypeName  string    // Type name or trait name; empty for asset queries
+	TypeName  string    // Type name or trait name; empty for bare roots
 	Predicate Predicate // Filter to apply (may be nil)
 }
 

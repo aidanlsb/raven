@@ -72,62 +72,49 @@ func TestIntegration_DeleteJSONSingleAppliesByDefaultWithDryRun(t *testing.T) {
 	v.AssertFileNotExists("people/delete-apply.md")
 }
 
-func TestIntegration_DeleteAssetSingleDryRunAndApply(t *testing.T) {
+func TestIntegration_DeleteFileSingleDryRunAndApply(t *testing.T) {
 	t.Parallel()
 
-	const assetID = "assets/images/example/chart.png"
+	const filePath = "files/images/example/chart.png"
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
-		WithFile(assetID, "png").
-		WithFile("notes/reference.md", "![Chart]("+assetID+")\n").
+		WithFile(filePath, "png").
+		WithFile("notes/reference.md", "![Chart](../"+filePath+")\n").
 		Build()
 	v.RunCLI("reindex").MustSucceed(t)
 
-	ids := v.RunCLI("query", `asset startswith(.file_path, "assets/images/example/")`, "--ids").MustSucceed(t)
-	gotIDs := ids.DataList("ids")
-	if len(gotIDs) != 1 || gotIDs[0] != assetID {
-		t.Fatalf("asset IDs = %#v, want [%s]", gotIDs, assetID)
+	preview := v.RunCLI("delete", filePath, "--dry-run").MustSucceed(t)
+	if preview.Data["preview"] != true || preview.DataString("object_id") != filePath {
+		t.Fatalf("unexpected file delete preview: %s", preview.RawJSON)
 	}
+	v.AssertFileExists(filePath)
 
-	preview := v.RunCLI("delete", assetID, "--dry-run").MustSucceed(t)
-	if preview.Data["preview"] != true || preview.DataString("object_id") != assetID {
-		t.Fatalf("unexpected asset delete preview: %s", preview.RawJSON)
+	applied := v.RunCLI("delete", filePath).MustSucceed(t)
+	if applied.DataString("deleted") != filePath {
+		t.Fatalf("deleted = %q, want %q", applied.DataString("deleted"), filePath)
 	}
-	preview.AssertHasWarning(t, "HAS_BACKLINKS")
-	v.AssertFileExists(assetID)
-
-	applied := v.RunCLI("delete", assetID).MustSucceed(t)
-	if applied.DataString("deleted") != assetID {
-		t.Fatalf("deleted = %q, want %q", applied.DataString("deleted"), assetID)
-	}
-	applied.AssertHasWarning(t, "HAS_BACKLINKS")
 	for _, warning := range applied.Warnings {
 		if warning.Code == "INDEX_UPDATE_FAILED" {
-			t.Fatalf("unexpected index warning after asset delete: %s", applied.RawJSON)
+			t.Fatalf("unexpected index warning after file delete: %s", applied.RawJSON)
 		}
 	}
-	v.AssertFileNotExists(assetID)
-	v.AssertFileExists(".trash/" + assetID)
-
-	remaining := v.RunCLI("query", "asset", "--count-only").MustSucceed(t)
-	if remaining.Data["total"] != float64(0) {
-		t.Fatalf("asset total after delete = %#v, want 0", remaining.Data["total"])
-	}
+	v.AssertFileNotExists(filePath)
+	v.AssertFileExists(".trash/" + filePath)
 }
 
-func TestIntegration_DeleteAssetsBulkRequiresConfirmAndSkipsSections(t *testing.T) {
+func TestIntegration_DeleteFilesBulkRequiresConfirmAndSkipsSections(t *testing.T) {
 	t.Parallel()
 
 	const (
-		firstAsset  = "assets/images/example/one.png"
-		secondAsset = "assets/images/example/two.png"
-		sectionID   = "notes/reference#details"
+		firstFile  = "files/images/example/one.png"
+		secondFile = "files/images/example/two.png"
+		sectionID  = "notes/reference#details"
 	)
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
-		WithFile(firstAsset, "one").
-		WithFile(secondAsset, "two").
-		WithFile("notes/reference.md", "# Reference\n\n![One]("+firstAsset+")\n\n## Details\n").
+		WithFile(firstFile, "one").
+		WithFile(secondFile, "two").
+		WithFile("notes/reference.md", "# Reference\n\n![One](../"+firstFile+")\n\n## Details\n").
 		Build()
 	v.RunCLI("reindex").MustSucceed(t)
 
@@ -135,32 +122,27 @@ func TestIntegration_DeleteAssetsBulkRequiresConfirmAndSkipsSections(t *testing.
 	sectionDelete.MustFail(t, "INVALID_INPUT")
 	v.AssertFileExists("notes/reference.md")
 
-	stdin := strings.Join([]string{firstAsset, sectionID, secondAsset}, "\n") + "\n"
+	stdin := strings.Join([]string{firstFile, sectionID, secondFile}, "\n") + "\n"
 	preview := v.RunCLIWithStdin(stdin, "delete", "--stdin").MustSucceed(t)
 	if preview.Data["preview"] != true || len(preview.DataList("items")) != 2 {
-		t.Fatalf("unexpected bulk asset preview: %s", preview.RawJSON)
+		t.Fatalf("unexpected bulk file preview: %s", preview.RawJSON)
 	}
-	if !strings.Contains(preview.RawJSON, "SECTION_SKIPPED") || !strings.Contains(preview.RawJSON, "referenced by 1") {
-		t.Fatalf("bulk preview missing section/backlink warnings: %s", preview.RawJSON)
+	if !strings.Contains(preview.RawJSON, "SECTION_SKIPPED") {
+		t.Fatalf("bulk preview missing section warning: %s", preview.RawJSON)
 	}
-	v.AssertFileExists(firstAsset)
-	v.AssertFileExists(secondAsset)
+	v.AssertFileExists(firstFile)
+	v.AssertFileExists(secondFile)
 
 	applied := v.RunCLIWithStdin(stdin, "delete", "--stdin", "--confirm").MustSucceed(t)
 	if applied.Data["deleted"] != float64(2) {
 		t.Fatalf("deleted = %#v, want 2: %s", applied.Data["deleted"], applied.RawJSON)
 	}
 	applied.AssertHasWarning(t, "SECTION_SKIPPED")
-	v.AssertFileNotExists(firstAsset)
-	v.AssertFileNotExists(secondAsset)
-	v.AssertFileExists(".trash/" + firstAsset)
-	v.AssertFileExists(".trash/" + secondAsset)
+	v.AssertFileNotExists(firstFile)
+	v.AssertFileNotExists(secondFile)
+	v.AssertFileExists(".trash/" + firstFile)
+	v.AssertFileExists(".trash/" + secondFile)
 	v.AssertFileExists("notes/reference.md")
-
-	remaining := v.RunCLI("query", "asset", "--count-only").MustSucceed(t)
-	if remaining.Data["total"] != float64(0) {
-		t.Fatalf("asset total after bulk delete = %#v, want 0", remaining.Data["total"])
-	}
 }
 
 func TestIntegration_EditWithEditsJSON(t *testing.T) {

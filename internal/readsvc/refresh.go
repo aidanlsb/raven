@@ -163,8 +163,15 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 		return report, err
 	}
 
-	if err := recoverDirtyAssets(rt, pending, matcher, forceFullScan, &report); err != nil {
-		return report, err
+	for _, relPath := range pending.Paths() {
+		if paths.HasMDExtension(relPath) {
+			continue
+		}
+		if err := indexjournal.ClearRecoveredPath(rt.VaultPath, pending, relPath); err != nil {
+			report.Failures = append(report.Failures, SmartReindexFailure{
+				Path: relPath, Stage: "journal", ErrMsg: err.Error(),
+			})
+		}
 	}
 	if forceFullScan && len(report.Failures) == 0 {
 		if err := indexjournal.CompleteRecoveredUnknown(rt.VaultPath, pending); err != nil {
@@ -199,69 +206,6 @@ func recoverRemovedDirtyPaths(rt *Runtime, pending indexjournal.Snapshot, matche
 		}
 	}
 	return nil
-}
-
-func recoverDirtyAssets(
-	rt *Runtime,
-	pending indexjournal.Snapshot,
-	matcher *ravenignore.Matcher,
-	forceFullScan bool,
-	report *SmartReindexReport,
-) error {
-	knownAssets := make(map[string]struct{})
-	for _, relPath := range pending.Paths() {
-		if !paths.HasMDExtension(relPath) && !matcher.Match(relPath, false) {
-			knownAssets[relPath] = struct{}{}
-		}
-	}
-	if !forceFullScan {
-		for relPath := range knownAssets {
-			fullPath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
-			info, err := os.Stat(fullPath)
-			if err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				report.Failures = append(report.Failures, SmartReindexFailure{Path: relPath, Stage: "read", ErrMsg: err.Error()})
-				continue
-			}
-			asset := vault.BuildAsset(relPath, info, rt.VaultCfg)
-			if err := rt.DB.IndexAsset(asset); err != nil {
-				report.Failures = append(report.Failures, SmartReindexFailure{Path: relPath, Stage: "index", ErrMsg: err.Error()})
-				continue
-			}
-			report.Indexed++
-			if err := indexjournal.ClearRecoveredPath(rt.VaultPath, pending, relPath); err != nil {
-				report.Failures = append(report.Failures, SmartReindexFailure{Path: relPath, Stage: "journal", ErrMsg: err.Error()})
-			}
-		}
-		return nil
-	}
-
-	return vault.WalkAssetFilesWithOptions(rt.VaultPath, rt.VaultCfg, &vault.AssetWalkOptions{ExcludeMatcher: matcher}, func(result vault.AssetWalkResult) error {
-		if result.Error != nil {
-			report.Failures = append(report.Failures, SmartReindexFailure{
-				Path: result.RelativePath, Stage: "read", ErrMsg: result.Error.Error(),
-			})
-			return nil //nolint:nilerr // record and continue; caller surfaces Failures
-		}
-		if result.Asset == nil {
-			return nil
-		}
-		if err := rt.DB.IndexAsset(result.Asset); err != nil {
-			report.Failures = append(report.Failures, SmartReindexFailure{
-				Path: result.RelativePath, Stage: "index", ErrMsg: err.Error(),
-			})
-			return nil //nolint:nilerr // record and continue; caller surfaces Failures
-		}
-		report.Indexed++
-		if err := indexjournal.ClearRecoveredPath(rt.VaultPath, pending, result.RelativePath); err != nil {
-			report.Failures = append(report.Failures, SmartReindexFailure{
-				Path: result.RelativePath, Stage: "journal", ErrMsg: err.Error(),
-			})
-		}
-		return nil
-	})
 }
 
 func excludeMatcher(rt *Runtime) (*ravenignore.Matcher, error) {

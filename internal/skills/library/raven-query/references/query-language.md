@@ -5,7 +5,6 @@
 - Object query: `type:<type> [predicates...]`
 - Section query: `section [predicates...]`
 - Trait query: `trait:<name> [predicates...]`
-- Asset query: `asset [predicates...]`
 - Link query: `link [predicates...]`
 
 Examples:
@@ -14,31 +13,32 @@ Examples:
 type:project .status==active
 section .title==Tasks
 trait:due .value<today
-asset .extension==pdf
 link .ext==pdf within(type:project)
 ```
 
-Every query returns exactly one result kind: objects, sections, traits, assets, or outgoing link edges. Use `rvn schema`, `rvn schema type <name>`, and `rvn schema trait <name>` to verify local names before writing specific predicates.
+Every query returns exactly one result kind: objects, sections, traits, or
+outgoing link edges. Use `rvn schema`, `rvn schema type <name>`, and `rvn schema
+trait <name>` to verify local names before writing specific predicates.
 
 ## Predicate-by-root capability matrix
 
 Scope/structural predicates are root-dependent. Predicates rejected for a root produce a validation error.
 
-| Predicate / family | `type:<t>` | `section` | `trait:<name>` | `asset` | `link` |
-|--------------------|:----------:|:---------:|:--------------:|:-------:|:------:|
-| Field compares, `exists(.field)` | yes | yes (built-in fields) | yes (`.value`) | yes | yes |
-| `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes | yes |
-| String funcs (`includes`/`startswith`/`endswith`/`matches`) | yes | yes (non-numeric) | yes (`.value`) | yes | yes (string fields) |
-| `any`/`all`/`none` | yes (array fields) | no | yes (array `.value`) | no | no |
-| `has(...)` (direct downward) | yes | yes | no | no | no |
-| `contains(...)` (recursive downward) | yes | yes | no | no | no |
-| `in(...)` (direct upward scope) | no | yes | yes | no | no |
-| `within(...)` (recursive upward/source scope) | no | yes | yes | no | yes |
-| `at(trait:...)` | no | no | yes | no | no |
-| `refs(...)` | yes | yes | yes | no | no |
-| `links(...)` | yes | yes | yes | no | no |
-| `refd(...)` | yes | yes | no | yes | no |
-| `content("term")` | yes | yes | yes | no | no |
+| Predicate / family | `type:<t>` | `section` | `trait:<name>` | `link` |
+|--------------------|:----------:|:---------:|:--------------:|:------:|
+| Field compares, `exists(.field)` | yes | yes (built-in fields) | yes (`.value`) | yes |
+| `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes |
+| String funcs (`includes`/`startswith`/`endswith`/`matches`) | yes | yes (non-numeric) | yes (`.value`) | yes (string fields) |
+| `any`/`all`/`none` | yes (array fields) | no | yes (array `.value`) | no |
+| `has(...)` (direct downward) | yes | yes | no | no |
+| `contains(...)` (recursive downward) | yes | yes | no | no |
+| `in(...)` (direct upward scope) | no | yes | yes | no |
+| `within(...)` (recursive upward/source scope) | no | yes | yes | yes |
+| `at(trait:...)` | no | no | yes | no |
+| `refs(...)` | yes | yes | yes | no |
+| `links(...)` | yes | yes | yes | no |
+| `refd(...)` | yes | yes | no | no |
+| `content("term")` | yes | yes | yes | no |
 
 Scope shortcuts: downward (`has`/`contains`) live on container roots (`type:`/`section`); upward (`in`/`within`) live on contained roots (`trait:`/`section`). `has`/`in` are direct-only; `contains`/`within` are recursive.
 
@@ -62,8 +62,8 @@ Values can be bare identifiers, quoted strings, or wikilink references. `.field=
 
 String functions are case-insensitive by default. Add `true` as the third argument for case-sensitive matching, for example `includes(.name, "API", true)`.
 
-Use string predicates on scalar string-like type fields, trait `.value`, string
-asset fields, and the string-valued shared link fields. For array fields, use
+Use string predicates on scalar string-like type fields, trait `.value`, and
+the string-valued shared link fields. For array fields, use
 `any()`/`all()`/`none()` with `_`.
 
 ## Array predicates
@@ -129,31 +129,6 @@ trait:reviewers any(.value, _ == [[person/freya]])
 `in(...)` matches only the direct scope; `within(...)` matches any ancestor scope. Prefer `within(type:project ...)` for inline traits that live under a heading. `in(...)` is scope containment, not set membership — for "value is one of a set" use `oneof(.value, [...])`.
 
 `refd(...)`, `has(...)`, downward scope predicates, and arbitrary fields other than `.value` are not valid on trait queries.
-
-## Asset-query predicates
-
-Asset queries use derived metadata fields:
-
-- `.id`: stable asset ID, currently the same as `.file_path`
-- `.file_path`: vault-relative asset path
-- `.filename`: basename including extension
-- `.extension`: lowercase extension without the dot
-- `.media_type`: MIME type derived from extension when known
-- `.size_bytes`: file size in bytes
-
-Examples:
-
-```text
-asset .extension==pdf
-asset oneof(.extension, [jpg,jpeg,png,webp,gif,svg])
-asset startswith(.media_type, "image/")
-asset startswith(.file_path, "assets/screenshots/")
-asset .size_bytes>1048576
-asset refd(type:project .status==active)
-asset refd(trait:todo .value==todo)
-```
-
-Asset queries support scalar predicates, string predicates on string asset fields, boolean composition, and `refd(...)`. Assets do not support `refs(...)`, `has(...)`, `content(...)`, scope predicates, or array predicates.
 
 ## Outgoing link predicates
 
@@ -226,5 +201,5 @@ type:date .date>=2026-05-01 .date<=today
 
 - Object queries support `--apply "set ..."`, `add`, `delete`, and `move`.
 - Trait queries support only `--apply "update <new_value>"`.
-- Section, asset, and link queries do not support `--apply`.
+- Section queries support only `move`; link queries do not support `--apply`.
 - All apply flows preview first; add `--confirm` to execute.

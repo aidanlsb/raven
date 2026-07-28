@@ -71,8 +71,6 @@ func (vc *VaultConfig) UnmarshalYAML(value *yaml.Node) error {
 		switch key.Value {
 		case "daily_directory":
 			return fmt.Errorf("daily_directory is no longer supported; use directories.daily instead")
-		case "assets":
-			return fmt.Errorf("assets is no longer supported; use directories.assets instead")
 		}
 	}
 	vc.DailyDirectory = vc.GetDailyDirectory()
@@ -104,10 +102,6 @@ type DirectoriesConfig struct {
 	// - daily_template in raven.yaml
 	// If empty, defaults to "templates/".
 	Template string `yaml:"template,omitempty"`
-
-	// Assets is the root directory scanned for non-Markdown asset resources.
-	// If empty, defaults to "assets/".
-	Assets string `yaml:"assets,omitempty"`
 
 	// Deprecated: use Page instead. Kept for backwards compatibility.
 	Pages string `yaml:"pages,omitempty"`
@@ -160,7 +154,6 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	cfg.Object = paths.NormalizeDirRoot(cfg.Object)
 	cfg.Page = paths.NormalizeDirRoot(cfg.Page)
 	cfg.Template = paths.NormalizeDirRoot(cfg.Template)
-	cfg.Assets = paths.NormalizeDirRoot(cfg.Assets)
 
 	// If page root is omitted, default it to the type root.
 	// This keeps "all notes under one root" configs simple:
@@ -183,7 +176,7 @@ func (vc *VaultConfig) HasDirectoriesConfig() bool {
 		return false
 	}
 	return vc.Directories.Object != "" || vc.Directories.Page != "" ||
-		vc.Directories.Pages != "" || vc.Directories.Assets != ""
+		vc.Directories.Pages != ""
 }
 
 // DeletionConfig configures how file deletion is handled.
@@ -262,7 +255,6 @@ func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
 
 const defaultDailyDirectory = "daily"
 const defaultTemplateDirectory = "templates/"
-const defaultAssetRoot = "assets/"
 
 //go:embed defaults/raven.yaml
 var defaultVaultFiles embed.FS
@@ -312,23 +304,6 @@ func (vc *VaultConfig) GetTemplateDirectory() string {
 	cleaned := paths.NormalizeVaultRelPath(normalized)
 	if !paths.IsValidVaultRelPath(cleaned) {
 		return defaultTemplateDirectory
-	}
-	return paths.NormalizeDirRoot(cleaned)
-}
-
-// GetAssetRoot returns the configured asset root with defaults applied.
-func (vc *VaultConfig) GetAssetRoot() string {
-	root := defaultAssetRoot
-	if vc != nil && vc.Directories != nil && vc.Directories.Assets != "" {
-		root = vc.Directories.Assets
-	}
-	normalized := paths.NormalizeDirRoot(root)
-	if normalized == "" {
-		return defaultAssetRoot
-	}
-	cleaned := paths.NormalizeVaultRelPath(normalized)
-	if !paths.IsValidVaultRelPath(cleaned) {
-		return defaultAssetRoot
 	}
 	return paths.NormalizeDirRoot(cleaned)
 }
@@ -428,7 +403,7 @@ func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
 		return false, fmt.Errorf("failed to write vault config: %w", err)
 	}
 
-	defaultDirectories := []string{"daily", "type", "page", "templates", "assets"}
+	defaultDirectories := []string{"daily", "type", "page", "templates"}
 	for _, dir := range defaultDirectories {
 		if err := os.MkdirAll(filepath.Join(vaultPath, dir), 0o755); err != nil {
 			return false, fmt.Errorf("failed to create default directory %q: %w", dir, err)

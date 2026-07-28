@@ -79,7 +79,7 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 	for _, id := range req.ObjectIDs {
 		target, err := resolveBulkDeleteTarget(req.VaultPath, req.VaultConfig, id)
 		if err != nil {
-			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: "object or asset not found"})
+			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: "object or file not found"})
 			continue
 		}
 		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
@@ -88,9 +88,11 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 		}
 
 		details := ""
-		backlinks, _ := db.Backlinks(target.ObjectID)
-		if len(backlinks) > 0 {
-			details = fmt.Sprintf("⚠ referenced by %d objects", len(backlinks))
+		if target.RavenObject {
+			backlinks, _ := db.Backlinks(target.ObjectID)
+			if len(backlinks) > 0 {
+				details = fmt.Sprintf("⚠ referenced by %d objects", len(backlinks))
+			}
 		}
 
 		changes := map[string]string{"behavior": "permanent deletion"}
@@ -149,7 +151,7 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 		target, err := resolveBulkDeleteTarget(req.VaultPath, req.VaultConfig, id)
 		if err != nil {
 			result.Status = "skipped"
-			result.Reason = "object or asset not found"
+			result.Reason = "object or file not found"
 			skippedCount++
 			results = append(results, result)
 			continue

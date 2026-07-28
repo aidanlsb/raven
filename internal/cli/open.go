@@ -48,7 +48,7 @@ func prepareOpenArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 		if err != nil {
 			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		selectedRef, selected, err := cliSelector.referenceCandidate(vaultPath, vaultCfg, "open> ", "Select a reference to open", interactiveReferencePickerOptions{IncludeAssets: true})
+		selectedRef, selected, err := cliSelector.referenceCandidate(vaultPath, vaultCfg, "open> ", "Select a reference to open")
 		if err != nil {
 			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed references")
 		}

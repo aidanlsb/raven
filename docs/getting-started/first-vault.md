@@ -22,7 +22,6 @@ cd ~/notes
 notes/
 ├── .gitignore
 ├── .raven/
-├── assets/
 ├── daily/
 ├── page/
 ├── templates/

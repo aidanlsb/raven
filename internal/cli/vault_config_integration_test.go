@@ -12,7 +12,7 @@ func TestIntegration_VaultConfigShow(t *testing.T) {
 	t.Parallel()
 
 	v := testutil.NewTestVault(t).
-		WithRavenYAML("auto_reindex: false\ndirectories:\n  assets: resources/assets/\nprotected_prefixes:\n  - private/\nexclude:\n  - AGENTS.md\n").
+		WithRavenYAML("auto_reindex: false\ndirectories:\n  page: pages/\nprotected_prefixes:\n  - private/\nexclude:\n  - AGENTS.md\n").
 		Build()
 
 	result := v.RunCLI("vault", "config", "show")
@@ -28,8 +28,8 @@ func TestIntegration_VaultConfigShow(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected directories map, got %#v", result.Data["directories"])
 	}
-	if got := directories["assets"]; got != "resources/assets/" {
-		t.Fatalf("expected directories.assets resources/assets/, got %#v", got)
+	if got := directories["page"]; got != "pages/" {
+		t.Fatalf("expected directories.page pages/, got %#v", got)
 	}
 
 	prefixes := result.DataList("protected_prefixes")
@@ -91,15 +91,14 @@ func TestIntegration_VaultConfigDirectoriesLifecycle(t *testing.T) {
 
 	v := testutil.NewTestVault(t).Build()
 
-	result := v.RunCLI("vault", "config", "directories", "set", "--daily=journal", "--type=types", "--template=templates/custom", "--assets=resources/assets")
+	result := v.RunCLI("vault", "config", "directories", "set", "--daily=journal", "--type=types", "--template=templates/custom")
 	result.MustSucceed(t)
 	v.AssertFileContains("raven.yaml", "directories:")
 	v.AssertFileContains("raven.yaml", "daily: journal/")
 	v.AssertFileContains("raven.yaml", "type: types/")
 	v.AssertFileContains("raven.yaml", "template: templates/custom/")
-	v.AssertFileContains("raven.yaml", "assets: resources/assets/")
 
-	result = v.RunCLI("vault", "config", "directories", "unset", "--daily", "--type", "--template", "--assets")
+	result = v.RunCLI("vault", "config", "directories", "unset", "--daily", "--type", "--template")
 	result.MustSucceed(t)
 	v.AssertFileNotContains("raven.yaml", "directories:")
 }

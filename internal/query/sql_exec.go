@@ -69,25 +69,6 @@ func scanSectionRows(rows *sql.Rows) ([]model.Section, error) {
 	})
 }
 
-func scanAssetRows(rows *sql.Rows) ([]model.Asset, error) {
-	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Asset, error) {
-		var r model.Asset
-		if err := rows.Scan(
-			&r.ID,
-			&r.FilePath,
-			&r.MediaType,
-			&r.Extension,
-			&r.Filename,
-			&r.SizeBytes,
-			&r.FileMtime,
-			&r.IndexedAt,
-		); err != nil {
-			return model.Asset{}, err
-		}
-		return r, nil
-	})
-}
-
 func scanLinkRows(rows *sql.Rows) ([]model.Link, error) {
 	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Link, error) {
 		var r model.Link
@@ -166,22 +147,6 @@ func (e *Executor) executeTraitCountQuery(q *Query) (int, error) {
 	return runEntityCount(e, q, traitSpec)
 }
 
-func (e *Executor) executeAssetQuery(q *Query) ([]model.Asset, error) {
-	return runEntityPageRows(e, q, assetSpec, 0, 0, scanAssetRows)
-}
-
-func (e *Executor) executeAssetPageQuery(q *Query, limit, offset int) ([]model.Asset, error) {
-	return runEntityPageRows(e, q, assetSpec, limit, offset, scanAssetRows)
-}
-
-func (e *Executor) executeAssetIDQuery(q *Query, limit, offset int) ([]string, error) {
-	return runEntityIDs(e, q, assetSpec, limit, offset)
-}
-
-func (e *Executor) executeAssetCountQuery(q *Query) (int, error) {
-	return runEntityCount(e, q, assetSpec)
-}
-
 func (e *Executor) executeSectionQuery(q *Query) ([]model.Section, error) {
 	return runEntityPageRows(e, q, sectionSpec, 0, 0, scanSectionRows)
 }
@@ -252,26 +217,6 @@ func (e *Executor) ExecuteTraitIDQuery(q *Query, limit, offset int) ([]string, e
 // ExecuteTraitCountQuery executes a trait query as COUNT(*).
 func (e *Executor) ExecuteTraitCountQuery(q *Query) (int, error) {
 	return e.withExecutionNow().executeTraitCountQuery(q)
-}
-
-// ExecuteAssetQuery executes an asset query and returns matching assets.
-func (e *Executor) ExecuteAssetQuery(q *Query) ([]model.Asset, error) {
-	return e.withExecutionNow().executeAssetQuery(q)
-}
-
-// ExecuteAssetPageQuery executes an asset query with SQL-level pagination.
-func (e *Executor) ExecuteAssetPageQuery(q *Query, limit, offset int) ([]model.Asset, error) {
-	return e.withExecutionNow().executeAssetPageQuery(q, limit, offset)
-}
-
-// ExecuteAssetIDQuery executes an asset query returning only asset IDs.
-func (e *Executor) ExecuteAssetIDQuery(q *Query, limit, offset int) ([]string, error) {
-	return e.withExecutionNow().executeAssetIDQuery(q, limit, offset)
-}
-
-// ExecuteAssetCountQuery executes an asset query as COUNT(*).
-func (e *Executor) ExecuteAssetCountQuery(q *Query) (int, error) {
-	return e.withExecutionNow().executeAssetCountQuery(q)
 }
 
 func (e *Executor) ExecuteSectionQuery(q *Query) ([]model.Section, error) {

@@ -241,32 +241,3 @@ func TestPrintQueryTraitResultsIncludesColumnHeaders(t *testing.T) {
 		}
 	}
 }
-
-func TestPrintQueryAssetResultsIncludesColumnHeaders(t *testing.T) {
-	prevJSON := jsonOutput
-	prevHyperlinksDisabled := hyperlinksDisabled
-	prevHyperlinkEnabled := hyperlinkEnabled
-	jsonOutput = false
-	setHyperlinksDisabled(true)
-	t.Cleanup(func() {
-		jsonOutput = prevJSON
-		hyperlinksDisabled = prevHyperlinksDisabled
-		hyperlinkEnabled = prevHyperlinkEnabled
-	})
-
-	out := captureStdout(t, func() {
-		printQueryAssetResults("asset", []model.Asset{
-			{
-				FilePath:  "assets/diagram.png",
-				MediaType: "image/png",
-				SizeBytes: 2048,
-			},
-		})
-	})
-
-	for _, want := range []string{"path", "media type", "size", "assets/diagram.png", "image/png", "2.0 KB"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("expected asset query output to include %q, got: %q", want, out)
-		}
-	}
-}

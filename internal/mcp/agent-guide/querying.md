@@ -20,9 +20,9 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 
 ## Choosing the retrieval tool
 
-- `query` — real Raven items, real trait instances, indexed asset rows, or outgoing link-edge rows; filter by type/section/trait/asset/link, fields, scope, and references.
+- `query` — real Raven items, real trait instances, or outgoing link-edge rows; filter by type/section/trait/link, fields, scope, references, and links.
 - `search` — you only know a text fragment and do not yet know the type, trait, or structure. Returns file/snippet matches; it does NOT distinguish a real `@todo` trait from prose that mentions `@todo`. For real traits use `query "trait:todo"`.
-- `backlinks <reference>` — incoming references to one object/asset (structured equivalent: `query "... refd(...)"`; `read` also appends backlinks).
+- `backlinks <reference>` — incoming references to one object or section (structured equivalent: `query "... refd(...)"`; `read` also appends backlinks).
 - `outlinks <reference>` — outgoing references from one object (structured equivalent: `query "... refs(...)"`).
 - `resolve <reference>` — map an accepted reference input to its canonical object ID without reading content; use that ID in authored references.
 - `read <reference>` — full file content once you have identified the object.
@@ -44,10 +44,6 @@ Traits attach to the nearest section, so lead with the forgiving forms:
 raven_invoke(command="query", args={"query_string":"type:project .status==active"})
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
 raven_invoke(command="query", args={"query_string":"type:meeting refs([[project/website]])"})
-raven_invoke(command="query", args={"query_string":"type:page refs([[assets/pdfs/paper.pdf]])"})
-raven_invoke(command="query", args={"query_string":"asset .extension==pdf"})
-raven_invoke(command="query", args={"query_string":"asset startswith(.media_type, \"image/\")"})
-raven_invoke(command="query", args={"query_string":"asset refd(type:project .status==active)"})
 raven_invoke(command="query", args={"query_string":"link .ext==pdf within(type:project)"})
 ```
 
@@ -60,10 +56,6 @@ before child headings; structural placement with `section_create` and
 `section_move` uses complete subtree boundaries. Section query IDs can be piped
 into bulk `add` (`--ids` + `stdin=true`) to append inside each matching section,
 and `read` with `sections=true` returns a file's outline directly.
-
-Assets can be reference targets in `refs(...)` and `refd(...)` flows, including links discovered from Markdown links/images. Use the bare `asset` query root to return asset rows directly.
-
-Asset queries support derived metadata fields only: `.id`, `.file_path`, `.filename`, `.extension`, `.media_type`, and `.size_bytes`. Assets do not have outbound refs, traits, or scope, so `asset refs(...)`, `asset has(...)`, and scope predicates are invalid.
 
 Use `links(...)` on type, section, or trait roots to filter by outgoing non-Raven
 links, for example `type:project links(.ext==pdf)` or

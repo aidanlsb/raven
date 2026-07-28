@@ -103,19 +103,3 @@ func TestExecuteLinksPredicateByRoot(t *testing.T) {
 		})
 	}
 }
-
-func TestExecuteLinksPredicateRejectsAssetRoot(t *testing.T) {
-	t.Parallel()
-
-	db := setupTestDB(t)
-	defer db.Close()
-
-	q, err := Parse("asset links(.ext==pdf)")
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	_, err = NewExecutor(db).executeAssetQuery(q)
-	if err == nil || !strings.Contains(err.Error(), "links() predicate is only valid for type, trait, and section queries") {
-		t.Fatalf("error = %v", err)
-	}
-}

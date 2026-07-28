@@ -171,7 +171,7 @@ output. In particular, unset `editor_mode` and `ui.markdown_style` appear as
 
 ## Vault config: `raven.yaml`
 
-`raven.yaml` controls per-vault behavior: directories, assets, auto-reindexing, capture, deletion, saved queries, and protected paths.
+`raven.yaml` controls per-vault behavior: directories, auto-reindexing, capture, deletion, saved queries, and protected paths.
 
 Use structured CLI commands when available instead of editing `raven.yaml` manually:
 
@@ -182,7 +182,7 @@ rvn vault config auto-reindex unset --json
 rvn vault config protected-prefixes list --json
 rvn vault config protected-prefixes add private --json
 rvn vault config protected-prefixes remove private/ --json
-rvn vault config directories set --daily journal --type types --template templates/custom --assets assets --json
+rvn vault config directories set --daily journal --type types --template templates/custom --json
 rvn vault config directories unset --template --json
 rvn vault config capture set --destination inbox.md --heading "## Captured" --json
 rvn vault config capture unset --heading --json
@@ -200,7 +200,6 @@ directories:
   type: type/
   page: page/
   template: templates/
-  assets: assets/
 
 capture:
   destination: daily
@@ -215,7 +214,6 @@ directories:
   type: type/
   page: page/
   template: templates/
-  assets: assets/
 
 auto_reindex: true
 
@@ -267,7 +265,6 @@ Directory roots used by Raven.
 | `type` | string | unset | Root for typed items |
 | `page` | string | unset, but defaults to `type` when `type` is set and `page` is omitted | Root for untyped pages |
 | `template` | string | `templates/` | Root for template files referenced by schema |
-| `assets` | string | `assets/` | Root scanned for non-Markdown asset files |
 
 Behavior notes:
 - Paths are normalized as vault-relative paths.
@@ -280,18 +277,7 @@ Compatibility notes:
 - Legacy `directories.object` and `directories.objects` are rejected. Use `directories.type` instead.
 - Legacy plural `pages` and `templates` are still accepted.
 - If both singular and plural are present for `page` or `template`, singular wins.
-- Top-level `assets` config is rejected. Use `directories.assets` instead.
 - `daily_directory` is no longer supported and causes a config error.
-
-### Assets
-
-Vault-local non-Markdown files that Raven can index as graph resources.
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `directories.assets` | string | `assets/` | Root scanned for asset files |
-
-Assets are not schema object types and do not have user-defined fields or kind rules. Raven derives path, filename, extension, media type, size, and modification time from the filesystem. Authored metadata should live in Markdown objects that link to the asset. Use `rvn vault config directories get --json` or `rvn vault config directories set --assets <dir> --json` to inspect or change the scanned directory. Run `rvn reindex --json` after changing asset config so cached asset metadata is refreshed. See `using-your-vault/assets.md` for linking, checks, and move behavior.
 
 ### `capture`
 
@@ -361,7 +347,6 @@ exclude:
   - AGENTS.md
   - .cursor/
   - "*.plan.md"
-  - assets/generated/**
 ```
 
 `exclude` is separate from `protected_prefixes`: protected paths can still be managed/read/indexed by Raven but cannot be changed by mutation commands; excluded paths are outside Raven's managed content model.
@@ -383,7 +368,7 @@ rvn vault config exclude remove '*.plan.md'
 ## Defaults from `rvn init`
 
 `rvn init` creates a default `raven.yaml` with:
-- `directories.daily`, `directories.type`, `directories.page`, `directories.template`, `directories.assets`
+- `directories.daily`, `directories.type`, `directories.page`, `directories.template`
 - `auto_reindex: true`
 - starter `queries`
 

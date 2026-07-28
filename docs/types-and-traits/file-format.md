@@ -1,6 +1,7 @@
 # File Format Reference
 
-Raven object files are plain markdown with optional YAML frontmatter. Non-Markdown files under the configured asset root are assets, not object files.
+Raven object files are plain Markdown with optional YAML frontmatter.
+Non-Markdown files are ordinary vault files, not Raven objects.
 
 ## File Structure Overview
 
@@ -55,17 +56,6 @@ stripped so the object ID is the bare ISO date, regardless of the configured
 daily directory. A file at `daily/2026-01-10.md` (or `journal/2026-01-10.md` with
 `directories.daily: journal/`) has the object ID `2026-01-10`. The daily directory
 is filesystem layout only and is never part of the daily note's identity.
-
-### Asset IDs
-
-Assets are non-Markdown files under `directories.assets` in `raven.yaml`. Asset IDs preserve the vault-relative file path including the extension:
-
-| File Path | Asset ID |
-|-----------|----------|
-| `assets/pdfs/paper.pdf` | `assets/pdfs/paper.pdf` |
-| `assets/photos/diagram.png` | `assets/photos/diagram.png` |
-
-Assets are graph resources, not schema object types. They do not have YAML frontmatter, sections, traits, templates, or user-defined fields. Raven derives asset metadata from the filesystem and index.
 
 ### Sections
 
@@ -257,31 +247,31 @@ Use `in(...)`, `within(...)`, `has(...)`, and `contains(...)` predicates to quer
 
 ## References
 
-Wiki-style links connect objects, sections, and assets across your vault:
+Wiki-style links connect objects and sections across your vault:
 
 ```markdown
 [[person/freya]]                   # Basic reference
 [[person/freya|Freya]]             # With display text
 [[project/website#tasks]]         # To a section
 [[2026-01-10]]                     # Date reference (daily note)
-[[assets/pdfs/paper.pdf]]          # Asset reference
 ```
 
 Object references can appear in markdown body content and frontmatter `ref`/`ref[]` fields.
 Section references must be global (`[[object#fragment]]`); source-relative fragment links like `[[#tasks]]` are not Raven references.
 
-Vault-relative Markdown links and images to non-Markdown files are indexed as asset references:
+Markdown links and images to non-Markdown files are indexed as outgoing link
+edges, not Raven references:
 
 ```markdown
-[Paper](assets/pdfs/paper.pdf)
-![Diagram](assets/photos/diagram.png)
+[Paper](../files/paper.pdf)
+![Diagram](../files/diagram.png)
 ```
 
 Raven resolves references to canonical IDs through alias, name field, date,
-path, asset path, and short name matching. Author references with canonical
-object IDs (for example, `[[person/freya]]`) or full asset paths (for example,
-`[[assets/pdfs/paper.pdf]]`). Bare short forms still resolve when unambiguous,
-but they are resolution sugar rather than the preferred authoring form.
+path, and short-name matching. Author references with canonical object IDs
+(for example, `[[person/freya]]`). Bare short forms still resolve when
+unambiguous, but they are resolution sugar rather than the preferred authoring
+form.
 
 For the full resolution model, ambiguity handling, frontmatter ref syntax, and maintenance commands, see `types-and-traits/references.md`.
 

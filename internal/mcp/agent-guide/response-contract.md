@@ -133,7 +133,7 @@ a `Created <file>` line followed by a `link as <id>` hint.
 There are two mutation classes with different defaults:
 
 1. Single-object writes apply immediately (`meta.mutation.phase = "applied"`):
-   `asset_import`, `set`, `add`, `update`, `edit`, `section_create`,
+   `set`, `add`, `update`, `edit`, `section_create`,
    `section_move`, `section_rename`, `reclassify`, and single-object
    `delete`/`move`. Commands that expose `dry-run` accept `dry-run=true` to get
    a preview (`meta.mutation.phase = "preview"`) without writing.

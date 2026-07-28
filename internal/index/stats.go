@@ -15,17 +15,7 @@ func (d *Database) Stats() (*IndexStats, error) {
 	if err := d.db.QueryRow("SELECT COUNT(*) FROM refs").Scan(&stats.RefCount); err != nil {
 		return nil, err
 	}
-	if err := d.db.QueryRow("SELECT COUNT(*) FROM assets").Scan(&stats.AssetCount); err != nil {
-		return nil, err
-	}
-	if err := d.db.QueryRow(`
-		SELECT COUNT(DISTINCT file_path)
-		FROM (
-			SELECT file_path FROM objects
-			UNION
-			SELECT file_path FROM assets
-		)
-	`).Scan(&stats.FileCount); err != nil {
+	if err := d.db.QueryRow("SELECT COUNT(DISTINCT file_path) FROM objects").Scan(&stats.FileCount); err != nil {
 		return nil, err
 	}
 
@@ -57,5 +47,4 @@ type IndexStats struct {
 	TraitCount  int
 	RefCount    int
 	FileCount   int
-	AssetCount  int
 }

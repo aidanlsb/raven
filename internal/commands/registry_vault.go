@@ -283,7 +283,7 @@ Safety checks:
 		Description: "Show current raven.yaml values",
 		LongDesc: `Show current effective raven.yaml values.
 
-The JSON output includes resolved defaults for directories, assets, capture,
+The JSON output includes resolved defaults for directories, capture,
 deletion, auto_reindex, protected_prefixes, and exclude patterns.`,
 		Examples: []string{
 			"rvn vault config show --json",
@@ -406,12 +406,10 @@ mutation commands ignore or reject matching paths.`,
 			{Name: "type", Description: "Set directories.type", Type: FlagTypeString},
 			{Name: "page", Description: "Set directories.page", Type: FlagTypeString},
 			{Name: "template", Description: "Set directories.template", Type: FlagTypeString},
-			{Name: "assets", Description: "Set directories.assets", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn vault config directories set --daily journal --json",
 			"rvn vault config directories set --type type --page page --template templates --json",
-			"rvn vault config directories set --assets assets --json",
 		},
 	},
 	"vault_config_directories_unset": {
@@ -423,7 +421,6 @@ mutation commands ignore or reject matching paths.`,
 			{Name: "type", Description: "Clear directories.type", Type: FlagTypeBool},
 			{Name: "page", Description: "Clear directories.page", Type: FlagTypeBool},
 			{Name: "template", Description: "Clear directories.template", Type: FlagTypeBool},
-			{Name: "assets", Description: "Clear directories.assets", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn vault config directories unset --page --json",

@@ -12,7 +12,6 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
-	vaultpkg "github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -109,27 +108,6 @@ func TestBuildJSON_MissingReferenceSummarySuggestsCreateMissing(t *testing.T) {
 	}
 }
 
-func TestRun_ReportsMissingAssetReference(t *testing.T) {
-	t.Parallel()
-
-	vault := testutil.NewTestVault(t).
-		WithSchema(testutil.PersonProjectSchema()).
-		WithFile("note.md", "See [paper](assets/pdfs/missing.pdf).\n").
-		Build()
-	sch, err := schema.Load(vault.Path)
-	if err != nil {
-		t.Fatalf("load schema: %v", err)
-	}
-
-	result, err := runCheckTest(t, vault.Path, config.DefaultVaultConfig(), sch, Options{})
-	if err != nil {
-		t.Fatalf("Run returned error: %v", err)
-	}
-	if !hasIssue(result.Issues, check.IssueMissingAsset) {
-		t.Fatalf("issues = %#v, want missing_asset", result.Issues)
-	}
-}
-
 func TestRun_ReportsBrokenFileLinksAndSkipsURLs(t *testing.T) {
 	t.Parallel()
 
@@ -186,66 +164,17 @@ func TestRun_ReportsBrokenFileLinksAndSkipsURLs(t *testing.T) {
 	}
 }
 
-func TestRun_ReportsOrphanedAsset(t *testing.T) {
-	t.Parallel()
-
-	vaultPath := t.TempDir()
-	assetRel := "assets/random/paper.pdf"
-	if err := os.MkdirAll(filepath.Join(vaultPath, "assets", "random"), 0o755); err != nil {
-		t.Fatalf("mkdir asset dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(vaultPath, assetRel), []byte("%PDF test\n"), 0o644); err != nil {
-		t.Fatalf("write asset: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("version: 1\ntypes: {}\ntraits: {}\n"), 0o644); err != nil {
-		t.Fatalf("write schema: %v", err)
-	}
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		t.Fatalf("load schema: %v", err)
-	}
-	cfg := config.DefaultVaultConfig()
-	info, err := os.Stat(filepath.Join(vaultPath, assetRel))
-	if err != nil {
-		t.Fatalf("stat asset: %v", err)
-	}
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		t.Fatalf("open index: %v", err)
-	}
-	if err := db.IndexAsset(vaultpkg.BuildAsset(assetRel, info, cfg)); err != nil {
-		t.Fatalf("index asset: %v", err)
-	}
-	db.Close()
-
-	result, err := runCheckTest(t, vaultPath, cfg, sch, Options{})
-	if err != nil {
-		t.Fatalf("Run returned error: %v", err)
-	}
-	if !hasIssue(result.Issues, check.IssueOrphanedAsset) {
-		t.Fatalf("issues = %#v, want orphaned_asset", result.Issues)
-	}
-}
-
-func TestRun_IgnoresExcludedMarkdownAndAssetIssues(t *testing.T) {
+func TestRun_IgnoresExcludedMarkdown(t *testing.T) {
 	t.Parallel()
 
 	vault := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
-		WithRavenYAML("directories:\n  type: type/\n  page: page/\nexclude:\n  - AGENTS.md\n  - .cursor/\n  - assets/generated/**\n").
+		WithRavenYAML("directories:\n  type: type/\n  page: page/\nexclude:\n  - AGENTS.md\n  - .cursor/\n").
 		WithFile("page/keep.md", "# Keep\n").
 		WithFile("AGENTS.md", "---\ntype: person\nname: [\n---\n").
 		WithFile(".cursor/plans/work.plan.md", "---\ntype: person\nname: [\n---\n").
 		Build()
 
-	assetRel := "assets/generated/drop.pdf"
-	assetFull := filepath.Join(vault.Path, assetRel)
-	if err := os.MkdirAll(filepath.Dir(assetFull), 0o755); err != nil {
-		t.Fatalf("mkdir asset: %v", err)
-	}
-	if err := os.WriteFile(assetFull, []byte("%PDF test\n"), 0o644); err != nil {
-		t.Fatalf("write asset: %v", err)
-	}
 	cfg, err := config.LoadVaultConfig(vault.Path)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -254,19 +183,6 @@ func TestRun_IgnoresExcludedMarkdownAndAssetIssues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load schema: %v", err)
 	}
-	info, err := os.Stat(assetFull)
-	if err != nil {
-		t.Fatalf("stat asset: %v", err)
-	}
-	db, err := index.Open(vault.Path)
-	if err != nil {
-		t.Fatalf("open index: %v", err)
-	}
-	if err := db.IndexAsset(vaultpkg.BuildAsset(assetRel, info, cfg)); err != nil {
-		t.Fatalf("index asset: %v", err)
-	}
-	db.Close()
-
 	result, err := runCheckTest(t, vault.Path, cfg, sch, Options{})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)

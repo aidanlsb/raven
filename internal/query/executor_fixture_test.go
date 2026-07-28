@@ -89,17 +89,6 @@ func setupTestDB(t *testing.T) *sql.DB {
 			line_number INTEGER
 		);
 
-		CREATE TABLE assets (
-			id TEXT PRIMARY KEY,
-			file_path TEXT NOT NULL UNIQUE,
-			media_type TEXT,
-			extension TEXT,
-			filename TEXT NOT NULL,
-			size_bytes INTEGER NOT NULL,
-			file_mtime INTEGER,
-			indexed_at INTEGER
-		);
-
 		CREATE TABLE date_index (
 			date TEXT NOT NULL,
 			source_type TEXT NOT NULL,
@@ -161,9 +150,6 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('daily/2025-02-01#planning', 'projects/mobile', 'projects/mobile', 'daily/2025-02-01.md', 32),
 			('daily/2025-02-01#planning', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 33),
 			('projects/website', 'people/freya', 'people/freya', 'projects/website.md', 5),
-			('projects/website', 'assets/pdfs/paper.pdf', 'assets/pdfs/paper.pdf', 'projects/website.md', 6),
-			('projects/website#tasks', 'assets/images/diagram.png', 'assets/images/diagram.png', 'projects/website.md', 26),
-			('trait5', 'assets/images/diagram.png', 'assets/images/diagram.png', 'projects/website.md', 25),
 			-- Unresolved ref (target_id is NULL) - tests fallback to target_raw matching
 			('projects/mobile#tasks', NULL, 'projects/website', 'projects/mobile.md', 30);
 
@@ -180,11 +166,6 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('projects/website', 'project', 'projects/website.md', 55, 8, 51, 'https://example.com/Guide.PDF', 'Guide', 0, 'url', 'pdf', 'https://example.com/Guide.PDF'),
 			('projects/mobile', 'project', 'projects/mobile.md', 20, 1, 29, '../manual.pdf', 'Manual', 0, 'file', 'pdf', 'manual.pdf'),
 			('people/freya', 'person', 'people/freya.md', 12, 3, 34, 'https://example.com', 'Website', 0, 'url', '', 'https://example.com');
-
-		INSERT INTO assets (id, file_path, media_type, extension, filename, size_bytes, file_mtime, indexed_at) VALUES
-			('assets/images/diagram.png', 'assets/images/diagram.png', 'image/png', 'png', 'diagram.png', 2048, 100, 200),
-			('assets/pdfs/paper.pdf', 'assets/pdfs/paper.pdf', 'application/pdf', 'pdf', 'paper.pdf', 12345, 100, 200),
-			('assets/raw/data.bin', 'assets/raw/data.bin', NULL, 'bin', 'data.bin', 99, 100, 200);
 
 		INSERT INTO fts_content (object_id, title, content, file_path) VALUES
 			('projects/website', 'Website Project', 'This is the website redesign project. Freya is a colleague working on this. Optional workflow input inputs.project is documented here.', 'projects/website.md'),
