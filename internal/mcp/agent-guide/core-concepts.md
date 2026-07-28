@@ -35,7 +35,9 @@ are resolution sugar and agents should not generate them.
 
 Non-Markdown files are not Raven identities. Copy them into the vault directly,
 run `reindex`, and link them with standard Markdown such as
-`[PDF](../files/file.pdf)`. Do not use `[[...]]` for files.
+`[PDF](../files/file.pdf)`. Standard links and images render portably when
+Markdown becomes HTML; `[[...]]` is reserved for Raven object and section
+references and does not render as a file link or image.
 
 ## Command reference arguments
 

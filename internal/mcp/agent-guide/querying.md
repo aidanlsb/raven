@@ -67,6 +67,10 @@ file and URL targets. Both surfaces use the same complete field grammar:
 `.position_end`, `.raw_target`, `.display`, `.is_image`, `.scheme`, `.ext`,
 and `.normalized_key`. Line and position fields compare numerically. Use
 `within(type:...)` or `within(section ...)` for root source scope.
+For `.normalized_key`, URLs lowercase the host and strip only default ports
+(`:80` for HTTP and `:443` for HTTPS), preserving path case, query, trailing
+slash, and fragment. Files inside the vault use vault-relative POSIX keys;
+absolute targets outside the vault remain absolute.
 `link --ids` projects `source_id` once per edge. Link rows are outgoing-only
 and do not support `refs()`, `refd()`, `in()`, `content()`, arrays, or
 `--apply`; there is no `linkd()` inverse because external files and URLs are
