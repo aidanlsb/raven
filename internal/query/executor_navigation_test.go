@@ -11,12 +11,21 @@ func TestTraitWithinIncludesAttachmentScope(t *testing.T) {
 	defer db.Close()
 
 	_, err := db.Exec(`
+		DELETE FROM traits WHERE trait_type = 'todo';
+
+		INSERT INTO objects (id, file_path, type, fields, line_start) VALUES
+			('project/beta', 'project/beta.md', 'project', '{}', 1),
+			('project/navigation', 'project/navigation.md', 'project', '{}', 1);
+
 		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, line_end, subtree_line_end, parent_section_id)
-		VALUES ('projects/website#subtasks', 'projects/website', 'projects/website.md', 'subtasks', 'Subtasks', 3, 30, 49, 49, 'projects/website#tasks');
+		VALUES
+			('project/navigation#tasks', 'project/navigation', 'project/navigation.md', 'tasks', 'Tasks', 2, 20, 29, 49, NULL),
+			('project/navigation#subtasks', 'project/navigation', 'project/navigation.md', 'subtasks', 'Subtasks', 3, 30, 49, 49, 'project/navigation#tasks');
 
 		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number) VALUES
-			('trait-preamble-todo', 'projects/website.md', 'projects/website', 'todo', 'todo', 'Preamble task', 5),
-			('trait-subtask-todo', 'projects/website.md', 'projects/website#subtasks', 'todo', 'todo', 'Nested task', 35);
+			('trait-beta-preamble', 'project/beta.md', 'project/beta', 'todo', 'todo', 'Preamble task', 5),
+			('trait-tasks', 'project/navigation.md', 'project/navigation#tasks', 'todo', 'todo', 'Direct task', 25),
+			('trait-subtasks', 'project/navigation.md', 'project/navigation#subtasks', 'todo', 'todo', 'Nested task', 35);
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert within regression fixtures: %v", err)
@@ -32,20 +41,20 @@ func TestTraitWithinIncludesAttachmentScope(t *testing.T) {
 		{
 			name:       "section includes direct and nested traits",
 			scope:      "section .title==Tasks",
-			wantIn:     []string{"trait7", "trait8", "trait5"},
-			wantWithin: []string{"trait7", "trait8", "trait5", "trait-subtask-todo"},
+			wantIn:     []string{"trait-tasks"},
+			wantWithin: []string{"trait-tasks", "trait-subtasks"},
 		},
 		{
 			name:       "nested section includes directly attached trait",
 			scope:      "section .title==Subtasks",
-			wantIn:     []string{"trait-subtask-todo"},
-			wantWithin: []string{"trait-subtask-todo"},
+			wantIn:     []string{"trait-subtasks"},
+			wantWithin: []string{"trait-subtasks"},
 		},
 		{
 			name:       "object includes heading-free preamble trait",
-			scope:      "[[projects/website]]",
-			wantIn:     []string{"trait-preamble-todo"},
-			wantWithin: []string{"trait-preamble-todo", "trait5", "trait-subtask-todo"},
+			scope:      "[[project/beta]]",
+			wantIn:     []string{"trait-beta-preamble"},
+			wantWithin: []string{"trait-beta-preamble"},
 		},
 	}
 
