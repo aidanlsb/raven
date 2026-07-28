@@ -627,7 +627,11 @@ func isFileInScope(filePath string, scope *Scope, walkPath string, targetFileSet
 	case "file":
 		return targetFileSet[filePath]
 	case "directory":
-		return strings.HasPrefix(filePath, walkPath)
+		rel, err := filepath.Rel(walkPath, filePath)
+		if err != nil || filepath.IsAbs(rel) {
+			return false
+		}
+		return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 	default:
 		return true
 	}

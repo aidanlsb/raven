@@ -2,6 +2,7 @@ package linktarget
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -41,6 +42,7 @@ func TestAnalyzeNormalizesFilePathVariantsToVaultRelativeKey(t *testing.T) {
 
 	vaultPath := t.TempDir()
 	absoluteTarget := filepath.Join(vaultPath, "assets", "x.pdf")
+	fileURI := "file:///" + strings.TrimPrefix(filepath.ToSlash(absoluteTarget), "/")
 	tests := []struct {
 		name       string
 		sourceFile string
@@ -50,6 +52,7 @@ func TestAnalyzeNormalizesFilePathVariantsToVaultRelativeKey(t *testing.T) {
 		{name: "explicit source relative", sourceFile: "source.md", target: "./assets/x.pdf"},
 		{name: "parent relative", sourceFile: "notes/source.md", target: "../assets/x.pdf"},
 		{name: "absolute inside vault", sourceFile: "notes/source.md", target: absoluteTarget},
+		{name: "file URI inside vault", sourceFile: "notes/source.md", target: fileURI},
 	}
 
 	for _, tt := range tests {
@@ -71,6 +74,27 @@ func TestAnalyzeKeepsAbsolutePathsOutsideVaultAbsolute(t *testing.T) {
 	got := Analyze(target, "source.md", vaultPath)
 	if got.NormalizedKey != filepath.ToSlash(filepath.Clean(target)) {
 		t.Fatalf("normalized key = %q, want %q", got.NormalizedKey, filepath.ToSlash(filepath.Clean(target)))
+	}
+}
+
+func TestAnalyzeAuthoredPreservesEscapedFilenameDelimiters(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	tests := []struct {
+		raw      string
+		semantic string
+		want     string
+	}{
+		{raw: `../assets/a\#1.pdf`, semantic: "../assets/a#1.pdf", want: "assets/a#1.pdf"},
+		{raw: `../assets/a\?1.pdf`, semantic: "../assets/a?1.pdf", want: "assets/a?1.pdf"},
+		{raw: `../assets/a.pdf#page=2`, semantic: "../assets/a.pdf#page=2", want: "assets/a.pdf"},
+	}
+	for _, tt := range tests {
+		got := AnalyzeAuthored(tt.raw, tt.semantic, "notes/source.md", vaultPath)
+		if got.NormalizedKey != tt.want {
+			t.Errorf("AnalyzeAuthored(%q) key = %q, want %q", tt.raw, got.NormalizedKey, tt.want)
+		}
 	}
 }
 
@@ -171,6 +195,20 @@ func TestRetargetFilePreservesAuthoredStyle(t *testing.T) {
 			want:       `../assets/archive/a\(1\).pdf`,
 		},
 		{
+			name:       "escaped fragment delimiter",
+			raw:        `../assets/a\#1.pdf`,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a#1.pdf",
+			want:       `../assets/archive/a\#1.pdf`,
+		},
+		{
+			name:       "new fragment delimiter is escaped",
+			raw:        `../assets/a.pdf`,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a#1.pdf",
+			want:       `../assets/archive/a\#1.pdf`,
+		},
+		{
 			name:       "angle brackets",
 			raw:        `<../assets/a(1).pdf?download=1>`,
 			sourceFile: "notes/source.md",
@@ -197,6 +235,27 @@ func TestRetargetFilePreservesAuthoredStyle(t *testing.T) {
 			sourceFile: "notes/source.md",
 			newKey:     "assets/archive/a(1).pdf",
 			want:       "file://" + absoluteNew,
+		},
+		{
+			name:       "unwrapped destination gains angle brackets for spaces",
+			raw:        `../assets/a.pdf`,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a final.pdf",
+			want:       `<../assets/archive/a final.pdf>`,
+		},
+		{
+			name:       "unbalanced parenthesis is escaped",
+			raw:        `../assets/a.pdf`,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a(1.pdf",
+			want:       `../assets/archive/a\(1.pdf`,
+		},
+		{
+			name:       "standard Windows file URI",
+			raw:        `file:///C:/vault/assets/a.pdf`,
+			sourceFile: "notes/source.md",
+			newKey:     "C:/vault/assets/archive/a.pdf",
+			want:       `file:///C:/vault/assets/archive/a.pdf`,
 		},
 	}
 

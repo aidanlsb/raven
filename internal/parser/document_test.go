@@ -874,14 +874,15 @@ func TestParseDocumentKeepsExternalMarkdownAndNormalizesMarkdownEscapes(t *testi
 [escaped](assets/a\(1\).pdf)
 [plain](assets/a(1).pdf)
 [angle](<assets/report final.pdf>)
+[escaped-fragment](assets/a\#1.pdf)
 `, filepath.ToSlash(externalMarkdown))
 
 	doc, err := ParseDocument(content, filepath.Join(vaultPath, "source.md"), vaultPath)
 	if err != nil {
 		t.Fatalf("ParseDocument: %v", err)
 	}
-	if len(doc.Links) != 4 {
-		t.Fatalf("links = %#v, want external markdown and three file edges", doc.Links)
+	if len(doc.Links) != 5 {
+		t.Fatalf("links = %#v, want external markdown and four file edges", doc.Links)
 	}
 
 	external := doc.Links[0]
@@ -897,5 +898,9 @@ func TestParseDocumentKeepsExternalMarkdownAndNormalizesMarkdownEscapes(t *testi
 	if doc.Links[3].RawTarget != "<assets/report final.pdf>" ||
 		doc.Links[3].NormalizedKey != "assets/report final.pdf" {
 		t.Errorf("angle-delimited edge = %#v", doc.Links[3])
+	}
+	if doc.Links[4].RawTarget != `assets/a\#1.pdf` ||
+		doc.Links[4].NormalizedKey != "assets/a#1.pdf" {
+		t.Errorf("escaped-fragment edge = %#v", doc.Links[4])
 	}
 }

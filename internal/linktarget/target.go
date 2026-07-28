@@ -45,6 +45,23 @@ func Analyze(raw, sourceFile, vaultPath string) Info {
 	return info
 }
 
+// AnalyzeAuthored derives target metadata from both the verbatim authored
+// destination and its Markdown-decoded semantic value. The authored form is
+// needed to distinguish escaped filename delimiters (\# and \?) from actual
+// query/fragment suffixes.
+func AnalyzeAuthored(rawTarget, semanticTarget, sourceFile, vaultPath string) Info {
+	info := Analyze(semanticTarget, sourceFile, vaultPath)
+	if info.Scheme != SchemeFile ||
+		(!strings.Contains(rawTarget, `\#`) && !strings.Contains(rawTarget, `\?`)) {
+		return info
+	}
+
+	filePath := normalizeFileDestinationPath(AuthoredFilePath(rawTarget))
+	info.Ext = fileExtension(filePath)
+	info.NormalizedKey = normalizeFile(filePath, sourceFile, vaultPath)
+	return info
+}
+
 // Classify maps a target to the broad category used by the link index.
 func Classify(raw string) Scheme {
 	target := strings.TrimSpace(raw)
@@ -103,6 +120,17 @@ func ResolveFileKey(normalizedKey, vaultPath string) string {
 	return filepath.Clean(filepath.Join(vaultPath, target))
 }
 
+// AuthoredFilePath returns the Markdown-semantic path portion of an authored
+// file destination, without angle brackets or a query/fragment suffix.
+func AuthoredFilePath(rawTarget string) string {
+	target := strings.TrimSpace(rawTarget)
+	if len(target) >= 2 && target[0] == '<' && target[len(target)-1] == '>' {
+		target = target[1 : len(target)-1]
+	}
+	authoredPath, _ := splitFileSuffix(target)
+	return unescapePathStyle(authoredPath)
+}
+
 // RetargetFile preserves the authored style of a file-link destination while
 // changing its semantic target. Angle brackets, query/fragment suffixes,
 // relative-vs-absolute form, explicit "./", file: URI form, and escaped
@@ -129,7 +157,9 @@ func RetargetFile(rawTarget, sourceFile, vaultPath, newNormalizedKey string) str
 		prefixEnd := len(scheme) + 1
 		prefix := authoredPath[:prefixEnd]
 		rest := semanticPath[prefixEnd:]
-		if strings.HasPrefix(rest, "//") {
+		if strings.HasPrefix(rest, "///") && !strings.HasPrefix(filepath.ToSlash(newAbs), "/") {
+			prefix += "///"
+		} else if strings.HasPrefix(rest, "//") {
 			prefix += "//"
 		}
 		replacement = prefix + filepath.ToSlash(newAbs)
@@ -158,7 +188,7 @@ func RetargetFile(rawTarget, sourceFile, vaultPath, newNormalizedKey string) str
 
 	replacement = preservePathEscapes(authoredPath, replacement)
 	replacement += suffix
-	if angle {
+	if angle || strings.ContainsAny(replacement, " \t\r\n") {
 		replacement = "<" + replacement + ">"
 	}
 	return leading + replacement + trailing
@@ -190,13 +220,33 @@ func unescapePathStyle(target string) string {
 }
 
 func preservePathEscapes(authored, replacement string) string {
-	escapeParens := strings.Contains(authored, `\(`) || strings.Contains(authored, `\)`)
-	if !escapeParens {
-		return replacement
+	var escaped [256]bool
+	for i := 0; i+1 < len(authored); i++ {
+		if authored[i] == '\\' && isMarkdownEscapable(authored[i+1]) {
+			escaped[authored[i+1]] = true
+			i++
+		}
 	}
-	replacement = strings.ReplaceAll(replacement, `\`, `\\`)
-	replacement = strings.ReplaceAll(replacement, "(", `\(`)
-	return strings.ReplaceAll(replacement, ")", `\)`)
+	if strings.Count(replacement, "(") != strings.Count(replacement, ")") {
+		escaped['('] = true
+		escaped[')'] = true
+	}
+	// replacement is the path portion only; literal suffix delimiters in a
+	// filename must be escaped before the original suffix is reattached.
+	if strings.ContainsAny(replacement, "#?") {
+		escaped['#'] = true
+		escaped['?'] = true
+	}
+
+	var b strings.Builder
+	b.Grow(len(replacement))
+	for i := 0; i < len(replacement); i++ {
+		if escaped[replacement[i]] {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(replacement[i])
+	}
+	return b.String()
 }
 
 func isMarkdownEscapable(c byte) bool {
@@ -207,15 +257,23 @@ func isMarkdownEscapable(c byte) bool {
 }
 
 func fileDestinationPath(target string) string {
-	if scheme, ok := uriScheme(target); ok && strings.EqualFold(scheme, "file") {
-		target = target[len(scheme)+1:]
-		target = strings.TrimPrefix(target, "//")
-		if !strings.HasPrefix(target, "/") {
-			target = "/" + target
-		}
-	}
 	if idx := strings.IndexAny(target, "?#"); idx >= 0 {
 		target = target[:idx]
+	}
+	return normalizeFileDestinationPath(target)
+}
+
+func normalizeFileDestinationPath(target string) string {
+	if scheme, ok := uriScheme(target); ok && strings.EqualFold(scheme, "file") {
+		target = target[len(scheme)+1:]
+		if strings.HasPrefix(target, "///") && isWindowsAbsolute(target[3:]) {
+			target = target[3:]
+		} else {
+			target = strings.TrimPrefix(target, "//")
+		}
+		if !strings.HasPrefix(target, "/") && !isWindowsAbsolute(target) {
+			target = "/" + target
+		}
 	}
 	return strings.ReplaceAll(target, "\\", "/")
 }

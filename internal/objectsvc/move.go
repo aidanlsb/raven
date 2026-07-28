@@ -317,16 +317,19 @@ func rewriteIndexedLinkTarget(content []byte, link model.Link, replacement strin
 	}
 	start := lineStart + link.PositionStart
 	end := lineStart + link.PositionEnd
-	if start < 0 || end > len(content) || start >= end {
-		return content, false
+	targetStart := -1
+	if start >= 0 && end <= len(content) && start < end {
+		span := content[start:end]
+		if targetOffset, found := indexedRawTargetOffset(span, []byte(link.RawTarget)); found {
+			targetStart = start + targetOffset
+		}
 	}
-
-	span := content[start:end]
-	targetOffset, ok := indexedRawTargetOffset(span, []byte(link.RawTarget))
-	if !ok {
-		return content, false
+	if targetStart < 0 {
+		targetStart, ok = nearestCurrentLinkTarget(content, link.RawTarget, start)
+		if !ok {
+			return content, false
+		}
 	}
-	targetStart := start + targetOffset
 	targetEnd := targetStart + len(link.RawTarget)
 
 	updated := make([]byte, 0, len(content)-len(link.RawTarget)+len(replacement))
@@ -334,6 +337,44 @@ func rewriteIndexedLinkTarget(content []byte, link model.Link, replacement strin
 	updated = append(updated, replacement...)
 	updated = append(updated, content[targetEnd:]...)
 	return updated, true
+}
+
+func nearestCurrentLinkTarget(content []byte, rawTarget string, expectedStart int) (int, bool) {
+	extracted, err := parser.ExtractFromAST(content, 1)
+	if err != nil {
+		return 0, false
+	}
+
+	best := -1
+	bestDistance := 0
+	for _, candidate := range extracted.Links {
+		if candidate.RawTarget != rawTarget {
+			continue
+		}
+		lineStart, ok := contentLineStart(content, candidate.Line)
+		if !ok {
+			continue
+		}
+		syntaxStart := lineStart + candidate.PositionStart
+		syntaxEnd := lineStart + candidate.PositionEnd
+		if syntaxStart < 0 || syntaxEnd > len(content) || syntaxStart >= syntaxEnd {
+			continue
+		}
+		offset, ok := indexedRawTargetOffset(content[syntaxStart:syntaxEnd], []byte(rawTarget))
+		if !ok {
+			continue
+		}
+		targetStart := syntaxStart + offset
+		distance := targetStart - expectedStart
+		if distance < 0 {
+			distance = -distance
+		}
+		if best < 0 || distance < bestDistance {
+			best = targetStart
+			bestDistance = distance
+		}
+	}
+	return best, best >= 0
 }
 
 func contentLineStart(content []byte, line int) (int, bool) {

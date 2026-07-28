@@ -119,6 +119,7 @@ func TestRun_ReportsBrokenFileLinksAndSkipsURLs(t *testing.T) {
 			"[site](https://example.com/files/missing.txt)",
 			"",
 		}, "\n")).
+		WithFile("notes-old/source.md", "[outside scope](../files/also-missing.txt)\n").
 		WithFile("files/existing.txt", "present\n").
 		Build()
 
@@ -126,24 +127,27 @@ func TestRun_ReportsBrokenFileLinksAndSkipsURLs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load schema: %v", err)
 	}
-	content := vault.ReadFile("notes/source.md")
-	doc, err := parser.ParseDocument(content, filepath.Join(vault.Path, "notes", "source.md"), vault.Path)
-	if err != nil {
-		t.Fatalf("parse source: %v", err)
-	}
 	db, err := index.Open(vault.Path)
 	if err != nil {
 		t.Fatalf("open index: %v", err)
 	}
-	if err := db.IndexDocument(doc, sch); err != nil {
-		_ = db.Close()
-		t.Fatalf("index source: %v", err)
+	for _, relPath := range []string{"notes/source.md", "notes-old/source.md"} {
+		content := vault.ReadFile(relPath)
+		doc, parseErr := parser.ParseDocument(content, filepath.Join(vault.Path, filepath.FromSlash(relPath)), vault.Path)
+		if parseErr != nil {
+			_ = db.Close()
+			t.Fatalf("parse %s: %v", relPath, parseErr)
+		}
+		if err := db.IndexDocument(doc, sch); err != nil {
+			_ = db.Close()
+			t.Fatalf("index %s: %v", relPath, err)
+		}
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("close index: %v", err)
 	}
 
-	result, err := runCheckTest(t, vault.Path, config.DefaultVaultConfig(), sch, Options{})
+	result, err := runCheckTest(t, vault.Path, config.DefaultVaultConfig(), sch, Options{PathArg: "notes"})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}

@@ -9,13 +9,12 @@ import (
 	"github.com/aidanlsb/raven/internal/slugs"
 )
 
-// ReplaceAllRefVariants rewrites every reference to the moved object across the
-// whole content, covering wikilinks, markdown link/image destinations, and YAML
-// frontmatter values.
+// ReplaceAllRefVariants rewrites every Raven reference to the moved object
+// across the whole content, covering wikilinks and YAML frontmatter values.
 //
 // Matching is structural: a reference is rewritten when its target base equals
-// oldID, oldBase, or a root-prefixed form of oldID. Section fragments, display
-// text, link titles, and query/anchor suffixes are preserved.
+// oldID, oldBase, or a root-prefixed form of oldID. Section fragments and
+// display text are preserved.
 func ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot string) string {
 	out, _ := refs.RewriteContent(content, moveRefDecider(oldID, oldBase, newRef, objectRoot, pageRoot))
 	return out

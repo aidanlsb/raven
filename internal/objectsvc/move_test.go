@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -119,6 +120,56 @@ func TestMoveFileUpdatesMarkdownFileLinks(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(v.Path, "files/archive/paper(1).pdf")); err != nil {
 		t.Fatalf("expected moved file to exist: %v", err)
+	}
+}
+
+func TestMoveFileDoesNotRewriteDifferentNormalizedLink(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("files/paper.pdf", "%PDF test\n").
+		WithFile("notes/ref.md", "This source-relative link points elsewhere: [paper](files/paper.pdf).\n").
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "notes/ref.md")
+
+	result, err := MoveFile(MoveFileRequest{
+		VaultPath:         v.Path,
+		VaultConfig:       config.DefaultVaultConfig(),
+		Schema:            sch,
+		SourceFile:        filepath.Join(v.Path, "files/paper.pdf"),
+		DestinationFile:   filepath.Join(v.Path, "files/archive/paper.pdf"),
+		SourceObjectID:    "files/paper.pdf",
+		DestinationObject: "files/archive/paper.pdf",
+		UpdateRefs:        true,
+	})
+	if err != nil {
+		t.Fatalf("MoveFile() error = %v", err)
+	}
+	if len(result.UpdatedRefs) != 0 {
+		t.Fatalf("UpdatedRefs = %#v, want none for non-matching normalized key", result.UpdatedRefs)
+	}
+	v.AssertFileContains("notes/ref.md", "[paper](files/paper.pdf)")
+}
+
+func TestRewriteIndexedLinkTargetRelocatesStalePosition(t *testing.T) {
+	t.Parallel()
+
+	content := []byte("prefix inserted [paper](../assets/paper.pdf)\n")
+	link := model.Link{
+		Line:          1,
+		PositionStart: 0,
+		PositionEnd:   len("[paper](../assets/paper.pdf)"),
+		RawTarget:     "../assets/paper.pdf",
+	}
+	updated, changed := rewriteIndexedLinkTarget(content, link, "../assets/archive/paper.pdf")
+	if !changed {
+		t.Fatal("rewriteIndexedLinkTarget() did not relocate stale indexed span")
+	}
+	if got := string(updated); !strings.Contains(got, "[paper](../assets/archive/paper.pdf)") {
+		t.Fatalf("rewriteIndexedLinkTarget() = %q", got)
 	}
 }
 
