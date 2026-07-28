@@ -98,6 +98,11 @@ func TestAnalyzeNormalizesURLsConservatively(t *testing.T) {
 			want:   "https://example.com:8443/Path",
 		},
 		{
+			name:   "empty explicit port retained",
+			target: "https://EXAMPLE.COM:/Path",
+			want:   "https://example.com:/Path",
+		},
+		{
 			name:   "protocol relative host only",
 			target: "//EXAMPLE.COM:443/Path?Q=A#Frag",
 			want:   "//example.com:443/Path?Q=A#Frag",
@@ -118,6 +123,8 @@ func TestAnalyzeNormalizesURLsConservatively(t *testing.T) {
 func TestIsRavenTarget(t *testing.T) {
 	t.Parallel()
 
+	vaultPath := t.TempDir()
+	externalMarkdown := filepath.Join(filepath.Dir(vaultPath), "external", "readme.md")
 	tests := []struct {
 		target string
 		want   bool
@@ -126,10 +133,11 @@ func TestIsRavenTarget(t *testing.T) {
 		{target: "../next.MD#details", want: true},
 		{target: "#details", want: true},
 		{target: "assets/report.pdf", want: false},
+		{target: externalMarkdown, want: false},
 		{target: "https://example.com/readme.md", want: false},
 	}
 	for _, tt := range tests {
-		if got := IsRavenTarget(tt.target); got != tt.want {
+		if got := IsRavenTarget(tt.target, "notes/source.md", vaultPath); got != tt.want {
 			t.Errorf("IsRavenTarget(%q) = %v, want %v", tt.target, got, tt.want)
 		}
 	}

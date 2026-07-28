@@ -10,9 +10,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/linktarget"
+
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 // Goldmark's parser configuration is immutable after its first Parse call;
@@ -238,7 +241,7 @@ func directMarkdownLink(
 	lineStartOffset := lineStarts[lineIndex]
 	return MarkdownLink{
 		RawTarget:     rawTarget,
-		Target:        string(destination),
+		Target:        markdownDestinationValue(destination),
 		Display:       collectInlineText(node, content),
 		IsImage:       isImage,
 		Line:          startLine + lineIndex,
@@ -272,6 +275,7 @@ func markdownLinkSource(content []byte, start int, isImage bool) (rawTarget stri
 		return "", 0, false
 	}
 
+	rawTargetStart := destinationStart
 	var destinationEnd int
 	if content[destinationStart] == '<' {
 		destinationStart++
@@ -290,7 +294,11 @@ func markdownLinkSource(content []byte, start int, isImage bool) (rawTarget stri
 	if linkEnd < 0 {
 		return "", 0, false
 	}
-	return string(content[destinationStart:destinationEnd]), linkEnd, true
+	rawTargetEnd := destinationEnd
+	if content[rawTargetStart] == '<' {
+		rawTargetEnd++
+	}
+	return string(content[rawTargetStart:rawTargetEnd]), linkEnd, true
 }
 
 func matchingBracket(content []byte, start int, opener, closer byte) int {
@@ -299,6 +307,8 @@ func matchingBracket(content []byte, start int, opener, closer byte) int {
 		switch content[i] {
 		case '\\':
 			i++
+		case '`':
+			i = markdownCodeSpanEnd(content, i)
 		case opener:
 			depth++
 		case closer:
@@ -309,6 +319,40 @@ func matchingBracket(content []byte, start int, opener, closer byte) int {
 		}
 	}
 	return -1
+}
+
+func markdownCodeSpanEnd(content []byte, start int) int {
+	delimiterLength := byteRunLength(content, start, '`')
+	for i := start + delimiterLength; i < len(content); {
+		if content[i] != '`' {
+			i++
+			continue
+		}
+		runLength := byteRunLength(content, i, '`')
+		if runLength == delimiterLength {
+			return i + runLength - 1
+		}
+		i += runLength
+	}
+	return start
+}
+
+func byteRunLength(content []byte, start int, value byte) int {
+	end := start
+	for end < len(content) && content[end] == value {
+		end++
+	}
+	return end - start
+}
+
+func markdownDestinationValue(destination []byte) string {
+	if linktarget.Classify(string(destination)) != linktarget.SchemeFile {
+		return string(destination)
+	}
+	destination = util.UnescapePunctuations(destination)
+	destination = util.ResolveNumericReferences(destination)
+	destination = util.ResolveEntityNames(destination)
+	return string(destination)
 }
 
 func escapedDelimiter(content []byte, start int, delimiter byte) int {

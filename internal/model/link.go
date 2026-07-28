@@ -14,8 +14,9 @@ type Link struct {
 	// Line is the 1-indexed source line.
 	Line int `json:"line"`
 
-	// PositionStart and PositionEnd are 0-indexed byte offsets on Line. End is
-	// exclusive and encompasses the complete Markdown link or image syntax.
+	// PositionStart and PositionEnd are 0-indexed byte offsets relative to the
+	// start of Line. End is exclusive and encompasses the complete Markdown
+	// syntax, so it may extend across subsequent lines.
 	PositionStart int `json:"position_start"`
 	PositionEnd   int `json:"position_end"`
 

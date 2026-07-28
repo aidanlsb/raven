@@ -76,8 +76,9 @@ func Classify(raw string) Scheme {
 }
 
 // IsRavenTarget reports whether a Markdown destination names a Raven Markdown
-// object or section. Wikilinks are parsed separately and never reach this path.
-func IsRavenTarget(raw string) bool {
+// object or section inside the vault. Markdown files outside the vault remain
+// ordinary file link targets. Wikilinks are parsed separately.
+func IsRavenTarget(raw, sourceFile, vaultPath string) bool {
 	target := strings.TrimSpace(raw)
 	if target == "" || strings.HasPrefix(target, "#") {
 		return true
@@ -85,7 +86,11 @@ func IsRavenTarget(raw string) bool {
 	if Classify(target) != SchemeFile {
 		return false
 	}
-	return strings.EqualFold(path.Ext(fileDestinationPath(target)), ".md")
+	info := Analyze(target, sourceFile, vaultPath)
+	if !strings.EqualFold(info.Ext, "md") {
+		return false
+	}
+	return !filepath.IsAbs(filepath.FromSlash(info.NormalizedKey)) && !isWindowsAbsolute(info.NormalizedKey)
 }
 
 func fileDestinationPath(target string) string {
@@ -160,14 +165,14 @@ func normalizeURL(raw string) string {
 		hostport = authority[at+1:]
 	}
 
-	host, port := splitHostPort(hostport)
+	host, port, hasPort := splitHostPort(hostport)
 	host = strings.ToLower(host)
 	if isDefaultPort(scheme, port) {
-		port = ""
+		hasPort = false
 	}
 
 	normalizedHost := host
-	if port != "" {
+	if hasPort {
 		normalizedHost += ":" + port
 	}
 	return raw[:authorityStart] + userinfo + normalizedHost + raw[authorityEnd:]
@@ -188,22 +193,23 @@ func urlAuthority(raw string) (start int, scheme string, ok bool) {
 	return separator + 2, scheme, true
 }
 
-func splitHostPort(hostport string) (host, port string) {
+func splitHostPort(hostport string) (host, port string, hasPort bool) {
 	if strings.HasPrefix(hostport, "[") {
 		if closeBracket := strings.IndexByte(hostport, ']'); closeBracket >= 0 {
 			host = hostport[:closeBracket+1]
 			if len(hostport) > closeBracket+1 && hostport[closeBracket+1] == ':' {
 				port = hostport[closeBracket+2:]
+				hasPort = true
 			}
-			return host, port
+			return host, port, hasPort
 		}
 	}
 	if strings.Count(hostport, ":") == 1 {
 		if colon := strings.LastIndexByte(hostport, ':'); colon >= 0 {
-			return hostport[:colon], hostport[colon+1:]
+			return hostport[:colon], hostport[colon+1:], true
 		}
 	}
-	return hostport, ""
+	return hostport, "", false
 }
 
 func isDefaultPort(scheme, port string) bool {

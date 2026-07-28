@@ -113,19 +113,22 @@ More content.
 	})
 
 	t.Run("extracts direct markdown link edge syntax", func(t *testing.T) {
-		content := "See [Paper](docs/a\\(1\\).PDF) here.\n![Diagram](images/diagram.png)\n[reference link][paper]\n\n[paper]: docs/reference.pdf\n"
+		content := "See [Paper](docs/a\\(1\\).PDF) here.\n![Diagram](<images/diagram.png>)\n[`]`](assets/bracket.pdf)\n[reference link][paper]\n\n[paper]: docs/reference.pdf\n"
 
 		result, err := ExtractFromAST([]byte(content), 1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if len(result.Links) != 2 {
-			t.Fatalf("got %d links, want 2: %#v", len(result.Links), result.Links)
+		if len(result.Links) != 3 {
+			t.Fatalf("got %d links, want 3: %#v", len(result.Links), result.Links)
 		}
 		first := result.Links[0]
 		if first.RawTarget != `docs/a\(1\).PDF` {
 			t.Errorf("raw target = %q, want verbatim escaped destination", first.RawTarget)
+		}
+		if first.Target != "docs/a(1).PDF" {
+			t.Errorf("semantic target = %q, want unescaped destination", first.Target)
 		}
 		if first.Display != "Paper" || first.IsImage {
 			t.Errorf("first link display/image = %q/%v, want Paper/false", first.Display, first.IsImage)
@@ -137,12 +140,36 @@ More content.
 		}
 
 		second := result.Links[1]
-		if second.RawTarget != "images/diagram.png" || second.Display != "Diagram" || !second.IsImage {
+		if second.RawTarget != "<images/diagram.png>" || second.Target != "images/diagram.png" ||
+			second.Display != "Diagram" || !second.IsImage {
 			t.Errorf("second link = %#v, want diagram image", second)
 		}
-		if second.Line != 2 || second.PositionStart != 0 || second.PositionEnd != len("![Diagram](images/diagram.png)") {
+		imageSyntax := "![Diagram](<images/diagram.png>)"
+		if second.Line != 2 || second.PositionStart != 0 || second.PositionEnd != len(imageSyntax) {
 			t.Errorf("second link location = line %d [%d,%d), want line 2 [0,%d)",
-				second.Line, second.PositionStart, second.PositionEnd, len("![Diagram](images/diagram.png)"))
+				second.Line, second.PositionStart, second.PositionEnd, len(imageSyntax))
+		}
+
+		third := result.Links[2]
+		if third.RawTarget != "assets/bracket.pdf" || third.Display != "]" || third.Line != 3 {
+			t.Errorf("code-span-label link = %#v", third)
+		}
+	})
+
+	t.Run("tracks multiline link span from its starting line", func(t *testing.T) {
+		content := "[multi\nline](assets/multi.pdf)\n"
+
+		result, err := ExtractFromAST([]byte(content), 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Links) != 1 {
+			t.Fatalf("links = %#v, want one multiline link", result.Links)
+		}
+		link := result.Links[0]
+		if link.Line != 1 || link.PositionStart != 0 || link.PositionEnd != len(content)-1 {
+			t.Fatalf("location = line %d [%d,%d), want line 1 [0,%d)",
+				link.Line, link.PositionStart, link.PositionEnd, len(content)-1)
 		}
 	})
 

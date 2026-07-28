@@ -173,7 +173,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	// object/section targets stay out of this index, while legacy asset refs
 	// above remain intact until the asset entity is removed separately.
 	for _, astLink := range astContent.Links {
-		if linktarget.IsRavenTarget(astLink.Target) {
+		if linktarget.IsRavenTarget(astLink.Target, relativePath, vaultPath) {
 			continue
 		}
 		targetInfo := linktarget.Analyze(astLink.Target, relativePath, vaultPath)
