@@ -4,12 +4,12 @@
 - Use `raven_invoke(command="schema", ...)`, `raven_invoke(command="vault_stats")`, and targeted `raven_invoke(command="query", ...)` first.
 - Read files only after narrowing candidates.
 
-2. Treat markdown and asset files as source of truth.
+2. Treat vault files as source of truth.
 - Index is rebuildable; use `raven_invoke(command="reindex")` when state looks stale.
 
 3. Prefer explicit, schema-safe writes.
 - Use `raven_invoke` with commands like `new`, `set`, `edit`, `move`, `section_create`, `section_move`, `section_rename`, `delete`, and `upsert`.
-- Avoid shell-level mutations for vault operations, including asset moves.
+- Use `move` for in-vault relocation so references and file links are rewritten.
 - See `raven://guide/critical-rules` and `raven://guide/write-patterns`.
 
 4. Use the command's documented mutation flow.
@@ -18,7 +18,7 @@
 - Because single-object writes apply on the first call, only invoke them when intent is clear.
 
 5. Author canonical references and surface ambiguity.
-- Use canonical object IDs and full asset paths in generated references. Take new object IDs from `data.id` (the human CLI's `link as <id>` value); do not generate short forms.
+- Use canonical object IDs in generated references. Take new object IDs from `data.id` (the human CLI's `link as <id>` value); do not generate short forms.
 - If user-supplied or existing reference sugar is ambiguous, or destructive intent is unclear, ask a focused clarifying question.
 
 6. Prefer one strong query over many weak queries.

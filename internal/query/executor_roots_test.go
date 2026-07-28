@@ -1,7 +1,6 @@
 package query
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -201,130 +200,6 @@ func TestExecuteObjectQuery(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-func TestExecuteAssetQuery(t *testing.T) {
-	t.Parallel()
-	db := setupTestDB(t)
-	defer db.Close()
-
-	executor := NewExecutor(db)
-
-	tests := []struct {
-		name      string
-		query     string
-		wantIDs   []string
-		wantCount int
-		wantErr   bool
-	}{
-		{
-			name:      "all assets",
-			query:     "asset",
-			wantCount: 3,
-		},
-		{
-			name:    "extension equality",
-			query:   "asset .extension==pdf",
-			wantIDs: []string{"assets/pdfs/paper.pdf"},
-		},
-		{
-			name:    "media type prefix",
-			query:   `asset startswith(.media_type, "image/")`,
-			wantIDs: []string{"assets/images/diagram.png"},
-		},
-		{
-			name:    "filename contains",
-			query:   `asset includes(.filename, "paper")`,
-			wantIDs: []string{"assets/pdfs/paper.pdf"},
-		},
-		{
-			name:    "size comparison",
-			query:   "asset .size_bytes>1024",
-			wantIDs: []string{"assets/images/diagram.png", "assets/pdfs/paper.pdf"},
-		},
-		{
-			name:    "referenced by direct object including sections",
-			query:   "asset refd([[projects/website]])",
-			wantIDs: []string{"assets/images/diagram.png", "assets/pdfs/paper.pdf"},
-		},
-		{
-			name:    "referenced by object subquery",
-			query:   "asset refd(type:project .status==active)",
-			wantIDs: []string{"assets/images/diagram.png", "assets/pdfs/paper.pdf"},
-		},
-		{
-			name:    "referenced by trait subquery",
-			query:   "asset refd(trait:todo .value==todo)",
-			wantIDs: []string{"assets/images/diagram.png"},
-		},
-		{
-			name:    "negated refd",
-			query:   "asset !refd([[projects/website]])",
-			wantIDs: []string{"assets/raw/data.bin"},
-		},
-		{
-			name:    "refs rejected at execution",
-			query:   "asset refs([[projects/website]])",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			q, err := Parse(tt.query)
-			if err != nil {
-				t.Fatalf("parse error: %v", err)
-			}
-
-			results, err := executor.executeAssetQuery(q)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if tt.wantIDs != nil {
-				got := make([]string, 0, len(results))
-				for _, r := range results {
-					got = append(got, r.ID)
-				}
-				if strings.Join(got, ",") != strings.Join(tt.wantIDs, ",") {
-					t.Fatalf("ids = %#v, want %#v", got, tt.wantIDs)
-				}
-			} else if len(results) != tt.wantCount {
-				t.Fatalf("got %d results, want %d", len(results), tt.wantCount)
-			}
-		})
-	}
-}
-func TestExecuteAssetIDAndCountQueries(t *testing.T) {
-	t.Parallel()
-	db := setupTestDB(t)
-	defer db.Close()
-
-	executor := NewExecutor(db)
-	q, err := Parse("asset .size_bytes>1000")
-	if err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	ids, err := executor.executeAssetIDQuery(q, 1, 1)
-	if err != nil {
-		t.Fatalf("unexpected ID query error: %v", err)
-	}
-	if len(ids) != 1 || ids[0] != "assets/pdfs/paper.pdf" {
-		t.Fatalf("ids = %#v, want assets/pdfs/paper.pdf", ids)
-	}
-
-	count, err := executor.executeAssetCountQuery(q)
-	if err != nil {
-		t.Fatalf("unexpected count query error: %v", err)
-	}
-	if count != 2 {
-		t.Fatalf("count = %d, want 2", count)
 	}
 }
 func TestExecuteTraitQuery_MatchesDirectRefsAcrossRootVariants(t *testing.T) {

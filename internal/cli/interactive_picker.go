@@ -13,11 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
-type interactiveReferencePickerOptions struct {
-	IncludeAssets bool
-}
-
-func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt, header string, opts interactiveReferencePickerOptions) ([]string, bool, error) {
+func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt, header string) ([]string, bool, error) {
 	if len(args) > 0 {
 		return args, false, nil
 	}
@@ -28,7 +24,7 @@ func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt
 		if err != nil {
 			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		selectedRef, selected, err := cliSelector.referenceCandidate(vaultPath, vaultCfg, prompt, header, opts)
+		selectedRef, selected, err := cliSelector.referenceCandidate(vaultPath, vaultCfg, prompt, header)
 		if err != nil {
 			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed references")
 		}
@@ -47,20 +43,19 @@ func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt
 	return nil, err == nil, err
 }
 
-func indexedReferenceTargetItems(vaultPath string, vaultCfg *config.VaultConfig, opts interactiveReferencePickerOptions) ([]picker.Item, error) {
+func indexedReferenceTargetItems(vaultPath string, vaultCfg *config.VaultConfig) ([]picker.Item, error) {
 	rt := &readsvc.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
 	defer rt.Close()
 
 	catalog, err := readsvc.Catalog(rt, readsvc.CatalogOptions{
 		Objects:  true,
 		Sections: true,
-		Assets:   opts.IncludeAssets,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	items := make([]picker.Item, 0, len(catalog.Objects)+len(catalog.Sections)+len(catalog.Assets))
+	items := make([]picker.Item, 0, len(catalog.Objects)+len(catalog.Sections))
 	for _, obj := range catalog.Objects {
 		if !indexedReferenceFileExists(vaultPath, obj.FilePath) {
 			continue
@@ -73,13 +68,6 @@ func indexedReferenceTargetItems(vaultPath string, vaultCfg *config.VaultConfig,
 		}
 		items = append(items, pickerItemForSectionReference(section))
 	}
-	for _, asset := range catalog.Assets {
-		if !indexedReferenceFileExists(vaultPath, asset.FilePath) {
-			continue
-		}
-		items = append(items, pickerItemForAssetReference(asset))
-	}
-
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].FilePath != items[j].FilePath {
 			return items[i].FilePath < items[j].FilePath
@@ -142,30 +130,6 @@ func pickerItemForSectionReference(section model.Section) picker.Item {
 		),
 		FilePath: section.FilePath,
 		Line:     section.LineStart,
-	}
-}
-
-func pickerItemForAssetReference(asset model.Asset) picker.Item {
-	location := asset.FilePath
-	kind := "asset"
-	if asset.MediaType != "" {
-		kind += " " + asset.MediaType
-	}
-	return picker.Item{
-		ID:       asset.ID,
-		Label:    asset.ID,
-		Detail:   kind,
-		Location: location,
-		Columns:  []string{asset.ID, kind, location},
-		SearchText: browseSearchText(
-			asset.ID,
-			asset.FilePath,
-			asset.Filename,
-			asset.Extension,
-			asset.MediaType,
-			location,
-		),
-		FilePath: asset.FilePath,
 	}
 }
 

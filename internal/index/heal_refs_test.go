@@ -223,12 +223,6 @@ func TestResolverStateAddsCandidates(t *testing.T) {
 		addResolverStateMatch(state.nameFields, name, id)
 		return state
 	}
-	withAsset := func(id string) *resolverFileState {
-		state := newResolverFileState()
-		state.assetIDs[id] = struct{}{}
-		return state
-	}
-
 	tests := []struct {
 		name     string
 		oldState *resolverFileState
@@ -242,7 +236,6 @@ func TestResolverStateAddsCandidates(t *testing.T) {
 		{"removed object id only", withObject("a"), newResolverFileState(), false},
 		{"added alias", newResolverFileState(), withAlias("The Queen", "people/freya"), true},
 		{"added name field", newResolverFileState(), withNameField("Freya", "people/freya"), true},
-		{"added asset id", newResolverFileState(), withAsset("docs/spec.pdf"), true},
 		{"both nil", nil, nil, false},
 	}
 

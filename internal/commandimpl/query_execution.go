@@ -58,7 +58,7 @@ func prepareQueryExecution(req commandexec.Request) (execution *queryExecution, 
 		return nil, mapQuerySvcFailure(err)
 	}
 	if isSavedQuery && !querysvc.IsFullQueryRoot(resolvedQuery) {
-		return nil, commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', 'section', 'asset', or 'link'", queryName), nil, "")
+		return nil, commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', 'section', or 'link'", queryName), nil, "")
 	}
 
 	if rt.SchemaLoadErr != nil {

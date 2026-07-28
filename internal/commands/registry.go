@@ -96,7 +96,6 @@ const barePickerInsertModeHelp = "\n\nThe bare-command picker starts in insert m
 
 // Registry holds all registered commands.
 var Registry = mergeRegistries(
-	assetRegistry,
 	contentRegistry,
 	maintenanceRegistry,
 	navigationRegistry,

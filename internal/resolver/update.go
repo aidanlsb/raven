@@ -1,7 +1,6 @@
 package resolver
 
 import (
-	"path"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/paths"
@@ -14,8 +13,6 @@ import (
 type Update struct {
 	AddedObjectIDs   []string
 	RemovedObjectIDs []string
-	AddedAssetIDs    []string
-	RemovedAssetIDs  []string
 
 	AddedAliases   map[string][]string
 	RemovedAliases map[string][]string
@@ -43,15 +40,9 @@ func (r *Resolver) ApplyUpdate(update Update) {
 	for _, id := range update.RemovedObjectIDs {
 		r.removeObjectID(id)
 	}
-	for _, id := range update.RemovedAssetIDs {
-		r.removeAssetID(id)
-	}
 
 	for _, id := range update.AddedObjectIDs {
 		r.addObjectID(id)
-	}
-	for _, id := range update.AddedAssetIDs {
-		r.addAssetID(id)
 	}
 	for value, ids := range update.AddedAliases {
 		for _, id := range ids {
@@ -69,48 +60,17 @@ func (r *Resolver) addObjectID(id string) {
 	if id == "" {
 		return
 	}
-	if _, exists := r.baseObjectIDs[id]; exists {
+	if _, exists := r.objectIDs[id]; exists {
 		return
 	}
-	r.baseObjectIDs[id] = struct{}{}
-	if _, exists := r.objectIDs[id]; !exists {
-		r.addCommonID(id)
-	}
+	r.addCommonID(id)
 }
 
 func (r *Resolver) removeObjectID(id string) {
-	if _, exists := r.baseObjectIDs[id]; !exists {
-		return
-	}
-	delete(r.baseObjectIDs, id)
-	if _, remainsAsset := r.assetIDs[id]; !remainsAsset {
-		r.removeCommonID(id)
-	}
-}
-
-func (r *Resolver) addAssetID(id string) {
-	if id == "" {
-		return
-	}
-	if _, exists := r.assetIDs[id]; exists {
-		return
-	}
-	r.assetIDs[id] = struct{}{}
 	if _, exists := r.objectIDs[id]; !exists {
-		r.addCommonID(id)
-	}
-	addAssetShortNames(r.shortMap, id, paths.ShortNameFromID(id))
-}
-
-func (r *Resolver) removeAssetID(id string) {
-	if _, exists := r.assetIDs[id]; !exists {
 		return
 	}
-	delete(r.assetIDs, id)
-	removeAssetShortNames(r.shortMap, id, paths.ShortNameFromID(id))
-	if _, remainsObject := r.baseObjectIDs[id]; !remainsObject {
-		r.removeCommonID(id)
-	}
+	r.removeCommonID(id)
 }
 
 func (r *Resolver) addCommonID(id string) {
@@ -142,22 +102,6 @@ func (r *Resolver) removeCommonID(id string) {
 	}
 
 	removeResolverSuffixes(r.suffixMap, id)
-}
-
-func removeAssetShortNames(shortMap map[string][]string, id, shortName string) {
-	ext := path.Ext(shortName)
-	if ext == "" || ext == ".md" {
-		return
-	}
-	base := strings.TrimSuffix(shortName, ext)
-	if base == "" || base == shortName {
-		return
-	}
-	removeMapEntry(shortMap, base, id)
-	slugged := slugs.ComponentSlug(base)
-	if slugged != "" && slugged != base {
-		removeMapEntry(shortMap, slugged, id)
-	}
 }
 
 func removeResolverSuffixes(suffixMap map[string][]string, id string) {

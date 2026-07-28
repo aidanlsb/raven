@@ -25,7 +25,7 @@ return `VAULT_AMBIGUOUS` again.
 ```text
 raven_invoke(command="check", args={"errors-only":true})
 raven_invoke(command="check", args={"reference":"project/"})
-raven_invoke(command="check", args={"issues":"missing_reference,missing_asset,unknown_type"})
+raven_invoke(command="check", args={"issues":"missing_reference,broken_file_link,unknown_type"})
 ```
 
 Use issue `fix_command` / `fix_hint` from JSON output when available.
@@ -68,9 +68,8 @@ raven_invoke(command="edit", args={
 ## 4. Move, reclassify, and delete
 
 ```text
-raven_invoke(command="asset_import", args={"source":"/tmp/paper.pdf", "destination":"assets/pdfs/"})
 raven_invoke(command="move", args={"source":"person/loki", "destination":"person/loki-archived"})
-raven_invoke(command="move", args={"source":"assets/downloads/paper.pdf", "destination":"assets/pdfs/paper.pdf"})
+raven_invoke(command="move", args={"source":"files/downloads/paper.pdf", "destination":"files/paper.pdf"})
 raven_invoke(command="section_move", args={"section_id":"project/website#notes", "after":"project/website#tasks"})
 raven_invoke(command="section_rename", args={"section_id":"project/website#tasks", "new_heading_text":"Completed Tasks"})
 raven_invoke(command="reclassify", args={"reference":"pages/draft", "new-type":"project"})
@@ -86,13 +85,11 @@ raven_invoke(command="backlinks", args={"reference":"project/old-project"})
 raven_invoke(command="delete", args={"reference":"project/old-project"})
 ```
 
-`asset_import` copies an external non-Markdown file by default; pass
-`move=true` to remove the source after the write and index handoff,
-`force=true` to overwrite a collision, or `dry-run=true` to preview. Its
-destination must remain under `directories.assets`. Use `move` for sources
-already inside the vault.
+Copy external non-Markdown files into the vault directly, then invoke
+`reindex`. Use `move` for sources already inside the vault so inbound Markdown
+file links are rewritten.
 
-Single-object `asset_import`, `delete`, `move`, `section_create`, `section_move`,
+Single-object `delete`, `move`, `section_create`, `section_move`,
 `section_rename`, and `reclassify` apply immediately. Run the backlinks check
 first for delete when impact is not already clear, or use `dry-run=true` on
 commands that expose it to

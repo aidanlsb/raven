@@ -49,7 +49,7 @@ func representativePredicate(kind predKind) Predicate {
 	}
 }
 
-var allRoots = []QueryType{QueryTypeObject, QueryTypeTrait, QueryTypeAsset, QueryTypeSection, QueryTypeLink}
+var allRoots = []QueryType{QueryTypeObject, QueryTypeTrait, QueryTypeSection, QueryTypeLink}
 
 var allPredKinds = []predKind{
 	predKindField, predKindStringFunc, predKindArray, predKindHas, predKindContains,

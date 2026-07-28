@@ -290,20 +290,6 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 		}
 	}
 
-	if db != nil && (scope.Type == "full" || scope.Type == "directory") {
-		for _, issue := range detectAssetIssues(db, vaultPath, excludeMatcher, scope, walkPath, targetFileSet) {
-			if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
-				continue
-			}
-			allIssues = append(allIssues, issue)
-			if issue.Level == check.LevelWarning {
-				result.WarningCount++
-			} else {
-				result.ErrorCount++
-			}
-		}
-	}
-
 	for _, pe := range parseErrors {
 		if shouldIncludeIssue(pe, includeIssues, excludeIssues, opts.ErrorsOnly) {
 			allIssues = append([]check.Issue{pe}, allIssues...)
@@ -519,38 +505,6 @@ func detectBrokenFileLinkIssues(links []model.Link, vaultPath string, excludeMat
 			continue
 		}
 		issues = append(issues, issue)
-	}
-	return issues
-}
-
-func detectAssetIssues(db *index.Database, vaultPath string, excludeMatcher *ravenignore.Matcher, scope *Scope, walkPath string, targetFileSet map[string]bool) []check.Issue {
-	assets, err := db.QueryAssets()
-	if err != nil {
-		return nil
-	}
-	var issues []check.Issue
-	for _, asset := range assets {
-		if excludeMatcher.Match(asset.FilePath, false) {
-			continue
-		}
-		fullPath := filepath.Join(vaultPath, asset.FilePath)
-		if !isFileInScope(fullPath, scope, walkPath, targetFileSet) {
-			continue
-		}
-		backlinks, err := db.Backlinks(asset.ID)
-		if err != nil {
-			continue
-		}
-		if len(backlinks) == 0 {
-			issues = append(issues, check.Issue{
-				Level:    check.LevelWarning,
-				Type:     check.IssueOrphanedAsset,
-				FilePath: asset.FilePath,
-				Message:  fmt.Sprintf("Asset %q is not referenced by any indexed note", asset.FilePath),
-				Value:    asset.FilePath,
-				FixHint:  "Add a Markdown link to this asset or remove it if it is no longer needed",
-			})
-		}
 	}
 	return issues
 }

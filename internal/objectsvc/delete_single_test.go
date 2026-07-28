@@ -57,25 +57,21 @@ traits: {}
 	}
 }
 
-func TestDeleteByReferenceAssetPreviewAndApply(t *testing.T) {
+func TestDeleteByReferenceFilePreviewAndApply(t *testing.T) {
 	t.Parallel()
 
-	const assetID = "assets/images/example/chart.png"
+	const filePath = "files/images/example/chart.png"
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
-		WithFile(assetID, "png").
-		WithFile("notes/reference.md", "![Chart]("+assetID+")\n").
+		WithFile(filePath, "png").
 		Build()
 	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "notes/reference.md")
-	indexVaultAssets(t, v.Path, assetID)
-	resolveVaultRefs(t, v.Path, sch)
 
 	req := DeleteByReferenceRequest{
 		VaultPath:   v.Path,
 		VaultConfig: config.DefaultVaultConfig(),
 		Schema:      sch,
-		Reference:   assetID,
+		Reference:   filePath,
 		Behavior:    "trash",
 		TrashDir:    ".trash",
 	}
@@ -83,22 +79,22 @@ func TestDeleteByReferenceAssetPreviewAndApply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PreviewDeleteByReference() error = %v", err)
 	}
-	if preview.ObjectID != assetID {
-		t.Fatalf("ObjectID = %q, want %q", preview.ObjectID, assetID)
+	if preview.ObjectID != filePath {
+		t.Fatalf("ObjectID = %q, want %q", preview.ObjectID, filePath)
 	}
-	if len(preview.Backlinks) != 1 || preview.Backlinks[0].SourceID != "notes/reference" {
-		t.Fatalf("Backlinks = %#v, want notes/reference", preview.Backlinks)
+	if len(preview.Backlinks) != 0 {
+		t.Fatalf("Backlinks = %#v, want none for a file path", preview.Backlinks)
 	}
-	v.AssertFileExists(assetID)
+	v.AssertFileExists(filePath)
 
 	result, err := DeleteByReference(req)
 	if err != nil {
 		t.Fatalf("DeleteByReference() error = %v", err)
 	}
-	v.AssertFileNotExists(assetID)
-	v.AssertFileExists(".trash/" + assetID)
-	if got := result.ChangeSet.Deleted; len(got) != 1 || got[0] != assetID {
-		t.Fatalf("ChangeSet.Deleted = %#v, want [%s]", got, assetID)
+	v.AssertFileNotExists(filePath)
+	v.AssertFileExists(".trash/" + filePath)
+	if got := result.ChangeSet.Deleted; len(got) != 1 || got[0] != filePath {
+		t.Fatalf("ChangeSet.Deleted = %#v, want [%s]", got, filePath)
 	}
 }
 

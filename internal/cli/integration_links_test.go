@@ -90,9 +90,6 @@ title: Sync
 			result.AssertResultCount(t, "items", 1)
 		})
 	}
-
-	v.RunCLI("query", "asset links(.ext==pdf)").
-		MustFailWithMessage(t, "links() predicate is only valid for type, trait, and section queries")
 }
 
 func TestIntegration_BacklinksOutlinksStdinGroupedOutput(t *testing.T) {

@@ -16,13 +16,12 @@ import (
 var queryCmd = &cobra.Command{
 	Use:   "query <query-string>",
 	Short: "Run a query using the Raven query language",
-	Long: `Query items, sections, traits, assets, or outgoing link edges using the Raven query language.
+	Long: `Query items, sections, traits, or outgoing link edges using the Raven query language.
 
 Query roots:
   type:<type> [predicates]    Query items of a type
   section [predicates]        Query heading-derived sections
   trait:<name> [predicates]   Query traits by name
-  asset [predicates]          Query indexed asset resources
   link [predicates]           Query indexed outgoing Markdown link edges
 
 Predicates for type queries:
@@ -62,15 +61,6 @@ Predicates for section queries:
   contains(trait:...)  Recursively contains a matching trait
   links(.ext==pdf)     Subtree contains a matching file or URL link
 
-Predicates for asset queries:
-  .extension==pdf       Asset field equals value
-  oneof(.extension, [...]) Asset field matches any listed scalar value
-  includes(.filename, "text") Substring match on derived metadata
-  startswith(.media_type, "image/")  String match on derived metadata
-  .size_bytes>1024      Numeric size comparison
-  refd(type:...)        Referenced by matching items
-  refd(trait:...)       Referenced by matching trait lines
-
 Predicates for link queries:
   .ext==pdf              Link target extension equals value
   .is_image==true        Link is an image
@@ -97,8 +87,6 @@ Examples:
   rvn query "type:meeting has(trait:due)"
   rvn query "section .title==Tasks"
   rvn query "trait:due .value<today"
-  rvn query "asset .extension==pdf"
-  rvn query "asset startswith(.media_type, \"image/\")"
   rvn query "link .ext==pdf within(type:project)"
   rvn query "trait:todo content(\"my task\")"
   rvn query "trait:highlight in(type:book .status==reading)"

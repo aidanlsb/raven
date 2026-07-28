@@ -52,7 +52,6 @@ type DirectoriesInfo struct {
 	Object     string
 	Page       string
 	Template   string
-	Assets     string
 }
 
 type CaptureInfo struct {
@@ -81,7 +80,6 @@ type SetDirectoriesRequest struct {
 	Object    *string
 	Page      *string
 	Template  *string
-	Assets    *string
 }
 
 type SetDirectoriesResult struct {
@@ -97,7 +95,6 @@ type UnsetDirectoriesRequest struct {
 	Object    bool
 	Page      bool
 	Template  bool
-	Assets    bool
 }
 
 type UnsetDirectoriesResult struct {
@@ -318,8 +315,8 @@ func GetDirectories(rt *vaultruntime.Runtime, req GetDirectoriesRequest) (*GetDi
 }
 
 func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDirectoriesResult, error) {
-	if req.Daily == nil && req.Object == nil && req.Page == nil && req.Template == nil && req.Assets == nil {
-		return nil, newError(CodeInvalidInput, "specify at least one directories field", "Use --daily, --type, --page, --template, or --assets", nil)
+	if req.Daily == nil && req.Object == nil && req.Page == nil && req.Template == nil {
+		return nil, newError(CodeInvalidInput, "specify at least one directories field", "Use --daily, --type, --page, or --template", nil)
 	}
 
 	cfg, exists, configPath, err := load(rt)
@@ -361,14 +358,6 @@ func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDi
 		}
 		next.Template = value
 	}
-	if req.Assets != nil {
-		value, err := normalizeDirValue(*req.Assets, "assets")
-		if err != nil {
-			return nil, err
-		}
-		next.Assets = value
-	}
-
 	next = compactDirectoriesConfig(next)
 	changed := !directoriesConfigEqual(before, next)
 	if changed {
@@ -387,8 +376,8 @@ func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDi
 }
 
 func UnsetDirectories(rt *vaultruntime.Runtime, req UnsetDirectoriesRequest) (*UnsetDirectoriesResult, error) {
-	if !req.Daily && !req.Object && !req.Page && !req.Template && !req.Assets {
-		return nil, newError(CodeInvalidInput, "specify at least one directories field to clear", "Use --daily, --type, --page, --template, or --assets", nil)
+	if !req.Daily && !req.Object && !req.Page && !req.Template {
+		return nil, newError(CodeInvalidInput, "specify at least one directories field to clear", "Use --daily, --type, --page, or --template", nil)
 	}
 
 	cfg, _, configPath, err := load(rt)
@@ -414,10 +403,6 @@ func UnsetDirectories(rt *vaultruntime.Runtime, req UnsetDirectoriesRequest) (*U
 	if req.Template {
 		next.Template = ""
 	}
-	if req.Assets {
-		next.Assets = ""
-	}
-
 	next = compactDirectoriesConfig(next)
 	changed := !directoriesConfigEqual(before, next)
 	if changed {
@@ -939,16 +924,12 @@ func showDirectories(cfg *config.VaultConfig) DirectoriesInfo {
 		Configured: dirs != nil,
 		Daily:      paths.NormalizeDirRoot(cfg.GetDailyDirectory()),
 		Template:   cfg.GetTemplateDirectory(),
-		Assets:     cfg.GetAssetRoot(),
 	}
 	if dirs != nil {
 		info.Object = dirs.Object
 		info.Page = dirs.Page
 		if dirs.Template != "" {
 			info.Template = dirs.Template
-		}
-		if dirs.Assets != "" {
-			info.Assets = dirs.Assets
 		}
 	}
 	return info
@@ -978,14 +959,12 @@ func canonicalDirectoriesConfig(cfg *config.VaultConfig) *config.DirectoriesConf
 		template = dirs.Templates
 	}
 	template = paths.NormalizeDirRoot(template)
-	assets := paths.NormalizeDirRoot(dirs.Assets)
 
 	return &config.DirectoriesConfig{
 		Daily:    daily,
 		Object:   object,
 		Page:     page,
 		Template: template,
-		Assets:   assets,
 	}
 }
 
@@ -1005,7 +984,7 @@ func compactDirectoriesConfig(cfg *config.DirectoriesConfig) *config.Directories
 	cfg.Pages = ""
 	//nolint:staticcheck // Clearing deprecated aliases keeps saved config canonical.
 	cfg.Templates = ""
-	if cfg.Daily == "" && cfg.Object == "" && cfg.Page == "" && cfg.Template == "" && cfg.Assets == "" {
+	if cfg.Daily == "" && cfg.Object == "" && cfg.Page == "" && cfg.Template == "" {
 		return nil
 	}
 	return cfg
@@ -1018,8 +997,7 @@ func directoriesConfigEqual(a, b *config.DirectoriesConfig) bool {
 	return a.Daily == b.Daily &&
 		a.Object == b.Object &&
 		a.Page == b.Page &&
-		a.Template == b.Template &&
-		a.Assets == b.Assets
+		a.Template == b.Template
 }
 
 func canonicalCaptureConfig(cfg *config.VaultConfig) *config.CaptureConfig {

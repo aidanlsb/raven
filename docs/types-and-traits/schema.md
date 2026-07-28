@@ -142,7 +142,8 @@ type: date
 - Date references (`[[2026-01-10]]`) resolve to daily notes
 - Files are stored under `directories.daily` (from `raven.yaml`)
 
-There is intentionally no built-in `asset` type. Assets such as PDFs and images are non-Markdown graph resources scanned from `directories.assets` in `raven.yaml`; they are not schema-backed objects and do not define frontmatter fields.
+Non-Markdown files are not schema-backed objects. Link to them with standard
+Markdown and query their outgoing edges through the link model.
 
 ---
 
@@ -713,16 +714,14 @@ Validates managed vault files against the schema. Paths matched by `raven.yaml` 
 | `undefined_trait` | Trait not in schema | Add trait to schema |
 | `missing_reference` | Link to non-existent object or section | Create the target or update the link |
 | `broken_file_link` | Markdown file link/image target is missing on disk | Restore the target file or update/remove the link; URLs are not checked |
-| `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset or update the reference |
-| `ambiguous_reference` | Reference matches multiple objects or assets | Use a canonical object ID or full asset path (e.g., `[[person/freya]]`) |
-| `short_ref_could_be_full_path` | Short ref can be written with its canonical object ID or full asset path | Run `rvn check fix --confirm` to rewrite it |
+| `ambiguous_reference` | Reference matches multiple objects or sections | Use a canonical object ID (e.g., `[[person/freya]]`) |
+| `short_ref_could_be_full_path` | Short ref can be written with its canonical object ID | Run `rvn check fix --confirm` to rewrite it |
 | `id_collision` | Same short name maps to multiple object IDs | Use canonical object IDs or rename objects |
 | `duplicate_alias` | Multiple objects use the same alias | Make aliases unique |
 | `alias_collision` | Alias conflicts with object ID or short name | Rename alias or use the canonical object ID |
 | `non_canonical_path` | File lives outside the configured directory root for its type | Run `rvn check fix --confirm` to move the file |
 | `directory_type_mismatch` | File lives in a directory that implies a different type | Reclassify the object to the expected type |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix | Run `rvn check fix --confirm` to strip the prefix |
-| `orphaned_asset` | Indexed asset has no incoming references | Link it from a note or remove it if unused |
 | `stale_index` | Index may be stale | Run `rvn reindex` |
 | `check_incomplete` | An index-backed check subsystem failed | Fix the named subsystem (often `rvn reindex`) and re-run check |
 

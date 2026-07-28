@@ -24,11 +24,10 @@ type CatalogOptions struct {
 
 	Objects  bool
 	Sections bool
-	Assets   bool
 	Aliases  bool
 	Resolver bool
 
-	// FilePaths requests all distinct object and asset file paths.
+	// FilePaths requests all distinct indexed Markdown file paths.
 	FilePaths bool
 
 	// Consistent brackets all selected reads with the resolver generation and
@@ -49,9 +48,6 @@ type CatalogSnapshot struct {
 	Sections    []model.Section
 	SectionByID map[string]model.Section
 
-	Assets    []model.Asset
-	AssetByID map[string]model.Asset
-
 	Aliases  map[string]string
 	Resolver *resolver.Resolver
 
@@ -63,7 +59,6 @@ type catalogReader interface {
 	AllObjectIDs() ([]string, error)
 	AllObjects() ([]model.Object, error)
 	AllSections() ([]model.Section, error)
-	QueryAssets() ([]model.Asset, error)
 	AllAliases() (map[string]string, error)
 	Resolver(index.ResolverOptions) (*resolver.Resolver, error)
 	AllIndexedFilePaths() ([]string, error)
@@ -149,16 +144,6 @@ func readCatalog(db catalogReader, opts CatalogOptions, resolverOpts index.Resol
 		snapshot.SectionByID = make(map[string]model.Section, len(snapshot.Sections))
 		for _, section := range snapshot.Sections {
 			snapshot.SectionByID[section.ID] = section
-		}
-	}
-	if opts.Assets {
-		snapshot.Assets, err = db.QueryAssets()
-		if err != nil {
-			return CatalogSnapshot{}, fmt.Errorf("list catalog assets: %w", err)
-		}
-		snapshot.AssetByID = make(map[string]model.Asset, len(snapshot.Assets))
-		for _, asset := range snapshot.Assets {
-			snapshot.AssetByID[asset.ID] = asset
 		}
 	}
 	if opts.Aliases {

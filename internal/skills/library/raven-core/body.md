@@ -25,8 +25,8 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Update frontmatter fields only: `rvn set <reference> field=value --json`
 - Exact body text replacement: `rvn edit`
 - Update a trait value by trait ID: `rvn update`
-- Import an external non-Markdown file: `rvn asset import <source> <destination>`
-- Relocate an asset already in the vault: `rvn move` (updates references)
+- Copy an external non-Markdown file into the vault, then run `rvn reindex`
+- Relocate a non-Markdown file already in the vault: `rvn move` (updates file links)
 - Create/reorder/rename headings: `rvn section create` / `rvn section move` / `rvn section rename`
 
 Key distinctions:
@@ -71,9 +71,10 @@ Raven ships its own long-form documentation. Use these when you need usage detai
 
 ## Safety
 
-- Avoid shell-level `cp`, `rm`, `mv`, `sed`, or `awk` for vault content when
-  Raven commands exist. Use `rvn asset import` for external assets and `rvn
-  move` for in-vault relocation.
+- Avoid shell-level `rm`, `mv`, `sed`, or `awk` for managed vault content when
+  Raven commands exist. Copying a new external non-Markdown file into the vault
+  is supported; run `rvn reindex` afterward. Use `rvn move` for in-vault
+  relocation.
 - Use `rvn section create` for headings; `rvn add` is body-only and rejects heading content.
 - Keep path operations vault-relative where possible.
 - If `reclassify` reports dropped fields or missing required values, stop and resolve explicitly.

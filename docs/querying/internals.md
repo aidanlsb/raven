@@ -20,7 +20,6 @@ Every parsed query has exactly one root kind:
 | `type:<name>` | object query with `TypeName` set to the schema type | `objects` |
 | `trait:<name>` | trait query with `TypeName` set to the trait name | `traits` |
 | `section` | section query with no type name | `sections` |
-| `asset` | asset query with no type name | `assets` |
 | `link` | link-edge query with no type name | `links` |
 
 The root kind determines which predicates are legal, which SQL builder runs, and what the command response contains. `link` is an outgoing-only leaf root: its rows are edges rather than file entities, and source scoping uses indexed source IDs/positions. Avoid adding predicates that silently change the result kind; compose them through nested queries instead.
@@ -64,7 +63,9 @@ refs(type:project .status==active)
 trait:todo within([[project/raven]])
 ```
 
-Direct targets are resolved during execution, because ambiguity depends on indexed objects, assets, schema, and the configured daily directory. Missing targets intentionally match nothing instead of creating implicit objects.
+Direct targets are resolved during execution, because ambiguity depends on
+indexed objects, sections, schema, and the configured daily directory. Missing
+targets intentionally match nothing instead of creating implicit objects.
 
 For schema `ref` and `ref[]` fields, field comparisons use reference-aware semantics. Preserve explicit ambiguity errors for shorthand values that could match multiple objects.
 

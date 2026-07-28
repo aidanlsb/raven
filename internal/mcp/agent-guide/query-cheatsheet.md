@@ -7,7 +7,6 @@ Quick reference for common Raven Query Language (RQL) patterns.
 - `type:<type> [predicates...]`
 - `section [predicates...]`
 - `trait:<name> [predicates...]`
-- `asset [predicates...]`
 - `link [predicates...]`
 
 ## Predicates

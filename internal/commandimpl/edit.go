@@ -42,6 +42,17 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return mapEditFailure(err)
 	}
 
+	// Reject explicit non-content file paths before reference resolution. Files
+	// are not Raven identities, but path-oriented validation must still return
+	// the command's stable safety error for config, template, protected, and
+	// non-Markdown targets.
+	literalPath := filepath.Join(vaultPath, filepath.FromSlash(reference))
+	if info, statErr := os.Stat(literalPath); statErr == nil && !info.IsDir() {
+		if validation := validateEditableContentPath(vaultPath, vaultCfg, literalPath); validation != nil {
+			return *validation
+		}
+	}
+
 	resolved, err := readsvc.ResolveReference(reference, rt, false)
 	if err != nil {
 		return mapResolveFailure(err, reference)

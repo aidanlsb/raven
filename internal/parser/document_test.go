@@ -882,7 +882,7 @@ func TestParseDocumentKeepsExternalMarkdownAndNormalizesMarkdownEscapes(t *testi
 		t.Fatalf("ParseDocument: %v", err)
 	}
 	if len(doc.Links) != 5 {
-		t.Fatalf("links = %#v, want external markdown and four asset edges", doc.Links)
+		t.Fatalf("links = %#v, want external markdown and four file edges", doc.Links)
 	}
 
 	external := doc.Links[0]

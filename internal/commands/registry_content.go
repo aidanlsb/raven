@@ -197,8 +197,8 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 	},
 	"delete": {
 		Name:        "delete",
-		Description: "Delete an object or asset from the vault",
-		LongDesc: `Delete a file-backed object or asset from the vault.
+		Description: "Delete an object or file from the vault",
+		LongDesc: `Delete a file-backed object or an explicit non-Markdown file path from the vault.
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'rm'.
 Using 'rm' directly will NOT warn about backlinks (other files that reference this one),
@@ -208,7 +208,8 @@ potentially creating broken links throughout the vault. The raven_delete command
 - Updates the index properly
 
 By default, files are moved to a trash directory (.trash/).
-Warns about backlinks (objects that reference the deleted object or asset).
+Warns about backlinks to Raven objects. File-link integrity is reported by
+broken_file_link in 'rvn check'.
 
 Single-file delete:
 Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
@@ -217,15 +218,15 @@ show a confirmation prompt unless --force is set. Only call delete after user in
 is clear; when unsure, inspect the object and run backlinks first.
 
 Bulk operations:
-Use --stdin to read object or asset references from stdin (one per line).
+Use --stdin to read object references or explicit file paths from stdin (one per line).
 IMPORTANT:
 - Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
-			{Name: "reference", Description: "Object or asset reference to delete (e.g., people/freya or assets/pdfs/paper.pdf)", Required: false},
+			{Name: "reference", Description: "Object reference or explicit non-Markdown file path to delete", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompt", Type: FlagTypeBool},
-			{Name: "stdin", Description: "Read object or asset references from stdin (one per line)", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read object references or file paths from stdin (one per line)", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk delete (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 			{Name: "dry-run", Description: "Preview a single-file delete without applying it", Type: FlagTypeBool},
 		},
@@ -233,20 +234,19 @@ IMPORTANT:
 		Examples: []string{
 			"rvn delete people/freya --json",
 			"rvn delete people/freya --dry-run --json",
-			"rvn delete assets/pdfs/paper.pdf --dry-run --json",
-			`rvn query "asset .extension==png" --ids | rvn delete --stdin --confirm --json`,
+			"rvn delete files/paper.pdf --dry-run --json",
 			"rvn delete projects/old --force",
 		},
 		UseCases: []string{
 			"Delete a file safely (NEVER use 'rm' shell command)",
-			"Remove objects or assets while checking for broken links",
+			"Remove objects with backlink warnings",
 			"Move files to trash with backlink warnings",
 		},
 	},
 	"move": {
 		Name:        "move",
-		Description: "Move or rename an object or asset within the vault",
-		LongDesc: `Move or rename a file/object or asset within the vault.
+		Description: "Move or rename an object or file within the vault",
+		LongDesc: `Move or rename a file or object within the vault.
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
 Using 'mv' directly will NOT update references to the file, causing broken links
@@ -260,7 +260,7 @@ This command:
 - Validates paths are within the vault
 - Updates all references and normalized-key-matched file links to the moved file
   (--update-refs, default: true)
-- Preserves non-Markdown asset filenames/extensions when moving assets
+- Preserves non-Markdown filenames and extensions
 - Warns if moving to a type's default directory with mismatched type
 - Creates destination directories if needed
 
@@ -283,7 +283,7 @@ Use --stdin to read object IDs from stdin (one per line).
 Destination must be a directory (ending with /).
 IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
-			{Name: "source", Description: "Source object reference or asset path (e.g., inbox/note.md, people/loki, assets/pdfs/file.pdf); section IDs are rejected", Required: false},
+			{Name: "source", Description: "Source object reference or explicit non-Markdown file path; section IDs are rejected", Required: false},
 			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/projects/)", Required: false},
 		},
 		Flags: []FlagMeta{
@@ -299,7 +299,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"rvn move people/loki people/loki-archived --dry-run --json",
 			"rvn move inbox/task.md projects/website/task.md --json",
 			"rvn move drafts/person.md people/freya.md --update-refs --json",
-			"rvn move assets/pdfs/paper.pdf assets/pdfs/archive/paper.pdf --json",
+			"rvn move files/paper.pdf files/archive/paper.pdf --json",
 		},
 		UseCases: []string{
 			"Rename a file in place (NEVER use 'mv' shell command)",

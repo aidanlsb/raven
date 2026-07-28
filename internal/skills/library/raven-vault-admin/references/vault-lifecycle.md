@@ -65,9 +65,9 @@ rvn vault config show --json
 rvn vault config auto-reindex set --value=false --json
 rvn vault config auto-reindex unset --json
 
-# Directory layout, including assets
+# Directory layout
 rvn vault config directories get --json
-rvn vault config directories set --daily journal --type types --template templates --assets assets --json
+rvn vault config directories set --daily journal --type types --template templates --json
 rvn vault config directories unset --template --json
 
 # Capture destination
@@ -90,7 +90,8 @@ rvn vault config exclude add '.cursor/' --json
 rvn vault config exclude remove '.cursor/' --json
 ```
 
-After changing directories, assets, or exclude patterns, run `rvn reindex --json` and `rvn check --json`.
+After changing directories or exclude patterns, run `rvn reindex --json` and
+`rvn check --json`.
 
 ## Safe removal sequence
 

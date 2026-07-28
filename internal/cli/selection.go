@@ -87,11 +87,10 @@ func (selector) vaultFile(vaultPath string, vaultCfg *config.VaultConfig, prompt
 	return strings.TrimSpace(selected.Item.ID), true, nil
 }
 
-// referenceCandidate opens a picker over indexed reference targets (objects,
-// sections, and optionally assets) and returns the selected reference. ok is
-// false when the user cancels.
-func (selector) referenceCandidate(vaultPath string, vaultCfg *config.VaultConfig, prompt, title string, opts interactiveReferencePickerOptions) (string, bool, error) {
-	items, err := indexedReferenceTargetItems(vaultPath, vaultCfg, opts)
+// referenceCandidate opens a picker over indexed objects and sections and
+// returns the selected reference. ok is false when the user cancels.
+func (selector) referenceCandidate(vaultPath string, vaultCfg *config.VaultConfig, prompt, title string) (string, bool, error) {
+	items, err := indexedReferenceTargetItems(vaultPath, vaultCfg)
 	if err != nil {
 		return "", false, err
 	}

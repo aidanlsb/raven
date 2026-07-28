@@ -37,7 +37,6 @@ type MoveFileRequest struct {
 	VaultConfig        *config.VaultConfig
 	Schema             *schema.Schema
 	ParseOptions       *parser.ParseOptions
-	IsAsset            bool
 	Runtime            *vaultruntime.Runtime
 }
 
@@ -60,12 +59,6 @@ type linkUpdatePlan struct {
 	filePath       string
 	link           model.Link
 	replacement    string
-}
-
-type legacyDirectLinkKey struct {
-	filePath string
-	line     int
-	target   string
 }
 
 type fileSnapshot struct {
@@ -126,7 +119,9 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	var refPlans []refUpdatePlan
 	var linkPlans []linkUpdatePlan
 	if req.UpdateRefs && db != nil {
-		refPlans, result.WarningMessages = prepareRefUpdatePlans(db, req, objectRoot, pageRoot, dailyDir, result.WarningMessages)
+		if paths.HasMDExtension(req.SourceFile) {
+			refPlans, result.WarningMessages = prepareRefUpdatePlans(db, req, objectRoot, pageRoot, dailyDir, result.WarningMessages)
+		}
 		linkPlans, result.WarningMessages = prepareLinkUpdatePlans(db, req, result.WarningMessages)
 	}
 
@@ -253,7 +248,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, linkPla
 
 	for _, refPlan := range refPlans {
 		if movedDocumentSource(refPlan.applySourceID, req.DestinationObject) {
-			updated := applyNonMarkdownRefVariantsAtLine(destCurrent, refPlan.line, req.SourceObjectID, refPlan.oldBase, refPlan.replacement, objectRoot, pageRoot)
+			updated := ApplyAllRefVariantsAtLine(destCurrent, refPlan.line, req.SourceObjectID, refPlan.oldBase, refPlan.replacement, objectRoot, pageRoot)
 			if updated == destCurrent {
 				continue
 			}
@@ -280,7 +275,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, linkPla
 			existing = rewrite
 		}
 
-		updated := applyNonMarkdownRefVariantsAtLine(string(existing.updatedContent), refPlan.line, req.SourceObjectID, refPlan.oldBase, refPlan.replacement, objectRoot, pageRoot)
+		updated := ApplyAllRefVariantsAtLine(string(existing.updatedContent), refPlan.line, req.SourceObjectID, refPlan.oldBase, refPlan.replacement, objectRoot, pageRoot)
 		if updated == string(existing.updatedContent) {
 			continue
 		}
@@ -522,38 +517,14 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 		return nil, append(warnings, fmt.Sprintf("Failed to read backlinks for move update: %v", err))
 	}
 
-	// Direct Markdown file links are duplicated in the legacy refs table while
-	// the asset entity remains. Exclude those rows here so only normalized_key
-	// identity controls file-link rewrites; wikilinks and field refs continue
-	// through the existing reference path.
-	directLinkCounts := make(map[legacyDirectLinkKey]int)
-	fileLinks, linksErr := db.FileLinks()
-	if linksErr != nil {
-		warnings = append(warnings, fmt.Sprintf("Failed to distinguish indexed file links from legacy asset refs: %v", linksErr))
-	} else {
-		for _, link := range fileLinks {
-			legacyTarget, ok := parser.NormalizeMarkdownDestination(linktarget.AuthoredFilePath(link.RawTarget))
-			if !ok {
-				continue
-			}
-			directLinkCounts[legacyDirectLinkKey{
-				filePath: link.FilePath,
-				line:     link.Line,
-				target:   legacyTarget,
-			}]++
-		}
-	}
-
 	aliases, err := db.AllAliases()
 	if err != nil {
 		return nil, append(warnings, fmt.Sprintf("Failed to read aliases for move update: %v", err))
 	}
 
-	resolverOpts := index.ResolverOptions{DailyDirectory: dailyDir}
-	if req.IsAsset {
-		resolverOpts.ExtraAssetIDs = []string{req.DestinationObject}
-	} else {
-		resolverOpts.ExtraIDs = []string{req.DestinationObject}
+	resolverOpts := index.ResolverOptions{
+		DailyDirectory: dailyDir,
+		ExtraIDs:       []string{req.DestinationObject},
 	}
 	res, err := db.Resolver(resolverOpts)
 	if err != nil {
@@ -567,18 +538,6 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 
 	plans := make([]refUpdatePlan, 0, len(backlinks))
 	for _, bl := range backlinks {
-		if bl.Line != nil {
-			key := legacyDirectLinkKey{
-				filePath: bl.FilePath,
-				line:     *bl.Line,
-				target:   bl.TargetRaw,
-			}
-			if directLinkCounts[key] > 0 {
-				directLinkCounts[key]--
-				continue
-			}
-		}
-
 		base := refBaseFromTargetRaw(bl.TargetRaw)
 		if base == "" {
 			continue

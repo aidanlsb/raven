@@ -15,7 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Corrected MCP docs, embedded agent guides, and packaged skills for explicit post-`init` vault targeting, canonical hyphenated flag names, bulk argument arrays and retry details, and the body-only `add` contract.
-- Corrected user docs for import mapping-file keys, core-type template placement, bulk reclassification, stale active-vault failures, managed asset imports, and bare daily-note IDs.
+- Corrected user docs for import mapping-file keys, core-type template placement, bulk reclassification, stale active-vault failures, and bare daily-note IDs.
+
+### Removed
+- **Breaking:** Removed the first-class asset entity, including the `asset` query root, `rvn asset import`, file identities in the Raven reference resolver, asset check issue types, and the asset index schema. Use the link model for file links and copy non-Markdown files into the vault directly; reindex to upgrade, with nothing to migrate.
 
 ## [v0.0.32] - 2026-07-25
 

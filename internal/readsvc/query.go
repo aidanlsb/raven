@@ -25,7 +25,6 @@ type ExecuteQueryResult struct {
 	IDs       []string
 	Objects   []model.Object
 	Traits    []model.Trait
-	Assets    []model.Asset
 	Sections  []model.Section
 	Links     []model.Link
 }
@@ -98,7 +97,6 @@ func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, er
 		IDs:       runResult.IDs,
 		Objects:   runResult.Objects,
 		Traits:    runResult.Traits,
-		Assets:    runResult.Assets,
 		Sections:  runResult.Sections,
 		Links:     runResult.Links,
 	}, nil
@@ -108,8 +106,6 @@ func queryKindString(t query.QueryType) string {
 	switch t {
 	case query.QueryTypeObject:
 		return "type"
-	case query.QueryTypeAsset:
-		return "asset"
 	case query.QueryTypeSection:
 		return "section"
 	case query.QueryTypeLink:

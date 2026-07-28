@@ -7,12 +7,6 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-// IsAssetQueryRoot reports whether a query string targets the asset root.
-func IsAssetQueryRoot(queryString string) bool {
-	trimmed := strings.TrimSpace(queryString)
-	return trimmed == "asset" || strings.HasPrefix(trimmed, "asset ")
-}
-
 // IsSectionQueryRoot reports whether a query string targets the section root.
 func IsSectionQueryRoot(queryString string) bool {
 	trimmed := strings.TrimSpace(queryString)
@@ -26,12 +20,11 @@ func IsLinkQueryRoot(queryString string) bool {
 }
 
 // IsFullQueryRoot reports whether a query string already starts with a concrete
-// query root (type:, trait:, section, asset, or link) rather than a saved-query name.
+// query root (type:, trait:, section, or link) rather than a saved-query name.
 func IsFullQueryRoot(queryString string) bool {
 	trimmed := strings.TrimSpace(queryString)
 	return strings.HasPrefix(trimmed, "type:") ||
 		strings.HasPrefix(trimmed, "trait:") ||
-		IsAssetQueryRoot(trimmed) ||
 		IsSectionQueryRoot(trimmed) ||
 		IsLinkQueryRoot(trimmed)
 }
@@ -49,7 +42,7 @@ func MatchInvocation(vaultCfg *config.VaultConfig, rawQueryString string) (name 
 	}
 
 	trimmed := strings.TrimSpace(rawQueryString)
-	if trimmed == "" || IsAssetQueryRoot(trimmed) || IsSectionQueryRoot(trimmed) || IsLinkQueryRoot(trimmed) {
+	if trimmed == "" || IsSectionQueryRoot(trimmed) || IsLinkQueryRoot(trimmed) {
 		return "", nil, nil, false
 	}
 

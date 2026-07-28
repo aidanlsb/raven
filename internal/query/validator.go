@@ -28,7 +28,7 @@ func (e *ValidationError) Error() string {
 //
 //   - Structural validation is always performed, even when no schema is
 //     available: the root/predicate legality matrix (capabilities.go), trait
-//     ".value" restrictions, section/asset built-in field names, regex
+//     ".value" restrictions, section/link built-in field names, regex
 //     validity, and empty content terms. These depend only on the query shape.
 //   - Schema-dependent validation (unknown types/traits, unknown or wrongly
 //     typed object/trait fields) only runs when a schema is present.
@@ -61,8 +61,6 @@ func (v *Validator) validateQuery(q *Query) error {
 	switch q.Type {
 	case QueryTypeObject:
 		return v.validateObjectQuery(q)
-	case QueryTypeAsset:
-		return v.validateAssetQuery(q)
 	case QueryTypeSection:
 		return v.validateSectionQuery(q)
 	case QueryTypeLink:
@@ -103,10 +101,6 @@ func (v *Validator) validateTraitQuery(q *Query) error {
 	}
 
 	return v.validatePredicate(QueryTypeTrait, q.TypeName, nil, q.Predicate)
-}
-
-func (v *Validator) validateAssetQuery(q *Query) error {
-	return v.validatePredicate(QueryTypeAsset, "", nil, q.Predicate)
 }
 
 func (v *Validator) validateSectionQuery(q *Query) error {
@@ -155,8 +149,6 @@ func (v *Validator) validatePredicate(root QueryType, typeName string, typeDef *
 		return v.validateLegalObjectPredicate(typeName, typeDef, pred)
 	case QueryTypeTrait:
 		return v.validateLegalTraitPredicate(typeName, pred)
-	case QueryTypeAsset:
-		return v.validateLegalAssetPredicate(pred)
 	case QueryTypeSection:
 		return v.validateLegalSectionPredicate(pred)
 	case QueryTypeLink:
@@ -260,18 +252,6 @@ func (v *Validator) validateLegalTraitPredicate(traitName string, pred Predicate
 	return nil
 }
 
-func (v *Validator) validateLegalAssetPredicate(pred Predicate) error {
-	switch p := pred.(type) {
-	case *FieldPredicate:
-		return v.validateAssetFieldPredicate(p)
-	case *StringFuncPredicate:
-		return v.validateAssetStringFuncPredicate(p)
-	case *RefdPredicate:
-		return v.validateSubquery(p.SubQuery)
-	}
-	return nil
-}
-
 func (v *Validator) validateLegalSectionPredicate(pred Predicate) error {
 	switch p := pred.(type) {
 	case *FieldPredicate:
@@ -367,39 +347,6 @@ func (v *Validator) validateFieldPredicate(p *FieldPredicate, typeName string, t
 	}
 	_, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
 	return err
-}
-
-func (v *Validator) validateAssetFieldPredicate(p *FieldPredicate) error {
-	if _, ok := assetFieldTypes[p.Field]; !ok {
-		return &ValidationError{
-			Message:    fmt.Sprintf("asset has no field '%s'", p.Field),
-			Suggestion: fmt.Sprintf("Available asset fields: %s", strings.Join(availableAssetFields(), ", ")),
-		}
-	}
-	return nil
-}
-
-func (v *Validator) validateAssetStringFuncPredicate(p *StringFuncPredicate) error {
-	if p.IsElementRef {
-		return &ValidationError{
-			Message:    "string function placeholder '_' is not valid for asset queries",
-			Suggestion: `Use includes(.filename, "..."), startswith(.file_path, "..."), or startswith(.media_type, "...")`,
-		}
-	}
-	fieldType, ok := assetFieldTypes[p.Field]
-	if !ok {
-		return &ValidationError{
-			Message:    fmt.Sprintf("asset has no field '%s'", p.Field),
-			Suggestion: fmt.Sprintf("Available asset fields: %s", strings.Join(availableAssetFields(), ", ")),
-		}
-	}
-	if fieldType != schema.FieldTypeString {
-		return &ValidationError{
-			Message:    fmt.Sprintf("string function predicates are not valid for asset field '.%s' of type %s", p.Field, fieldType),
-			Suggestion: "Use comparison predicates for non-string asset fields",
-		}
-	}
-	return validateRegexPattern(p)
 }
 
 func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, typeName string, typeDef *schema.TypeDefinition) error {

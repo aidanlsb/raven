@@ -4,8 +4,6 @@
 //
 //   - wikilink display text and section fragments ([[target#frag|Display]])
 //   - inline code spans and fenced code blocks (never rewritten)
-//   - markdown link/image destinations with titles, angle brackets, and
-//     fragment/query suffixes
 //   - quoted YAML frontmatter values, inline flow arrays, and block sequences
 //
 // The YAML frontmatter region is located with parser.FrontmatterBounds rather
@@ -13,8 +11,8 @@
 // paths.ParseSectionID.
 //
 // Callers supply a Decider that maps a matched reference base to its
-// replacement base. Fragments (wikilink #frag, markdown #frag/?query) and
-// display text/titles are preserved automatically by the rewriter, so a
+// replacement base. Wikilink fragments and display text are preserved
+// automatically by the rewriter, so a
 // Decider only needs to answer "given this base target, what is the new base?".
 package refs
 
@@ -33,8 +31,6 @@ type Kind int
 const (
 	// KindWikilink is a [[target]] reference in the body or frontmatter.
 	KindWikilink Kind = iota
-	// KindMarkdownLink is a markdown [text](dest) or ![alt](dest) destination.
-	KindMarkdownLink
 	// KindFrontmatter is a bare/quoted YAML frontmatter scalar or sequence value.
 	KindFrontmatter
 )
@@ -54,14 +50,6 @@ type Occurrence struct {
 // fragment and preserves display text / link titles, so a Decider must return
 // only the new base (without a fragment).
 type Decider func(occ Occurrence) (newBase string, ok bool)
-
-// markdownLinkRe matches an inline markdown link/image destination:
-//
-//	](dest)            ](<dest>)            ](dest "title")            ](dest 'title')
-//
-// Group 1 captures the destination token (either <...> or a run without spaces
-// or a closing paren). Group 2 captures an optional title plus trailing space.
-var markdownLinkRe = regexp.MustCompile(`\]\(\s*(<[^>]*>|[^)\s]+)((?:\s+"[^"]*"|\s+'[^']*')?\s*)\)`)
 
 // Frontmatter mapping/sequence value matchers. These capture the value region
 // only; matching against reference targets happens in Go (not the regex), so
@@ -154,12 +142,7 @@ type span struct {
 // body line, skipping inline code spans.
 func rewriteBodyLine(line string, decide Decider) (string, bool) {
 	masked := parser.RemoveInlineCode(line)
-
-	var edits []span
-	edits = append(edits, wikilinkSpans(line, masked, decide)...)
-	edits = append(edits, markdownLinkSpans(line, masked, decide)...)
-
-	return applySpans(line, edits)
+	return applySpans(line, wikilinkSpans(line, masked, decide))
 }
 
 // rewriteWikilinksOnLine rewrites only wikilink references on a line, skipping
@@ -200,53 +183,6 @@ func wikilinkSpans(line, masked string, decide Decider) []span {
 			end:   m.End,
 			repl:  buildWikilink(newBase, fragment, isSection, display),
 		})
-	}
-	return edits
-}
-
-// markdownLinkSpans collects replacement spans for markdown link/image
-// destinations. Only the path portion of the destination is replaced; angle
-// brackets, fragment/query suffixes, and titles are preserved.
-func markdownLinkSpans(line, masked string, decide Decider) []span {
-	locs := markdownLinkRe.FindAllStringSubmatchIndex(masked, -1)
-	if len(locs) == 0 {
-		return nil
-	}
-
-	var edits []span
-	for _, loc := range locs {
-		destStart, destEnd := loc[2], loc[3]
-		if destStart < 0 || destEnd < 0 {
-			continue
-		}
-
-		pathStart, pathTokEnd := destStart, destEnd
-		if destEnd-destStart >= 2 && line[destStart] == '<' && line[destEnd-1] == '>' {
-			pathStart = destStart + 1
-			pathTokEnd = destEnd - 1
-		}
-
-		pathEnd := pathTokEnd
-		for k := pathStart; k < pathTokEnd; k++ {
-			if line[k] == '#' || line[k] == '?' {
-				pathEnd = k
-				break
-			}
-		}
-		if pathEnd <= pathStart {
-			continue
-		}
-
-		rawPath := line[pathStart:pathEnd]
-		normalized, ok := parser.NormalizeMarkdownDestination(rawPath)
-		if !ok {
-			continue
-		}
-		newBase, replace := decide(Occurrence{Kind: KindMarkdownLink, Base: normalized})
-		if !replace {
-			continue
-		}
-		edits = append(edits, span{start: pathStart, end: pathEnd, repl: newBase})
 	}
 	return edits
 }

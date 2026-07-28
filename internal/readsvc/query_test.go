@@ -194,52 +194,6 @@ func TestExecuteQuery_TraitModes(t *testing.T) {
 	}
 }
 
-func TestExecuteQuery_AssetModes(t *testing.T) {
-	t.Parallel()
-	rt := seededRuntime(t)
-
-	result, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "asset"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.QueryKind != "asset" {
-		t.Fatalf("unexpected query kind: %#v", result)
-	}
-	if result.Total != 2 || len(result.Assets) != 2 || result.Returned != 2 {
-		t.Fatalf("unexpected asset results: %#v", result)
-	}
-
-	idsOnly, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "asset", IDsOnly: true, Limit: 1})
-	if err != nil {
-		t.Fatalf("unexpected IDsOnly error: %v", err)
-	}
-	if len(idsOnly.IDs) != 1 || idsOnly.Returned != 1 || idsOnly.Total != 2 {
-		t.Fatalf("unexpected asset IDsOnly result: %#v", idsOnly)
-	}
-	if len(idsOnly.Assets) != 0 {
-		t.Fatalf("ids-only should not include rows: %#v", idsOnly)
-	}
-
-	countOnly, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "asset", CountOnly: true})
-	if err != nil {
-		t.Fatalf("unexpected CountOnly error: %v", err)
-	}
-	if countOnly.Total != 2 || countOnly.Returned != 0 || len(countOnly.Assets) != 0 {
-		t.Fatalf("unexpected asset CountOnly result: %#v", countOnly)
-	}
-
-	paged, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "asset", Limit: 1, Offset: 1})
-	if err != nil {
-		t.Fatalf("unexpected paged asset query error: %v", err)
-	}
-	if paged.Total != 2 || paged.Returned != 1 || len(paged.Assets) != 1 {
-		t.Fatalf("unexpected paged asset result: %#v", paged)
-	}
-	if paged.Assets[0].ID != "assets/paper.pdf" {
-		t.Fatalf("unexpected paged asset ID: %#v", paged.Assets[0])
-	}
-}
-
 func TestExecuteQuery_SectionModes(t *testing.T) {
 	t.Parallel()
 	rt := seededRuntime(t)
@@ -343,16 +297,6 @@ func TestExecuteQuery_StructuralValidationWithoutSchema(t *testing.T) {
 			name:    "in on object root",
 			query:   "type:project in(type:project)",
 			wantMsg: "in() predicate is only valid for trait and section queries",
-		},
-		{
-			name:    "content on asset root",
-			query:   `asset content("diagram")`,
-			wantMsg: "content() predicate is not valid for asset queries",
-		},
-		{
-			name:    "unknown asset field",
-			query:   "asset .bogus==1",
-			wantMsg: "asset has no field 'bogus'",
 		},
 		{
 			name:    "refd on trait root",
@@ -467,15 +411,6 @@ func seededRuntime(t *testing.T) *Runtime {
 	`)
 	if err != nil {
 		t.Fatalf("failed to seed traits: %v", err)
-	}
-
-	_, err = db.DB().Exec(`
-		INSERT INTO assets (id, file_path, media_type, extension, filename, size_bytes) VALUES
-			('assets/diagram.png', 'assets/diagram.png', 'image/png', 'png', 'diagram.png', 2048),
-			('assets/paper.pdf', 'assets/paper.pdf', 'application/pdf', 'pdf', 'paper.pdf', 4096)
-	`)
-	if err != nil {
-		t.Fatalf("failed to seed assets: %v", err)
 	}
 
 	_, err = db.DB().Exec(`

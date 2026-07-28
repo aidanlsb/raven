@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// entitySQLSpec captures everything that differs between the five query roots
-// (object/trait/asset/section/link) when generating page/id/count SQL. Everything
+// entitySQLSpec captures everything that differs between the four query roots
+// (object/trait/section/link) when generating page/id/count SQL. Everything
 // else — the WHERE-clause assembly, LIMIT/OFFSET handling, row execution, and
 // COUNT execution — is shared, so adding or changing a root is a single-spec
 // edit rather than a copy-paste across a dozen functions.
@@ -22,7 +22,7 @@ type entitySQLSpec struct {
 	idColumn   string
 	orderBy    string
 	// typeColumn is the discriminator column (e.g. "o.type"). Empty for roots
-	// that have no discriminator (assets, sections), which use a "1=1" base.
+	// that have no discriminator (sections, links), which use a "1=1" base.
 	typeColumn string
 }
 
@@ -44,16 +44,6 @@ var (
 		idColumn:   "t.id",
 		orderBy:    "t.file_path, t.line_number",
 		typeColumn: "t.trait_type",
-	}
-	assetSpec = entitySQLSpec{
-		queryType: QueryTypeAsset,
-		table:     "assets",
-		alias:     "a",
-		rowColumns: "a.id, a.file_path, COALESCE(a.media_type, ''), COALESCE(a.extension, ''), " +
-			"a.filename, a.size_bytes, COALESCE(a.file_mtime, 0), COALESCE(a.indexed_at, 0)",
-		idColumn:   "a.id",
-		orderBy:    "a.file_path",
-		typeColumn: "",
 	}
 	sectionSpec = entitySQLSpec{
 		queryType:  QueryTypeSection,
@@ -84,8 +74,6 @@ func specForQueryType(t QueryType) (entitySQLSpec, error) {
 		return objectSpec, nil
 	case QueryTypeTrait:
 		return traitSpec, nil
-	case QueryTypeAsset:
-		return assetSpec, nil
 	case QueryTypeSection:
 		return sectionSpec, nil
 	case QueryTypeLink:
@@ -101,8 +89,6 @@ func queryTypeName(t QueryType) string {
 		return "type"
 	case QueryTypeTrait:
 		return "trait"
-	case QueryTypeAsset:
-		return "asset"
 	case QueryTypeSection:
 		return "section"
 	case QueryTypeLink:

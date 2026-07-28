@@ -46,18 +46,26 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 		return nil, nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 	if strings.TrimSpace(req.Reference) == "" {
-		return nil, nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn delete <object-or-asset-id>", nil, nil)
+		return nil, nil, newError(ErrorInvalidInput, "reference or file path is required", "Usage: rvn delete <reference-or-file-path>", nil, nil)
 	}
 
-	resolved, err := resolveReferenceForMutation(req.Runtime, req.Reference)
+	filePath, relPath, isFile, err := resolveLiteralNonMarkdownFileForMutation(req.Runtime, req.Reference)
 	if err != nil {
 		return nil, nil, err
 	}
-	if resolved.IsSection {
-		return nil, nil, newError(ErrorInvalidInput, "delete only supports file-level objects and assets", "Use a file-level object or asset ID without a section fragment", nil, nil)
+	var target *deleteTarget
+	if isFile {
+		target, err = deleteTargetFromFilePath(req.VaultPath, req.VaultConfig, filePath, relPath)
+	} else {
+		resolved, resolveErr := resolveReferenceForMutation(req.Runtime, req.Reference)
+		if resolveErr != nil {
+			return nil, nil, resolveErr
+		}
+		if resolved.IsSection {
+			return nil, nil, newError(ErrorInvalidInput, "delete only supports file-level objects", "Use a file-level object ID without a section fragment", nil, nil)
+		}
+		target, err = deleteTargetFromFilePath(req.VaultPath, req.VaultConfig, resolved.FilePath, resolved.ObjectID)
 	}
-
-	target, err := deleteTargetFromFilePath(req.VaultPath, req.VaultConfig, resolved.FilePath, resolved.ObjectID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -66,9 +74,12 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 		return nil, nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
 	}
 
-	backlinks, err := req.Runtime.DB.Backlinks(target.ObjectID)
-	if err != nil {
-		return nil, nil, newError(ErrorDatabase, "failed to read backlinks", "Run 'rvn reindex' to rebuild the database", nil, err)
+	var backlinks []model.Reference
+	if target.RavenObject {
+		backlinks, err = req.Runtime.DB.Backlinks(target.ObjectID)
+		if err != nil {
+			return nil, nil, newError(ErrorDatabase, "failed to read backlinks", "Run 'rvn reindex' to rebuild the database", nil, err)
+		}
 	}
 
 	return &DeleteByReferenceResult{

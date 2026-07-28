@@ -111,7 +111,6 @@ func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
 		fmt.Printf("%s %s\n", ui.Hint("page:"), v)
 	}
 	fmt.Printf("%s %s\n", ui.Hint("template:"), stringValue(directories["template"]))
-	fmt.Printf("%s %s\n", ui.Hint("assets:"), stringValue(directories["assets"]))
 
 	capture, _ := data["capture"].(map[string]interface{})
 	fmt.Println(ui.SectionHeader("capture"))
@@ -248,7 +247,6 @@ func renderVaultConfigDirectoriesGet(_ *cobra.Command, result commandexec.Result
 		fmt.Printf("%s %s\n", ui.Hint("page:"), v)
 	}
 	fmt.Printf("%s %s\n", ui.Hint("template:"), stringValue(data["template"]))
-	fmt.Printf("%s %s\n", ui.Hint("assets:"), stringValue(data["assets"]))
 	return nil
 }
 

@@ -388,15 +388,6 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 
 ```json
 {
-  "command": "vault_config_directories_set",
-  "args": {
-    "assets": "assets"
-  }
-}
-```
-
-```json
-{
   "command": "vault_config_capture_set",
   "args": {
     "destination": "inbox.md",
@@ -441,45 +432,29 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 }
 ```
 
-### Asset references
+### File links
 
-Use `asset_import` to copy or move an external non-Markdown file into the
-configured asset root. The source is an absolute or `~`-relative host path; the
-destination is vault-relative and must stay under `directories.assets`.
+Copy an external non-Markdown file into the vault with the host filesystem,
+then invoke `reindex`. Link to it with standard Markdown, not `[[...]]`.
 
 ```json
 {
-  "command": "asset_import",
+  "command": "query",
   "args": {
-    "source": "/tmp/paper.pdf",
-    "destination": "assets/pdfs/"
+    "query_string": "link .ext==pdf"
   }
 }
 ```
 
-The default mode is copy. Add `"move": true` to remove the source after the
-write and index handoff, `"force": true` to overwrite a collision, or
-`"dry-run": true` to preview.
-
-Use `backlinks` to find notes that reference a vault-local asset. Use `move`
-instead of shell `mv` for an asset already in the vault so Markdown links/images
-and wikilinks are rewritten.
-
-```json
-{
-  "command": "backlinks",
-  "args": {
-    "reference": "assets/pdfs/paper.pdf"
-  }
-}
-```
+Use `move` for a file already inside the vault so inbound Markdown file links
+are rewritten:
 
 ```json
 {
   "command": "move",
   "args": {
-    "source": "assets/downloads/paper.pdf",
-    "destination": "assets/pdfs/paper.pdf"
+    "source": "files/downloads/paper.pdf",
+    "destination": "files/paper.pdf"
   }
 }
 ```
@@ -533,7 +508,7 @@ Create the heading explicitly, then append body content to the returned section:
 
 ### Preview/apply flow
 
-Single-object writes (`asset_import`, `set`, `add`, `update`, `edit`,
+Single-object writes (`set`, `add`, `update`, `edit`,
 `section_create`, `section_move`, `section_rename`, `reclassify`, and
 single-object `delete`/`move`) apply immediately. The call below writes on the
 first invocation:
@@ -608,8 +583,8 @@ write it delegates to.
 3. Use raw `read` ranges before building string replacements for `edit`.
 4. Use `edit` only for content markdown files; use dedicated commands for `raven.yaml`, `schema.yaml`, and templates.
 5. Single-object writes apply immediately (`dry-run` to preview); bulk and query-driven mutations stay preview-first and need `confirm`. Read `meta.mutation.phase` (`applied`/`preview`) to confirm whether a write happened.
-6. Use `asset_import` for external assets and `move` for in-vault asset relocation so references and the asset index stay correct.
-7. Reindex after schema-level structural changes or out-of-band asset file changes when required.
+6. Copy external non-Markdown files into the vault directly; use `move` for in-vault relocation so file links are rewritten.
+7. Reindex after schema-level structural changes or out-of-band file changes when required.
 8. Treat `raven_describe` as the authority for argument shape.
 
 ## Related Resources
@@ -624,5 +599,5 @@ write it delegates to.
 
 - `querying/query-language.md` — RQL syntax for `query` commands
 - `vault-management/bulk-operations.md` — `--apply` and `--ids` patterns for bulk changes
-- `using-your-vault/assets.md` — asset organization, linking, and checks
+- `using-your-vault/file-links.md` — file-link indexing, checks, and moves
 - `using-your-vault/common-commands.md` — full command surface (read, search, edit, check, etc.)

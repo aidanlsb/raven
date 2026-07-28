@@ -112,73 +112,17 @@ func TestRewriteContentSkipsFencedCodeBlocks(t *testing.T) {
 	}
 }
 
-func TestRewriteContentMarkdownLinks(t *testing.T) {
+func TestRewriteContentLeavesMarkdownLinksUntouched(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name    string
-		content string
-		mapping map[string]string
-		want    string
-	}{
-		{
-			name:    "basic destination",
-			content: "Read [paper](assets/pdfs/paper.pdf).",
-			mapping: map[string]string{"assets/pdfs/paper.pdf": "assets/archive/paper.pdf"},
-			want:    "Read [paper](assets/archive/paper.pdf).",
-		},
-		{
-			name:    "title preserved",
-			content: `Read [paper](assets/pdfs/paper.pdf "My Paper").`,
-			mapping: map[string]string{"assets/pdfs/paper.pdf": "assets/archive/paper.pdf"},
-			want:    `Read [paper](assets/archive/paper.pdf "My Paper").`,
-		},
-		{
-			name:    "angle brackets preserved",
-			content: "Read [paper](<assets/pdfs/paper.pdf>).",
-			mapping: map[string]string{"assets/pdfs/paper.pdf": "assets/archive/paper.pdf"},
-			want:    "Read [paper](<assets/archive/paper.pdf>).",
-		},
-		{
-			name:    "fragment suffix preserved",
-			content: "Read [paper](assets/pdfs/paper.pdf#page=2).",
-			mapping: map[string]string{"assets/pdfs/paper.pdf": "assets/archive/paper.pdf"},
-			want:    "Read [paper](assets/archive/paper.pdf#page=2).",
-		},
-		{
-			name:    "image destination",
-			content: "![diagram](assets/img/a.png)",
-			mapping: map[string]string{"assets/img/a.png": "assets/archive/a.png"},
-			want:    "![diagram](assets/archive/a.png)",
-		},
-		{
-			name:    "inline code span is not rewritten",
-			content: "`[paper](assets/pdfs/paper.pdf)` [paper](assets/pdfs/paper.pdf)",
-			mapping: map[string]string{"assets/pdfs/paper.pdf": "assets/archive/paper.pdf"},
-			want:    "`[paper](assets/pdfs/paper.pdf)` [paper](assets/archive/paper.pdf)",
-		},
-		{
-			name:    "external url untouched",
-			content: "See [site](https://example.com/paper.pdf).",
-			mapping: map[string]string{"assets/pdfs/paper.pdf": "assets/archive/paper.pdf"},
-			want:    "See [site](https://example.com/paper.pdf).",
-		},
-		{
-			name:    "markdown link to md target untouched",
-			content: "See [note](notes/other.md).",
-			mapping: map[string]string{"notes/other": "notes/renamed"},
-			want:    "See [note](notes/other.md).",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got, _ := RewriteContent(tt.content, mapDecider(tt.mapping))
-			if got != tt.want {
-				t.Fatalf("RewriteContent() = %q, want %q", got, tt.want)
-			}
-		})
+	content := "Read [paper](files/paper.pdf) and [[notes/old]]."
+	got, changed := RewriteContent(content, mapDecider(map[string]string{
+		"files/paper.pdf": "files/archive/paper.pdf",
+		"notes/old":       "notes/new",
+	}))
+	want := "Read [paper](files/paper.pdf) and [[notes/new]]."
+	if !changed || got != want {
+		t.Fatalf("RewriteContent() = %q, changed=%v, want %q", got, changed, want)
 	}
 }
 

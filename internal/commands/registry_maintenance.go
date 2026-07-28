@@ -15,8 +15,8 @@ By default, performs an incremental reindex that only processes files that have
 changed since the last index. Deleted files are automatically detected and
 removed from the index.
 
-Reindex also discovers non-Markdown assets under the configured asset root and
-resolves Markdown links/images to those assets.
+Non-Markdown files are not indexed as entities. Markdown file and URL targets
+are represented by the link edge index.
 
 Paths matched by raven.yaml exclude patterns are skipped and removed from the
 index during incremental reindexing.
@@ -54,7 +54,7 @@ on-disk index.`,
 		LongDesc: `Validates managed files in the vault against the schema.
 
 Returns structured issues with:
-- issue_type: unknown_type, missing_reference, broken_file_link, missing_asset, orphaned_asset, directory_type_mismatch, undefined_trait, unknown_frontmatter_key, etc.
+- issue_type: unknown_type, missing_reference, broken_file_link, directory_type_mismatch, undefined_trait, unknown_frontmatter_key, etc.
 - fix_command: Suggested CLI command to fix the issue
 - fix_hint: Human-readable explanation of how to fix
 
@@ -118,8 +118,7 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 Preview is default; use --confirm to apply.
 
 Auto-fixable issue types include:
-- short_ref_could_be_full_path: rewrite short refs to canonical object IDs or
-  full asset paths
+- short_ref_could_be_full_path: rewrite short refs to canonical object IDs
 - invalid_enum_value: remove unnecessary quotes around enum trait values
 - non_canonical_ref: strip configured root prefix from wikilink targets
 - non_canonical_path: move file under the configured directory root for its type

@@ -27,16 +27,6 @@ func TestParseObjectQuery(t *testing.T) {
 			wantName: "due",
 		},
 		{
-			name:     "simple asset query",
-			input:    "asset",
-			wantType: QueryTypeAsset,
-		},
-		{
-			name:     "asset query with predicate",
-			input:    "asset .extension==pdf",
-			wantType: QueryTypeAsset,
-		},
-		{
 			name:     "simple link query",
 			input:    "link",
 			wantType: QueryTypeLink,
@@ -90,15 +80,12 @@ func TestParseRejectsLinkKind(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
-func TestParseRejectsAssetKind(t *testing.T) {
+func TestParseRejectsRemovedAssetRoot(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse("asset:pdf")
+	_, err := Parse("asset")
 	if err == nil {
 		t.Fatal("expected parse error, got nil")
-	}
-	if !strings.Contains(err.Error(), "asset query root is bare 'asset'") {
-		t.Fatalf("unexpected error: %v", err)
 	}
 }
 func TestParseRejectsLegacyObjectRoot(t *testing.T) {

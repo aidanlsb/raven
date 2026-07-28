@@ -6,7 +6,6 @@
 package parser
 
 import (
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -113,8 +112,6 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 				refs := extractRefsFromText(seg.text, line)
 				result.Refs = append(result.Refs, refs...)
 			}
-			result.Refs = append(result.Refs, extractMarkdownAssetRefs(processNode, content, lineStarts, startLine)...)
-
 			return ast.WalkSkipChildren, nil
 		}
 
@@ -163,30 +160,6 @@ func extractHeadingFromNode(heading *ast.Heading, content []byte, lineStarts []i
 // extractRefsFromText extracts wikilink references from a text segment.
 func extractRefsFromText(textStr string, line int) []Reference {
 	return extractRefsFromLine(textStr, line)
-}
-
-func extractMarkdownAssetRefs(node ast.Node, content []byte, lineStarts []int, startLine int) []Reference {
-	var refs []Reference
-	var walk func(ast.Node)
-	walk = func(n ast.Node) {
-		switch typed := n.(type) {
-		case *ast.Link:
-			if ref, ok := markdownLinkRef(typed, content, lineStarts, startLine); ok {
-				refs = append(refs, ref)
-			}
-		case *ast.Image:
-			if ref, ok := markdownImageRef(typed, content, lineStarts, startLine); ok {
-				refs = append(refs, ref)
-			}
-		case *ast.CodeSpan:
-			return
-		}
-		for child := n.FirstChild(); child != nil; child = child.NextSibling() {
-			walk(child)
-		}
-	}
-	walk(node)
-	return refs
 }
 
 func extractMarkdownLinks(node ast.Node, content []byte, lineStarts []int, startLine int) []MarkdownLink {
@@ -431,114 +404,6 @@ func skipMarkdownSpaces(content []byte, start int) int {
 		}
 	}
 	return start
-}
-
-func markdownLinkRef(link *ast.Link, content []byte, lineStarts []int, startLine int) (Reference, bool) {
-	target, ok := normalizeMarkdownAssetDestination(string(link.Destination))
-	if !ok {
-		return Reference{}, false
-	}
-	line, start := nodeLineStart(link, lineStarts, startLine)
-	display := collectInlineText(link, content)
-	return Reference{
-		TargetRaw:   target,
-		DisplayText: optionalDisplayText(display, target),
-		Line:        line,
-		Start:       start,
-		End:         start,
-	}, true
-}
-
-func markdownImageRef(image *ast.Image, content []byte, lineStarts []int, startLine int) (Reference, bool) {
-	target, ok := normalizeMarkdownAssetDestination(string(image.Destination))
-	if !ok {
-		return Reference{}, false
-	}
-	line, start := nodeLineStart(image, lineStarts, startLine)
-	display := collectInlineText(image, content)
-	return Reference{
-		TargetRaw:   target,
-		DisplayText: optionalDisplayText(display, target),
-		Line:        line,
-		Start:       start,
-		End:         start,
-	}, true
-}
-
-// NormalizeMarkdownDestination normalizes a markdown link/image destination to a
-// vault-relative asset path. It returns ok=false for destinations that are not
-// asset references (external URLs, mailto:, pure fragments, protocol-relative
-// URLs, markdown targets, or extensionless paths).
-//
-// This is the canonical normalization shared by ref extraction and ref
-// rewriting so both agree on which markdown destinations are asset references.
-func NormalizeMarkdownDestination(raw string) (string, bool) {
-	return normalizeMarkdownAssetDestination(raw)
-}
-
-func normalizeMarkdownAssetDestination(raw string) (string, bool) {
-	target := strings.TrimSpace(raw)
-	target = strings.TrimPrefix(target, "<")
-	target = strings.TrimSuffix(target, ">")
-	if target == "" || strings.HasPrefix(target, "#") || strings.HasPrefix(target, "//") {
-		return "", false
-	}
-	lower := strings.ToLower(target)
-	if strings.Contains(lower, "://") || strings.HasPrefix(lower, "mailto:") {
-		return "", false
-	}
-	if idx := strings.IndexAny(target, "?#"); idx >= 0 {
-		target = target[:idx]
-	}
-	target = strings.TrimSpace(target)
-	if target == "" {
-		return "", false
-	}
-	target = strings.TrimPrefix(target, "/")
-	target = strings.TrimPrefix(target, "./")
-	normalized := filepath.ToSlash(filepath.Clean(target))
-	normalized = strings.TrimPrefix(normalized, "./")
-	if normalized == "." || normalized == "" || normalized == ".." || strings.HasPrefix(normalized, "../") {
-		return "", false
-	}
-	if strings.HasSuffix(strings.ToLower(normalized), ".md") {
-		return "", false
-	}
-	if filepath.Ext(normalized) == "" {
-		return "", false
-	}
-	return normalized, true
-}
-
-func optionalDisplayText(display, target string) *string {
-	display = strings.TrimSpace(display)
-	if display == "" || display == target {
-		return nil
-	}
-	return &display
-}
-
-func nodeLineStart(node ast.Node, lineStarts []int, startLine int) (int, int) {
-	if offset, ok := firstTextOffset(node); ok {
-		return startLine + offsetToLine(lineStarts, offset), 0
-	}
-	if node.Lines().Len() > 0 {
-		offset := node.Lines().At(0).Start
-		return startLine + offsetToLine(lineStarts, offset), 0
-	}
-	return startLine, 0
-}
-
-func firstTextOffset(node ast.Node) (int, bool) {
-	if textNode, ok := node.(*ast.Text); ok {
-		return textNode.Segment.Start, true
-	}
-	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
-		if offset, ok := firstTextOffset(child); ok {
-			return offset, true
-		}
-	}
-	return 0, false
 }
 
 func collectInlineText(node ast.Node, content []byte) string {

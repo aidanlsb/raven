@@ -9,9 +9,9 @@
 
 | Use this | When you want |
 |----------|---------------|
-| `rvn query` | Structured filtering by type/section/trait/asset/link, field values, scope, and references |
+| `rvn query` | Structured filtering by type/section/trait/link, field values, scope, references, and outgoing links |
 | `rvn search` | Free-text discovery when you do not know the structure yet |
-| `rvn backlinks` | All incoming references to one specific object or asset |
+| `rvn backlinks` | All incoming references to one specific object or section |
 | `rvn outlinks` | All outgoing references from one specific target |
 | `rvn read` | Full file content after you already identified relevant objects |
 | `rvn resolve` | Map an accepted reference input to its canonical target ID (no content) |
@@ -35,35 +35,32 @@ Retrieval commands overlap. When several could work, this table picks the sharpe
 | `type:<type> ...` | Objects | Find file-backed objects by frontmatter fields and structural relationships |
 | `section ...` | Sections | Find Markdown heading sections by title, slug, file, line range, and scope |
 | `trait:<name> ...` | Trait instances | Find inline annotations (`@todo`, `@due`, etc.) and surrounding content|
-| `asset ...` | Assets | Find indexed non-Markdown files by path, metadata, size, or references |
 | `link ...` | Link edges | Find indexed outgoing Markdown links/images by target metadata and source scope |
 
 Core rules:
-1. Every query returns exactly one kind of result (objects, sections, traits, assets, or link edges).
+1. Every query returns exactly one kind of result (objects, sections, traits, or link edges).
 2. Queries can nest arbitrarily, e.g. `type:project contains(trait:...)`.
 3. Boolean composition is `AND` (space), `OR` (`|`), and `NOT` (`!`).
-
-Assets can participate as reference targets in object and trait queries, and `asset` queries return asset rows directly.
 
 ## Predicate-by-Root Capability Matrix
 
 Which predicates are legal depends on the query root. Predicates rejected for a root produce a validation error. Field, string, and array predicates are also subject to schema field types (see the per-root predicate sections below).
 
-| Predicate / family | `type:<t>` | `section` | `trait:<name>` | `asset` | `link` |
-|--------------------|:----------:|:---------:|:--------------:|:-------:|:------:|
-| Field compares (`==`, `!=`, `<`, `>`, `<=`, `>=`), `exists(.field)` | yes (schema fields) | yes (built-in section fields) | yes (`.value` only) | yes (asset fields) | yes (shared link fields) |
-| `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes | yes |
-| String funcs (`includes`, `startswith`, `endswith`, `matches`) | yes (string fields) | yes (non-numeric fields) | yes (`.value` only) | yes (string fields) | yes (string fields) |
-| Array quantifiers (`any`, `all`, `none`) | yes (array fields) | no | yes (array-valued `.value`) | no | no |
-| `has(...)` — direct downward | yes | yes | no | no | no |
-| `contains(...)` — recursive downward | yes | yes | no | no | no |
-| `in(...)` — direct upward scope | no | yes | yes | no | no |
-| `within(...)` — recursive upward scope | no | yes | yes | no | yes |
-| `at(trait:...)` — co-located trait | no | no | yes | no | no |
-| `refs(...)` — outgoing reference | yes | yes | yes | no | no |
-| `links(...)` — outgoing external/file/URL link | yes | yes | yes | no | no |
-| `refd(...)` — incoming reference | yes | yes | no | yes | no |
-| `content("term")` — full-text | yes | yes | yes | no | no |
+| Predicate / family | `type:<t>` | `section` | `trait:<name>` | `link` |
+|--------------------|:----------:|:---------:|:--------------:|:------:|
+| Field compares (`==`, `!=`, `<`, `>`, `<=`, `>=`), `exists(.field)` | yes (schema fields) | yes (built-in section fields) | yes (`.value` only) | yes (shared link fields) |
+| `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes |
+| String funcs (`includes`, `startswith`, `endswith`, `matches`) | yes (string fields) | yes (non-numeric fields) | yes (`.value` only) | yes (string fields) |
+| Array quantifiers (`any`, `all`, `none`) | yes (array fields) | no | yes (array-valued `.value`) | no |
+| `has(...)` — direct downward | yes | yes | no | no |
+| `contains(...)` — recursive downward | yes | yes | no | no |
+| `in(...)` — direct upward scope | no | yes | yes | no |
+| `within(...)` — recursive upward scope | no | yes | yes | yes |
+| `at(trait:...)` — co-located trait | no | no | yes | no |
+| `refs(...)` — outgoing reference | yes | yes | yes | no |
+| `links(...)` — outgoing external/file/URL link | yes | yes | yes | no |
+| `refd(...)` — incoming reference | yes | yes | no | no |
+| `content("term")` — full-text | yes | yes | yes | no |
 
 Reading the scope rows:
 
@@ -150,22 +147,6 @@ Examples:
 trait:due
 trait:due .value<today
 trait:highlight in(type:book .status==reading)
-```
-
-### Asset Query
-
-```text
-asset [predicates...]
-```
-
-Examples:
-
-```text
-asset
-asset .extension==pdf
-asset startswith(.media_type, "image/")
-asset .size_bytes>1048576
-asset refd(type:project .status==active)
 ```
 
 ### Link Query
@@ -282,52 +263,10 @@ type:project has(trait:due)
 type:project has(section .title==Tasks)
 type:project contains(trait:todo .value==todo)
 type:meeting refs([[project/website]])
-type:paper-notes refs([[assets/pdfs/paper.pdf]])
 type:meeting refs(type:project .status==active)
 type:project links(.ext==pdf)
 type:project refd(type:meeting)
 ```
-
-For assets, prefer a full asset path in `refs(...)`. An unambiguous short asset
-name is accepted as resolution sugar, but a full path remains stable as the
-vault grows. Standard Markdown links and images to vault-local non-Markdown
-files are indexed as references, so
-`rvn backlinks assets/pdfs/paper.pdf` and `refd(...)` queries can find Markdown
-files that link to the asset.
-
-## Asset Query Predicates
-
-Asset queries use a fixed set of derived metadata fields:
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `.id` | string | Stable asset ID, currently the same as `.file_path` |
-| `.file_path` | string | Vault-relative asset path |
-| `.filename` | string | Basename including extension |
-| `.extension` | string | Lowercase extension without the dot |
-| `.media_type` | string | MIME type derived from the extension when known |
-| `.size_bytes` | number | File size in bytes |
-
-Examples:
-
-```text
-asset .extension==pdf
-asset oneof(.extension, ["jpg", "jpeg", "png", "webp", "gif", "svg"])
-asset startswith(.media_type, "image/")
-asset startswith(.file_path, "assets/screenshots/")
-asset includes(.filename, "diagram")
-asset .size_bytes>1048576
-```
-
-`asset refd(...)` returns assets referenced by the selected source:
-
-```text
-asset refd([[project/raven]])
-asset refd(type:note refs([[project/raven]]))
-asset refd(trait:todo .value==todo)
-```
-
-Assets do not have outbound references, traits, authored fields, or scope, so `asset refs(...)`, `asset has(...)`, `asset content(...)`, and scope predicates are not valid.
 
 ## Link Query Predicates
 
@@ -449,7 +388,6 @@ type:meeting (has(trait:due .value<today) | has(trait:remind .value<today))
 ```bash
 rvn query 'type:project .status==active' --json
 rvn query 'trait:due .value<today' --ids
-rvn query 'asset .extension==pdf' --json
 rvn query 'link .ext==pdf within(type:project)' --json
 rvn query 'type:project refs([[company/acme]])' --refresh --json
 rvn query 'type:project .status==active' --browse
@@ -467,7 +405,9 @@ Key flags:
 
 Use `rvn pick` when you want Raven-native interactive selection in a pipeline. It reads `--pipe` output, opens a picker on the terminal, and writes selected IDs to stdout. Cancelling the picker exits with code 130 (and prints nothing), so scripts can distinguish cancellation from a selection.
 
-Section query IDs are stable `file#slug` IDs and asset query IDs are stable asset paths. Link rows have no durable edge ID, so `link --ids` emits the source object ID once per edge. Section, asset, and link queries do not support `--apply`; use `--ids` to pass IDs to commands that explicitly support them.
+Section query IDs are stable `file#slug` IDs. Link rows have no durable edge ID,
+so `link --ids` emits the source object ID once per edge. Link queries do not
+support `--apply`; section queries only support move.
 
 ### Counting and Pagination
 
@@ -557,7 +497,7 @@ A saved `browse` default only applies when the query runs on an interactive term
 
 - Object query `--apply` supports: `set`, `add`, `delete`, `move`.
 - Trait query `--apply` supports only: `update <new_value>`.
-- Section, asset, and link queries do not support `--apply`.
+- Link queries do not support `--apply`; section queries support only `move`.
 - All `--apply` operations preview by default; use `--confirm` to apply.
 
 Examples:
@@ -574,7 +514,7 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 
 - RQL implementation notes: `querying/internals.md`
 - Query-driven bulk changes: `vault-management/bulk-operations.md`
-- Organizing and referencing assets: `using-your-vault/assets.md`
+- File-link indexing and maintenance: `using-your-vault/file-links.md`
 - Queryable field/trait definitions: `types-and-traits/schema.md`
 - Object IDs and sections (`#fragment`): `types-and-traits/file-format.md`
 - Saved query configuration in `raven.yaml`: `using-your-vault/configuration.md`

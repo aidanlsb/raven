@@ -40,7 +40,9 @@ If an explicit reference is ambiguous, interactive `rvn read`, `rvn open`, `rvn 
 
 ### `rvn read`
 
-Display an object's content. By default, Raven renders wiki-links and appends backlinks. Use `--raw` for plain file content (recommended when preparing edits). Use your editor or operating system tools to view binary assets.
+Display an object's content. By default, Raven renders wiki-links and appends
+backlinks. Use `--raw` for plain file content (recommended when preparing
+edits). Use your editor or operating system tools to view non-Markdown files.
 
 ```bash
 rvn read person/freya                     # Enriched output with backlinks
@@ -100,12 +102,11 @@ Key flags:
 
 ### `rvn backlinks`
 
-Find all incoming references to an object or asset — everything that links *to* it.
+Find all incoming Raven references to an object or section.
 
 ```bash
 rvn backlinks person/freya
 rvn backlinks project/website
-rvn backlinks assets/pdfs/paper.pdf
 rvn backlinks person/freya --browse     # Pick and open one incoming reference
 rvn query 'type:project .status==active' --ids | rvn backlinks --stdin --json
 ```
@@ -114,7 +115,8 @@ Use `--stdin` to traverse multiple targets at once. JSON output is grouped under
 
 ### `rvn outlinks`
 
-Find all outgoing references from an object — everything it links *to*, including assets referenced with Markdown links or images.
+Find all outgoing Raven references from an object. Query standard Markdown
+file and URL links through the `link` root instead.
 
 ```bash
 rvn outlinks project/website
@@ -221,34 +223,34 @@ Key flags:
 
 ## Organizing content
 
-### `rvn asset import`
+### Copying non-Markdown files
 
-Copy an external non-Markdown file into the configured asset root. Sources must
-be absolute or `~`-relative host paths; destinations are vault-relative paths
-under `directories.assets`.
+Copy external non-Markdown files into the vault with normal filesystem tools,
+then reindex:
 
 ```bash
-rvn asset import ~/Downloads/paper.pdf assets/pdfs/
-rvn asset import /tmp/photo.png assets/images/hero.png --move
-rvn asset import /tmp/data.csv assets/data/ --dry-run
+cp ~/Downloads/paper.pdf ~/notes/files/paper.pdf
+rvn reindex
 ```
 
-Directory destinations preserve the source basename. The final path must have a
-file extension. Imports fail on collisions unless `--force` is supplied.
-`--move` removes the external source only after a successful vault write and
-index handoff. Use `rvn move` for files already inside the vault.
+Link to the file with normal Markdown, for example
+`[Paper](../files/paper.pdf)`. Non-Markdown files are not Raven reference
+identities, so do not use `[[...]]` for them.
 
 ### `rvn move`
 
-Move or rename an object or asset. References are updated automatically by default, including Raven wikilinks and Markdown links/images that point at moved assets.
+Move or rename an object or file. References are updated automatically by
+default, including Raven wikilinks and Markdown links/images that point at the
+moved file.
 
 ```bash
 rvn move inbox/idea project/idea              # Rename/relocate
 rvn move project/old-name project/new-name    # Rename
-rvn move assets/pdfs/draft.pdf assets/pdfs/final.pdf
+rvn move files/draft.pdf files/final.pdf
 ```
 
-Asset destinations must include a file extension. Raven treats non-Markdown moves as asset moves and keeps the asset index in sync.
+Non-Markdown destinations must include a file extension. Raven rewrites inbound
+file links through the link edge index.
 
 Section IDs (`file#slug`) are not valid `rvn move` sources. Single and bulk
 object moves reject them; use `rvn section move` to reorder/reparent a section
@@ -348,16 +350,15 @@ items; objects that would drop fields also require `--force`.
 
 ### `rvn delete`
 
-Remove an object or asset. Files are moved to `.trash/` by default, backlink
-warnings are reported, and the object or asset index entry is removed.
+Remove an object or an explicit non-Markdown file path. Files are moved to
+`.trash/` by default. Raven objects report backlink warnings.
 
 ```bash
 rvn delete project/old-project                 # Interactive: preview, then confirm prompt
 rvn delete project/old-project --force         # Skip the confirmation prompt
 rvn delete project/old-project --dry-run       # Preview without deleting
 rvn delete project/old-project --json          # Applies immediately (non-interactive)
-rvn delete assets/pdfs/old-paper.pdf --dry-run --json
-rvn query 'asset .extension==png' --ids | rvn delete --stdin --confirm --json
+rvn delete files/old-paper.pdf --dry-run --json
 ```
 
 Bulk deletion previews by default and only applies with `--confirm`. Section IDs
@@ -375,9 +376,9 @@ rvn backlinks project/old-project
 
 ### `rvn check`
 
-Validate managed vault files against the schema and asset graph. Reports issues
-like unknown types, missing required fields, broken references, missing assets,
-orphaned assets, and undefined traits. Paths matched by `raven.yaml` `exclude`
+Validate managed Markdown files against the schema and link index. Reports
+issues like unknown types, missing required fields, broken references, broken
+file links, and undefined traits. Paths matched by `raven.yaml` `exclude`
 patterns are not checked.
 
 ```bash
@@ -399,12 +400,10 @@ rvn check create-missing --confirm               # Create them
 
 `rvn check fix` handles these unambiguous fixes:
 
-- **`short_ref_could_be_full_path`** — replace short refs with canonical object IDs or full asset paths
+- **`short_ref_could_be_full_path`** — replace short refs with canonical object IDs
 - **`invalid_enum_value`** — remove unnecessary quotes around enum trait values when the unquoted value is valid
 - **`non_canonical_ref`** — strip the configured root prefix from wikilink targets (e.g. `[[type/person/freya]]` → `[[person/freya]]`)
 - **`non_canonical_path`** — move files into the configured directory root for their type and rewrite all references that point at them
-
-Asset-related issues are reported by `rvn check`, but are not auto-fixed by `rvn check fix` in this release. Use `rvn move` to relocate assets so references are rewritten safely.
 
 Key flags:
 - `--type` / `-t` — check only objects of a specific type
@@ -419,19 +418,19 @@ Repairs are separate subcommands, not flags on `rvn check`:
 
 ### `rvn resolve`
 
-Debug reference resolution. Shows how Raven resolves a reference string to an object or asset ID.
+Debug reference resolution. Shows how Raven resolves a reference string to an
+object or section ID.
 
 ```bash
 rvn resolve person/freya                         # Canonical object ID
 rvn resolve "The Queen"                          # Alias
 rvn resolve 2026-03-15                           # Date reference
 rvn resolve project/website#tasks               # Section reference
-rvn resolve assets/pdfs/paper.pdf                # Full asset path
 rvn resolve freya                                # Inspect short-form resolution
 ```
 
 Returns whether the reference resolved, the canonical target ID, and the match
-source (alias, name_field, object_id, short_name, asset path, etc.). Use the
+source (alias, name_field, object_id, short_name, etc.). Use the
 returned ID when authoring references. Short forms remain accepted as resolution
 sugar but are not the preferred authoring form.
 
@@ -441,11 +440,13 @@ sugar but are not the preferred authoring form.
 
 ### `rvn reindex`
 
-Rebuild the SQLite index from managed vault files, including Markdown objects and assets under the configured asset root. Paths matched by `raven.yaml` `exclude` patterns are skipped and removed from the index during incremental reindexing. Normally Raven reindexes automatically after commands (`auto_reindex: true` in `raven.yaml`). Manual reindexing is needed after:
+Rebuild the SQLite index from managed Markdown files. Paths matched by
+`raven.yaml` `exclude` patterns are skipped and removed from the index during
+incremental reindexing. Normally Raven reindexes automatically after commands
+(`auto_reindex: true` in `raven.yaml`). Manual reindexing is needed after:
 
 - Editing files outside of Raven (e.g., in your editor or with git)
-- Adding, moving, or deleting assets outside of Raven
-- Changing the asset root in `raven.yaml`
+- Editing Markdown links after copying, moving, or deleting non-Markdown files
 - Schema changes that affect indexing
 - Recovering from index corruption
 
@@ -520,7 +521,7 @@ Key flags (`docs search`):
 ## Related docs
 
 - `querying/query-language.md` — full RQL syntax for complex queries
-- `using-your-vault/assets.md` — organizing and referencing non-Markdown files
+- `using-your-vault/file-links.md` — linking and moving non-Markdown files
 - `vault-management/bulk-operations.md` — `--apply` and `--ids` piping for bulk changes
 - `vault-management/import.md` — bulk importing from JSON
 - `types-and-traits/references.md` — reference syntax, resolution, and maintenance

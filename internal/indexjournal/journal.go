@@ -1,8 +1,8 @@
 // Package indexjournal tracks derived index work that has not completed yet.
 //
-// The journal is disposable cache metadata. Markdown and managed asset files
-// remain the source of truth, and a successful reindex can always discard
-// journal entries after projecting their contents.
+// The journal is disposable cache metadata. Vault files remain the source of
+// truth, and a successful reindex can always discard journal entries after
+// projecting their contents.
 package indexjournal
 
 import (

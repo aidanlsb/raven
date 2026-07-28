@@ -7,13 +7,11 @@
 | `unknown_type` | File declares a type not in schema | `rvn reclassify` or `rvn schema add type` |
 | `missing_reference` | `[[ref]]` target doesn't exist | Create the target or fix the reference |
 | `broken_file_link` | Indexed Markdown file-link target is missing on disk | Restore the file or update/remove the link; URLs are not checked |
-| `missing_asset` | Markdown link/image points to a missing asset | Restore the asset or fix the link |
-| `orphaned_asset` | Indexed asset has no incoming references | Link it from content or remove/archive it |
 | `unknown_frontmatter_key` | Field not defined on the type | `rvn schema add field` or remove the key |
 | `undefined_trait` | `@trait` not in schema | `rvn schema add trait` or remove from file |
 | `missing_required_field` | Required field is absent | `rvn set <reference> field=value` |
 | `invalid_field_value` | Value doesn't match field type/enum | `rvn set <reference> field=correct_value` |
-| `short_ref_could_be_full_path` | Short ref can use its canonical object ID or full asset path | `rvn check fix --confirm` |
+| `short_ref_could_be_full_path` | Short ref can use its canonical object ID | `rvn check fix --confirm` |
 | `non_canonical_path` | File is outside the configured directory root for its type | `rvn check fix --confirm` |
 | `non_canonical_ref` | Wikilink includes a configured root prefix | `rvn check fix --confirm` |
 

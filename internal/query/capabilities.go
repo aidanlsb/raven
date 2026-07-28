@@ -1,7 +1,7 @@
 package query
 
 // This file is the single source of truth for which predicate kinds are legal
-// at which query root (object/trait/asset/section/link). Both the validator
+// at which query root (object/trait/section/link). Both the validator
 // (validator.go) and the SQL executor (sql_predicate_dispatch.go) consult this
 // table so the legality rules cannot drift apart.
 //
@@ -113,48 +113,6 @@ var disallowedPredicates = map[QueryType]map[predKind]predicateCapability{
 		predKindContains: {
 			message:    "contains() predicate is only valid for type and section queries",
 			suggestion: "Use contains(trait:...) or contains(section ...) in type and section queries",
-		},
-	},
-	QueryTypeAsset: {
-		predKindRefs: {
-			message:    "refs() predicate is not valid for asset queries",
-			suggestion: "Assets do not have outbound references; use asset refd(...) to find assets referenced by objects or traits",
-		},
-		predKindLinks: {
-			message:    "links() predicate is only valid for type, trait, and section queries",
-			suggestion: "External files and URLs are outgoing leaves, so links(...) has no inverse linkd() predicate",
-		},
-		predKindArray: {
-			message:    "array predicates are not valid for asset queries",
-			suggestion: "Asset fields are scalar metadata fields",
-		},
-		predKindContent: {
-			message:    "content() predicate is not valid for asset queries",
-			suggestion: "Filter assets by derived metadata fields such as .filename, .extension, .media_type, or .size_bytes",
-		},
-		predKindHas: {
-			message:    "has() predicate is not valid for asset queries",
-			suggestion: "Assets do not have traits; use asset refd(...) to filter by referencing objects or traits",
-		},
-		predKindContains: {
-			message:    "contains() predicate is not valid for asset queries",
-			suggestion: "Assets do not contain Raven sections or traits",
-		},
-		predKindIn: {
-			message:    "scope predicates are not valid for asset queries",
-			suggestion: "Assets are path-backed resources, not markdown scopes",
-		},
-		predKindWithin: {
-			message:    "scope predicates are not valid for asset queries",
-			suggestion: "Assets are path-backed resources, not markdown scopes",
-		},
-		predKindAt: {
-			message:    "trait-location predicates are not valid for asset queries",
-			suggestion: "Use asset refd(trait:...) to find assets referenced by matching trait lines",
-		},
-		predKindValue: {
-			message:    "value predicates are not valid for asset queries",
-			suggestion: "Use asset fields such as .filename, .extension, .media_type, or .size_bytes",
 		},
 	},
 	QueryTypeSection: {

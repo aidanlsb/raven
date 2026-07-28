@@ -88,10 +88,10 @@ func (p *Parser) expect(t TokenType) error {
 	return nil
 }
 
-// parseQuery parses a top-level query (type:<name>, trait:<name>, section, asset, or link).
+// parseQuery parses a top-level query (type:<name>, trait:<name>, section, or link).
 func (p *Parser) parseQuery() (*Query, error) {
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected 'type', 'trait', 'section', 'asset', or 'link', got %v", p.curr.Value)
+		return nil, fmt.Errorf("expected 'type', 'trait', 'section', or 'link', got %v", p.curr.Value)
 	}
 
 	queryKind := strings.ToLower(p.curr.Value)
@@ -100,15 +100,12 @@ func (p *Parser) parseQuery() (*Query, error) {
 	}
 	p.advance()
 
-	if queryKind == "asset" || queryKind == "section" || queryKind == "link" {
+	if queryKind == "section" || queryKind == "link" {
 		if p.curr.Type == TokenColon {
 			return nil, fmt.Errorf("%s query root is bare '%s'; use %s, not %s:<kind>", queryKind, queryKind, queryKind, queryKind)
 		}
-		queryType := QueryTypeAsset
-		switch queryKind {
-		case "section":
-			queryType = QueryTypeSection
-		case "link":
+		queryType := QueryTypeSection
+		if queryKind == "link" {
 			queryType = QueryTypeLink
 		}
 		query := Query{Type: queryType}
@@ -141,7 +138,7 @@ func (p *Parser) parseQuery() (*Query, error) {
 	case "trait":
 		query.Type = QueryTypeTrait
 	default:
-		return nil, fmt.Errorf("invalid query type: %s (expected 'type', 'trait', 'section', 'asset', or 'link')", queryKind)
+		return nil, fmt.Errorf("invalid query type: %s (expected 'type', 'trait', 'section', or 'link')", queryKind)
 	}
 	query.TypeName = typeName
 

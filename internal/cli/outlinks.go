@@ -38,7 +38,7 @@ func prepareOutlinksArgs(cmd *cobra.Command, args []string) ([]string, bool, err
 	if stdin {
 		return args, false, nil
 	}
-	return prepareInteractiveReferenceArgs(args, "outlinks", "reference", "outlinks> ", "Select a reference for outlinks (Esc to cancel)", interactiveReferencePickerOptions{})
+	return prepareInteractiveReferenceArgs(args, "outlinks", "reference", "outlinks> ", "Select a reference for outlinks (Esc to cancel)")
 }
 
 func buildOutlinksArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {

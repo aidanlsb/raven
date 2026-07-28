@@ -2,7 +2,6 @@ package check
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
@@ -160,19 +159,6 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 			}
 		}
 
-		if looksLikeAssetReference(ref.TargetRaw) && targetType == "" {
-			issues = append(issues, Issue{
-				Level:    LevelError,
-				Type:     IssueMissingAsset,
-				FilePath: filePath,
-				Line:     line,
-				Message:  fmt.Sprintf("Asset reference %q not found", ref.TargetRaw),
-				Value:    ref.TargetRaw,
-				FixHint:  "Add the asset file under the configured assets root or update the Markdown link",
-			})
-			return issues
-		}
-
 		issues = append(issues, Issue{
 			Level:      LevelError,
 			Type:       IssueMissingReference,
@@ -225,19 +211,6 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 	}
 
 	return issues
-}
-
-func looksLikeAssetReference(target string) bool {
-	target = strings.TrimSpace(target)
-	if target == "" {
-		return false
-	}
-	base, _, _ := paths.ParseSectionID(target)
-	if idx := strings.IndexAny(base, "?#"); idx >= 0 {
-		base = base[:idx]
-	}
-	ext := strings.ToLower(filepath.Ext(base))
-	return ext != "" && ext != ".md"
 }
 
 func formatAmbiguousRefMessage(raw string, result resolver.ResolveResult, displayID func(string) string) string {

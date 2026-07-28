@@ -22,7 +22,6 @@ type referenceResolverCache struct {
 
 type resolverFileState struct {
 	objectIDs  map[string]struct{}
-	assetIDs   map[string]struct{}
 	aliases    map[string]map[string]struct{}
 	nameFields map[string]map[string]struct{}
 }
@@ -30,7 +29,6 @@ type resolverFileState struct {
 func newResolverFileState() *resolverFileState {
 	return &resolverFileState{
 		objectIDs:  make(map[string]struct{}),
-		assetIDs:   make(map[string]struct{}),
 		aliases:    make(map[string]map[string]struct{}),
 		nameFields: make(map[string]map[string]struct{}),
 	}
@@ -116,7 +114,7 @@ func (d *Database) writeResolverFileStateLocked(tx *sql.Tx, filePath string, sch
 }
 
 // resolverStateAddsCandidates reports whether newState introduces resolution
-// candidates (object/section/asset IDs, aliases, or name-field matches) that
+// candidates (object/section IDs, aliases, or name-field matches) that
 // oldState did not have. When a write adds candidates, refs elsewhere in the
 // vault that previously failed to resolve may now succeed.
 func resolverStateAddsCandidates(oldState, newState *resolverFileState) bool {
@@ -128,7 +126,6 @@ func resolverStateAddsCandidates(oldState, newState *resolverFileState) bool {
 	}
 	update := diffResolverFileStates(oldState, newState)
 	return len(update.AddedObjectIDs) > 0 ||
-		len(update.AddedAssetIDs) > 0 ||
 		len(update.AddedAliases) > 0 ||
 		len(update.AddedNameFields) > 0
 }
@@ -181,7 +178,7 @@ func (d *Database) getReferenceResolverLocked(dailyDirectory string, sch *schema
 const resolverGenerationMetaKey = indexschema.ResolverGenerationMetaKey
 
 // ResolverGeneration returns the durable generation for resolver-relevant
-// index state. It changes when objects, sections, or assets are mutated,
+// index state. It changes when objects or sections are mutated,
 // including by another database handle or process.
 func (d *Database) ResolverGeneration() (int64, error) {
 	return resolverGeneration(d.db)
@@ -242,9 +239,6 @@ func loadResolverFileState(tx *sql.Tx, filePath string, sch *schema.Schema) (*re
 	if err := loadResolverIDsForFile(tx, "sections", filePath, state.objectIDs); err != nil {
 		return nil, err
 	}
-	if err := loadResolverIDsForFile(tx, "assets", filePath, state.assetIDs); err != nil {
-		return nil, err
-	}
 	return state, nil
 }
 
@@ -253,8 +247,6 @@ func loadResolverIDsForFile(tx *sql.Tx, table, filePath string, ids map[string]s
 	switch table {
 	case "sections":
 		query = "SELECT id FROM sections WHERE file_path = ? ORDER BY id"
-	case "assets":
-		query = "SELECT id FROM assets WHERE file_path = ? ORDER BY id"
 	default:
 		return fmt.Errorf("unsupported resolver table %q", table)
 	}
@@ -287,8 +279,6 @@ func diffResolverFileStates(oldState, newState *resolverFileState) resolver.Upda
 	return resolver.Update{
 		AddedObjectIDs:    addedSetValues(oldState.objectIDs, newState.objectIDs),
 		RemovedObjectIDs:  addedSetValues(newState.objectIDs, oldState.objectIDs),
-		AddedAssetIDs:     addedSetValues(oldState.assetIDs, newState.assetIDs),
-		RemovedAssetIDs:   addedSetValues(newState.assetIDs, oldState.assetIDs),
 		AddedAliases:      addedMatchValues(oldState.aliases, newState.aliases),
 		RemovedAliases:    addedMatchValues(newState.aliases, oldState.aliases),
 		AddedNameFields:   addedMatchValues(oldState.nameFields, newState.nameFields),

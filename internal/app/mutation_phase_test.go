@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -295,36 +293,6 @@ func TestMutationPhaseImport(t *testing.T) {
 		res := runInvoked(t, v.Path, "import", map[string]any{"type": "person"}, func(req *commandexec.Request) {
 			req.Stdin = []byte(`[{"name":"Imported Two"}]`)
 		})
-		requirePhase(t, res, commandexec.MutationPhaseApplied)
-	})
-}
-
-func TestMutationPhaseAssetImport(t *testing.T) {
-	t.Parallel()
-
-	t.Run("dry-run previews", func(t *testing.T) {
-		t.Parallel()
-		v := buildPhaseVault(t)
-		source := filepath.Join(t.TempDir(), "preview.pdf")
-		if err := os.WriteFile(source, []byte("preview"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		res := runInvoked(t, v.Path, "asset_import", map[string]any{
-			"source": source, "destination": "assets/preview.pdf", "dry-run": true,
-		}, nil)
-		requirePhase(t, res, commandexec.MutationPhasePreview)
-	})
-
-	t.Run("applies without dry-run", func(t *testing.T) {
-		t.Parallel()
-		v := buildPhaseVault(t)
-		source := filepath.Join(t.TempDir(), "applied.pdf")
-		if err := os.WriteFile(source, []byte("applied"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		res := runInvoked(t, v.Path, "asset_import", map[string]any{
-			"source": source, "destination": "assets/applied.pdf",
-		}, nil)
 		requirePhase(t, res, commandexec.MutationPhaseApplied)
 	})
 }

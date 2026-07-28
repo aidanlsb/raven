@@ -15,10 +15,9 @@ check failures.
 | `unknown_type` | File uses a type not in schema | Add/rename type in schema, or change file type |
 | `missing_reference` | Link points to missing object/section | Preview `check create-missing`, then confirm or update/remove the reference |
 | `broken_file_link` | Indexed Markdown file link/image target is missing on disk | Restore the target file or update/remove the Markdown link; URL targets are not checked |
-| `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset under the configured asset root or update/remove the reference |
 | `local_fragment_ref` | Wikilink uses unsupported source-relative fragment syntax like `[[#tasks]]` | Rewrite it as a global section ref like `[[object#tasks]]` |
 | `stale_fragment` | Link points to an existing object but a missing section fragment | Update the fragment to match an existing heading, or remove the fragment. Prevent this with `raven_invoke(command="section_rename", args={"section_id":"file#section","new_heading_text":"New Heading"})`, which rewrites inbound refs |
-| `ambiguous_reference` | Link matches multiple objects, aliases, or short names | Rewrite the link with a canonical object ID or full asset path, or rename the conflicting alias/short name |
+| `ambiguous_reference` | Link matches multiple objects, aliases, or short names | Rewrite the link with a canonical object ID, or rename the conflicting alias/short name |
 | `unknown_frontmatter_key` | Field is not defined for object type | Add schema field or remove invalid key |
 | `duplicate_object_id` | A file defines the same object ID more than once | Rename one of the duplicate objects |
 | `missing_required_field` | Required type field missing | Set required field value(s) |
@@ -52,9 +51,8 @@ check failures.
 | `unknown_field_type` | Schema field has an unrecognized field type | Change the schema field to a supported type |
 | `self_referential_required` | Required ref field points to the same type, making the first object hard to create | Make the field optional or add a default value |
 | `id_collision` | Short name matches multiple objects and that short name is used in a reference | Use canonical object IDs in references to avoid ambiguity |
-| `short_ref_could_be_full_path` | Short ref is not the preferred canonical authoring form | Run `check fix --confirm` to rewrite it with the canonical object ID or full asset path |
+| `short_ref_could_be_full_path` | Short ref is not the preferred canonical authoring form | Run `check fix --confirm` to rewrite it with the canonical object ID |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix (e.g. `[[type/person/jane]]`) | Run `check fix --confirm` to rewrite to canonical form (`[[person/jane]]`) |
-| `orphaned_asset` | Indexed asset has no incoming references | Link it from a note or remove it if unused |
 
 ## Filtering patterns
 

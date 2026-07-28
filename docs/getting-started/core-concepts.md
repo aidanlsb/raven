@@ -1,6 +1,6 @@
 # Core Concepts
 
-This page gives you the mental model for Raven. After reading it, you should understand the key building blocks — types, references, traits, sections, assets, daily notes, and queries — even if you don't yet know every syntax detail.
+This page gives you the mental model for Raven. After reading it, you should understand the key building blocks — types, references, traits, sections, file links, daily notes, and queries — even if you don't yet know every syntax detail.
 
 ## Types & Objects
 
@@ -63,7 +63,8 @@ rvn check                                # Entire vault
 rvn check project/midgard-security-review  # One object
 ```
 
-`rvn check` reports issues like unknown fields, missing required data, broken references, missing assets, and schema mismatches.
+`rvn check` reports issues like unknown fields, missing required data, broken
+references, broken file links, and schema mismatches.
 
 ### Built-in types
 
@@ -79,7 +80,8 @@ Built-in types cannot be redefined. Your custom types (`project`, `meeting`, `pe
 
 ## References
 
-References connect objects, sections, and assets into a graph. Wiki-style links are the Raven-native syntax for objects and sections:
+References connect objects and sections into a graph. Wiki-style links are the
+Raven-native syntax:
 
 ```markdown
 Met with [[person/freya]] about [[project/website]].
@@ -88,15 +90,15 @@ See the tasks: [[project/website#tasks]]
 
 References also appear in frontmatter `ref` fields (`owner: person/freya`).
 
-Normal Markdown links/images to vault-local non-Markdown files are asset references:
+Normal Markdown links/images point to non-Markdown files:
 
 ```markdown
-Read [the paper](assets/pdfs/paper.pdf).
-![Diagram](assets/photos/system.png)
+Read [the paper](../files/paper.pdf).
+![Diagram](../files/system.png)
 ```
 
-Author references with canonical object IDs and full asset paths, as in the
-examples above. After `rvn new`, `rvn upsert`, or `rvn daily`, use the returned
+Author references with canonical object IDs. After `rvn new`, `rvn upsert`, or
+`rvn daily`, use the returned
 `data.id` in JSON output (or the human CLI's `link as <id>` hint). Bare short
 forms still resolve when unambiguous, but they are resolution sugar and can
 become ambiguous as the vault grows. Use `rvn backlinks` to see what links to an
@@ -104,27 +106,17 @@ item:
 
 ```bash
 rvn backlinks person/freya
-rvn backlinks assets/pdfs/paper.pdf
 ```
 
 See `types-and-traits/references.md` for the full reference guide.
 
-## Assets
+## File Links
 
-Assets are vault-local non-Markdown files such as PDFs, images, audio, videos, and datasets. They are first-class graph resources, but they are not schema object types.
-
-Asset behavior is configured in `raven.yaml`, not `schema.yaml`:
-
-```yaml
-directories:
-  assets: assets/
-```
-
-Raven derives asset metadata such as path, extension, media type, size, and modification time. If you need authored metadata about an asset, create a Markdown object that references it.
-
-Bring external files into the managed asset root with `rvn asset import`; use
-`rvn move` for assets already inside the vault so references stay in sync. See
-`using-your-vault/assets.md` for the managed import and organization flow.
+Non-Markdown files such as PDFs and images are ordinary files in the vault, not
+Raven entities. Copy them into the vault directly, run `rvn reindex`, and link
+them with standard Markdown. Raven indexes the outgoing link edges, reports
+`broken_file_link`, and rewrites inbound file links when `rvn move` relocates a
+file. See `using-your-vault/file-links.md`.
 
 ## Traits
 
@@ -201,7 +193,7 @@ rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review
 rvn query 'trait:due .value<today'
 ```
 
-Queries return exactly one result kind—objects, sections, traits, assets, or
+Queries return exactly one result kind—objects, sections, traits, or
 outgoing link edges—can nest arbitrarily, and support boolean composition
 (`AND`, `OR`, `NOT`). See
 `querying/query-language.md` for the full syntax.
@@ -228,7 +220,7 @@ Good descriptions focus on intent and constraints, not just repeating the field 
 |------|------|
 | Set up an AI agent | `getting-started/agent-setup.md` |
 | Work with daily notes | `using-your-vault/daily-notes.md` |
-| Organize files like PDFs and images | `using-your-vault/assets.md` |
+| Link files like PDFs and images | `using-your-vault/file-links.md` |
 | Learn everyday commands | `using-your-vault/common-commands.md` |
 | Design your schema | `types-and-traits/schema-intro.md` |
 | Understand file format details | `types-and-traits/file-format.md` |

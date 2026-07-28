@@ -10,9 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
-// newQueryPayloadVault builds a vault exercising every query result mode:
-// a typed object with a section, a trait on that section, and a referenced
-// asset.
+// newQueryPayloadVault builds a vault exercising every query result mode.
 func newQueryPayloadVault(t *testing.T) *testutil.TestVault {
 	t.Helper()
 
@@ -27,10 +25,9 @@ status: active
 
 ## Tasks
 
-Ship it @priority(high). See [[assets/pdfs/paper.pdf]].
+Ship it @priority(high).
 Read [the spec](docs/spec.pdf).
 `).
-		WithFile("assets/pdfs/paper.pdf", "%PDF-1.7\nhello").
 		Build()
 
 	reindexForEditTest(t, v.Path)
@@ -134,29 +131,6 @@ func TestHandleQueryTypedTraitResult(t *testing.T) {
 	}
 }
 
-func TestHandleQueryTypedAssetResult(t *testing.T) {
-	t.Parallel()
-	v := newQueryPayloadVault(t)
-
-	result := runQueryHandler(t, v.Path, map[string]any{"query_string": "asset .extension==pdf"})
-
-	payload, ok := result.Data.(commandpayload.QueryAssetResult)
-	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.QueryAssetResult", result.Data)
-	}
-	if payload.QueryKind != "asset" {
-		t.Fatalf("query_kind = %q, want asset", payload.QueryKind)
-	}
-	if len(payload.Items) != 1 || payload.Items[0].ID != "assets/pdfs/paper.pdf" {
-		t.Fatalf("items = %#v, want one paper.pdf item", payload.Items)
-	}
-
-	wire := marshalToMap(t, payload)
-	assertKeys(t, wire, []string{"query_kind", "items", "total", "returned", "offset", "limit", "has_more"})
-	item := wire["items"].([]interface{})[0].(map[string]interface{})
-	assertKeys(t, item, []string{"num", "id", "file_path", "filename", "extension", "media_type", "size_bytes"})
-}
-
 func TestHandleQueryTypedSectionResult(t *testing.T) {
 	t.Parallel()
 	v := newQueryPayloadVault(t)
@@ -250,15 +224,6 @@ func TestHandleQueryTypedCountResult(t *testing.T) {
 			t.Fatalf("count payload = %#v, want trait/priority", payload)
 		}
 		assertKeys(t, marshalToMap(t, payload), []string{"query_kind", "trait", "total"})
-	})
-
-	t.Run("asset", func(t *testing.T) {
-		result := runQueryHandler(t, v.Path, map[string]any{"query_string": "asset", "count-only": true})
-		payload := result.Data.(commandpayload.QueryCountResult)
-		if payload.QueryKind != "asset" {
-			t.Fatalf("count payload = %#v, want asset", payload)
-		}
-		assertKeys(t, marshalToMap(t, payload), []string{"query_kind", "total"})
 	})
 
 	t.Run("link", func(t *testing.T) {

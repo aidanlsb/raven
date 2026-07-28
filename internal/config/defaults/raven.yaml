@@ -7,8 +7,6 @@ directories:
   type: type/
   page: page/
   template: templates/
-  # Assets are non-Markdown files that Raven can reference, validate, and index.
-  assets: assets/
 
 # Additional protected/system prefixes (additive).
 # Raven mutation commands and automation features refuse to operate on protected paths.

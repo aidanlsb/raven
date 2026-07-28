@@ -16,8 +16,6 @@ func (e *Executor) Execute(queryStr string) (interface{}, error) {
 		return scoped.executeObjectQuery(q)
 	case QueryTypeTrait:
 		return scoped.executeTraitQuery(q)
-	case QueryTypeAsset:
-		return scoped.executeAssetQuery(q)
 	case QueryTypeSection:
 		return scoped.executeSectionQuery(q)
 	case QueryTypeLink:

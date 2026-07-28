@@ -86,33 +86,6 @@ func TestBuildCommandContractBulkPreviewModes(t *testing.T) {
 	}
 }
 
-func TestBuildCommandContractAssetImport(t *testing.T) {
-	t.Parallel()
-
-	contract, ok := BuildCommandContract("asset_import")
-	if !ok {
-		t.Fatal("expected asset_import contract")
-	}
-	if contract.CLIName != "asset import" || contract.CLIUsage != "rvn asset import <source> <destination>" {
-		t.Fatalf("unexpected CLI contract: name=%q usage=%q", contract.CLIName, contract.CLIUsage)
-	}
-	for _, required := range []string{"source", "destination"} {
-		spec, ok := contract.Parameters[required]
-		if !ok || !spec.Required || spec.Type != ParameterTypeString {
-			t.Fatalf("%s parameter = %#v", required, spec)
-		}
-	}
-	for _, flag := range []string{"move", "force", "dry-run"} {
-		spec, ok := contract.Parameters[flag]
-		if !ok || spec.Required || spec.Type != ParameterTypeBool {
-			t.Fatalf("%s parameter = %#v", flag, spec)
-		}
-	}
-	if contract.PreviewMode != string(PreviewModeNone) {
-		t.Fatalf("preview mode = %q, want none", contract.PreviewMode)
-	}
-}
-
 func TestBuildCommandContractReclassifyBulkArguments(t *testing.T) {
 	t.Parallel()
 

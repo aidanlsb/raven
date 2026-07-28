@@ -101,41 +101,6 @@ func (d *Database) AllSections() ([]model.Section, error) {
 	return results, rows.Err()
 }
 
-// QueryAssets returns indexed asset resources.
-func (d *Database) QueryAssets() ([]model.Asset, error) {
-	query := `
-		SELECT id, file_path, COALESCE(media_type, ''), COALESCE(extension, ''),
-		       filename, size_bytes, COALESCE(file_mtime, 0), COALESCE(indexed_at, 0)
-		FROM assets
-		ORDER BY file_path
-	`
-
-	rows, err := d.db.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []model.Asset
-	for rows.Next() {
-		var result model.Asset
-		if err := rows.Scan(
-			&result.ID,
-			&result.FilePath,
-			&result.MediaType,
-			&result.Extension,
-			&result.Filename,
-			&result.SizeBytes,
-			&result.FileMtime,
-			&result.IndexedAt,
-		); err != nil {
-			return nil, err
-		}
-		results = append(results, result)
-	}
-	return results, rows.Err()
-}
-
 // FileLinks returns all indexed Markdown links and images whose target is a
 // local file. Existence is intentionally not part of the index and must be
 // checked by callers against the current filesystem.

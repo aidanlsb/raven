@@ -254,7 +254,7 @@ func TestAutoResolveDisabledKeepsResolverColdUntilFinalPass(t *testing.T) {
 	}
 }
 
-func TestIncrementalResolverTracksSectionsAndAssets(t *testing.T) {
+func TestIncrementalResolverTracksSections(t *testing.T) {
 	t.Parallel()
 
 	db, err := OpenInMemory()
@@ -274,20 +274,6 @@ func TestIncrementalResolverTracksSectionsAndAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := db.IndexAsset(&model.Asset{
-		ID:        "assets/paper.pdf",
-		FilePath:  "assets/paper.pdf",
-		Extension: ".pdf",
-		Filename:  "paper.pdf",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	source.Refs[0].TargetRaw = "paper"
-	if err := db.IndexDocument(source, sch); err != nil {
-		t.Fatal(err)
-	}
-	assertIndexedRefTarget(t, db, source.FilePath, "paper", "assets/paper.pdf")
-
 	person.Sections = []*model.Section{{
 		ID:           "people/freya#bio",
 		FileObjectID: "people/freya",
@@ -306,7 +292,7 @@ func TestIncrementalResolverTracksSectionsAndAssets(t *testing.T) {
 	}
 	assertIndexedRefTarget(t, db, source.FilePath, "people/freya#bio", "people/freya#bio")
 	if db.referenceResolverBuilds != 1 {
-		t.Fatalf("resolver builds across asset/section updates = %d, want 1", db.referenceResolverBuilds)
+		t.Fatalf("resolver builds across section updates = %d, want 1", db.referenceResolverBuilds)
 	}
 }
 

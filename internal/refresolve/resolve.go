@@ -168,7 +168,7 @@ func (op *Operation) Resolve(reference string, allowMissing bool) (*ResolveResul
 	res, err := op.getResolver()
 	if err != nil {
 		// When the resolver cannot be built (e.g. the index is unavailable) but a
-		// file exists at the literal path, fall back to it rather than failing.
+		// Markdown object exists at the literal path, fall back to it rather than failing.
 		if literalPathResult != nil {
 			return literalPathResult, nil
 		}
@@ -177,7 +177,7 @@ func (op *Operation) Resolve(reference string, allowMissing bool) (*ResolveResul
 
 	resolved := res.Resolve(ref)
 
-	// A file sitting at the literal path participates as a resolution candidate
+	// A Markdown object at the literal path participates as a resolution candidate
 	// alongside the index. We never silently prefer the on-disk file over
 	// indexed objects (or vice versa): if the index resolves the same reference
 	// to a different object, or to multiple objects, the reference is ambiguous.
@@ -215,13 +215,6 @@ func (op *Operation) Resolve(reference string, allowMissing bool) (*ResolveResul
 		result.FileObjectID = resolved.TargetID[:idx]
 	} else {
 		result.FileObjectID = resolved.TargetID
-	}
-
-	if assetPath, ok, err := tryResolvedAssetPath(op.rt.VaultPath, result.FileObjectID); err != nil {
-		return nil, err
-	} else if ok {
-		result.FilePath = assetPath
-		return result, nil
 	}
 
 	filePath, err := vault.ResolveObjectToFileWithConfig(op.rt.VaultPath, result.FileObjectID, op.rt.VaultCfg)
@@ -271,30 +264,6 @@ func (op *Operation) addSectionMetadata(result *ResolveResult) error {
 	result.LineEnd = section.LineEnd
 	result.SubtreeLineEnd = section.SubtreeLineEnd
 	return nil
-}
-
-func tryResolvedAssetPath(vaultPath, targetID string) (string, bool, error) {
-	if strings.TrimSpace(vaultPath) == "" || strings.TrimSpace(targetID) == "" {
-		return "", false, nil
-	}
-	if filepath.Ext(targetID) == "" || strings.HasSuffix(strings.ToLower(targetID), ".md") {
-		return "", false, nil
-	}
-	fullPath := filepath.Join(vaultPath, targetID)
-	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-		return "", false, err
-	}
-	info, err := os.Stat(fullPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", false, nil
-		}
-		return "", false, err
-	}
-	if info.IsDir() {
-		return "", false, nil
-	}
-	return fullPath, true, nil
 }
 
 // literalPathResolverConflict reports ambiguity when a file found at the literal
@@ -398,8 +367,8 @@ func tryLiteralPath(reference, vaultPath string, vaultCfg interface {
 	FilePathToObjectID(string) string
 }) (*ResolveResult, error) {
 	candidates := []string{reference}
-	if !strings.HasSuffix(reference, ".md") {
-		candidates = append(candidates, reference+".md")
+	if !paths.HasMDExtension(reference) {
+		candidates = []string{reference + paths.MDExtension}
 	}
 
 	for _, candidate := range candidates {

@@ -152,54 +152,8 @@ func TestLoadVaultConfig(t *testing.T) {
 			t.Fatal("expected error for legacy directories.objects, got nil")
 		}
 	})
-
-	t.Run("rejects legacy top-level assets", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		configPath := filepath.Join(tmpDir, "raven.yaml")
-
-		content := "assets:\n  root: assets/\n"
-		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
-			t.Fatalf("failed to write config: %v", err)
-		}
-
-		if _, err := LoadVaultConfig(tmpDir); err == nil {
-			t.Fatal("expected error for legacy top-level assets, got nil")
-		}
-	})
 }
 
-func TestAssetRootConfig(t *testing.T) {
-	t.Parallel()
-
-	cfg := DefaultVaultConfig()
-	if got := cfg.GetAssetRoot(); got != "assets/" {
-		t.Fatalf("asset root = %q, want assets/", got)
-	}
-
-	cfg.Directories = &DirectoriesConfig{Assets: "resources/assets"}
-	if got := cfg.GetAssetRoot(); got != "resources/assets/" {
-		t.Fatalf("directories.assets root = %q, want resources/assets/", got)
-	}
-
-	cfg.Directories.Assets = ""
-	if got := cfg.GetAssetRoot(); got != "assets/" {
-		t.Fatalf("empty directories.assets defaulted to %q, want assets/", got)
-	}
-}
-
-func TestDirectoriesConfigAssets(t *testing.T) {
-	t.Parallel()
-
-	cfg := &VaultConfig{Directories: &DirectoriesConfig{Assets: "resources/assets"}}
-	if got := cfg.GetAssetRoot(); got != "resources/assets/" {
-		t.Fatalf("asset root = %q, want resources/assets/", got)
-	}
-
-	dirs := cfg.GetDirectoriesConfig()
-	if dirs.Assets != "resources/assets/" {
-		t.Fatalf("directories.assets = %q, want resources/assets/", dirs.Assets)
-	}
-}
 func TestVaultConfigPaths(t *testing.T) {
 	cfg := &VaultConfig{
 		DailyDirectory: "daily",

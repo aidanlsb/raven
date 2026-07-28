@@ -129,12 +129,7 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 func countDistinctFilesWithPrefix(db resolverQuerier, pathPrefix string) (int, error) {
 	var count int
 	err := db.QueryRow(`
-		SELECT COUNT(DISTINCT file_path)
-		FROM (
-			SELECT file_path FROM objects
-			UNION
-			SELECT file_path FROM assets
-		)
+		SELECT COUNT(DISTINCT file_path) FROM objects
 		WHERE file_path LIKE ?
 	`, pathPrefix+"%").Scan(&count)
 	if err != nil {
@@ -148,8 +143,6 @@ func countDistinctFilesWithPrefix(db resolverQuerier, pathPrefix string) (int, e
 func (d *Database) AllIndexedFilePaths() ([]string, error) {
 	rows, err := d.db.Query(`
 		SELECT DISTINCT file_path FROM objects
-		UNION
-		SELECT DISTINCT file_path FROM assets
 	`)
 	if err != nil {
 		return nil, err

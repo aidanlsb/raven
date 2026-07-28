@@ -67,21 +67,6 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 		}
 		printQueryTraitResults(queryStr, label, traits)
 		return nil
-	case commandpayload.QueryAssetResult:
-		assets := assetsFromItems(payload.Items)
-		if browse {
-			if len(assets) == 0 {
-				printQueryAssetResults(queryStr, assets)
-				return nil
-			}
-			return browseQueryResults(browseItemsForAssetResults(assets), assetBrowseHeaders(), ui.AssetLayout())
-		}
-		if ShouldUsePipeFormat() {
-			WritePipeableList(os.Stdout, pipeItemsForAssetResults(assets))
-			return nil
-		}
-		printQueryAssetResults(queryStr, assets)
-		return nil
 	case commandpayload.QuerySectionResult:
 		sections := sectionsFromItems(payload.Items)
 		if browse {
@@ -348,21 +333,6 @@ func traitsFromItems(items []commandpayload.TraitItem) []model.Trait {
 		}
 		trait.SetIndexValueString(item.Value)
 		results = append(results, trait)
-	}
-	return results
-}
-
-func assetsFromItems(items []commandpayload.AssetItem) []model.Asset {
-	results := make([]model.Asset, 0, len(items))
-	for _, item := range items {
-		results = append(results, model.Asset{
-			ID:        item.ID,
-			FilePath:  item.FilePath,
-			Filename:  item.Filename,
-			Extension: item.Extension,
-			MediaType: item.MediaType,
-			SizeBytes: item.SizeBytes,
-		})
 	}
 	return results
 }

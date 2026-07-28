@@ -30,7 +30,6 @@ func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandex
 			"type":       result.Directories.Object,
 			"page":       result.Directories.Page,
 			"template":   result.Directories.Template,
-			"assets":     result.Directories.Assets,
 		},
 		"capture": map[string]interface{}{
 			"destination": result.Capture.Destination,
@@ -241,7 +240,6 @@ func HandleVaultConfigDirectoriesSet(_ context.Context, req commandexec.Request)
 		Object:    optionalStringArg(req.Args, "type"),
 		Page:      optionalStringArg(req.Args, "page"),
 		Template:  optionalStringArg(req.Args, "template"),
-		Assets:    optionalStringArg(req.Args, "assets"),
 	})
 	if err != nil {
 		return mapVaultConfigFailure(err)
@@ -264,7 +262,6 @@ func HandleVaultConfigDirectoriesUnset(_ context.Context, req commandexec.Reques
 		Object:    boolArg(req.Args, "type"),
 		Page:      boolArg(req.Args, "page"),
 		Template:  boolArg(req.Args, "template"),
-		Assets:    boolArg(req.Args, "assets"),
 	})
 	if err != nil {
 		return mapVaultConfigFailure(err)
@@ -401,7 +398,6 @@ func vaultDirectoriesData(configPath string, exists bool, info vaultconfigsvc.Di
 		"type":        info.Object,
 		"page":        info.Page,
 		"template":    info.Template,
-		"assets":      info.Assets,
 	}
 }
 

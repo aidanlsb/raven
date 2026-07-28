@@ -57,9 +57,6 @@ func stalenessRows(db *sql.DB) (*sql.Rows, error) {
 	return db.Query(`
 		SELECT DISTINCT file_path, file_mtime
 		FROM objects
-		UNION
-		SELECT DISTINCT file_path, file_mtime
-		FROM assets
 	`)
 }
 
@@ -96,14 +93,9 @@ func isFileStaleAgainstIndexedMtime(fullPath string, indexedMtime sql.NullInt64)
 func (d *Database) GetFileMtime(filePath string) (int64, error) {
 	var mtime sql.NullInt64
 	err := d.db.QueryRow(`
-		SELECT file_mtime
-		FROM (
-			SELECT file_mtime FROM objects WHERE file_path = ?
-			UNION ALL
-			SELECT file_mtime FROM assets WHERE file_path = ?
-		)
+		SELECT file_mtime FROM objects WHERE file_path = ?
 		LIMIT 1
-	`, filePath, filePath).Scan(&mtime)
+	`, filePath).Scan(&mtime)
 
 	if err == sql.ErrNoRows {
 		return 0, nil
@@ -122,11 +114,7 @@ func (d *Database) GetFileMtime(filePath string) (int64, error) {
 func (d *Database) GetFileMtimes() (map[string]int64, error) {
 	rows, err := d.db.Query(`
 		SELECT file_path, MAX(file_mtime)
-		FROM (
-			SELECT file_path, file_mtime FROM objects
-			UNION ALL
-			SELECT file_path, file_mtime FROM assets
-		)
+		FROM objects
 		GROUP BY file_path
 	`)
 	if err != nil {

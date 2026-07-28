@@ -34,8 +34,6 @@ const (
 	IssueNonCanonicalPath        IssueType = "non_canonical_path"
 	IssueNonCanonicalRef         IssueType = "non_canonical_ref"
 	IssueDirectoryTypeMismatch   IssueType = "directory_type_mismatch"
-	IssueMissingAsset            IssueType = "missing_asset"
-	IssueOrphanedAsset           IssueType = "orphaned_asset"
 	IssueBrokenFileLink          IssueType = "broken_file_link"
 )
 
@@ -72,8 +70,6 @@ func AllIssueTypes() []IssueType {
 		IssueNonCanonicalPath,
 		IssueNonCanonicalRef,
 		IssueDirectoryTypeMismatch,
-		IssueMissingAsset,
-		IssueOrphanedAsset,
 		IssueBrokenFileLink,
 	}
 }

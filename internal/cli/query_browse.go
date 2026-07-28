@@ -127,37 +127,6 @@ func traitBrowseHeaders() []string {
 	return []string{"#", "content", "trait", "location"}
 }
 
-func browseItemsForAssetResults(results []model.Asset) []picker.Item {
-	items := make([]picker.Item, 0, len(results))
-	for _, result := range results {
-		detail := result.MediaType
-		if detail == "" {
-			detail = "-"
-		}
-		items = append(items, picker.Item{
-			ID:       result.ID,
-			Label:    result.FilePath,
-			Detail:   detail,
-			Location: formatAssetSize(result.SizeBytes),
-			Columns:  []string{result.FilePath, detail, formatAssetSize(result.SizeBytes)},
-			SearchText: browseSearchText(
-				result.ID,
-				result.FilePath,
-				result.Filename,
-				result.Extension,
-				result.MediaType,
-				formatAssetSize(result.SizeBytes),
-			),
-			FilePath: result.FilePath,
-		})
-	}
-	return items
-}
-
-func assetBrowseHeaders() []string {
-	return []string{"#", "path", "media type", "size"}
-}
-
 func browseItemsForSectionResults(results []model.Section) []picker.Item {
 	items := make([]picker.Item, 0, len(results))
 	for _, result := range results {

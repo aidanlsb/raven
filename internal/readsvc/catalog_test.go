@@ -18,7 +18,6 @@ type catalogReaderStub struct {
 	objectIDs []string
 	objects   []model.Object
 	sections  []model.Section
-	assets    []model.Asset
 	aliases   map[string]string
 	filePaths []string
 }
@@ -58,11 +57,6 @@ func (s *catalogReaderStub) AllSections() ([]model.Section, error) {
 	return s.sections, nil
 }
 
-func (s *catalogReaderStub) QueryAssets() ([]model.Asset, error) {
-	s.record("assets")
-	return s.assets, nil
-}
-
 func (s *catalogReaderStub) AllAliases() (map[string]string, error) {
 	s.record("aliases")
 	return s.aliases, nil
@@ -93,19 +87,14 @@ func TestBuildCatalogSelectsDomainValuesAndLookups(t *testing.T) {
 			ID:       "people/freya#notes",
 			FilePath: "people/freya.md",
 		}},
-		assets: []model.Asset{{
-			ID:       "assets/portrait.png",
-			FilePath: "assets/portrait.png",
-		}},
 		aliases:   map[string]string{"The Queen": "people/freya"},
-		filePaths: []string{"people/freya.md", "assets/portrait.png"},
+		filePaths: []string{"people/freya.md"},
 	}
 
 	snapshot, err := buildCatalog(stub, CatalogOptions{
 		ObjectIDs: true,
 		Objects:   true,
 		Sections:  true,
-		Assets:    true,
 		Aliases:   true,
 		Resolver:  true,
 		FilePaths: true,
@@ -123,16 +112,13 @@ func TestBuildCatalogSelectsDomainValuesAndLookups(t *testing.T) {
 	if got := snapshot.SectionByID["people/freya#notes"].FilePath; got != "people/freya.md" {
 		t.Errorf("SectionByID file path = %q, want people/freya.md", got)
 	}
-	if got := snapshot.AssetByID["assets/portrait.png"].FilePath; got != "assets/portrait.png" {
-		t.Errorf("AssetByID file path = %q, want assets/portrait.png", got)
-	}
 	if got := snapshot.Aliases["The Queen"]; got != "people/freya" {
 		t.Errorf("alias target = %q, want people/freya", got)
 	}
 	if resolved := snapshot.Resolver.Resolve("The Queen"); resolved.TargetID != "people/freya" {
 		t.Errorf("resolver target = %q, want people/freya", resolved.TargetID)
 	}
-	for _, call := range []string{"object_ids", "objects", "sections", "assets", "aliases", "resolver", "file_paths"} {
+	for _, call := range []string{"object_ids", "objects", "sections", "aliases", "resolver", "file_paths"} {
 		if stub.calls[call] != 1 {
 			t.Errorf("%s calls = %d, want 1", call, stub.calls[call])
 		}
