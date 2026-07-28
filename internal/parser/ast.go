@@ -272,7 +272,7 @@ func markdownLinkSource(content []byte, start int, isImage bool) (rawTarget stri
 		return "", 0, false
 	}
 
-	destinationEnd := destinationStart
+	var destinationEnd int
 	if content[destinationStart] == '<' {
 		destinationStart++
 		destinationEnd = escapedDelimiter(content, destinationStart, '>')
