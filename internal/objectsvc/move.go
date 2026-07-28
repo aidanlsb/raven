@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/linktarget"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -49,6 +52,13 @@ type refUpdatePlan struct {
 	applySourceID  string
 	line           int
 	oldBase        string
+	replacement    string
+}
+
+type linkUpdatePlan struct {
+	reportSourceID string
+	filePath       string
+	link           model.Link
 	replacement    string
 }
 
@@ -108,8 +118,10 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	}
 
 	var refPlans []refUpdatePlan
+	var linkPlans []linkUpdatePlan
 	if req.UpdateRefs && db != nil {
 		refPlans, result.WarningMessages = prepareRefUpdatePlans(db, req, objectRoot, pageRoot, dailyDir, result.WarningMessages)
+		linkPlans, result.WarningMessages = prepareLinkUpdatePlans(db, req, result.WarningMessages)
 	}
 
 	sourceSnapshot, err := readFileSnapshot(req.SourceFile)
@@ -117,7 +129,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 		return nil, newError(ErrorFileRead, "failed to read source file", "", nil, err)
 	}
 
-	writePlan, warnings, err := prepareMoveWritePlan(req, refPlans, sourceSnapshot, objectRoot, pageRoot)
+	writePlan, warnings, err := prepareMoveWritePlan(req, refPlans, linkPlans, sourceSnapshot, objectRoot, pageRoot)
 	result.WarningMessages = append(result.WarningMessages, warnings...)
 	if err != nil {
 		return nil, err
@@ -169,7 +181,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	return result, nil
 }
 
-func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, sourceSnapshot *fileSnapshot, objectRoot, pageRoot string) (*moveWritePlan, []string, error) {
+func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, linkPlans []linkUpdatePlan, sourceSnapshot *fileSnapshot, objectRoot, pageRoot string) (*moveWritePlan, []string, error) {
 	plan := &moveWritePlan{}
 
 	destinationContent := sourceSnapshot.content
@@ -193,6 +205,44 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, sourceS
 		}
 		updatedRefSeen[ref] = struct{}{}
 		plan.updatedRefs = append(plan.updatedRefs, ref)
+	}
+
+	// Apply position-based link edits from the end of each file toward the
+	// beginning so replacement lengths cannot invalidate later indexed spans.
+	sort.SliceStable(linkPlans, func(i, j int) bool {
+		if linkPlans[i].filePath != linkPlans[j].filePath {
+			return linkPlans[i].filePath < linkPlans[j].filePath
+		}
+		if linkPlans[i].link.Line != linkPlans[j].link.Line {
+			return linkPlans[i].link.Line > linkPlans[j].link.Line
+		}
+		return linkPlans[i].link.PositionStart > linkPlans[j].link.PositionStart
+	})
+	for _, linkPlan := range linkPlans {
+		rewrite, err := planRewriteForLinkSource(req.VaultPath, req.VaultConfig, linkPlan)
+		if err != nil {
+			var svcErr *Error
+			if errors.As(err, &svcErr) && svcErr.Code == ErrorValidationFailed {
+				return nil, warnings, err
+			}
+			warnings = append(warnings, fmt.Sprintf("Failed to update file link in %s: %v", linkPlan.reportSourceID, err))
+			continue
+		}
+
+		existing, ok := rewritesByPath[rewrite.path]
+		if !ok {
+			rewritesByPath[rewrite.path] = rewrite
+			rewriteOrder = append(rewriteOrder, rewrite)
+			existing = rewrite
+		}
+
+		updated, changed := rewriteIndexedLinkTarget(existing.updatedContent, linkPlan.link, linkPlan.replacement)
+		if !changed {
+			warnings = append(warnings, fmt.Sprintf("Failed to update file link in %s: indexed link no longer matches source", linkPlan.reportSourceID))
+			continue
+		}
+		existing.updatedContent = updated
+		addUpdatedRef(linkPlan.reportSourceID)
 	}
 
 	for _, refPlan := range refPlans {
@@ -240,6 +290,88 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, sourceS
 	}
 
 	return plan, warnings, nil
+}
+
+func planRewriteForLinkSource(vaultPath string, vaultCfg *config.VaultConfig, linkPlan linkUpdatePlan) (*fileRewrite, error) {
+	filePath := filepath.Join(vaultPath, filepath.FromSlash(linkPlan.filePath))
+	if err := ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
+		return nil, err
+	}
+
+	snapshot, err := readFileSnapshot(filePath)
+	if err != nil {
+		return nil, err
+	}
+	return &fileRewrite{
+		fileSnapshot:   *snapshot,
+		reportSourceID: linkPlan.reportSourceID,
+		updatedContent: append([]byte(nil), snapshot.content...),
+	}, nil
+}
+
+func rewriteIndexedLinkTarget(content []byte, link model.Link, replacement string) ([]byte, bool) {
+	lineStart, ok := contentLineStart(content, link.Line)
+	if !ok {
+		return content, false
+	}
+	start := lineStart + link.PositionStart
+	end := lineStart + link.PositionEnd
+	if start < 0 || end > len(content) || start >= end {
+		return content, false
+	}
+
+	span := content[start:end]
+	targetOffset, ok := indexedRawTargetOffset(span, []byte(link.RawTarget))
+	if !ok {
+		return content, false
+	}
+	targetStart := start + targetOffset
+	targetEnd := targetStart + len(link.RawTarget)
+
+	updated := make([]byte, 0, len(content)-len(link.RawTarget)+len(replacement))
+	updated = append(updated, content[:targetStart]...)
+	updated = append(updated, replacement...)
+	updated = append(updated, content[targetEnd:]...)
+	return updated, true
+}
+
+func contentLineStart(content []byte, line int) (int, bool) {
+	if line < 1 {
+		return 0, false
+	}
+	if line == 1 {
+		return 0, true
+	}
+	current := 1
+	for i, b := range content {
+		if b != '\n' {
+			continue
+		}
+		current++
+		if current == line {
+			return i + 1, true
+		}
+	}
+	return 0, false
+}
+
+func indexedRawTargetOffset(linkSyntax, rawTarget []byte) (int, bool) {
+	if len(rawTarget) == 0 {
+		return 0, false
+	}
+	for searchFrom := 0; searchFrom <= len(linkSyntax)-len(rawTarget); {
+		relative := strings.Index(string(linkSyntax[searchFrom:]), string(rawTarget))
+		if relative < 0 {
+			break
+		}
+		offset := searchFrom + relative
+		open := strings.LastIndex(string(linkSyntax[:offset]), "](")
+		if open >= 0 && strings.TrimSpace(string(linkSyntax[open+2:offset])) == "" {
+			return offset, true
+		}
+		searchFrom = offset + 1
+	}
+	return 0, false
 }
 
 func planRewriteForSource(vaultPath string, vaultCfg *config.VaultConfig, refPlan refUpdatePlan) (*fileRewrite, error) {
@@ -394,6 +526,53 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 	}
 
 	return plans, warnings
+}
+
+func prepareLinkUpdatePlans(db *index.Database, req MoveFileRequest, warnings []string) ([]linkUpdatePlan, []string) {
+	sourceRel, err := filepath.Rel(req.VaultPath, req.SourceFile)
+	if err != nil {
+		return nil, append(warnings, fmt.Sprintf("Failed to resolve source path for file-link updates: %v", err))
+	}
+	sourceKey := paths.NormalizeVaultRelPath(sourceRel)
+
+	links, err := db.FileLinksByNormalizedKey(sourceKey)
+	if err != nil {
+		return nil, append(warnings, fmt.Sprintf("Failed to read inbound file links for move update: %v", err))
+	}
+
+	destRel, err := filepath.Rel(req.VaultPath, req.DestinationFile)
+	if err != nil {
+		return nil, append(warnings, fmt.Sprintf("Failed to resolve destination path for file-link updates: %v", err))
+	}
+	destKey := paths.NormalizeVaultRelPath(destRel)
+
+	plans := make([]linkUpdatePlan, 0, len(links))
+	for _, link := range links {
+		filePath := paths.NormalizeVaultRelPath(link.FilePath)
+		reportSourceID := remapMovedSourceID(link.SourceID, req.SourceObjectID, req.DestinationObject)
+		for _, priorMove := range req.PriorMoves {
+			filePath = remapMovedFilePath(filePath, priorMove)
+			reportSourceID = remapMovedSourceID(
+				reportSourceID,
+				movePathObjectID(priorMove.From, req.VaultConfig),
+				movePathObjectID(priorMove.To, req.VaultConfig),
+			)
+		}
+		plans = append(plans, linkUpdatePlan{
+			reportSourceID: reportSourceID,
+			filePath:       filePath,
+			link:           link,
+			replacement:    linktarget.RetargetFile(link.RawTarget, filePath, req.VaultPath, destKey),
+		})
+	}
+	return plans, warnings
+}
+
+func remapMovedFilePath(filePath string, move mutation.Move) string {
+	if paths.NormalizeVaultRelPath(filePath) == paths.NormalizeVaultRelPath(move.From) {
+		return paths.NormalizeVaultRelPath(move.To)
+	}
+	return filePath
 }
 
 func movePathObjectID(relPath string, vaultCfg *config.VaultConfig) string {

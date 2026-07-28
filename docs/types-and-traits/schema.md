@@ -712,6 +712,7 @@ Validates managed vault files against the schema. Paths matched by `raven.yaml` 
 | `invalid_enum_value` | Enum trait value not in allowed list | Use a valid value; `rvn check fix --confirm` can remove unnecessary quotes |
 | `undefined_trait` | Trait not in schema | Add trait to schema |
 | `missing_reference` | Link to non-existent object or section | Create the target or update the link |
+| `broken_file_link` | Markdown file link/image target is missing on disk | Restore the target file or update/remove the link; URLs are not checked |
 | `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset or update the reference |
 | `ambiguous_reference` | Reference matches multiple objects or assets | Use a canonical object ID or full asset path (e.g., `[[person/freya]]`) |
 | `short_ref_could_be_full_path` | Short ref can be written with its canonical object ID or full asset path | Run `rvn check fix --confirm` to rewrite it |

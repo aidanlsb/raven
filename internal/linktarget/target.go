@@ -93,6 +93,119 @@ func IsRavenTarget(raw, sourceFile, vaultPath string) bool {
 	return !filepath.IsAbs(filepath.FromSlash(info.NormalizedKey)) && !isWindowsAbsolute(info.NormalizedKey)
 }
 
+// ResolveFileKey turns a normalized file-link key into an OS path. Keys inside
+// the vault are vault-relative; external absolute targets remain absolute.
+func ResolveFileKey(normalizedKey, vaultPath string) string {
+	target := filepath.FromSlash(normalizedKey)
+	if filepath.IsAbs(target) || isWindowsAbsolute(normalizedKey) {
+		return filepath.Clean(target)
+	}
+	return filepath.Clean(filepath.Join(vaultPath, target))
+}
+
+// RetargetFile preserves the authored style of a file-link destination while
+// changing its semantic target. Angle brackets, query/fragment suffixes,
+// relative-vs-absolute form, explicit "./", file: URI form, and escaped
+// parentheses are retained.
+func RetargetFile(rawTarget, sourceFile, vaultPath, newNormalizedKey string) string {
+	target := strings.TrimSpace(rawTarget)
+	if target == "" {
+		return rawTarget
+	}
+
+	leading := rawTarget[:len(rawTarget)-len(strings.TrimLeft(rawTarget, " \t\r\n"))]
+	trailing := rawTarget[len(strings.TrimRight(rawTarget, " \t\r\n")):]
+
+	angle := len(target) >= 2 && target[0] == '<' && target[len(target)-1] == '>'
+	if angle {
+		target = target[1 : len(target)-1]
+	}
+	authoredPath, suffix := splitFileSuffix(target)
+	semanticPath := unescapePathStyle(authoredPath)
+
+	newAbs := ResolveFileKey(newNormalizedKey, vaultPath)
+	replacement := ""
+	if scheme, ok := uriScheme(semanticPath); ok && strings.EqualFold(scheme, "file") {
+		prefixEnd := len(scheme) + 1
+		prefix := authoredPath[:prefixEnd]
+		rest := semanticPath[prefixEnd:]
+		if strings.HasPrefix(rest, "//") {
+			prefix += "//"
+		}
+		replacement = prefix + filepath.ToSlash(newAbs)
+	} else if filepath.IsAbs(filepath.FromSlash(semanticPath)) || isWindowsAbsolute(semanticPath) {
+		replacement = filepath.ToSlash(newAbs)
+		if strings.Contains(semanticPath, `\`) && isWindowsAbsolute(semanticPath) {
+			replacement = strings.ReplaceAll(replacement, "/", `\`)
+		}
+	} else {
+		sourceDir := filepath.Dir(filepath.FromSlash(sourceFile))
+		newPath := filepath.FromSlash(newNormalizedKey)
+		if filepath.IsAbs(newPath) || isWindowsAbsolute(newNormalizedKey) {
+			newPath = newAbs
+			sourceDir = filepath.Join(vaultPath, sourceDir)
+		}
+		rel, err := filepath.Rel(sourceDir, newPath)
+		if err != nil {
+			replacement = filepath.ToSlash(newAbs)
+		} else {
+			replacement = filepath.ToSlash(rel)
+		}
+		if strings.HasPrefix(semanticPath, "./") && !strings.HasPrefix(replacement, ".") {
+			replacement = "./" + replacement
+		}
+	}
+
+	replacement = preservePathEscapes(authoredPath, replacement)
+	replacement += suffix
+	if angle {
+		replacement = "<" + replacement + ">"
+	}
+	return leading + replacement + trailing
+}
+
+func splitFileSuffix(target string) (string, string) {
+	for i := 0; i < len(target); i++ {
+		if target[i] == '\\' {
+			i++
+			continue
+		}
+		if target[i] == '?' || target[i] == '#' {
+			return target[:i], target[i:]
+		}
+	}
+	return target, ""
+}
+
+func unescapePathStyle(target string) string {
+	var b strings.Builder
+	b.Grow(len(target))
+	for i := 0; i < len(target); i++ {
+		if target[i] == '\\' && i+1 < len(target) && isMarkdownEscapable(target[i+1]) {
+			i++
+		}
+		b.WriteByte(target[i])
+	}
+	return b.String()
+}
+
+func preservePathEscapes(authored, replacement string) string {
+	escapeParens := strings.Contains(authored, `\(`) || strings.Contains(authored, `\)`)
+	if !escapeParens {
+		return replacement
+	}
+	replacement = strings.ReplaceAll(replacement, `\`, `\\`)
+	replacement = strings.ReplaceAll(replacement, "(", `\(`)
+	return strings.ReplaceAll(replacement, ")", `\)`)
+}
+
+func isMarkdownEscapable(c byte) bool {
+	return (c >= '!' && c <= '/') ||
+		(c >= ':' && c <= '@') ||
+		(c >= '[' && c <= '`') ||
+		(c >= '{' && c <= '~')
+}
+
 func fileDestinationPath(target string) string {
 	if scheme, ok := uriScheme(target); ok && strings.EqualFold(scheme, "file") {
 		target = target[len(scheme)+1:]

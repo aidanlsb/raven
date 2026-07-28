@@ -57,6 +57,33 @@ func TestIntegration_MoveDryRunDoesNotMutate(t *testing.T) {
 	v.AssertFileContains("projects/preview-ref.md", "[[people/preview-me]]")
 }
 
+func TestIntegration_MoveRewritesIndexedFileLinks(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("assets/paper(1).pdf", "%PDF test\n").
+		WithFile("notes/ref.md", "See [angle](<../assets/paper(1).pdf>) and [escaped](../assets/paper\\(1\\).pdf).\n").
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	preview := v.RunCLI("move", "assets/paper(1).pdf", "assets/archive/paper(1).pdf", "--dry-run")
+	preview.MustSucceed(t)
+	if !strings.Contains(preview.RawJSON, "notes/ref") {
+		t.Fatalf("preview did not show inbound link rewrite: %s", preview.RawJSON)
+	}
+	v.AssertFileExists("assets/paper(1).pdf")
+	v.AssertFileNotExists("assets/archive/paper(1).pdf")
+	v.AssertFileContains("notes/ref.md", `<../assets/paper(1).pdf>`)
+
+	apply := v.RunCLI("move", "assets/paper(1).pdf", "assets/archive/paper(1).pdf")
+	apply.MustSucceed(t)
+	v.AssertFileNotExists("assets/paper(1).pdf")
+	v.AssertFileExists("assets/archive/paper(1).pdf")
+	v.AssertFileContains("notes/ref.md", `<../assets/archive/paper(1).pdf>`)
+	v.AssertFileContains("notes/ref.md", `../assets/archive/paper\(1\).pdf`)
+}
+
 func TestIntegration_MoveRejectsSectionSource(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

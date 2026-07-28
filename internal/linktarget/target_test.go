@@ -142,3 +142,84 @@ func TestIsRavenTarget(t *testing.T) {
 		}
 	}
 }
+
+func TestRetargetFilePreservesAuthoredStyle(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	absoluteOld := filepath.ToSlash(filepath.Join(vaultPath, "assets", "a(1).pdf"))
+	absoluteNew := filepath.ToSlash(filepath.Join(vaultPath, "assets", "archive", "a(1).pdf"))
+	tests := []struct {
+		name       string
+		raw        string
+		sourceFile string
+		newKey     string
+		want       string
+	}{
+		{
+			name:       "parent relative",
+			raw:        `../assets/a(1).pdf#page=2`,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a(1).pdf",
+			want:       `../assets/archive/a(1).pdf#page=2`,
+		},
+		{
+			name:       "escaped parentheses",
+			raw:        `../assets/a\(1\).pdf`,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a(1).pdf",
+			want:       `../assets/archive/a\(1\).pdf`,
+		},
+		{
+			name:       "angle brackets",
+			raw:        `<../assets/a(1).pdf?download=1>`,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a(1).pdf",
+			want:       `<../assets/archive/a(1).pdf?download=1>`,
+		},
+		{
+			name:       "explicit current directory",
+			raw:        `./a.pdf`,
+			sourceFile: "assets/source.md",
+			newKey:     "assets/archive/a.pdf",
+			want:       `./archive/a.pdf`,
+		},
+		{
+			name:       "absolute",
+			raw:        absoluteOld,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a(1).pdf",
+			want:       absoluteNew,
+		},
+		{
+			name:       "file URI",
+			raw:        "file://" + absoluteOld,
+			sourceFile: "notes/source.md",
+			newKey:     "assets/archive/a(1).pdf",
+			want:       "file://" + absoluteNew,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := RetargetFile(tt.raw, tt.sourceFile, vaultPath, tt.newKey); got != tt.want {
+				t.Fatalf("RetargetFile() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveFileKey(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if got, want := ResolveFileKey("assets/report.pdf", vaultPath), filepath.Join(vaultPath, "assets", "report.pdf"); got != want {
+		t.Fatalf("ResolveFileKey() = %q, want %q", got, want)
+	}
+
+	absolute := filepath.Join(filepath.Dir(vaultPath), "external", "report.pdf")
+	if got := ResolveFileKey(filepath.ToSlash(absolute), vaultPath); got != filepath.Clean(absolute) {
+		t.Fatalf("ResolveFileKey(absolute) = %q, want %q", got, filepath.Clean(absolute))
+	}
+}

@@ -10,6 +10,8 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/linktarget"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/refresolve"
@@ -273,6 +275,21 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 		}
 	}
 
+	if db != nil {
+		fileLinks, linksErr := db.FileLinks()
+		if linksErr != nil {
+			recordIncomplete("file links", linksErr)
+		} else {
+			for _, issue := range detectBrokenFileLinkIssues(fileLinks, vaultPath, excludeMatcher, scope, walkPath, targetFileSet, allDocs) {
+				if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
+					continue
+				}
+				allIssues = append(allIssues, issue)
+				result.ErrorCount++
+			}
+		}
+	}
+
 	if db != nil && (scope.Type == "full" || scope.Type == "directory") {
 		for _, issue := range detectAssetIssues(db, vaultPath, excludeMatcher, scope, walkPath, targetFileSet) {
 			if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
@@ -467,6 +484,43 @@ func summaryFix(issueType string, issues []check.Issue) (string, string) {
 		}
 	}
 	return "", ""
+}
+
+func detectBrokenFileLinkIssues(links []model.Link, vaultPath string, excludeMatcher *ravenignore.Matcher, scope *Scope, walkPath string, targetFileSet map[string]bool, docs []*parser.ParsedDocument) []check.Issue {
+	var issues []check.Issue
+	for _, link := range links {
+		if excludeMatcher.Match(link.FilePath, false) {
+			continue
+		}
+		sourcePath := filepath.Join(vaultPath, filepath.FromSlash(link.FilePath))
+		if !isFileInScope(sourcePath, scope, walkPath, targetFileSet) {
+			continue
+		}
+
+		issue := check.Issue{
+			Level:    check.LevelError,
+			Type:     check.IssueBrokenFileLink,
+			FilePath: link.FilePath,
+			Line:     link.Line,
+			Message:  fmt.Sprintf("File link target %q does not exist", link.RawTarget),
+			Value:    link.RawTarget,
+			FixHint:  "Restore the target file or update/remove this Markdown link",
+		}
+		if doc := docByPath(docs, link.FilePath); doc != nil {
+			if !isIssueInScope(issue, doc, scope) {
+				continue
+			}
+		} else if scope.Type == "type_filter" || scope.Type == "trait_filter" {
+			continue
+		}
+
+		targetPath := linktarget.ResolveFileKey(link.NormalizedKey, vaultPath)
+		if _, err := os.Stat(targetPath); err == nil || !os.IsNotExist(err) {
+			continue
+		}
+		issues = append(issues, issue)
+	}
+	return issues
 }
 
 func detectAssetIssues(db *index.Database, vaultPath string, excludeMatcher *ravenignore.Matcher, scope *Scope, walkPath string, targetFileSet map[string]bool) []check.Issue {

@@ -63,23 +63,45 @@ func TestMoveFileUpdatesMarkdownAssetLinks(t *testing.T) {
 
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
-		WithFile("assets/pdfs/paper.pdf", "%PDF test\n").
-		WithFile("notes/ref.md", "Read [paper](assets/pdfs/paper.pdf).\n").
+		WithFile("assets/pdfs/paper(1).pdf", "%PDF test\n").
+		WithFile("notes/ref.md", "Read [angle](<../assets/pdfs/paper(1).pdf>) and [escaped](../assets/pdfs/paper\\(1\\).pdf).\n").
 		Build()
 
 	sch := loadTestSchema(t, v.Path)
 	indexVaultFiles(t, v.Path, sch, "notes/ref.md")
-	indexVaultAssets(t, v.Path, "assets/pdfs/paper.pdf")
+	indexVaultAssets(t, v.Path, "assets/pdfs/paper(1).pdf")
 	resolveVaultRefs(t, v.Path, sch)
+
+	preview, err := MoveFile(MoveFileRequest{
+		VaultPath:         v.Path,
+		VaultConfig:       config.DefaultVaultConfig(),
+		Schema:            sch,
+		SourceFile:        filepath.Join(v.Path, "assets/pdfs/paper(1).pdf"),
+		DestinationFile:   filepath.Join(v.Path, "assets/pdfs/archive/paper(1).pdf"),
+		SourceObjectID:    "assets/pdfs/paper(1).pdf",
+		DestinationObject: "assets/pdfs/archive/paper(1).pdf",
+		UpdateRefs:        true,
+		IsAsset:           true,
+		Preview:           true,
+	})
+	if err != nil {
+		t.Fatalf("MoveFile(preview) error = %v", err)
+	}
+	if len(preview.UpdatedRefs) != 1 || preview.UpdatedRefs[0] != "notes/ref" {
+		t.Fatalf("preview UpdatedRefs = %#v, want [notes/ref]", preview.UpdatedRefs)
+	}
+	if content := v.ReadFile("notes/ref.md"); strings.Contains(content, "assets/pdfs/archive") {
+		t.Fatalf("preview changed source link:\n%s", content)
+	}
 
 	result, err := MoveFile(MoveFileRequest{
 		VaultPath:         v.Path,
 		VaultConfig:       config.DefaultVaultConfig(),
 		Schema:            sch,
-		SourceFile:        filepath.Join(v.Path, "assets/pdfs/paper.pdf"),
-		DestinationFile:   filepath.Join(v.Path, "assets/pdfs/archive/paper.pdf"),
-		SourceObjectID:    "assets/pdfs/paper.pdf",
-		DestinationObject: "assets/pdfs/archive/paper.pdf",
+		SourceFile:        filepath.Join(v.Path, "assets/pdfs/paper(1).pdf"),
+		DestinationFile:   filepath.Join(v.Path, "assets/pdfs/archive/paper(1).pdf"),
+		SourceObjectID:    "assets/pdfs/paper(1).pdf",
+		DestinationObject: "assets/pdfs/archive/paper(1).pdf",
 		UpdateRefs:        true,
 		IsAsset:           true,
 	})
@@ -94,10 +116,13 @@ func TestMoveFileUpdatesMarkdownAssetLinks(t *testing.T) {
 	}
 
 	content := v.ReadFile("notes/ref.md")
-	if !strings.Contains(content, "[paper](assets/pdfs/archive/paper.pdf)") {
-		t.Fatalf("asset link not updated, content:\n%s", content)
+	if !strings.Contains(content, "[angle](<../assets/pdfs/archive/paper(1).pdf>)") {
+		t.Fatalf("angle-delimited asset link not updated, content:\n%s", content)
 	}
-	if _, err := os.Stat(filepath.Join(v.Path, "assets/pdfs/archive/paper.pdf")); err != nil {
+	if !strings.Contains(content, `[escaped](../assets/pdfs/archive/paper\(1\).pdf)`) {
+		t.Fatalf("escaped asset link not updated, content:\n%s", content)
+	}
+	if _, err := os.Stat(filepath.Join(v.Path, "assets/pdfs/archive/paper(1).pdf")); err != nil {
 		t.Fatalf("expected moved asset to exist: %v", err)
 	}
 }

@@ -42,6 +42,33 @@ See [[nonexistent/page]] for details.
 	}
 }
 
+func TestIntegration_CheckBrokenFileLinksSkipsURLs(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("notes/links.md", strings.Join([]string{
+			"[existing](../files/existing.txt)",
+			"[missing](../files/missing.txt)",
+			"[url](https://example.com/files/missing.txt)",
+			"",
+		}, "\n")).
+		WithFile("files/existing.txt", "present\n").
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("check")
+	if !strings.Contains(result.RawJSON, "broken_file_link") {
+		t.Fatalf("expected broken_file_link issue, got: %s", result.RawJSON)
+	}
+	if !strings.Contains(result.RawJSON, "../files/missing.txt") {
+		t.Fatalf("expected missing file target in issue, got: %s", result.RawJSON)
+	}
+	if strings.Contains(result.RawJSON, "https://example.com") {
+		t.Fatalf("URL target must not be checked for existence: %s", result.RawJSON)
+	}
+}
+
 func TestIntegration_CheckFixSubcommandAppliesShortRefFixes(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

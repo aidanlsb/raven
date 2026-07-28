@@ -36,6 +36,7 @@ const (
 	IssueDirectoryTypeMismatch   IssueType = "directory_type_mismatch"
 	IssueMissingAsset            IssueType = "missing_asset"
 	IssueOrphanedAsset           IssueType = "orphaned_asset"
+	IssueBrokenFileLink          IssueType = "broken_file_link"
 )
 
 // AllIssueTypes returns the stable issue type strings emitted by check.
@@ -73,6 +74,7 @@ func AllIssueTypes() []IssueType {
 		IssueDirectoryTypeMismatch,
 		IssueMissingAsset,
 		IssueOrphanedAsset,
+		IssueBrokenFileLink,
 	}
 }
 
