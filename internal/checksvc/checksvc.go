@@ -259,6 +259,18 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 		}
 	}
 
+	for _, issue := range detectMarkdownLinkToVaultNoteIssues(allDocs, vaultPath) {
+		doc := docByPath(allDocs, issue.FilePath)
+		if doc != nil && !isIssueInScope(issue, doc, scope) {
+			continue
+		}
+		if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
+			continue
+		}
+		allIssues = append(allIssues, issue)
+		result.ErrorCount++
+	}
+
 	for _, issue := range detectNonCanonicalIssues(allDocs, sch, vaultCfg) {
 		doc := docByPath(allDocs, issue.FilePath)
 		if doc != nil && !isIssueInScope(issue, doc, scope) {
@@ -470,6 +482,36 @@ func summaryFix(issueType string, issues []check.Issue) (string, string) {
 		}
 	}
 	return "", ""
+}
+
+func detectMarkdownLinkToVaultNoteIssues(docs []*parser.ParsedDocument, vaultPath string) []check.Issue {
+	var issues []check.Issue
+	for _, doc := range docs {
+		for _, link := range doc.MarkdownLinks {
+			if !linktarget.IsRavenTarget(link.Target, doc.FilePath, vaultPath) {
+				continue
+			}
+			targetInfo := linktarget.AnalyzeAuthored(link.RawTarget, link.Target, doc.FilePath, vaultPath)
+			if !strings.EqualFold(targetInfo.Ext, "md") {
+				continue
+			}
+
+			linkKind := "link"
+			if link.IsImage {
+				linkKind = "image"
+			}
+			issues = append(issues, check.Issue{
+				Level:    check.LevelError,
+				Type:     check.IssueMarkdownLinkToVaultNote,
+				FilePath: doc.FilePath,
+				Line:     link.Line,
+				Message:  fmt.Sprintf("Markdown %s target %q points to a vault note but is not tracked as a Raven reference", linkKind, link.RawTarget),
+				Value:    link.RawTarget,
+				FixHint:  "Use a Raven wikilink/object reference (for example, [[target]]) so backlinks and moves can track it",
+			})
+		}
+	}
+	return issues
 }
 
 func detectBrokenFileLinkIssues(links []model.Link, vaultPath string, excludeMatcher *ravenignore.Matcher, scope *Scope, walkPath string, targetFileSet map[string]bool, docs []*parser.ParsedDocument) []check.Issue {

@@ -35,6 +35,7 @@ const (
 	IssueNonCanonicalRef         IssueType = "non_canonical_ref"
 	IssueDirectoryTypeMismatch   IssueType = "directory_type_mismatch"
 	IssueBrokenFileLink          IssueType = "broken_file_link"
+	IssueMarkdownLinkToVaultNote IssueType = "markdown_link_to_vault_note"
 )
 
 // AllIssueTypes returns the stable issue type strings emitted by check.
@@ -71,6 +72,7 @@ func AllIssueTypes() []IssueType {
 		IssueNonCanonicalRef,
 		IssueDirectoryTypeMismatch,
 		IssueBrokenFileLink,
+		IssueMarkdownLinkToVaultNote,
 	}
 }
 

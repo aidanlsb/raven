@@ -54,7 +54,7 @@ on-disk index.`,
 		LongDesc: `Validates managed files in the vault against the schema.
 
 Returns structured issues with:
-- issue_type: unknown_type, missing_reference, broken_file_link, directory_type_mismatch, undefined_trait, unknown_frontmatter_key, etc.
+- issue_type: unknown_type, missing_reference, broken_file_link, markdown_link_to_vault_note, directory_type_mismatch, undefined_trait, unknown_frontmatter_key, etc.
 - fix_command: Suggested CLI command to fix the issue
 - fix_hint: Human-readable explanation of how to fix
 
@@ -72,6 +72,8 @@ are not checked.
 
 File-link existence is evaluated against the current filesystem when check
 runs. URL targets are never fetched and are not reported as broken.
+Markdown links/images targeting in-vault .md notes are reported because they
+must use Raven wikilinks to participate in backlinks and reference rewrites.
 
 For agents: Use this tool to discover issues, then use the fix_command suggestions to resolve them.
 For missing_reference summaries, preview generated pages with 'rvn check create-missing --json'
