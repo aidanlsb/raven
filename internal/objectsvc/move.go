@@ -62,6 +62,12 @@ type linkUpdatePlan struct {
 	replacement    string
 }
 
+type indexedLinkPosition struct {
+	filePath string
+	line     int
+	start    int
+}
+
 type fileSnapshot struct {
 	path    string
 	content []byte
@@ -316,16 +322,19 @@ func rewriteIndexedLinkTarget(content []byte, link model.Link, replacement strin
 	}
 	start := lineStart + link.PositionStart
 	end := lineStart + link.PositionEnd
-	if start < 0 || end > len(content) || start >= end {
-		return content, false
+	targetStart := -1
+	if start >= 0 && end <= len(content) && start < end {
+		span := content[start:end]
+		if targetOffset, found := indexedRawTargetOffset(span, []byte(link.RawTarget)); found {
+			targetStart = start + targetOffset
+		}
 	}
-
-	span := content[start:end]
-	targetOffset, ok := indexedRawTargetOffset(span, []byte(link.RawTarget))
-	if !ok {
-		return content, false
+	if targetStart < 0 {
+		targetStart, ok = nearestIndexedRawTarget(content, []byte(link.RawTarget), start)
+		if !ok {
+			return content, false
+		}
 	}
-	targetStart := start + targetOffset
 	targetEnd := targetStart + len(link.RawTarget)
 
 	updated := make([]byte, 0, len(content)-len(link.RawTarget)+len(replacement))
@@ -333,6 +342,31 @@ func rewriteIndexedLinkTarget(content []byte, link model.Link, replacement strin
 	updated = append(updated, replacement...)
 	updated = append(updated, content[targetEnd:]...)
 	return updated, true
+}
+
+func nearestIndexedRawTarget(content, rawTarget []byte, expectedStart int) (int, bool) {
+	best := -1
+	bestDistance := 0
+	for searchFrom := 0; searchFrom <= len(content)-len(rawTarget); {
+		relative := strings.Index(string(content[searchFrom:]), string(rawTarget))
+		if relative < 0 {
+			break
+		}
+		offset := searchFrom + relative
+		open := strings.LastIndex(string(content[:offset]), "](")
+		if open >= 0 && strings.TrimSpace(string(content[open+2:offset])) == "" {
+			distance := offset - expectedStart
+			if distance < 0 {
+				distance = -distance
+			}
+			if best < 0 || distance < bestDistance {
+				best = offset
+				bestDistance = distance
+			}
+		}
+		searchFrom = offset + 1
+	}
+	return best, best >= 0
 }
 
 func contentLineStart(content []byte, line int) (int, bool) {
@@ -475,6 +509,24 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 		return nil, append(warnings, fmt.Sprintf("Failed to read backlinks for move update: %v", err))
 	}
 
+	// Direct Markdown file links are duplicated in the legacy refs table while
+	// the asset entity remains. Exclude those rows here so only normalized_key
+	// identity controls file-link rewrites; wikilinks and field refs continue
+	// through the existing reference path.
+	directLinkPositions := make(map[indexedLinkPosition]struct{})
+	fileLinks, linksErr := db.FileLinks()
+	if linksErr != nil {
+		warnings = append(warnings, fmt.Sprintf("Failed to distinguish indexed file links from legacy asset refs: %v", linksErr))
+	} else {
+		for _, link := range fileLinks {
+			directLinkPositions[indexedLinkPosition{
+				filePath: link.FilePath,
+				line:     link.Line,
+				start:    link.PositionStart,
+			}] = struct{}{}
+		}
+	}
+
 	aliases, err := db.AllAliases()
 	if err != nil {
 		return nil, append(warnings, fmt.Sprintf("Failed to read aliases for move update: %v", err))
@@ -498,6 +550,16 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 
 	plans := make([]refUpdatePlan, 0, len(backlinks))
 	for _, bl := range backlinks {
+		if bl.Line != nil && bl.PositionStart != nil {
+			if _, isDirectLink := directLinkPositions[indexedLinkPosition{
+				filePath: bl.FilePath,
+				line:     *bl.Line,
+				start:    *bl.PositionStart,
+			}]; isDirectLink {
+				continue
+			}
+		}
+
 		base := refBaseFromTargetRaw(bl.TargetRaw)
 		if base == "" {
 			continue

@@ -129,7 +129,9 @@ func RetargetFile(rawTarget, sourceFile, vaultPath, newNormalizedKey string) str
 		prefixEnd := len(scheme) + 1
 		prefix := authoredPath[:prefixEnd]
 		rest := semanticPath[prefixEnd:]
-		if strings.HasPrefix(rest, "//") {
+		if strings.HasPrefix(rest, "///") && !strings.HasPrefix(filepath.ToSlash(newAbs), "/") {
+			prefix += "///"
+		} else if strings.HasPrefix(rest, "//") {
 			prefix += "//"
 		}
 		replacement = prefix + filepath.ToSlash(newAbs)
@@ -158,7 +160,7 @@ func RetargetFile(rawTarget, sourceFile, vaultPath, newNormalizedKey string) str
 
 	replacement = preservePathEscapes(authoredPath, replacement)
 	replacement += suffix
-	if angle {
+	if angle || strings.ContainsAny(replacement, " \t\r\n") {
 		replacement = "<" + replacement + ">"
 	}
 	return leading + replacement + trailing
@@ -190,13 +192,27 @@ func unescapePathStyle(target string) string {
 }
 
 func preservePathEscapes(authored, replacement string) string {
-	escapeParens := strings.Contains(authored, `\(`) || strings.Contains(authored, `\)`)
-	if !escapeParens {
-		return replacement
+	var escaped [256]bool
+	for i := 0; i+1 < len(authored); i++ {
+		if authored[i] == '\\' && isMarkdownEscapable(authored[i+1]) {
+			escaped[authored[i+1]] = true
+			i++
+		}
 	}
-	replacement = strings.ReplaceAll(replacement, `\`, `\\`)
-	replacement = strings.ReplaceAll(replacement, "(", `\(`)
-	return strings.ReplaceAll(replacement, ")", `\)`)
+	if strings.Count(replacement, "(") != strings.Count(replacement, ")") {
+		escaped['('] = true
+		escaped[')'] = true
+	}
+
+	var b strings.Builder
+	b.Grow(len(replacement))
+	for i := 0; i < len(replacement); i++ {
+		if escaped[replacement[i]] {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(replacement[i])
+	}
+	return b.String()
 }
 
 func isMarkdownEscapable(c byte) bool {
@@ -209,8 +225,12 @@ func isMarkdownEscapable(c byte) bool {
 func fileDestinationPath(target string) string {
 	if scheme, ok := uriScheme(target); ok && strings.EqualFold(scheme, "file") {
 		target = target[len(scheme)+1:]
-		target = strings.TrimPrefix(target, "//")
-		if !strings.HasPrefix(target, "/") {
+		if strings.HasPrefix(target, "///") && isWindowsAbsolute(target[3:]) {
+			target = target[3:]
+		} else {
+			target = strings.TrimPrefix(target, "//")
+		}
+		if !strings.HasPrefix(target, "/") && !isWindowsAbsolute(target) {
 			target = "/" + target
 		}
 	}
