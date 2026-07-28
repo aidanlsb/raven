@@ -77,18 +77,18 @@ func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string)
 		}
 		sql := fmt.Sprintf(`EXISTS (
 			WITH RECURSIVE descendants AS (
-				SELECT s.id, 1 AS depth
-				FROM sections s
+				SELECT child_s.id, 1 AS depth
+				FROM sections child_s
 				WHERE %s
 				UNION ALL
-				SELECT s.id, descendants.depth + 1
-				FROM sections s
-				JOIN descendants ON s.parent_section_id = descendants.id
+				SELECT nested_s.id, descendants.depth + 1
+				FROM sections nested_s
+				JOIN descendants ON nested_s.parent_section_id = descendants.id
 				WHERE descendants.depth < ?
 			)
 			SELECT 1 FROM sections desc_s
 			WHERE desc_s.id IN (SELECT id FROM descendants) AND %s
-		)`, directSectionParentCondition("s", scopeID), cond)
+		)`, directSectionParentCondition("child_s", scopeID), cond)
 		args = append([]interface{}{recursivePredicateMaxDepth}, args...)
 		if p.Negated() {
 			sql = "NOT " + sql

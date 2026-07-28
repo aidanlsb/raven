@@ -34,7 +34,7 @@ func TestRun_AllRootsCountIDsPageFull(t *testing.T) {
 	}{
 		{"object", "type:project", 2},
 		{"trait", "trait:due", 3},
-		{"section", "section", 5},
+		{"section", "section", 7},
 		{"link", "link", 9},
 	}
 
