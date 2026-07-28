@@ -10,17 +10,20 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Use `rvn search` for open-ended text discovery when structure is unknown.
 - Always pass `--json` so output is deterministic and parseable.
 - Use single-quoted query strings in shell invocations to avoid shell expansion.
-- Decide early whether the result should be objects (`type:<type>`), traits (`trait:<name>`), or assets (`asset`).
+- Decide early whether the result should be objects (`type:<type>`), sections (`section`), traits (`trait:<name>`), assets (`asset`), or outgoing link edges (`link`).
 - Use canonical object IDs and full asset paths in direct reference targets such
   as `refs([[project/raven]])`; short forms are resolution sugar and can become
   ambiguous.
 - Scope predicates are root-dependent and traits attach to the nearest section: prefer the forgiving forms `contains(...)`/`within(...)` over `has(...)`/`in(...)` for inline traits under headings. `type:project has(trait:todo)` usually returns nothing; use `type:project contains(trait:todo .value==todo)`.
+- Use `links(...)` to filter type/section/trait rows by outgoing links; use the
+  bare `link` root when the result should be edge rows. Both share the same
+  complete link-field grammar.
 - Count or sample before pulling large result sets into context.
 - For `--apply`, always preview first, then add `--confirm` only when the user approves.
 
 ## Choosing query vs search
 
-- `rvn query`: returns schema-aware item rows, real trait rows, or asset rows. Use when you know the type, field names, trait names, or asset metadata. Supports predicates and pagination; object and trait queries support bulk apply.
+- `rvn query`: returns schema-aware item rows, real trait rows, asset rows, or outgoing link-edge rows. Use when you know the type, field names, trait names, asset metadata, or link target/source criteria. Supports predicates and pagination; object and trait queries support bulk apply.
 - `rvn search`: returns file/snippet matches ranked by relevance. Use when you don't yet know the right type or structural context. Supports prefix matching, phrases, and boolean operators.
 - `rvn backlinks`/`rvn outlinks`: direct link traversal by object or asset ID. Use when you need the reference graph around one specific target.
 

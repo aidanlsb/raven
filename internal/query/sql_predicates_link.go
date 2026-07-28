@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/schema"
@@ -54,20 +55,27 @@ func buildLinkFieldPredicateSQL(p *FieldPredicate, alias string) (string, []inte
 		return cond, nil, nil
 	}
 
+	fieldType := linkFieldTypes[p.Field]
+	op := compareOpToSQL(p.CompareOp)
 	var cond string
 	var args []interface{}
-	if linkFieldTypes[p.Field] == schema.FieldTypeBool {
-		value := 0
-		if strings.EqualFold(p.Value, "true") {
-			value = 1
+	switch fieldType {
+	case schema.FieldTypeNumber:
+		n, err := strconv.ParseFloat(strings.TrimSpace(p.Value), 64)
+		if err != nil {
+			return "", nil, fmt.Errorf("link field '.%s' requires a numeric value", p.Field)
 		}
-		cond = fmt.Sprintf("%s %s ?", column, compareOpToSQL(p.CompareOp))
-		args = []interface{}{value}
-	} else if p.CompareOp == CompareEq || p.CompareOp == CompareNeq {
-		cond = fmt.Sprintf("LOWER(%s) %s LOWER(?)", column, compareOpToSQL(p.CompareOp))
-		args = []interface{}{p.Value}
-	} else {
-		cond = fmt.Sprintf("%s %s ?", column, compareOpToSQL(p.CompareOp))
+		cond = fmt.Sprintf("%s %s ?", column, op)
+		args = []interface{}{n}
+	case schema.FieldTypeBool:
+		cond = fmt.Sprintf("%s %s ?", column, op)
+		args = []interface{}{strings.EqualFold(p.Value, "true")}
+	default:
+		if p.CompareOp == CompareEq || p.CompareOp == CompareNeq {
+			cond = fmt.Sprintf("LOWER(%s) %s LOWER(?)", column, op)
+		} else {
+			cond = fmt.Sprintf("%s %s ?", column, op)
+		}
 		args = []interface{}{p.Value}
 	}
 
@@ -126,6 +134,32 @@ func (e *Executor) buildLinksPredicateSQL(p *LinksPredicate, alias string, root 
 	)`, sourceCond, linkCond)
 	if p.Negated() {
 		cond = "NOT (" + cond + ")"
+	}
+	return cond, args, nil
+}
+
+// buildLinkWithinPredicateSQL treats the source object and every section whose
+// subtree contains the indexed link line as ancestor scopes. This uses the
+// edge index directly; it does not re-parse Markdown or infer a target.
+func (e *Executor) buildLinkWithinPredicateSQL(p *WithinPredicate, alias string) (string, []interface{}, error) {
+	targetCond, args, err := e.scopeMatcherCondition(p.Target, p.SubQuery, "anc")
+	if err != nil {
+		return "", nil, err
+	}
+	cond := fmt.Sprintf(`EXISTS (
+		WITH link_scopes(id) AS (
+			SELECT %[1]s.source_id
+			UNION ALL
+			SELECT scope_sec.id
+			FROM sections scope_sec
+			WHERE scope_sec.file_object_id = %[1]s.source_id
+			  AND %[1]s.line_number >= scope_sec.line_start
+			  AND (scope_sec.subtree_line_end IS NULL OR %[1]s.line_number <= scope_sec.subtree_line_end)
+		)
+		SELECT 1 FROM link_scopes anc WHERE %[2]s
+	)`, alias, targetCond)
+	if p.Negated() {
+		cond = "NOT " + cond
 	}
 	return cond, args, nil
 }

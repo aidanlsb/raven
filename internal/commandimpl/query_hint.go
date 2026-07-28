@@ -19,7 +19,7 @@ func isSingleToken(s string) bool {
 // resolvable reference); a nil database or schema degrades to the base message
 // rather than changing behavior.
 func buildUnknownQuerySuggestion(db *index.Database, queryStr, dailyDir string, sch *schema.Schema) string {
-	base := "Queries must start with 'type:', 'trait:', 'section', or 'asset', or be a saved query name. Run 'rvn query saved list' to see saved queries."
+	base := "Queries must start with 'type:', 'trait:', 'section', 'asset', or 'link', or be a saved query name. Run 'rvn query saved list' to see saved queries."
 
 	q := strings.TrimSpace(queryStr)
 	if !isSingleToken(q) {

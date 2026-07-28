@@ -9,6 +9,7 @@ const (
 	QueryTypeTrait
 	QueryTypeAsset
 	QueryTypeSection
+	QueryTypeLink
 )
 
 // Query represents a parsed query.

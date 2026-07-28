@@ -280,6 +280,49 @@ func TestExecuteQuery_SectionModes(t *testing.T) {
 	}
 }
 
+func TestExecuteQuery_LinkModes(t *testing.T) {
+	t.Parallel()
+	rt := seededRuntime(t)
+
+	result, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "link .ext==pdf"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.QueryKind != "link" || result.Total != 1 || result.Returned != 1 || len(result.Links) != 1 {
+		t.Fatalf("unexpected link results: %#v", result)
+	}
+	if result.Links[0].SourceID != "project/raven" || result.Links[0].RawTarget != "docs/spec.pdf" {
+		t.Fatalf("unexpected link row: %#v", result.Links[0])
+	}
+
+	idsOnly, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "link", IDsOnly: true, Limit: 1})
+	if err != nil {
+		t.Fatalf("unexpected IDsOnly error: %v", err)
+	}
+	if len(idsOnly.IDs) != 1 || idsOnly.IDs[0] != "project/atlas" || idsOnly.Total != 2 {
+		t.Fatalf("unexpected link IDsOnly result: %#v", idsOnly)
+	}
+
+	countOnly, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "link", CountOnly: true})
+	if err != nil {
+		t.Fatalf("unexpected CountOnly error: %v", err)
+	}
+	if countOnly.Total != 2 || countOnly.Returned != 0 || len(countOnly.Links) != 0 {
+		t.Fatalf("unexpected link CountOnly result: %#v", countOnly)
+	}
+
+	paged, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "link", Limit: 1, Offset: 1})
+	if err != nil {
+		t.Fatalf("unexpected paged link query error: %v", err)
+	}
+	if paged.Total != 2 || paged.Returned != 1 || len(paged.Links) != 1 {
+		t.Fatalf("unexpected paged link result: %#v", paged)
+	}
+	if paged.Links[0].SourceID != "project/raven" {
+		t.Fatalf("unexpected paged link source: %#v", paged.Links[0])
+	}
+}
+
 // TestExecuteQuery_StructuralValidationWithoutSchema verifies that structural
 // (root/predicate) validation runs even when the runtime has no schema, while
 // structurally valid queries still execute. This is the intended hardening from
@@ -443,6 +486,18 @@ func seededRuntime(t *testing.T) *Runtime {
 	`)
 	if err != nil {
 		t.Fatalf("failed to seed sections: %v", err)
+	}
+
+	_, err = db.DB().Exec(`
+		INSERT INTO links (
+			source_id, source_type, file_path, line_number, position_start, position_end,
+			raw_target, display, is_image, scheme, ext, normalized_key
+		) VALUES
+			('project/raven', 'project', 'projects/raven.md', 5, 0, 21, 'docs/spec.pdf', 'Spec', 0, 'file', 'pdf', 'projects/docs/spec.pdf'),
+			('project/atlas', 'project', 'projects/atlas.md', 6, 0, 28, 'https://example.com', 'Example', 0, 'url', '', 'https://example.com')
+	`)
+	if err != nil {
+		t.Fatalf("failed to seed links: %v", err)
 	}
 
 	return &Runtime{

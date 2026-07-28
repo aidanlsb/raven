@@ -37,6 +37,16 @@ func TestParseObjectQuery(t *testing.T) {
 			wantType: QueryTypeAsset,
 		},
 		{
+			name:     "simple link query",
+			input:    "link",
+			wantType: QueryTypeLink,
+		},
+		{
+			name:     "link query with predicate and scope",
+			input:    "link .ext==pdf within(type:project)",
+			wantType: QueryTypeLink,
+		},
+		{
 			name:    "invalid query type",
 			input:   "foo:bar",
 			wantErr: true,
@@ -67,6 +77,17 @@ func TestParseObjectQuery(t *testing.T) {
 				t.Errorf("TypeName = %v, want %v", q.TypeName, tt.wantName)
 			}
 		})
+	}
+}
+func TestParseRejectsLinkKind(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse("link:pdf")
+	if err == nil {
+		t.Fatal("expected parse error, got nil")
+	}
+	if !strings.Contains(err.Error(), "link query root is bare 'link'") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 func TestParseRejectsAssetKind(t *testing.T) {

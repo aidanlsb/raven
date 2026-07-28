@@ -8,6 +8,7 @@ Quick reference for common Raven Query Language (RQL) patterns.
 - `section [predicates...]`
 - `trait:<name> [predicates...]`
 - `asset [predicates...]`
+- `link [predicates...]`
 
 ## Predicates
 
@@ -22,11 +23,17 @@ Quick reference for common Raven Query Language (RQL) patterns.
 - References:
   - `refs([[target]])` (objects/traits that reference target)
   - `refs(type:project .status==active)`
+  - `links(.ext==pdf)` (type/section/trait has a matching non-Raven outgoing link)
   - Upward scope (on `trait:`/`section`) — direct: `in([[target]])`, `in(type:...)`, `in(section ...)`
-  - Upward scope (on `trait:`/`section`) — recursive: `within([[target]])`, `within(type:...)`, `within(section ...)`
+  - Upward scope (on `trait:`/`section`), plus source scope on `link` — recursive: `within([[target]])`, `within(type:...)`, `within(section ...)`
   - Downward scope (on `type:`/`section`): `has(section ...)`, `has(trait:...)`, `contains(section ...)`, `contains(trait:...)`
 
 **Scope is root-dependent, and traits attach to the nearest section.** Lead with the forgiving forms: `type:project contains(trait:todo ...)` (not `has`) and `trait:todo within(type:project)` (not `in`). A `@todo` under `## Tasks` is not directly on the project object, so `has`/`in` (direct-only) usually return nothing.
+
+`links(...)` and the bare `link` root share `.source_id`, `.source_type`,
+`.file_path`, `.line`, `.position_start`, `.position_end`, `.raw_target`,
+`.display`, `.is_image`, `.scheme`, `.ext`, and `.normalized_key`. The root
+returns edge rows; `links(...)` filters type/section/trait source rows.
 
 ## Sub-queries
 
@@ -73,3 +80,5 @@ This can be very useful to provide lots of information to the user. If a questio
   - `type:meeting .attendees == [[person/freya]]`
 - Active projects:
   - `type:project .status == active`
+- PDF links from projects:
+  - `link .ext == pdf within(type:project)`

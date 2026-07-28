@@ -35,6 +35,8 @@ func (e *Executor) buildPredicateSQL(root QueryType, pred Predicate, alias, type
 		switch root {
 		case QueryTypeAsset:
 			return e.buildAssetFieldPredicateSQL(p, alias)
+		case QueryTypeLink:
+			return e.buildLinkPredicateSQL(p, alias)
 		case QueryTypeSection:
 			return e.buildSectionFieldPredicateSQL(p, alias)
 		case QueryTypeTrait:
@@ -52,6 +54,8 @@ func (e *Executor) buildPredicateSQL(root QueryType, pred Predicate, alias, type
 		switch root {
 		case QueryTypeAsset:
 			return e.buildAssetStringFuncPredicateSQL(p, alias)
+		case QueryTypeLink:
+			return e.buildLinkPredicateSQL(p, alias)
 		case QueryTypeTrait:
 			return e.buildTraitStringFuncPredicateSQL(p, alias)
 		case QueryTypeSection:
@@ -76,6 +80,9 @@ func (e *Executor) buildPredicateSQL(root QueryType, pred Predicate, alias, type
 		return e.buildInPredicateSQL(p, alias, root)
 
 	case *WithinPredicate:
+		if root == QueryTypeLink {
+			return e.buildLinkWithinPredicateSQL(p, alias)
+		}
 		return e.buildWithinPredicateSQL(p, alias, root)
 
 	case *RefsPredicate:

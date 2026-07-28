@@ -28,6 +28,7 @@ status: active
 ## Tasks
 
 Ship it @priority(high). See [[assets/pdfs/paper.pdf]].
+Read [the spec](docs/spec.pdf).
 `).
 		WithFile("assets/pdfs/paper.pdf", "%PDF-1.7\nhello").
 		Build()
@@ -182,6 +183,32 @@ func TestHandleQueryTypedSectionResult(t *testing.T) {
 	})
 }
 
+func TestHandleQueryTypedLinkResult(t *testing.T) {
+	t.Parallel()
+	v := newQueryPayloadVault(t)
+
+	result := runQueryHandler(t, v.Path, map[string]any{"query_string": "link .ext==pdf"})
+
+	payload, ok := result.Data.(commandpayload.QueryLinkResult)
+	if !ok {
+		t.Fatalf("Data type = %T, want commandpayload.QueryLinkResult", result.Data)
+	}
+	if payload.QueryKind != "link" {
+		t.Fatalf("query_kind = %q, want link", payload.QueryKind)
+	}
+	if len(payload.Items) != 1 || payload.Items[0].RawTarget != "docs/spec.pdf" {
+		t.Fatalf("items = %#v, want one docs/spec.pdf edge", payload.Items)
+	}
+
+	wire := marshalToMap(t, payload)
+	assertKeys(t, wire, []string{"query_kind", "items", "total", "returned", "offset", "limit", "has_more"})
+	item := wire["items"].([]interface{})[0].(map[string]interface{})
+	assertKeys(t, item, []string{
+		"num", "source_id", "source_type", "file_path", "line", "position_start",
+		"position_end", "raw_target", "display", "is_image", "scheme", "ext", "normalized_key",
+	})
+}
+
 func TestHandleQueryTypedIDsResult(t *testing.T) {
 	t.Parallel()
 	v := newQueryPayloadVault(t)
@@ -230,6 +257,15 @@ func TestHandleQueryTypedCountResult(t *testing.T) {
 		payload := result.Data.(commandpayload.QueryCountResult)
 		if payload.QueryKind != "asset" {
 			t.Fatalf("count payload = %#v, want asset", payload)
+		}
+		assertKeys(t, marshalToMap(t, payload), []string{"query_kind", "total"})
+	})
+
+	t.Run("link", func(t *testing.T) {
+		result := runQueryHandler(t, v.Path, map[string]any{"query_string": "link", "count-only": true})
+		payload := result.Data.(commandpayload.QueryCountResult)
+		if payload.QueryKind != "link" || payload.Total != 1 {
+			t.Fatalf("count payload = %#v, want link total=1", payload)
 		}
 		assertKeys(t, marshalToMap(t, payload), []string{"query_kind", "total"})
 	})

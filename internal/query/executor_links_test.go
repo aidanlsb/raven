@@ -47,6 +47,21 @@ func TestExecuteLinksPredicateByRoot(t *testing.T) {
 			query:   `type:project links(includes(.display, "SPEC"))`,
 			wantIDs: []string{"projects/mobile"},
 		},
+		{
+			name:    "shared source field grammar",
+			query:   "type:project links(.source_type==project)",
+			wantIDs: []string{"projects/mobile", "projects/website"},
+		},
+		{
+			name:    "shared numeric field grammar",
+			query:   "trait:todo links(.line==20)",
+			wantIDs: []string{"trait7"},
+		},
+		{
+			name:    "shared numeric position grammar",
+			query:   "type:project links(.position_start>=8)",
+			wantIDs: []string{"projects/website"},
+		},
 	}
 
 	for _, tt := range tests {

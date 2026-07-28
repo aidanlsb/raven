@@ -174,7 +174,12 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('projects/website', 'project', 'projects/website.md', 6, 0, 30, '../assets/report.pdf', 'report', 0, 'file', 'pdf', 'assets/report.pdf'),
 			('projects/website', 'project', 'projects/website.md', 25, 0, 32, '../assets/diagram.png', 'diagram', 1, 'file', 'png', 'assets/diagram.png'),
 			('projects/website', 'project', 'projects/website.md', 55, 0, 28, 'https://example.com', 'site', 0, 'url', '', 'https://example.com/'),
-			('projects/mobile', 'project', 'projects/mobile.md', 20, 0, 30, '../assets/spec.pdf', 'spec', 0, 'file', 'pdf', 'assets/spec.pdf');
+			('projects/mobile', 'project', 'projects/mobile.md', 20, 0, 30, '../assets/spec.pdf', 'spec', 0, 'file', 'pdf', 'assets/spec.pdf'),
+			('projects/website', 'project', 'projects/website.md', 6, 4, 28, 'docs/brief.pdf', 'Brief', 0, 'file', 'pdf', 'projects/docs/brief.pdf'),
+			('projects/website', 'project', 'projects/website.md', 25, 2, 37, 'assets/wireframe.png', 'Wireframe', 1, 'file', 'png', 'projects/assets/wireframe.png'),
+			('projects/website', 'project', 'projects/website.md', 55, 8, 51, 'https://example.com/Guide.PDF', 'Guide', 0, 'url', 'pdf', 'https://example.com/Guide.PDF'),
+			('projects/mobile', 'project', 'projects/mobile.md', 20, 1, 29, '../manual.pdf', 'Manual', 0, 'file', 'pdf', 'manual.pdf'),
+			('people/freya', 'person', 'people/freya.md', 12, 3, 34, 'https://example.com', 'Website', 0, 'url', '', 'https://example.com');
 
 		INSERT INTO assets (id, file_path, media_type, extension, filename, size_bytes, file_mtime, indexed_at) VALUES
 			('assets/images/diagram.png', 'assets/images/diagram.png', 'image/png', 'png', 'diagram.png', 2048, 100, 200),

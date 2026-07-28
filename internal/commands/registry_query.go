@@ -5,16 +5,16 @@ var queryRegistry = map[string]Meta{
 		Name:        "query",
 		Use:         "query <query_string|saved-query> [inputs...]",
 		Description: "Run a query using the Raven query language",
-		LongDesc: `Query items by type, sections, traits by name, or assets using the Raven query language.
+		LongDesc: `Query items, sections, traits, assets, or outgoing link edges using the Raven query language.
 
 Prefer query when the structure is known and you need real Raven items or
 trait instances, or when you need indexed asset metadata. Use search for broad
 text discovery when you do not yet know the right type, trait, or structural
 context. Search returns file/snippet matches; query returns schema-aware item
-rows, section rows, real trait rows, or asset rows.
+rows, section rows, real trait rows, asset rows, or outgoing link-edge rows.
 
 Choose the right retrieval tool:
-- query — structured filtering by type/section/trait/asset, field values, scope,
+- query — structured filtering by type/section/trait/asset/link, field values, scope,
   and references. Returns real items you can filter and bulk-apply to.
 - search — free-text discovery when you do not know the structure yet. Returns
   file/snippet matches only. search "@todo" finds the text "@todo", NOT real
@@ -38,6 +38,8 @@ Query syntax:
   Examples: trait:due .value<today, trait:highlight in(type:book)
 - Asset queries: asset [predicates...]
   Examples: asset .extension==pdf, asset startswith(.media_type, "image/")
+- Link queries: link [predicates...]
+  Examples: link .ext==pdf within(type:project), link .is_image==true
 
 Common predicates:
 - .field==value — Filter by field (.status==active, .priority==high)
@@ -48,9 +50,9 @@ Common predicates:
 - refs([[target]]) — References target (refs([[people/freya]]))
 - refs(type:...) — References items matching subquery (refs(type:project .status==active))
 - links(<link-predicate>) — Contains an outgoing non-Raven file or URL link
-  matching .ext, .is_image, .scheme, .raw_target, .display, or .normalized_key
-  (links(.ext==pdf)). Unlike refs()/refd(), links() is outgoing-only: external
-  files and URLs are leaves, so there is no linkd() inverse.
+  matching the shared link fields (links(.ext==pdf)). Unlike refs()/refd(),
+  links() is outgoing-only: external files and URLs are leaves, so there is no
+  linkd() inverse.
 - refd(type:...) — Asset is referenced by matching source items (asset refd(type:note))
 - Prefer canonical object IDs and full asset paths in direct reference targets;
   bare short forms are resolution sugar and can become ambiguous.
@@ -58,6 +60,14 @@ Common predicates:
 - oneof(.field, [a,b]) — Field/value is one of a set (this is set membership, NOT
   the scope predicate in(...); see below)
 - content("text") — Full-text search within content (content("meeting notes"))
+
+Link rows are outgoing Markdown links/images to non-Raven targets. They expose
+.source_id, .source_type, .file_path, .line, .position_start, .position_end,
+.raw_target, .display, .is_image, .scheme, .ext, and .normalized_key.
+The link root and links(...) share this complete field vocabulary, including
+numeric comparisons for line and positions. Use within(type:...) or
+within(section ...) to filter where a link occurs. Link queries do not support
+links(), refs(), refd(), content(), in(), or arrays.
 
 Scope predicates are root-dependent, and traits attach to the nearest section:
 - Prefer the forgiving forms contains(...) and within(...) unless you specifically
@@ -89,6 +99,7 @@ Saved query inputs must be declared in the saved query definition when using {{a
 You can then pass inputs by position (in args order) or as key=value pairs.
 
 Use --ids to output just IDs (one per line) for piping to other commands.
+For link queries, --ids projects each matching edge's source_id.
 Use --limit/--offset for paginated result windows.
 Use --count-only to return only the total match count without items.
 
@@ -103,6 +114,7 @@ Use --browse to open an interactive Raven picker with filtering and editor
 handoff for the selected result.
 Use --apply to run a bulk operation directly on query results.
 Section and asset queries return stable IDs but do not support --apply.
+Link queries return edge rows and do not support --apply.
 For sections, pipe IDs to add instead: query "section ..." --ids | rvn add <text> --stdin.
 
 For type queries (type:...):
@@ -114,11 +126,11 @@ For trait queries (trait:...):
 - Supported command: update <new_value> (updates trait values in-place)
 - Example: trait:todo .value==todo --apply "update done" marks todos as done`,
 		Args: []ArgMeta{
-			{Name: "query_string", Description: "Query string (e.g., 'type:project .status==active', 'asset .extension==pdf', or saved query name) optionally followed by saved-query inputs.", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'type:project .status==active', 'asset .extension==pdf', 'link .ext==pdf', or saved query name) optionally followed by saved-query inputs.", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "refresh", Description: "Refresh stale and journaled pending files before query", Type: FlagTypeBool},
-			{Name: "ids", Description: "Output only object/trait IDs, one per line (for piping)", Type: FlagTypeBool},
+			{Name: "ids", Description: "Output only result IDs; link queries output source IDs, one per edge", Type: FlagTypeBool},
 			{Name: "limit", Description: "Maximum number of query results to return (0 means no limit)", Type: FlagTypeInt},
 			{Name: "offset", Description: "Zero-based offset for query results", Type: FlagTypeInt},
 			{Name: "count-only", Description: "Return only the total count of matches (no items or IDs)", Type: FlagTypeBool},
@@ -138,6 +150,8 @@ For trait queries (trait:...):
 			"rvn query 'asset .extension==pdf' --json",
 			"rvn query 'asset startswith(.media_type, \"image/\")' --json",
 			"rvn query 'asset refd(type:project .status==active)' --json",
+			"rvn query 'link .ext==pdf within(type:project)' --json",
+			"rvn query 'link .is_image==true' --json",
 			"rvn query 'trait:due .value<today' --ids",
 			"rvn query 'trait:todo .value==todo' --limit 50 --offset 100 --json",
 			"rvn query 'trait:todo .value==todo' --count-only --json",
@@ -152,6 +166,7 @@ For trait queries (trait:...):
 			"Find items matching specific criteria",
 			"Find traits with specific values",
 			"Find assets by extension, media type, path, size, or referencing objects",
+			"Find outgoing file and URL links by target metadata and source scope",
 			"Probe result size with --count-only before reading",
 			"Page through large result sets with --limit/--offset while has_more is true",
 			"Bulk update query results with --apply",

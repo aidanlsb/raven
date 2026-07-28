@@ -19,20 +19,27 @@ func IsSectionQueryRoot(queryString string) bool {
 	return trimmed == "section" || strings.HasPrefix(trimmed, "section ")
 }
 
+// IsLinkQueryRoot reports whether a query string targets the link root.
+func IsLinkQueryRoot(queryString string) bool {
+	trimmed := strings.TrimSpace(queryString)
+	return trimmed == "link" || strings.HasPrefix(trimmed, "link ")
+}
+
 // IsFullQueryRoot reports whether a query string already starts with a concrete
-// query root (type:, trait:, section, or asset) rather than a saved-query name.
+// query root (type:, trait:, section, asset, or link) rather than a saved-query name.
 func IsFullQueryRoot(queryString string) bool {
 	trimmed := strings.TrimSpace(queryString)
 	return strings.HasPrefix(trimmed, "type:") ||
 		strings.HasPrefix(trimmed, "trait:") ||
 		IsAssetQueryRoot(trimmed) ||
-		IsSectionQueryRoot(trimmed)
+		IsSectionQueryRoot(trimmed) ||
+		IsLinkQueryRoot(trimmed)
 }
 
 // MatchInvocation reports whether a raw query string invokes a saved query.
 // It returns the saved query name, its definition, and any trailing input
 // tokens (positional or key=value) that follow the name. It returns
-// matched=false for asset/section roots, empty strings, or names that are not
+// matched=false for bare roots, empty strings, or names that are not
 // defined as saved queries. This is the single place both the CLI (for run-time
 // option merging) and the canonical command handler (for query resolution)
 // decide whether an invocation names a saved query.
@@ -42,7 +49,7 @@ func MatchInvocation(vaultCfg *config.VaultConfig, rawQueryString string) (name 
 	}
 
 	trimmed := strings.TrimSpace(rawQueryString)
-	if trimmed == "" || IsAssetQueryRoot(trimmed) || IsSectionQueryRoot(trimmed) {
+	if trimmed == "" || IsAssetQueryRoot(trimmed) || IsSectionQueryRoot(trimmed) || IsLinkQueryRoot(trimmed) {
 		return "", nil, nil, false
 	}
 

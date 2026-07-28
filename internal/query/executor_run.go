@@ -2,7 +2,7 @@ package query
 
 import "fmt"
 
-// Execute parses and executes a query string, returning either object or trait results.
+// Execute parses and executes a query string, returning rows for its query root.
 func (e *Executor) Execute(queryStr string) (interface{}, error) {
 	scoped := e.withExecutionNow()
 
@@ -11,11 +11,18 @@ func (e *Executor) Execute(queryStr string) (interface{}, error) {
 		return nil, fmt.Errorf("parse error: %w", err)
 	}
 
-	if q.Type == QueryTypeObject {
+	switch q.Type {
+	case QueryTypeObject:
 		return scoped.executeObjectQuery(q)
-	}
-	if q.Type == QueryTypeAsset {
+	case QueryTypeTrait:
+		return scoped.executeTraitQuery(q)
+	case QueryTypeAsset:
 		return scoped.executeAssetQuery(q)
+	case QueryTypeSection:
+		return scoped.executeSectionQuery(q)
+	case QueryTypeLink:
+		return scoped.executeLinkQuery(q)
+	default:
+		return nil, fmt.Errorf("unsupported query type: %d", q.Type)
 	}
-	return scoped.executeTraitQuery(q)
 }

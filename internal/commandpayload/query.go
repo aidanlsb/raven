@@ -70,6 +70,23 @@ type SectionItem struct {
 	ParentSectionID *string `json:"parent_section_id"`
 }
 
+// LinkItem is one outgoing Markdown link edge returned by a `link` query.
+type LinkItem struct {
+	Num           int    `json:"num"`
+	SourceID      string `json:"source_id"`
+	SourceType    string `json:"source_type"`
+	FilePath      string `json:"file_path"`
+	Line          int    `json:"line"`
+	PositionStart int    `json:"position_start"`
+	PositionEnd   int    `json:"position_end"`
+	RawTarget     string `json:"raw_target"`
+	Display       string `json:"display"`
+	IsImage       bool   `json:"is_image"`
+	Scheme        string `json:"scheme"`
+	Ext           string `json:"ext"`
+	NormalizedKey string `json:"normalized_key"`
+}
+
 // QueryObjectResult is the success payload for a `type:` query.
 type QueryObjectResult struct {
 	QueryKind  string       `json:"query_kind"`
@@ -104,6 +121,14 @@ type QuerySectionResult struct {
 	Pagination
 }
 
+// QueryLinkResult is the success payload for a `link` query.
+type QueryLinkResult struct {
+	QueryKind  string     `json:"query_kind"`
+	SavedQuery string     `json:"saved_query,omitempty"`
+	Items      []LinkItem `json:"items"`
+	Pagination
+}
+
 // QueryIDsResult is the success payload for any query run with --ids.
 type QueryIDsResult struct {
 	IDs []string `json:"ids"`
@@ -111,7 +136,7 @@ type QueryIDsResult struct {
 }
 
 // QueryCountResult is the success payload for any query run with --count-only.
-// Type and Trait are mutually exclusive discriminators; asset and section
+// Type and Trait are mutually exclusive discriminators; asset, section, and link
 // count responses omit both.
 type QueryCountResult struct {
 	QueryKind string `json:"query_kind"`

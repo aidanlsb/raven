@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// entitySQLSpec captures everything that differs between the four query roots
-// (object/trait/asset/section) when generating page/id/count SQL. Everything
+// entitySQLSpec captures everything that differs between the five query roots
+// (object/trait/asset/section/link) when generating page/id/count SQL. Everything
 // else — the WHERE-clause assembly, LIMIT/OFFSET handling, row execution, and
 // COUNT execution — is shared, so adding or changing a root is a single-spec
 // edit rather than a copy-paste across a dozen functions.
@@ -19,6 +19,7 @@ type entitySQLSpec struct {
 	table      string
 	alias      string
 	rowColumns string
+	idColumn   string
 	orderBy    string
 	// typeColumn is the discriminator column (e.g. "o.type"). Empty for roots
 	// that have no discriminator (assets, sections), which use a "1=1" base.
@@ -31,6 +32,7 @@ var (
 		table:      "objects",
 		alias:      "o",
 		rowColumns: "o.id, o.type, o.fields, o.file_path, o.line_start",
+		idColumn:   "o.id",
 		orderBy:    "o.file_path, o.line_start",
 		typeColumn: "o.type",
 	}
@@ -39,6 +41,7 @@ var (
 		table:      "traits",
 		alias:      "t",
 		rowColumns: "t.id, t.trait_type, t.value, t.content, t.file_path, t.line_number, t.parent_object_id",
+		idColumn:   "t.id",
 		orderBy:    "t.file_path, t.line_number",
 		typeColumn: "t.trait_type",
 	}
@@ -48,6 +51,7 @@ var (
 		alias:     "a",
 		rowColumns: "a.id, a.file_path, COALESCE(a.media_type, ''), COALESCE(a.extension, ''), " +
 			"a.filename, a.size_bytes, COALESCE(a.file_mtime, 0), COALESCE(a.indexed_at, 0)",
+		idColumn:   "a.id",
 		orderBy:    "a.file_path",
 		typeColumn: "",
 	}
@@ -56,7 +60,20 @@ var (
 		table:      "sections",
 		alias:      "s",
 		rowColumns: "s.id, s.file_object_id, s.file_path, s.slug, s.title, s.level, s.line_start, s.line_end, s.subtree_line_end, s.parent_section_id",
+		idColumn:   "s.id",
 		orderBy:    "s.file_path, s.line_start",
+		typeColumn: "",
+	}
+	linkSpec = entitySQLSpec{
+		queryType: QueryTypeLink,
+		table:     "links",
+		alias:     "l",
+		rowColumns: "l.source_id, l.source_type, l.file_path, l.line_number, l.position_start, l.position_end, " +
+			"l.raw_target, l.display, l.is_image, l.scheme, l.ext, l.normalized_key",
+		// Links have no durable edge ID. In IDs-only mode, project the source
+		// object ID once per matching edge.
+		idColumn:   "l.source_id",
+		orderBy:    "l.file_path, l.line_number, l.position_start, l.id",
 		typeColumn: "",
 	}
 )
@@ -71,6 +88,8 @@ func specForQueryType(t QueryType) (entitySQLSpec, error) {
 		return assetSpec, nil
 	case QueryTypeSection:
 		return sectionSpec, nil
+	case QueryTypeLink:
+		return linkSpec, nil
 	default:
 		return entitySQLSpec{}, fmt.Errorf("unsupported query type: %d", t)
 	}
@@ -86,6 +105,8 @@ func queryTypeName(t QueryType) string {
 		return "asset"
 	case QueryTypeSection:
 		return "section"
+	case QueryTypeLink:
+		return "link"
 	default:
 		return "unknown"
 	}
@@ -163,8 +184,8 @@ func (e *Executor) buildEntityIDSQL(q *Query, spec entitySQLSpec, limit, offset 
 	if err != nil {
 		return "", nil, err
 	}
-	sqlStr := fmt.Sprintf("SELECT %s.id\nFROM %s %s\nWHERE %s\nORDER BY %s",
-		spec.alias, spec.table, spec.alias, where, spec.orderBy)
+	sqlStr := fmt.Sprintf("SELECT %s\nFROM %s %s\nWHERE %s\nORDER BY %s",
+		spec.idColumn, spec.table, spec.alias, where, spec.orderBy)
 	sqlStr, args = appendLimitOffset(sqlStr, args, limit, offset)
 	return sqlStr, args, nil
 }

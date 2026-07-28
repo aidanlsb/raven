@@ -88,6 +88,29 @@ func scanAssetRows(rows *sql.Rows) ([]model.Asset, error) {
 	})
 }
 
+func scanLinkRows(rows *sql.Rows) ([]model.Link, error) {
+	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Link, error) {
+		var r model.Link
+		if err := rows.Scan(
+			&r.SourceID,
+			&r.SourceType,
+			&r.FilePath,
+			&r.Line,
+			&r.PositionStart,
+			&r.PositionEnd,
+			&r.RawTarget,
+			&r.Display,
+			&r.IsImage,
+			&r.Scheme,
+			&r.Ext,
+			&r.NormalizedKey,
+		); err != nil {
+			return model.Link{}, err
+		}
+		return r, nil
+	})
+}
+
 func scanIDRows(rows *sql.Rows) ([]string, error) {
 	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (string, error) {
 		var id string
@@ -175,6 +198,22 @@ func (e *Executor) executeSectionCountQuery(q *Query) (int, error) {
 	return runEntityCount(e, q, sectionSpec)
 }
 
+func (e *Executor) executeLinkQuery(q *Query) ([]model.Link, error) {
+	return runEntityPageRows(e, q, linkSpec, 0, 0, scanLinkRows)
+}
+
+func (e *Executor) executeLinkPageQuery(q *Query, limit, offset int) ([]model.Link, error) {
+	return runEntityPageRows(e, q, linkSpec, limit, offset, scanLinkRows)
+}
+
+func (e *Executor) executeLinkIDQuery(q *Query, limit, offset int) ([]string, error) {
+	return runEntityIDs(e, q, linkSpec, limit, offset)
+}
+
+func (e *Executor) executeLinkCountQuery(q *Query) (int, error) {
+	return runEntityCount(e, q, linkSpec)
+}
+
 // ExecuteObjectQuery executes a type query and returns matching objects.
 func (e *Executor) ExecuteObjectQuery(q *Query) ([]model.Object, error) {
 	return e.withExecutionNow().executeObjectQuery(q)
@@ -249,4 +288,24 @@ func (e *Executor) ExecuteSectionIDQuery(q *Query, limit, offset int) ([]string,
 
 func (e *Executor) ExecuteSectionCountQuery(q *Query) (int, error) {
 	return e.withExecutionNow().executeSectionCountQuery(q)
+}
+
+// ExecuteLinkQuery executes a link query and returns matching outgoing edges.
+func (e *Executor) ExecuteLinkQuery(q *Query) ([]model.Link, error) {
+	return e.withExecutionNow().executeLinkQuery(q)
+}
+
+// ExecuteLinkPageQuery executes a link query with SQL-level pagination.
+func (e *Executor) ExecuteLinkPageQuery(q *Query, limit, offset int) ([]model.Link, error) {
+	return e.withExecutionNow().executeLinkPageQuery(q, limit, offset)
+}
+
+// ExecuteLinkIDQuery executes a link query returning source IDs, one per edge.
+func (e *Executor) ExecuteLinkIDQuery(q *Query, limit, offset int) ([]string, error) {
+	return e.withExecutionNow().executeLinkIDQuery(q, limit, offset)
+}
+
+// ExecuteLinkCountQuery executes a link query as COUNT(*).
+func (e *Executor) ExecuteLinkCountQuery(q *Query) (int, error) {
+	return e.withExecutionNow().executeLinkCountQuery(q)
 }

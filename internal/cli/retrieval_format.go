@@ -139,6 +139,41 @@ func printQuerySectionResults(queryStr string, results []model.Section) {
 	fmt.Println(table.Render())
 }
 
+func printQueryLinkResults(queryStr string, results []model.Link) {
+	if len(results) == 0 {
+		fmt.Println(ui.Starf("No links found for: %s", queryStr))
+		return
+	}
+
+	fmt.Printf("%s %s\n\n", ui.SectionHeader("link"), ui.Badge(fmt.Sprintf("%d", len(results))))
+
+	display := ui.NewDisplayContext()
+	table := ui.NewResultsTable(display, ui.SearchLayout())
+	table.SetHeaders(linkBrowseHeaders())
+
+	for i, r := range results {
+		target := r.RawTarget
+		if r.Display != "" && r.Display != r.RawTarget {
+			target = fmt.Sprintf("%s (%s)", r.Display, r.RawTarget)
+		}
+		kind := r.Scheme
+		if r.Ext != "" {
+			kind += " ." + r.Ext
+		}
+		if r.IsImage {
+			kind += " image"
+		}
+		location := formatLocationLinkSimpleStyled(r.FilePath, r.Line, ui.Muted.Render)
+		table.AddRow(ui.ResultRow{
+			Num:      i + 1,
+			Cells:    []string{ui.FormatRowNum(i+1, len(results)), ui.TruncateWithEllipsis(target, table.GetColumnWidth(1)), kind, location},
+			Location: fmt.Sprintf("%s:%d", r.FilePath, r.Line),
+		})
+	}
+
+	fmt.Println(table.Render())
+}
+
 func pipeItemsForObjectResults(results []model.Object) []PipeableItem {
 	pipeItems := make([]PipeableItem, len(results))
 	for i, r := range results {
@@ -177,6 +212,25 @@ func pipeItemsForSectionResults(results []model.Section) []PipeableItem {
 			ID:       r.ID,
 			Content:  r.Title,
 			Location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
+		}
+	}
+	return pipeItems
+}
+
+func pipeItemsForLinkResults(results []model.Link) []PipeableItem {
+	pipeItems := make([]PipeableItem, len(results))
+	for i, r := range results {
+		content := r.Display
+		if content == "" {
+			content = r.RawTarget
+		} else if content != r.RawTarget {
+			content += " (" + r.RawTarget + ")"
+		}
+		pipeItems[i] = PipeableItem{
+			Num:      i + 1,
+			ID:       r.SourceID,
+			Content:  content,
+			Location: fmt.Sprintf("%s:%d", r.FilePath, r.Line),
 		}
 	}
 	return pipeItems

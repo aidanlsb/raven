@@ -74,6 +74,11 @@ func TestMatchInvocation(t *testing.T) {
 			raw:         "section .title==Tasks",
 			wantMatched: false,
 		},
+		{
+			name:        "link root is never a saved invocation",
+			raw:         "link .ext==pdf",
+			wantMatched: false,
+		},
 	}
 
 	for _, tt := range tests {

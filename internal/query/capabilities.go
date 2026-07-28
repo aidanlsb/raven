@@ -1,7 +1,7 @@
 package query
 
 // This file is the single source of truth for which predicate kinds are legal
-// at which query root (object/trait/asset/section). Both the validator
+// at which query root (object/trait/asset/section/link). Both the validator
 // (validator.go) and the SQL executor (sql_predicate_dispatch.go) consult this
 // table so the legality rules cannot drift apart.
 //
@@ -169,6 +169,48 @@ var disallowedPredicates = map[QueryType]map[predKind]predicateCapability{
 		predKindAt: {
 			message:    "at() predicate is only valid for trait queries",
 			suggestion: "Use at(trait:...) to find traits co-located with other traits",
+		},
+	},
+	QueryTypeLink: {
+		predKindArray: {
+			message:    "array predicates are not valid for link queries",
+			suggestion: "Link fields are scalar edge metadata fields",
+		},
+		predKindHas: {
+			message:    "has() predicate is not valid for link queries",
+			suggestion: "Links do not contain Raven sections or traits; use within(...) to filter their source scope",
+		},
+		predKindContains: {
+			message:    "contains() predicate is not valid for link queries",
+			suggestion: "Links do not contain Raven sections or traits; use within(...) to filter their source scope",
+		},
+		predKindIn: {
+			message:    "in() predicate is not valid for link queries",
+			suggestion: "Use within(type:...) or within(section ...) to filter where links occur",
+		},
+		predKindRefs: {
+			message:    "refs() predicate is not valid for link queries",
+			suggestion: "Link rows are outgoing edges; filter their indexed target fields directly",
+		},
+		predKindLinks: {
+			message:    "links() predicate is not valid for link queries",
+			suggestion: "Filter link rows directly with the shared link fields",
+		},
+		predKindRefd: {
+			message:    "refd() predicate is not valid for link queries",
+			suggestion: "Links are outgoing-only edge rows and do not have inverse edges",
+		},
+		predKindContent: {
+			message:    "content() predicate is not valid for link queries",
+			suggestion: `Use string functions on link fields, such as includes(.display, "text")`,
+		},
+		predKindValue: {
+			message:    "value predicates are not valid for link queries",
+			suggestion: "Use link fields such as .raw_target, .display, .ext, or .scheme",
+		},
+		predKindAt: {
+			message:    "at() predicate is not valid for link queries",
+			suggestion: "Use within(...) to filter link source scope",
 		},
 	},
 }

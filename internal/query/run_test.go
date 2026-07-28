@@ -12,6 +12,8 @@ func runResultRowCount(qt QueryType, r *RunResult) int {
 		return len(r.Assets)
 	case QueryTypeSection:
 		return len(r.Sections)
+	case QueryTypeLink:
+		return len(r.Links)
 	default:
 		return 0
 	}
@@ -36,6 +38,7 @@ func TestRun_AllRootsCountIDsPageFull(t *testing.T) {
 		{"trait", "trait:due", 3},
 		{"asset", "asset", 3},
 		{"section", "section", 5},
+		{"link", "link", 9},
 	}
 
 	for _, tc := range cases {
