@@ -15,6 +15,7 @@ check failures.
 | `unknown_type` | File uses a type not in schema | Add/rename type in schema, or change file type |
 | `missing_reference` | Link points to missing object/section | Preview `check create-missing`, then confirm or update/remove the reference |
 | `broken_file_link` | Indexed Markdown file link/image target is missing on disk | Restore the target file or update/remove the Markdown link; URL targets are not checked |
+| `markdown_link_to_vault_note` | Markdown link/image targets a `.md` note inside the vault, so Raven does not track it as a reference | Convert it to a Raven object/section wikilink (`[[...]]`) so backlinks and moves track it |
 | `local_fragment_ref` | Wikilink uses unsupported source-relative fragment syntax like `[[#tasks]]` | Rewrite it as a global section ref like `[[object#tasks]]` |
 | `stale_fragment` | Link points to an existing object but a missing section fragment | Update the fragment to match an existing heading, or remove the fragment. Prevent this with `raven_invoke(command="section_rename", args={"section_id":"file#section","new_heading_text":"New Heading"})`, which rewrites inbound refs |
 | `ambiguous_reference` | Link matches multiple objects, aliases, or short names | Rewrite the link with a canonical object ID, or rename the conflicting alias/short name |

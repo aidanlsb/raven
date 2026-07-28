@@ -14,14 +14,15 @@ import (
 
 // ParsedDocument represents a fully parsed document.
 type ParsedDocument struct {
-	FilePath   string             // File path relative to vault
-	RawContent string             // Raw markdown content
-	Body       string             // Content without frontmatter (for full-text search indexing)
-	Objects    []*model.Object    // All objects in this document
-	Sections   []*model.Section   // All sections in this document
-	Traits     []*model.Trait     // All traits in this document
-	Refs       []*model.Reference // All references in this document
-	Links      []*model.Link      // Markdown links to non-Raven targets
+	FilePath      string             // File path relative to vault
+	RawContent    string             // Raw markdown content
+	Body          string             // Content without frontmatter (for full-text search indexing)
+	Objects       []*model.Object    // All objects in this document
+	Sections      []*model.Section   // All sections in this document
+	Traits        []*model.Trait     // All traits in this document
+	Refs          []*model.Reference // All references in this document
+	MarkdownLinks []MarkdownLink     // All direct Markdown links/images before target classification
+	Links         []*model.Link      // Markdown links to non-Raven targets
 }
 
 // ParseOptions contains options for parsing documents.
@@ -195,14 +196,15 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	computeSectionLineEnds(sections)
 
 	return &ParsedDocument{
-		FilePath:   relativePath,
-		RawContent: content,
-		Body:       bodyContent,
-		Objects:    objects,
-		Sections:   sections,
-		Traits:     traits,
-		Refs:       refs,
-		Links:      links,
+		FilePath:      relativePath,
+		RawContent:    content,
+		Body:          bodyContent,
+		Objects:       objects,
+		Sections:      sections,
+		Traits:        traits,
+		Refs:          refs,
+		MarkdownLinks: astContent.Links,
+		Links:         links,
 	}, nil
 }
 

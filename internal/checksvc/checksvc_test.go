@@ -168,6 +168,57 @@ func TestRun_ReportsBrokenFileLinksAndSkipsURLs(t *testing.T) {
 	}
 }
 
+func TestRun_ReportsMarkdownLinksAndImagesToVaultNotes(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("notes/source.md", strings.Join([]string{
+			"[note](../type/foo.md)",
+			"![note image](../type/foo.md#details)",
+			"[file](../files/manual.pdf)",
+			"[url](https://example.com/foo.md)",
+			"[[type/foo]]",
+			"",
+		}, "\n")).
+		WithFile("type/foo.md", "# Foo\n\n## Details\n").
+		WithFile("files/manual.pdf", "present\n").
+		Build()
+
+	sch, err := schema.Load(vault.Path)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+	result, err := runCheckTest(t, vault.Path, config.DefaultVaultConfig(), sch, Options{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	var issues []check.Issue
+	for _, issue := range result.Issues {
+		if issue.Type == check.IssueMarkdownLinkToVaultNote {
+			issues = append(issues, issue)
+		}
+	}
+	if len(issues) != 2 {
+		t.Fatalf("markdown_link_to_vault_note issues = %#v, want link and image only", issues)
+	}
+	if issues[0].Value != "../type/foo.md" || issues[0].Line != 1 {
+		t.Errorf("link issue = %#v, want target on line 1", issues[0])
+	}
+	if issues[1].Value != "../type/foo.md#details" || issues[1].Line != 2 {
+		t.Errorf("image issue = %#v, want target on line 2", issues[1])
+	}
+	for _, issue := range issues {
+		if issue.Level != check.LevelError {
+			t.Errorf("issue level = %v, want error", issue.Level)
+		}
+		if !strings.Contains(issue.FixHint, "[[target]]") {
+			t.Errorf("fix hint = %q, want wikilink guidance", issue.FixHint)
+		}
+	}
+}
+
 func TestRun_IgnoresExcludedMarkdown(t *testing.T) {
 	t.Parallel()
 

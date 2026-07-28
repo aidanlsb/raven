@@ -69,6 +69,25 @@ func TestIntegration_CheckBrokenFileLinksSkipsURLs(t *testing.T) {
 	}
 }
 
+func TestIntegration_CheckReportsMarkdownLinkToVaultNote(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("notes/source.md", "[foo](../type/foo.md)\n").
+		WithFile("type/foo.md", "# Foo\n").
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("check")
+	if !strings.Contains(result.RawJSON, "markdown_link_to_vault_note") {
+		t.Fatalf("expected markdown_link_to_vault_note issue, got: %s", result.RawJSON)
+	}
+	if !strings.Contains(result.RawJSON, "../type/foo.md") {
+		t.Fatalf("expected Markdown target in issue, got: %s", result.RawJSON)
+	}
+}
+
 func TestIntegration_CheckFixSubcommandAppliesShortRefFixes(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
