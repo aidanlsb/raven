@@ -176,7 +176,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		if linktarget.IsRavenTarget(astLink.Target, relativePath, vaultPath) {
 			continue
 		}
-		targetInfo := linktarget.Analyze(astLink.Target, relativePath, vaultPath)
+		targetInfo := linktarget.AnalyzeAuthored(astLink.RawTarget, astLink.Target, relativePath, vaultPath)
 		links = append(links, &model.Link{
 			SourceID:      fileID,
 			SourceType:    fileType,

@@ -29,6 +29,17 @@ func ApplyAllRefVariantsAtLine(content string, line int, oldID, oldBase, newRef,
 	return out
 }
 
+func applyNonMarkdownRefVariantsAtLine(content string, line int, oldID, oldBase, newRef, objectRoot, pageRoot string) string {
+	decide := moveRefDecider(oldID, oldBase, newRef, objectRoot, pageRoot)
+	out, _ := refs.RewriteContentAtLine(content, line, func(occ refs.Occurrence) (string, bool) {
+		if occ.Kind == refs.KindMarkdownLink {
+			return "", false
+		}
+		return decide(occ)
+	})
+	return out
+}
+
 // moveRefDecider builds a refs.Decider that maps any recognized written form of
 // the moved object's base target to newRef. The recognized forms mirror the
 // variants a reference may take: the canonical object ID, the base as written
