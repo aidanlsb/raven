@@ -29,6 +29,18 @@ rvn query 'asset startswith(.media_type, "image/")' --json
 rvn query 'asset refd(type:project .status==active)' --json
 ```
 
+## Outgoing links
+
+```bash
+rvn query 'type:project links(.ext==pdf)' --json
+rvn query 'trait:todo links(.is_image==true)' --json
+rvn query 'link .ext==pdf within(type:project)' --json
+```
+
+Use `links(...)` when the results should remain source entities; use the bare
+`link` root when the results should be individual edge rows. Both use the same
+six link filter fields.
+
 ## Trait-centric work
 
 ```bash
@@ -48,7 +60,7 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --json
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json
 ```
 
-In each pair, the first command previews the bulk change and the second applies it after approval. Section and asset queries do not support `--apply`; for sections, pipe IDs into bulk add instead: `rvn query 'section .title==Tasks' --ids | rvn add "text" --stdin --confirm`.
+In each pair, the first command previews the bulk change and the second applies it after approval. Section, asset, and link queries do not support `--apply`; for sections, pipe IDs into bulk add instead: `rvn query 'section .title==Tasks' --ids | rvn add "text" --stdin --confirm`.
 
 ## Saved query lifecycle
 

@@ -129,3 +129,29 @@ func (e *Executor) buildLinksPredicateSQL(p *LinksPredicate, alias string, root 
 	}
 	return cond, args, nil
 }
+
+// buildLinkWithinPredicateSQL treats the source object and every section whose
+// subtree contains the indexed link line as ancestor scopes. This uses the
+// edge index directly; it does not re-parse Markdown or infer a target.
+func (e *Executor) buildLinkWithinPredicateSQL(p *WithinPredicate, alias string) (string, []interface{}, error) {
+	targetCond, args, err := e.scopeMatcherCondition(p.Target, p.SubQuery, "anc")
+	if err != nil {
+		return "", nil, err
+	}
+	cond := fmt.Sprintf(`EXISTS (
+		WITH link_scopes(id) AS (
+			SELECT %[1]s.source_id
+			UNION ALL
+			SELECT scope_sec.id
+			FROM sections scope_sec
+			WHERE scope_sec.file_object_id = %[1]s.source_id
+			  AND %[1]s.line_number >= scope_sec.line_start
+			  AND (scope_sec.subtree_line_end IS NULL OR %[1]s.line_number <= scope_sec.subtree_line_end)
+		)
+		SELECT 1 FROM link_scopes anc WHERE %[2]s
+	)`, alias, targetCond)
+	if p.Negated() {
+		cond = "NOT " + cond
+	}
+	return cond, args, nil
+}

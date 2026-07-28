@@ -6,6 +6,7 @@
 - Section query: `section [predicates...]`
 - Trait query: `trait:<name> [predicates...]`
 - Asset query: `asset [predicates...]`
+- Link query: `link [predicates...]`
 
 Examples:
 
@@ -14,28 +15,30 @@ type:project .status==active
 section .title==Tasks
 trait:due .value<today
 asset .extension==pdf
+link .ext==pdf within(type:project)
 ```
 
-Every query returns exactly one result kind: objects, sections, traits, or assets. Use `rvn schema`, `rvn schema type <name>`, and `rvn schema trait <name>` to verify local names before writing specific predicates.
+Every query returns exactly one result kind: objects, sections, traits, assets, or outgoing link edges. Use `rvn schema`, `rvn schema type <name>`, and `rvn schema trait <name>` to verify local names before writing specific predicates.
 
 ## Predicate-by-root capability matrix
 
 Scope/structural predicates are root-dependent. Predicates rejected for a root produce a validation error.
 
-| Predicate / family | `type:<t>` | `section` | `trait:<name>` | `asset` |
-|--------------------|:----------:|:---------:|:--------------:|:-------:|
-| Field compares, `exists(.field)` | yes | yes (built-in fields) | yes (`.value`) | yes |
-| `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes |
-| String funcs (`includes`/`startswith`/`endswith`/`matches`) | yes | yes (non-numeric) | yes (`.value`) | yes |
-| `any`/`all`/`none` | yes (array fields) | no | yes (array `.value`) | no |
-| `has(...)` (direct downward) | yes | yes | no | no |
-| `contains(...)` (recursive downward) | yes | yes | no | no |
-| `in(...)` (direct upward scope) | no | yes | yes | no |
-| `within(...)` (recursive upward scope) | no | yes | yes | no |
-| `at(trait:...)` | no | no | yes | no |
-| `refs(...)` | yes | yes | yes | no |
-| `refd(...)` | yes | yes | no | yes |
-| `content("term")` | yes | yes | yes | no |
+| Predicate / family | `type:<t>` | `section` | `trait:<name>` | `asset` | `link` |
+|--------------------|:----------:|:---------:|:--------------:|:-------:|:------:|
+| Field compares, `exists(.field)` | yes | yes (built-in fields) | yes (`.value`) | yes | yes |
+| `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes | yes |
+| String funcs (`includes`/`startswith`/`endswith`/`matches`) | yes | yes (non-numeric) | yes (`.value`) | yes | yes (string fields) |
+| `any`/`all`/`none` | yes (array fields) | no | yes (array `.value`) | no | no |
+| `has(...)` (direct downward) | yes | yes | no | no | no |
+| `contains(...)` (recursive downward) | yes | yes | no | no | no |
+| `in(...)` (direct upward scope) | no | yes | yes | no | no |
+| `within(...)` (recursive upward/source scope) | no | yes | yes | no | yes |
+| `at(trait:...)` | no | no | yes | no | no |
+| `refs(...)` | yes | yes | yes | no | no |
+| `links(...)` | yes | yes | yes | no | no |
+| `refd(...)` | yes | yes | no | yes | no |
+| `content("term")` | yes | yes | yes | no | no |
 
 Scope shortcuts: downward (`has`/`contains`) live on container roots (`type:`/`section`); upward (`in`/`within`) live on contained roots (`trait:`/`section`). `has`/`in` are direct-only; `contains`/`within` are recursive.
 
@@ -59,7 +62,9 @@ Values can be bare identifiers, quoted strings, or wikilink references. `.field=
 
 String functions are case-insensitive by default. Add `true` as the third argument for case-sensitive matching, for example `includes(.name, "API", true)`.
 
-Use string predicates on scalar string-like type fields, trait `.value`, and string asset fields. For array fields, use `any()`/`all()`/`none()` with `_`.
+Use string predicates on scalar string-like type fields, trait `.value`, string
+asset fields, and the string-valued shared link fields. For array fields, use
+`any()`/`all()`/`none()` with `_`.
 
 ## Array predicates
 
@@ -82,6 +87,7 @@ Type queries support field predicates plus:
 - `contains(trait:...)`: matching trait recursively in the section tree
 - `contains(section...)`: matching section recursively in the section tree
 - `refs(...)`: object references a target or matching type query
+- `links(...)`: object has an outgoing non-Raven link matching the shared link fields
 - `refd(...)`: object is referenced by a target, matching type query, or matching trait query
 - `content("term")`: full-text content search within objects
 
@@ -106,6 +112,7 @@ Trait queries support `.value` predicates plus:
 - `within(...)`: trait is within a matching object or section scope
 - `at(trait:...)`: trait is co-located with a matching trait on the same line
 - `refs(...)`: trait line references a target or matching type query
+- `links(...)`: trait line contains an outgoing non-Raven link matching the shared link fields
 - `content("term")`: term appears in the trait line
 - `any(.value, ...)`, `all(.value, ...)`, `none(.value, ...)`: element predicates for array-valued traits
 
@@ -148,6 +155,42 @@ asset refd(trait:todo .value==todo)
 
 Asset queries support scalar predicates, string predicates on string asset fields, boolean composition, and `refd(...)`. Assets do not support `refs(...)`, `has(...)`, `content(...)`, scope predicates, or array predicates.
 
+## Outgoing link predicates
+
+Use `links(...)` on type, section, or trait roots to filter source entities by
+outgoing non-Raven file/URL links:
+
+```text
+type:project links(.ext==pdf)
+section links(.scheme==url)
+trait:todo links(.is_image==true)
+```
+
+`links(...)` and the bare `link` root share exactly these filter fields:
+`.ext`, `.is_image`, `.scheme`, `.raw_target`, `.display`, and
+`.normalized_key`. There is no inverse `linkd()` predicate.
+
+## Link-query predicates
+
+The bare `link` root returns one indexed outgoing Markdown link/image edge per
+row. Result fields are `.source_id`, `.source_type`, `.file_path`, `.line`,
+`.position_start`, `.position_end`, `.raw_target`, `.display`, `.is_image`,
+`.scheme`, `.ext`, and `.normalized_key`.
+
+```text
+link .ext==pdf within(type:project)
+link .is_image==true within(section .title==Resources)
+link .scheme==url includes(.display, "documentation")
+```
+
+Use the same six filter fields as `links(...)`; source/location fields are
+output metadata. `within(type:...)` filters the source file object;
+`within(section ...)` filters by the indexed link line in a matching section
+subtree. Link rows are outgoing-only and do not support `in()`, `refs()`,
+`links()`, `refd()`, `content()`, structural containment, or arrays.
+`link --ids` projects `source_id` once per matching edge, and link queries do
+not support `--apply`.
+
 ## Boolean composition
 
 - `!pred` (NOT), highest precedence
@@ -182,5 +225,5 @@ type:date .date>=2026-05-01 .date<=today
 
 - Object queries support `--apply "set ..."`, `add`, `delete`, and `move`.
 - Trait queries support only `--apply "update <new_value>"`.
-- Section and asset queries do not support `--apply`.
+- Section, asset, and link queries do not support `--apply`.
 - All apply flows preview first; add `--confirm` to execute.

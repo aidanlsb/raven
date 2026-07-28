@@ -225,6 +225,94 @@ Reference the paper [[assets/pdfs/paper.pdf]] and diagram [[assets/images/diagra
 	}
 }
 
+func TestIntegration_LinkQuery(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/raven.md", `---
+type: project
+title: Raven
+status: active
+---
+# Raven
+
+[Brief](docs/brief.pdf)
+
+## Files
+
+[Plan](../plan.pdf)
+![Diagram](images/diagram.png)
+`).
+		WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+# Alice
+
+[Resume](resume.pdf)
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	pdfs := v.RunCLI("query", "link .ext==pdf within(type:project)")
+	pdfs.MustSucceed(t)
+	if got := pdfs.Data["query_kind"]; got != "link" {
+		t.Fatalf("query_kind = %#v, want link", got)
+	}
+	pdfs.AssertResultCount(t, "items", 2)
+	for _, raw := range pdfs.DataList("items") {
+		item := raw.(map[string]interface{})
+		if item["source_id"] != "projects/raven" || item["source_type"] != "project" {
+			t.Fatalf("unexpected link source: %#v", item)
+		}
+		for _, field := range []string{
+			"file_path", "line", "position_start", "position_end", "raw_target",
+			"display", "is_image", "scheme", "ext", "normalized_key",
+		} {
+			if _, ok := item[field]; !ok {
+				t.Fatalf("link item missing %q: %#v", field, item)
+			}
+		}
+	}
+
+	sectionPDF := v.RunCLI("query", "link .ext==pdf within(section .title==Files)")
+	sectionPDF.MustSucceed(t)
+	sectionPDF.AssertResultCount(t, "items", 1)
+	if got := sectionPDF.DataList("items")[0].(map[string]interface{})["raw_target"]; got != "../plan.pdf" {
+		t.Fatalf("section-scoped target = %#v, want ../plan.pdf", got)
+	}
+
+	image := v.RunCLI("query", `link .is_image==true includes(.display, "gram")`)
+	image.MustSucceed(t)
+	image.AssertResultCount(t, "items", 1)
+
+	ids := v.RunCLI("query", "link .ext==pdf within(type:project)", "--ids")
+	ids.MustSucceed(t)
+	gotIDs := ids.DataList("ids")
+	if len(gotIDs) != 2 || gotIDs[0] != "projects/raven" || gotIDs[1] != "projects/raven" {
+		t.Fatalf("source IDs = %#v, want one projects/raven projection per edge", gotIDs)
+	}
+
+	page := v.RunCLI("query", "link .scheme==file", "--limit", "1")
+	page.MustSucceed(t)
+	page.AssertResultCount(t, "items", 1)
+	if got := page.Data["total"]; got != float64(4) {
+		t.Fatalf("total = %#v, want 4", got)
+	}
+	if got := page.Data["has_more"]; got != true {
+		t.Fatalf("has_more = %#v, want true", got)
+	}
+
+	apply := v.RunCLI("query", "link", "--apply", "delete")
+	apply.MustFail(t, "INVALID_INPUT")
+	apply.MustFailWithMessage(t, "--apply is not supported for link queries")
+
+	invalid := v.RunCLI("query", "link refs([[projects/raven]])")
+	invalid.MustFail(t, "QUERY_INVALID")
+	invalid.MustFailWithMessage(t, "refs() predicate is not valid for link queries")
+}
+
 func TestIntegration_QueryRefreshRespectsDirectoryRoots(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

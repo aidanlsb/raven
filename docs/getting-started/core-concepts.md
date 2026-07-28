@@ -201,8 +201,9 @@ rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review
 rvn query 'trait:due .value<today'
 ```
 
-Queries return exactly one result kind—objects, sections, traits, or assets—can
-nest arbitrarily, and support boolean composition (`AND`, `OR`, `NOT`). See
+Queries return exactly one result kind—objects, sections, traits, assets, or
+outgoing link edges—can nest arbitrarily, and support boolean composition
+(`AND`, `OR`, `NOT`). See
 `querying/query-language.md` for the full syntax.
 
 ## Agent-friendly descriptions

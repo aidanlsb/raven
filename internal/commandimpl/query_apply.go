@@ -15,7 +15,7 @@ import (
 // and delegates preview/apply execution to the same nested command for every
 // transport.
 func handleQueryApply(ctx context.Context, req commandexec.Request, result *readsvc.ExecuteQueryResult, applyArgs []string, queryTimeMs int64) commandexec.Result {
-	if result.QueryKind == "asset" {
+	if result.QueryKind == "asset" || result.QueryKind == "link" {
 		return commandexec.Failure(
 			"INVALID_INPUT",
 			fmt.Sprintf("--apply is not supported for %s queries", result.QueryKind),

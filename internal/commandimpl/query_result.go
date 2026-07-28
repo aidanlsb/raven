@@ -27,8 +27,8 @@ func shapeQueryResult(result *readsvc.ExecuteQueryResult, options queryResultSha
 		switch result.QueryKind {
 		case "trait":
 			payload.Trait = result.TypeName
-		case "asset", "section":
-			// Asset and section counts carry no type/trait discriminator.
+		case "asset", "section", "link":
+			// Bare-root counts carry no type/trait discriminator.
 		default:
 			payload.Type = result.TypeName
 		}
@@ -73,6 +73,17 @@ func shapeQueryResult(result *readsvc.ExecuteQueryResult, options queryResultSha
 		payload := commandpayload.QuerySectionResult{
 			QueryKind:  "section",
 			Items:      sectionQueryItems(result),
+			Pagination: queryPagination(result),
+		}
+		if options.IsSavedQuery && options.SavedQueryName != "" {
+			payload.SavedQuery = options.SavedQueryName
+		}
+		return commandexec.Success(payload, meta)
+	case "link":
+		meta.Count = result.Returned
+		payload := commandpayload.QueryLinkResult{
+			QueryKind:  "link",
+			Items:      linkQueryItems(result),
 			Pagination: queryPagination(result),
 		}
 		if options.IsSavedQuery && options.SavedQueryName != "" {
@@ -179,6 +190,28 @@ func sectionQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.Sect
 			DirectLineEnd:   row.LineEnd,
 			SubtreeLineEnd:  row.SubtreeLineEnd,
 			ParentSectionID: row.ParentSectionID,
+		}
+	}
+	return items
+}
+
+func linkQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.LinkItem {
+	items := make([]commandpayload.LinkItem, len(result.Links))
+	for i, row := range result.Links {
+		items[i] = commandpayload.LinkItem{
+			Num:           result.Offset + i + 1,
+			SourceID:      row.SourceID,
+			SourceType:    row.SourceType,
+			FilePath:      row.FilePath,
+			Line:          row.Line,
+			PositionStart: row.PositionStart,
+			PositionEnd:   row.PositionEnd,
+			RawTarget:     row.RawTarget,
+			Display:       row.Display,
+			IsImage:       row.IsImage,
+			Scheme:        row.Scheme,
+			Ext:           row.Ext,
+			NormalizedKey: row.NormalizedKey,
 		}
 	}
 	return items

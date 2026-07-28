@@ -194,6 +194,45 @@ func sectionBrowseHeaders() []string {
 	return []string{"#", "title", "heading", "location"}
 }
 
+func browseItemsForLinkResults(results []model.Link) []picker.Item {
+	items := make([]picker.Item, 0, len(results))
+	for _, result := range results {
+		label := result.Display
+		if label == "" {
+			label = result.RawTarget
+		}
+		detail := result.Scheme
+		if result.Ext != "" {
+			detail += " ." + result.Ext
+		}
+		location := fmt.Sprintf("%s:%d", result.FilePath, result.Line)
+		items = append(items, picker.Item{
+			ID:       result.SourceID,
+			Label:    label,
+			Detail:   detail,
+			Location: location,
+			Columns:  []string{label, detail, location},
+			SearchText: browseSearchText(
+				result.SourceID,
+				result.SourceType,
+				result.RawTarget,
+				result.Display,
+				result.Scheme,
+				result.Ext,
+				result.NormalizedKey,
+				location,
+			),
+			FilePath: result.FilePath,
+			Line:     result.Line,
+		})
+	}
+	return items
+}
+
+func linkBrowseHeaders() []string {
+	return []string{"#", "target", "kind", "location"}
+}
+
 func objectBrowseDetail(obj model.Object, fieldColumns []string) string {
 	parts := make([]string, 0, len(fieldColumns))
 	for _, fieldName := range fieldColumns {

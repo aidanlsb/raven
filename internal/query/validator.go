@@ -65,8 +65,12 @@ func (v *Validator) validateQuery(q *Query) error {
 		return v.validateAssetQuery(q)
 	case QueryTypeSection:
 		return v.validateSectionQuery(q)
-	default:
+	case QueryTypeLink:
+		return v.validateLinkQuery(q)
+	case QueryTypeTrait:
 		return v.validateTraitQuery(q)
+	default:
+		return &ValidationError{Message: fmt.Sprintf("unknown query root %d", q.Type)}
 	}
 }
 
@@ -107,6 +111,10 @@ func (v *Validator) validateAssetQuery(q *Query) error {
 
 func (v *Validator) validateSectionQuery(q *Query) error {
 	return v.validatePredicate(QueryTypeSection, "", nil, q.Predicate)
+}
+
+func (v *Validator) validateLinkQuery(q *Query) error {
+	return v.validatePredicate(QueryTypeLink, "", nil, q.Predicate)
 }
 
 // validatePredicate is the single validation entry point for predicate nodes.
@@ -151,6 +159,8 @@ func (v *Validator) validatePredicate(root QueryType, typeName string, typeDef *
 		return v.validateLegalAssetPredicate(pred)
 	case QueryTypeSection:
 		return v.validateLegalSectionPredicate(pred)
+	case QueryTypeLink:
+		return v.validateLegalLinkPredicate(pred)
 	default:
 		return nil
 	}
@@ -307,6 +317,16 @@ func (v *Validator) validateLegalSectionPredicate(pred Predicate) error {
 		return v.validateSubquery(p.SubQuery)
 	case *ContentPredicate:
 		return validateContentTerm(p)
+	}
+	return nil
+}
+
+func (v *Validator) validateLegalLinkPredicate(pred Predicate) error {
+	switch p := pred.(type) {
+	case *FieldPredicate, *StringFuncPredicate:
+		return validateLinkPredicate(pred)
+	case *WithinPredicate:
+		return v.validateSubquery(p.SubQuery)
 	}
 	return nil
 }

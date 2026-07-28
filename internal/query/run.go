@@ -22,10 +22,11 @@ type RunResult struct {
 	Traits   []model.Trait
 	Assets   []model.Asset
 	Sections []model.Section
+	Links    []model.Link
 }
 
 // Run executes a parsed query in the requested mode against any root
-// (object/trait/asset/section). It is the single execution entry point for the
+// (object/trait/asset/section/link). It is the single execution entry point for the
 // read service: the count / ids-only / paginated / full branching lives here
 // once instead of being copy-pasted per root.
 //
@@ -132,6 +133,13 @@ func (e *Executor) entityRows(q *Query, limit, offset int, result *RunResult) (i
 			return 0, err
 		}
 		result.Sections = rows
+		return len(rows), nil
+	case QueryTypeLink:
+		rows, err := runEntityPageRows(e, q, linkSpec, limit, offset, scanLinkRows)
+		if err != nil {
+			return 0, err
+		}
+		result.Links = rows
 		return len(rows), nil
 	default:
 		return 0, errUnexpectedQueryType(QueryTypeObject, q.Type)

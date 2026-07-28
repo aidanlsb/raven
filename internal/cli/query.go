@@ -16,13 +16,14 @@ import (
 var queryCmd = &cobra.Command{
 	Use:   "query <query-string>",
 	Short: "Run a query using the Raven query language",
-	Long: `Query items by type, sections, traits by name, or assets using the Raven query language.
+	Long: `Query items, sections, traits, assets, or outgoing link edges using the Raven query language.
 
 Query roots:
   type:<type> [predicates]    Query items of a type
   section [predicates]        Query heading-derived sections
   trait:<name> [predicates]   Query traits by name
   asset [predicates]          Query indexed asset resources
+  link [predicates]           Query indexed outgoing Markdown link edges
 
 Predicates for type queries:
   .field==value      Field equals value
@@ -70,6 +71,15 @@ Predicates for asset queries:
   refd(type:...)        Referenced by matching items
   refd(trait:...)       Referenced by matching trait lines
 
+Predicates for link queries:
+  .ext==pdf              Link target extension equals value
+  .is_image==true        Link is an image
+  .scheme==url           Link target scheme is file, url, or other
+  includes(.raw_target, "text") String match on the authored target
+  includes(.display, "text") String match on the display or alt text
+  within(type:...)       Source file matches a type query
+  within(section ...)    Link occurs in a matching section subtree
+
 Boolean operators:
   !pred            NOT
   pred1 pred2      AND (space-separated)
@@ -89,6 +99,7 @@ Examples:
   rvn query "trait:due .value<today"
   rvn query "asset .extension==pdf"
   rvn query "asset startswith(.media_type, \"image/\")"
+  rvn query "link .ext==pdf within(type:project)"
   rvn query "trait:todo content(\"my task\")"
   rvn query "trait:highlight in(type:book .status==reading)"
   rvn query tasks                    # Run saved query
@@ -307,7 +318,7 @@ func savedQueryOptionsFromFlags(cmd *cobra.Command) *config.QueryOptions {
 
 func init() {
 	queryCmd.Flags().Bool("refresh", false, "Refresh stale files before query")
-	queryCmd.Flags().Bool("ids", false, "Output only object/trait IDs, one per line (for piping)")
+	queryCmd.Flags().Bool("ids", false, "Output only result IDs; link queries output source IDs, one per edge")
 	queryCmd.Flags().Int("limit", 0, "Maximum number of query results to return (0 means no limit)")
 	queryCmd.Flags().Int("offset", 0, "Zero-based offset for query results")
 	queryCmd.Flags().Bool("count-only", false, "Return only the total count of matches (no items or IDs)")

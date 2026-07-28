@@ -38,7 +38,7 @@ func TestBuildUnknownQuerySuggestion_IncludesReadOpenForResolvableRefs(t *testin
 
 func TestBuildUnknownQuerySuggestionListsEveryQueryRoot(t *testing.T) {
 	suggestion := buildUnknownQuerySuggestion(nil, "issue .status==open", "daily", nil)
-	for _, root := range []string{"type:", "trait:", "section", "asset"} {
+	for _, root := range []string{"type:", "trait:", "section", "asset", "link"} {
 		if !strings.Contains(suggestion, root) {
 			t.Fatalf("suggestion %q does not mention query root %q", suggestion, root)
 		}

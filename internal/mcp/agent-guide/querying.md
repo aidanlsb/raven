@@ -20,7 +20,7 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 
 ## Choosing the retrieval tool
 
-- `query` — real Raven items, real trait instances, or indexed asset rows; filter by type/section/trait/asset, fields, scope, and references.
+- `query` — real Raven items, real trait instances, indexed asset rows, or outgoing link-edge rows; filter by type/section/trait/asset/link, fields, scope, and references.
 - `search` — you only know a text fragment and do not yet know the type, trait, or structure. Returns file/snippet matches; it does NOT distinguish a real `@todo` trait from prose that mentions `@todo`. For real traits use `query "trait:todo"`.
 - `backlinks <reference>` — incoming references to one object/asset (structured equivalent: `query "... refd(...)"`; `read` also appends backlinks).
 - `outlinks <reference>` — outgoing references from one object (structured equivalent: `query "... refs(...)"`).
@@ -48,6 +48,7 @@ raven_invoke(command="query", args={"query_string":"type:page refs([[assets/pdfs
 raven_invoke(command="query", args={"query_string":"asset .extension==pdf"})
 raven_invoke(command="query", args={"query_string":"asset startswith(.media_type, \"image/\")"})
 raven_invoke(command="query", args={"query_string":"asset refd(type:project .status==active)"})
+raven_invoke(command="query", args={"query_string":"link .ext==pdf within(type:project)"})
 ```
 
 For text search inside typed queries, use `content("term")`.
@@ -66,9 +67,17 @@ Asset queries support derived metadata fields only: `.id`, `.file_path`, `.filen
 
 Use `links(...)` on type, section, or trait roots to filter by outgoing non-Raven
 links, for example `type:project links(.ext==pdf)` or
-`trait:todo links(.is_image==true)`. Link fields are `.ext`, `.is_image`,
-`.scheme`, `.raw_target`, `.display`, and `.normalized_key`. There is no
-`linkd()` inverse because external files and URLs are leaf targets.
+`trait:todo links(.is_image==true)`.
+
+The bare `link` root returns outgoing Markdown link/image edges to non-Raven
+file and URL targets. Both surfaces use the same filter fields: `.ext`,
+`.is_image`, `.scheme`, `.raw_target`, `.display`, and `.normalized_key`.
+Root rows additionally return `.source_id`, `.source_type`, `.file_path`,
+`.line`, `.position_start`, and `.position_end` as edge metadata. Use
+`within(type:...)` or `within(section ...)` for source scope. `link --ids`
+projects `source_id` once per edge. Link rows are outgoing-only and do not
+support `refs()`, `refd()`, `in()`, `content()`, arrays, or `--apply`; there is
+no `linkd()` inverse because external files and URLs are leaf targets.
 
 If you see SQLite/FTS errors during full-text search, treat them as query-syntax issues and simplify or quote punctuation-heavy terms.
 

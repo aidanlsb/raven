@@ -97,6 +97,21 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 		}
 		printQuerySectionResults(queryStr, sections)
 		return nil
+	case commandpayload.QueryLinkResult:
+		links := linksFromItems(payload.Items)
+		if browse {
+			if len(links) == 0 {
+				printQueryLinkResults(queryStr, links)
+				return nil
+			}
+			return browseQueryResults(browseItemsForLinkResults(links), linkBrowseHeaders(), ui.SearchLayout())
+		}
+		if ShouldUsePipeFormat() {
+			WritePipeableList(os.Stdout, pipeItemsForLinkResults(links))
+			return nil
+		}
+		printQueryLinkResults(queryStr, links)
+		return nil
 	default:
 		return handleErrorMsg(ErrInternal, "unexpected query result shape", "")
 	}
@@ -366,6 +381,27 @@ func sectionsFromItems(items []commandpayload.SectionItem) []model.Section {
 			LineEnd:         item.LineEnd,
 			SubtreeLineEnd:  item.SubtreeLineEnd,
 			ParentSectionID: item.ParentSectionID,
+		})
+	}
+	return results
+}
+
+func linksFromItems(items []commandpayload.LinkItem) []model.Link {
+	results := make([]model.Link, 0, len(items))
+	for _, item := range items {
+		results = append(results, model.Link{
+			SourceID:      item.SourceID,
+			SourceType:    item.SourceType,
+			FilePath:      item.FilePath,
+			Line:          item.Line,
+			PositionStart: item.PositionStart,
+			PositionEnd:   item.PositionEnd,
+			RawTarget:     item.RawTarget,
+			Display:       item.Display,
+			IsImage:       item.IsImage,
+			Scheme:        item.Scheme,
+			Ext:           item.Ext,
+			NormalizedKey: item.NormalizedKey,
 		})
 	}
 	return results

@@ -27,6 +27,7 @@ type ExecuteQueryResult struct {
 	Traits    []model.Trait
 	Assets    []model.Asset
 	Sections  []model.Section
+	Links     []model.Link
 }
 
 // HasMore reports whether more results exist beyond the returned window.
@@ -99,6 +100,7 @@ func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, er
 		Traits:    runResult.Traits,
 		Assets:    runResult.Assets,
 		Sections:  runResult.Sections,
+		Links:     runResult.Links,
 	}, nil
 }
 
@@ -110,6 +112,8 @@ func queryKindString(t query.QueryType) string {
 		return "asset"
 	case query.QueryTypeSection:
 		return "section"
+	case query.QueryTypeLink:
+		return "link"
 	default:
 		return "trait"
 	}

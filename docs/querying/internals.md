@@ -21,8 +21,13 @@ Every parsed query has exactly one root kind:
 | `trait:<name>` | trait query with `TypeName` set to the trait name | `traits` |
 | `section` | section query with no type name | `sections` |
 | `asset` | asset query with no type name | `assets` |
+| `link` | link-edge query with no type name | `links` |
 
-The root kind determines which predicates are legal, which SQL builder runs, and what the command response contains. Avoid adding predicates that silently change the result kind; compose them through nested queries instead.
+The root kind determines which predicates are legal, which SQL builder runs, and what the command response contains. `link` is an outgoing-only leaf root: its rows are edges rather than file entities, and source scoping uses indexed source IDs/positions. Avoid adding predicates that silently change the result kind; compose them through nested queries instead.
+
+The `link` root and `links(...)` predicate must consume the single link-field
+vocabulary and SQL compiler in `link_fields.go` / `sql_predicates_link.go`.
+Source/location columns returned by the root are not a second field grammar.
 
 ## Layer Boundaries
 
