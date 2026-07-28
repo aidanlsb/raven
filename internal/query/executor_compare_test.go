@@ -398,6 +398,47 @@ func TestBuildWithinPredicateSQL_AddsDepthGuard(t *testing.T) {
 	}
 }
 
+func TestBuildWithinPredicateSQL_RootScopeSemantics(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		root      QueryType
+		alias     string
+		wantDepth string
+	}{
+		{
+			name:      "trait includes attachment scope",
+			root:      QueryTypeTrait,
+			alias:     "t",
+			wantDepth: "anc.depth >= 0",
+		},
+		{
+			name:      "section excludes itself",
+			root:      QueryTypeSection,
+			alias:     "s",
+			wantDepth: "anc.depth > 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &Executor{}
+			p := &WithinPredicate{
+				SubQuery: &Query{Type: QueryTypeObject, TypeName: "project"},
+			}
+
+			cond, _, err := e.buildWithinPredicateSQL(p, tt.alias, tt.root)
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+			if !strings.Contains(cond, tt.wantDepth) {
+				t.Fatalf("cond = %q, want depth condition %q", cond, tt.wantDepth)
+			}
+		})
+	}
+}
+
 func containsAll(s string, subs ...string) bool {
 	for _, sub := range subs {
 		if !strings.Contains(s, sub) {

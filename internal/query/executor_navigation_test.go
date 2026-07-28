@@ -1,8 +1,95 @@
 package query
 
 import (
+	"reflect"
 	"testing"
 )
+
+func TestTraitWithinIncludesAttachmentScope(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`
+		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, line_end, subtree_line_end, parent_section_id)
+		VALUES ('projects/website#subtasks', 'projects/website', 'projects/website.md', 'subtasks', 'Subtasks', 3, 30, 49, 49, 'projects/website#tasks');
+
+		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number) VALUES
+			('trait-preamble-todo', 'projects/website.md', 'projects/website', 'todo', 'todo', 'Preamble task', 5),
+			('trait-subtask-todo', 'projects/website.md', 'projects/website#subtasks', 'todo', 'todo', 'Nested task', 35);
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert within regression fixtures: %v", err)
+	}
+
+	executor := NewExecutor(db)
+	tests := []struct {
+		name       string
+		scope      string
+		wantIn     []string
+		wantWithin []string
+	}{
+		{
+			name:       "section includes direct and nested traits",
+			scope:      "section .title==Tasks",
+			wantIn:     []string{"trait7", "trait8", "trait5"},
+			wantWithin: []string{"trait7", "trait8", "trait5", "trait-subtask-todo"},
+		},
+		{
+			name:       "nested section includes directly attached trait",
+			scope:      "section .title==Subtasks",
+			wantIn:     []string{"trait-subtask-todo"},
+			wantWithin: []string{"trait-subtask-todo"},
+		},
+		{
+			name:       "object includes heading-free preamble trait",
+			scope:      "[[projects/website]]",
+			wantIn:     []string{"trait-preamble-todo"},
+			wantWithin: []string{"trait-preamble-todo", "trait5", "trait-subtask-todo"},
+		},
+	}
+
+	queryIDs := func(t *testing.T, predicate, scope string) []string {
+		t.Helper()
+		q, parseErr := Parse("trait:todo " + predicate + "(" + scope + ")")
+		if parseErr != nil {
+			t.Fatalf("parse error: %v", parseErr)
+		}
+		results, queryErr := executor.executeTraitQuery(q)
+		if queryErr != nil {
+			t.Fatalf("execute error: %v", queryErr)
+		}
+		ids := make([]string, 0, len(results))
+		for _, result := range results {
+			ids = append(ids, result.ID)
+		}
+		return ids
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inIDs := queryIDs(t, "in", tt.scope)
+			if !reflect.DeepEqual(inIDs, tt.wantIn) {
+				t.Errorf("in IDs = %#v, want %#v", inIDs, tt.wantIn)
+			}
+
+			withinIDs := queryIDs(t, "within", tt.scope)
+			if !reflect.DeepEqual(withinIDs, tt.wantWithin) {
+				t.Errorf("within IDs = %#v, want %#v", withinIDs, tt.wantWithin)
+			}
+
+			withinSet := make(map[string]struct{}, len(withinIDs))
+			for _, id := range withinIDs {
+				withinSet[id] = struct{}{}
+			}
+			for _, id := range inIDs {
+				if _, ok := withinSet[id]; !ok {
+					t.Errorf("within results do not include directly attached trait %q", id)
+				}
+			}
+		})
+	}
+}
 
 func TestDirectTargetPredicates(t *testing.T) {
 	t.Parallel()
