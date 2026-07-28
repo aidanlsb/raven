@@ -54,6 +54,95 @@ func TestValidator_NilQuery(t *testing.T) {
 	}
 }
 
+func TestValidator_RejectsTypeSectionRoot(t *testing.T) {
+	t.Parallel()
+
+	q, err := Parse("type:section .title==Tasks")
+	if err != nil {
+		t.Fatalf("Parse(): %v", err)
+	}
+	err = NewValidator(nil).Validate(q)
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("Validate() error = %T %v, want *ValidationError", err, err)
+	}
+	if !strings.Contains(ve.Message, "type:section is not a valid query root") {
+		t.Fatalf("message = %q", ve.Message)
+	}
+	if !strings.Contains(ve.Suggestion, "bare section root") {
+		t.Fatalf("suggestion = %q", ve.Suggestion)
+	}
+}
+
+func TestValidator_IllegalSubqueriesReachCapabilityErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		query          string
+		wantMessage    string
+		wantSuggestion string
+	}{
+		{
+			query:          "link within(trait:todo)",
+			wantMessage:    "within(trait:todo) is not valid for link queries",
+			wantSuggestion: "trait:todo links(...)",
+		},
+		{
+			query:          "type:project refs(trait:todo)",
+			wantMessage:    "refs() cannot target a trait query",
+			wantSuggestion: "trait:todo refs(...)",
+		},
+		{
+			query:          "trait:todo within(link .ext==pdf)",
+			wantMessage:    "link queries cannot be within() targets",
+			wantSuggestion: "not Raven scopes",
+		},
+		{
+			query:          "section refs(link .ext==pdf)",
+			wantMessage:    "refs() cannot target a link query",
+			wantSuggestion: "use links(...)",
+		},
+	}
+
+	v := NewValidator(nil)
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("Parse(%q): %v", tt.query, err)
+			}
+			err = v.Validate(q)
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("Validate(%q) error = %T %v, want *ValidationError", tt.query, err, err)
+			}
+			if !strings.Contains(ve.Message, tt.wantMessage) {
+				t.Fatalf("message = %q, want substring %q", ve.Message, tt.wantMessage)
+			}
+			if !strings.Contains(ve.Suggestion, tt.wantSuggestion) {
+				t.Fatalf("suggestion = %q, want substring %q", ve.Suggestion, tt.wantSuggestion)
+			}
+		})
+	}
+}
+
+func TestValidator_SectionNumericFieldsRequireNumbers(t *testing.T) {
+	t.Parallel()
+
+	q, err := Parse("section .line_start==abc")
+	if err != nil {
+		t.Fatalf("Parse(): %v", err)
+	}
+	err = NewValidator(nil).Validate(q)
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("Validate() error = %T %v, want *ValidationError", err, err)
+	}
+	if !strings.Contains(ve.Message, "section field '.line_start' requires a numeric value") {
+		t.Fatalf("message = %q", ve.Message)
+	}
+}
+
 // TestValidator_StructuralWithoutSchema verifies that with a nil schema the
 // validator still enforces structural rules (root/predicate legality, trait
 // .value restrictions, and built-in section/link fields) while skipping

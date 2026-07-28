@@ -13,10 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `links(...)` predicates for type, trait, and section queries, using the shared link-field grammar to filter outgoing non-Raven file and URL links.
 - Added the `link` RQL root for querying indexed outgoing link/image edges by target metadata and source type/section scope.
 
+### Changed
+- Section `refs(...)` now searches the complete section subtree, matching `links(...)`; trait variants of both predicates remain source-line scoped.
+- RQL now rejects the phantom `type:section` root, non-scope subqueries in `within(...)`/`refs(...)`, and `exists()` on always-present link fields with capability-specific guidance.
+- Link equality preserves target identity: `.normalized_key` and `.raw_target` comparisons are now case-sensitive, while other string link fields remain case-insensitive.
+
 ### Fixed
 - `trait ... within(...)` now includes traits attached directly to the matching object or section scope, including heading-free preamble traits.
 - Fixed nested section containment queries returning no matches when a `section` query used `contains(section ...)`.
 - `refd([[file]])` and `refd(type:...)` queries now include references originating in sections of matching source files, consistent with `refs(...)` and `rvn backlinks`.
+- Invalid numeric values for built-in link and section fields now return `QUERY_INVALID` instead of a database error and reindex hint.
 - Corrected MCP docs, embedded agent guides, and packaged skills for explicit post-`init` vault targeting, canonical hyphenated flag names, bulk argument arrays and retry details, and the body-only `add` contract.
 - Corrected user docs for import mapping-file keys, core-type template placement, bulk reclassification, stale active-vault failures, and bare daily-note IDs.
 - Clarified portable Markdown file-link rendering and conservative URL/file `normalized_key` behavior in user and agent documentation.

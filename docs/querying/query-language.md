@@ -48,7 +48,7 @@ Which predicates are legal depends on the query root. Predicates rejected for a 
 
 | Predicate / family | `type:<t>` | `section` | `trait:<name>` | `link` |
 |--------------------|:----------:|:---------:|:--------------:|:------:|
-| Field compares (`==`, `!=`, `<`, `>`, `<=`, `>=`), `exists(.field)` | yes (schema fields) | yes (built-in section fields) | yes (`.value` only) | yes (shared link fields) |
+| Field compares (`==`, `!=`, `<`, `>`, `<=`, `>=`), `exists(.field)` | yes (schema fields) | yes (built-in section fields) | yes (`.value` only) | compares only; `exists()` is rejected because every link field is present |
 | `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes |
 | String funcs (`includes`, `startswith`, `endswith`, `matches`) | yes (string fields) | yes (non-numeric fields) | yes (`.value` only) | yes (string fields) |
 | Array quantifiers (`any`, `all`, `none`) | yes (array fields) | no | yes (array-valued `.value`) | no |
@@ -69,10 +69,20 @@ Reading the scope rows:
 - `has`/`in` match the **direct** relationship only; `contains`/`within` match **recursively** through the section tree.
 - Link edges support only `within(...)`: `within(type:...)` matches the source file object, while `within(section ...)` matches sections whose subtree contains the link line.
 
+Outgoing predicate scope is also root-dependent:
+
+- On `type:<t>`, `refs(...)` and `links(...)` inspect the whole file, including its section tree.
+- On `section`, both predicates inspect that section's complete subtree.
+- On `trait:<name>`, both predicates inspect only the trait's source line.
+- The bare `link` root has neither predicate; it already returns the outgoing edge rows.
+
 `links(...)` and the bare `link` root use the same link fields: `.source_id`,
 `.source_type`, `.file_path`, `.line`, `.position_start`, `.position_end`,
 `.raw_target`, `.display`, `.is_image`, `.scheme`, `.ext`, and
 `.normalized_key`. For example: `type:project links(.ext==pdf)`.
+Equality on `.raw_target` and `.normalized_key` is case-sensitive because both
+fields preserve meaningful target case. Equality on the other string link
+fields remains case-insensitive.
 It is outgoing-only: unlike `refs()`/`refd()`, there is no `linkd()` because
 external files and URLs are leaf targets that cannot link back.
 
@@ -292,11 +302,16 @@ For URL targets, `.normalized_key` lowercases the host and strips only default
 ports (`:80` for HTTP and `:443` for HTTPS). Path case, the query string,
 trailing slash, and fragment are preserved. File targets inside the vault use a
 vault-relative POSIX key; absolute targets outside the vault remain absolute.
+Equality on `.normalized_key` and `.raw_target` is case-sensitive. Equality on
+the other string link fields remains case-insensitive.
 
 The `link` root and `links(...)` predicate share this complete field
 vocabulary. All fields support scalar comparisons, string-valued fields support
 string functions, and `.line` / `.position_start` / `.position_end` use numeric
-comparison semantics. The root also supports source scoping with `within(...)`:
+comparison semantics. All indexed link columns are present, so `exists()` and
+`!exists()` are rejected; use an empty-value comparison such as `.ext==""`
+when that is the intended test. The root also supports source scoping with
+`within(...)`:
 
 ```text
 link .ext==pdf within(type:project)
@@ -306,7 +321,9 @@ link .is_image==true within(section includes(.title, "resources"))
 `within(type:...)` filters the source object. `within(section ...)` matches the
 indexed link line against the section's complete subtree range. Link queries do
 not support `in()`, `refs()`, `refd()`, `content()`, structural containment, or
-array predicates.
+array predicates. In particular, `link` has no `in()`: to find traits whose
+line contains a matching link, use `trait:<name> links(...)`, not
+`link within(trait:<name>)`.
 
 ## Trait Query Predicates
 
@@ -350,6 +367,7 @@ type:brief .date==today
 | `within(...)` | Trait is anywhere within matching object or section scope |
 | `at(trait:...)` | Co-located with matching trait (same file and line) |
 | `refs(...)` | Trait's line references target or query match |
+| `links(...)` | Trait's line contains a matching outgoing non-Raven link |
 | `content("term")` | Trait's line contains term |
 | `any(.value, ...)`, `all(.value, ...)`, `none(.value, ...)` | Element predicates for array-valued traits |
 

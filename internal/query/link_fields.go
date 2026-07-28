@@ -97,6 +97,23 @@ func validateLinkPredicate(pred Predicate) error {
 				Suggestion: "Use an identifier or quoted string value",
 			}
 		}
+		if p.IsExists {
+			predicateName := "exists()"
+			if p.Negated() {
+				predicateName = "!exists()"
+			}
+			suggestion := fmt.Sprintf("Link fields are always present; compare .%s to a concrete value instead", p.Field)
+			if fieldType == schema.FieldTypeString {
+				suggestion = fmt.Sprintf(`Use .%s=="" to match an indexed empty value`, p.Field)
+			}
+			return &ValidationError{
+				Message:    fmt.Sprintf("%s is not valid for link field '.%s' because link fields are always present", predicateName, p.Field),
+				Suggestion: suggestion,
+			}
+		}
+		if fieldType == schema.FieldTypeNumber {
+			return validateNumericFieldPredicate("link", p)
+		}
 		if fieldType == schema.FieldTypeBool && !p.IsExists {
 			if p.CompareOp != CompareEq && p.CompareOp != CompareNeq {
 				return &ValidationError{

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/schema"
@@ -73,6 +74,13 @@ func (v *Validator) validateQuery(q *Query) error {
 }
 
 func (v *Validator) validateObjectQuery(q *Query) error {
+	if strings.EqualFold(q.TypeName, "section") {
+		return &ValidationError{
+			Message:    "type:section is not a valid query root",
+			Suggestion: "Use the bare section root, for example: section .title==Tasks",
+		}
+	}
+
 	var typeDef *schema.TypeDefinition
 	if v.hasSchema() {
 		td, exists := v.schema.Types[q.TypeName]
@@ -177,6 +185,69 @@ func validateContentTerm(p *ContentPredicate) error {
 	return nil
 }
 
+func validateNumericFieldPredicate(rootName string, p *FieldPredicate) error {
+	if p == nil || p.IsExists {
+		return nil
+	}
+	if _, err := strconv.ParseFloat(strings.TrimSpace(p.Value), 64); err != nil {
+		return &ValidationError{
+			Message:    fmt.Sprintf("%s field '.%s' requires a numeric value, got '%s'", rootName, p.Field, p.Value),
+			Suggestion: fmt.Sprintf("Use a numeric literal, for example: .%s==1", p.Field),
+		}
+	}
+	return nil
+}
+
+func (v *Validator) validateScopeSubquery(root QueryType, kind string, sub *Query) error {
+	if sub == nil {
+		return nil
+	}
+	switch sub.Type {
+	case QueryTypeObject, QueryTypeSection:
+		return v.validateSubquery(sub)
+	case QueryTypeTrait:
+		if root == QueryTypeLink && kind == "within" {
+			return &ValidationError{
+				Message:    fmt.Sprintf("within(trait:%s) is not valid for link queries", sub.TypeName),
+				Suggestion: fmt.Sprintf("Use trait:%s links(...) to filter trait lines by outgoing links", sub.TypeName),
+			}
+		}
+		return &ValidationError{
+			Message:    fmt.Sprintf("%s() expects a type or section query, not trait:%s", kind, sub.TypeName),
+			Suggestion: fmt.Sprintf("Use %s(type:...) or %s(section ...)", kind, kind),
+		}
+	case QueryTypeLink:
+		return &ValidationError{
+			Message:    fmt.Sprintf("link queries cannot be %s() targets", kind),
+			Suggestion: "Link rows are outgoing edges, not Raven scopes; use a type or section query as the scope target",
+		}
+	default:
+		return &ValidationError{Message: fmt.Sprintf("%s() expects a type or section query", kind)}
+	}
+}
+
+func (v *Validator) validateRefsSubquery(sub *Query) error {
+	if sub == nil {
+		return nil
+	}
+	switch sub.Type {
+	case QueryTypeObject, QueryTypeSection:
+		return v.validateSubquery(sub)
+	case QueryTypeTrait:
+		return &ValidationError{
+			Message:    fmt.Sprintf("refs() cannot target a trait query (trait:%s)", sub.TypeName),
+			Suggestion: fmt.Sprintf("To filter trait lines by outgoing references, use trait:%s refs(...)", sub.TypeName),
+		}
+	case QueryTypeLink:
+		return &ValidationError{
+			Message:    "refs() cannot target a link query",
+			Suggestion: "External file and URL links have no Raven reference identity; use links(...) to filter outgoing links",
+		}
+	default:
+		return &ValidationError{Message: "refs() expects a type or section query"}
+	}
+}
+
 func (v *Validator) validateLegalObjectPredicate(typeName string, typeDef *schema.TypeDefinition, pred Predicate) error {
 	switch p := pred.(type) {
 	case *FieldPredicate:
@@ -190,7 +261,7 @@ func (v *Validator) validateLegalObjectPredicate(typeName string, typeDef *schem
 	case *ContainsPredicate:
 		return v.validateSubquery(p.SubQuery)
 	case *RefsPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateRefsSubquery(p.SubQuery)
 	case *LinksPredicate:
 		return validateLinkPredicate(p.LinkPredicate)
 	case *RefdPredicate:
@@ -229,11 +300,11 @@ func (v *Validator) validateLegalTraitPredicate(traitName string, pred Predicate
 	case *ArrayQuantifierPredicate:
 		return v.validateTraitArrayQuantifierPredicate(p, traitName)
 	case *InPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateScopeSubquery(QueryTypeTrait, "in", p.SubQuery)
 	case *WithinPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateScopeSubquery(QueryTypeTrait, "within", p.SubQuery)
 	case *RefsPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateRefsSubquery(p.SubQuery)
 	case *LinksPredicate:
 		return validateLinkPredicate(p.LinkPredicate)
 	case *ContentPredicate:
@@ -261,6 +332,9 @@ func (v *Validator) validateLegalSectionPredicate(pred Predicate) error {
 				Suggestion: "Available section fields: id, file_object_id, file_path, slug, title, level, line_start, line_end, direct_line_end, subtree_line_end, parent_section_id",
 			}
 		}
+		if isNumericSectionField(p.Field) {
+			return validateNumericFieldPredicate("section", p)
+		}
 	case *StringFuncPredicate:
 		if p.IsElementRef {
 			return &ValidationError{
@@ -282,15 +356,15 @@ func (v *Validator) validateLegalSectionPredicate(pred Predicate) error {
 		}
 		return validateRegexPattern(p)
 	case *InPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateScopeSubquery(QueryTypeSection, "in", p.SubQuery)
 	case *WithinPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateScopeSubquery(QueryTypeSection, "within", p.SubQuery)
 	case *HasPredicate:
 		return v.validateSubquery(p.SubQuery)
 	case *ContainsPredicate:
 		return v.validateSubquery(p.SubQuery)
 	case *RefsPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateRefsSubquery(p.SubQuery)
 	case *LinksPredicate:
 		return validateLinkPredicate(p.LinkPredicate)
 	case *RefdPredicate:
@@ -306,7 +380,7 @@ func (v *Validator) validateLegalLinkPredicate(pred Predicate) error {
 	case *FieldPredicate, *StringFuncPredicate:
 		return validateLinkPredicate(pred)
 	case *WithinPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateScopeSubquery(QueryTypeLink, "within", p.SubQuery)
 	}
 	return nil
 }

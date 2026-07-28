@@ -260,10 +260,16 @@ func scopeParentExpr(alias string, root QueryType) string {
 	}
 }
 
-// buildRefsPredicateSQL builds SQL for refs([[target]]) or refs(type:...) predicates.
-func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string, []interface{}, error) {
+// buildRefsPredicateSQL builds SQL for refs([[target]]) or refs(type:...)
+// predicates. Object roots include references from the whole file; section
+// roots include references from the section's complete subtree.
+func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root QueryType) (string, []interface{}, error) {
 	var cond string
 	var args []interface{}
+	sourceCond, err := refsSourceCondition(alias, root)
+	if err != nil {
+		return "", nil, err
+	}
 
 	if p.Target != "" {
 		// Direct reference to specific target
@@ -276,8 +282,8 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
-			WHERE (r.source_id = %s.id OR r.source_id LIKE %s.id || '#%%') AND %s
-		)`, alias, alias, targetCond)
+			WHERE %s AND %s
+		)`, sourceCond, targetCond)
 		args = append(args, targetArgs...)
 	} else if p.SubQuery != nil {
 		var targetTable string
@@ -307,8 +313,8 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 				r.target_id = %s.id OR 
 				(r.target_id IS NULL AND r.target_raw = %s.id)
 			)
-			WHERE (r.source_id = %s.id OR r.source_id LIKE %s.id || '#%%') AND %s
-		)`, targetTable, targetAlias, targetAlias, targetAlias, alias, alias, targetCondition)
+			WHERE %s AND %s
+		)`, targetTable, targetAlias, targetAlias, targetAlias, sourceCond, targetCondition)
 	} else {
 		return "", nil, fmt.Errorf("refs predicate must have target or subquery")
 	}
@@ -318,6 +324,20 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 	}
 
 	return cond, args, nil
+}
+
+func refsSourceCondition(alias string, root QueryType) (string, error) {
+	switch root {
+	case QueryTypeObject:
+		return fmt.Sprintf("(r.source_id = %[1]s.id OR r.source_id LIKE %[1]s.id || '#%%')", alias), nil
+	case QueryTypeSection:
+		return fmt.Sprintf(
+			"r.file_path = %[1]s.file_path AND r.line_number >= %[1]s.line_start AND (%[1]s.subtree_line_end IS NULL OR r.line_number <= %[1]s.subtree_line_end)",
+			alias,
+		), nil
+	default:
+		return "", fmt.Errorf("refs() predicate is not supported for %s queries", queryTypeName(root))
+	}
 }
 
 // buildContentPredicateSQL builds SQL for content("search terms") predicates.

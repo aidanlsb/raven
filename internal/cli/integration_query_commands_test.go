@@ -120,6 +120,37 @@ func TestIntegration_QueryErrorsSuggestCorrectSyntax(t *testing.T) {
 			t.Fatalf("expected all query roots in suggestion, got %#v", result.Error)
 		}
 	})
+
+	for _, tt := range []struct {
+		name    string
+		query   string
+		message string
+	}{
+		{
+			name:    "nonnumeric link line",
+			query:   "link .line==abc",
+			message: "link field '.line' requires a numeric value",
+		},
+		{
+			name:    "nonnumeric section line",
+			query:   "section .line_start==abc",
+			message: "section field '.line_start' requires a numeric value",
+		},
+		{
+			name:    "phantom section type root",
+			query:   "type:section .title==Tasks",
+			message: "type:section is not a valid query root",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result := v.RunCLI("query", tt.query)
+			result.MustFail(t, "QUERY_INVALID")
+			result.MustFailWithMessage(t, tt.message)
+			if result.Error != nil && strings.Contains(result.Error.Suggestion, "reindex") {
+				t.Fatalf("query validation error must not suggest reindexing: %#v", result.Error)
+			}
+		})
+	}
 }
 
 func TestIntegration_LinkQuery(t *testing.T) {

@@ -50,6 +50,10 @@ func TestValidator_LinkPredicates(t *testing.T) {
 		{`link content("guide")`, "content() predicate is not valid for link queries"},
 		{"link any(.ext, _ == pdf)", "array predicates are not valid for link queries"},
 		{"link .is_image>0", "link field '.is_image' only supports == and !="},
+		{"link .line==abc", "link field '.line' requires a numeric value"},
+		{"link exists(.ext)", "exists() is not valid for link field '.ext'"},
+		{"link !exists(.ext)", "!exists() is not valid for link field '.ext'"},
+		{"type:project links(exists(.ext))", "exists() is not valid for link field '.ext'"},
 	}
 	for _, tt := range rejected {
 		t.Run("rejected/"+tt.query, func(t *testing.T) {
@@ -66,6 +70,23 @@ func TestValidator_LinkPredicates(t *testing.T) {
 				t.Fatalf("message = %q, want substring %q", validationErr.Message, tt.message)
 			}
 		})
+	}
+}
+
+func TestValidator_LinkExistsErrorSuggestsEmptyComparison(t *testing.T) {
+	t.Parallel()
+
+	q, err := Parse("link exists(.ext)")
+	if err != nil {
+		t.Fatalf("Parse(): %v", err)
+	}
+	err = NewValidator(nil).Validate(q)
+	var validationErr *ValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("Validate() error = %T %v, want *ValidationError", err, err)
+	}
+	if validationErr.Suggestion != `Use .ext=="" to match an indexed empty value` {
+		t.Fatalf("suggestion = %q", validationErr.Suggestion)
 	}
 }
 

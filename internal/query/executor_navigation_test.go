@@ -262,6 +262,42 @@ func TestSectionContainsNestedSection(t *testing.T) {
 	}
 }
 
+func TestSectionRefsPredicateUsesCompleteSubtree(t *testing.T) {
+	t.Parallel()
+
+	db := setupTestDB(t)
+	defer db.Close()
+	_, err := db.Exec(`
+		INSERT INTO sections (
+			id, file_object_id, file_path, slug, title, level,
+			line_start, line_end, subtree_line_end, parent_section_id
+		) VALUES (
+			'projects/website#details', 'projects/website', 'projects/website.md',
+			'details', 'Details', 3, 30, 39, 39, 'projects/website#tasks'
+		);
+		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number)
+		VALUES (
+			'projects/website#details', 'people/freya', 'people/freya',
+			'projects/website.md', 35
+		);
+	`)
+	if err != nil {
+		t.Fatalf("insert nested section reference: %v", err)
+	}
+
+	q, err := Parse("section .title==Tasks refs([[people/freya]])")
+	if err != nil {
+		t.Fatalf("Parse(): %v", err)
+	}
+	results, err := NewExecutor(db).executeSectionQuery(q)
+	if err != nil {
+		t.Fatalf("executeSectionQuery(): %v", err)
+	}
+	if len(results) != 1 || results[0].ID != "projects/website#tasks" {
+		t.Fatalf("results = %#v, want parent Tasks section", results)
+	}
+}
+
 func TestAtPredicate(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
