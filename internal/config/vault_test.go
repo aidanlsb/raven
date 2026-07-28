@@ -152,7 +152,6 @@ func TestLoadVaultConfig(t *testing.T) {
 			t.Fatal("expected error for legacy directories.objects, got nil")
 		}
 	})
-
 }
 
 func TestVaultConfigPaths(t *testing.T) {
