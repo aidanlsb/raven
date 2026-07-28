@@ -47,6 +47,10 @@ Common predicates:
 - contains(section...|trait:...) — Recursively contains section or trait matching subquery
 - refs([[target]]) — References target (refs([[people/freya]]))
 - refs(type:...) — References items matching subquery (refs(type:project .status==active))
+- links(<link-predicate>) — Contains an outgoing non-Raven file or URL link
+  matching .ext, .is_image, .scheme, .raw_target, .display, or .normalized_key
+  (links(.ext==pdf)). Unlike refs()/refd(), links() is outgoing-only: external
+  files and URLs are leaves, so there is no linkd() inverse.
 - refd(type:...) — Asset is referenced by matching source items (asset refd(type:note))
 - Prefer canonical object IDs and full asset paths in direct reference targets;
   bare short forms are resolution sugar and can become ambiguous.

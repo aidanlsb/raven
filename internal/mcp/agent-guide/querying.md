@@ -64,6 +64,12 @@ Assets can be reference targets in `refs(...)` and `refd(...)` flows, including 
 
 Asset queries support derived metadata fields only: `.id`, `.file_path`, `.filename`, `.extension`, `.media_type`, and `.size_bytes`. Assets do not have outbound refs, traits, or scope, so `asset refs(...)`, `asset has(...)`, and scope predicates are invalid.
 
+Use `links(...)` on type, section, or trait roots to filter by outgoing non-Raven
+links, for example `type:project links(.ext==pdf)` or
+`trait:todo links(.is_image==true)`. Link fields are `.ext`, `.is_image`,
+`.scheme`, `.raw_target`, `.display`, and `.normalized_key`. There is no
+`linkd()` inverse because external files and URLs are leaf targets.
+
 If you see SQLite/FTS errors during full-text search, treat them as query-syntax issues and simplify or quote punctuation-heavy terms.
 
 ## Common agent patterns

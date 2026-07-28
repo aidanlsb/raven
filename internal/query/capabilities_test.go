@@ -32,6 +32,10 @@ func representativePredicate(kind predKind) Predicate {
 		return &WithinPredicate{Target: "projects/website"}
 	case predKindRefs:
 		return &RefsPredicate{Target: "projects/website"}
+	case predKindLinks:
+		return &LinksPredicate{
+			LinkPredicate: &FieldPredicate{Field: "ext", Value: "pdf", CompareOp: CompareEq},
+		}
 	case predKindRefd:
 		return &RefdPredicate{Target: "projects/website"}
 	case predKindContent:
@@ -49,7 +53,7 @@ var allRoots = []QueryType{QueryTypeObject, QueryTypeTrait, QueryTypeAsset, Quer
 
 var allPredKinds = []predKind{
 	predKindField, predKindStringFunc, predKindArray, predKindHas, predKindContains,
-	predKindIn, predKindWithin, predKindRefs, predKindRefd, predKindContent, predKindValue, predKindAt,
+	predKindIn, predKindWithin, predKindRefs, predKindLinks, predKindRefd, predKindContent, predKindValue, predKindAt,
 }
 
 // TestCapabilityMatrix_LegalityIsSingleSourced verifies that predicateAllowedAtRoot

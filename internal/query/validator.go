@@ -189,6 +189,8 @@ func (v *Validator) validateLegalObjectPredicate(typeName string, typeDef *schem
 		return v.validateSubquery(p.SubQuery)
 	case *RefsPredicate:
 		return v.validateSubquery(p.SubQuery)
+	case *LinksPredicate:
+		return validateLinkPredicate(p.LinkPredicate)
 	case *RefdPredicate:
 		return v.validateSubquery(p.SubQuery)
 	case *ContentPredicate:
@@ -230,6 +232,8 @@ func (v *Validator) validateLegalTraitPredicate(traitName string, pred Predicate
 		return v.validateSubquery(p.SubQuery)
 	case *RefsPredicate:
 		return v.validateSubquery(p.SubQuery)
+	case *LinksPredicate:
+		return validateLinkPredicate(p.LinkPredicate)
 	case *ContentPredicate:
 		return validateContentTerm(p)
 	case *AtPredicate:
@@ -297,6 +301,8 @@ func (v *Validator) validateLegalSectionPredicate(pred Predicate) error {
 		return v.validateSubquery(p.SubQuery)
 	case *RefsPredicate:
 		return v.validateSubquery(p.SubQuery)
+	case *LinksPredicate:
+		return validateLinkPredicate(p.LinkPredicate)
 	case *RefdPredicate:
 		return v.validateSubquery(p.SubQuery)
 	case *ContentPredicate:
