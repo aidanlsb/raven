@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -237,7 +238,7 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 		}
 
 		if fixedCount > 0 {
-			if err := os.WriteFile(fullPath, []byte(newContent), 0o644); err != nil {
+			if err := atomicfile.WriteFile(fullPath, []byte(newContent), 0); err != nil {
 				return result, validationErrorf("failed to write %s: %w", filePath, err)
 			}
 			result.FileCount++

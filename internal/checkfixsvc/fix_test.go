@@ -1,6 +1,9 @@
 package checkfixsvc
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
@@ -8,6 +11,71 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
+
+func TestApplyFixes_ReplacesVaultFileAtomically(t *testing.T) {
+	t.Parallel()
+
+	const original = "See [[freya]].\n"
+	vault := testutil.NewTestVault(t).
+		WithFile("notes/example.md", original).
+		Build()
+
+	notePath := filepath.Join(vault.Path, "notes/example.md")
+	if err := os.Chmod(notePath, 0o600); err != nil {
+		t.Fatalf("chmod note: %v", err)
+	}
+
+	// A hard link retains the original inode after an atomic replacement. A
+	// direct os.WriteFile call would modify the shared inode and this snapshot.
+	snapshotPath := filepath.Join(vault.Path, "note-before-fix")
+	if err := os.Link(notePath, snapshotPath); err != nil {
+		t.Skipf("hard links unavailable: %v", err)
+	}
+
+	result, err := ApplyFixes(vault.Path, []FixableIssue{
+		{
+			FilePath:    "notes/example.md",
+			Line:        1,
+			IssueType:   check.IssueShortRefCouldBeFullPath,
+			FixType:     FixTypeWikilink,
+			OldValue:    "freya",
+			NewValue:    "people/freya",
+			Description: "[[freya]] -> [[people/freya]]",
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("ApplyFixes returned error: %v", err)
+	}
+	if result.FileCount != 1 || result.IssueCount != 1 {
+		t.Fatalf("result counts = files:%d issues:%d, want files:1 issues:1", result.FileCount, result.IssueCount)
+	}
+
+	got, err := os.ReadFile(notePath)
+	if err != nil {
+		t.Fatalf("read fixed note: %v", err)
+	}
+	if want := "See [[people/freya]].\n"; string(got) != want {
+		t.Fatalf("fixed note = %q, want %q", got, want)
+	}
+
+	snapshot, err := os.ReadFile(snapshotPath)
+	if err != nil {
+		t.Fatalf("read pre-fix snapshot: %v", err)
+	}
+	if string(snapshot) != original {
+		t.Fatalf("pre-fix inode was modified in place: got %q, want %q", snapshot, original)
+	}
+
+	if runtime.GOOS != "windows" {
+		info, statErr := os.Stat(notePath)
+		if statErr != nil {
+			t.Fatalf("stat fixed note: %v", statErr)
+		}
+		if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
+			t.Fatalf("fixed note mode = %o, want %o", got, want)
+		}
+	}
+}
 
 func TestApplyFixes_ReportsSkippedFixes(t *testing.T) {
 	t.Parallel()
