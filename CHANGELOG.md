@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Reference and ref-field post-index resolution now share batching and outcome handling, keeping resolved, missing, and ambiguous behavior aligned.
 
+### Fixed
+- Check auto-fixes now replace text only on each issue's reported line, so repeated or conflicting patterns are applied and counted independently.
+
 ### Removed
 - Removed the orphaned internal `rvnexec` subprocess helper.
 

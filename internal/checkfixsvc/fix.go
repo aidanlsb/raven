@@ -193,8 +193,12 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 
 		newContent := string(content)
 		fixedCount := 0
+		lineRanges := contentLineRanges(newContent)
+		lineDeltas := make(map[int]int)
 
-		sort.Slice(fileFixes, func(i, j int) bool {
+		// Applying lower lines first keeps the original byte ranges valid for
+		// every line still to process. Deltas account for multiple fixes on one line.
+		sort.SliceStable(fileFixes, func(i, j int) bool {
 			return fileFixes[i].Line > fileFixes[j].Line
 		})
 
@@ -211,11 +215,24 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 				result.Skipped = append(result.Skipped, skippedFix(fix, "unsupported fix type"))
 				continue
 			}
-			if !strings.Contains(newContent, oldPattern) {
+			lineIdx := fix.Line - 1
+			if lineIdx < 0 || lineIdx >= len(lineRanges) {
 				result.Skipped = append(result.Skipped, skippedFix(fix, "expected content no longer present in file"))
 				continue
 			}
-			newContent = strings.ReplaceAll(newContent, oldPattern, newPattern)
+
+			lineRange := lineRanges[lineIdx]
+			lineEnd := lineRange.end + lineDeltas[fix.Line]
+			matchOffset := strings.Index(newContent[lineRange.start:lineEnd], oldPattern)
+			if matchOffset == -1 {
+				result.Skipped = append(result.Skipped, skippedFix(fix, "expected content no longer present in file"))
+				continue
+			}
+
+			matchStart := lineRange.start + matchOffset
+			matchEnd := matchStart + len(oldPattern)
+			newContent = newContent[:matchStart] + newPattern + newContent[matchEnd:]
+			lineDeltas[fix.Line] += len(newPattern) - len(oldPattern)
 			fixedCount++
 		}
 
@@ -230,6 +247,24 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 	}
 
 	return result, nil
+}
+
+type contentLineRange struct {
+	start int
+	end   int
+}
+
+func contentLineRanges(content string) []contentLineRange {
+	ranges := make([]contentLineRange, 0, strings.Count(content, "\n")+1)
+	start := 0
+	for i := range len(content) {
+		if content[i] != '\n' {
+			continue
+		}
+		ranges = append(ranges, contentLineRange{start: start, end: i})
+		start = i + 1
+	}
+	return append(ranges, contentLineRange{start: start, end: len(content)})
 }
 
 func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, fixes []FixableIssue) FixResult {
