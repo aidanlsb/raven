@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/parser"
+	ravenpaths "github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -227,6 +228,47 @@ func referenceResolutionIncompleteWarning(vaultPath, filePath string, err *index
 		Message: fmt.Sprintf("auto-reindex indexed %s, but %s reference resolution did not complete: %v", displayPath, scope, err.Err),
 		Ref:     "The file was indexed successfully, but backlinks may be stale. Run 'rvn reindex' to retry reference resolution.",
 	}
+}
+
+func indexProjectionFailureWarnings(rt *vaultruntime.Runtime, filePath, stage string, projectionErr error) []commandexec.Warning {
+	if projectionErr == nil {
+		return nil
+	}
+	var warning commandexec.Warning
+	var resolutionErr *index.PostCommitReferenceResolutionError
+	if errors.As(projectionErr, &resolutionErr) {
+		warning = referenceResolutionIncompleteWarning(rt.VaultPath, filePath, resolutionErr)
+	} else {
+		warning = indexUpdateWarning(rt.VaultPath, filePath, "failed to "+stage, projectionErr)
+	}
+	warnings := []commandexec.Warning{warning}
+	if err := recordIndexProjectionRecovery(rt.VaultPath, filePath, projectionErr); err != nil {
+		warnings = append(warnings, indexJournalWarning("failed to record pending index recovery", err))
+	}
+	return warnings
+}
+
+func recordIndexProjectionRecovery(vaultPath, filePath string, projectionErr error) error {
+	var resolutionErr *index.PostCommitReferenceResolutionError
+	if errors.As(projectionErr, &resolutionErr) && resolutionErr.VaultWide {
+		_, err := indexjournal.RequireFullScan(vaultPath, "")
+		return err
+	}
+
+	fullPath := filePath
+	if !filepath.IsAbs(fullPath) {
+		fullPath = filepath.Join(vaultPath, filepath.FromSlash(fullPath))
+	}
+	relPath, err := filepath.Rel(vaultPath, fullPath)
+	if err != nil {
+		return fmt.Errorf("resolve index recovery path: %w", err)
+	}
+	relPath = filepath.ToSlash(filepath.Clean(relPath))
+	if !ravenpaths.IsValidVaultRelPath(relPath) {
+		return fmt.Errorf("invalid index recovery path %q", relPath)
+	}
+	_, err = indexjournal.SetPaths(vaultPath, "", []string{relPath})
+	return err
 }
 
 // missingRefEnvelope detects references in the given files whose targets do not

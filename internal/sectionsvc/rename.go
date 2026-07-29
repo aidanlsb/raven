@@ -42,6 +42,7 @@ type RenameResult struct {
 	DestinationRel  string
 	UpdatedRefs     []string
 	WarningMessages []string
+	IndexWarnings   []IndexWarning
 }
 
 type fileRewrite struct {
@@ -324,8 +325,8 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 
 	if db != nil && req.Schema != nil {
 		for _, path := range writtenFiles {
-			if warning := reindexRenamedFile(db, req, path); warning != "" {
-				result.WarningMessages = append(result.WarningMessages, warning)
+			if warning := reindexRenamedFile(db, req, path); warning != nil {
+				result.IndexWarnings = append(result.IndexWarnings, *warning)
 			}
 		}
 	}
@@ -436,21 +437,24 @@ func replaceSectionRefVariants(content, oldRaw, newRaw string) string {
 	return replacer.Replace(content)
 }
 
-func reindexRenamedFile(db *index.Database, req RenameRequest, filePath string) string {
+func reindexRenamedFile(db *index.Database, req RenameRequest, filePath string) *IndexWarning {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Sprintf("Failed to reindex %s: %v", filePath, err)
+		return &IndexWarning{FilePath: filePath, Stage: "read file", Err: err}
 	}
 	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, req.VaultPath, req.ParseOptions)
-	if err != nil || doc == nil {
-		return fmt.Sprintf("Failed to reindex %s: %v", filePath, err)
+	if err != nil {
+		return &IndexWarning{FilePath: filePath, Stage: "parse file", Err: err}
+	}
+	if doc == nil {
+		return &IndexWarning{FilePath: filePath, Stage: "parse file", Err: errors.New("parsed document is nil")}
 	}
 	var mtime int64
 	if st, err := os.Stat(filePath); err == nil {
 		mtime = st.ModTime().Unix()
 	}
 	if err := db.IndexDocumentWithMtime(doc, req.Schema, mtime); err != nil {
-		return fmt.Sprintf("Failed to reindex %s: %v", filePath, err)
+		return &IndexWarning{FilePath: filePath, Stage: "update index", Err: err}
 	}
-	return ""
+	return nil
 }

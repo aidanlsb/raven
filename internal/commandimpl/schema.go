@@ -703,8 +703,12 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 
 	var warnings []commandexec.Warning
 	if result.Changed && result.ChangedPath != "" {
-		if warning, failed := autoReindexWarningLocked(rt, filepath.Clean(result.ChangedPath)); failed {
+		changedPath := filepath.Clean(result.ChangedPath)
+		if warning, projectionErr := autoReindexWarningAndErrorLocked(rt, changedPath); projectionErr != nil {
 			warnings = append(warnings, warning)
+			if err := recordIndexProjectionRecovery(rt.VaultPath, changedPath, projectionErr); err != nil {
+				warnings = append(warnings, indexJournalWarning("failed to record pending index recovery", err))
+			}
 		}
 	}
 

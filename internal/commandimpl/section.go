@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/sectionsvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // HandleSectionCreate executes the canonical `section create` command.
@@ -64,7 +65,7 @@ func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec
 	data["level"] = result.Level
 	return commandexec.SuccessWithWarnings(
 		data,
-		warningMessagesToCommandWarnings(result.WarningMessages, indexUpdateFailedWarningCode),
+		sectionCommandWarnings(rt, result.WarningMessages, result.IndexWarnings),
 		nil,
 	)
 }
@@ -111,7 +112,7 @@ func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.R
 
 	return commandexec.SuccessWithWarnings(
 		sectionLifecycleData(result.SectionID, result.FileRelative, result.Placement, result.AnchorID, req.Preview),
-		warningMessagesToCommandWarnings(result.WarningMessages, indexUpdateFailedWarningCode),
+		sectionCommandWarnings(rt, result.WarningMessages, result.IndexWarnings),
 		nil,
 	)
 }
@@ -176,9 +177,22 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 
 	return commandexec.SuccessWithWarnings(
 		data,
-		warningMessagesToCommandWarnings(result.WarningMessages, indexUpdateFailedWarningCode),
+		sectionCommandWarnings(rt, result.WarningMessages, result.IndexWarnings),
 		nil,
 	)
+}
+
+func sectionCommandWarnings(rt *vaultruntime.Runtime, warningMessages []string, indexWarnings []sectionsvc.IndexWarning) []commandexec.Warning {
+	warnings := warningMessagesToCommandWarnings(warningMessages, indexUpdateFailedWarningCode)
+	for _, indexWarning := range indexWarnings {
+		warnings = append(warnings, indexProjectionFailureWarnings(
+			rt,
+			indexWarning.FilePath,
+			indexWarning.Stage,
+			indexWarning.Err,
+		)...)
+	}
+	return warnings
 }
 
 func sectionPlacementArg(args map[string]any) sectionsvc.Placement {

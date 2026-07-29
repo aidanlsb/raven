@@ -91,6 +91,7 @@ func prepareQueryExecution(req commandexec.Request) (execution *queryExecution, 
 			return nil, commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to refresh index: %v", err), nil, "Run 'rvn reindex' to rebuild the database")
 		}
 		refreshWarnings = append(refreshFailureWarnings(report), refreshUnknownFieldWarnings(report)...)
+		refreshWarnings = append(refreshWarnings, refreshReferenceResolutionWarnings(report)...)
 	}
 
 	execution = &queryExecution{
@@ -269,6 +270,37 @@ func refreshUnknownFieldWarnings(report readsvc.SmartReindexReport) []commandexe
 		Code:    codes.WarnUnknownField,
 		Message: message,
 		Ref:     "Add the field to schema.yaml or remove it; run 'rvn check' for details",
+	}}
+}
+
+func refreshReferenceResolutionWarnings(report readsvc.SmartReindexReport) []commandexec.Warning {
+	if len(report.ReferenceResolutionWarnings) == 0 {
+		return nil
+	}
+
+	const maxListed = 5
+	listed := make([]string, 0, maxListed)
+	for i, warning := range report.ReferenceResolutionWarnings {
+		if i >= maxListed {
+			break
+		}
+		listed = append(listed, warning.Message)
+	}
+	message := fmt.Sprintf(
+		"refresh indexed %d file(s), but reference resolution did not complete",
+		len(report.ReferenceResolutionWarnings),
+	)
+	if len(listed) > 0 {
+		message = fmt.Sprintf("%s: %s", message, strings.Join(listed, "; "))
+	}
+	if len(report.ReferenceResolutionWarnings) > maxListed {
+		message = fmt.Sprintf("%s; and %d more", message, len(report.ReferenceResolutionWarnings)-maxListed)
+	}
+
+	return []commandexec.Warning{{
+		Code:    codes.WarnRefResolutionIncomplete,
+		Message: message,
+		Ref:     "The files were indexed successfully, but backlinks may be stale. Run 'rvn reindex' to retry reference resolution.",
 	}}
 }
 

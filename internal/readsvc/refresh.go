@@ -1,6 +1,7 @@
 package readsvc
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,9 +44,10 @@ type SmartReindexWarning struct {
 
 // SmartReindexReport summarizes an incremental refresh.
 type SmartReindexReport struct {
-	Indexed  int
-	Failures []SmartReindexFailure
-	Warnings []SmartReindexWarning
+	Indexed                     int
+	Failures                    []SmartReindexFailure
+	Warnings                    []SmartReindexWarning
+	ReferenceResolutionWarnings []SmartReindexWarning
 }
 
 func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
@@ -133,13 +135,27 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 			return nil //nolint:nilerr // record and continue; caller surfaces Failures
 		}
 
-		if err := rt.DB.IndexDocumentWithMtime(result.Document, sch, result.FileMtime); err != nil {
-			report.Failures = append(report.Failures, SmartReindexFailure{
-				Path:   result.RelativePath,
-				Stage:  "index",
-				ErrMsg: err.Error(),
+		if indexErr := rt.DB.IndexDocumentWithMtime(result.Document, sch, result.FileMtime); indexErr != nil {
+			var resolutionErr *index.PostCommitReferenceResolutionError
+			if !errors.As(indexErr, &resolutionErr) {
+				report.Failures = append(report.Failures, SmartReindexFailure{
+					Path:   result.RelativePath,
+					Stage:  "index",
+					ErrMsg: indexErr.Error(),
+				})
+				return nil //nolint:nilerr // record and continue; caller surfaces Failures
+			}
+			report.ReferenceResolutionWarnings = append(report.ReferenceResolutionWarnings, SmartReindexWarning{
+				Path:    result.RelativePath,
+				Message: resolutionErr.Error(),
 			})
-			return nil //nolint:nilerr // record and continue; caller surfaces Failures
+			if err := recordReferenceResolutionRecovery(rt.VaultPath, result.RelativePath, resolutionErr); err != nil {
+				report.Failures = append(report.Failures, SmartReindexFailure{
+					Path:   result.RelativePath,
+					Stage:  "journal",
+					ErrMsg: err.Error(),
+				})
+			}
 		}
 
 		for _, warning := range index.UnknownFrontmatterWarnings(result.Document, sch) {
@@ -184,6 +200,15 @@ func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
 	}
 
 	return report, nil
+}
+
+func recordReferenceResolutionRecovery(vaultPath, relPath string, resolutionErr *index.PostCommitReferenceResolutionError) error {
+	if resolutionErr.VaultWide {
+		_, err := indexjournal.RequireFullScan(vaultPath, "")
+		return err
+	}
+	_, err := indexjournal.SetPaths(vaultPath, "", []string{relPath})
+	return err
 }
 
 func recoverRemovedDirtyPaths(rt *Runtime, pending indexjournal.Snapshot, matcher *ravenignore.Matcher) error {
