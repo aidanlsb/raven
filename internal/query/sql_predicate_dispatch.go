@@ -82,9 +82,6 @@ func (e *Executor) buildPredicateSQL(root QueryType, pred Predicate, alias, type
 		return e.buildWithinPredicateSQL(p, alias, root)
 
 	case *RefsPredicate:
-		if root == QueryTypeTrait {
-			return e.buildTraitRefsPredicateSQL(p, alias)
-		}
 		return e.buildRefsPredicateSQL(p, alias, root)
 
 	case *LinksPredicate:

@@ -261,8 +261,9 @@ func scopeParentExpr(alias string, root QueryType) string {
 }
 
 // buildRefsPredicateSQL builds SQL for refs([[target]]) or refs(type:...)
-// predicates. Object roots include references from the whole file; section
-// roots include references from the section's complete subtree.
+// predicates. Object roots include references from the whole file, trait roots
+// include references from the trait's source line, and section roots include
+// references from the section's complete subtree.
 func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root QueryType) (string, []interface{}, error) {
 	var cond string
 	var args []interface{}
@@ -330,6 +331,8 @@ func refsSourceCondition(alias string, root QueryType) (string, error) {
 	switch root {
 	case QueryTypeObject:
 		return fmt.Sprintf("(r.source_id = %[1]s.id OR r.source_id LIKE %[1]s.id || '#%%')", alias), nil
+	case QueryTypeTrait:
+		return fmt.Sprintf("r.file_path = %[1]s.file_path AND r.line_number = %[1]s.line_number", alias), nil
 	case QueryTypeSection:
 		return fmt.Sprintf(
 			"r.file_path = %[1]s.file_path AND r.line_number >= %[1]s.line_start AND (%[1]s.subtree_line_end IS NULL OR r.line_number <= %[1]s.subtree_line_end)",
