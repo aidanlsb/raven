@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -185,6 +186,62 @@ func TestApplyChangeSetClearsOnlySuccessfullyProjectedFiles(t *testing.T) {
 	}
 	if _, err := rt.DB.GetObject("people/good"); err != nil {
 		t.Fatalf("successfully projected object missing: %v", err)
+	}
+}
+
+func TestApplyChangeSetReportsCommittedResolutionFailureAndFullRecoveryScope(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("source.md", "[[target]]\n").
+		WithFile("target.md", "# Target\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+	indexPostMutationFiles(t, rt, "source.md")
+	if _, err := rt.DB.DB().Exec(`
+		CREATE TRIGGER fail_reference_resolution
+		BEFORE UPDATE OF target_id ON refs
+		BEGIN
+			SELECT RAISE(ABORT, 'reference resolution failed');
+		END;
+	`); err != nil {
+		t.Fatalf("create resolution trigger: %v", err)
+	}
+
+	changes := mutation.NewChangeSet()
+	changes.AddChanged("target.md")
+	data, warnings := applyChangeSet(rt, changes)
+
+	if len(data) != 0 {
+		t.Fatalf("data = %#v, want no missing-ref annotations with incomplete resolution", data)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %#v, want one resolution warning", warnings)
+	}
+	if warnings[0].Code != codes.WarnRefResolutionIncomplete {
+		t.Fatalf("warning code = %q, want %q", warnings[0].Code, codes.WarnRefResolutionIncomplete)
+	}
+	for _, want := range []string{"indexed target.md", "vault-wide reference resolution did not complete"} {
+		if !strings.Contains(warnings[0].Message, want) {
+			t.Fatalf("warning message = %q, want substring %q", warnings[0].Message, want)
+		}
+	}
+	if !strings.Contains(warnings[0].Ref, "indexed successfully") || !strings.Contains(warnings[0].Ref, "backlinks may be stale") {
+		t.Fatalf("warning ref = %q, want committed-index recovery guidance", warnings[0].Ref)
+	}
+
+	pending, err := indexjournal.Load(v.Path)
+	if err != nil {
+		t.Fatalf("load index journal: %v", err)
+	}
+	if !pending.Dirty() || !pending.RequiresFullScan() {
+		t.Fatalf("pending journal = %#v, want vault-wide recovery", pending)
+	}
+	if target, err := rt.DB.GetObject("target"); err != nil {
+		t.Fatalf("get committed target: %v", err)
+	} else if target == nil {
+		t.Fatal("target is absent after committed index write")
 	}
 }
 

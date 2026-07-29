@@ -1,6 +1,7 @@
 package sectionsvc
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,6 +87,72 @@ func TestRenameRewritesInboundReferences(t *testing.T) {
 		if !seen {
 			t.Errorf("UpdatedRefs missing %q: %#v", id, result.UpdatedRefs)
 		}
+	}
+}
+
+func TestRenamePreservesPostCommitResolutionErrors(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", renameSectionProjectContent).
+		WithFile("notes/ref.md", "See [[projects/site#tasks]].\n").
+		Build()
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "projects/site.md", "notes/ref.md")
+
+	db, err := index.Open(v.Path)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	if _, err := db.DB().Exec(`
+		CREATE TRIGGER fail_reference_resolution
+		BEFORE UPDATE OF target_id ON refs
+		BEGIN
+			SELECT RAISE(ABORT, 'reference resolution failed');
+		END;
+	`); err != nil {
+		_ = db.Close()
+		t.Fatalf("create resolution trigger: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close index: %v", err)
+	}
+
+	result, err := Rename(RenameRequest{
+		VaultPath:      v.Path,
+		VaultConfig:    config.DefaultVaultConfig(),
+		Schema:         sch,
+		Reference:      "projects/site#tasks",
+		NewHeadingText: "Completed Tasks",
+		FailOnIndexErr: true,
+	})
+	if err != nil {
+		t.Fatalf("Rename() error = %v", err)
+	}
+	if len(result.IndexWarnings) == 0 {
+		t.Fatalf("index warnings = %#v, want post-commit resolution failure", result.IndexWarnings)
+	}
+	var resolutionErr *index.PostCommitReferenceResolutionError
+	foundVaultWide := false
+	for _, warning := range result.IndexWarnings {
+		if errors.As(warning.Err, &resolutionErr) && resolutionErr.VaultWide {
+			foundVaultWide = true
+			break
+		}
+	}
+	if !foundVaultWide {
+		t.Fatalf("index warnings = %#v, want vault-wide post-commit error", result.IndexWarnings)
+	}
+	checkDB, err := index.Open(v.Path)
+	if err != nil {
+		t.Fatalf("reopen index: %v", err)
+	}
+	defer checkDB.Close()
+	if object, err := checkDB.GetObject("projects/site"); err != nil {
+		t.Fatalf("get committed project: %v", err)
+	} else if object == nil {
+		t.Fatal("renamed project is absent from committed index")
 	}
 }
 

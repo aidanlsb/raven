@@ -9,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexjournal"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -109,6 +110,75 @@ func TestSmartReindexSkipsParsingUnchangedMarkdown(t *testing.T) {
 	}
 	if len(report.Failures) != 0 {
 		t.Fatalf("failures = %#v, want none because unchanged file must not be parsed", report.Failures)
+	}
+}
+
+func TestSmartReindexRecordsPostCommitResolutionRecovery(t *testing.T) {
+	t.Parallel()
+
+	testVault := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("source.md", "[[target]]\n").
+		WithFile("target.md", "# Target\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, testVault.Path, vaultruntime.Options{OpenDB: true})
+	t.Cleanup(rt.Close)
+
+	sourcePath := filepath.Join(testVault.Path, "source.md")
+	sourceDoc, err := parser.ParseDocumentWithOptions("[[target]]\n", sourcePath, testVault.Path, rt.ParseOptions)
+	if err != nil {
+		t.Fatalf("parse source: %v", err)
+	}
+	if err := rt.DB.IndexDocument(sourceDoc, rt.Schema); err != nil {
+		t.Fatalf("index source: %v", err)
+	}
+	if _, err := rt.DB.DB().Exec(`
+		CREATE TRIGGER fail_reference_resolution
+		BEFORE UPDATE OF target_id ON refs
+		BEGIN
+			SELECT RAISE(ABORT, 'reference resolution failed');
+		END;
+	`); err != nil {
+		t.Fatalf("create resolution trigger: %v", err)
+	}
+
+	report, err := SmartReindex(rt)
+	if err != nil {
+		t.Fatalf("SmartReindex: %v", err)
+	}
+	if report.Indexed != 1 || len(report.Failures) != 0 || len(report.ReferenceResolutionWarnings) != 1 {
+		t.Fatalf("report = %#v, want one committed index with a resolution warning", report)
+	}
+	if pending, err := indexjournal.Load(testVault.Path); err != nil {
+		t.Fatalf("load index journal: %v", err)
+	} else if !pending.Dirty() || !pending.RequiresFullScan() {
+		t.Fatalf("pending journal = %#v, want full-scan recovery", pending)
+	}
+	if target, err := rt.DB.GetObject("target"); err != nil {
+		t.Fatalf("get committed target: %v", err)
+	} else if target == nil {
+		t.Fatal("target is absent after committed index write")
+	}
+
+	if _, err := rt.DB.DB().Exec(`DROP TRIGGER fail_reference_resolution`); err != nil {
+		t.Fatalf("drop resolution trigger: %v", err)
+	}
+	recovered, err := SmartReindex(rt)
+	if err != nil {
+		t.Fatalf("recovery SmartReindex: %v", err)
+	}
+	if len(recovered.Failures) != 0 || len(recovered.ReferenceResolutionWarnings) != 0 {
+		t.Fatalf("recovery report = %#v, want clean recovery", recovered)
+	}
+	if pending, err := indexjournal.Load(testVault.Path); err != nil {
+		t.Fatalf("load recovered journal: %v", err)
+	} else if pending.Dirty() {
+		t.Fatalf("journal remains dirty after recovery: %#v", pending)
+	}
+	if backlinks, err := rt.DB.Backlinks("target"); err != nil {
+		t.Fatalf("read recovered backlinks: %v", err)
+	} else if len(backlinks) != 1 || backlinks[0].SourceID != "source" {
+		t.Fatalf("backlinks = %#v, want source", backlinks)
 	}
 }
 

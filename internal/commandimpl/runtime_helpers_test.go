@@ -2,6 +2,7 @@ package commandimpl
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/testutil"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -45,6 +47,72 @@ func TestMissingRefWarning_InferredType(t *testing.T) {
 	if got := w.CreateInvoke.Args["title"]; got != "ghost" {
 		t.Fatalf("create_invoke.args.title = %#v, want ghost", got)
 	}
+}
+
+func TestIndexProjectionFailureWarningsRecordRecoveryScope(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		projectionErr error
+		wantCode      codes.WarningCode
+		wantFullScan  bool
+		wantPaths     []string
+	}{
+		{
+			name:          "pre-commit failure keeps concrete path",
+			projectionErr: errors.New("index write failed"),
+			wantCode:      codes.WarnIndexUpdateFailed,
+			wantPaths:     []string{"notes/changed.md"},
+		},
+		{
+			name: "post-commit vault resolution failure widens scope",
+			projectionErr: &index.PostCommitReferenceResolutionError{
+				FilePath:  "notes/changed.md",
+				VaultWide: true,
+				Err:       errors.New("reference resolution failed"),
+			},
+			wantCode:     codes.WarnRefResolutionIncomplete,
+			wantFullScan: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			vaultPath := t.TempDir()
+			rt := &vaultruntime.Runtime{VaultPath: vaultPath}
+			filePath := filepath.Join(vaultPath, "notes", "changed.md")
+			warnings := indexProjectionFailureWarnings(rt, filePath, "update index", tc.projectionErr)
+			if len(warnings) != 1 || warnings[0].Code != tc.wantCode {
+				t.Fatalf("warnings = %#v, want code %q", warnings, tc.wantCode)
+			}
+
+			pending, err := indexjournal.Load(vaultPath)
+			if err != nil {
+				t.Fatalf("load index journal: %v", err)
+			}
+			if !pending.Dirty() || pending.RequiresFullScan() != tc.wantFullScan {
+				t.Fatalf("pending = %#v, want full scan %v", pending, tc.wantFullScan)
+			}
+			if got := pending.Paths(); !equalStrings(got, tc.wantPaths) {
+				t.Fatalf("pending paths = %#v, want %#v", got, tc.wantPaths)
+			}
+		})
+	}
+}
+
+func equalStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestMissingRefWarning_UnknownTypeFallsBackToCheck(t *testing.T) {

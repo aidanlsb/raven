@@ -14,6 +14,33 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
+// PostCommitReferenceResolutionError reports that the document's index rows
+// were committed, but the follow-up reference-resolution pass did not finish.
+// Callers must not treat this as a rolled-back index write.
+type PostCommitReferenceResolutionError struct {
+	FilePath  string
+	VaultWide bool
+	Err       error
+}
+
+func (e *PostCommitReferenceResolutionError) Error() string {
+	if e == nil {
+		return "index write committed, but reference resolution did not complete"
+	}
+	scope := "file"
+	if e.VaultWide {
+		scope = "vault-wide"
+	}
+	return fmt.Sprintf("index write for %s committed, but %s reference resolution did not complete: %v", e.FilePath, scope, e.Err)
+}
+
+func (e *PostCommitReferenceResolutionError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
 // IndexDocument indexes a parsed document (replaces existing data for the file).
 // IndexDocument indexes a parsed document into the database.
 // The schema is needed to validate field types and trait definitions.
@@ -105,7 +132,11 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 			resolveScope = nil
 		}
 		if _, err := d.resolveReferencesWithSchemaLocked(resolveScope, d.dailyDirectory, sch); err != nil {
-			return err
+			return &PostCommitReferenceResolutionError{
+				FilePath:  doc.FilePath,
+				VaultWide: resolveScope == nil,
+				Err:       err,
+			}
 		}
 	} else {
 		// Bulk indexing deliberately keeps the cache cold and builds one resolver

@@ -1,11 +1,13 @@
 package commandimpl
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -38,6 +40,7 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journa
 
 	autoReindexEnabled := rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled()
 	failedPaths := make(map[string]struct{})
+	requiresFullScan := false
 	if autoReindexEnabled {
 		canProject := true
 		if err := rt.OpenDB(); err != nil {
@@ -73,9 +76,20 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journa
 				}
 			}
 			for _, relPath := range indexPaths {
-				if warning, ok := projectIndexPathWarning(rt, relPath); ok {
+				if warning, projectionErr := projectIndexPathWarning(rt, relPath); projectionErr != nil {
 					warnings = append(warnings, warning)
 					failedPaths[relPath] = struct{}{}
+					var resolutionErr *index.PostCommitReferenceResolutionError
+					if errors.As(projectionErr, &resolutionErr) && resolutionErr.VaultWide {
+						requiresFullScan = true
+					}
+				}
+			}
+			if requiresFullScan {
+				var err error
+				trackedOperation, err = indexjournal.RequireFullScan(rt.VaultPath, trackedOperation)
+				if err != nil {
+					warnings = append(warnings, indexJournalWarning("failed to record required full index recovery", err))
 				}
 			}
 			successfulPaths := make([]string, 0, len(affectedPaths))
@@ -189,12 +203,12 @@ func removeIndexPathWarning(rt *vaultruntime.Runtime, relPath string) (commandex
 	return commandexec.Warning{}, false
 }
 
-func projectIndexPathWarning(rt *vaultruntime.Runtime, relPath string) (commandexec.Warning, bool) {
+func projectIndexPathWarning(rt *vaultruntime.Runtime, relPath string) (commandexec.Warning, error) {
 	filePath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
 	if paths.HasMDExtension(relPath) {
-		return autoReindexWarningLocked(rt, filePath)
+		return autoReindexWarningAndErrorLocked(rt, filePath)
 	}
 	// Non-Markdown files have no derived entity row. Any Markdown files whose
 	// link edges were rewritten are separate ChangeSet entries and are indexed.
-	return commandexec.Warning{}, false
+	return commandexec.Warning{}, nil
 }

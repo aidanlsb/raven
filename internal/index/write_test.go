@@ -47,6 +47,78 @@ func traitsByType(t *testing.T, db *Database, traitType string) []model.Trait {
 	return results
 }
 
+func TestIndexDocumentDistinguishesPostCommitResolutionFailure(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("open in-memory database: %v", err)
+	}
+	defer db.Close()
+
+	sourceDoc, err := parser.ParseDocument("[[target]]\n", filepath.Join(vaultPath, "source.md"), vaultPath)
+	if err != nil {
+		t.Fatalf("parse source: %v", err)
+	}
+	if err := db.IndexDocument(sourceDoc, schema.New()); err != nil {
+		t.Fatalf("index source: %v", err)
+	}
+	if _, err := db.db.Exec(`
+		CREATE TRIGGER fail_reference_resolution
+		BEFORE UPDATE OF target_id ON refs
+		BEGIN
+			SELECT RAISE(ABORT, 'reference resolution failed');
+		END;
+	`); err != nil {
+		t.Fatalf("create resolution trigger: %v", err)
+	}
+
+	targetDoc, err := parser.ParseDocument("# Target\n", filepath.Join(vaultPath, "target.md"), vaultPath)
+	if err != nil {
+		t.Fatalf("parse target: %v", err)
+	}
+	err = db.IndexDocument(targetDoc, schema.New())
+	var postCommitErr *PostCommitReferenceResolutionError
+	if !errors.As(err, &postCommitErr) {
+		t.Fatalf("IndexDocument() error = %v, want PostCommitReferenceResolutionError", err)
+	}
+	if postCommitErr.FilePath != "target.md" || !postCommitErr.VaultWide {
+		t.Fatalf("post-commit error = %#v, want target.md with vault-wide scope", postCommitErr)
+	}
+	if target, getErr := db.GetObject("target"); getErr != nil {
+		t.Fatalf("get committed target: %v", getErr)
+	} else if target == nil {
+		t.Fatal("target is absent after post-commit resolution failure")
+	}
+
+	if _, err := db.db.Exec(`
+		CREATE TRIGGER fail_object_insert
+		BEFORE INSERT ON objects
+		BEGIN
+			SELECT RAISE(ABORT, 'index write failed');
+		END;
+	`); err != nil {
+		t.Fatalf("create indexing trigger: %v", err)
+	}
+	preCommitDoc, err := parser.ParseDocument("# Pre-commit\n", filepath.Join(vaultPath, "pre-commit.md"), vaultPath)
+	if err != nil {
+		t.Fatalf("parse pre-commit document: %v", err)
+	}
+	err = db.IndexDocument(preCommitDoc, schema.New())
+	if err == nil {
+		t.Fatal("IndexDocument() error = nil, want pre-commit failure")
+	}
+	if errors.As(err, &postCommitErr) {
+		t.Fatalf("pre-commit error was misclassified as post-commit: %v", err)
+	}
+	if object, getErr := db.GetObject("pre-commit"); getErr != nil {
+		t.Fatalf("get rolled-back object: %v", getErr)
+	} else if object != nil {
+		t.Fatalf("pre-commit object was indexed: %#v", object)
+	}
+}
+
 func TestStarterSchemaBareTodoIndexesAsOpen(t *testing.T) {
 	t.Parallel()
 

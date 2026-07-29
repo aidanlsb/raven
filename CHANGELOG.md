@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Check auto-fixes now replace text only on each issue's reported line, so repeated or conflicting patterns are applied and counted independently.
 - `rvn check --fix` now replaces modified vault notes atomically, preventing interrupted writes from truncating note content while preserving existing file permissions.
+- Index writes now distinguish pre-commit failures from post-commit reference-resolution failures, reporting successful indexing with potentially stale backlinks and preserving the required recovery scope.
 
 ### Removed
 - Removed the orphaned internal `rvnexec` subprocess helper.

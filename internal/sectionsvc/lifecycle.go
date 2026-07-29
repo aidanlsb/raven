@@ -49,6 +49,7 @@ type CreateResult struct {
 	Placement       string
 	AnchorID        string
 	WarningMessages []string
+	IndexWarnings   []IndexWarning
 }
 
 type MoveRequest struct {
@@ -69,6 +70,7 @@ type MoveResult struct {
 	Placement       string
 	AnchorID        string
 	WarningMessages []string
+	IndexWarnings   []IndexWarning
 }
 
 type placementKind string
@@ -204,11 +206,12 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return result, nil
 	}
 
-	warnings, err := ctx.writeAndReindex(state.filePath, updatedContent, req.FailOnIndexErr)
+	warnings, indexWarnings, err := ctx.writeAndReindex(state.filePath, updatedContent, req.FailOnIndexErr)
 	if err != nil {
 		return nil, err
 	}
 	result.WarningMessages = warnings
+	result.IndexWarnings = indexWarnings
 	return result, nil
 }
 
@@ -316,11 +319,12 @@ func Move(req MoveRequest) (*MoveResult, error) {
 		return result, nil
 	}
 
-	warnings, err := ctx.writeAndReindex(state.filePath, updatedContent, req.FailOnIndexErr)
+	warnings, indexWarnings, err := ctx.writeAndReindex(state.filePath, updatedContent, req.FailOnIndexErr)
 	if err != nil {
 		return nil, err
 	}
 	result.WarningMessages = warnings
+	result.IndexWarnings = indexWarnings
 	return result, nil
 }
 
@@ -620,11 +624,11 @@ func validateOriginalSectionSlugs(state *documentState, updatedDoc *parser.Parse
 	return nil
 }
 
-func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnIndexErr bool) ([]string, error) {
+func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnIndexErr bool) ([]string, []IndexWarning, error) {
 	var warnings []string
 	if err := ctx.runtime.OpenDB(); err != nil {
 		if failOnIndexErr || errors.Is(err, index.ErrIndexRebuildRequired) {
-			return nil, newError(codes.ErrValidationFailed, "failed to open index database for section mutation", "Run 'rvn reindex' to rebuild the database", nil, err)
+			return nil, nil, newError(codes.ErrValidationFailed, "failed to open index database for section mutation", "Run 'rvn reindex' to rebuild the database", nil, err)
 		}
 		warnings = append(warnings, fmt.Sprintf("Failed to open index database for section mutation: %v", err))
 	}
@@ -635,8 +639,9 @@ func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnInd
 		perm = st.Mode()
 	}
 	if err := atomicfile.WriteFile(filePath, []byte(content), perm); err != nil {
-		return nil, newError(codes.ErrFileWrite, "failed to write section mutation", "", nil, err)
+		return nil, nil, newError(codes.ErrFileWrite, "failed to write section mutation", "", nil, err)
 	}
+	var indexWarnings []IndexWarning
 	if db != nil && ctx.schema != nil {
 		req := RenameRequest{
 			VaultPath:    ctx.vaultPath,
@@ -644,9 +649,9 @@ func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnInd
 			Schema:       ctx.schema,
 			ParseOptions: ctx.parseOptions,
 		}
-		if warning := reindexRenamedFile(db, req, filePath); warning != "" {
-			warnings = append(warnings, warning)
+		if warning := reindexRenamedFile(db, req, filePath); warning != nil {
+			indexWarnings = append(indexWarnings, *warning)
 		}
 	}
-	return warnings, nil
+	return warnings, indexWarnings, nil
 }
