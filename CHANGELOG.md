@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Section `refs(...)` now searches the complete section subtree, matching `links(...)`; trait variants of both predicates remain source-line scoped.
+- RQL `refs(...)` predicates now share one SQL builder across object, section, and trait roots while preserving each root's existing source scope.
 - RQL now rejects the phantom `type:section` root, non-scope subqueries in `within(...)`/`refs(...)`, and `exists()` on always-present link fields with capability-specific guidance.
 - Link equality preserves target identity: `.normalized_key` and `.raw_target` comparisons are now case-sensitive, while other string link fields remain case-insensitive.
 
