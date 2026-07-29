@@ -36,8 +36,8 @@ var activeOperations = struct {
 }{files: make(map[string]*os.File)}
 
 // Operation is one in-flight or interrupted mutation's pending index work.
-// Unknown is true between the write-ahead guard and the point where the
-// mutation's concrete changed paths are known.
+// Unknown is true when safe recovery requires a full vault scan, including
+// between the write-ahead guard and the point where concrete paths are known.
 type Operation struct {
 	ID       string   `json:"id"`
 	Revision uint64   `json:"revision"`
@@ -140,6 +140,39 @@ func SetPaths(vaultPath, operationID string, relPaths []string) (string, error) 
 			ID:       operationID,
 			Revision: revision,
 			Paths:    normalized,
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return operationID, nil
+}
+
+// RequireFullScan records that an operation cannot be safely recovered from
+// its concrete paths alone. If operationID is empty, a new recovery operation
+// is created.
+func RequireFullScan(vaultPath, operationID string) (string, error) {
+	defer func() { _ = releaseActiveOperation(vaultPath, operationID) }()
+	if operationID != "" && !validOperationID(operationID) {
+		return "", fmt.Errorf("invalid index dirty operation %q", operationID)
+	}
+	if operationID == "" {
+		var err error
+		operationID, err = newOperationID()
+		if err != nil {
+			return "", err
+		}
+	}
+	err := update(vaultPath, func(journal *journalFile) error {
+		revision := uint64(1)
+		if current, ok := journal.Operations[operationID]; ok {
+			revision = current.Revision + 1
+		}
+		journal.Operations[operationID] = Operation{
+			ID:       operationID,
+			Revision: revision,
+			Unknown:  true,
 		}
 		return nil
 	})

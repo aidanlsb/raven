@@ -50,6 +50,36 @@ func TestJournalLifecycle(t *testing.T) {
 	}
 }
 
+func TestRequireFullScanWidensConcreteRecoveryScope(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	operationID, err := SetPaths(vaultPath, "", []string{"notes/changed.md"})
+	if err != nil {
+		t.Fatalf("SetPaths() error = %v", err)
+	}
+	before := loadSnapshot(t, vaultPath).Operations[0]
+
+	gotID, err := RequireFullScan(vaultPath, operationID)
+	if err != nil {
+		t.Fatalf("RequireFullScan() error = %v", err)
+	}
+	if gotID != operationID {
+		t.Fatalf("operation ID = %q, want %q", gotID, operationID)
+	}
+
+	snapshot := loadSnapshot(t, vaultPath)
+	if !snapshot.Dirty() || !snapshot.RequiresFullScan() {
+		t.Fatalf("snapshot = %#v, want full-scan recovery", snapshot)
+	}
+	if got := snapshot.Paths(); len(got) != 0 {
+		t.Fatalf("Paths() = %#v, want no misleading concrete scope", got)
+	}
+	if got := snapshot.Operations[0].Revision; got != before.Revision+1 {
+		t.Fatalf("revision = %d, want %d", got, before.Revision+1)
+	}
+}
+
 func TestCompleteIfUnchangedPreservesAdvancedOperation(t *testing.T) {
 	t.Parallel()
 

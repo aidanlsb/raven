@@ -93,25 +93,26 @@ const (
 	// a reference whose target does not exist yet. It is intentionally distinct
 	// from the fatal ErrRefNotFound (REF_NOT_FOUND) error used on read/resolve
 	// failures so agents can branch on the code alone.
-	WarnRefTargetMissing    WarningCode = "REF_TARGET_MISSING"
-	WarnDeprecated          WarningCode = "DEPRECATED"
-	WarnSchemaOutdated      WarningCode = "SCHEMA_OUTDATED"
-	WarnSchemaLoadFailed    WarningCode = "SCHEMA_LOAD_FAILED"
-	WarnDatabaseOutdated    WarningCode = "DATABASE_OUTDATED"
-	WarnIndexUpdateFailed   WarningCode = "INDEX_UPDATE_FAILED"
-	WarnDocsFetchFailed     WarningCode = "DOCS_FETCH_FAILED"
-	WarnWrongCommand        WarningCode = "WRONG_COMMAND"
-	WarnMissingField        WarningCode = "MISSING_REQUIRED_FIELD"
-	WarnBacklinks           WarningCode = "HAS_BACKLINKS"
-	WarnSectionSkipped      WarningCode = "SECTION_SKIPPED"
-	WarnUnknownField        WarningCode = "UNKNOWN_FIELD"
-	WarnTypeMismatch        WarningCode = "TYPE_DIRECTORY_MISMATCH"
-	WarnOrphanedFiles       WarningCode = "ORPHANED_FILES"
-	WarnOrphanedTraits      WarningCode = "ORPHANED_TRAITS"
-	WarnCheckIncomplete     WarningCode = "CHECK_APPLY_INCOMPLETE"
-	WarnCheckRunIncomplete  WarningCode = "CHECK_INCOMPLETE"
-	WarnVaultFallback       WarningCode = "VAULT_FALLBACK"
-	WarnVaultRegisterFailed WarningCode = "VAULT_REGISTER_FAILED"
+	WarnRefTargetMissing        WarningCode = "REF_TARGET_MISSING"
+	WarnDeprecated              WarningCode = "DEPRECATED"
+	WarnSchemaOutdated          WarningCode = "SCHEMA_OUTDATED"
+	WarnSchemaLoadFailed        WarningCode = "SCHEMA_LOAD_FAILED"
+	WarnDatabaseOutdated        WarningCode = "DATABASE_OUTDATED"
+	WarnIndexUpdateFailed       WarningCode = "INDEX_UPDATE_FAILED"
+	WarnRefResolutionIncomplete WarningCode = "REFERENCE_RESOLUTION_INCOMPLETE"
+	WarnDocsFetchFailed         WarningCode = "DOCS_FETCH_FAILED"
+	WarnWrongCommand            WarningCode = "WRONG_COMMAND"
+	WarnMissingField            WarningCode = "MISSING_REQUIRED_FIELD"
+	WarnBacklinks               WarningCode = "HAS_BACKLINKS"
+	WarnSectionSkipped          WarningCode = "SECTION_SKIPPED"
+	WarnUnknownField            WarningCode = "UNKNOWN_FIELD"
+	WarnTypeMismatch            WarningCode = "TYPE_DIRECTORY_MISMATCH"
+	WarnOrphanedFiles           WarningCode = "ORPHANED_FILES"
+	WarnOrphanedTraits          WarningCode = "ORPHANED_TRAITS"
+	WarnCheckIncomplete         WarningCode = "CHECK_APPLY_INCOMPLETE"
+	WarnCheckRunIncomplete      WarningCode = "CHECK_INCOMPLETE"
+	WarnVaultFallback           WarningCode = "VAULT_FALLBACK"
+	WarnVaultRegisterFailed     WarningCode = "VAULT_REGISTER_FAILED"
 )
 
 var knownErrorCodes = map[ErrorCode]struct{}{
@@ -127,7 +128,7 @@ var knownErrorCodes = map[ErrorCode]struct{}{
 }
 
 var knownWarningCodes = map[WarningCode]struct{}{
-	WarnRefTargetMissing: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnSchemaLoadFailed: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnDocsFetchFailed: {},
+	WarnRefTargetMissing: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnSchemaLoadFailed: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnRefResolutionIncomplete: {}, WarnDocsFetchFailed: {},
 	WarnWrongCommand: {}, WarnMissingField: {}, WarnBacklinks: {}, WarnSectionSkipped: {}, WarnUnknownField: {}, WarnTypeMismatch: {},
 	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {}, WarnCheckRunIncomplete: {}, WarnVaultFallback: {},
 	WarnVaultRegisterFailed: {},

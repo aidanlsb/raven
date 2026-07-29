@@ -233,6 +233,9 @@ override session focus for one invocation. MCP never resolves from the CLI's
 - If warnings indicate stale state, run corrective steps such as `reindex` before continuing.
 - `DATABASE_OUTDATED` means `.raven/index-dirty.json` contains pending
   post-mutation projection work. Run `reindex`, then retry the read.
+- `REFERENCE_RESOLUTION_INCOMPLETE` means the changed file was indexed
+  successfully, but the follow-up reference pass failed and backlinks may be
+  stale. Do not retry the mutation; run `reindex` to complete resolution.
 - `REF_TARGET_MISSING` on a successful write means the object was created/modified but a
   reference points at a target that does not exist yet. This benign write-time warning is
   intentionally distinct from the fatal `REF_NOT_FOUND` error (returned when a read/resolve

@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -161,22 +162,28 @@ func autoReindexWarning(rt *vaultruntime.Runtime, filePath string) (commandexec.
 // autoReindexWarningLocked projects one Markdown file while the caller holds
 // the vault's projection lock.
 func autoReindexWarningLocked(rt *vaultruntime.Runtime, filePath string) (commandexec.Warning, bool) {
+	warning, err := autoReindexWarningAndErrorLocked(rt, filePath)
+	return warning, err != nil
+}
+
+func autoReindexWarningAndErrorLocked(rt *vaultruntime.Runtime, filePath string) (commandexec.Warning, error) {
 	vaultPath := rt.VaultPath
 	if rt.SchemaLoadErr != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", rt.SchemaLoadErr), true
+		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", rt.SchemaLoadErr), rt.SchemaLoadErr
 	}
 	if rt.Schema == nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", errors.New("schema runtime is required")), true
+		err := errors.New("schema runtime is required")
+		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", err), err
 	}
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to read file", err), true
+		return indexUpdateWarning(vaultPath, filePath, "failed to read file", err), err
 	}
 
 	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, rt.ParseOptions)
 	if err != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to parse file", err), true
+		return indexUpdateWarning(vaultPath, filePath, "failed to parse file", err), err
 	}
 
 	var mtime int64
@@ -185,9 +192,13 @@ func autoReindexWarningLocked(rt *vaultruntime.Runtime, filePath string) (comman
 	}
 
 	if err := rt.DB.IndexDocumentWithMtime(doc, rt.Schema, mtime); err != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to update index", err), true
+		var resolutionErr *index.PostCommitReferenceResolutionError
+		if errors.As(err, &resolutionErr) {
+			return referenceResolutionIncompleteWarning(vaultPath, filePath, resolutionErr), err
+		}
+		return indexUpdateWarning(vaultPath, filePath, "failed to update index", err), err
 	}
-	return commandexec.Warning{}, false
+	return commandexec.Warning{}, nil
 }
 
 func indexUpdateWarning(vaultPath, filePath, prefix string, err error) commandexec.Warning {
@@ -199,6 +210,22 @@ func indexUpdateWarning(vaultPath, filePath, prefix string, err error) commandex
 		Code:    indexUpdateFailedWarningCode,
 		Message: fmt.Sprintf("auto-reindex failed for %s: %s: %v", displayPath, prefix, err),
 		Ref:     indexUpdateFailedWarningRef,
+	}
+}
+
+func referenceResolutionIncompleteWarning(vaultPath, filePath string, err *index.PostCommitReferenceResolutionError) commandexec.Warning {
+	displayPath := filepath.ToSlash(filepath.Clean(filePath))
+	if relPath, relErr := filepath.Rel(vaultPath, filePath); relErr == nil && !strings.HasPrefix(relPath, "..") {
+		displayPath = filepath.ToSlash(relPath)
+	}
+	scope := "file"
+	if err.VaultWide {
+		scope = "vault-wide"
+	}
+	return commandexec.Warning{
+		Code:    codes.WarnRefResolutionIncomplete,
+		Message: fmt.Sprintf("auto-reindex indexed %s, but %s reference resolution did not complete: %v", displayPath, scope, err.Err),
+		Ref:     "The file was indexed successfully, but backlinks may be stale. Run 'rvn reindex' to retry reference resolution.",
 	}
 }
 
