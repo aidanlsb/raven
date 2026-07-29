@@ -48,6 +48,91 @@ owner: "[[people/freya]]"
 	}
 }
 
+func TestApplyFixes_TextFixesAreLineScoped(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		content string
+		fixes   []FixableIssue
+		want    string
+	}{
+		{
+			name:    "identical replacements on different lines",
+			content: "First: [[freya]]\nSecond: [[freya]]\n",
+			fixes: []FixableIssue{
+				{
+					FilePath:  "notes/refs.md",
+					Line:      1,
+					IssueType: check.IssueShortRefCouldBeFullPath,
+					FixType:   FixTypeWikilink,
+					OldValue:  "freya",
+					NewValue:  "people/freya",
+				},
+				{
+					FilePath:  "notes/refs.md",
+					Line:      2,
+					IssueType: check.IssueShortRefCouldBeFullPath,
+					FixType:   FixTypeWikilink,
+					OldValue:  "freya",
+					NewValue:  "people/freya",
+				},
+			},
+			want: "First: [[people/freya]]\nSecond: [[people/freya]]\n",
+		},
+		{
+			name:    "conflicting replacements on different lines",
+			content: "First: [[shared]]\nSecond: [[shared]]\n",
+			fixes: []FixableIssue{
+				{
+					FilePath:  "notes/refs.md",
+					Line:      1,
+					IssueType: check.IssueShortRefCouldBeFullPath,
+					FixType:   FixTypeWikilink,
+					OldValue:  "shared",
+					NewValue:  "people/first",
+				},
+				{
+					FilePath:  "notes/refs.md",
+					Line:      2,
+					IssueType: check.IssueShortRefCouldBeFullPath,
+					FixType:   FixTypeWikilink,
+					OldValue:  "shared",
+					NewValue:  "people/second",
+				},
+			},
+			want: "First: [[people/first]]\nSecond: [[people/second]]\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			vault := testutil.NewTestVault(t).
+				WithFile("notes/refs.md", tt.content).
+				Build()
+
+			result, err := ApplyFixes(vault.Path, tt.fixes, nil, nil)
+			if err != nil {
+				t.Fatalf("ApplyFixes returned error: %v", err)
+			}
+			if result.IssueCount != 2 {
+				t.Errorf("issue count = %d, want 2", result.IssueCount)
+			}
+			if result.FileCount != 1 {
+				t.Errorf("file count = %d, want 1", result.FileCount)
+			}
+			if len(result.Skipped) != 0 {
+				t.Errorf("skipped = %v, want none", result.Skipped)
+			}
+			if got := vault.ReadFile("notes/refs.md"); got != tt.want {
+				t.Errorf("content = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCollectFixableIssues_IgnoresNilTraitDefinition(t *testing.T) {
 	t.Parallel()
 
