@@ -5,18 +5,18 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/skillsvc"
+	"github.com/aidanlsb/raven/internal/skills"
 )
 
 // HandleSkillList executes the canonical `skill list` command.
 func HandleSkillList(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := skillsvc.List(skillsvc.ListRequest{
+	result, err := skills.List(skills.ListRequest{
 		Scope:         strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:          strings.TrimSpace(stringArg(req.Args, "dest")),
 		InstalledOnly: boolArg(req.Args, "installed"),
 	})
 	if err != nil {
-		return mapSkillSvcFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	data := map[string]interface{}{
@@ -29,14 +29,14 @@ func HandleSkillList(_ context.Context, req commandexec.Request) commandexec.Res
 
 // HandleSkillSync executes the canonical `skill sync` command.
 func HandleSkillSync(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := skillsvc.Sync(skillsvc.SyncRequest{
+	result, err := skills.Sync(skills.SyncRequest{
 		Name:    strings.TrimSpace(stringArg(req.Args, "name")),
 		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
 		Confirm: req.Confirm,
 	})
 	if err != nil {
-		return mapSkillSvcFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	data := map[string]interface{}{
@@ -54,14 +54,14 @@ func HandleSkillSync(_ context.Context, req commandexec.Request) commandexec.Res
 // installs shipped Raven skills in one shot (the full catalog by default, or a
 // narrowed set when names are given). Preview by default; applies on confirm.
 func HandleSkillInstall(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := skillsvc.Install(skillsvc.InstallRequest{
+	result, err := skills.Install(skills.InstallRequest{
 		Names:   stringSliceArg(req.Args["names"]),
 		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
 		Confirm: req.Confirm,
 	})
 	if err != nil {
-		return mapSkillSvcFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	data := map[string]interface{}{
@@ -88,14 +88,14 @@ func HandleSkillRemove(_ context.Context, req commandexec.Request) commandexec.R
 		return commandexec.Failure("MISSING_ARGUMENT", "specify skill name", nil, "Usage: rvn skill remove <name>")
 	}
 
-	result, err := skillsvc.Remove(skillsvc.RemoveRequest{
+	result, err := skills.Remove(skills.RemoveRequest{
 		Name:    name,
 		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
 		Confirm: req.Confirm,
 	})
 	if err != nil {
-		return mapSkillSvcFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	data := map[string]interface{}{
@@ -111,19 +111,15 @@ func HandleSkillRemove(_ context.Context, req commandexec.Request) commandexec.R
 
 // HandleSkillDoctor executes the canonical `skill doctor` command.
 func HandleSkillDoctor(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := skillsvc.Doctor(skillsvc.DoctorRequest{
+	result, err := skills.RunDoctor(skills.DoctorRequest{
 		Scope: strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:  strings.TrimSpace(stringArg(req.Args, "dest")),
 	})
 	if err != nil {
-		return mapSkillSvcFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	return commandexec.Success(map[string]interface{}{
 		"reports": result.Reports,
 	}, &commandexec.Meta{Count: len(result.Reports)})
-}
-
-func mapSkillSvcFailure(err error) commandexec.Result {
-	return commandexec.FromServiceError(err)
 }

@@ -8,7 +8,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/skills"
-	"github.com/aidanlsb/raven/internal/skillsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -289,8 +288,8 @@ func skillSyncPlanFromAny(raw interface{}) *skills.SyncPlan {
 	return plan
 }
 
-func skillInstallResultsFromAny(raw interface{}) []skillsvc.InstallSkillResult {
-	entries, _ := raw.([]skillsvc.InstallSkillResult)
+func skillInstallResultsFromAny(raw interface{}) []skills.InstallSkillResult {
+	entries, _ := raw.([]skills.InstallSkillResult)
 	return entries
 }
 

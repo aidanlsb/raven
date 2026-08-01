@@ -1,11 +1,11 @@
-package skillsvc
+package skills
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/skills"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -54,7 +54,7 @@ func TestSyncDefaultsToAgentSkillsRoot(t *testing.T) {
 func TestInstallPreviewDoesNotWriteAnySkills(t *testing.T) {
 	t.Parallel()
 
-	catalog, err := skills.LoadCatalog()
+	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)
 	}
@@ -89,7 +89,7 @@ func TestInstallPreviewDoesNotWriteAnySkills(t *testing.T) {
 func TestInstallConfirmInstallsAllShippedSkills(t *testing.T) {
 	t.Parallel()
 
-	catalog, err := skills.LoadCatalog()
+	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)
 	}
@@ -160,10 +160,10 @@ func TestInstallUnknownSkillReturnsNotFound(t *testing.T) {
 	_, err := Install(InstallRequest{Names: []string{"nope"}, Scope: "project", Dest: root})
 	svcErr, ok := svcerr.AsError(err)
 	if !ok {
-		t.Fatalf("Install() error = %v, want skillsvc error", err)
+		t.Fatalf("Install() error = %v, want structured service error", err)
 	}
-	if svcErr.Code != CodeSkillNotFound {
-		t.Fatalf("Install() code = %q, want %q", svcErr.Code, CodeSkillNotFound)
+	if svcErr.Code != codes.ErrSkillNotFound {
+		t.Fatalf("Install() code = %q, want %q", svcErr.Code, codes.ErrSkillNotFound)
 	}
 }
 
@@ -205,7 +205,7 @@ func TestDoctorReturnsSingleResolvedRoot(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	result, err := Doctor(DoctorRequest{
+	result, err := RunDoctor(DoctorRequest{
 		Scope: "project",
 		Dest:  root,
 	})
