@@ -501,7 +501,7 @@ rvn docs getting-started                         # List topics in a section
 rvn docs search "saved query"                    # Full-text search across docs
 rvn docs search "exclude" --section using-your-vault --limit 10
 rvn docs fetch                                   # Force-refresh the global docs cache
-rvn docs fetch --ref v0.0.31                     # Pin docs to a specific ref
+rvn docs fetch --ref v0.0.33                     # Pin docs to a specific ref
 ```
 
 Docs are cached in a global directory (fetched during `rvn init`). After an
