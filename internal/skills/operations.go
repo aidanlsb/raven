@@ -1,26 +1,14 @@
-package skillsvc
+package skills
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/skills"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput        Code = codes.ErrInvalidInput
-	CodeSkillNotFound       Code = codes.ErrSkillNotFound
-	CodeSkillNotInstalled   Code = codes.ErrSkillNotInstalled
-	CodeSkillPathUnresolved Code = codes.ErrSkillPathUnresolved
-	CodeFileWriteError      Code = codes.ErrFileWrite
-	CodeInternal            Code = codes.ErrInternal
-)
-
-func newError(code Code, message, suggestion string, details map[string]interface{}, err error) *svcerr.Error {
+func newError(code codes.ErrorCode, message, suggestion string, details map[string]interface{}, err error) *svcerr.Error {
 	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Details: details, Err: err}
 }
 
@@ -31,9 +19,9 @@ type ListRequest struct {
 }
 
 type ListResult struct {
-	Scope  string           `json:"scope"`
-	Root   string           `json:"root"`
-	Skills []skills.Summary `json:"skills"`
+	Scope  string    `json:"scope"`
+	Root   string    `json:"root"`
+	Skills []Summary `json:"skills"`
 }
 
 type SyncRequest struct {
@@ -44,10 +32,10 @@ type SyncRequest struct {
 }
 
 type SyncResult struct {
-	Mode           string           `json:"mode"`
-	SkillName      string           `json:"skill_name,omitempty"`
-	Plan           *skills.SyncPlan `json:"plan,omitempty"`
-	ActionsApplied int              `json:"actions_applied,omitempty"`
+	Mode           string    `json:"mode"`
+	SkillName      string    `json:"skill_name,omitempty"`
+	Plan           *SyncPlan `json:"plan,omitempty"`
+	ActionsApplied int       `json:"actions_applied,omitempty"`
 }
 
 type InstallRequest struct {
@@ -59,8 +47,8 @@ type InstallRequest struct {
 
 // InstallSkillResult reports the sync plan for a single shipped skill.
 type InstallSkillResult struct {
-	Name string           `json:"name"`
-	Plan *skills.SyncPlan `json:"plan"`
+	Name string    `json:"name"`
+	Plan *SyncPlan `json:"plan"`
 }
 
 type InstallResult struct {
@@ -84,10 +72,10 @@ type RemoveRequest struct {
 }
 
 type RemoveResult struct {
-	Mode      string             `json:"mode"`
-	Removed   bool               `json:"removed,omitempty"`
-	SkillName string             `json:"skill_name"`
-	Plan      *skills.RemovePlan `json:"plan,omitempty"`
+	Mode      string      `json:"mode"`
+	Removed   bool        `json:"removed,omitempty"`
+	SkillName string      `json:"skill_name"`
+	Plan      *RemovePlan `json:"plan,omitempty"`
 }
 
 type DoctorRequest struct {
@@ -96,27 +84,27 @@ type DoctorRequest struct {
 }
 
 type DoctorResult struct {
-	Reports []skills.DoctorReport `json:"reports"`
+	Reports []DoctorReport `json:"reports"`
 }
 
 func List(req ListRequest) (*ListResult, error) {
-	catalog, err := skills.LoadCatalog()
+	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(CodeInternal, "failed to load skill catalog", "", nil, err)
+		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
 	}
 
-	scope, err := skills.ParseScope(strings.TrimSpace(req.Scope))
+	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(CodeInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
 	}
-	root, err := skills.ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
+	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
 
-	items := skills.InstalledSummaries(catalog, root)
+	items := InstalledSummaries(catalog, root)
 	if req.InstalledOnly {
-		filtered := make([]skills.Summary, 0, len(items))
+		filtered := make([]Summary, 0, len(items))
 		for _, item := range items {
 			if item.Installed {
 				filtered = append(filtered, item)
@@ -134,20 +122,20 @@ func List(req ListRequest) (*ListResult, error) {
 
 func Sync(req SyncRequest) (*SyncResult, error) {
 	skillName := strings.TrimSpace(req.Name)
-	catalog, err := skills.LoadCatalog()
+	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(CodeInternal, "failed to load skill catalog", "", nil, err)
+		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
 	}
 
 	if skillName != "" {
 		if _, ok := catalog[skillName]; !ok {
-			available := skills.SortedSummaries(catalog)
+			available := SortedSummaries(catalog)
 			names := make([]string, 0, len(available))
 			for _, item := range available {
 				names = append(names, item.Name)
 			}
 			return nil, newError(
-				CodeSkillNotFound,
+				codes.ErrSkillNotFound,
 				fmt.Sprintf("skill '%s' not found", skillName),
 				"Run 'rvn skill list' to see available skills",
 				map[string]interface{}{"available": names},
@@ -156,18 +144,18 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 		}
 	}
 
-	scope, err := skills.ParseScope(strings.TrimSpace(req.Scope))
+	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(CodeInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
 	}
-	root, err := skills.ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
+	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
 
-	plan, err := skills.PlanSync(catalog, skillName, scope, root)
+	plan, err := PlanSync(catalog, skillName, scope, root)
 	if err != nil {
-		return nil, newError(CodeInternal, "failed to build sync plan", "", nil, err)
+		return nil, newError(codes.ErrInternal, "failed to build sync plan", "", nil, err)
 	}
 
 	if !req.Confirm {
@@ -178,9 +166,9 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 		}, nil
 	}
 
-	applied, err := skills.ApplySync(plan)
+	applied, err := ApplySync(plan)
 	if err != nil {
-		return nil, newError(CodeFileWriteError, "failed to apply sync", "", nil, err)
+		return nil, newError(codes.ErrFileWrite, "failed to apply sync", "", nil, err)
 	}
 	return &SyncResult{
 		Mode:           "applied",
@@ -196,9 +184,9 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 // skills are installed and existing Raven-managed skills are aligned with the
 // shipped version, reusing the same receipt-based sync machinery as Sync.
 func Install(req InstallRequest) (*InstallResult, error) {
-	catalog, err := skills.LoadCatalog()
+	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(CodeInternal, "failed to load skill catalog", "", nil, err)
+		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
 	}
 
 	names, err := resolveInstallNames(catalog, req.Names)
@@ -206,13 +194,13 @@ func Install(req InstallRequest) (*InstallResult, error) {
 		return nil, err
 	}
 
-	scope, err := skills.ParseScope(strings.TrimSpace(req.Scope))
+	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(CodeInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
 	}
-	root, err := skills.ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
+	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
 
 	result := &InstallResult{
@@ -223,9 +211,9 @@ func Install(req InstallRequest) (*InstallResult, error) {
 	}
 
 	for _, name := range names {
-		plan, err := skills.PlanSync(catalog, name, scope, root)
+		plan, err := PlanSync(catalog, name, scope, root)
 		if err != nil {
-			return nil, newError(CodeInternal, "failed to build install plan", "", nil, err)
+			return nil, newError(codes.ErrInternal, "failed to build install plan", "", nil, err)
 		}
 		result.Skills = append(result.Skills, InstallSkillResult{Name: name, Plan: plan})
 		result.Installed += plan.Installed
@@ -242,9 +230,9 @@ func Install(req InstallRequest) (*InstallResult, error) {
 
 	applied := 0
 	for i := range result.Skills {
-		n, err := skills.ApplySync(result.Skills[i].Plan)
+		n, err := ApplySync(result.Skills[i].Plan)
 		if err != nil {
-			return nil, newError(CodeFileWriteError, "failed to apply install", "", nil, err)
+			return nil, newError(codes.ErrFileWrite, "failed to apply install", "", nil, err)
 		}
 		applied += n
 	}
@@ -257,7 +245,7 @@ func Install(req InstallRequest) (*InstallResult, error) {
 // resolveInstallNames returns the ordered, de-duplicated set of skills to
 // install. An empty request installs the full shipped catalog; otherwise each
 // requested name must exist in the catalog.
-func resolveInstallNames(catalog map[string]*skills.Skill, requested []string) ([]string, error) {
+func resolveInstallNames(catalog map[string]*Skill, requested []string) ([]string, error) {
 	trimmed := make([]string, 0, len(requested))
 	for _, raw := range requested {
 		if name := strings.TrimSpace(raw); name != "" {
@@ -266,7 +254,7 @@ func resolveInstallNames(catalog map[string]*skills.Skill, requested []string) (
 	}
 
 	if len(trimmed) == 0 {
-		summaries := skills.SortedSummaries(catalog)
+		summaries := SortedSummaries(catalog)
 		names := make([]string, 0, len(summaries))
 		for _, summary := range summaries {
 			names = append(names, summary.Name)
@@ -278,13 +266,13 @@ func resolveInstallNames(catalog map[string]*skills.Skill, requested []string) (
 	names := make([]string, 0, len(trimmed))
 	for _, name := range trimmed {
 		if _, ok := catalog[name]; !ok {
-			available := skills.SortedSummaries(catalog)
+			available := SortedSummaries(catalog)
 			availableNames := make([]string, 0, len(available))
 			for _, item := range available {
 				availableNames = append(availableNames, item.Name)
 			}
 			return nil, newError(
-				CodeSkillNotFound,
+				codes.ErrSkillNotFound,
 				fmt.Sprintf("skill '%s' not found", name),
 				"Run 'rvn skill list' to see available skills",
 				map[string]interface{}{"available": availableNames},
@@ -302,30 +290,30 @@ func resolveInstallNames(catalog map[string]*skills.Skill, requested []string) (
 
 func Remove(req RemoveRequest) (*RemoveResult, error) {
 	skillName := strings.TrimSpace(req.Name)
-	catalog, err := skills.LoadCatalog()
+	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(CodeInternal, "failed to load skill catalog", "", nil, err)
+		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
 	}
 	if _, ok := catalog[skillName]; !ok {
-		return nil, newError(CodeSkillNotFound, fmt.Sprintf("skill '%s' not found", skillName), "Run 'rvn skill list' to see available skills", nil, nil)
+		return nil, newError(codes.ErrSkillNotFound, fmt.Sprintf("skill '%s' not found", skillName), "Run 'rvn skill list' to see available skills", nil, nil)
 	}
 
-	scope, err := skills.ParseScope(strings.TrimSpace(req.Scope))
+	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(CodeInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
 	}
-	root, err := skills.ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
+	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
 
-	plan, err := skills.PlanRemove(skillName, scope, root)
+	plan, err := PlanRemove(skillName, scope, root)
 	if err != nil {
-		return nil, newError(CodeInvalidInput, err.Error(), "", nil, err)
+		return nil, newError(codes.ErrInvalidInput, err.Error(), "", nil, err)
 	}
 	if !plan.Exists {
 		return nil, newError(
-			CodeSkillNotInstalled,
+			codes.ErrSkillNotInstalled,
 			fmt.Sprintf("skill '%s' is not installed", skillName),
 			"Run 'rvn skill list --installed' to see installed skills",
 			nil,
@@ -337,27 +325,27 @@ func Remove(req RemoveRequest) (*RemoveResult, error) {
 		return &RemoveResult{Mode: "preview", SkillName: skillName, Plan: plan}, nil
 	}
 
-	if err := skills.ApplyRemove(plan); err != nil {
-		return nil, newError(CodeFileWriteError, "failed to apply removal", "", nil, err)
+	if err := ApplyRemove(plan); err != nil {
+		return nil, newError(codes.ErrFileWrite, "failed to apply removal", "", nil, err)
 	}
 	return &RemoveResult{Mode: "applied", Removed: true, SkillName: skillName, Plan: plan}, nil
 }
 
-func Doctor(req DoctorRequest) (*DoctorResult, error) {
-	catalog, err := skills.LoadCatalog()
+func RunDoctor(req DoctorRequest) (*DoctorResult, error) {
+	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(CodeInternal, "failed to load skill catalog", "", nil, err)
+		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
 	}
 
-	scope, err := skills.ParseScope(strings.TrimSpace(req.Scope))
+	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(CodeInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
 	}
 
-	root, err := skills.ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
+	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
 
-	return &DoctorResult{Reports: []skills.DoctorReport{skills.Doctor(catalog, scope, root)}}, nil
+	return &DoctorResult{Reports: []DoctorReport{Doctor(catalog, scope, root)}}, nil
 }

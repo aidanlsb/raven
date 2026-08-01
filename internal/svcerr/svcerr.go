@@ -1,7 +1,7 @@
 // Package svcerr defines Raven's shared, transport-neutral structured service
-// error. Service (`*svc`) packages return it instead of maintaining their own
-// near-identical Error/Code/AsError shapes, and handlers convert it to a
-// response envelope through a single adapter (commandexec.FromServiceError).
+// error. Operation packages return it instead of maintaining their own
+// near-identical Error/Code/AsError shapes, and handlers convert it to a response
+// envelope through a single adapter (commandexec.FromServiceError).
 package svcerr
 
 import (
@@ -10,7 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 )
 
-// Error is the canonical structured error returned by service packages. It
+// Error is the canonical structured error returned by operation packages. It
 // carries a stable ErrorCode plus the optional message, suggestion, structured
 // details, and wrapped cause that handlers surface in the JSON envelope.
 type Error struct {

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Removed the internal `skillsvc` pass-through layer so skill commands call the shared skills implementation directly.
 - Reference and ref-field post-index resolution now share batching and outcome handling, keeping resolved, missing, and ambiguous behavior aligned.
 
 ### Fixed
