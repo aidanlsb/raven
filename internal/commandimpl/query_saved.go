@@ -12,9 +12,6 @@ import (
 // HandleQuerySavedList executes the canonical `query_saved_list` command.
 func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newLazyConfigCommandRuntime(vaultPath)
 	if failure.Error != nil {
@@ -39,9 +36,6 @@ func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexe
 // HandleQuerySavedGet executes the canonical `query_saved_get` command.
 func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newLazyConfigCommandRuntime(vaultPath)
 	if failure.Error != nil {
@@ -63,9 +57,6 @@ func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec
 // HandleQuerySavedSet executes the canonical `query_saved_set` command.
 func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newLazyConfigCommandRuntime(vaultPath)
 	if failure.Error != nil {
@@ -93,9 +84,6 @@ func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec
 // HandleQuerySavedRemove executes the canonical `query_saved_remove` command.
 func HandleQuerySavedRemove(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newLazyConfigCommandRuntime(vaultPath)
 	if failure.Error != nil {

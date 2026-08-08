@@ -19,9 +19,6 @@ import (
 // HandleEdit executes the canonical `edit` command.
 func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	// Edit resolves the target reference (schema-aware) before mutating and
 	// then reports missing-reference warnings, so require a valid schema.

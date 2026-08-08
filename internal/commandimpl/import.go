@@ -14,9 +14,6 @@ import (
 // HandleImport executes the canonical `import` command.
 func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	mappingCfg, err := importsvc.BuildMappingConfig(importsvc.BuildMappingConfigRequest{
 		MappingFilePath: strings.TrimSpace(stringArg(req.Args, "mapping")),

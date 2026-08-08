@@ -33,9 +33,6 @@ type queryExecutionOptions struct {
 
 func prepareQueryExecution(req commandexec.Request) (execution *queryExecution, failure commandexec.Result) {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return nil, commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newConfigCommandVaultRuntime(vaultPath)
 	if failure.Error != nil {

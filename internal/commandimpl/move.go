@@ -14,9 +14,6 @@ import (
 // HandleMove executes the canonical `move` command.
 func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	objectIDs := commandIDsArg(req.Args, "object_ids")
 	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0

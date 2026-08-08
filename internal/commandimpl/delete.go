@@ -16,9 +16,6 @@ import (
 // HandleDelete executes the canonical `delete` command.
 func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	references := commandIDsArg(req.Args, "references")
 	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0

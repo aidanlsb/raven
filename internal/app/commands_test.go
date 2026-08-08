@@ -4,14 +4,21 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 )
+
+// testVaultPath is a placeholder vault path used to satisfy the shared
+// validateRequest vault check. validateRequest only inspects that the path is
+// non-empty, so the actual directory does not need to exist.
+const testVaultPath = "/tmp/raven-validate-request-test-vault"
 
 func TestValidateRequestNormalizesConfirmArg(t *testing.T) {
 	t.Parallel()
 
 	req, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "delete",
+		VaultPath: testVaultPath,
 		Args: map[string]any{
 			"stdin":      true,
 			"references": []interface{}{"note/one"},
@@ -72,6 +79,7 @@ func TestValidateRequestDefaultsPreviewForPreviewCommands(t *testing.T) {
 
 	req, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "check_fix",
+		VaultPath: testVaultPath,
 		Args:      map[string]any{},
 	})
 	if !ok {
@@ -90,6 +98,7 @@ func TestValidateRequestEditAppliesByDefault(t *testing.T) {
 
 	req, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "edit",
+		VaultPath: testVaultPath,
 		Args: map[string]any{
 			"reference": "note/example",
 			"old_str":   "old",
@@ -112,6 +121,7 @@ func TestValidateRequestDryRunForcesPreviewAndOverridesConfirm(t *testing.T) {
 
 	req, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "edit",
+		VaultPath: testVaultPath,
 		Args: map[string]any{
 			"reference": "note/example",
 			"old_str":   "old",
@@ -129,6 +139,7 @@ func TestValidateRequestDryRunForcesPreviewAndOverridesConfirm(t *testing.T) {
 	// dry-run wins even if confirm is also present.
 	req, result, ok = validateRequest(context.Background(), commandexec.Request{
 		CommandID: "delete",
+		VaultPath: testVaultPath,
 		Args: map[string]any{
 			"stdin":      true,
 			"references": []interface{}{"note/one"},
@@ -149,6 +160,7 @@ func TestValidateRequestDefaultsPreviewForBulkInputsOnly(t *testing.T) {
 
 	single, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "add",
+		VaultPath: testVaultPath,
 		Args: map[string]any{
 			"text": "hello",
 		},
@@ -162,6 +174,7 @@ func TestValidateRequestDefaultsPreviewForBulkInputsOnly(t *testing.T) {
 
 	bulk, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "add",
+		VaultPath: testVaultPath,
 		Args: map[string]any{
 			"text":       "hello",
 			"stdin":      true,
@@ -173,5 +186,88 @@ func TestValidateRequestDefaultsPreviewForBulkInputsOnly(t *testing.T) {
 	}
 	if !bulk.Preview {
 		t.Fatal("bulk add Preview = false, want true")
+	}
+}
+
+// TestValidateRequestRejectsEmptyVaultPathForVaultCommands verifies that the
+// shared invoker gate rejects vault-scoped commands whose request omits a
+// vault path, so individual handlers no longer need to repeat the same
+// defensive check. The check must fire for every RequiresVault command,
+// use the stable VAULT_NOT_SPECIFIED error code, and be skipped for the
+// small set of commands that do not require a vault (e.g. version).
+//
+// The commands covered here accept an empty args map (they have no required
+// invoke parameters), which isolates the vault gate from the earlier
+// argument-validation gate. Argument validation intentionally still runs
+// first when the request carries bad args — a separate MCP parity test
+// covers that ordering — but tests targeting the vault gate itself must
+// exercise it independently.
+func TestValidateRequestRejectsEmptyVaultPathForVaultCommands(t *testing.T) {
+	t.Parallel()
+
+	vaultRequiringCommands := []string{
+		"check",
+		"check_fix",
+		"daily",
+		"date",
+		"query_saved_list",
+		"reindex",
+		"vault_path",
+		"vault_stats",
+	}
+
+	for _, commandID := range vaultRequiringCommands {
+		t.Run(commandID+"/empty", func(t *testing.T) {
+			t.Parallel()
+
+			_, result, ok := validateRequest(context.Background(), commandexec.Request{
+				CommandID: commandID,
+				VaultPath: "",
+				Args:      map[string]any{},
+			})
+			if ok {
+				t.Fatalf("expected validateRequest to reject empty vault path for %q, got success", commandID)
+			}
+			if result.Error == nil {
+				t.Fatalf("expected error envelope, got %#v", result)
+			}
+			if result.Error.Code != codes.ErrVaultNotSpecified {
+				t.Fatalf("error code = %q, want %q", result.Error.Code, codes.ErrVaultNotSpecified)
+			}
+		})
+
+		t.Run(commandID+"/whitespace", func(t *testing.T) {
+			t.Parallel()
+
+			_, result, ok := validateRequest(context.Background(), commandexec.Request{
+				CommandID: commandID,
+				VaultPath: "   \t\n",
+				Args:      map[string]any{},
+			})
+			if ok {
+				t.Fatalf("expected validateRequest to reject whitespace vault path for %q, got success", commandID)
+			}
+			if result.Error == nil || result.Error.Code != codes.ErrVaultNotSpecified {
+				t.Fatalf("expected VAULT_NOT_SPECIFIED, got %#v", result)
+			}
+		})
+	}
+
+	// Commands that do not require a vault must not be blocked by the shared
+	// gate, even when VaultPath is empty.
+	noVaultCommands := []string{"version", "config_show", "docs", "docs_fetch"}
+	for _, commandID := range noVaultCommands {
+		t.Run(commandID+"/no_vault_ok", func(t *testing.T) {
+			t.Parallel()
+
+			_, result, ok := validateRequest(context.Background(), commandexec.Request{
+				CommandID: commandID,
+				VaultPath: "",
+				Args:      map[string]any{},
+			})
+			if !ok {
+				t.Fatalf("validateRequest unexpectedly rejected %q: %#v", commandID, result)
+			}
+		})
 	}
 }
