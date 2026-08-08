@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/aidanlsb/raven/internal/indexschema"
 )
 
 func setupTestDB(t *testing.T) *sql.DB {
@@ -13,100 +15,9 @@ func setupTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to open database: %v", err)
 	}
 
-	// Create schema
-	_, err = db.Exec(`
-		CREATE TABLE objects (
-			id TEXT PRIMARY KEY,
-			file_path TEXT NOT NULL,
-			type TEXT NOT NULL,
-			fields TEXT NOT NULL DEFAULT '{}',
-			line_start INTEGER NOT NULL,
-			created_at INTEGER,
-			updated_at INTEGER
-		);
-
-		CREATE TABLE traits (
-			id TEXT PRIMARY KEY,
-			file_path TEXT NOT NULL,
-			parent_object_id TEXT NOT NULL,
-			trait_type TEXT NOT NULL,
-			value TEXT,
-			content TEXT NOT NULL,
-			line_number INTEGER NOT NULL,
-			created_at INTEGER
-		);
-
-		CREATE TABLE sections (
-			id TEXT PRIMARY KEY,
-			file_object_id TEXT NOT NULL,
-			file_path TEXT NOT NULL,
-			slug TEXT NOT NULL,
-			title TEXT NOT NULL,
-			level INTEGER NOT NULL,
-			line_start INTEGER NOT NULL,
-			line_end INTEGER,
-			subtree_line_end INTEGER,
-			parent_section_id TEXT,
-			indexed_at INTEGER
-		);
-
-		CREATE TABLE refs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			source_id TEXT NOT NULL,
-			target_id TEXT,
-			target_raw TEXT NOT NULL,
-			display_text TEXT,
-			file_path TEXT NOT NULL,
-			line_number INTEGER,
-			position_start INTEGER,
-			position_end INTEGER
-		);
-
-		CREATE TABLE links (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			source_id TEXT NOT NULL,
-			source_type TEXT NOT NULL,
-			file_path TEXT NOT NULL,
-			line_number INTEGER NOT NULL,
-			position_start INTEGER NOT NULL,
-			position_end INTEGER NOT NULL,
-			raw_target TEXT NOT NULL,
-			display TEXT NOT NULL,
-			is_image INTEGER NOT NULL,
-			scheme TEXT NOT NULL,
-			ext TEXT NOT NULL,
-			normalized_key TEXT NOT NULL
-		);
-
-		CREATE TABLE field_refs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			source_id TEXT NOT NULL,
-			field_name TEXT NOT NULL,
-			target_id TEXT,
-			target_raw TEXT NOT NULL,
-			resolution_status TEXT NOT NULL,
-			file_path TEXT NOT NULL,
-			line_number INTEGER
-		);
-
-		CREATE TABLE date_index (
-			date TEXT NOT NULL,
-			source_type TEXT NOT NULL,
-			source_id TEXT NOT NULL,
-			field_name TEXT NOT NULL,
-			file_path TEXT NOT NULL,
-			PRIMARY KEY (date, source_type, source_id, field_name)
-		);
-
-		CREATE VIRTUAL TABLE fts_content USING fts5(
-			object_id,
-			title,
-			content,
-			file_path UNINDEXED,
-			tokenize='porter unicode61'
-		);
-	`)
-	if err != nil {
+	// Create schema from the authoritative index schema definition so these
+	// fixtures track any real schema changes automatically.
+	if _, err := db.Exec(indexschema.SchemaSQL); err != nil {
 		t.Fatalf("failed to create schema: %v", err)
 	}
 
@@ -190,83 +101,7 @@ func setupRefRegressionDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to open database: %v", err)
 	}
 
-	_, err = db.Exec(`
-		CREATE TABLE objects (
-			id TEXT PRIMARY KEY,
-			file_path TEXT NOT NULL,
-			type TEXT NOT NULL,
-			fields TEXT NOT NULL DEFAULT '{}',
-			line_start INTEGER NOT NULL,
-			created_at INTEGER,
-			updated_at INTEGER
-		);
-
-		CREATE TABLE traits (
-			id TEXT PRIMARY KEY,
-			file_path TEXT NOT NULL,
-			parent_object_id TEXT NOT NULL,
-			trait_type TEXT NOT NULL,
-			value TEXT,
-			content TEXT NOT NULL,
-			line_number INTEGER NOT NULL,
-			created_at INTEGER
-		);
-
-		CREATE TABLE sections (
-			id TEXT PRIMARY KEY,
-			file_object_id TEXT NOT NULL,
-			file_path TEXT NOT NULL,
-			slug TEXT NOT NULL,
-			title TEXT NOT NULL,
-			level INTEGER NOT NULL,
-			line_start INTEGER NOT NULL,
-			line_end INTEGER,
-			subtree_line_end INTEGER,
-			parent_section_id TEXT,
-			indexed_at INTEGER
-		);
-
-		CREATE TABLE refs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			source_id TEXT NOT NULL,
-			target_id TEXT,
-			target_raw TEXT NOT NULL,
-			display_text TEXT,
-			file_path TEXT NOT NULL,
-			line_number INTEGER,
-			position_start INTEGER,
-			position_end INTEGER
-		);
-
-		CREATE TABLE field_refs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			source_id TEXT NOT NULL,
-			field_name TEXT NOT NULL,
-			target_id TEXT,
-			target_raw TEXT NOT NULL,
-			resolution_status TEXT NOT NULL,
-			file_path TEXT NOT NULL,
-			line_number INTEGER
-		);
-
-		CREATE TABLE date_index (
-			date TEXT NOT NULL,
-			source_type TEXT NOT NULL,
-			source_id TEXT NOT NULL,
-			field_name TEXT NOT NULL,
-			file_path TEXT NOT NULL,
-			PRIMARY KEY (date, source_type, source_id, field_name)
-		);
-
-		CREATE VIRTUAL TABLE fts_content USING fts5(
-			object_id,
-			title,
-			content,
-			file_path UNINDEXED,
-			tokenize='porter unicode61'
-		);
-	`)
-	if err != nil {
+	if _, err := db.Exec(indexschema.SchemaSQL); err != nil {
 		t.Fatalf("failed to create schema: %v", err)
 	}
 
