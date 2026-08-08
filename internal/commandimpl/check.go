@@ -21,9 +21,6 @@ const checkApplyIncompleteWarningCode = codes.WarnCheckIncomplete
 // HandleCheck executes the canonical `check` command.
 func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 	if boolArg(req.Args, "fix") && boolArg(req.Args, "create-missing") {
 		return commandexec.Failure("INVALID_INPUT", "cannot combine --fix with --create-missing", nil, "Use one action at a time")
 	}

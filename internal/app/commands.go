@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -133,6 +134,30 @@ func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Re
 	}
 
 	req.Args = normalized
+
+	// Vault-scoped commands require a resolved vault path. CLI and MCP
+	// transports resolve the vault before dispatch and surface their own
+	// vault-resolution errors; this central check guards direct invoker
+	// callers so every handler can assume req.VaultPath is non-empty and
+	// no longer needs a duplicated defensive check. The check runs after
+	// argument validation so INVALID_ARGS keeps priority over
+	// VAULT_NOT_SPECIFIED — matching the pre-centralization handler order
+	// where args were validated by the invoker before the handler's own
+	// empty-path guard fired. Emit the stable VAULT_NOT_SPECIFIED code
+	// because it is the documented contract for a missing vault (see
+	// AGENTS.md and internal/codes) and matches the code the specialized
+	// `vault_path` and read handlers already emitted for this condition;
+	// INVALID_INPUT was a misleading defensive default in the removed
+	// per-handler boilerplate.
+	if commands.RequiresVault(req.CommandID) && strings.TrimSpace(req.VaultPath) == "" {
+		return req, commandexec.Failure(
+			codes.ErrVaultNotSpecified,
+			"no vault path resolved",
+			nil,
+			"Use --vault-path, --vault, active_vault, or default_vault",
+		), false
+	}
+
 	// `yes` is an apply flag used by commands that prompt in interactive
 	// terminals (e.g. skill install); treat it like `confirm` for non-interactive
 	// and MCP callers so preview/apply resolution stays consistent.

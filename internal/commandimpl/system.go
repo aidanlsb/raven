@@ -79,9 +79,6 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 // HandleReindex executes the canonical `reindex` command.
 func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newSchemaFirstCommandVaultRuntime(vaultPath)
 	if failure.Error != nil {
@@ -118,9 +115,6 @@ func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Res
 // HandleDaily executes the canonical `daily` command.
 func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newConfigCommandVaultRuntime(vaultPath)
 	if failure.Error != nil {
@@ -149,9 +143,6 @@ func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result 
 // HandleDate executes the canonical `date` command.
 func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newConfigOnlyCommandVaultRuntime(vaultPath)
 	if failure.Error != nil {

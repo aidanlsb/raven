@@ -12,9 +12,6 @@ import (
 // HandleSectionCreate executes the canonical `section create` command.
 func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
 	if failure.Error != nil {
@@ -73,9 +70,6 @@ func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec
 // HandleSectionMove executes the canonical `section move` command.
 func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
 	if failure.Error != nil {
@@ -120,9 +114,6 @@ func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.R
 // HandleSectionRename executes the canonical `section rename` command.
 func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
 	if failure.Error != nil {

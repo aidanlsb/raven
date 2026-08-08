@@ -228,12 +228,11 @@ func HandleVaultRemove(_ context.Context, req commandexec.Request) commandexec.R
 	}, nil)
 }
 
-// HandleVaultPath executes the canonical `vault_path` command.
+// HandleVaultPath executes the canonical `vault_path` command. The shared
+// invoker validateRequest step guarantees req.VaultPath is non-empty for
+// vault-scoped commands, so this handler can render the resolved path directly.
 func HandleVaultPath(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("VAULT_NOT_SPECIFIED", "no vault path resolved", nil, "Use --vault-path, --vault, active_vault, or default_vault")
-	}
 	return commandexec.Success(map[string]interface{}{"path": filepath.Clean(vaultPath)}, nil)
 }
 

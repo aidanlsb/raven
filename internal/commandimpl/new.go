@@ -20,9 +20,6 @@ import (
 // HandleNew executes the canonical `new` command.
 func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
 	if failure.Error != nil {
@@ -100,9 +97,6 @@ func mapContentMutationError(err error) commandexec.Result {
 // HandleUpsert executes the canonical `upsert` command.
 func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
 
 	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
 	if failure.Error != nil {
