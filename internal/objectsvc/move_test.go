@@ -517,6 +517,160 @@ func TestMoveFileUpdatesFrontmatterBareRef(t *testing.T) {
 	}
 }
 
+// TestMoveFileGuardsProtectedAndExcludedPaths covers the primitive MoveFile
+// gate: both the source and destination must clear the mutationguard policy
+// (protected prefixes, exclude patterns, template directory) even when a
+// higher-level caller has not already validated them (e.g., reclassify).
+func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		vaultCfg      *config.VaultConfig
+		sourceRel     string
+		destRel       string
+		sourceObjID   string
+		destObjID     string
+		wantErrCode   ErrorCode
+		wantErrSubstr string
+	}{
+		{
+			name:          "protected prefix destination",
+			vaultCfg:      &config.VaultConfig{ProtectedPrefixes: []string{"private/"}},
+			sourceRel:     "people/freya.md",
+			destRel:       "private/freya.md",
+			sourceObjID:   "people/freya",
+			destObjID:     "private/freya",
+			wantErrCode:   ErrorValidationFailed,
+			wantErrSubstr: "protected or system-managed",
+		},
+		{
+			name:          "protected prefix source",
+			vaultCfg:      &config.VaultConfig{ProtectedPrefixes: []string{"private/"}},
+			sourceRel:     "private/freya.md",
+			destRel:       "people/freya.md",
+			sourceObjID:   "private/freya",
+			destObjID:     "people/freya",
+			wantErrCode:   ErrorValidationFailed,
+			wantErrSubstr: "protected or system-managed",
+		},
+		{
+			name:          "excluded destination",
+			vaultCfg:      &config.VaultConfig{Exclude: []string{"archive/"}},
+			sourceRel:     "people/freya.md",
+			destRel:       "archive/freya.md",
+			sourceObjID:   "people/freya",
+			destObjID:     "archive/freya",
+			wantErrCode:   ErrorValidationFailed,
+			wantErrSubstr: "excluded paths",
+		},
+		{
+			name:          "default template directory destination",
+			vaultCfg:      &config.VaultConfig{},
+			sourceRel:     "people/freya.md",
+			destRel:       "templates/freya.md",
+			sourceObjID:   "people/freya",
+			destObjID:     "templates/freya",
+			wantErrCode:   ErrorValidationFailed,
+			wantErrSubstr: "template files",
+		},
+		{
+			name: "custom template directory destination",
+			vaultCfg: &config.VaultConfig{
+				Directories: &config.DirectoriesConfig{Template: "blueprints/"},
+			},
+			sourceRel:     "people/freya.md",
+			destRel:       "blueprints/freya.md",
+			sourceObjID:   "people/freya",
+			destObjID:     "blueprints/freya",
+			wantErrCode:   ErrorValidationFailed,
+			wantErrSubstr: "template files",
+		},
+		{
+			name:          "hard protected system directory destination",
+			vaultCfg:      &config.VaultConfig{},
+			sourceRel:     "people/freya.md",
+			destRel:       ".raven/freya.md",
+			sourceObjID:   "people/freya",
+			destObjID:     ".raven/freya",
+			wantErrCode:   ErrorValidationFailed,
+			wantErrSubstr: "protected or system-managed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			v := testutil.NewTestVault(t).
+				WithSchema(testutil.PersonProjectSchema()).
+				WithFile(tt.sourceRel, "---\ntype: person\nname: Freya\n---\n").
+				Build()
+
+			_, err := MoveFile(MoveFileRequest{
+				VaultPath:         v.Path,
+				VaultConfig:       tt.vaultCfg,
+				SourceFile:        filepath.Join(v.Path, tt.sourceRel),
+				DestinationFile:   filepath.Join(v.Path, tt.destRel),
+				SourceObjectID:    tt.sourceObjID,
+				DestinationObject: tt.destObjID,
+			})
+			if err == nil {
+				t.Fatalf("MoveFile() error = nil, want error with code %s", tt.wantErrCode)
+			}
+
+			var svcErr *Error
+			if !errors.As(err, &svcErr) {
+				t.Fatalf("expected *Error, got %T: %v", err, err)
+			}
+			if svcErr.Code != tt.wantErrCode {
+				t.Errorf("error code = %s, want %s", svcErr.Code, tt.wantErrCode)
+			}
+			if !strings.Contains(svcErr.Message, tt.wantErrSubstr) {
+				t.Errorf("error message = %q, want to contain %q", svcErr.Message, tt.wantErrSubstr)
+			}
+
+			// The guard must run before any filesystem mutation.
+			if _, statErr := os.Stat(filepath.Join(v.Path, tt.sourceRel)); statErr != nil {
+				t.Errorf("expected source file to remain at %s, stat err = %v", tt.sourceRel, statErr)
+			}
+			if _, statErr := os.Stat(filepath.Join(v.Path, tt.destRel)); !errors.Is(statErr, os.ErrNotExist) {
+				t.Errorf("expected destination %s to not exist, stat err = %v", tt.destRel, statErr)
+			}
+		})
+	}
+}
+
+// TestMoveFileAllowsNormalContentPaths ensures the added guard does not
+// regress the happy path for content moves.
+func TestMoveFileAllowsNormalContentPaths(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "people/freya.md")
+
+	_, err := MoveFile(MoveFileRequest{
+		VaultPath:         v.Path,
+		VaultConfig:       config.DefaultVaultConfig(),
+		Schema:            sch,
+		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
+		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
+		SourceObjectID:    "people/freya",
+		DestinationObject: "archive/freya",
+	})
+	if err != nil {
+		t.Fatalf("MoveFile() error = %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(v.Path, "archive/freya.md")); statErr != nil {
+		t.Fatalf("expected moved file at archive/freya.md: %v", statErr)
+	}
+}
+
 func indexVaultFiles(t *testing.T, vaultPath string, sch *schema.Schema, relPaths ...string) {
 	t.Helper()
 
