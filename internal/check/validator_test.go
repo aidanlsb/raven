@@ -1109,3 +1109,103 @@ func TestValidatorStaleFragment(t *testing.T) {
 		t.Fatalf("expected local fragment issue, got %v", issues)
 	})
 }
+
+// TestValidatorSetDailyDirectoryPreservesResolver is a regression test for a
+// bug where Validator.SetDailyDirectory rebuilt the resolver with only
+// DailyDirectory + Aliases, silently dropping AliasMatches and NameFieldMap
+// that the canonical resolver normally supplies. Name-field and alias-match
+// resolution must continue to work after SetDailyDirectory.
+func TestValidatorSetDailyDirectoryPreservesResolver(t *testing.T) {
+	t.Parallel()
+
+	s := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"page":   {},
+			"person": {},
+			"book": {
+				NameField: "title",
+				Fields: map[string]*schema.FieldDefinition{
+					"title": {Type: schema.FieldTypeString},
+				},
+			},
+		},
+		Traits: map[string]*schema.TraitDefinition{},
+	}
+
+	objectInfos := []ObjectInfo{
+		{ID: "books/the-prose-edda", Type: "book"},
+		{ID: "people/freya", Type: "person"},
+		{ID: "people/frigg", Type: "person"},
+		{ID: "notes/test", Type: "page"},
+	}
+
+	ids := make([]string, 0, len(objectInfos))
+	for _, info := range objectInfos {
+		ids = append(ids, info.ID)
+	}
+
+	// Prebuilt resolver mirrors what indexschema.BuildResolver produces:
+	// aliases, alias matches, and name-field values are all populated.
+	// The name-field value intentionally does not slug-match the filename so
+	// that resolution is only possible via NameFieldMap.
+	prebuilt := resolver.New(ids, resolver.Options{
+		DailyDirectory: "daily",
+		AliasMatches: map[string][]string{
+			"goddess": {"people/freya", "people/frigg"},
+		},
+		NameFieldMap: map[string][]string{
+			"An Edda of Prose": {"books/the-prose-edda"},
+		},
+	})
+
+	v := NewValidatorWithTypesAliasesAndResolver(s, objectInfos, nil, prebuilt)
+
+	// Changing the daily directory must not weaken the resolver.
+	v.SetDailyDirectory("journal")
+
+	t.Run("name-field resolution still works", func(t *testing.T) {
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*model.Object{
+				{ID: "notes/test", Type: "page"},
+			},
+			Refs: []*model.Reference{
+				{SourceID: "notes/test", TargetRaw: "An Edda of Prose", Line: model.IntPtr(5)},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueMissingReference || issue.Type == IssueAmbiguousReference {
+				t.Errorf("name-field resolution should still work after SetDailyDirectory, got: %+v", issue)
+			}
+		}
+	})
+
+	t.Run("alias-match ambiguity still surfaces", func(t *testing.T) {
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*model.Object{
+				{ID: "notes/test", Type: "page"},
+			},
+			Refs: []*model.Reference{
+				{SourceID: "notes/test", TargetRaw: "goddess", Line: model.IntPtr(5)},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		hasAmbiguous := false
+		for _, issue := range issues {
+			if issue.Type == IssueAmbiguousReference {
+				hasAmbiguous = true
+				if !strings.Contains(issue.Message, "goddess") {
+					t.Errorf("expected message to mention 'goddess', got: %s", issue.Message)
+				}
+				break
+			}
+		}
+		if !hasAmbiguous {
+			t.Errorf("expected ambiguous ref from alias-match after SetDailyDirectory, got: %v", issues)
+		}
+	})
+}

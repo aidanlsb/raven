@@ -125,27 +125,21 @@ func (v *Validator) SetDirectoryRoots(objectsRoot, pagesRoot string) {
 	v.pagesRoot = paths.NormalizeDirRoot(pagesRoot)
 }
 
-// SetDailyDirectory updates the resolver's daily directory.
+// SetDailyDirectory updates the resolver's daily directory in place.
+//
+// The resolver retains its full indexed state (object IDs, aliases,
+// alias matches, name-field values, etc.) so callers that started from a
+// canonical resolver do not silently lose alias-match or name-field
+// resolution when the daily directory changes.
 func (v *Validator) SetDailyDirectory(dailyDir string) {
 	v.SetDailyDirectoryForInference(dailyDir)
-	v.resolver = resolver.New(v.allIDList(), resolver.Options{
-		DailyDirectory: dailyDir,
-		Aliases:        v.aliases,
-	})
+	v.resolver.SetDailyDirectory(dailyDir)
 }
 
 // SetDailyDirectoryForInference sets the daily directory used for missing-ref
 // type inference without rebuilding the resolver.
 func (v *Validator) SetDailyDirectoryForInference(dailyDir string) {
 	v.dailyDir = strings.TrimSuffix(paths.NormalizeDirRoot(dailyDir), "/")
-}
-
-func (v *Validator) allIDList() []string {
-	ids := make([]string, 0, len(v.allIDs))
-	for id := range v.allIDs {
-		ids = append(ids, id)
-	}
-	return ids
 }
 
 // displayID returns an object ID suitable for display (with directory prefix stripped).

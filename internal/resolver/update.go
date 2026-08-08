@@ -21,6 +21,22 @@ type Update struct {
 	RemovedNameFields map[string][]string
 }
 
+// SetDailyDirectory updates the resolver's configured daily-note directory in
+// place. Unlike rebuilding via [New], this preserves the resolver's existing
+// indexed maps (object IDs, aliases, alias matches, name-field entries, etc.),
+// so callers can adjust the daily directory without losing resolution power.
+//
+// An empty dailyDir resets to the default "daily".
+func (r *Resolver) SetDailyDirectory(dailyDir string) {
+	if r == nil {
+		return
+	}
+	if dailyDir == "" {
+		dailyDir = "daily"
+	}
+	r.dailyDirectory = dailyDir
+}
+
 // ApplyUpdate incrementally applies index changes to the resolver.
 func (r *Resolver) ApplyUpdate(update Update) {
 	if r == nil {
