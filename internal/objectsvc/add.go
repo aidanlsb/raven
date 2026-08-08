@@ -95,6 +95,16 @@ func AppendToFile(
 		}
 	}
 
+	// Serialize concurrent appends to this destination. The lock covers the
+	// heading/section RMW paths (which use atomicfile.WriteFile) as well as
+	// the fast in-place append below, so different paths targeting the same
+	// file cannot lose writes.
+	release, err := acquireAppendLock(vaultPath, destPath)
+	if err != nil {
+		return 0, addFileWriteError(destPath, "failed to lock target file", "Close other writers and try again", err)
+	}
+	defer release()
+
 	if targetObjectID != "" && strings.Contains(targetObjectID, "#") {
 		return appendWithinObject(vaultPath, destPath, line, targetObjectID, rt.ParseOptions)
 	}
@@ -103,6 +113,14 @@ func AppendToFile(
 		return appendUnderHeading(destPath, line, cfg.Heading)
 	}
 
+	return appendAtEndOfFile(destPath, line)
+}
+
+// appendAtEndOfFile performs the fast in-place append. The caller must hold
+// the destination's append lock. We still take an exclusive flock on the
+// destination file descriptor so that external processes locking the file
+// directly are respected (this preserves prior behavior).
+func appendAtEndOfFile(destPath, line string) (int, error) {
 	f, err := os.OpenFile(destPath, os.O_APPEND|os.O_RDWR, 0o644)
 	if err != nil {
 		return 0, addFileWriteError(destPath, "failed to open target file", "Check that the target file is writable", err)
