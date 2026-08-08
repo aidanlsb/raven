@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/linktarget"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -93,6 +94,17 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	}
 	if strings.TrimSpace(req.SourceObjectID) == "" || strings.TrimSpace(req.DestinationObject) == "" {
 		return nil, newError(ErrorInvalidInput, "source and destination object IDs are required", "", nil, nil)
+	}
+
+	// Guard both source and destination against protected prefixes, exclude
+	// patterns, and the template directory. MoveByReference already validates
+	// these paths, but callers like Reclassify derive the destination from a
+	// type's default_path and would otherwise bypass the guard.
+	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.SourceFile); err != nil {
+		return nil, err
+	}
+	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.DestinationFile); err != nil {
+		return nil, err
 	}
 
 	result := &MoveFileResult{}
@@ -522,7 +534,7 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 		return nil, append(warnings, fmt.Sprintf("Failed to read aliases for move update: %v", err))
 	}
 
-	resolverOpts := index.ResolverOptions{
+	resolverOpts := indexschema.ResolverOptions{
 		DailyDirectory: dailyDir,
 		ExtraIDs:       []string{req.DestinationObject},
 	}
