@@ -38,15 +38,6 @@ func PolicyForCommandID(commandID string) Policy {
 	return policy
 }
 
-// ResolveToolPolicy resolves a tool name to a command ID and policy.
-func ResolveToolPolicy(toolName string) (commandID string, policy Policy, ok bool) {
-	commandID, ok = ResolveToolCommandID(toolName)
-	if !ok {
-		return "", Policy{}, false
-	}
-	return commandID, PolicyForCommandID(commandID), true
-}
-
 func IsInvokableCommandID(commandID string) bool {
 	return PolicyForCommandID(commandID).Invokable
 }
