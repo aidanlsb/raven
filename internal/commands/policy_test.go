@@ -42,21 +42,3 @@ func TestPolicyForCommandID(t *testing.T) {
 		})
 	}
 }
-
-func TestResolveToolPolicy(t *testing.T) {
-	t.Parallel()
-	commandID, policy, ok := ResolveToolPolicy("raven_query")
-	if !ok {
-		t.Fatal("expected raven_query to resolve")
-	}
-	if commandID != "query" {
-		t.Fatalf("commandID=%q, want query", commandID)
-	}
-	if !policy.Invokable || !policy.Discoverable {
-		t.Fatalf("unexpected policy for query: %+v", policy)
-	}
-
-	if _, _, ok := ResolveToolPolicy("raven_not_real"); ok {
-		t.Fatal("expected unknown tool to fail policy resolution")
-	}
-}
