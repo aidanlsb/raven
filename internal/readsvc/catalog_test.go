@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/resolver"
 )
@@ -62,7 +62,7 @@ func (s *catalogReaderStub) AllAliases() (map[string]string, error) {
 	return s.aliases, nil
 }
 
-func (s *catalogReaderStub) Resolver(index.ResolverOptions) (*resolver.Resolver, error) {
+func (s *catalogReaderStub) Resolver(indexschema.ResolverOptions) (*resolver.Resolver, error) {
 	s.record("resolver")
 	return resolver.New(s.objectIDs, resolver.Options{Aliases: s.aliases}), nil
 }
@@ -98,7 +98,7 @@ func TestBuildCatalogSelectsDomainValuesAndLookups(t *testing.T) {
 		Aliases:   true,
 		Resolver:  true,
 		FilePaths: true,
-	}, index.ResolverOptions{})
+	}, indexschema.ResolverOptions{})
 	if err != nil {
 		t.Fatalf("buildCatalog() error = %v", err)
 	}
@@ -136,7 +136,7 @@ func TestBuildCatalogConsistentRetriesWholeSelection(t *testing.T) {
 	snapshot, err := buildCatalog(stub, CatalogOptions{
 		Objects:    true,
 		Consistent: true,
-	}, index.ResolverOptions{})
+	}, indexschema.ResolverOptions{})
 	if err != nil {
 		t.Fatalf("buildCatalog() error = %v", err)
 	}
@@ -155,7 +155,7 @@ func TestBuildCatalogConsistentRejectsContinuouslyChangingIndex(t *testing.T) {
 		generations: []int64{1, 2, 2, 3, 3, 4},
 	}
 
-	_, err := buildCatalog(stub, CatalogOptions{Objects: true, Consistent: true}, index.ResolverOptions{})
+	_, err := buildCatalog(stub, CatalogOptions{Objects: true, Consistent: true}, indexschema.ResolverOptions{})
 	if !errors.Is(err, ErrCatalogChanging) {
 		t.Fatalf("buildCatalog() error = %v, want ErrCatalogChanging", err)
 	}

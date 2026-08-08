@@ -190,7 +190,7 @@ The `resolver` package has a single constructor `New(objectIDs, Options)`, but u
 
 ```go
 // ✅ CORRECT: Use the database's unified factory
-res, err := db.Resolver(index.ResolverOptions{
+res, err := db.Resolver(indexschema.ResolverOptions{
     DailyDirectory: dailyDir,
     Schema:         sch,  // Optional: enables name_field resolution
     ExtraIDs:       ids,  // Optional: for hypothetical resolution (move command)

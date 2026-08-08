@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/shellquote"
 )
@@ -43,7 +44,7 @@ func buildUnknownQuerySuggestion(db *index.Database, queryStr, dailyDir string, 
 
 	// Try to resolve the token as a reference to give a better hint. This does NOT
 	// change behavior; it only improves the suggestion text.
-	res, err := db.Resolver(index.ResolverOptions{
+	res, err := db.Resolver(indexschema.ResolverOptions{
 		DailyDirectory: dailyDir,
 		Schema:         sch,
 	})

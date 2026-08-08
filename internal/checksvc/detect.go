@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -44,7 +44,7 @@ func DetectMissingRefs(rt *vaultruntime.Runtime, relPaths ...string) ([]*check.M
 	}
 
 	aliases, _ := db.AllAliases()
-	canonicalResolver, _ := db.Resolver(index.ResolverOptions{
+	canonicalResolver, _ := db.Resolver(indexschema.ResolverOptions{
 		DailyDirectory: vaultCfg.GetDailyDirectory(),
 		Schema:         sch,
 	})

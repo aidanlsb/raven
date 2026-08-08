@@ -1,7 +1,6 @@
 package index
 
 import (
-	"database/sql"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/indexschema"
@@ -22,9 +21,6 @@ func (d *Database) AllAliases() (map[string]string, error) {
 	return indexschema.AllAliases(d.db)
 }
 
-// ResolverOptions is retained as an index-package compatibility alias.
-type ResolverOptions = indexschema.ResolverOptions
-
 // Resolver builds the canonical resolver for this vault index.
 //
 // This is the ONE resolver factory that handles all cases:
@@ -35,51 +31,14 @@ type ResolverOptions = indexschema.ResolverOptions
 // - Extra IDs for hypothetical resolution
 //
 // Use this method for all resolver creation to ensure consistent behavior.
-func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
-	return BuildResolver(d.db, opts)
-}
-
-// BuildResolver builds the canonical resolver from a database handle.
-//
-// This shared helper allows all subsystems (index/query/check) to use identical
-// resolver semantics without re-implementing object ID and alias loading logic.
-func BuildResolver(db *sql.DB, opts ResolverOptions) (*resolver.Resolver, error) {
-	return indexschema.BuildResolver(db, opts)
-}
-
-type resolverQuerier interface {
-	Query(query string, args ...any) (*sql.Rows, error)
-	QueryRow(query string, args ...any) *sql.Row
-}
-
-func buildResolverSnapshot(db *sql.DB, opts ResolverOptions) (*resolver.Resolver, int64, error) {
-	return indexschema.BuildResolverSnapshot(db, opts)
-}
-
-func defaultDailyDir(dailyDir string) string {
-	return indexschema.DefaultDailyDirectory(dailyDir)
+func (d *Database) Resolver(opts indexschema.ResolverOptions) (*resolver.Resolver, error) {
+	return indexschema.BuildResolver(d.db, opts)
 }
 
 // AllNameFieldValues returns a map from name_field values to candidate object IDs.
 // It queries each type's name_field and extracts the corresponding field value.
 func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string][]string, error) {
 	return indexschema.AllNameFieldValues(d.db, sch)
-}
-
-func allAliasesFromDB(db resolverQuerier) (map[string]string, error) {
-	return indexschema.AllAliases(db)
-}
-
-func allAliasMatchesFromDB(db resolverQuerier) (map[string][]string, error) {
-	return indexschema.AllAliasMatches(db)
-}
-
-func buildTypeNameFields(sch *schema.Schema) map[string]string {
-	return indexschema.BuildTypeNameFields(sch)
-}
-
-func extractNameFieldValue(typeNameFields map[string]string, objType string, fieldsJSON string) (string, bool) {
-	return indexschema.ExtractNameFieldValue(typeNameFields, objType, fieldsJSON)
 }
 
 // FindDuplicateAliases finds cases where multiple objects use the same alias.

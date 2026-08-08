@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/aidanlsb/raven/internal/filelock"
+	"github.com/aidanlsb/raven/internal/indexschema"
 )
 
 // RebuildOptions configures an index rebuild session.
@@ -225,7 +226,7 @@ func hasRebuildRequiredMarker(dbDir string) (bool, error) {
 }
 
 func writeRebuildRequiredMarker(markerPath string) error {
-	content := fmt.Sprintf("full reindex required for database version %d\n", CurrentDBVersion)
+	content := fmt.Sprintf("full reindex required for database version %d\n", indexschema.CurrentDBVersion)
 	if err := os.WriteFile(markerPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write index rebuild marker: %w", err)
 	}
@@ -255,7 +256,7 @@ func isSchemaCompatible(db *sql.DB) bool {
 	if err != nil || !ok {
 		return false
 	}
-	return version == CurrentDBVersion
+	return version == indexschema.CurrentDBVersion
 }
 
 // SchemaCompatible reports whether this database has the current index schema.
@@ -264,5 +265,5 @@ func (d *Database) SchemaCompatible() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return ok && version == CurrentDBVersion, nil
+	return ok && version == indexschema.CurrentDBVersion, nil
 }

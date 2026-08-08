@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -143,7 +144,7 @@ func (op *Operation) getResolver() (*resolver.Resolver, error) {
 		return nil, err
 	}
 
-	res, err := db.Resolver(index.ResolverOptions{
+	res, err := db.Resolver(indexschema.ResolverOptions{
 		DailyDirectory: op.dailyDirectory(),
 		Schema:         op.rt.Schema,
 	})

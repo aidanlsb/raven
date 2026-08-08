@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 )
 
@@ -370,7 +371,7 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 		limit = 20
 	}
 
-	ftsQuery := BuildFTSSearchQuery(query)
+	ftsQuery := indexschema.BuildFTSSearchQuery(query)
 
 	// Use FTS5 match query with BM25 ranking
 	// Search both title and content columns
@@ -447,7 +448,7 @@ func (d *Database) SearchWithType(query string, objectType string, limit int) ([
 		limit = 20
 	}
 
-	ftsQuery := BuildFTSSearchQuery(query)
+	ftsQuery := indexschema.BuildFTSSearchQuery(query)
 
 	rows, err := d.db.Query(`
 		SELECT 

@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/linktarget"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -522,7 +523,7 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 		return nil, append(warnings, fmt.Sprintf("Failed to read aliases for move update: %v", err))
 	}
 
-	resolverOpts := index.ResolverOptions{
+	resolverOpts := indexschema.ResolverOptions{
 		DailyDirectory: dailyDir,
 		ExtraIDs:       []string{req.DestinationObject},
 	}
