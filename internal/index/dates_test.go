@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -79,7 +80,7 @@ func TestTryParseTemporalComparisonWithOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			condition, args, ok, err := TryParseTemporalComparisonWithOptions(tt.filter, tt.op, "value", DateFilterOptions{
+			condition, args, ok, err := indexschema.TryParseTemporalComparisonWithOptions(tt.filter, tt.op, "value", indexschema.DateFilterOptions{
 				Now: now,
 			})
 			if tt.wantErr {
@@ -115,7 +116,7 @@ func TestTryParseTemporalComparisonWithOptionsDefaultsNow(t *testing.T) {
 
 	// A zero Now falls back to time.Now(); the parse should still succeed and
 	// yield a date comparison for a relative keyword.
-	condition, args, ok, err := TryParseTemporalComparisonWithOptions("today", "=", "value", DateFilterOptions{})
+	condition, args, ok, err := indexschema.TryParseTemporalComparisonWithOptions("today", "=", "value", indexschema.DateFilterOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

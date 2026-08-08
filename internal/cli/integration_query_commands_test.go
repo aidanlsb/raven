@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -359,7 +359,7 @@ func TestIntegration_IndexReadsFailOnStaleIndexSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open index: %v", err)
 	}
-	if _, err := db.Exec(`UPDATE meta SET value = ? WHERE key = 'version'`, strconv.Itoa(index.CurrentDBVersion-1)); err != nil {
+	if _, err := db.Exec(`UPDATE meta SET value = ? WHERE key = 'version'`, strconv.Itoa(indexschema.CurrentDBVersion-1)); err != nil {
 		db.Close()
 		t.Fatalf("downgrade index version: %v", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -413,7 +414,7 @@ func assertCachedResolverMatchesCold(t *testing.T, db *Database, sch *schema.Sch
 		t.Fatal("reference resolver cache is nil")
 	}
 	cached := db.referenceResolverCache.resolver.Resolve(ref)
-	cold, err := db.Resolver(ResolverOptions{DailyDirectory: "daily", Schema: sch})
+	cold, err := db.Resolver(indexschema.ResolverOptions{DailyDirectory: "daily", Schema: sch})
 	if err != nil {
 		t.Fatal(err)
 	}

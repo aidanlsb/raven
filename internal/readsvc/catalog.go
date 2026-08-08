@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -60,7 +60,7 @@ type catalogReader interface {
 	AllObjects() ([]model.Object, error)
 	AllSections() ([]model.Section, error)
 	AllAliases() (map[string]string, error)
-	Resolver(index.ResolverOptions) (*resolver.Resolver, error)
+	Resolver(indexschema.ResolverOptions) (*resolver.Resolver, error)
 	AllIndexedFilePaths() ([]string, error)
 }
 
@@ -76,7 +76,7 @@ func Catalog(rt *Runtime, opts CatalogOptions) (CatalogSnapshot, error) {
 	return buildCatalog(rt.DB, opts, catalogResolverOptions(rt))
 }
 
-func buildCatalog(db catalogReader, opts CatalogOptions, resolverOpts index.ResolverOptions) (CatalogSnapshot, error) {
+func buildCatalog(db catalogReader, opts CatalogOptions, resolverOpts indexschema.ResolverOptions) (CatalogSnapshot, error) {
 	if !opts.Consistent {
 		snapshot, err := readCatalog(db, opts, resolverOpts)
 		if err != nil {
@@ -116,7 +116,7 @@ func buildCatalog(db catalogReader, opts CatalogOptions, resolverOpts index.Reso
 	return CatalogSnapshot{}, ErrCatalogChanging
 }
 
-func readCatalog(db catalogReader, opts CatalogOptions, resolverOpts index.ResolverOptions) (CatalogSnapshot, error) {
+func readCatalog(db catalogReader, opts CatalogOptions, resolverOpts indexschema.ResolverOptions) (CatalogSnapshot, error) {
 	var snapshot CatalogSnapshot
 	var err error
 
@@ -168,12 +168,12 @@ func readCatalog(db catalogReader, opts CatalogOptions, resolverOpts index.Resol
 	return snapshot, nil
 }
 
-func catalogResolverOptions(rt *Runtime) index.ResolverOptions {
+func catalogResolverOptions(rt *Runtime) indexschema.ResolverOptions {
 	sch := rt.Schema
 	if sch == nil {
 		sch = schema.New()
 	}
-	return index.ResolverOptions{
+	return indexschema.ResolverOptions{
 		DailyDirectory: rt.VaultCfg.GetDailyDirectory(),
 		Schema:         sch,
 	}

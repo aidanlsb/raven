@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -345,7 +346,7 @@ func TestAliasIndexing(t *testing.T) {
 			}
 		}
 
-		res, err := db2.Resolver(ResolverOptions{})
+		res, err := db2.Resolver(indexschema.ResolverOptions{})
 		if err != nil {
 			t.Fatalf("failed to build resolver: %v", err)
 		}
@@ -414,17 +415,17 @@ func TestAllAliasesFromDB_LegacySchemaWithoutAliasColumn(t *testing.T) {
 		t.Fatalf("create legacy objects table: %v", err)
 	}
 
-	aliases, err := allAliasesFromDB(rawDB)
+	aliases, err := indexschema.AllAliases(rawDB)
 	if err != nil {
-		t.Fatalf("allAliasesFromDB returned error: %v", err)
+		t.Fatalf("indexschema.AllAliases returned error: %v", err)
 	}
 	if len(aliases) != 0 {
 		t.Fatalf("expected no aliases from legacy schema, got %v", aliases)
 	}
 
-	aliasMatches, err := allAliasMatchesFromDB(rawDB)
+	aliasMatches, err := indexschema.AllAliasMatches(rawDB)
 	if err != nil {
-		t.Fatalf("allAliasMatchesFromDB returned error: %v", err)
+		t.Fatalf("indexschema.AllAliasMatches returned error: %v", err)
 	}
 	if len(aliasMatches) != 0 {
 		t.Fatalf("expected no alias matches from legacy schema, got %v", aliasMatches)

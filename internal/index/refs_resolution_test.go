@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -468,7 +469,7 @@ about: "[[The Prose Edda]]"
 	db.IndexDocument(noteDoc, sch)
 
 	// Resolve references WITH schema to enable name_field resolution
-	res, err := db.Resolver(ResolverOptions{
+	res, err := db.Resolver(indexschema.ResolverOptions{
 		DailyDirectory: "daily",
 		Schema:         sch,
 	})

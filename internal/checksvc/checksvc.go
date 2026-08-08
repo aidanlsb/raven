@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/linktarget"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parseopts"
@@ -175,7 +176,7 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 			recordIncomplete("duplicate aliases", duplicateAliasesErr)
 		}
 		var resolverErr error
-		canonicalResolver, resolverErr = db.Resolver(index.ResolverOptions{
+		canonicalResolver, resolverErr = db.Resolver(indexschema.ResolverOptions{
 			DailyDirectory: vaultCfg.GetDailyDirectory(),
 			Schema:         sch,
 		})

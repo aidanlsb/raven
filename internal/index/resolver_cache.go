@@ -38,7 +38,7 @@ func resolverSchemaKey(sch *schema.Schema) string {
 	if sch == nil {
 		return "nil"
 	}
-	nameFields := buildTypeNameFields(sch)
+	nameFields := indexschema.BuildTypeNameFields(sch)
 	typeNames := make([]string, 0, len(nameFields))
 	for typeName := range nameFields {
 		typeNames = append(typeNames, typeName)
@@ -70,11 +70,11 @@ func (d *Database) prepareReferenceResolverCacheLocked(sch *schema.Schema) {
 	}
 }
 
-func (d *Database) ensureReferenceResolverCacheCurrentLocked(db resolverQuerier) error {
+func (d *Database) ensureReferenceResolverCacheCurrentLocked(db indexschema.ResolverQuerier) error {
 	if d.referenceResolverCache == nil {
 		return nil
 	}
-	generation, err := resolverGeneration(db)
+	generation, err := indexschema.ResolverGeneration(db)
 	if err != nil {
 		d.referenceResolverCache = nil
 		return err
@@ -144,7 +144,7 @@ func (d *Database) updateReferenceResolverCacheLocked(oldState, newState *resolv
 }
 
 func (d *Database) getReferenceResolverLocked(dailyDirectory string, sch *schema.Schema) (*resolver.Resolver, error) {
-	dailyDirectory = defaultDailyDir(dailyDirectory)
+	dailyDirectory = indexschema.DefaultDailyDirectory(dailyDirectory)
 	schemaKey := resolverSchemaKey(sch)
 	if cache := d.referenceResolverCache; cache != nil &&
 		cache.dailyDirectory == dailyDirectory &&
@@ -157,7 +157,7 @@ func (d *Database) getReferenceResolverLocked(dailyDirectory string, sch *schema
 		}
 	}
 
-	res, generation, err := buildResolverSnapshot(d.db, ResolverOptions{
+	res, generation, err := indexschema.BuildResolverSnapshot(d.db, indexschema.ResolverOptions{
 		DailyDirectory: dailyDirectory,
 		Schema:         sch,
 	})
@@ -175,32 +175,26 @@ func (d *Database) getReferenceResolverLocked(dailyDirectory string, sch *schema
 	return res, nil
 }
 
-const resolverGenerationMetaKey = indexschema.ResolverGenerationMetaKey
-
 // ResolverGeneration returns the durable generation for resolver-relevant
 // index state. It changes when objects or sections are mutated,
 // including by another database handle or process.
 func (d *Database) ResolverGeneration() (int64, error) {
-	return resolverGeneration(d.db)
-}
-
-func resolverGeneration(db resolverQuerier) (int64, error) {
-	return indexschema.ResolverGeneration(db)
+	return indexschema.ResolverGeneration(d.db)
 }
 
 func bumpResolverGeneration(tx *sql.Tx) (int64, error) {
 	if _, err := tx.Exec(`
 		INSERT INTO meta (key, value) VALUES (?, '1')
 		ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1
-	`, resolverGenerationMetaKey); err != nil {
+	`, indexschema.ResolverGenerationMetaKey); err != nil {
 		return 0, fmt.Errorf("bump resolver generation: %w", err)
 	}
-	return resolverGeneration(tx)
+	return indexschema.ResolverGeneration(tx)
 }
 
 func loadResolverFileState(tx *sql.Tx, filePath string, sch *schema.Schema) (*resolverFileState, error) {
 	state := newResolverFileState()
-	typeNameFields := buildTypeNameFields(sch)
+	typeNameFields := indexschema.BuildTypeNameFields(sch)
 
 	rows, err := tx.Query(`
 		SELECT id, type, fields, alias
@@ -224,7 +218,7 @@ func loadResolverFileState(tx *sql.Tx, filePath string, sch *schema.Schema) (*re
 		if alias.Valid && alias.String != "" {
 			addResolverStateMatch(state.aliases, alias.String, id)
 		}
-		if nameValue, ok := extractNameFieldValue(typeNameFields, objectType, fieldsJSON); ok {
+		if nameValue, ok := indexschema.ExtractNameFieldValue(typeNameFields, objectType, fieldsJSON); ok {
 			addResolverStateMatch(state.nameFields, nameValue, id)
 		}
 	}

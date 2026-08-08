@@ -10,6 +10,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/filelock"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -148,7 +149,7 @@ func TestIsSchemaCompatibleUsesMetaVersion(t *testing.T) {
 		{
 			name: "current version is compatible",
 			version: func() *string {
-				v := strconv.Itoa(CurrentDBVersion)
+				v := strconv.Itoa(indexschema.CurrentDBVersion)
 				return &v
 			}(),
 			want: true,
@@ -156,7 +157,7 @@ func TestIsSchemaCompatibleUsesMetaVersion(t *testing.T) {
 		{
 			name: "stale version is incompatible",
 			version: func() *string {
-				v := strconv.Itoa(CurrentDBVersion - 1)
+				v := strconv.Itoa(indexschema.CurrentDBVersion - 1)
 				return &v
 			}(),
 			want: false,
@@ -207,7 +208,7 @@ func TestOpenRejectsIncompatibleSchema(t *testing.T) {
 		name    string
 		version string
 	}{
-		{name: "stale version", version: strconv.Itoa(CurrentDBVersion - 1)},
+		{name: "stale version", version: strconv.Itoa(indexschema.CurrentDBVersion - 1)},
 		{name: "missing version"},
 	}
 
@@ -227,7 +228,7 @@ func TestRebuildSessionKeepsWipedIndexUnavailableUntilComplete(t *testing.T) {
 	t.Parallel()
 
 	vaultDir := t.TempDir()
-	seedLegacyIndexVersion(t, vaultDir, strconv.Itoa(CurrentDBVersion-1))
+	seedLegacyIndexVersion(t, vaultDir, strconv.Itoa(indexschema.CurrentDBVersion-1))
 
 	session, err := OpenWithRebuild(vaultDir, RebuildOptions{})
 	if err != nil {
@@ -241,8 +242,8 @@ func TestRebuildSessionKeepsWipedIndexUnavailableUntilComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("storedDatabaseVersion after rebuild: %v", err)
 	}
-	if !ok || currentVersion != CurrentDBVersion {
-		t.Fatalf("expected rebuilt DB version %d, got ok=%v version=%d", CurrentDBVersion, ok, currentVersion)
+	if !ok || currentVersion != indexschema.CurrentDBVersion {
+		t.Fatalf("expected rebuilt DB version %d, got ok=%v version=%d", indexschema.CurrentDBVersion, ok, currentVersion)
 	}
 
 	if _, err := Open(vaultDir); !errors.Is(err, ErrIndexLocked) {

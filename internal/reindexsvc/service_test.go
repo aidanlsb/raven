@@ -11,6 +11,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexjournal"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -523,8 +524,8 @@ func TestRunDryRunDoesNotPublishVersionMismatchWipe(t *testing.T) {
 	if err := rawDB.QueryRow(`SELECT value FROM meta WHERE key = 'version'`).Scan(&version); err != nil {
 		t.Fatalf("read raw index version after dry-run: %v", err)
 	}
-	if version != strconv.Itoa(index.CurrentDBVersion-1) {
-		t.Fatalf("index version after dry-run = %q, want stale version %d", version, index.CurrentDBVersion-1)
+	if version != strconv.Itoa(indexschema.CurrentDBVersion-1) {
+		t.Fatalf("index version after dry-run = %q, want stale version %d", version, indexschema.CurrentDBVersion-1)
 	}
 }
 
@@ -806,7 +807,7 @@ func downgradeIndexVersion(t *testing.T, vaultPath string) {
 	}
 	if _, err := db.Exec(
 		`UPDATE meta SET value = ? WHERE key = 'version'`,
-		strconv.Itoa(index.CurrentDBVersion-1),
+		strconv.Itoa(indexschema.CurrentDBVersion-1),
 	); err != nil {
 		_ = db.Close()
 		t.Fatalf("downgrade index version: %v", err)

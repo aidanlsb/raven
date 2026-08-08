@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -904,7 +905,7 @@ func TestDatabase(t *testing.T) {
 			t.Fatalf("failed to index document: %v", err)
 		}
 
-		res, err := db.Resolver(ResolverOptions{DailyDirectory: "journal"})
+		res, err := db.Resolver(indexschema.ResolverOptions{DailyDirectory: "journal"})
 		if err != nil {
 			t.Fatalf("failed to build resolver: %v", err)
 		}
@@ -969,7 +970,7 @@ func TestDatabase(t *testing.T) {
 			t.Fatalf("failed to index second doc: %v", err)
 		}
 
-		res, err := db.Resolver(ResolverOptions{Schema: testSchema})
+		res, err := db.Resolver(indexschema.ResolverOptions{Schema: testSchema})
 		if err != nil {
 			t.Fatalf("failed to build resolver: %v", err)
 		}

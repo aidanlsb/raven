@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/indexschema"
 )
 
 // RemoveFile removes all data for a file.
@@ -126,7 +128,7 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 	return count, nil
 }
 
-func countDistinctFilesWithPrefix(db resolverQuerier, pathPrefix string) (int, error) {
+func countDistinctFilesWithPrefix(db indexschema.ResolverQuerier, pathPrefix string) (int, error) {
 	var count int
 	err := db.QueryRow(`
 		SELECT COUNT(DISTINCT file_path) FROM objects

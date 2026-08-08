@@ -11,9 +11,6 @@ import (
 	"github.com/aidanlsb/raven/internal/indexschema"
 )
 
-// CurrentDBVersion is retained as an index-package compatibility alias.
-const CurrentDBVersion = indexschema.CurrentDBVersion
-
 // initialize creates the database schema.
 func (d *Database) initialize(isNewDB bool) error {
 	_, err := d.db.Exec(indexschema.SchemaSQL)
@@ -22,7 +19,7 @@ func (d *Database) initialize(isNewDB bool) error {
 	}
 
 	if isNewDB {
-		if err := setDatabaseVersion(d.db, CurrentDBVersion); err != nil {
+		if err := setDatabaseVersion(d.db, indexschema.CurrentDBVersion); err != nil {
 			return fmt.Errorf("failed to set database version: %w", err)
 		}
 	}

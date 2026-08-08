@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -20,7 +21,7 @@ func derefInt(p *int) int {
 
 func TestBuildFTSContentQuery_SanitizesHyphenatedTokens(t *testing.T) {
 	t.Parallel()
-	q := BuildFTSContentQuery(`michael-truell OR "Michael Truell"`)
+	q := indexschema.BuildFTSContentQuery(`michael-truell OR "Michael Truell"`)
 	if q != `content: ("michael-truell" OR "Michael Truell")` {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, `content: ("michael-truell" OR "Michael Truell")`)
 	}
@@ -28,7 +29,7 @@ func TestBuildFTSContentQuery_SanitizesHyphenatedTokens(t *testing.T) {
 
 func TestBuildFTSContentQuery_SanitizesDottedTokens(t *testing.T) {
 	t.Parallel()
-	q := BuildFTSContentQuery(`inputs.project OR "optional input"`)
+	q := indexschema.BuildFTSContentQuery(`inputs.project OR "optional input"`)
 	if q != `content: ("inputs.project" OR "optional input")` {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, `content: ("inputs.project" OR "optional input")`)
 	}
@@ -37,7 +38,7 @@ func TestBuildFTSContentQuery_SanitizesDottedTokens(t *testing.T) {
 func TestBuildFTSContentQuery_SanitizesSlashAndFunctionLikeTokens(t *testing.T) {
 	t.Parallel()
 
-	q := BuildFTSContentQuery(`reference/ OR content()`)
+	q := indexschema.BuildFTSContentQuery(`reference/ OR content()`)
 	want := `content: ("reference/" OR "content()")`
 	if q != want {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
@@ -46,31 +47,31 @@ func TestBuildFTSContentQuery_SanitizesSlashAndFunctionLikeTokens(t *testing.T) 
 
 func TestBuildFTSSearchQuery_ScopesTitleAndContent(t *testing.T) {
 	t.Parallel()
-	q := BuildFTSSearchQuery("hello world")
+	q := indexschema.BuildFTSSearchQuery("hello world")
 	want := `{title content}: (hello world)`
 	if q != want {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
 	}
 
-	q = BuildFTSSearchQuery(`michael-truell OR "Michael Truell"`)
+	q = indexschema.BuildFTSSearchQuery(`michael-truell OR "Michael Truell"`)
 	want = `{title content}: ("michael-truell" OR "Michael Truell")`
 	if q != want {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
 	}
 
-	q = BuildFTSSearchQuery(`inputs.project OR "optional input"`)
+	q = indexschema.BuildFTSSearchQuery(`inputs.project OR "optional input"`)
 	want = `{title content}: ("inputs.project" OR "optional input")`
 	if q != want {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
 	}
 
-	q = BuildFTSSearchQuery(`reference/ OR content()`)
+	q = indexschema.BuildFTSSearchQuery(`reference/ OR content()`)
 	want = `{title content}: ("reference/" OR "content()")`
 	if q != want {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
 	}
 
-	q = BuildFTSSearchQuery("")
+	q = indexschema.BuildFTSSearchQuery("")
 	want = `{title content}:""`
 	if q != want {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
