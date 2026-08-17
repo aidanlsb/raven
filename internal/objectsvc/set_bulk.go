@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -82,7 +83,7 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 			skipped = append(skipped, SetBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
-		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
 			skipped = append(skipped, SetBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -44,7 +45,7 @@ func resolveReferenceForMutation(rt *vaultruntime.Runtime, reference string) (*r
 		)
 	}
 
-	if err := ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, resolved.FilePath); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, resolved.FilePath); err != nil {
 		return nil, err
 	}
 
@@ -81,7 +82,7 @@ func resolveLiteralNonMarkdownFileForMutation(rt *vaultruntime.Runtime, input st
 	if info.IsDir() {
 		return "", "", false, nil
 	}
-	if err := ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
 		return "", "", false, err
 	}
 	return filePath, relPath, true, nil

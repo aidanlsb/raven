@@ -244,14 +244,12 @@ func (p *Parser) parseAndPredicate(qt QueryType) (Predicate, error) {
 
 // parseUnaryPredicate parses NOT and grouped predicates (highest precedence).
 func (p *Parser) parseUnaryPredicate(qt QueryType) (Predicate, error) {
-	// Check for negation
 	negated := false
 	if p.curr.Type == TokenBang {
 		negated = true
 		p.advance()
 	}
 
-	// Check for grouping parentheses
 	if p.curr.Type == TokenLParen {
 		p.advance()
 		pred, err := p.parseOrPredicate(qt)

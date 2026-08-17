@@ -74,10 +74,6 @@ func newLazyConfigCommandRuntime(vaultPath string) (*vaultruntime.Runtime, comma
 	})
 }
 
-func newVaultConfigCommandRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
-	return newLazyConfigCommandRuntime(vaultPath)
-}
-
 func newDatabaseCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{
 		OpenDB:     true,
@@ -153,18 +149,12 @@ func autoReindexWarning(rt *vaultruntime.Runtime, filePath string) (commandexec.
 	if err != nil {
 		return indexUpdateWarning(vaultPath, filePath, "failed to lock index projection", err), true
 	}
-	warning, failed := autoReindexWarningLocked(rt, filePath)
+	warning, err := autoReindexWarningAndErrorLocked(rt, filePath)
+	failed := err != nil
 	if err := projectionLock.Close(); err != nil && !failed {
 		return indexUpdateWarning(vaultPath, filePath, "failed to unlock index projection", err), true
 	}
 	return warning, failed
-}
-
-// autoReindexWarningLocked projects one Markdown file while the caller holds
-// the vault's projection lock.
-func autoReindexWarningLocked(rt *vaultruntime.Runtime, filePath string) (commandexec.Warning, bool) {
-	warning, err := autoReindexWarningAndErrorLocked(rt, filePath)
-	return warning, err != nil
 }
 
 func autoReindexWarningAndErrorLocked(rt *vaultruntime.Runtime, filePath string) (commandexec.Warning, error) {

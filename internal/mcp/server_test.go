@@ -676,7 +676,7 @@ func TestStartupModeMessage(t *testing.T) {
 	t.Parallel()
 	t.Run("uses explicit vaultPath field", func(t *testing.T) {
 		s := &Server{vaultPath: "/tmp/explicit"}
-		msg := s.startupModeMessage()
+		msg := s.startupVaultModeMessage()
 		want := "[raven-mcp] Server starting with pinned vault: /tmp/explicit"
 		if msg != want {
 			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
@@ -685,7 +685,7 @@ func TestStartupModeMessage(t *testing.T) {
 
 	t.Run("detects --vault-path value in base args", func(t *testing.T) {
 		s := &Server{baseArgs: []string{"--vault-path", "/tmp/base"}}
-		msg := s.startupModeMessage()
+		msg := s.startupVaultModeMessage()
 		want := "[raven-mcp] Server starting with pinned vault: /tmp/base"
 		if msg != want {
 			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
@@ -694,7 +694,7 @@ func TestStartupModeMessage(t *testing.T) {
 
 	t.Run("detects --vault-path=value in base args", func(t *testing.T) {
 		s := &Server{baseArgs: []string{"--vault-path=/tmp/inline"}}
-		msg := s.startupModeMessage()
+		msg := s.startupVaultModeMessage()
 		want := "[raven-mcp] Server starting with pinned vault: /tmp/inline"
 		if msg != want {
 			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
@@ -703,7 +703,7 @@ func TestStartupModeMessage(t *testing.T) {
 
 	t.Run("detects --vault name in base args", func(t *testing.T) {
 		s := &Server{baseArgs: []string{"--vault", "work"}}
-		msg := s.startupModeMessage()
+		msg := s.startupVaultModeMessage()
 		want := "[raven-mcp] Server starting with pinned named vault: work"
 		if msg != want {
 			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
@@ -712,7 +712,7 @@ func TestStartupModeMessage(t *testing.T) {
 
 	t.Run("describes explicit-vault requirement when unpinned", func(t *testing.T) {
 		s := &Server{}
-		msg := s.startupModeMessage()
+		msg := s.startupVaultModeMessage()
 		want := "[raven-mcp] Server starting without a pinned vault; vault-scoped calls require vault or vault_path"
 		if msg != want {
 			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)

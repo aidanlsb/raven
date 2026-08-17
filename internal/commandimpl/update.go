@@ -7,7 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/traitsvc"
 )
 
@@ -74,7 +74,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 	}
 	filteredTraits := make([]model.Trait, 0, len(traits))
 	for _, trait := range traits {
-		if err := objectsvc.ValidateContentMutationFilePath(vaultPath, vaultCfg, trait.FilePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(vaultPath, vaultCfg, trait.FilePath); err != nil {
 			if !stdinMode {
 				return mapContentMutationError(err)
 			}

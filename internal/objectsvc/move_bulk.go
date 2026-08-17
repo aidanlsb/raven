@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -85,14 +86,14 @@ func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
-		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
 			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
 
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(req.DestinationDir, filename)
-		if err := ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
+		if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
 			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
@@ -157,7 +158,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 			results = append(results, result)
 			continue
 		}
-		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
 			result.Status = "error"
 			result.Reason = err.Error()
 			errorCount++
@@ -167,7 +168,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(req.DestinationDir, filename)
-		if err := ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
+		if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
 			result.Status = "error"
 			result.Reason = err.Error()
 			errorCount++

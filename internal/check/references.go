@@ -48,12 +48,10 @@ func (v *Validator) inferTypeFromPath(targetPath string) (typeName string, confi
 	}
 
 	for name, typeDef := range v.schema.Types {
-		if typeDef.DefaultPath != "" {
-			// Check if path starts with default_path
-			if len(targetPath) > len(typeDef.DefaultPath) &&
-				targetPath[:len(typeDef.DefaultPath)] == typeDef.DefaultPath {
-				return name, ConfidenceInferred
-			}
+		if typeDef.DefaultPath != "" &&
+			len(targetPath) > len(typeDef.DefaultPath) &&
+			targetPath[:len(typeDef.DefaultPath)] == typeDef.DefaultPath {
+			return name, ConfidenceInferred
 		}
 	}
 	return "", ConfidenceUnknown
@@ -111,21 +109,19 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 	}
 
 	result := v.resolver.Resolve(ref.TargetRaw)
-
 	if result.Ambiguous {
-		message := formatAmbiguousRefMessage(ref.TargetRaw, result, v.displayID)
-		fixHint := formatAmbiguousRefFixHint(result, v.displayID)
 		issues = append(issues, Issue{
 			Level:    LevelError,
 			Type:     IssueAmbiguousReference,
 			FilePath: filePath,
 			Line:     line,
-			Message:  message,
+			Message:  formatAmbiguousRefMessage(ref.TargetRaw, result, v.displayID),
 			Value:    ref.TargetRaw,
-			FixHint:  fixHint,
+			FixHint:  formatAmbiguousRefFixHint(result, v.displayID),
 		})
-	} else if result.TargetID == "" {
-		// Check if this is a stale fragment reference (file exists but section doesn't)
+		return issues
+	}
+	if result.TargetID == "" {
 		if baseID, fragment, isSection := paths.ParseSectionID(ref.TargetRaw); isSection && fragment != "" {
 			baseResult := v.resolver.Resolve(baseID)
 			if baseResult.TargetID != "" {
@@ -142,21 +138,16 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 			}
 		}
 
-		// Determine the fix command based on type inference
 		fixCmd := ""
 		fixHint := ""
 		if targetType != "" {
 			fixCmd = fmt.Sprintf("rvn new %s \"%s\"", targetType, ref.TargetRaw)
 			fixHint = fmt.Sprintf("Create the missing %s", targetType)
+		} else if inferredType, conf := v.inferTypeFromPath(ref.TargetRaw); conf == ConfidenceInferred {
+			fixCmd = fmt.Sprintf("rvn new %s \"%s\"", inferredType, ref.TargetRaw)
+			fixHint = fmt.Sprintf("Create the missing %s (inferred from path)", inferredType)
 		} else {
-			// Try to infer from path
-			inferredType, conf := v.inferTypeFromPath(ref.TargetRaw)
-			if conf == ConfidenceInferred {
-				fixCmd = fmt.Sprintf("rvn new %s \"%s\"", inferredType, ref.TargetRaw)
-				fixHint = fmt.Sprintf("Create the missing %s (inferred from path)", inferredType)
-			} else {
-				fixHint = "Create the missing page with 'rvn new <type> <title>'"
-			}
+			fixHint = "Create the missing page with 'rvn new <type> <title>'"
 		}
 
 		issues = append(issues, Issue{
@@ -169,44 +160,37 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 			FixCommand: fixCmd,
 			FixHint:    fixHint,
 		})
-
-		// Track this missing reference with type inference
 		v.trackMissingRef(ref.TargetRaw, filePath, sourceObjectID, line, targetType, fieldName)
-	} else {
-		// Reference resolved successfully - perform additional checks
+		return issues
+	}
 
-		// Check if short ref could be a full path (for better clarity)
-		if !strings.Contains(ref.TargetRaw, "/") && strings.Contains(result.TargetID, "/") {
-			// Short ref that resolved to a full path - suggest using full path
-			// Use displayID to strip directory prefix (e.g., "objects/") for cleaner suggestions
-			suggestedID := v.displayID(result.TargetID)
-			v.shortRefs[ref.TargetRaw] = suggestedID
+	if !strings.Contains(ref.TargetRaw, "/") && strings.Contains(result.TargetID, "/") {
+		suggestedID := v.displayID(result.TargetID)
+		v.shortRefs[ref.TargetRaw] = suggestedID
+		issues = append(issues, Issue{
+			Level:          LevelWarning,
+			Type:           IssueShortRefCouldBeFullPath,
+			FilePath:       filePath,
+			Line:           line,
+			Message:        fmt.Sprintf("Short reference [[%s]] could be written as [[%s]] for clarity", ref.TargetRaw, suggestedID),
+			Value:          ref.TargetRaw,
+			FixHint:        fmt.Sprintf("Consider using full path: [[%s]]", suggestedID),
+			FixReplacement: suggestedID,
+		})
+	}
+
+	if targetType != "" && len(v.objectTypes) > 0 {
+		actualType, exists := v.objectTypes[result.TargetID]
+		if exists && actualType != targetType {
 			issues = append(issues, Issue{
-				Level:          LevelWarning,
-				Type:           IssueShortRefCouldBeFullPath,
-				FilePath:       filePath,
-				Line:           line,
-				Message:        fmt.Sprintf("Short reference [[%s]] could be written as [[%s]] for clarity", ref.TargetRaw, suggestedID),
-				Value:          ref.TargetRaw,
-				FixHint:        fmt.Sprintf("Consider using full path: [[%s]]", suggestedID),
-				FixReplacement: suggestedID,
+				Level:    LevelError,
+				Type:     IssueWrongTargetType,
+				FilePath: filePath,
+				Line:     line,
+				Message:  fmt.Sprintf("Field '%s' expects type '%s', but [[%s]] is type '%s'", fieldName, targetType, ref.TargetRaw, actualType),
+				Value:    ref.TargetRaw,
+				FixHint:  fmt.Sprintf("Reference a '%s' object instead, or change the field's target type", targetType),
 			})
-		}
-
-		// Validate target type if specified (e.g., for ref fields with target constraint)
-		if targetType != "" && len(v.objectTypes) > 0 {
-			actualType, exists := v.objectTypes[result.TargetID]
-			if exists && actualType != targetType {
-				issues = append(issues, Issue{
-					Level:    LevelError,
-					Type:     IssueWrongTargetType,
-					FilePath: filePath,
-					Line:     line,
-					Message:  fmt.Sprintf("Field '%s' expects type '%s', but [[%s]] is type '%s'", fieldName, targetType, ref.TargetRaw, actualType),
-					Value:    ref.TargetRaw,
-					FixHint:  fmt.Sprintf("Reference a '%s' object instead, or change the field's target type", targetType),
-				})
-			}
 		}
 	}
 
@@ -271,16 +255,11 @@ func hasSource(matchSources map[string]string, source string) bool {
 
 // trackMissingRef records a missing reference with type inference.
 func (v *Validator) trackMissingRef(targetPath, sourceFile, sourceObjectID string, line int, targetType, fieldName string) {
-	// Normalize path (remove .md extension if present, treat as file path)
-	normalizedPath := targetPath
-
-	// If we already have this ref with higher confidence, don't downgrade
-	if existing, ok := v.missingRefs[normalizedPath]; ok {
+	if existing, ok := v.missingRefs[targetPath]; ok {
 		if existing.Confidence >= ConfidenceCertain {
-			return // Already have certain confidence
+			return
 		}
 		if targetType != "" {
-			// Upgrade to certain confidence
 			existing.InferredType = targetType
 			existing.Confidence = ConfidenceCertain
 			existing.FieldSource = fieldName
@@ -290,24 +269,20 @@ func (v *Validator) trackMissingRef(targetPath, sourceFile, sourceObjectID strin
 	}
 
 	missing := &MissingRef{
-		TargetPath:     normalizedPath,
+		TargetPath:     targetPath,
 		SourceFile:     sourceFile,
 		SourceObjectID: sourceObjectID,
 		Line:           line,
 	}
-
-	// Determine confidence and type
 	if targetType != "" {
-		// From a typed field - certain
 		missing.InferredType = targetType
 		missing.Confidence = ConfidenceCertain
 		missing.FieldSource = fieldName
 	} else {
-		// Try to infer from path
-		inferredType, confidence := v.inferTypeFromPath(normalizedPath)
+		inferredType, confidence := v.inferTypeFromPath(targetPath)
 		missing.InferredType = inferredType
 		missing.Confidence = confidence
 	}
 
-	v.missingRefs[normalizedPath] = missing
+	v.missingRefs[targetPath] = missing
 }

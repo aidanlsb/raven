@@ -377,14 +377,12 @@ func (p *Parser) parseElementAndPredicate() (Predicate, error) {
 // parseElementUnaryPredicate parses element predicates used within array quantifiers.
 // Supports: _ == value, _ != value, includes(_, "str"), etc.
 func (p *Parser) parseElementUnaryPredicate() (Predicate, error) {
-	// Check for negation
 	negated := false
 	if p.curr.Type == TokenBang {
 		negated = true
 		p.advance()
 	}
 
-	// Check for parenthesized group
 	if p.curr.Type == TokenLParen {
 		p.advance()
 		pred, err := p.parseElementOrPredicate()
@@ -403,12 +401,10 @@ func (p *Parser) parseElementUnaryPredicate() (Predicate, error) {
 		return pred, nil
 	}
 
-	// Check for _ == value or _ != value
 	if p.curr.Type == TokenUnderscore {
 		return p.parseElementUnderscoreEquality(negated)
 	}
 
-	// Check for function-style predicates: includes(_, "str"), etc.
 	if p.curr.Type == TokenIdent {
 		if pred, ok, err := p.tryParseElementFuncPredicate(negated); ok || err != nil {
 			return pred, err
@@ -440,7 +436,6 @@ func (p *Parser) parseElementUnderscoreEquality(negated bool) (Predicate, error)
 	}
 	p.advance()
 
-	// Get the value
 	var value string
 	isRefValue := false
 	switch p.curr.Type {

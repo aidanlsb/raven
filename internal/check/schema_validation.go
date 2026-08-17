@@ -97,11 +97,8 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 					FixHint: fmt.Sprintf("Use one of: %s", schema.ValidFieldTypes()),
 				})
 			}
-			// Check ref and ref[] fields with target constraints
 			if (fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray) && fieldDef.Target != "" {
-				// Check if target type exists
 				if _, exists := v.schema.Types[fieldDef.Target]; !exists {
-					// Also check built-in types
 					if !schema.IsBuiltinType(fieldDef.Target) {
 						issues = append(issues, SchemaIssue{
 							Level:      LevelError,
@@ -117,7 +114,7 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 		}
 	}
 
-	// Check for self-referential required fields (impossible to create first instance)
+	// Self-referential required fields make the first instance impossible to create.
 	for typeName, typeDef := range v.schema.Types {
 		if typeDef == nil || typeDef.Fields == nil {
 			continue
@@ -126,7 +123,6 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 			if fieldDef == nil {
 				continue
 			}
-			// Check if a required ref field points to the same type
 			if fieldDef.Required && fieldDef.Default == nil {
 				if (fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray) && fieldDef.Target == typeName {
 					issues = append(issues, SchemaIssue{

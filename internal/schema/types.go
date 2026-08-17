@@ -168,7 +168,6 @@ const (
 	FieldTypeRefArray      FieldType = "ref[]"
 )
 
-// Helper function to create a float64 pointer.
 func floatPtr(f float64) *float64 {
 	return &f
 }

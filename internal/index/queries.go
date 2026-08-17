@@ -202,10 +202,7 @@ func (d *Database) Outlinks(sourceID string) ([]model.Reference, error) {
 // including refs that use directory-prefixed paths (e.g., [[objects/people/freya]]).
 // This is important for move operations to find all variants of a reference.
 func (d *Database) BacklinksWithRoots(targetID, objectRoot, pageRoot string) ([]model.Reference, error) {
-	// Build list of target patterns to search for
 	patterns := []string{targetID}
-
-	// Add directory-prefixed variants
 	if objectRoot != "" {
 		patterns = append(patterns, objectRoot+targetID)
 	}

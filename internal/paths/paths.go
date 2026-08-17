@@ -101,14 +101,6 @@ func IsValidVaultRelPath(p string) bool {
 	return !strings.HasPrefix(p, "../")
 }
 
-// normalizeRelPath normalizes a vault-relative path-like value:
-// - converts OS separators to '/'
-// - trims leading "./" and leading "/"
-// - collapses repeated '/'
-func normalizeRelPath(p string) string {
-	return NormalizeVaultRelPath(p)
-}
-
 // FilePathToObjectID converts a vault-relative file path to an object ID.
 //
 // It:
@@ -121,7 +113,7 @@ func normalizeRelPath(p string) string {
 // The daily directory is layout-only and is not part of the link/object identity,
 // so a file at "<dailyRoot>2026-03-15.md" indexes and links as "2026-03-15".
 func FilePathToObjectID(filePath, objectsRoot, pagesRoot, dailyRoot string) string {
-	id := normalizeRelPath(filePath)
+	id := NormalizeVaultRelPath(filePath)
 	id = TrimMDExtension(id)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
@@ -160,7 +152,7 @@ func FilePathToObjectID(filePath, objectsRoot, pagesRoot, dailyRoot string) stri
 // the configured daily directory even though their object ID is a bare date, so
 // a "date" object "2026-03-15" maps to "<dailyRoot>2026-03-15.md".
 func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot, dailyRoot string) string {
-	id := normalizeRelPath(objectID)
+	id := NormalizeVaultRelPath(objectID)
 	id = TrimMDExtension(id)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
@@ -216,7 +208,7 @@ func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot, dailyRoot st
 // A bare ISO date reference (e.g. "2026-03-15") is treated as a daily note and
 // resolves to "<dailyRoot>2026-03-15.md".
 func ReferenceToFilePath(ref, objectsRoot, pagesRoot, dailyRoot string) string {
-	ref = normalizeRelPath(ref)
+	ref = NormalizeVaultRelPath(ref)
 	ref = TrimMDExtension(ref)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
@@ -292,7 +284,7 @@ func ShortNameFromID(id string) string {
 // ".md" suffix), plus rooted interpretations if roots are configured. A bare ISO
 // date reference also yields a daily-directory candidate ("<dailyRoot>ref.md").
 func CandidateFilePaths(ref, objectsRoot, pagesRoot, dailyRoot string) []string {
-	ref = normalizeRelPath(ref)
+	ref = NormalizeVaultRelPath(ref)
 	ref = TrimMDExtension(ref)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
@@ -508,7 +500,7 @@ var hardProtectedFiles = map[string]struct{}{
 // extraPrefixes are additional user-configured protected prefixes (vault-relative).
 // They are treated as directory prefixes (normalized with NormalizeDirRoot).
 func IsProtectedRelPath(relPath string, extraPrefixes []string) bool {
-	p := normalizeRelPath(relPath)
+	p := NormalizeVaultRelPath(relPath)
 
 	if _, ok := hardProtectedFiles[p]; ok {
 		return true

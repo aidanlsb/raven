@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -162,7 +163,7 @@ func runAddSingle(rt *vaultruntime.Runtime, text, toRef, journalOperation string
 		}
 		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 	}
-	if err := objectsvc.ValidateContentMutationFilePath(vaultPath, vaultCfg, destPath); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(vaultPath, vaultCfg, destPath); err != nil {
 		return mapContentMutationError(err)
 	}
 

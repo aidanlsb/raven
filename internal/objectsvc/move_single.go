@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -104,7 +105,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		}
 		sourceRelPath = paths.NormalizeVaultRelPath(sourceRelPath)
 	}
-	if err := ValidateContentMutationRelPath(req.VaultConfig, sourceRelPath); err != nil {
+	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, sourceRelPath); err != nil {
 		return nil, err
 	}
 	sourceID := req.VaultConfig.FilePathToObjectID(sourceRelPath)
@@ -150,7 +151,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		return nil, newError(ErrorValidationFailed, "destination path is outside vault", "Files can only be moved within the vault", nil, err)
 	}
 	relDest, _ := filepath.Rel(req.VaultPath, destFile)
-	if err := ValidateContentMutationRelPath(req.VaultConfig, relDest); err != nil {
+	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, relDest); err != nil {
 		return nil, err
 	}
 	if _, err := os.Stat(destFile); err == nil {

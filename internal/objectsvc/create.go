@@ -7,6 +7,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
@@ -90,7 +91,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	if !strings.HasSuffix(plannedRelPath, ".md") {
 		plannedRelPath += ".md"
 	}
-	if err := ValidateContentMutationRelPath(req.VaultConfig, plannedRelPath); err != nil {
+	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, plannedRelPath); err != nil {
 		return nil, err
 	}
 	if pages.Exists(req.VaultPath, resolvedTargetPath) {

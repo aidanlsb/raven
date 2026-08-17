@@ -153,13 +153,3 @@ func ParseTrait(line string, lineNumber int) *TraitAnnotation {
 	}
 	return &traits[0]
 }
-
-// IsRefOnTraitLine returns true if a reference is on the same line as a trait.
-// This implements the CONTENT SCOPE RULE: refs on the same line as a trait
-// are considered associated with that trait's content.
-//
-// This function is the single source of truth for trait-to-reference association.
-// The query executor uses this same logic (matching by file_path and line_number).
-func IsRefOnTraitLine(traitLine, refLine int) bool {
-	return traitLine == refLine
-}

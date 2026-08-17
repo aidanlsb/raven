@@ -7,6 +7,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -34,7 +35,7 @@ func UnsetObjectFile(req UnsetObjectFileRequest) (*UnsetObjectFileResult, error)
 	if req.Schema == nil {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
-	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.FilePath); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.FilePath); err != nil {
 		return nil, err
 	}
 

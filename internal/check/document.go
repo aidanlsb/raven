@@ -12,7 +12,6 @@ import (
 func (v *Validator) ValidateDocument(doc *parser.ParsedDocument) []Issue {
 	var issues []Issue
 
-	// Check for duplicate object IDs
 	seenIDs := make(map[string]struct{})
 	for _, obj := range doc.Objects {
 		if _, exists := seenIDs[obj.ID]; exists {
@@ -29,17 +28,14 @@ func (v *Validator) ValidateDocument(doc *parser.ParsedDocument) []Issue {
 		seenIDs[obj.ID] = struct{}{}
 	}
 
-	// Validate each object
 	for _, obj := range doc.Objects {
 		issues = append(issues, v.validateObject(doc.FilePath, obj)...)
 	}
 
-	// Validate traits
 	for _, trait := range doc.Traits {
 		issues = append(issues, v.validateTrait(doc.FilePath, trait)...)
 	}
 
-	// Validate references
 	for _, ref := range doc.Refs {
 		issues = append(issues, v.validateRef(doc.FilePath, ref)...)
 	}
@@ -50,10 +46,8 @@ func (v *Validator) ValidateDocument(doc *parser.ParsedDocument) []Issue {
 func (v *Validator) validateObject(filePath string, obj *model.Object) []Issue {
 	var issues []Issue
 
-	// Track type usage
 	v.usedTypes[obj.Type] = struct{}{}
 
-	// Check if type is defined
 	typeDef, typeExists := v.schema.Types[obj.Type]
 	if !typeExists && !schema.IsBuiltinType(obj.Type) {
 		issues = append(issues, Issue{
@@ -122,10 +116,8 @@ func (v *Validator) validateObject(filePath string, obj *model.Object) []Issue {
 func (v *Validator) validateTrait(filePath string, trait *model.Trait) []Issue {
 	var issues []Issue
 
-	// Track trait usage
 	v.usedTraits[trait.TraitType] = struct{}{}
 
-	// Check if trait is defined
 	traitDef, exists := v.schema.Traits[trait.TraitType]
 	if !exists {
 		issues = append(issues, Issue{
@@ -138,7 +130,6 @@ func (v *Validator) validateTrait(filePath string, trait *model.Trait) []Issue {
 			FixCommand: fmt.Sprintf("rvn schema add trait %s", trait.TraitType),
 			FixHint:    fmt.Sprintf("Add trait '%s' to schema", trait.TraitType),
 		})
-		// Track this undefined trait
 		v.trackUndefinedTrait(trait.TraitType, filePath, trait.Line, trait.HasValue())
 		return issues
 	}
@@ -155,7 +146,6 @@ func (v *Validator) validateTrait(filePath string, trait *model.Trait) []Issue {
 		return issues
 	}
 
-	// Validate value based on trait type
 	if !traitDef.IsBoolean() && !trait.HasValue() && traitDef.Default == nil {
 		issues = append(issues, Issue{
 			Level:    LevelWarning,

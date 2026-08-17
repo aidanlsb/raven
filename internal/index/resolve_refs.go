@@ -43,10 +43,6 @@ func (d *Database) ResolveReferencesForFileWithSchema(filePath, dailyDirectory s
 	d.resolverMu.Lock()
 	defer d.resolverMu.Unlock()
 
-	return d.resolveReferencesForFileWithSchemaLocked(filePath, dailyDirectory, sch)
-}
-
-func (d *Database) resolveReferencesForFileWithSchemaLocked(filePath, dailyDirectory string, sch *schema.Schema) (*ReferenceResolutionResult, error) {
 	return d.resolveReferencesWithSchemaLocked(&filePath, dailyDirectory, sch)
 }
 

@@ -98,14 +98,10 @@ func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (stri
 	return cond, args, nil
 }
 
-// buildValueCondition builds a SQL condition for a ValuePredicate.
-// This is a helper for use in subqueries where we don't have the full executor context.
 func (e *Executor) buildValueCondition(p *ValuePredicate, column string) (string, []interface{}) {
 	return e.buildCompareCondition(p.Value, p.CompareOp, p.Negated(), column)
 }
 
-// buildCompareCondition builds a SQL condition for comparing a column to a value.
-// This is the core comparison logic shared by ValuePredicate and FieldPredicate(.value).
 func (e *Executor) buildCompareCondition(value string, compareOp CompareOp, negated bool, column string) (string, []interface{}) {
 	// Date filters (today/tomorrow/yesterday, YYYY-MM-DD, etc.)
 	if cond, args, ok := buildDateFilterConditionForCompare(strings.TrimSpace(value), compareOp, column, e.queryNow()); ok {

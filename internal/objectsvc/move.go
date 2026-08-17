@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/linktarget"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -100,10 +101,10 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	// patterns, and the template directory. MoveByReference already validates
 	// these paths, but callers like Reclassify derive the destination from a
 	// type's default_path and would otherwise bypass the guard.
-	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.SourceFile); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.SourceFile); err != nil {
 		return nil, err
 	}
-	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.DestinationFile); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.DestinationFile); err != nil {
 		return nil, err
 	}
 
@@ -307,7 +308,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, linkPla
 
 func planRewriteForLinkSource(vaultPath string, vaultCfg *config.VaultConfig, linkPlan linkUpdatePlan) (*fileRewrite, error) {
 	filePath := filepath.Join(vaultPath, filepath.FromSlash(linkPlan.filePath))
-	if err := ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
 		return nil, err
 	}
 
@@ -435,7 +436,7 @@ func planRewriteForSource(vaultPath string, vaultCfg *config.VaultConfig, refPla
 	if err != nil {
 		return nil, err
 	}
-	if err := ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
 		return nil, err
 	}
 

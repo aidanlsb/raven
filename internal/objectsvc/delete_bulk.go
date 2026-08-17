@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -82,7 +83,7 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: "object or file not found"})
 			continue
 		}
-		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
 			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
@@ -156,7 +157,7 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 			results = append(results, result)
 			continue
 		}
-		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
 			result.Status = "error"
 			result.Reason = err.Error()
 			errorCount++

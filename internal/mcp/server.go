@@ -203,7 +203,7 @@ func (s *Server) Run() error {
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
 
 	// Log startup to stderr (not stdout which is for protocol)
-	fmt.Fprintln(os.Stderr, s.startupModeMessage())
+	fmt.Fprintln(os.Stderr, s.startupVaultModeMessage())
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -237,10 +237,6 @@ func (s *Server) Run() error {
 
 	fmt.Fprintln(os.Stderr, "[raven-mcp] Server shutting down")
 	return nil
-}
-
-func (s *Server) startupModeMessage() string {
-	return s.startupVaultModeMessage()
 }
 
 func (s *Server) startupVaultModeMessage() string {
@@ -332,7 +328,6 @@ func (s *Server) handleInitialize(req *Request) {
 }
 
 func (s *Server) handleToolsList(req *Request) {
-	// Generate tools from the registry - single source of truth!
 	tools := GenerateToolSchemas()
 	s.sendResult(req.ID, map[string]interface{}{"tools": tools})
 }
@@ -901,50 +896,10 @@ func (s *Server) send(v interface{}) {
 func fallbackRPCResponseJSON(v interface{}, marshalErr error) string {
 	idJSON := "null"
 	if resp, ok := v.(Response); ok {
-		if encoded, ok := encodeFallbackResponseID(resp.ID); ok {
-			idJSON = encoded
+		if encoded, err := json.Marshal(resp.ID); err == nil {
+			idJSON = string(encoded)
 		}
 	}
 
 	return `{"jsonrpc":"2.0","id":` + idJSON + `,"error":{"code":-32603,"message":"failed to marshal response","data":` + strconv.Quote(marshalErr.Error()) + `}}`
-}
-
-func encodeFallbackResponseID(id interface{}) (string, bool) {
-	switch v := id.(type) {
-	case nil:
-		return "null", true
-	case string:
-		return strconv.Quote(v), true
-	case bool:
-		if v {
-			return "true", true
-		}
-		return "false", true
-	case int:
-		return strconv.Itoa(v), true
-	case int8:
-		return strconv.FormatInt(int64(v), 10), true
-	case int16:
-		return strconv.FormatInt(int64(v), 10), true
-	case int32:
-		return strconv.FormatInt(int64(v), 10), true
-	case int64:
-		return strconv.FormatInt(v, 10), true
-	case uint:
-		return strconv.FormatUint(uint64(v), 10), true
-	case uint8:
-		return strconv.FormatUint(uint64(v), 10), true
-	case uint16:
-		return strconv.FormatUint(uint64(v), 10), true
-	case uint32:
-		return strconv.FormatUint(uint64(v), 10), true
-	case uint64:
-		return strconv.FormatUint(v, 10), true
-	case float32:
-		return strconv.FormatFloat(float64(v), 'f', -1, 32), true
-	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64), true
-	default:
-		return "", false
-	}
 }

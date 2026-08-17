@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -72,7 +73,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 			skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
-		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
 			skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
@@ -157,7 +158,7 @@ func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
 			results = append(results, result)
 			continue
 		}
-		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
 			result.Status = "error"
 			result.Reason = err.Error()
 			errorCount++

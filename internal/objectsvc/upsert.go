@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -99,7 +100,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 	if !strings.HasSuffix(slugified, ".md") {
 		slugified += ".md"
 	}
-	if err := ValidateContentMutationRelPath(req.VaultConfig, slugified); err != nil {
+	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, slugified); err != nil {
 		return nil, err
 	}
 

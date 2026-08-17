@@ -221,9 +221,8 @@ func (d *Database) RemoveDocument(objectID string) error {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrObjectNotFound
-		} else {
-			return err
 		}
+		return err
 	}
 
 	oldResolverState, err := d.cachedResolverFileStateLocked(tx, filePath)

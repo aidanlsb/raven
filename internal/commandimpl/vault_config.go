@@ -9,7 +9,7 @@ import (
 )
 
 func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -48,7 +48,7 @@ func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandex
 }
 
 func HandleVaultConfigAutoReindexSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -70,7 +70,7 @@ func HandleVaultConfigAutoReindexSet(_ context.Context, req commandexec.Request)
 }
 
 func HandleVaultConfigAutoReindexUnset(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -90,7 +90,7 @@ func HandleVaultConfigAutoReindexUnset(_ context.Context, req commandexec.Reques
 }
 
 func HandleVaultConfigProtectedPrefixesList(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -109,7 +109,7 @@ func HandleVaultConfigProtectedPrefixesList(_ context.Context, req commandexec.R
 }
 
 func HandleVaultConfigProtectedPrefixesAdd(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -131,7 +131,7 @@ func HandleVaultConfigProtectedPrefixesAdd(_ context.Context, req commandexec.Re
 }
 
 func HandleVaultConfigProtectedPrefixesRemove(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -152,7 +152,7 @@ func HandleVaultConfigProtectedPrefixesRemove(_ context.Context, req commandexec
 }
 
 func HandleVaultConfigExcludeList(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -171,7 +171,7 @@ func HandleVaultConfigExcludeList(_ context.Context, req commandexec.Request) co
 }
 
 func HandleVaultConfigExcludeAdd(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -193,7 +193,7 @@ func HandleVaultConfigExcludeAdd(_ context.Context, req commandexec.Request) com
 }
 
 func HandleVaultConfigExcludeRemove(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -214,7 +214,7 @@ func HandleVaultConfigExcludeRemove(_ context.Context, req commandexec.Request) 
 }
 
 func HandleVaultConfigDirectoriesGet(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -229,7 +229,7 @@ func HandleVaultConfigDirectoriesGet(_ context.Context, req commandexec.Request)
 }
 
 func HandleVaultConfigDirectoriesSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -251,7 +251,7 @@ func HandleVaultConfigDirectoriesSet(_ context.Context, req commandexec.Request)
 }
 
 func HandleVaultConfigDirectoriesUnset(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -272,7 +272,7 @@ func HandleVaultConfigDirectoriesUnset(_ context.Context, req commandexec.Reques
 }
 
 func HandleVaultConfigCaptureGet(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -287,7 +287,7 @@ func HandleVaultConfigCaptureGet(_ context.Context, req commandexec.Request) com
 }
 
 func HandleVaultConfigCaptureSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -307,7 +307,7 @@ func HandleVaultConfigCaptureSet(_ context.Context, req commandexec.Request) com
 }
 
 func HandleVaultConfigCaptureUnset(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -326,7 +326,7 @@ func HandleVaultConfigCaptureUnset(_ context.Context, req commandexec.Request) c
 }
 
 func HandleVaultConfigDeletionGet(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -341,7 +341,7 @@ func HandleVaultConfigDeletionGet(_ context.Context, req commandexec.Request) co
 }
 
 func HandleVaultConfigDeletionSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
@@ -361,7 +361,7 @@ func HandleVaultConfigDeletionSet(_ context.Context, req commandexec.Request) co
 }
 
 func HandleVaultConfigDeletionUnset(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newVaultConfigCommandRuntime(req.VaultPath)
+	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
 	if failure.Error != nil {
 		return failure
 	}
