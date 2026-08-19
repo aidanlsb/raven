@@ -14,9 +14,7 @@ rvn vault list --json
 
 Read the result:
 - Empty `vaults` (or `meta.count` of `0`): there is no vault yet. Follow **New vault setup**.
-- One or more entries: at least one vault exists. Target it, then run the **Discover intent** conversation against what they already have (see **Existing vault tour**). Use `active_vault` and `default_vault` to see whether one is already selected.
-
-Only run `rvn vault current --json` once a vault exists — it is for confirming which vault is resolved, not for detecting the empty state.
+- One or more entries: at least one vault exists. Target it, then run the **Discover intent** conversation against what they already have (see **Existing vault tour**). Use `active_vault`, `default_vault`, and `current_vault` from the same result to inspect routing.
 
 ## New vault setup
 
@@ -267,8 +265,8 @@ Use `raven-query` for deeper RQL examples once the user is comfortable with obje
 When a vault already exists, stay intent-first: understand what's there, then ask what isn't working, then propose small additions.
 
 ```bash
-rvn vault current --json
-rvn vault path --json
+rvn vault list --json
+rvn vault list --path-only --json
 rvn vault stats --json
 rvn schema --json
 rvn query 'type:project' --limit 5 --json

@@ -32,10 +32,6 @@ func vaultRows(cfg *config.Config, state *config.State) ([]vaultRow, string, str
 	return rows, defaultName, activeName, activeMissing
 }
 
-func resolveCurrentVault(cfg *config.Config, state *config.State) (*configsvc.CurrentVaultInfo, error) {
-	return configsvc.ResolveCurrentVault(cfg, state)
-}
-
 var vaultCmd = &cobra.Command{
 	Use:   "vault",
 	Short: "Manage configured vaults and active selection",
@@ -50,11 +46,12 @@ is switched or cleared.`,
 }
 
 var vaultListCmd = newCanonicalLeafCommand("vault_list", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
 	RenderHuman: renderVaultList,
 })
 
 var vaultCurrentCmd = newCanonicalLeafCommand("vault_current", canonicalLeafOptions{
-	RenderHuman: renderVaultCurrent,
+	RenderHuman: renderVaultList,
 })
 
 var vaultUseCmd = newCanonicalLeafCommand("vault_use", canonicalLeafOptions{
@@ -99,7 +96,13 @@ func init() {
 
 func renderVaultList(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
+	if path, ok := data["path"]; ok {
+		fmt.Println(stringValue(path))
+		return nil
+	}
+
 	rows := vaultRowsFromAny(data["vaults"])
+	current := currentVaultFromAny(data["current_vault"])
 	activeName := stringValue(data["active_vault"])
 	activeMissing := boolValue(data["active_missing"])
 	configFile := stringValue(data["config_path"])
@@ -131,6 +134,17 @@ func renderVaultList(_ *cobra.Command, result commandexec.Result) error {
 	}
 
 	fmt.Println()
+	if current != nil {
+		fmt.Printf(
+			"%s %s -> %s (%s)\n",
+			ui.Hint("current:"),
+			ui.Bold.Render(current.Name),
+			ui.FilePath(current.Path),
+			current.Source,
+		)
+	} else {
+		fmt.Printf("%s %s\n", ui.Hint("current:"), ui.Hint("none"))
+	}
 	fmt.Println(ui.Hint("> = active vault (state)"))
 	fmt.Println(ui.Hint("* = default vault (config)"))
 	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(configFile))
@@ -139,14 +153,6 @@ func renderVaultList(_ *cobra.Command, result commandexec.Result) error {
 		fmt.Println(ui.Warningf("active vault '%s' in state is not configured", activeName))
 	}
 
-	return nil
-}
-
-func renderVaultCurrent(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Printf("%s %s\n", ui.Hint("current:"), ui.Bold.Render(stringValue(data["name"])))
-	fmt.Printf("%s %s\n", ui.Hint("path:"), ui.FilePath(stringValue(data["path"])))
-	fmt.Printf("%s %s\n", ui.Hint("source:"), stringValue(data["source"]))
 	return nil
 }
 
@@ -248,6 +254,24 @@ func vaultRowsFromAny(raw interface{}) []vaultRow {
 			})
 		}
 		return rows
+	default:
+		return nil
+	}
+}
+
+func currentVaultFromAny(raw interface{}) *configsvc.CurrentVaultInfo {
+	switch value := raw.(type) {
+	case *configsvc.CurrentVaultInfo:
+		return value
+	case configsvc.CurrentVaultInfo:
+		current := value
+		return &current
+	case map[string]interface{}:
+		return &configsvc.CurrentVaultInfo{
+			Name:   stringValue(value["name"]),
+			Path:   stringValue(value["path"]),
+			Source: stringValue(value["source"]),
+		}
 	default:
 		return nil
 	}

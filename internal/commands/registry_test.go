@@ -160,6 +160,13 @@ func TestRequiresVaultMetadata(t *testing.T) {
 			t.Fatalf("expected %q to require a resolved vault", commandID)
 		}
 	}
+
+	if RequiresVaultForInvocation("vault_list", nil) {
+		t.Fatal("vault_list should remain available without a resolved vault")
+	}
+	if !RequiresVaultForInvocation("vault_list", map[string]interface{}{"path-only": true}) {
+		t.Fatal("vault_list --path-only should require a resolved vault")
+	}
 }
 
 func TestGlobalConfigCommandContractsUsePositionalKeys(t *testing.T) {

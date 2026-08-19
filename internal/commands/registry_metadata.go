@@ -65,6 +65,21 @@ func RequiresVault(commandID string) bool {
 	return meta.VaultScope != VaultScopeNone
 }
 
+// RequiresVaultForInvocation adds argument-dependent vault requirements to the
+// registry's static scope. Most commands use only RequiresVault; vault_list
+// remains available without a configured vault for diagnostics, while its
+// path-only mode resolves and validates the selected vault like other
+// vault-scoped commands.
+func RequiresVaultForInvocation(commandID string, args map[string]interface{}) bool {
+	if commandID == "vault_list" {
+		pathOnly, _ := args["path-only"].(bool)
+		if pathOnly {
+			return true
+		}
+	}
+	return RequiresVault(commandID)
+}
+
 func defaultCategoryForCommandID(commandID string) Category {
 	commandID = strings.ReplaceAll(commandID, " ", "_")
 	switch {

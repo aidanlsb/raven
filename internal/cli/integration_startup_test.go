@@ -51,7 +51,7 @@ func TestIntegration_InitFirstVaultAutoRegisters(t *testing.T) {
 	}
 
 	// The new vault now resolves via active_vault without any explicit flag.
-	current := runVaultCurrent(t, binary, configFile)
+	current := runVaultListCurrent(t, binary, configFile)
 	if got := current["name"]; got != "new-notes" {
 		t.Fatalf("vault current name = %#v, want %q", got, "new-notes")
 	}
@@ -110,7 +110,7 @@ func TestIntegration_InitSecondVaultRegistersAndActivates(t *testing.T) {
 	}
 
 	// Ambient routing now points at the newly initialized vault.
-	current := runVaultCurrent(t, binary, configFile)
+	current := runVaultListCurrent(t, binary, configFile)
 	if got := current["name"]; got != "second" {
 		t.Fatalf("vault current name = %#v, want %q", got, "second")
 	}
@@ -249,24 +249,28 @@ func runInitPostInit(t *testing.T, binary, configFile, vaultPath string) map[str
 	return postInit
 }
 
-func runVaultCurrent(t *testing.T, binary, configFile string) map[string]interface{} {
+func runVaultListCurrent(t *testing.T, binary, configFile string) map[string]interface{} {
 	t.Helper()
-	cmd := exec.Command(binary, "--config", configFile, "--json", "vault", "current")
+	cmd := exec.Command(binary, "--config", configFile, "--json", "vault", "list")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("vault current failed: %v\n%s", err, output)
+		t.Fatalf("vault list failed: %v\n%s", err, output)
 	}
 	var resp struct {
 		OK   bool                   `json:"ok"`
 		Data map[string]interface{} `json:"data"`
 	}
 	if err := json.Unmarshal(output, &resp); err != nil {
-		t.Fatalf("unmarshal vault current response: %v\n%s", err, output)
+		t.Fatalf("unmarshal vault list response: %v\n%s", err, output)
 	}
 	if !resp.OK {
-		t.Fatalf("expected vault current success, got: %s", output)
+		t.Fatalf("expected vault list success, got: %s", output)
 	}
-	return resp.Data
+	current, ok := resp.Data["current_vault"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("current_vault = %#v, want object", resp.Data["current_vault"])
+	}
+	return current
 }
 
 func mustPostInitBool(t *testing.T, data map[string]interface{}, key string, want bool) {

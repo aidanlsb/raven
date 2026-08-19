@@ -186,7 +186,12 @@ func shouldResolveVaultForCommand(cmd *cobra.Command) bool {
 	if !ok {
 		return true
 	}
-	return commands.RequiresVault(commandID)
+	args := map[string]interface{}{}
+	if cmd.Flags().Lookup("path-only") != nil {
+		pathOnly, _ := cmd.Flags().GetBool("path-only")
+		args["path-only"] = pathOnly
+	}
+	return commands.RequiresVaultForInvocation(commandID, args)
 }
 
 func isExplicitNoVaultRuntimeCommand(cmd *cobra.Command) bool {

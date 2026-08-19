@@ -169,6 +169,38 @@ func TestCompactDiscoverReturnsFullCatalogByDefault(t *testing.T) {
 	}
 }
 
+func TestCompactDiscoverHidesVaultInspectAliases(t *testing.T) {
+	t.Parallel()
+
+	out, isErr := (&Server{}).callCompactDiscover(nil)
+	if isErr {
+		t.Fatalf("discover failed: %s", out)
+	}
+	var resp struct {
+		Data struct {
+			Items []struct {
+				Command string `json:"command"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("unmarshal discover response: %v", err)
+	}
+
+	foundList := false
+	for _, item := range resp.Data.Items {
+		switch item.Command {
+		case "vault_list":
+			foundList = true
+		case "vault_current", "vault_path":
+			t.Fatalf("compatibility alias %q should not be discoverable", item.Command)
+		}
+	}
+	if !foundList {
+		t.Fatal("canonical vault_list command was not discoverable")
+	}
+}
+
 func TestCompactDiscoverRejectsLegacySearchAndPaginationArgs(t *testing.T) {
 	t.Parallel()
 	s := &Server{}

@@ -34,6 +34,9 @@ func PolicyForCommandID(commandID string) Policy {
 		policy.Invokable = false
 		policy.Discoverable = false
 	}
+	if _, compatibilityAlias := compatibilityAliasCommandIDs[commandID]; compatibilityAlias {
+		policy.Discoverable = false
+	}
 
 	return policy
 }
@@ -75,6 +78,14 @@ var nonInvokableCommandIDs = map[string]struct{}{
 	"config":   {},
 	"vault":    {},
 	"template": {},
+}
+
+// compatibilityAliasCommandIDs remain directly invokable for existing clients
+// but are omitted from discovery so new integrations see only canonical
+// command surfaces.
+var compatibilityAliasCommandIDs = map[string]struct{}{
+	"vault_current": {},
+	"vault_path":    {},
 }
 
 // previewModeByCommandID controls default preview behavior.

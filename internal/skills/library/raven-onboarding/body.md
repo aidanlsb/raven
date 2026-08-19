@@ -23,8 +23,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 
 1. **Detect vault state.** Run `rvn vault list --json` and read the result:
    - Empty `vaults` (or `meta.count` of `0`) means there is no vault yet — follow the new-vault path below.
-   - One or more entries means at least one vault exists — target that vault, then still run the intent conversation (steps 4+) against what they already have. Use `active_vault` / `default_vault` to see whether one is already selected.
-   - There is no need to run `rvn vault current --json` first when no vault exists; detection above already covers the empty state.
+   - One or more entries means at least one vault exists — target that vault, then still run the intent conversation (steps 4+) against what they already have. Use `active_vault`, `default_vault`, and `current_vault` to inspect routing in the same result.
 2. **If there is no vault yet, create one (primary path):**
    - Ask where to create it. Suggest a sensible default such as `~/notes` or `~/raven`, but let the user choose.
    - Run `rvn init <path> --json`.

@@ -271,3 +271,26 @@ func TestValidateRequestRejectsEmptyVaultPathForVaultCommands(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRequestRequiresVaultOnlyForVaultListPathOnlyMode(t *testing.T) {
+	t.Parallel()
+
+	_, result, ok := validateRequest(context.Background(), commandexec.Request{
+		CommandID: "vault_list",
+		Args:      map[string]any{},
+	})
+	if !ok {
+		t.Fatalf("full vault_list unexpectedly required a vault: %#v", result)
+	}
+
+	_, result, ok = validateRequest(context.Background(), commandexec.Request{
+		CommandID: "vault_list",
+		Args:      map[string]any{"path-only": true},
+	})
+	if ok {
+		t.Fatal("vault_list path-only succeeded without a resolved vault")
+	}
+	if result.Error == nil || result.Error.Code != codes.ErrVaultNotSpecified {
+		t.Fatalf("error = %#v, want VAULT_NOT_SPECIFIED", result.Error)
+	}
+}

@@ -121,7 +121,7 @@ main = "` + defaultPath + `"
 			t.Fatalf("write state: %v", err)
 		}
 
-		resp := run(t, "--config", configFile, "--json", "vault", "path")
+		resp := run(t, "--config", configFile, "--json", "vault", "list", "--path-only")
 		if resp.Error.Code != "VAULT_NOT_FOUND" {
 			t.Fatalf("expected VAULT_NOT_FOUND, got %q", resp.Error.Code)
 		}
@@ -135,21 +135,27 @@ main = "` + defaultPath + `"
 
 		runPath := func(t *testing.T, want string, flags ...string) {
 			t.Helper()
-			args := append([]string{"--config", configFile}, flags...)
-			args = append(args, "--json", "vault", "path")
-			output, err := exec.Command(binary, args...).CombinedOutput()
-			if err != nil {
-				t.Fatalf("vault path failed: %v\n%s", err, output)
-			}
-			var success struct {
-				OK   bool                   `json:"ok"`
-				Data map[string]interface{} `json:"data"`
-			}
-			if err := json.Unmarshal(output, &success); err != nil {
-				t.Fatalf("unmarshal success response: %v\n%s", err, output)
-			}
-			if !success.OK || success.Data["path"] != want {
-				t.Fatalf("vault path response = %s, want path %q", output, want)
+			for _, commandArgs := range [][]string{
+				{"vault", "list", "--path-only"},
+				{"vault", "path"},
+			} {
+				args := append([]string{"--config", configFile}, flags...)
+				args = append(args, "--json")
+				args = append(args, commandArgs...)
+				output, err := exec.Command(binary, args...).CombinedOutput()
+				if err != nil {
+					t.Fatalf("%v failed: %v\n%s", commandArgs, err, output)
+				}
+				var success struct {
+					OK   bool                   `json:"ok"`
+					Data map[string]interface{} `json:"data"`
+				}
+				if err := json.Unmarshal(output, &success); err != nil {
+					t.Fatalf("unmarshal success response: %v\n%s", err, output)
+				}
+				if !success.OK || success.Data["path"] != want {
+					t.Fatalf("%v response = %s, want path %q", commandArgs, output, want)
+				}
 			}
 		}
 
@@ -176,7 +182,7 @@ main = "` + defaultPath + `"
 			t.Fatalf("write config: %v", err)
 		}
 
-		resp := run(t, "--config", configFile, "--json", "vault", "path")
+		resp := run(t, "--config", configFile, "--json", "vault", "list", "--path-only")
 		if resp.Error.Code != "VAULT_NOT_SPECIFIED" {
 			t.Fatalf("expected VAULT_NOT_SPECIFIED, got %q", resp.Error.Code)
 		}

@@ -35,12 +35,14 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 	if !ok {
 		panic(fmt.Sprintf("registry metadata missing for %q", commandID))
 	}
+	policy := commands.PolicyForCommandID(commandID)
 
 	cmd := &cobra.Command{
-		Use:   localUsageForMeta(meta),
-		Short: meta.Description,
-		Long:  buildLongDesc(meta),
-		Args:  cobraArgsForMeta(meta),
+		Use:    localUsageForMeta(meta),
+		Short:  meta.Description,
+		Long:   buildLongDesc(meta),
+		Args:   cobraArgsForMeta(meta),
+		Hidden: policy.Invokable && !policy.Discoverable,
 		Annotations: map[string]string{
 			canonicalLeafAnnotationKey: "true",
 		},
