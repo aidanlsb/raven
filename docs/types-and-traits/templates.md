@@ -86,8 +86,7 @@ rvn schema template set meeting_standard --file templates/meeting/standard.md
 ### 4) Bind it to the type and set default
 
 ```bash
-rvn schema template bind meeting_standard --type meeting
-rvn schema template default meeting_standard --type meeting
+rvn schema template bind meeting_standard --type meeting --default
 ```
 
 ### 5) Smoke test object creation
@@ -120,8 +119,7 @@ rvn template write daily.md --content "# Daily Note
 
 ```bash
 rvn schema template set daily_default --file templates/daily.md
-rvn schema template bind daily_default --core date
-rvn schema template default daily_default --core date
+rvn schema template bind daily_default --core date --default
 ```
 
 ### 3) Create/open a daily note
@@ -161,18 +159,14 @@ rvn daily tomorrow
   Bind a template ID to a type.
 - `rvn schema template bind <template_id> --core <core_type>`
   Bind a template ID to a core type.
+- Add `--default` to either bind command to also make that template the target
+  default. This also changes the default when the template ID is already bound.
 - `rvn schema template unbind <template_id> --type <type_name>`
   Unbind a template ID from a type.
 - `rvn schema template unbind <template_id> --core <core_type>`
   Unbind a template ID from a core type.
-- `rvn schema template default <template_id> --type <type_name>`
-  Set default template for a type.
-- `rvn schema template default <template_id> --core <core_type>`
-  Set default template for a core type.
-- `rvn schema template default --type <type_name> --clear`
-  Clear default template for a type.
-- `rvn schema template default --core <core_type> --clear`
-  Clear default template for a core type.
+- Add `--clear-default` when unbinding the target's current default. Raven
+  clears the default and removes the binding together.
 
 ## Important behavior
 
@@ -195,7 +189,8 @@ rvn daily tomorrow
 - `no editor configured`
   Set `editor` in config.toml or `$EDITOR`. GUI editors should use a blocking command such as `code --wait`.
 - `template '<id>' is still referenced by ...`
-  Unbind first using `rvn schema template unbind <id> --type <type>` or `--core <core>`.
+  Unbind first using `rvn schema template unbind <id> --type <type>` or
+  `--core <core>`. If it is the current default, add `--clear-default`.
 - `template file "<path>" is referenced by schema templates: ...`
   Remove schema template definitions first (`rvn schema template remove <id>`) or use `rvn template delete ... --force`.
 

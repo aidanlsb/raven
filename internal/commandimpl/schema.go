@@ -542,12 +542,12 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 	case "type":
 		result, err = schemasvc.AddTypeTemplate(rt, scopeValue, templateID)
 		if err == nil && setDefault {
-			_, err = schemasvc.SetTypeDefaultTemplate(rt, scopeValue, templateID, false)
+			_, err = schemasvc.SetTypeDefaultTemplate(rt, scopeValue, templateID)
 		}
 	case "core":
 		result, err = schemasvc.AddCoreTemplate(rt, scopeValue, templateID)
 		if err == nil && setDefault {
-			_, err = schemasvc.SetCoreDefaultTemplate(rt, scopeValue, templateID, false)
+			_, err = schemasvc.SetCoreDefaultTemplate(rt, scopeValue, templateID)
 		}
 	default:
 		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
@@ -607,44 +607,6 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 		data["default_cleared"] = true
 	}
 	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
-}
-
-// HandleSchemaTemplateDefault executes the canonical `schema_template_default` command.
-func HandleSchemaTemplateDefault(_ context.Context, req commandexec.Request) commandexec.Result {
-	start := time.Now()
-	rt, runtimeFailure := newSchemaOnlyCommandVaultRuntime(req.VaultPath)
-	if runtimeFailure.Error != nil {
-		return runtimeFailure
-	}
-	defer rt.Close()
-	targetKind, scopeKey, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
-	if failure.Error != nil {
-		return failure
-	}
-
-	templateID := strings.TrimSpace(stringArg(req.Args, "template_id"))
-	clearDefault := boolArg(req.Args, "clear")
-
-	var (
-		newDefault string
-		err        error
-	)
-	switch targetKind {
-	case "type":
-		newDefault, err = schemasvc.SetTypeDefaultTemplate(rt, scopeValue, templateID, clearDefault)
-	case "core":
-		newDefault, err = schemasvc.SetCoreDefaultTemplate(rt, scopeValue, templateID, clearDefault)
-	default:
-		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
-	}
-	if err != nil {
-		return commandexec.FromServiceError(err)
-	}
-
-	return commandexec.Success(map[string]interface{}{
-		scopeKey:           scopeValue,
-		"default_template": newDefault,
-	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleTemplateList executes the canonical `template_list` command.

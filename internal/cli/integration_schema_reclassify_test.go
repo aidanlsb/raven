@@ -30,8 +30,7 @@ func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 			t.Errorf("expected file 'templates/person.md', got %q", result.DataString("file"))
 		}
 
-		v.RunCLI("schema", "template", "bind", "person_profile", "--type", "person").MustSucceed(t)
-		v.RunCLI("schema", "template", "default", "person_profile", "--type", "person").MustSucceed(t)
+		v.RunCLI("schema", "template", "bind", "person_profile", "--type", "person", "--default").MustSucceed(t)
 		v.RunCLI("new", "person", "Alice").MustSucceed(t)
 		v.AssertFileContains("people/alice.md", "# Person Profile")
 
@@ -72,10 +71,13 @@ func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 		if got := result.DataString("core"); got != "date" {
 			t.Fatalf("bind core = %q, want %q", got, "date")
 		}
-		result = v.RunCLI("schema", "template", "default", "daily_default", "--core", "date")
+		result = v.RunCLI("schema", "template", "bind", "daily_default", "--core", "date", "--default")
 		result.MustSucceed(t)
-		if got := result.DataString("core"); got != "date" {
-			t.Fatalf("default core = %q, want %q", got, "date")
+		if result.Data["already_set"] != true {
+			t.Fatalf("expected rebinding with --default to report already_set=true")
+		}
+		if got := result.DataString("default_template"); got != "daily_default" {
+			t.Fatalf("default template = %q, want %q", got, "daily_default")
 		}
 		result = v.RunCLI("schema", "template", "list", "--core", "date")
 		result.MustSucceed(t)
@@ -88,7 +90,7 @@ func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 		v.RunCLI("daily", "2026-02-05", "--template", "daily_brief").MustSucceed(t)
 		v.AssertFileContains("daily/2026-02-05.md", "## Brief")
 
-		result = v.RunCLI("schema", "template", "default", "--core", "date", "--clear")
+		result = v.RunCLI("schema", "template", "unbind", "daily_default", "--core", "date", "--clear-default")
 		result.MustSucceed(t)
 		if got := result.DataString("core"); got != "date" {
 			t.Fatalf("clear default core = %q, want %q", got, "date")

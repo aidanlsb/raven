@@ -88,6 +88,32 @@ func TestRemovedAssetCommandIsAbsent(t *testing.T) {
 	}
 }
 
+func TestSchemaTemplateDefaultIsFoldedIntoBindAndUnbind(t *testing.T) {
+	t.Parallel()
+
+	if _, ok := findCommandByPath(rootCmd, "schema template default"); ok {
+		t.Fatal("removed schema template default command is still registered")
+	}
+	if _, ok := commands.EffectiveMeta("schema_template_default"); ok {
+		t.Fatal("removed schema_template_default command is still in the registry")
+	}
+
+	handlers := commandexec.NewHandlerRegistry()
+	commandimpl.RegisterAll(handlers)
+	if _, ok := handlers.Lookup("schema_template_default"); ok {
+		t.Fatal("removed schema_template_default handler is still registered")
+	}
+
+	bind, ok := findCommandByPath(rootCmd, "schema template bind")
+	if !ok || bind.Flags().Lookup("default") == nil {
+		t.Fatal("schema template bind must expose --default")
+	}
+	unbind, ok := findCommandByPath(rootCmd, "schema template unbind")
+	if !ok || unbind.Flags().Lookup("clear-default") == nil {
+		t.Fatal("schema template unbind must expose --clear-default")
+	}
+}
+
 // TestVaultConfigSubtreeGroupsPrintHelpOrDefault asserts the generated grouping
 // commands under "vault config" are non-leaf containers wired with a default
 // RunE (either a canonical group default or help), matching the pre-generation

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Inlined internal command service-error pass-throughs at their call sites.
 - **Breaking:** `rvn schema update field|trait` now rejects `--type` and `--values`; type and allowed-value remaps must use `rvn schema convert field|trait` with exhaustive `--map-json` preview/confirm migration.
 - `rvn vault list` is now the single vault inspection surface, including `current_vault` and an optional `--path-only` mode; `vault current` / `vault_current` and `vault path` / `vault_path` remain thin, hidden compatibility aliases.
+- **Breaking:** schema template defaults are now set with `schema template bind --default` and cleared while unbinding with `schema template unbind --clear-default`.
 - Removed the internal `skillsvc` pass-through layer so skill commands call the shared skills implementation directly.
 - Reference and ref-field post-index resolution now share batching and outcome handling, keeping resolved, missing, and ambiguous behavior aligned.
 - Saved queries now persist only RQL, declared arguments, and descriptions; runtime flags are supplied per invocation, and legacy saved `options` blocks are ignored.
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Removed the internal read-runtime, reference-resolution, and CLI field-JSON compatibility facades so callers use the shared extracted packages directly.
 - **Breaking:** Removed the redundant `rvn docs list` leaf and `docs_list` MCP command ID. Use `rvn docs --json` or `raven_invoke(command="docs")` for the same sections payload.
+- **Breaking:** Removed the standalone `schema template default` CLI command and `schema_template_default` MCP command ID.
 - Removed the orphaned internal `rvnexec` subprocess helper.
 
 ## [v0.0.33] - 2026-07-28

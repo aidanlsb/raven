@@ -102,7 +102,6 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("schema_template_remove", HandleSchemaTemplateRemove)
 	registry.Register("schema_template_bind", HandleSchemaTemplateBind)
 	registry.Register("schema_template_unbind", HandleSchemaTemplateUnbind)
-	registry.Register("schema_template_default", HandleSchemaTemplateDefault)
 	registry.Register("template_list", HandleTemplateList)
 	registry.Register("template_write", HandleTemplateWrite)
 	registry.Register("template_delete", HandleTemplateDelete)

@@ -91,8 +91,7 @@ rvn template write daily.md --content "# {{date}}
 
 # 2. Register and bind it to the date core type
 rvn schema template set daily_default --file templates/daily.md
-rvn schema template bind daily_default --core date
-rvn schema template default daily_default --core date
+rvn schema template bind daily_default --core date --default
 ```
 
 Now `rvn daily` uses this template when creating a new note. See `types-and-traits/templates.md` for the full template lifecycle.

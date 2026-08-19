@@ -25,9 +25,11 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 2. Create or update template files with `rvn template write`.
 3. Register schema template IDs with `rvn schema template set`.
 4. Bind template IDs with `rvn schema template bind ... --type ...` or `--core ...`.
-5. Set defaults only after bindings are in place, or use `rvn schema template bind <id> --type <type> --default --json` as a shortcut.
+5. Add `--default` to bind and set the target default in the same operation. Re-run
+   bind with `--default` to change the default when the ID is already bound.
 6. Smoke test creation with `rvn new <type> <title> --json` or `rvn daily <date> --json` for core `date` templates.
-7. Remove in reverse order: clear default if needed, unbind from type/core, remove schema template, then delete the file.
+7. Remove in reverse order: unbind from type/core (using `--clear-default` for
+   the current default), remove the schema template, then delete the file.
 
 ## Cross-references
 
@@ -38,7 +40,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 
 - `rvn template delete` blocks when schema templates still reference that file unless `--force` is used.
 - `rvn schema template remove` blocks while the template ID is still bound to any type or core type.
-- For default templates, clear defaults before removing the bound template ID.
+- For default templates, unbind with `--clear-default`.
 
 ## Reference
 
