@@ -14,7 +14,7 @@ import (
 func HandleConfigShow(_ context.Context, req commandexec.Request) commandexec.Result {
 	ctx, err := configsvc.ShowContext(configContextOptions(req))
 	if err != nil {
-		return mapConfigSvcFailure(err, "")
+		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
 	return commandexec.Success(ctx.Data(), nil)
 }
@@ -25,7 +25,7 @@ func HandleConfigInit(_ context.Context, req commandexec.Request) commandexec.Re
 		ConfigPathOverride: strings.TrimSpace(req.ConfigPath),
 	})
 	if err != nil {
-		return mapConfigSvcFailure(err, "")
+		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path": result.ConfigPath,
@@ -40,7 +40,7 @@ func HandleConfigSet(_ context.Context, req commandexec.Request) commandexec.Res
 		Settings:       stringSliceArg(req.Args["settings"]),
 	})
 	if err != nil {
-		return mapConfigSvcFailure(err, "")
+		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
 
 	data := result.Context.Data()
@@ -55,7 +55,7 @@ func HandleConfigUnset(_ context.Context, req commandexec.Request) commandexec.R
 		Keys:           stringSliceArg(req.Args["keys"]),
 	})
 	if err != nil {
-		return mapConfigSvcFailure(err, "Run 'rvn config init' first")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn config init' first")
 	}
 
 	data := result.Context.Data()
@@ -67,7 +67,7 @@ func HandleConfigUnset(_ context.Context, req commandexec.Request) commandexec.R
 func HandleVaultList(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := configsvc.ListVaults(configContextOptions(req))
 	if err != nil {
-		return mapConfigSvcFailure(err, "")
+		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path":    result.ConfigPath,
@@ -83,7 +83,7 @@ func HandleVaultList(_ context.Context, req commandexec.Request) commandexec.Res
 func HandleVaultCurrent(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := configsvc.CurrentVault(configContextOptions(req))
 	if err != nil {
-		return mapConfigSvcFailure(err, "Use 'rvn vault use <name>' or 'rvn vault pin <name>'")
+		return commandexec.FromServiceErrorWithFallback(err, "Use 'rvn vault use <name>' or 'rvn vault pin <name>'")
 	}
 	return commandexec.Success(map[string]interface{}{
 		"name":           result.Current.Name,
@@ -100,7 +100,7 @@ func HandleVaultCurrent(_ context.Context, req commandexec.Request) commandexec.
 func HandleVaultUse(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := configsvc.UseVault(configContextOptions(req), stringArg(req.Args, "name"))
 	if err != nil {
-		return mapConfigSvcFailure(err, "Run 'rvn vault list' to see configured vaults")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn vault list' to see configured vaults")
 	}
 	return commandexec.Success(map[string]interface{}{
 		"active_vault": result.ActiveVault,
@@ -120,7 +120,7 @@ func HandleVaultFocus(_ context.Context, req commandexec.Request) commandexec.Re
 		Clear:          boolArg(req.Args, "clear"),
 	})
 	if err != nil {
-		return mapConfigSvcFailure(err, "Use 'rvn vault list' to see configured vaults")
+		return commandexec.FromServiceErrorWithFallback(err, "Use 'rvn vault list' to see configured vaults")
 	}
 
 	data := map[string]interface{}{
@@ -145,7 +145,7 @@ func HandleVaultFocus(_ context.Context, req commandexec.Request) commandexec.Re
 func HandleVaultClear(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := configsvc.ClearActiveVault(configContextOptions(req))
 	if err != nil {
-		return mapConfigSvcFailure(err, "")
+		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
 	return commandexec.Success(map[string]interface{}{
 		"cleared":    result.Cleared,
@@ -158,7 +158,7 @@ func HandleVaultClear(_ context.Context, req commandexec.Request) commandexec.Re
 func HandleVaultPin(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := configsvc.PinVault(configContextOptions(req), stringArg(req.Args, "name"))
 	if err != nil {
-		return mapConfigSvcFailure(err, "Run 'rvn vault list' to see configured vaults")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn vault list' to see configured vaults")
 	}
 	return commandexec.Success(map[string]interface{}{
 		"default_vault": result.DefaultVault,
@@ -181,12 +181,12 @@ func HandleVaultAdd(_ context.Context, req commandexec.Request) commandexec.Resu
 		if svcErr, ok := svcerr.AsError(err); ok {
 			switch svcErr.Code {
 			case configsvc.CodeFileNotFound:
-				return mapConfigSvcFailure(err, "Run 'rvn init "+rawPath+"' to create it first")
+				return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn init "+rawPath+"' to create it first")
 			case configsvc.CodeDuplicateName:
-				return mapConfigSvcFailure(err, "Use --replace to update the path")
+				return commandexec.FromServiceErrorWithFallback(err, "Use --replace to update the path")
 			}
 		}
-		return mapConfigSvcFailure(err, "")
+		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
 	return commandexec.Success(map[string]interface{}{
 		"name":          result.Name,
@@ -210,13 +210,13 @@ func HandleVaultRemove(_ context.Context, req commandexec.Request) commandexec.R
 	if err != nil {
 		if svcErr, ok := svcerr.AsError(err); ok && svcErr.Code == configsvc.CodeConfirmationNeeded {
 			if strings.Contains(svcErr.Message, "default vault") {
-				return mapConfigSvcFailure(err, "Use --clear-default to clear default_vault as part of removal, or pin another vault first")
+				return commandexec.FromServiceErrorWithFallback(err, "Use --clear-default to clear default_vault as part of removal, or pin another vault first")
 			}
 			if strings.Contains(svcErr.Message, "active vault") {
-				return mapConfigSvcFailure(err, "Use --clear-active to clear active_vault as part of removal, or switch active vault first")
+				return commandexec.FromServiceErrorWithFallback(err, "Use --clear-active to clear active_vault as part of removal, or switch active vault first")
 			}
 		}
-		return mapConfigSvcFailure(err, "Run 'rvn vault list' to see configured vaults")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn vault list' to see configured vaults")
 	}
 	return commandexec.Success(map[string]interface{}{
 		"name":            result.Name,
@@ -241,8 +241,4 @@ func configContextOptions(req commandexec.Request) configsvc.ContextOptions {
 		ConfigPathOverride: strings.TrimSpace(req.ConfigPath),
 		StatePathOverride:  strings.TrimSpace(req.StatePath),
 	}
-}
-
-func mapConfigSvcFailure(err error, fallbackSuggestion string) commandexec.Result {
-	return commandexec.FromServiceErrorWithFallback(err, fallbackSuggestion)
 }

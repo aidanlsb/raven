@@ -52,7 +52,7 @@ func prepareQueryExecution(req commandexec.Request) (execution *queryExecution, 
 
 	resolvedQuery, queryName, isSavedQuery, err := resolveQueryString(queryString, req.Args["inputs"], rt.VaultCfg)
 	if err != nil {
-		return nil, mapQuerySvcFailure(err)
+		return nil, commandexec.FromServiceError(err)
 	}
 	if isSavedQuery && !querysvc.IsFullQueryRoot(resolvedQuery) {
 		return nil, commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', 'section', or 'link'", queryName), nil, "")
@@ -299,8 +299,4 @@ func refreshReferenceResolutionWarnings(report readsvc.SmartReindexReport) []com
 		Message: message,
 		Ref:     "The files were indexed successfully, but backlinks may be stale. Run 'rvn reindex' to retry reference resolution.",
 	}}
-}
-
-func mapQuerySvcFailure(err error) commandexec.Result {
-	return commandexec.FromServiceError(err)
 }

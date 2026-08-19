@@ -128,7 +128,7 @@ func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result 
 		TemplateID: stringArg(req.Args, "template"),
 	})
 	if err != nil {
-		return mapDateServiceError(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	return commandexec.Success(map[string]interface{}{
@@ -155,7 +155,7 @@ func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
 		DateArg:   stringArg(req.Args, "date"),
 	})
 	if err != nil {
-		return mapDateServiceError(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	data := map[string]interface{}{
@@ -190,10 +190,6 @@ func HandleVersion(_ context.Context, req commandexec.Request) commandexec.Resul
 		"goos":        info.GOOS,
 		"goarch":      info.GOARCH,
 	}, nil)
-}
-
-func mapDateServiceError(err error) commandexec.Result {
-	return commandexec.FromServiceError(err)
 }
 
 // initPostInitState is the resolved outcome of the first-run vault policy, used
