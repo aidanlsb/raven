@@ -96,6 +96,35 @@ func TestIntegration_QueryPaging(t *testing.T) {
 	}
 }
 
+func TestIntegration_SavedQueryIgnoresLegacyRuntimeOptions(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML(`queries:
+  active-projects:
+    query: "type:project .status==active"
+    options:
+      apply: ["set status=done"]
+      confirm: true
+      ids: true
+      limit: 1
+`).
+		Build()
+
+	v.RunCLI("new", "project", "Project Alpha", "--field", "status=active").MustSucceed(t)
+	v.RunCLI("new", "project", "Project Beta", "--field", "status=active").MustSucceed(t)
+
+	// Legacy persisted runtime options are ignored: invoking the saved query
+	// returns both rows and does not apply the stored mutation.
+	result := v.RunCLI("query", "active-projects").MustSucceed(t)
+	result.AssertResultCount(t, "items", 2)
+	v.RunCLI("query", "type:project .status==done").MustSucceed(t).AssertResultCount(t, "items", 0)
+
+	// Runtime behavior belongs on the saved-query invocation.
+	v.RunCLI("query", "active-projects", "--apply", "set status=done", "--confirm").MustSucceed(t)
+	v.RunCLI("query", "type:project .status==done").MustSucceed(t).AssertResultCount(t, "items", 2)
+}
+
 func TestIntegration_QueryErrorsSuggestCorrectSyntax(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

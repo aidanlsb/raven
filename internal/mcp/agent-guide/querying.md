@@ -49,6 +49,17 @@ raven_invoke(command="query", args={"query_string":"link .ext==pdf within(type:p
 
 For text search inside typed queries, use `content("term")`.
 
+## Saved queries
+
+Saved queries are named RQL definitions with optional declared inputs and a
+description. They do not store runtime execution policy. When invoking one,
+pass `refresh`, `ids`, `limit`, `offset`, `count-only`, `apply`, `confirm`,
+`pipe`, or `browse` in the current `query` call as needed.
+
+```text
+raven_invoke(command="query", args={"query_string":"open-projects","limit":100})
+```
+
 Sections use the bare `section` query root and return heading-derived rows with
 IDs like `file#slug`. Section rows include `line_start`, direct `line_end`, and
 `subtree_line_end`. Body appends with `add` use the direct range so they land

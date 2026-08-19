@@ -129,7 +129,7 @@ Raven exposes MCP resources that agents can fetch:
 
 Additional topic resources are available under `raven://guide/<topic>`.
 
-Vault-scoped resource content is produced by the same shared services that back the equivalent commands, so a resource read never drifts from the command output: `raven://queries/saved` mirrors `query_saved_list` (each entry carries `name`, `query`, `args`, `description`, and `options` when set), and `raven://schema/current` returns the raw on-disk `schema.yaml`.
+Vault-scoped resource content is produced by the same shared services that back the equivalent commands, so a resource read never drifts from the command output: `raven://queries/saved` mirrors `query_saved_list` (each entry carries `name`, `query`, `args`, and `description`), and `raven://schema/current` returns the raw on-disk `schema.yaml`.
 
 Vault-scoped resources use stable URIs. On `resources/read`, `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional `vault` or `vault_path` params to target a different vault for that read. Do not pass both. `resources/list` accepts the same optional `vault`/`vault_path` params, so list and read stay consistent — the list reflects (and reports) the same vault a read with identical params would target.
 
@@ -315,6 +315,9 @@ Example bulk apply preview:
 ### Saved query inputs
 
 Saved queries still use the `query` command. Pass the saved query name as `query_string` and optional inputs under `inputs`.
+Pass runtime options such as `limit`, `offset`, `refresh`, `apply`, and
+`confirm` in that same `query` invocation. Saved query definitions never store
+execution policy.
 
 ```json
 {

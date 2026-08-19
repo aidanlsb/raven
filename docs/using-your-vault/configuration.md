@@ -317,6 +317,12 @@ Each query entry supports:
 
 For parameterized saved queries, use placeholders like `{{args.project}}` and declare `args`.
 
+Saved queries contain definitions only. Runtime flags such as pagination,
+output mode, refresh, browse, and bulk `apply`/`confirm` belong on each
+`rvn query <name>` invocation and are not persisted. Legacy `options` blocks
+from older Raven versions are ignored when loading and removed the next time
+Raven rewrites `raven.yaml`.
+
 ### `protected_prefixes`
 
 Additional vault-relative prefixes treated as protected/system-managed by Raven mutation commands and automation features.

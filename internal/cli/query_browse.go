@@ -10,20 +10,6 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-// effectiveQueryBrowse decides whether browse mode applies. An explicit
-// --browse flag always wins (and is validated later, erroring in contexts
-// that cannot run a picker). When browse comes from a saved-query default,
-// machine-readable contexts suppress it so saved queries stay agent- and
-// script-friendly: JSON is an explicit machine mode, and a non-interactive
-// terminal (piped output, cron) degrades to the normal non-browse output
-// instead of erroring.
-func effectiveQueryBrowse(browse, explicit bool) bool {
-	if !browse || explicit {
-		return browse
-	}
-	return !isJSONOutput() && canUseInteractiveTerminal()
-}
-
 func browseQueryResults(items []picker.Item, headers []string, columns []ui.ColumnDef) error {
 	return cliSelector.browseAndOpen(browsePickerOptions{
 		Title:                  "Query results",

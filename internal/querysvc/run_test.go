@@ -109,27 +109,21 @@ func TestMatchInvocationWithoutSavedQueries(t *testing.T) {
 	}
 }
 
-func TestResolveRunOptionsMergesSavedDefaults(t *testing.T) {
+func TestResolveRunOptionsUsesInvocationOptionsForSavedQuery(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
 	rt := newQueryRuntime(t, vaultPath)
-	savedBrowse := true
-	savedLimit := 100
 	if _, err := Set(rt, SetRequest{
 		VaultPath:   vaultPath,
 		Name:        "open-issues",
 		QueryString: "type:issue .status=={{args.status}}",
 		Args:        []string{"status"},
-		Options: &config.QueryOptions{
-			Browse: &savedBrowse,
-			Limit:  &savedLimit,
-		},
 	}); err != nil {
 		t.Fatalf("Set() unexpected error: %v", err)
 	}
 
-	// No explicit flags: saved defaults apply and the query resolves.
+	// No invocation flags: the query resolves with zero-value runtime behavior.
 	opts, err := ResolveRunOptions(rt, "open-issues open", nil)
 	if err != nil {
 		t.Fatalf("ResolveRunOptions() unexpected error: %v", err)
@@ -140,28 +134,25 @@ func TestResolveRunOptionsMergesSavedDefaults(t *testing.T) {
 	if opts.ResolvedQuery != "type:issue .status==open" {
 		t.Fatalf("ResolveRunOptions() resolved = %q, want %q", opts.ResolvedQuery, "type:issue .status==open")
 	}
-	if !opts.Browse {
-		t.Fatalf("ResolveRunOptions() browse = false, want saved default true")
-	}
-	if opts.Limit != 100 {
-		t.Fatalf("ResolveRunOptions() limit = %d, want saved default 100", opts.Limit)
+	if opts.Browse || opts.Limit != 0 {
+		t.Fatalf("ResolveRunOptions() runtime options = browse %v / limit %d, want zero values", opts.Browse, opts.Limit)
 	}
 
-	// Explicit flags override saved defaults.
-	explicitBrowse := false
+	// Runtime flags are supplied when invoking the saved query.
+	explicitBrowse := true
 	explicitLimit := 5
-	opts, err = ResolveRunOptions(rt, "open-issues open", &config.QueryOptions{
+	opts, err = ResolveRunOptions(rt, "open-issues open", &RunOptionOverrides{
 		Browse: &explicitBrowse,
 		Limit:  &explicitLimit,
 	})
 	if err != nil {
 		t.Fatalf("ResolveRunOptions() unexpected error: %v", err)
 	}
-	if opts.Browse {
-		t.Fatalf("ResolveRunOptions() browse = true, want explicit override false")
+	if !opts.Browse {
+		t.Fatalf("ResolveRunOptions() browse = false, want invocation value true")
 	}
 	if opts.Limit != 5 {
-		t.Fatalf("ResolveRunOptions() limit = %d, want explicit override 5", opts.Limit)
+		t.Fatalf("ResolveRunOptions() limit = %d, want invocation value 5", opts.Limit)
 	}
 }
 
@@ -171,7 +162,7 @@ func TestResolveRunOptionsNonSavedQuery(t *testing.T) {
 	vaultPath := t.TempDir()
 	rt := newQueryRuntime(t, vaultPath)
 	explicitIDs := true
-	opts, err := ResolveRunOptions(rt, "type:project .status==active", &config.QueryOptions{
+	opts, err := ResolveRunOptions(rt, "type:project .status==active", &RunOptionOverrides{
 		IDs: &explicitIDs,
 	})
 	if err != nil {

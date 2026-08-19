@@ -200,6 +200,19 @@ func TestRegistryLongDescriptionsUseCompactReindexGuidance(t *testing.T) {
 	}
 }
 
+func TestQuerySavedSetExposesDefinitionFlagsOnly(t *testing.T) {
+	t.Parallel()
+
+	meta := Registry["query_saved_set"]
+	names := make([]string, 0, len(meta.Flags))
+	for _, flag := range meta.Flags {
+		names = append(names, flag.Name)
+	}
+	if got := strings.Join(names, ","); got != "description,arg" {
+		t.Fatalf("query_saved_set flags = %q, want definition flags only", got)
+	}
+}
+
 func TestCheckFixMetadataListsSupportedFixes(t *testing.T) {
 	t.Parallel()
 
