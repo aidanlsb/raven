@@ -118,7 +118,7 @@ raven_invoke(command="check")
 Check whether the user has global docs fetched so `rvn docs` works:
 
 ```text
-raven_invoke(command="docs_list")
+raven_invoke(command="docs")
 ```
 
 An existing cache from an older release refreshes lazily during this call. If

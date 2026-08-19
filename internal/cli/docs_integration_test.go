@@ -13,7 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
-func TestIntegration_DocsListOpenSearch(t *testing.T) {
+func TestIntegration_DocsBrowseOpenSearch(t *testing.T) {
 	t.Parallel()
 	configPath := seedGlobalDocsConfig(t, map[string]string{
 		"index.yaml": `sections:
@@ -37,17 +37,8 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 		t.Fatalf("expected docs sections, got none")
 	}
 
-	listAlias := runDocsCLI(t, configPath, "docs", "list")
-	listAlias.MustSucceed(t)
-	aliasSections := listAlias.DataList("sections")
-	if len(aliasSections) != len(sections) {
-		t.Fatalf("expected docs list alias to return %d sections, got %d", len(sections), len(aliasSections))
-	}
-
 	requireSection(t, sections, "getting-started")
 	requireSection(t, sections, "querying")
-	requireSection(t, aliasSections, "getting-started")
-	requireSection(t, aliasSections, "querying")
 
 	querying := runDocsCLI(t, configPath, "docs", "querying")
 	querying.MustSucceed(t)

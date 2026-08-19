@@ -154,6 +154,7 @@ When an existing cache was fetched by an older Raven release, docs read commands
 refresh it from the installed CLI version tag. Refresh failures return a warning and keep
 serving the existing cache. A missing cache still requires 'rvn docs fetch'.
 When run in an interactive terminal, 'rvn docs' opens Raven's picker.
+In non-interactive or JSON mode, bare 'rvn docs' lists the available sections.
 In the picker, use l to move forward into a section/topic and h to go back.
 For command-level usage, use 'rvn help <command>'.`,
 		Args: []ArgMeta{
@@ -163,7 +164,6 @@ For command-level usage, use 'rvn help <command>'.`,
 		Examples: []string{
 			"rvn docs --json",
 			"rvn docs fetch --json",
-			"rvn docs list --json",
 			"rvn docs getting-started --json",
 			"rvn docs querying query-language --json",
 			"rvn docs search \"saved query\" --json",
@@ -197,21 +197,6 @@ By default, docs are fetched from the "main" ref.`,
 			"Sync docs after init",
 			"Force-refresh docs without reinstalling rvn",
 			"Pin docs to a specific ref for reproducibility",
-		},
-	},
-	"docs_list": {
-		Name:        "docs list",
-		Description: "List docs sections and section commands",
-		VaultScope:  VaultScopeNone,
-		LongDesc: `List docs sections with explicit section command syntax.
-
-Use this to see exactly which 'rvn docs <section>' commands are available.`,
-		Examples: []string{
-			"rvn docs list --json",
-		},
-		UseCases: []string{
-			"List available docs section commands",
-			"See friendly section titles with topic counts",
 		},
 	},
 	"docs_search": {

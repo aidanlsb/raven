@@ -72,7 +72,6 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("query_saved_remove", HandleQuerySavedRemove)
 	registry.Register("docs", HandleDocs)
 	registry.Register("docs_fetch", HandleDocsFetch)
-	registry.Register("docs_list", HandleDocsList)
 	registry.Register("docs_search", HandleDocsSearch)
 	registry.Register("skill_list", HandleSkillList)
 	registry.Register("skill_sync", HandleSkillSync)

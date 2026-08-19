@@ -33,11 +33,6 @@ func renderDocsCommand(_ *cobra.Command, result commandexec.Result) error {
 	return outputDocsSections(docsSectionsFromCanonical(data["sections"]))
 }
 
-func renderDocsList(_ *cobra.Command, result commandexec.Result) error {
-	outputCanonicalDocsWarnings(result.Warnings)
-	return outputDocsSections(docsSectionsFromCanonical(canonicalDataMap(result)["sections"]))
-}
-
 func renderDocsFetch(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Println(ui.Checkf(
@@ -107,7 +102,7 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 func printDocsGeneralCommands(sectionID string, includeSectionCommand bool) {
 	fmt.Println(ui.SectionHeader("General docs commands"))
 	if sectionID == "" {
-		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs list"), ui.Hint("List sections and section commands"))))
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs"), ui.Hint("Browse sections and topics"))))
 		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs <section>"), ui.Hint("List topics in a section"))))
 		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs <section> <topic>"), ui.Hint("Open a docs topic"))))
 		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs search <query>"), ui.Hint("Search docs"))))
@@ -117,7 +112,7 @@ func printDocsGeneralCommands(sectionID string, includeSectionCommand bool) {
 	}
 
 	if !includeSectionCommand {
-		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs list"), ui.Hint("List sections and section commands"))))
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs"), ui.Hint("Browse sections and topics"))))
 		fmt.Println(ui.Bullet(fmt.Sprintf(
 			"%s %s",
 			ui.Bold.Render(fmt.Sprintf("rvn docs search <query> --section %s", sectionID)),
@@ -137,7 +132,7 @@ func printDocsGeneralCommands(sectionID string, includeSectionCommand bool) {
 		ui.Bold.Render(fmt.Sprintf("rvn docs search <query> --section %s", sectionID)),
 		ui.Hint("Search only this section"),
 	)))
-	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs list"), ui.Hint("List sections and section commands"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs"), ui.Hint("Browse sections and topics"))))
 	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync global docs"))))
 }
 

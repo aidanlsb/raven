@@ -92,7 +92,7 @@ func defaultAccessForCommandID(commandID string) AccessMode {
 	switch commandID {
 	case "read", "search", "backlinks", "outlinks", "resolve", "query", "query_saved_list", "query_saved_get",
 		"schema", "schema_validate", "schema_template_list", "schema_template_get",
-		"docs", "docs_list", "docs_search",
+		"docs", "docs_search",
 		"version",
 		"vault", "vault_list", "vault_current", "vault_path", "vault_stats",
 		"config", "config_show":

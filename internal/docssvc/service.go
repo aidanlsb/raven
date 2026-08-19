@@ -172,15 +172,6 @@ func loadGlobalDocsSource(opts loadGlobalDocsOptions) (*GlobalDocsSource, error)
 	return &GlobalDocsSource{FS: docsFS}, nil
 }
 
-func ListSections(configPath, cliVersion string) ([]SectionView, []Warning, error) {
-	source, err := LoadGlobalDocsSource(configPath, cliVersion)
-	if err != nil {
-		return nil, nil, err
-	}
-	sections, err := ListSectionsFS(source.FS, ".")
-	return sections, source.Warnings, err
-}
-
 func ListSectionsFS(docsFS fs.FS, docsRoot string) ([]SectionView, error) {
 	sections, err := listSectionsFS(docsFS, docsRoot)
 	if err != nil {

@@ -36,11 +36,6 @@ func docsArgsFromCanonical(args map[string]interface{}) []string {
 	return out
 }
 
-var docsListCmd = newCanonicalLeafCommand("docs_list", canonicalLeafOptions{
-	HandleError: handleCanonicalDocsLeafFailure,
-	RenderHuman: renderDocsList,
-})
-
 var docsSearchCmd = newCanonicalLeafCommand("docs_search", canonicalLeafOptions{
 	Args:        cobra.MinimumNArgs(1),
 	BuildArgs:   buildDocsSearchArgs,
@@ -160,7 +155,6 @@ func findCommandByPathRuntime(root *cobra.Command, path string) (*cobra.Command,
 }
 
 func init() {
-	docsCmd.AddCommand(docsListCmd)
 	docsCmd.AddCommand(docsSearchCmd)
 	docsCmd.AddCommand(docsFetchCmd)
 	rootCmd.AddCommand(docsCmd)

@@ -97,15 +97,6 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 	}, warnings, nil)
 }
 
-// HandleDocsList executes the canonical `docs list` command.
-func HandleDocsList(_ context.Context, req commandexec.Request) commandexec.Result {
-	sections, warnings, err := docssvc.ListSections(req.ConfigPath, docsCLIVersion(req))
-	if err != nil {
-		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs fetch' to download docs")
-	}
-	return commandexec.SuccessWithWarnings(docsSectionsData(sections), canonicalDocsWarnings(warnings), &commandexec.Meta{Count: len(sections)})
-}
-
 // HandleDocsSearch executes the canonical `docs search` command.
 func HandleDocsSearch(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
