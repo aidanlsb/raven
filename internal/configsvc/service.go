@@ -13,29 +13,6 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeConfigInvalid      Code = codes.ErrConfigInvalid
-	CodeVaultNotFound      Code = codes.ErrVaultNotFound
-	CodeVaultNotSpecified  Code = codes.ErrVaultNotSpecified
-	CodeFileNotFound       Code = codes.ErrFileNotFound
-	CodeFileReadError      Code = codes.ErrFileRead
-	CodeFileWriteError     Code = codes.ErrFileWrite
-	CodeInvalidInput       Code = codes.ErrInvalidInput
-	CodeMissingArgument    Code = codes.ErrMissingArgument
-	CodeDuplicateName      Code = codes.ErrDuplicateName
-	CodeConfirmationNeeded Code = codes.ErrConfirmationRequired
-)
-
-func newError(code Code, msg string, err error) *svcerr.Error {
-	return &svcerr.Error{
-		Code:    code,
-		Message: msg,
-		Err:     err,
-	}
-}
-
 type ContextOptions struct {
 	ConfigPathOverride string
 	StatePathOverride  string
@@ -97,12 +74,12 @@ func Init(req InitRequest) (*InitResult, error) {
 	_, statErr := os.Stat(targetPath)
 	existed := statErr == nil
 	if statErr != nil && !os.IsNotExist(statErr) {
-		return nil, newError(CodeFileReadError, "", statErr)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "", statErr)
 	}
 
 	createdPath, err := config.CreateDefaultAt(targetPath)
 	if err != nil {
-		return nil, newError(CodeFileWriteError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "", err)
 	}
 
 	return &InitResult{
@@ -138,7 +115,7 @@ func Set(req SetRequest) (*SetResult, error) {
 	}
 
 	if len(req.Settings) == 0 {
-		return nil, newError(CodeMissingArgument, "no settings provided; use key=value (valid keys: "+strings.Join(validSetKeys, ", ")+")", nil)
+		return nil, svcerr.New(codes.ErrMissingArgument, "no settings provided; use key=value (valid keys: "+strings.Join(validSetKeys, ", ")+")")
 	}
 
 	changed := make([]string, 0, len(req.Settings))
@@ -148,10 +125,10 @@ func Set(req SetRequest) (*SetResult, error) {
 		key = strings.TrimSpace(key)
 		value = strings.TrimSpace(value)
 		if !ok || key == "" {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("invalid config setting %q; expected key=value", setting), nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid config setting %q; expected key=value", setting))
 		}
 		if _, duplicate := seen[key]; duplicate {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("duplicate config key %q", key), nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("duplicate config key %q", key))
 		}
 		seen[key] = struct{}{}
 
@@ -164,7 +141,7 @@ func Set(req SetRequest) (*SetResult, error) {
 		case "editor_mode":
 			mode, valid := NormalizeEditorMode(value)
 			if !valid {
-				return nil, newError(CodeInvalidInput, "editor_mode must be one of: auto, terminal, gui", nil)
+				return nil, svcerr.New(codes.ErrInvalidInput, "editor_mode must be one of: auto, terminal, gui")
 			}
 			ctx.Cfg.EditorMode = mode
 		case "ui.markdown_style":
@@ -173,9 +150,9 @@ func Set(req SetRequest) (*SetResult, error) {
 			}
 			ctx.Cfg.UI.MarkdownStyle = value
 		case "default_vault":
-			return nil, newError(CodeInvalidInput, "default_vault cannot be set with 'rvn config set'; use 'rvn vault pin <name>'", nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, "default_vault cannot be set with 'rvn config set'; use 'rvn vault pin <name>'")
 		case "vault":
-			return nil, newError(CodeInvalidInput, "vault is no longer a supported config key; use 'rvn vault add <name> <path>' and 'rvn vault pin <name>'", nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, "vault is no longer a supported config key; use 'rvn vault add <name> <path>' and 'rvn vault pin <name>'")
 		default:
 			return nil, unknownConfigKeyError(key, validSetKeys)
 		}
@@ -183,7 +160,7 @@ func Set(req SetRequest) (*SetResult, error) {
 	}
 
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
-		return nil, newError(CodeFileWriteError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "", err)
 	}
 	ctx.ConfigExists = true
 	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath)
@@ -199,11 +176,11 @@ var validSetKeys = []string{"editor", "editor_mode", "ui.markdown_style"}
 var validUnsetKeys = []string{"default_vault", "editor", "editor_mode", "ui.markdown_style"}
 
 func emptySetValueError(key string) *svcerr.Error {
-	return newError(CodeInvalidInput, fmt.Sprintf("%s cannot be empty; use 'rvn config unset %s' to clear it", key, key), nil)
+	return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("%s cannot be empty; use 'rvn config unset %s' to clear it", key, key))
 }
 
 func unknownConfigKeyError(key string, validKeys []string) *svcerr.Error {
-	return newError(CodeInvalidInput, fmt.Sprintf("unknown config key %q; valid keys: %s", key, strings.Join(validKeys, ", ")), nil)
+	return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("unknown config key %q; valid keys: %s", key, strings.Join(validKeys, ", ")))
 }
 
 type UnsetRequest struct {
@@ -222,11 +199,11 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 		return nil, err
 	}
 	if !ctx.ConfigExists {
-		return nil, newError(CodeFileNotFound, fmt.Sprintf("config file not found: %s", ctx.ConfigPath), nil)
+		return nil, svcerr.New(codes.ErrFileNotFound, fmt.Sprintf("config file not found: %s", ctx.ConfigPath))
 	}
 
 	if len(req.Keys) == 0 {
-		return nil, newError(CodeMissingArgument, "no keys provided; valid keys: "+strings.Join(validUnsetKeys, ", "), nil)
+		return nil, svcerr.New(codes.ErrMissingArgument, "no keys provided; valid keys: "+strings.Join(validUnsetKeys, ", "))
 	}
 
 	changed := make([]string, 0, len(req.Keys))
@@ -237,7 +214,7 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 			return nil, unknownConfigKeyError(key, validUnsetKeys)
 		}
 		if _, duplicate := seen[key]; duplicate {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("duplicate config key %q", key), nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("duplicate config key %q", key))
 		}
 		seen[key] = struct{}{}
 
@@ -257,7 +234,7 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 	}
 
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
-		return nil, newError(CodeFileWriteError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "", err)
 	}
 	ctx.StatePath = config.ResolveStatePath(req.StatePathOverride, ctx.ConfigPath)
 
@@ -312,7 +289,7 @@ func SameVaultPath(left, right string) bool {
 func LoadVaultContext(opts ContextOptions) (*VaultContext, error) {
 	loadedCfg, resolvedConfigPath, err := loadGlobalConfigWithPath(opts.ConfigPathOverride)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, "", err)
+		return nil, svcerr.Wrap(codes.ErrConfigInvalid, "", err)
 	}
 	if loadedCfg == nil {
 		loadedCfg = &config.Config{}
@@ -325,7 +302,7 @@ func LoadVaultContext(opts ContextOptions) (*VaultContext, error) {
 			Cfg:        loadedCfg,
 			ConfigPath: resolvedConfigPath,
 			StatePath:  resolvedStatePath,
-		}, newError(CodeConfigInvalid, "", err)
+		}, svcerr.Wrap(codes.ErrConfigInvalid, "", err)
 	}
 
 	return &VaultContext{
@@ -383,11 +360,7 @@ func ResolveCurrentVault(cfg *config.Config, state *config.State) (*CurrentVault
 	if activeName != "" {
 		p, err := cfg.GetVaultPath(activeName)
 		if err != nil {
-			return nil, newError(
-				CodeVaultNotFound,
-				fmt.Sprintf("active vault '%s' not found in config", activeName),
-				err,
-			).WithSuggestion("Run 'rvn vault list' to see configured vaults, then 'rvn vault use <name>' to replace active_vault or 'rvn vault clear' to use default_vault")
+			return nil, svcerr.Wrap(codes.ErrVaultNotFound, fmt.Sprintf("active vault '%s' not found in config", activeName), err).WithSuggestion("Run 'rvn vault list' to see configured vaults, then 'rvn vault use <name>' to replace active_vault or 'rvn vault clear' to use default_vault")
 		}
 		return &CurrentVaultInfo{
 			Name:   activeName,
@@ -398,7 +371,7 @@ func ResolveCurrentVault(cfg *config.Config, state *config.State) (*CurrentVault
 
 	defaultPath, err := cfg.GetDefaultVaultPath()
 	if err != nil {
-		return nil, newError(CodeVaultNotSpecified, err.Error(), nil)
+		return nil, svcerr.New(codes.ErrVaultNotSpecified, err.Error())
 	}
 
 	return &CurrentVaultInfo{
@@ -504,10 +477,10 @@ func FocusVault(req VaultFocusRequest) (*VaultFocusResult, error) {
 		selected++
 	}
 	if selected == 0 {
-		return nil, newError(CodeMissingArgument, "vault focus requires a name, --path, or --clear", nil)
+		return nil, svcerr.New(codes.ErrMissingArgument, "vault focus requires a name, --path, or --clear")
 	}
 	if selected > 1 {
-		return nil, newError(CodeInvalidInput, "vault focus name, --path, and --clear are mutually exclusive", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "vault focus name, --path, and --clear are mutually exclusive")
 	}
 	if req.Clear {
 		return &VaultFocusResult{Cleared: true}, nil
@@ -521,28 +494,28 @@ func FocusVault(req VaultFocusRequest) (*VaultFocusResult, error) {
 		}
 		resolvedPath, err = ctx.Cfg.GetVaultPath(name)
 		if err != nil {
-			return nil, newError(CodeVaultNotFound, err.Error(), nil)
+			return nil, svcerr.New(codes.ErrVaultNotFound, err.Error())
 		}
 	} else if !filepath.IsAbs(rawPath) {
-		return nil, newError(CodeInvalidInput, fmt.Sprintf("vault focus path must be absolute: %s", rawPath), nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("vault focus path must be absolute: %s", rawPath))
 	}
 
 	absPath, err := filepath.Abs(strings.TrimSpace(resolvedPath))
 	if err != nil {
-		return nil, newError(CodeInvalidInput, fmt.Sprintf("failed to resolve vault focus path: %v", err), err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to resolve vault focus path: %v", err), err)
 	}
 	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, newError(CodeFileNotFound, fmt.Sprintf("vault focus path does not exist: %s", absPath), nil)
+			return nil, svcerr.New(codes.ErrFileNotFound, fmt.Sprintf("vault focus path does not exist: %s", absPath))
 		}
-		return nil, newError(CodeFileReadError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "", err)
 	}
 	if !info.IsDir() {
-		return nil, newError(CodeInvalidInput, fmt.Sprintf("vault focus path must be a directory: %s", absPath), nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("vault focus path must be a directory: %s", absPath))
 	}
 	if !looksLikeVault(absPath) {
-		return nil, newError(CodeInvalidInput, fmt.Sprintf("vault focus path is not a Raven vault: %s", absPath), nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("vault focus path is not a Raven vault: %s", absPath))
 	}
 
 	return &VaultFocusResult{
@@ -569,12 +542,12 @@ func UseVault(opts ContextOptions, name string) (*VaultUseResult, error) {
 
 	p, err := ctx.Cfg.GetVaultPath(name)
 	if err != nil {
-		return nil, newError(CodeVaultNotFound, err.Error(), nil)
+		return nil, svcerr.New(codes.ErrVaultNotFound, err.Error())
 	}
 
 	ctx.State.ActiveVault = name
 	if err := config.SaveState(ctx.StatePath, ctx.State); err != nil {
-		return nil, newError(CodeFileWriteError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "", err)
 	}
 
 	return &VaultUseResult{
@@ -599,7 +572,7 @@ func ClearActiveVault(opts ContextOptions) (*VaultClearResult, error) {
 	prev := strings.TrimSpace(ctx.State.ActiveVault)
 	ctx.State.ActiveVault = ""
 	if err := config.SaveState(ctx.StatePath, ctx.State); err != nil {
-		return nil, newError(CodeFileWriteError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "", err)
 	}
 
 	return &VaultClearResult{
@@ -624,12 +597,12 @@ func PinVault(opts ContextOptions, name string) (*VaultPinResult, error) {
 
 	p, err := ctx.Cfg.GetVaultPath(name)
 	if err != nil {
-		return nil, newError(CodeVaultNotFound, err.Error(), nil)
+		return nil, svcerr.New(codes.ErrVaultNotFound, err.Error())
 	}
 
 	ctx.Cfg.DefaultVault = name
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
-		return nil, newError(CodeFileWriteError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "", err)
 	}
 
 	return &VaultPinResult{
@@ -661,10 +634,10 @@ func AddVault(req VaultAddRequest) (*VaultAddResult, error) {
 	name := strings.TrimSpace(req.Name)
 	rawPath := strings.TrimSpace(req.RawPath)
 	if name == "" {
-		return nil, newError(CodeMissingArgument, "vault name is required", nil)
+		return nil, svcerr.New(codes.ErrMissingArgument, "vault name is required")
 	}
 	if err := vaultruntime.RequirePath(rawPath); err != nil {
-		return nil, newError(CodeMissingArgument, "vault path is required", err)
+		return nil, svcerr.Wrap(codes.ErrMissingArgument, "vault path is required", err)
 	}
 
 	ctx, err := LoadVaultContext(req.ContextOptions)
@@ -674,18 +647,18 @@ func AddVault(req VaultAddRequest) (*VaultAddResult, error) {
 
 	absPath, err := filepath.Abs(rawPath)
 	if err != nil {
-		return nil, newError(CodeInvalidInput, fmt.Sprintf("failed to resolve vault path: %v", err), err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to resolve vault path: %v", err), err)
 	}
 
 	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, newError(CodeFileNotFound, fmt.Sprintf("vault path does not exist: %s", absPath), nil)
+			return nil, svcerr.New(codes.ErrFileNotFound, fmt.Sprintf("vault path does not exist: %s", absPath))
 		}
-		return nil, newError(CodeFileReadError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "", err)
 	}
 	if !info.IsDir() {
-		return nil, newError(CodeInvalidInput, fmt.Sprintf("vault path must be a directory: %s", absPath), nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("vault path must be a directory: %s", absPath))
 	}
 
 	if ctx.Cfg.Vaults == nil {
@@ -694,7 +667,7 @@ func AddVault(req VaultAddRequest) (*VaultAddResult, error) {
 
 	prevPath, existed := ctx.Cfg.Vaults[name]
 	if existed && !req.Replace {
-		return nil, newError(CodeDuplicateName, fmt.Sprintf("vault '%s' already exists", name), nil)
+		return nil, svcerr.New(codes.ErrDuplicateName, fmt.Sprintf("vault '%s' already exists", name))
 	}
 
 	ctx.Cfg.Vaults[name] = absPath
@@ -703,7 +676,7 @@ func AddVault(req VaultAddRequest) (*VaultAddResult, error) {
 	}
 
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
-		return nil, newError(CodeFileWriteError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "", err)
 	}
 
 	return &VaultAddResult{
@@ -736,7 +709,7 @@ type VaultRemoveResult struct {
 func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return nil, newError(CodeMissingArgument, "vault name is required", nil)
+		return nil, svcerr.New(codes.ErrMissingArgument, "vault name is required")
 	}
 
 	ctx, err := LoadVaultContext(req.ContextOptions)
@@ -750,10 +723,10 @@ func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 	removingDefault := defaultName != "" && name == defaultName
 
 	if removingDefault && !req.ClearDefault {
-		return nil, newError(CodeConfirmationNeeded, fmt.Sprintf("vault '%s' is the current default vault", name), nil)
+		return nil, svcerr.New(codes.ErrConfirmationRequired, fmt.Sprintf("vault '%s' is the current default vault", name))
 	}
 	if removingActive && !req.ClearActive {
-		return nil, newError(CodeConfirmationNeeded, fmt.Sprintf("vault '%s' is the current active vault", name), nil)
+		return nil, svcerr.New(codes.ErrConfirmationRequired, fmt.Sprintf("vault '%s' is the current active vault", name))
 	}
 
 	removedPath := ""
@@ -764,7 +737,7 @@ func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 		}
 	}
 	if removedPath == "" {
-		return nil, newError(CodeVaultNotFound, fmt.Sprintf("vault '%s' not found in config", name), nil)
+		return nil, svcerr.New(codes.ErrVaultNotFound, fmt.Sprintf("vault '%s' not found in config", name))
 	}
 
 	defaultCleared := false
@@ -782,11 +755,11 @@ func RemoveVault(req VaultRemoveRequest) (*VaultRemoveResult, error) {
 	}
 
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
-		return nil, newError(CodeFileWriteError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "", err)
 	}
 	if activeCleared {
 		if err := config.SaveState(ctx.StatePath, ctx.State); err != nil {
-			return nil, newError(CodeFileWriteError, "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "", err)
 		}
 	}
 
@@ -832,7 +805,7 @@ func loadGlobalConfigAllowMissing(opts ContextOptions) (*GlobalConfigContext, er
 	if strings.TrimSpace(opts.ConfigPathOverride) == "" {
 		loadedCfg, err := config.Load()
 		if err != nil {
-			return nil, newError(CodeConfigInvalid, "", err)
+			return nil, svcerr.Wrap(codes.ErrConfigInvalid, "", err)
 		}
 		if loadedCfg == nil {
 			loadedCfg = &config.Config{}
@@ -857,12 +830,12 @@ func loadGlobalConfigAllowMissing(opts ContextOptions) (*GlobalConfigContext, er
 				ConfigExists: false,
 			}, nil
 		}
-		return nil, newError(CodeFileReadError, "", err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "", err)
 	}
 
 	loadedCfg, err := config.LoadFrom(resolvedPath)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, "", err)
+		return nil, svcerr.Wrap(codes.ErrConfigInvalid, "", err)
 	}
 	if loadedCfg == nil {
 		loadedCfg = &config.Config{}

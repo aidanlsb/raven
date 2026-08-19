@@ -15,18 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput   Code = codes.ErrInvalidInput
-	CodeFileWriteError Code = codes.ErrFileWrite
-)
-
 const WarnDocsFetchFailed = codes.WarnDocsFetchFailed
-
-func newError(code Code, message, suggestion string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
 
 type DocsResult struct {
 	Fetched   bool   `json:"fetched"`
@@ -58,16 +47,16 @@ type InitializeRequest struct {
 func Initialize(req InitializeRequest) (*Result, error) {
 	path := strings.TrimSpace(req.Path)
 	if path == "" {
-		return nil, newError(CodeInvalidInput, "path is required", "Usage: rvn init <path>", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "path is required").WithSuggestion("Usage: rvn init <path>")
 	}
 
 	if err := os.MkdirAll(path, 0o755); err != nil {
-		return nil, newError(CodeFileWriteError, "failed to create vault directory", "Check that the destination path is writable", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create vault directory", err).WithSuggestion("Check that the destination path is writable")
 	}
 
 	ravenDir := filepath.Join(path, ".raven")
 	if err := os.MkdirAll(ravenDir, 0o755); err != nil {
-		return nil, newError(CodeFileWriteError, "failed to create .raven directory", "Check that the destination path is writable", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create .raven directory", err).WithSuggestion("Check that the destination path is writable")
 	}
 
 	gitignorePath := filepath.Join(path, ".gitignore")
@@ -107,7 +96,7 @@ func Initialize(req InitializeRequest) (*Result, error) {
 			newContent = strings.TrimRight(existingContent, "\n") + "\n" + addition
 		}
 		if err := os.WriteFile(gitignorePath, []byte(newContent), 0o644); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to write .gitignore", "Check write permissions for .gitignore", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write .gitignore", err).WithSuggestion("Check write permissions for .gitignore")
 		}
 	} else if existingContent != "" {
 		gitignoreState = "unchanged"
@@ -115,11 +104,11 @@ func Initialize(req InitializeRequest) (*Result, error) {
 
 	createdConfig, err := config.CreateDefaultVaultConfig(path)
 	if err != nil {
-		return nil, newError(CodeFileWriteError, "failed to create raven.yaml", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create raven.yaml", err)
 	}
 	createdSchema, err := schema.CreateDefault(path)
 	if err != nil {
-		return nil, newError(CodeFileWriteError, "failed to create schema.yaml", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create schema.yaml", err)
 	}
 
 	result := &Result{

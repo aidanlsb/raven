@@ -4,11 +4,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -38,16 +40,16 @@ type SetByReferenceResult struct {
 
 func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if req.VaultConfig == nil {
-		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	if req.Schema == nil {
-		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
 	}
 	if strings.TrimSpace(req.Reference) == "" {
-		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn set <reference> field=value...", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "reference is required").WithSuggestion("Usage: rvn set <reference> field=value...")
 	}
 	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
@@ -60,7 +62,7 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 	}
 
 	if resolved.IsSection {
-		return nil, newError(ErrorInvalidInput, "set only supports file-level object frontmatter", "Use a file-level object ID without a section fragment", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "set only supports file-level object frontmatter").WithSuggestion("Use a file-level object ID without a section fragment")
 	}
 
 	result, err := SetObjectFile(SetObjectFileRequest{

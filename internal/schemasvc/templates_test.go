@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/codes"
 )
 
 func TestSetTemplateRejectsFrontmatter(t *testing.T) {
@@ -34,8 +36,8 @@ func TestSetTemplateRejectsFrontmatter(t *testing.T) {
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("error = %T, want *Error", err)
 	}
-	if svcErr.Code != ErrorValidation {
-		t.Fatalf("error code = %s, want %s", svcErr.Code, ErrorValidation)
+	if svcErr.Code != codes.ErrValidationFailed {
+		t.Fatalf("error code = %s, want %s", svcErr.Code, codes.ErrValidationFailed)
 	}
 	if !strings.Contains(svcErr.Message, "frontmatter") {
 		t.Fatalf("expected frontmatter validation message, got %q", svcErr.Message)

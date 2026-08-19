@@ -5,8 +5,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -86,11 +88,11 @@ var validFieldTypes = map[string]bool{
 func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, error) {
 	typeName := strings.TrimSpace(req.TypeName)
 	if typeName == "" {
-		return nil, newError(ErrorInvalidInput, "type name cannot be empty", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type name cannot be empty")
 	}
 
 	if schema.IsBuiltinType(typeName) {
-		return nil, newError(ErrorInvalidInput, fmt.Sprintf("'%s' is a built-in type", typeName), "Choose a different name", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type", typeName)).WithSuggestion("Choose a different name")
 	}
 
 	defaultPath := strings.TrimSpace(req.DefaultPath)
@@ -103,7 +105,7 @@ func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, erro
 	autoCreatedField := ""
 	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Types[typeName]; exists {
-			return newError(ErrorObjectExists, fmt.Sprintf("type '%s' already exists", typeName), "", nil, nil)
+			return svcerr.New(codes.ErrObjectExists, fmt.Sprintf("type '%s' already exists", typeName))
 		}
 
 		typesNode := schemadoc.EnsureMap(doc.Root(), "types")
@@ -142,7 +144,7 @@ func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, erro
 func AddTrait(rt *vaultruntime.Runtime, req AddTraitRequest) (*AddTraitResult, error) {
 	traitName := strings.TrimSpace(req.TraitName)
 	if traitName == "" {
-		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "trait name cannot be empty")
 	}
 
 	traitType := normalizeTraitTypeInput(req.TraitType)
@@ -150,7 +152,7 @@ func AddTrait(rt *vaultruntime.Runtime, req AddTraitRequest) (*AddTraitResult, e
 
 	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Traits[traitName]; exists {
-			return newError(ErrorObjectExists, fmt.Sprintf("trait '%s' already exists", traitName), "", nil, nil)
+			return svcerr.New(codes.ErrObjectExists, fmt.Sprintf("trait '%s' already exists", traitName))
 		}
 
 		traitsNode := schemadoc.EnsureMap(doc.Root(), "traits")
@@ -182,17 +184,11 @@ func AddField(rt *vaultruntime.Runtime, req AddFieldRequest) (*AddFieldResult, e
 	typeName := strings.TrimSpace(req.TypeName)
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
-		return nil, newError(ErrorInvalidInput, "type and field names are required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type and field names are required")
 	}
 
 	if schema.IsBuiltinType(typeName) {
-		return nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("cannot add fields to built-in type '%s'", typeName),
-			"Built-in types (page, section, date) have fixed definitions. Use traits for additional metadata.",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot add fields to built-in type '%s'", typeName)).WithSuggestion("Built-in types (page, section, date) have fixed definitions. Use traits for additional metadata.")
 	}
 	trimmedTarget := strings.TrimSpace(req.Target)
 	trimmedValues := splitCommaValues(req.Values)
@@ -201,17 +197,11 @@ func AddField(rt *vaultruntime.Runtime, req AddFieldRequest) (*AddFieldResult, e
 		sch := doc.Schema()
 		typeDef, exists := sch.Types[typeName]
 		if !exists {
-			return newError(
-				ErrorTypeNotFound,
-				fmt.Sprintf("type '%s' not found", typeName),
-				"Add the type first with 'rvn schema add type'",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName)).WithSuggestion("Add the type first with 'rvn schema add type'")
 		}
 		if typeDef.Fields != nil {
 			if _, exists := typeDef.Fields[fieldName]; exists {
-				return newError(ErrorObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", fieldName, typeName), "", nil, nil)
+				return svcerr.New(codes.ErrObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", fieldName, typeName))
 			}
 		}
 
@@ -227,7 +217,7 @@ func AddField(rt *vaultruntime.Runtime, req AddFieldRequest) (*AddFieldResult, e
 			if validation.TargetHint != "" {
 				details["target_hint"] = validation.TargetHint
 			}
-			return newError(ErrorInvalidInput, validation.Error, validation.Suggestion, details, nil)
+			return svcerr.New(codes.ErrInvalidInput, validation.Error).WithSuggestion(validation.Suggestion).WithDetails(details)
 		}
 
 		fieldType = validation.BaseType
@@ -240,7 +230,7 @@ func AddField(rt *vaultruntime.Runtime, req AddFieldRequest) (*AddFieldResult, e
 
 		typesNode, ok := doc.Root()["types"].(map[string]interface{})
 		if !ok {
-			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+			return svcerr.New(codes.ErrSchemaInvalid, "types section not found")
 		}
 		typeNode := schemadoc.EnsureMap(typesNode, typeName)
 		fieldsNode := schemadoc.EnsureMap(typeNode, "fields")

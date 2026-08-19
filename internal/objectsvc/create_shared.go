@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
@@ -17,6 +18,7 @@ import (
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -68,13 +70,7 @@ func lookupTypeDefinitionForCreate(sch *schema.Schema, typeName string) (*schema
 	}
 	sort.Strings(typeNames)
 
-	return nil, newError(
-		ErrorTypeNotFound,
-		fmt.Sprintf("type '%s' not found", typeName),
-		fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", ")),
-		map[string]interface{}{"available_types": typeNames},
-		nil,
-	)
+	return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName)).WithSuggestion(fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", "))).WithDetails(map[string]interface{}{"available_types": typeNames})
 }
 
 func normalizedCreateFieldValues(values map[string]fieldvalue.FieldValue, typeDef *schema.TypeDefinition, title string) map[string]fieldvalue.FieldValue {
@@ -222,7 +218,7 @@ func createObjectPage(req createPageRequest) (*pages.CreateResult, error) {
 		PagesRoot:         req.PagesRoot,
 	})
 	if err != nil {
-		return nil, newError(ErrorFileWrite, "failed to create object", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create object", err)
 	}
 	return result, nil
 }

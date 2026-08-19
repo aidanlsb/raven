@@ -5,8 +5,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 // ValueConvertChange describes one logical schema or vault-data mutation.
@@ -52,20 +54,20 @@ type ValueConvertPlan struct {
 // writing Markdown files.
 func BuildTraitConvertPlan(req ConvertTraitPlanRequest) (*ValueConvertPlan, error) {
 	if req.SchemaDoc == nil {
-		return nil, newError(ErrorInternal, "schema document is required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInternal, "schema document is required")
 	}
 
 	traits, ok := req.SchemaDoc.Root()["traits"].(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorSchemaInvalid, "traits section not found", "", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, "traits section not found")
 	}
 	rawTrait, ok := traits[req.TraitName]
 	if !ok {
-		return nil, newError(ErrorTraitNotFound, fmt.Sprintf("trait '%s' not found", req.TraitName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", req.TraitName))
 	}
 	traitNode, ok := rawTrait.(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorSchemaInvalid, fmt.Sprintf("trait '%s' has invalid definition", req.TraitName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("trait '%s' has invalid definition", req.TraitName))
 	}
 
 	plan := &ValueConvertPlan{Changes: make([]ValueConvertChange, 0)}
@@ -83,7 +85,7 @@ func BuildTraitConvertPlan(req ConvertTraitPlanRequest) (*ValueConvertPlan, erro
 
 	output, err := req.SchemaDoc.Marshal()
 	if err != nil {
-		return nil, MapSchemaDocError(err, "", ErrorSchemaInvalid)
+		return nil, MapSchemaDocError(err, "", codes.ErrSchemaInvalid)
 	}
 	plan.SchemaYAML = output
 	return plan, nil
@@ -93,32 +95,32 @@ func BuildTraitConvertPlan(req ConvertTraitPlanRequest) (*ValueConvertPlan, erro
 // writing Markdown files.
 func BuildFieldConvertPlan(req ConvertFieldPlanRequest) (*ValueConvertPlan, error) {
 	if req.SchemaDoc == nil {
-		return nil, newError(ErrorInternal, "schema document is required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInternal, "schema document is required")
 	}
 
 	types, ok := req.SchemaDoc.Root()["types"].(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, "types section not found")
 	}
 	rawType, ok := types[req.TypeName]
 	if !ok {
-		return nil, newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", req.TypeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", req.TypeName))
 	}
 	typeNode, ok := rawType.(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorSchemaInvalid, fmt.Sprintf("type '%s' has invalid definition", req.TypeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("type '%s' has invalid definition", req.TypeName))
 	}
 	fields, ok := typeNode["fields"].(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorFieldNotFound, fmt.Sprintf("type '%s' has no fields", req.TypeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("type '%s' has no fields", req.TypeName))
 	}
 	rawField, ok := fields[req.FieldName]
 	if !ok {
-		return nil, newError(ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", req.FieldName, req.TypeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", req.FieldName, req.TypeName))
 	}
 	fieldNode, ok := rawField.(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorSchemaInvalid, fmt.Sprintf("field '%s.%s' has invalid definition", req.TypeName, req.FieldName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("field '%s.%s' has invalid definition", req.TypeName, req.FieldName))
 	}
 
 	plan := &ValueConvertPlan{Changes: make([]ValueConvertChange, 0)}
@@ -143,7 +145,7 @@ func BuildFieldConvertPlan(req ConvertFieldPlanRequest) (*ValueConvertPlan, erro
 
 	output, err := req.SchemaDoc.Marshal()
 	if err != nil {
-		return nil, MapSchemaDocError(err, "", ErrorSchemaInvalid)
+		return nil, MapSchemaDocError(err, "", codes.ErrSchemaInvalid)
 	}
 	plan.SchemaYAML = output
 	return plan, nil

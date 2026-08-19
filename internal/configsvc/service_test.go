@@ -60,8 +60,8 @@ func TestResolveCurrentVaultRejectsMissingActiveVault(t *testing.T) {
 	if !ok {
 		t.Fatalf("ResolveCurrentVault() error = %T %v, want service error", err, err)
 	}
-	if svcErr.Code != CodeVaultNotFound {
-		t.Fatalf("ResolveCurrentVault() code = %q, want %q", svcErr.Code, CodeVaultNotFound)
+	if svcErr.Code != codes.ErrVaultNotFound {
+		t.Fatalf("ResolveCurrentVault() code = %q, want %q", svcErr.Code, codes.ErrVaultNotFound)
 	}
 	if !strings.Contains(svcErr.Message, "active vault 'personal' not found in config") {
 		t.Fatalf("ResolveCurrentVault() message = %q, want active vault name", svcErr.Message)
@@ -259,56 +259,56 @@ func TestSetValidatesSettings(t *testing.T) {
 	tests := []struct {
 		name     string
 		settings []string
-		code     Code
+		code     codes.ErrorCode
 	}{
 		{
 			name: "no fields",
-			code: CodeMissingArgument,
+			code: codes.ErrMissingArgument,
 		},
 		{
 			name:     "empty editor",
 			settings: []string{"editor=  "},
-			code:     CodeInvalidInput,
+			code:     codes.ErrInvalidInput,
 		},
 		{
 			name:     "invalid editor mode",
 			settings: []string{"editor_mode=background"},
-			code:     CodeInvalidInput,
+			code:     codes.ErrInvalidInput,
 		},
 		{
 			name:     "default vault must use pin",
 			settings: []string{"default_vault=personal"},
-			code:     CodeInvalidInput,
+			code:     codes.ErrInvalidInput,
 		},
 		{
 			name:     "empty UI markdown style",
 			settings: []string{"ui.markdown_style=\n"},
-			code:     CodeInvalidInput,
+			code:     codes.ErrInvalidInput,
 		},
 		{
 			name:     "unknown key",
 			settings: []string{"unknown=value"},
-			code:     CodeInvalidInput,
+			code:     codes.ErrInvalidInput,
 		},
 		{
 			name:     "removed single path key",
 			settings: []string{"vault=/path/to/notes"},
-			code:     CodeInvalidInput,
+			code:     codes.ErrInvalidInput,
 		},
 		{
 			name:     "removed state file key",
 			settings: []string{"state_file=runtime/state.toml"},
-			code:     CodeInvalidInput,
+			code:     codes.ErrInvalidInput,
 		},
 		{
 			name:     "malformed setting",
 			settings: []string{"editor"},
-			code:     CodeInvalidInput,
+			code:     codes.ErrInvalidInput,
 		},
 		{
 			name:     "duplicate key",
 			settings: []string{"editor=nvim", "editor=code"},
-			code:     CodeInvalidInput,
+			code:     codes.ErrInvalidInput,
 		},
 	}
 
@@ -348,25 +348,25 @@ func TestUnsetValidatesSelectionAndConfigPresence(t *testing.T) {
 		name       string
 		createFile bool
 		request    UnsetRequest
-		code       Code
+		code       codes.ErrorCode
 	}{
 		{
 			name:       "no selected fields",
 			createFile: true,
 			request:    UnsetRequest{},
-			code:       CodeMissingArgument,
+			code:       codes.ErrMissingArgument,
 		},
 		{
 			name:       "missing config file",
 			createFile: false,
 			request:    UnsetRequest{Keys: []string{"editor"}},
-			code:       CodeFileNotFound,
+			code:       codes.ErrFileNotFound,
 		},
 		{
 			name:       "removed state file key",
 			createFile: true,
 			request:    UnsetRequest{Keys: []string{"state_file"}},
-			code:       CodeInvalidInput,
+			code:       codes.ErrInvalidInput,
 		},
 	}
 
@@ -469,7 +469,7 @@ func TestVaultSelectionLifecycle(t *testing.T) {
 			name: "use rejects unknown vault",
 			run: func(t *testing.T, opts ContextOptions, _, _ string) {
 				_, err := UseVault(opts, "missing")
-				requireConfigServiceCode(t, err, CodeVaultNotFound)
+				requireConfigServiceCode(t, err, codes.ErrVaultNotFound)
 			},
 		},
 		{
@@ -495,7 +495,7 @@ func TestVaultSelectionLifecycle(t *testing.T) {
 			name: "pin rejects unknown vault",
 			run: func(t *testing.T, opts ContextOptions, _, _ string) {
 				_, err := PinVault(opts, "missing")
-				requireConfigServiceCode(t, err, CodeVaultNotFound)
+				requireConfigServiceCode(t, err, codes.ErrVaultNotFound)
 			},
 		},
 		{
@@ -549,42 +549,42 @@ func TestAddVaultValidationAndReplacement(t *testing.T) {
 	tests := []struct {
 		name    string
 		request func(root, vaultDir, filePath string) VaultAddRequest
-		code    Code
+		code    codes.ErrorCode
 	}{
 		{
 			name: "missing name",
 			request: func(_, vaultDir, _ string) VaultAddRequest {
 				return VaultAddRequest{RawPath: vaultDir}
 			},
-			code: CodeMissingArgument,
+			code: codes.ErrMissingArgument,
 		},
 		{
 			name: "missing path",
 			request: func(_, _, _ string) VaultAddRequest {
 				return VaultAddRequest{Name: "new"}
 			},
-			code: CodeMissingArgument,
+			code: codes.ErrMissingArgument,
 		},
 		{
 			name: "path does not exist",
 			request: func(root, _, _ string) VaultAddRequest {
 				return VaultAddRequest{Name: "new", RawPath: filepath.Join(root, "missing")}
 			},
-			code: CodeFileNotFound,
+			code: codes.ErrFileNotFound,
 		},
 		{
 			name: "path is not directory",
 			request: func(_, _, filePath string) VaultAddRequest {
 				return VaultAddRequest{Name: "new", RawPath: filePath}
 			},
-			code: CodeInvalidInput,
+			code: codes.ErrInvalidInput,
 		},
 		{
 			name: "duplicate requires replace",
 			request: func(_, vaultDir, _ string) VaultAddRequest {
 				return VaultAddRequest{Name: "existing", RawPath: vaultDir}
 			},
-			code: CodeDuplicateName,
+			code: codes.ErrDuplicateName,
 		},
 	}
 
@@ -739,16 +739,16 @@ func TestFocusVaultRejectsInvalidTargets(t *testing.T) {
 	tests := []struct {
 		name string
 		req  VaultFocusRequest
-		code Code
+		code codes.ErrorCode
 	}{
-		{name: "missing mode", req: VaultFocusRequest{}, code: CodeMissingArgument},
-		{name: "name and path", req: VaultFocusRequest{Name: "plain", Path: plainDir}, code: CodeInvalidInput},
-		{name: "clear and name", req: VaultFocusRequest{Name: "plain", Clear: true}, code: CodeInvalidInput},
-		{name: "relative path", req: VaultFocusRequest{Path: "relative"}, code: CodeInvalidInput},
-		{name: "missing path", req: VaultFocusRequest{Path: filepath.Join(root, "missing")}, code: CodeFileNotFound},
-		{name: "directory without marker", req: VaultFocusRequest{Path: plainDir}, code: CodeInvalidInput},
-		{name: "configured directory without marker", req: VaultFocusRequest{Name: "plain"}, code: CodeInvalidInput},
-		{name: "unknown name", req: VaultFocusRequest{Name: "missing"}, code: CodeVaultNotFound},
+		{name: "missing mode", req: VaultFocusRequest{}, code: codes.ErrMissingArgument},
+		{name: "name and path", req: VaultFocusRequest{Name: "plain", Path: plainDir}, code: codes.ErrInvalidInput},
+		{name: "clear and name", req: VaultFocusRequest{Name: "plain", Clear: true}, code: codes.ErrInvalidInput},
+		{name: "relative path", req: VaultFocusRequest{Path: "relative"}, code: codes.ErrInvalidInput},
+		{name: "missing path", req: VaultFocusRequest{Path: filepath.Join(root, "missing")}, code: codes.ErrFileNotFound},
+		{name: "directory without marker", req: VaultFocusRequest{Path: plainDir}, code: codes.ErrInvalidInput},
+		{name: "configured directory without marker", req: VaultFocusRequest{Name: "plain"}, code: codes.ErrInvalidInput},
+		{name: "unknown name", req: VaultFocusRequest{Name: "missing"}, code: codes.ErrVaultNotFound},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -767,17 +767,17 @@ func TestRemoveVaultRequiresConfirmation(t *testing.T) {
 		name         string
 		clearDefault bool
 		clearActive  bool
-		code         Code
+		code         codes.ErrorCode
 		wantRemoved  bool
 	}{
 		{
 			name: "default requires confirmation",
-			code: CodeConfirmationNeeded,
+			code: codes.ErrConfirmationRequired,
 		},
 		{
 			name:         "active also requires confirmation",
 			clearDefault: true,
-			code:         CodeConfirmationNeeded,
+			code:         codes.ErrConfirmationRequired,
 		},
 		{
 			name:         "confirmed default and active removal",
@@ -845,7 +845,7 @@ func TestRemoveVaultRequiresConfirmation(t *testing.T) {
 	}
 }
 
-func requireConfigServiceCode(t *testing.T, err error, want Code) {
+func requireConfigServiceCode(t *testing.T, err error, want codes.ErrorCode) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("error = nil, want %s", want)

@@ -8,10 +8,6 @@ import (
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-func newError(code codes.ErrorCode, message, suggestion string, details map[string]interface{}, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Details: details, Err: err}
-}
-
 type ListRequest struct {
 	Scope         string
 	Dest          string
@@ -90,16 +86,16 @@ type DoctorResult struct {
 func List(req ListRequest) (*ListResult, error) {
 	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to load skill catalog", err)
 	}
 
 	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use --scope user|project")
 	}
 	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, svcerr.Wrap(codes.ErrSkillPathUnresolved, err.Error(), err).WithSuggestion("Use --dest to set an explicit install root")
 	}
 
 	items := InstalledSummaries(catalog, root)
@@ -124,7 +120,7 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 	skillName := strings.TrimSpace(req.Name)
 	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to load skill catalog", err)
 	}
 
 	if skillName != "" {
@@ -134,28 +130,22 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 			for _, item := range available {
 				names = append(names, item.Name)
 			}
-			return nil, newError(
-				codes.ErrSkillNotFound,
-				fmt.Sprintf("skill '%s' not found", skillName),
-				"Run 'rvn skill list' to see available skills",
-				map[string]interface{}{"available": names},
-				nil,
-			)
+			return nil, svcerr.New(codes.ErrSkillNotFound, fmt.Sprintf("skill '%s' not found", skillName)).WithSuggestion("Run 'rvn skill list' to see available skills").WithDetails(map[string]interface{}{"available": names})
 		}
 	}
 
 	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use --scope user|project")
 	}
 	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, svcerr.Wrap(codes.ErrSkillPathUnresolved, err.Error(), err).WithSuggestion("Use --dest to set an explicit install root")
 	}
 
 	plan, err := PlanSync(catalog, skillName, scope, root)
 	if err != nil {
-		return nil, newError(codes.ErrInternal, "failed to build sync plan", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to build sync plan", err)
 	}
 
 	if !req.Confirm {
@@ -168,7 +158,7 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 
 	applied, err := ApplySync(plan)
 	if err != nil {
-		return nil, newError(codes.ErrFileWrite, "failed to apply sync", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to apply sync", err)
 	}
 	return &SyncResult{
 		Mode:           "applied",
@@ -186,7 +176,7 @@ func Sync(req SyncRequest) (*SyncResult, error) {
 func Install(req InstallRequest) (*InstallResult, error) {
 	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to load skill catalog", err)
 	}
 
 	names, err := resolveInstallNames(catalog, req.Names)
@@ -196,11 +186,11 @@ func Install(req InstallRequest) (*InstallResult, error) {
 
 	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use --scope user|project")
 	}
 	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, svcerr.Wrap(codes.ErrSkillPathUnresolved, err.Error(), err).WithSuggestion("Use --dest to set an explicit install root")
 	}
 
 	result := &InstallResult{
@@ -213,7 +203,7 @@ func Install(req InstallRequest) (*InstallResult, error) {
 	for _, name := range names {
 		plan, err := PlanSync(catalog, name, scope, root)
 		if err != nil {
-			return nil, newError(codes.ErrInternal, "failed to build install plan", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrInternal, "failed to build install plan", err)
 		}
 		result.Skills = append(result.Skills, InstallSkillResult{Name: name, Plan: plan})
 		result.Installed += plan.Installed
@@ -232,7 +222,7 @@ func Install(req InstallRequest) (*InstallResult, error) {
 	for i := range result.Skills {
 		n, err := ApplySync(result.Skills[i].Plan)
 		if err != nil {
-			return nil, newError(codes.ErrFileWrite, "failed to apply install", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to apply install", err)
 		}
 		applied += n
 	}
@@ -271,13 +261,7 @@ func resolveInstallNames(catalog map[string]*Skill, requested []string) ([]strin
 			for _, item := range available {
 				availableNames = append(availableNames, item.Name)
 			}
-			return nil, newError(
-				codes.ErrSkillNotFound,
-				fmt.Sprintf("skill '%s' not found", name),
-				"Run 'rvn skill list' to see available skills",
-				map[string]interface{}{"available": availableNames},
-				nil,
-			)
+			return nil, svcerr.New(codes.ErrSkillNotFound, fmt.Sprintf("skill '%s' not found", name)).WithSuggestion("Run 'rvn skill list' to see available skills").WithDetails(map[string]interface{}{"available": availableNames})
 		}
 		if _, dup := seen[name]; dup {
 			continue
@@ -292,33 +276,27 @@ func Remove(req RemoveRequest) (*RemoveResult, error) {
 	skillName := strings.TrimSpace(req.Name)
 	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to load skill catalog", err)
 	}
 	if _, ok := catalog[skillName]; !ok {
-		return nil, newError(codes.ErrSkillNotFound, fmt.Sprintf("skill '%s' not found", skillName), "Run 'rvn skill list' to see available skills", nil, nil)
+		return nil, svcerr.New(codes.ErrSkillNotFound, fmt.Sprintf("skill '%s' not found", skillName)).WithSuggestion("Run 'rvn skill list' to see available skills")
 	}
 
 	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use --scope user|project")
 	}
 	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, svcerr.Wrap(codes.ErrSkillPathUnresolved, err.Error(), err).WithSuggestion("Use --dest to set an explicit install root")
 	}
 
 	plan, err := PlanRemove(skillName, scope, root)
 	if err != nil {
-		return nil, newError(codes.ErrInvalidInput, err.Error(), "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err)
 	}
 	if !plan.Exists {
-		return nil, newError(
-			codes.ErrSkillNotInstalled,
-			fmt.Sprintf("skill '%s' is not installed", skillName),
-			"Run 'rvn skill list --installed' to see installed skills",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrSkillNotInstalled, fmt.Sprintf("skill '%s' is not installed", skillName)).WithSuggestion("Run 'rvn skill list --installed' to see installed skills")
 	}
 
 	if !req.Confirm {
@@ -326,7 +304,7 @@ func Remove(req RemoveRequest) (*RemoveResult, error) {
 	}
 
 	if err := ApplyRemove(plan); err != nil {
-		return nil, newError(codes.ErrFileWrite, "failed to apply removal", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to apply removal", err)
 	}
 	return &RemoveResult{Mode: "applied", Removed: true, SkillName: skillName, Plan: plan}, nil
 }
@@ -334,17 +312,17 @@ func Remove(req RemoveRequest) (*RemoveResult, error) {
 func RunDoctor(req DoctorRequest) (*DoctorResult, error) {
 	catalog, err := LoadCatalog()
 	if err != nil {
-		return nil, newError(codes.ErrInternal, "failed to load skill catalog", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to load skill catalog", err)
 	}
 
 	scope, err := ParseScope(strings.TrimSpace(req.Scope))
 	if err != nil {
-		return nil, newError(codes.ErrInvalidInput, err.Error(), "Use --scope user|project", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use --scope user|project")
 	}
 
 	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
 	if err != nil {
-		return nil, newError(codes.ErrSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
+		return nil, svcerr.Wrap(codes.ErrSkillPathUnresolved, err.Error(), err).WithSuggestion("Use --dest to set an explicit install root")
 	}
 
 	return &DoctorResult{Reports: []DoctorReport{Doctor(catalog, scope, root)}}, nil

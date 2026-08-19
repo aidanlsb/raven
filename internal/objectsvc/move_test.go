@@ -9,11 +9,13 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -204,12 +206,12 @@ func TestMoveFileRenameFailureDoesNotRewriteBacklinks(t *testing.T) {
 		t.Fatal("expected MoveFile() to fail")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorFileWrite {
-		t.Fatalf("error code = %s, want %s", svcErr.Code, ErrorFileWrite)
+	if svcErr.Code != codes.ErrFileWrite {
+		t.Fatalf("error code = %s, want %s", svcErr.Code, codes.ErrFileWrite)
 	}
 
 	content := v.ReadFile("notes/ref.md")
@@ -297,12 +299,12 @@ func TestMoveFileRollsBackWhenRefRewriteWriteFails(t *testing.T) {
 		t.Fatal("expected MoveFile() to fail")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorValidationFailed {
-		t.Fatalf("error code = %s, want %s", svcErr.Code, ErrorValidationFailed)
+	if svcErr.Code != codes.ErrValidationFailed {
+		t.Fatalf("error code = %s, want %s", svcErr.Code, codes.ErrValidationFailed)
 	}
 
 	content := v.ReadFile("notes/ref.md")
@@ -531,7 +533,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 		destRel       string
 		sourceObjID   string
 		destObjID     string
-		wantErrCode   ErrorCode
+		wantErrCode   codes.ErrorCode
 		wantErrSubstr string
 	}{
 		{
@@ -541,7 +543,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 			destRel:       "private/freya.md",
 			sourceObjID:   "people/freya",
 			destObjID:     "private/freya",
-			wantErrCode:   ErrorValidationFailed,
+			wantErrCode:   codes.ErrValidationFailed,
 			wantErrSubstr: "protected or system-managed",
 		},
 		{
@@ -551,7 +553,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 			destRel:       "people/freya.md",
 			sourceObjID:   "private/freya",
 			destObjID:     "people/freya",
-			wantErrCode:   ErrorValidationFailed,
+			wantErrCode:   codes.ErrValidationFailed,
 			wantErrSubstr: "protected or system-managed",
 		},
 		{
@@ -561,7 +563,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 			destRel:       "archive/freya.md",
 			sourceObjID:   "people/freya",
 			destObjID:     "archive/freya",
-			wantErrCode:   ErrorValidationFailed,
+			wantErrCode:   codes.ErrValidationFailed,
 			wantErrSubstr: "excluded paths",
 		},
 		{
@@ -571,7 +573,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 			destRel:       "templates/freya.md",
 			sourceObjID:   "people/freya",
 			destObjID:     "templates/freya",
-			wantErrCode:   ErrorValidationFailed,
+			wantErrCode:   codes.ErrValidationFailed,
 			wantErrSubstr: "template files",
 		},
 		{
@@ -583,7 +585,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 			destRel:       "blueprints/freya.md",
 			sourceObjID:   "people/freya",
 			destObjID:     "blueprints/freya",
-			wantErrCode:   ErrorValidationFailed,
+			wantErrCode:   codes.ErrValidationFailed,
 			wantErrSubstr: "template files",
 		},
 		{
@@ -593,7 +595,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 			destRel:       ".raven/freya.md",
 			sourceObjID:   "people/freya",
 			destObjID:     ".raven/freya",
-			wantErrCode:   ErrorValidationFailed,
+			wantErrCode:   codes.ErrValidationFailed,
 			wantErrSubstr: "protected or system-managed",
 		},
 	}
@@ -619,7 +621,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 				t.Fatalf("MoveFile() error = nil, want error with code %s", tt.wantErrCode)
 			}
 
-			var svcErr *Error
+			var svcErr *svcerr.Error
 			if !errors.As(err, &svcErr) {
 				t.Fatalf("expected *Error, got %T: %v", err, err)
 			}

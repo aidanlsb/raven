@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -11,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -37,13 +39,13 @@ type CreateResult struct {
 
 func Create(req CreateRequest) (*CreateResult, error) {
 	if req.Schema == nil {
-		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
 	}
 	if strings.TrimSpace(req.TypeName) == "" {
-		return nil, newError(ErrorInvalidInput, "type is required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type is required")
 	}
 	if strings.TrimSpace(req.Title) == "" {
-		return nil, newError(ErrorInvalidInput, "title is required", "Usage: rvn new <type> <title> --json", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "title is required").WithSuggestion("Usage: rvn new <type> <title> --json")
 	}
 	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
 	if owned {
@@ -76,13 +78,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 			details["name_field"] = typeDef.NameField
 			details["name_field_hint"] = fmt.Sprintf("The title argument auto-populates the '%s' field", typeDef.NameField)
 		}
-		return nil, newError(
-			ErrorRequiredField,
-			fmt.Sprintf("Missing required fields: %s", strings.Join(missingNames, ", ")),
-			fmt.Sprintf("Retry the same call with: field: {%s}", buildFieldTemplateExample(missingNames)),
-			details,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrRequiredFieldMissing, fmt.Sprintf("Missing required fields: %s", strings.Join(missingNames, ", "))).WithSuggestion(fmt.Sprintf("Retry the same call with: field: {%s}", buildFieldTemplateExample(missingNames))).WithDetails(details)
 	}
 
 	resolvedTargetPath := pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot)
@@ -95,24 +91,18 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, err
 	}
 	if pages.Exists(req.VaultPath, resolvedTargetPath) {
-		return nil, newError(
-			ErrorFileExists,
-			fmt.Sprintf("file already exists: %s.md", resolvedSlugPath),
-			"Choose a different title, or use `rvn open <reference>` to open the existing object",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrFileExists, fmt.Sprintf("file already exists: %s.md", resolvedSlugPath)).WithSuggestion("Choose a different title, or use `rvn open <reference>` to open the existing object")
 	}
 
 	templateOverride, err := schema.ResolveTypeTemplateFile(req.Schema, req.TypeName, req.TemplateID)
 	if err != nil {
-		return nil, newError(ErrorInvalidInput, err.Error(), "Use `rvn schema template list --type <type_name>` to see available template IDs", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use `rvn schema template list --type <type_name>` to see available template IDs")
 	}
 
 	refCtx := createRefValidationContext(rt, nil)
 	validatedFields, _, err := validateCreateFieldValues(req.TypeName, fieldValues, req.Schema, nil, refCtx)
 	if err != nil {
-		return nil, newError(ErrorValidationFailed, err.Error(), "Ensure values match the schema field types for this object", nil, err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, err.Error(), err).WithSuggestion("Ensure values match the schema field types for this object")
 	}
 
 	result, err := createObjectPage(createPageRequest{

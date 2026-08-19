@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -85,16 +86,10 @@ type RemoveResult struct {
 func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult, error) {
 	typeName := strings.TrimSpace(req.TypeName)
 	if typeName == "" {
-		return nil, newError(ErrorInvalidInput, "type name cannot be empty", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type name cannot be empty")
 	}
 	if schema.IsBuiltinType(typeName) {
-		return nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("'%s' is a built-in type and cannot be modified", typeName),
-			"",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be modified", typeName))
 	}
 
 	changes := make([]string, 0)
@@ -102,18 +97,12 @@ func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult,
 		sch := doc.Schema()
 		typeDef, exists := sch.Types[typeName]
 		if !exists {
-			return newError(
-				ErrorTypeNotFound,
-				fmt.Sprintf("type '%s' not found", typeName),
-				"Use 'rvn schema add type' to create it",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName)).WithSuggestion("Use 'rvn schema add type' to create it")
 		}
 
 		typesNode, ok := doc.Root()["types"].(map[string]interface{})
 		if !ok {
-			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+			return svcerr.New(codes.ErrSchemaInvalid, "types section not found")
 		}
 		typeNode := schemadoc.EnsureMap(typesNode, typeName)
 
@@ -143,13 +132,7 @@ func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult,
 					if fieldDef, ok := typeDef.Fields[req.NameField]; ok {
 						fieldExists = true
 						if fieldDef.Type != schema.FieldTypeString {
-							return newError(
-								ErrorInvalidInput,
-								fmt.Sprintf("name_field must reference a string field, '%s' is type '%s'", req.NameField, fieldDef.Type),
-								"Choose a string field or create a new one",
-								nil,
-								nil,
-							)
+							return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("name_field must reference a string field, '%s' is type '%s'", req.NameField, fieldDef.Type)).WithSuggestion("Choose a string field or create a new one")
 						}
 					}
 				}
@@ -171,13 +154,7 @@ func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult,
 
 		if strings.TrimSpace(req.AddTrait) != "" {
 			if _, exists := sch.Traits[req.AddTrait]; !exists {
-				return newError(
-					ErrorTraitNotFound,
-					fmt.Sprintf("trait '%s' not found", req.AddTrait),
-					"Add it first with 'rvn schema add trait'",
-					nil,
-					nil,
-				)
+				return svcerr.New(codes.ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", req.AddTrait)).WithSuggestion("Add it first with 'rvn schema add trait'")
 			}
 
 			currentTraits := interfaceSlice(typeNode["traits"])
@@ -204,13 +181,7 @@ func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult,
 		}
 
 		if len(changes) == 0 {
-			return newError(
-				ErrorInvalidInput,
-				"no changes specified",
-				"Use flags like --default-path, --description, --name-field, --add-trait, --remove-trait",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrInvalidInput, "no changes specified").WithSuggestion("Use flags like --default-path, --description, --name-field, --add-trait, --remove-trait")
 		}
 
 		return nil
@@ -228,7 +199,7 @@ func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult,
 func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResult, error) {
 	traitName := strings.TrimSpace(req.TraitName)
 	if traitName == "" {
-		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "trait name cannot be empty")
 	}
 	if err := rejectUpdateRemap("trait", traitName, req.TraitType, req.Values); err != nil {
 		return nil, err
@@ -238,13 +209,7 @@ func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResul
 	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		traitDef, exists := doc.Schema().Traits[traitName]
 		if !exists {
-			return newError(
-				ErrorTraitNotFound,
-				fmt.Sprintf("trait '%s' not found", traitName),
-				"Use 'rvn schema add trait' to create it",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName)).WithSuggestion("Use 'rvn schema add trait' to create it")
 		}
 
 		traitsNode := schemadoc.EnsureMap(doc.Root(), "traits")
@@ -259,13 +224,7 @@ func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResul
 		}
 
 		if len(changes) == 0 {
-			return newError(
-				ErrorInvalidInput,
-				"no changes specified",
-				"Use --default; use 'rvn schema convert trait' for type or value changes",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrInvalidInput, "no changes specified").WithSuggestion("Use --default; use 'rvn schema convert trait' for type or value changes")
 		}
 		return nil
 	})
@@ -283,7 +242,7 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 	typeName := strings.TrimSpace(req.TypeName)
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
-		return nil, newError(ErrorInvalidInput, "type and field names are required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type and field names are required")
 	}
 	if err := rejectUpdateRemap("field", typeName+" "+fieldName, req.FieldType, req.Values); err != nil {
 		return nil, err
@@ -294,35 +253,17 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 		sch := doc.Schema()
 		typeDef, exists := sch.Types[typeName]
 		if !exists {
-			return newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
+			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName))
 		}
 		if schema.IsBuiltinType(typeName) {
-			return newError(
-				ErrorInvalidInput,
-				fmt.Sprintf("cannot modify fields on built-in type '%s'", typeName),
-				"Built-in types (page, section, date) have fixed definitions.",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot modify fields on built-in type '%s'", typeName)).WithSuggestion("Built-in types (page, section, date) have fixed definitions.")
 		}
 		if typeDef == nil || typeDef.Fields == nil {
-			return newError(
-				ErrorFieldNotFound,
-				fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName),
-				"Use 'rvn schema add field' to create it",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName)).WithSuggestion("Use 'rvn schema add field' to create it")
 		}
 		currentFieldDef, ok := typeDef.Fields[fieldName]
 		if !ok {
-			return newError(
-				ErrorFieldNotFound,
-				fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName),
-				"Use 'rvn schema add field' to create it",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName)).WithSuggestion("Use 'rvn schema add field' to create it")
 		}
 
 		effectiveFieldType := currentFieldType(currentFieldDef)
@@ -349,7 +290,7 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 			if validation.TargetHint != "" {
 				details["target_hint"] = validation.TargetHint
 			}
-			return newError(ErrorInvalidInput, validation.Error, validation.Suggestion, details, nil)
+			return svcerr.New(codes.ErrInvalidInput, validation.Error).WithSuggestion(validation.Suggestion).WithDetails(details)
 		}
 
 		if req.Required == "true" {
@@ -380,13 +321,7 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 						if len(missing) > 5 {
 							details["affected_objects"] = append(missing[:5], "... and more")
 						}
-						return newError(
-							ErrorDataIntegrity,
-							fmt.Sprintf("%d objects of type '%s' lack field '%s'", len(missing), typeName, fieldName),
-							"Add the field to these files, then retry",
-							details,
-							nil,
-						)
+						return svcerr.New(codes.ErrDataIntegrityBlock, fmt.Sprintf("%d objects of type '%s' lack field '%s'", len(missing), typeName, fieldName)).WithSuggestion("Add the field to these files, then retry").WithDetails(details)
 					}
 				}
 			}
@@ -394,28 +329,16 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 
 		typesNode, ok := doc.Root()["types"].(map[string]interface{})
 		if !ok {
-			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+			return svcerr.New(codes.ErrSchemaInvalid, "types section not found")
 		}
 		typeNode, ok := typesNode[typeName].(map[string]interface{})
 		if !ok {
-			return newError(
-				ErrorSchemaInvalid,
-				fmt.Sprintf("type '%s' has invalid schema definition", typeName),
-				"",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("type '%s' has invalid schema definition", typeName))
 		}
 
 		fieldsNode, ok := typeNode["fields"].(map[string]interface{})
 		if !ok {
-			return newError(
-				ErrorSchemaInvalid,
-				fmt.Sprintf("type '%s' has invalid fields definition", typeName),
-				"",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("type '%s' has invalid fields definition", typeName))
 		}
 		fieldNode := schemadoc.EnsureMap(fieldsNode, fieldName)
 
@@ -443,13 +366,7 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 		}
 
 		if len(changes) == 0 {
-			return newError(
-				ErrorInvalidInput,
-				"no changes specified",
-				"Use flags like --required, --default, --target, --description; use 'rvn schema convert field' for type or value changes",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrInvalidInput, "no changes specified").WithSuggestion("Use flags like --required, --default, --target, --description; use 'rvn schema convert field' for type or value changes")
 		}
 		return nil
 	})
@@ -464,7 +381,7 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 	}, nil
 }
 
-func rejectUpdateRemap(kind, target, requestedType, values string) *Error {
+func rejectUpdateRemap(kind, target, requestedType, values string) *svcerr.Error {
 	flags := make([]string, 0, 2)
 	if strings.TrimSpace(requestedType) != "" {
 		flags = append(flags, "--type")
@@ -476,17 +393,14 @@ func rejectUpdateRemap(kind, target, requestedType, values string) *Error {
 		return nil
 	}
 
-	return newError(
-		ErrorInvalidInput,
+	return svcerr.New(
+		codes.ErrInvalidInput,
 		fmt.Sprintf("schema update %s does not support %s", kind, strings.Join(flags, " or ")),
-		fmt.Sprintf(
-			"Use 'rvn schema convert %s %s [--type <target-type>] --map-json <mapping>' to migrate schema and live values",
-			kind,
-			target,
-		),
-		map[string]interface{}{"unsupported_flags": flags},
-		nil,
-	)
+	).WithSuggestion(fmt.Sprintf(
+		"Use 'rvn schema convert %s %s [--type <target-type>] --map-json <mapping>' to migrate schema and live values",
+		kind,
+		target,
+	)).WithDetails(map[string]interface{}{"unsupported_flags": flags})
 }
 
 func currentTraitType(def *schema.TraitDefinition) string {
@@ -509,22 +423,16 @@ func currentFieldType(def *schema.FieldDefinition) string {
 func RemoveType(rt *vaultruntime.Runtime, req RemoveTypeRequest) (*RemoveResult, error) {
 	typeName := strings.TrimSpace(req.TypeName)
 	if typeName == "" {
-		return nil, newError(ErrorInvalidInput, "type name cannot be empty", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type name cannot be empty")
 	}
 	if schema.IsBuiltinType(typeName) {
-		return nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("'%s' is a built-in type and cannot be removed", typeName),
-			"",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be removed", typeName))
 	}
 
 	warnings := make([]Warning, 0)
 	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Types[typeName]; !exists {
-			return newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
+			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName))
 		}
 
 		dbErr := rt.OpenDB()
@@ -556,20 +464,14 @@ func RemoveType(rt *vaultruntime.Runtime, req RemoveTypeRequest) (*RemoveResult,
 					if len(objects) > len(sample) {
 						details["remaining_count"] = len(objects) - len(sample)
 					}
-					return newError(
-						ErrorConfirmation,
-						fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
-						"Use --force to skip confirmation",
-						details,
-						nil,
-					)
+					return svcerr.New(codes.ErrConfirmationRequired, fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName)).WithSuggestion("Use --force to skip confirmation").WithDetails(details)
 				}
 			}
 		}
 
 		typesNode, ok := doc.Root()["types"].(map[string]interface{})
 		if !ok {
-			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+			return svcerr.New(codes.ErrSchemaInvalid, "types section not found")
 		}
 		delete(typesNode, typeName)
 		return nil
@@ -587,13 +489,13 @@ func RemoveType(rt *vaultruntime.Runtime, req RemoveTypeRequest) (*RemoveResult,
 func RemoveTrait(rt *vaultruntime.Runtime, req RemoveTraitRequest) (*RemoveResult, error) {
 	traitName := strings.TrimSpace(req.TraitName)
 	if traitName == "" {
-		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "trait name cannot be empty")
 	}
 
 	warnings := make([]Warning, 0)
 	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Traits[traitName]; !exists {
-			return newError(ErrorTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "", nil, nil)
+			return svcerr.New(codes.ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName))
 		}
 
 		dbErr := rt.OpenDB()
@@ -608,16 +510,10 @@ func RemoveTrait(rt *vaultruntime.Runtime, req RemoveTraitRequest) (*RemoveResul
 					Message: fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
 				})
 				if req.Interactive && !req.Force {
-					return newError(
-						ErrorConfirmation,
-						fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
-						"Use --force to skip confirmation",
-						map[string]interface{}{
-							"trait":          traitName,
-							"affected_count": len(instances),
-						},
-						nil,
-					)
+					return svcerr.New(codes.ErrConfirmationRequired, fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName)).WithSuggestion("Use --force to skip confirmation").WithDetails(map[string]interface{}{
+						"trait":          traitName,
+						"affected_count": len(instances),
+					})
 				}
 			}
 		}
@@ -640,30 +536,24 @@ func RemoveField(rt *vaultruntime.Runtime, req RemoveFieldRequest) (*RemoveResul
 	typeName := strings.TrimSpace(req.TypeName)
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
-		return nil, newError(ErrorInvalidInput, "type and field names are required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type and field names are required")
 	}
 
 	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		typeDef, exists := doc.Schema().Types[typeName]
 		if !exists {
-			return newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
+			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName))
 		}
 		if schema.IsBuiltinType(typeName) {
-			return newError(
-				ErrorInvalidInput,
-				fmt.Sprintf("cannot remove fields from built-in type '%s'", typeName),
-				"Built-in types (page, section, date) have fixed definitions.",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot remove fields from built-in type '%s'", typeName)).WithSuggestion("Built-in types (page, section, date) have fixed definitions.")
 		}
 		if typeDef == nil || typeDef.Fields == nil {
-			return newError(ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "", nil, nil)
+			return svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName))
 		}
 
 		fieldDef, exists := typeDef.Fields[fieldName]
 		if !exists {
-			return newError(ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "", nil, nil)
+			return svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName))
 		}
 
 		if fieldDef != nil && fieldDef.Required {
@@ -674,44 +564,26 @@ func RemoveField(rt *vaultruntime.Runtime, req RemoveFieldRequest) (*RemoveResul
 			if dbErr == nil {
 				db := rt.DB
 				if objects, objectsErr := objectsByType(db, typeName); objectsErr == nil && len(objects) > 0 {
-					return newError(
-						ErrorDataIntegrity,
-						fmt.Sprintf("cannot remove required field '%s': %d objects have this field", fieldName, len(objects)),
-						"First make the field optional with 'rvn schema update field', then remove it",
-						map[string]interface{}{
-							"field":          fieldName,
-							"type":           typeName,
-							"affected_count": len(objects),
-						},
-						nil,
-					)
+					return svcerr.New(codes.ErrDataIntegrityBlock, fmt.Sprintf("cannot remove required field '%s': %d objects have this field", fieldName, len(objects))).WithSuggestion("First make the field optional with 'rvn schema update field', then remove it").WithDetails(map[string]interface{}{
+						"field":          fieldName,
+						"type":           typeName,
+						"affected_count": len(objects),
+					})
 				}
 			}
 		}
 
 		typesNode, ok := doc.Root()["types"].(map[string]interface{})
 		if !ok {
-			return newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+			return svcerr.New(codes.ErrSchemaInvalid, "types section not found")
 		}
 		typeNode, ok := typesNode[typeName].(map[string]interface{})
 		if !ok {
-			return newError(
-				ErrorSchemaInvalid,
-				fmt.Sprintf("type '%s' has invalid schema definition", typeName),
-				"",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("type '%s' has invalid schema definition", typeName))
 		}
 		fieldsNode, ok := typeNode["fields"].(map[string]interface{})
 		if !ok {
-			return newError(
-				ErrorSchemaInvalid,
-				fmt.Sprintf("type '%s' has invalid fields definition", typeName),
-				"",
-				nil,
-				nil,
-			)
+			return svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("type '%s' has invalid fields definition", typeName))
 		}
 
 		delete(fieldsNode, fieldName)
@@ -731,14 +603,8 @@ func RemoveField(rt *vaultruntime.Runtime, req RemoveFieldRequest) (*RemoveResul
 	}, nil
 }
 
-func indexRebuildRequiredError(err error) *Error {
-	return newError(
-		ErrorDatabase,
-		"index requires a full reindex",
-		"Run 'rvn reindex --full' and retry",
-		nil,
-		err,
-	)
+func indexRebuildRequiredError(err error) *svcerr.Error {
+	return svcerr.Wrap(codes.ErrDatabase, "index requires a full reindex", err).WithSuggestion("Run 'rvn reindex --full' and retry")
 }
 
 func isClearSentinel(value string) bool {

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexschema"
@@ -21,6 +22,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 	"github.com/aidanlsb/raven/internal/wikilink"
@@ -88,13 +90,13 @@ var (
 
 func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if strings.TrimSpace(req.SourceFile) == "" || strings.TrimSpace(req.DestinationFile) == "" {
-		return nil, newError(ErrorInvalidInput, "source and destination files are required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "source and destination files are required")
 	}
 	if strings.TrimSpace(req.SourceObjectID) == "" || strings.TrimSpace(req.DestinationObject) == "" {
-		return nil, newError(ErrorInvalidInput, "source and destination object IDs are required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "source and destination object IDs are required")
 	}
 
 	// Guard both source and destination against protected prefixes, exclude
@@ -140,7 +142,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 
 	sourceSnapshot, err := readFileSnapshot(req.SourceFile)
 	if err != nil {
-		return nil, newError(ErrorFileRead, "failed to read source file", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read source file", err)
 	}
 
 	writePlan, warnings, err := prepareMoveWritePlan(req, refPlans, linkPlans, sourceSnapshot, objectRoot, pageRoot)
@@ -155,19 +157,19 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	}
 
 	if err := os.MkdirAll(filepath.Dir(req.DestinationFile), 0o755); err != nil {
-		return nil, newError(ErrorFileWrite, "failed to create destination directory", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create destination directory", err)
 	}
 	if len(writePlan.destinationContent) > 0 {
 		if err := writeMoveFile(req.DestinationFile, writePlan.destinationContent, sourceSnapshot.perm); err != nil {
-			return nil, newError(ErrorFileWrite, "failed to write moved file", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write moved file", err)
 		}
 		if err := os.Remove(req.SourceFile); err != nil {
 			_ = os.Remove(req.DestinationFile)
-			return nil, newError(ErrorFileWrite, "failed to remove source file after move", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to remove source file after move", err)
 		}
 	} else {
 		if err := os.Rename(req.SourceFile, req.DestinationFile); err != nil {
-			return nil, newError(ErrorFileWrite, "failed to move file", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to move file", err)
 		}
 	}
 
@@ -235,8 +237,8 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, linkPla
 	for _, linkPlan := range linkPlans {
 		rewrite, err := planRewriteForLinkSource(req.VaultPath, req.VaultConfig, linkPlan)
 		if err != nil {
-			var svcErr *Error
-			if errors.As(err, &svcErr) && svcErr.Code == ErrorValidationFailed {
+			var svcErr *svcerr.Error
+			if errors.As(err, &svcErr) && svcErr.Code == codes.ErrValidationFailed {
 				return nil, warnings, err
 			}
 			warnings = append(warnings, fmt.Sprintf("Failed to update file link in %s: %v", linkPlan.reportSourceID, err))
@@ -273,8 +275,8 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, linkPla
 
 		rewrite, err := planRewriteForSource(req.VaultPath, req.VaultConfig, refPlan)
 		if err != nil {
-			var svcErr *Error
-			if errors.As(err, &svcErr) && svcErr.Code == ErrorValidationFailed {
+			var svcErr *svcerr.Error
+			if errors.As(err, &svcErr) && svcErr.Code == codes.ErrValidationFailed {
 				return nil, warnings, err
 			}
 			warnings = append(warnings, fmt.Sprintf("Failed to update refs in %s: %v", refPlan.reportSourceID, err))
@@ -492,22 +494,10 @@ func rollbackMovedFiles(req MoveFileRequest, sourceSnapshot *fileSnapshot, rewri
 
 func moveRollbackError(message string, cause, rollbackErr error) error {
 	if rollbackErr != nil {
-		return newError(
-			ErrorValidationFailed,
-			message,
-			"Inspect affected files and run 'rvn reindex' if needed; rollback was only partially successful",
-			nil,
-			errors.Join(cause, rollbackErr),
-		)
+		return svcerr.Wrap(codes.ErrValidationFailed, message, errors.Join(cause, rollbackErr)).WithSuggestion("Inspect affected files and run 'rvn reindex' if needed; rollback was only partially successful")
 	}
 
-	return newError(
-		ErrorValidationFailed,
-		message,
-		"Move was rolled back; fix the underlying error and try again",
-		nil,
-		cause,
-	)
+	return svcerr.Wrap(codes.ErrValidationFailed, message, cause).WithSuggestion("Move was rolled back; fix the underlying error and try again")
 }
 
 func movedDocumentSource(sourceID, destinationObject string) bool {

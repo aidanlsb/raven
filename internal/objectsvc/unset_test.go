@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestUnsetObjectFileRemovesUnknownField(t *testing.T) {
@@ -106,11 +108,11 @@ traits: {}
 		t.Fatal("expected error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorInvalidInput {
+	if svcErr.Code != codes.ErrInvalidInput {
 		t.Fatalf("expected ErrorInvalidInput, got %s", svcErr.Code)
 	}
 }

@@ -55,6 +55,15 @@ func Wrap(code codes.ErrorCode, message string, err error) *Error {
 	return &Error{Code: code, Message: message, Err: err}
 }
 
+// ValidationError converts a validation failure into Raven's shared structured
+// error contract. A nil cause remains nil.
+func ValidationError(err error) *Error {
+	if err == nil {
+		return nil
+	}
+	return Wrap(codes.ErrValidationFailed, err.Error(), err)
+}
+
 // WithSuggestion sets the remediation suggestion and returns the receiver so
 // constructors can be chained.
 func (e *Error) WithSuggestion(suggestion string) *Error {

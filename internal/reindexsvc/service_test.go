@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/indexschema"
@@ -25,18 +26,18 @@ func runTest(req RunRequest) (*RunResult, error) {
 		if errors.As(err, &setupErr) {
 			switch setupErr.Stage {
 			case vaultruntime.StageConfig:
-				return nil, newError(CodeConfigInvalid, setupErr.Error(), "Fix raven.yaml and try again", err)
+				return nil, svcerr.Wrap(codes.ErrConfigInvalid, setupErr.Error(), err).WithSuggestion("Fix raven.yaml and try again")
 			case vaultruntime.StageSchema:
-				return nil, newError(CodeSchemaInvalid, setupErr.Error(), "Run 'rvn init' to create a schema", err)
+				return nil, svcerr.Wrap(codes.ErrSchemaInvalid, setupErr.Error(), err).WithSuggestion("Run 'rvn init' to create a schema")
 			}
 		}
-		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	defer rt.Close()
 	return Run(rt, req)
 }
 
-func assertReindexCode(t *testing.T, err error, want Code) *svcerr.Error {
+func assertReindexCode(t *testing.T, err error, want codes.ErrorCode) *svcerr.Error {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected error code %q, got nil", want)
@@ -54,7 +55,7 @@ func assertReindexCode(t *testing.T, err error, want Code) *svcerr.Error {
 func TestRunInvalidInput(t *testing.T) {
 	t.Parallel()
 	_, err := runTest(RunRequest{VaultPath: "   "})
-	assertReindexCode(t, err, CodeInvalidInput)
+	assertReindexCode(t, err, codes.ErrInvalidInput)
 }
 
 func TestRunSchemaInvalid(t *testing.T) {
@@ -65,7 +66,7 @@ func TestRunSchemaInvalid(t *testing.T) {
 	}
 
 	_, err := runTest(RunRequest{VaultPath: vaultPath})
-	assertReindexCode(t, err, CodeSchemaInvalid)
+	assertReindexCode(t, err, codes.ErrSchemaInvalid)
 }
 
 func TestRunConfigInvalid(t *testing.T) {
@@ -76,7 +77,7 @@ func TestRunConfigInvalid(t *testing.T) {
 	}
 
 	_, err := runTest(RunRequest{VaultPath: vaultPath})
-	assertReindexCode(t, err, CodeConfigInvalid)
+	assertReindexCode(t, err, codes.ErrConfigInvalid)
 }
 
 func TestRunDryRunIndexesDiscoveredFiles(t *testing.T) {
@@ -291,7 +292,7 @@ func TestRunFullFailsClearlyWhileSharedIndexIsOpen(t *testing.T) {
 	defer holder.Close()
 
 	_, err = runTest(RunRequest{VaultPath: vaultPath, Full: true})
-	svcErr := assertReindexCode(t, err, CodeDatabaseError)
+	svcErr := assertReindexCode(t, err, codes.ErrDatabase)
 	if !errors.Is(svcErr.Err, index.ErrIndexLocked) {
 		t.Fatalf("underlying error = %v, want ErrIndexLocked", svcErr.Err)
 	}
@@ -317,7 +318,7 @@ func TestRunSchemaRebuildFailsWhileSharedIndexIsOpen(t *testing.T) {
 	downgradeIndexVersion(t, vaultPath)
 
 	_, err = runTest(RunRequest{VaultPath: vaultPath})
-	svcErr := assertReindexCode(t, err, CodeDatabaseError)
+	svcErr := assertReindexCode(t, err, codes.ErrDatabase)
 	if !errors.Is(svcErr.Err, index.ErrIndexLocked) {
 		t.Fatalf("underlying error = %v, want ErrIndexLocked", svcErr.Err)
 	}
@@ -477,7 +478,7 @@ func TestRunVersionMismatchFailureLeavesIndexUnavailable(t *testing.T) {
 	if _, err := runTest(RunRequest{VaultPath: vaultPath}); err == nil {
 		t.Fatal("expected failed full rebuild")
 	} else {
-		assertReindexCode(t, err, CodeFileReadError)
+		assertReindexCode(t, err, codes.ErrFileRead)
 	}
 	if _, err := index.Open(vaultPath); !errors.Is(err, index.ErrIndexRebuildRequired) {
 		t.Fatalf("Open after failed rebuild error = %v, want ErrIndexRebuildRequired", err)

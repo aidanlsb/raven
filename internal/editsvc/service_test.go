@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-func assertServiceCode(t *testing.T, err error, want Code) *svcerr.Error {
+func assertServiceCode(t *testing.T, err error, want codes.ErrorCode) *svcerr.Error {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected error code %q, got nil", want)
@@ -39,7 +40,7 @@ func TestParseEditsJSON(t *testing.T) {
 
 	t.Run("invalid payload returns INVALID_INPUT", func(t *testing.T) {
 		_, err := ParseEditsJSON(`{"edits":[{"new_str":"to"}]}`)
-		svcErr := assertServiceCode(t, err, CodeInvalidInput)
+		svcErr := assertServiceCode(t, err, codes.ErrInvalidInput)
 		if !strings.Contains(svcErr.Suggestion, "--edits-json") {
 			t.Fatalf("expected suggestion to include --edits-json guidance, got %q", svcErr.Suggestion)
 		}
@@ -47,7 +48,7 @@ func TestParseEditsJSON(t *testing.T) {
 
 	t.Run("trailing JSON returns INVALID_INPUT", func(t *testing.T) {
 		_, err := ParseEditsJSON(`{"edits":[{"old_str":"a","new_str":"b"}]} {"extra":true}`)
-		assertServiceCode(t, err, CodeInvalidInput)
+		assertServiceCode(t, err, codes.ErrInvalidInput)
 	})
 }
 
@@ -77,7 +78,7 @@ func TestApplyEditsInMemory(t *testing.T) {
 		_, _, err := ApplyEditsInMemory("hello\nworld\n", "notes/test.md", []EditSpec{
 			{OldStr: "absent", NewStr: "x"},
 		})
-		svcErr := assertServiceCode(t, err, CodeStringNotFound)
+		svcErr := assertServiceCode(t, err, codes.ErrStringNotFound)
 		if svcErr.Details["path"] != "notes/test.md" {
 			t.Fatalf("expected details path notes/test.md, got %#v", svcErr.Details)
 		}
@@ -87,19 +88,19 @@ func TestApplyEditsInMemory(t *testing.T) {
 		_, _, err := ApplyEditsInMemory("same\nsame\n", "notes/test.md", []EditSpec{
 			{OldStr: "same", NewStr: "new"},
 		})
-		assertServiceCode(t, err, CodeMultipleMatches)
+		assertServiceCode(t, err, codes.ErrMultipleMatches)
 	})
 }
 
 func TestAsErrorWithWrappedError(t *testing.T) {
 	t.Parallel()
-	base := newError(CodeInvalidInput, "bad input", "", nil, nil)
+	base := svcerr.New(codes.ErrInvalidInput, "bad input").WithDetails(stringDetails(nil))
 	wrapped := fmt.Errorf("outer: %w", base)
 
-	if got, ok := svcerr.AsError(base); !ok || got.Code != CodeInvalidInput {
+	if got, ok := svcerr.AsError(base); !ok || got.Code != codes.ErrInvalidInput {
 		t.Fatalf("expected AsError to recover editsvc error, got %#v ok=%v", got, ok)
 	}
-	if got, ok := svcerr.AsError(wrapped); !ok || got.Code != CodeInvalidInput {
+	if got, ok := svcerr.AsError(wrapped); !ok || got.Code != codes.ErrInvalidInput {
 		t.Fatalf("expected AsError to recover wrapped editsvc error, got %#v ok=%v", got, ok)
 	}
 }

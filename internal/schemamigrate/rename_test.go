@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -312,7 +313,7 @@ traits: {}
 		NewField:  "contact",
 		Confirm:   true,
 	})
-	requireMigrationCode(t, err, schemasvc.ErrorDataIntegrity)
+	requireMigrationCode(t, err, codes.ErrDataIntegrityBlock)
 	if got := vault.ReadFile("schema.yaml"); got != beforeSchema {
 		t.Fatalf("conflicted rename changed schema:\n%s", got)
 	}
@@ -342,7 +343,7 @@ func TestRenameType_DestinationConflictBlocksAllWrites(t *testing.T) {
 		Confirm:           true,
 		RenameDefaultPath: true,
 	})
-	requireMigrationCode(t, err, schemasvc.ErrorValidation)
+	requireMigrationCode(t, err, codes.ErrValidationFailed)
 	if vault.ReadFile("schema.yaml") != beforeSchema ||
 		vault.ReadFile("events/kickoff.md") != beforeSource ||
 		vault.ReadFile("meetings/kickoff.md") != beforeDestination ||
@@ -430,7 +431,7 @@ func countFieldChanges(changes []schemasvc.FieldRenameChange, changeType string)
 	return count
 }
 
-func requireMigrationCode(t *testing.T, err error, want schemasvc.ErrorCode) {
+func requireMigrationCode(t *testing.T, err error, want codes.ErrorCode) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("error = nil, want %s", want)

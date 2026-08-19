@@ -23,20 +23,6 @@ import (
 
 const docsIndexPath = "index.yaml"
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput Code = codes.ErrInvalidInput
-	CodeNotFound     Code = codes.ErrFileNotFound
-	CodeFileRead     Code = codes.ErrFileRead
-	CodeFetchFailed  Code = codes.ErrInternal
-	CodeInternal     Code = codes.ErrInternal
-)
-
-func newError(code Code, message, suggestion string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
 type SectionView struct {
 	ID         string `json:"id"`
 	Title      string `json:"title"`
@@ -135,9 +121,9 @@ func loadGlobalDocsSource(opts loadGlobalDocsOptions) (*GlobalDocsSource, error)
 	docsFS, err := docsync.OpenFS(configPath)
 	if err != nil {
 		if errors.Is(err, docsync.ErrDocsNotFetched) {
-			return nil, newError(CodeNotFound, "docs are not available in the global cache", "Run 'rvn docs fetch' to download docs", err)
+			return nil, svcerr.Wrap(codes.ErrFileNotFound, "docs are not available in the global cache", err).WithSuggestion("Run 'rvn docs fetch' to download docs")
 		}
-		return nil, newError(CodeFileRead, "failed to open docs cache", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to open docs cache", err)
 	}
 
 	refresh, refreshErr := docsync.RefreshIfStale(docsync.RefreshOptions{
@@ -166,7 +152,7 @@ func loadGlobalDocsSource(opts loadGlobalDocsOptions) (*GlobalDocsSource, error)
 	if refresh.Refreshed {
 		docsFS, err = docsync.OpenFS(configPath)
 		if err != nil {
-			return nil, newError(CodeFileRead, "failed to open refreshed docs cache", "Run 'rvn docs fetch' to refresh docs", err)
+			return nil, svcerr.Wrap(codes.ErrFileRead, "failed to open refreshed docs cache", err).WithSuggestion("Run 'rvn docs fetch' to refresh docs")
 		}
 	}
 	return &GlobalDocsSource{FS: docsFS}, nil
@@ -176,9 +162,9 @@ func ListSectionsFS(docsFS fs.FS, docsRoot string) ([]SectionView, error) {
 	sections, err := listSectionsFS(docsFS, docsRoot)
 	if err != nil {
 		if strings.Contains(err.Error(), "docs index not found") {
-			return nil, newError(CodeNotFound, err.Error(), "Run 'rvn docs fetch' to refresh docs", err)
+			return nil, svcerr.Wrap(codes.ErrFileNotFound, err.Error(), err).WithSuggestion("Run 'rvn docs fetch' to refresh docs")
 		}
-		return nil, newError(CodeInternal, err.Error(), "", err)
+		return nil, svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 	}
 	return sections, nil
 }
@@ -187,12 +173,12 @@ func ListTopicsFS(docsFS fs.FS, docsRoot, section string) ([]TopicRecord, error)
 	topics, err := listTopicsFS(docsFS, docsRoot, section)
 	if err != nil {
 		if strings.Contains(err.Error(), "is not declared in docs index") {
-			return nil, newError(CodeInvalidInput, err.Error(), "Run 'rvn docs' to list sections", err)
+			return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Run 'rvn docs' to list sections")
 		}
 		if strings.Contains(err.Error(), "docs index not found") {
-			return nil, newError(CodeNotFound, err.Error(), "Run 'rvn docs fetch' to refresh docs", err)
+			return nil, svcerr.Wrap(codes.ErrFileNotFound, err.Error(), err).WithSuggestion("Run 'rvn docs fetch' to refresh docs")
 		}
-		return nil, newError(CodeInternal, err.Error(), "", err)
+		return nil, svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 	}
 	return topics, nil
 }
@@ -200,7 +186,7 @@ func ListTopicsFS(docsFS fs.FS, docsRoot, section string) ([]TopicRecord, error)
 func ReadTopicContentFS(docsFS fs.FS, topic TopicRecord) (string, error) {
 	content, err := fs.ReadFile(docsFS, topic.FSPath)
 	if err != nil {
-		return "", newError(CodeFileRead, "failed to read docs topic", "", err)
+		return "", svcerr.Wrap(codes.ErrFileRead, "failed to read docs topic", err)
 	}
 	return string(content), nil
 }
@@ -219,18 +205,18 @@ func SearchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit, offset
 	if err != nil {
 		message := err.Error()
 		suggestion := ""
-		code := CodeInternal
+		code := codes.ErrInternal
 		switch {
 		case strings.Contains(message, "empty query"), strings.Contains(message, "limit must be >= 1"), strings.Contains(message, "offset must be >= 0"), strings.Contains(message, "unknown section"):
-			code = CodeInvalidInput
+			code = codes.ErrInvalidInput
 			suggestion = "Run 'rvn docs' to list sections"
 		case strings.Contains(message, "docs index not found"):
-			code = CodeNotFound
+			code = codes.ErrFileNotFound
 			suggestion = "Run 'rvn docs fetch' to refresh docs"
 		case strings.HasPrefix(message, "read "):
-			code = CodeFileRead
+			code = codes.ErrFileRead
 		}
-		return nil, newError(code, message, suggestion, err)
+		return nil, svcerr.Wrap(code, message, err).WithSuggestion(suggestion)
 	}
 	return result, nil
 }
@@ -244,7 +230,7 @@ func Fetch(req FetchRequest) (*FetchResult, error) {
 		HTTPClient:    &http.Client{Timeout: 60 * time.Second},
 	})
 	if err != nil {
-		return nil, newError(CodeFetchFailed, "failed to fetch docs", "Check your network connection and run 'rvn docs fetch' again", err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to fetch docs", err).WithSuggestion("Check your network connection and run 'rvn docs fetch' again")
 	}
 
 	return &FetchResult{

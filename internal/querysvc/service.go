@@ -13,20 +13,6 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput   Code = codes.ErrInvalidInput
-	CodeQueryInvalid   Code = codes.ErrQueryInvalid
-	CodeQueryNotFound  Code = codes.ErrQueryNotFound
-	CodeConfigInvalid  Code = codes.ErrConfigInvalid
-	CodeFileWriteError Code = codes.ErrFileWrite
-)
-
-func newError(code Code, message, suggestion string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
 type SavedQueryInfo struct {
 	Name        string
 	Query       string
@@ -124,7 +110,7 @@ func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
 func Get(rt *vaultruntime.Runtime, req GetRequest) (*GetResult, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query saved get <name>", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "query name is required").WithSuggestion("Usage: rvn query saved get <name>")
 	}
 
 	vaultCfg, err := runtimeConfig(rt)
@@ -133,7 +119,7 @@ func Get(rt *vaultruntime.Runtime, req GetRequest) (*GetResult, error) {
 	}
 	saved, exists := vaultCfg.Queries[name]
 	if !exists {
-		return nil, newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query saved list' to see available queries", nil)
+		return nil, svcerr.New(codes.ErrQueryNotFound, fmt.Sprintf("query '%s' not found", name)).WithSuggestion("Run 'rvn query saved list' to see available queries")
 	}
 
 	return &GetResult{Query: savedQueryInfo(name, saved)}, nil
@@ -142,11 +128,11 @@ func Get(rt *vaultruntime.Runtime, req GetRequest) (*GetResult, error) {
 func Set(rt *vaultruntime.Runtime, req SetRequest) (*SetResult, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query saved set <name> <query-string>", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "query name is required").WithSuggestion("Usage: rvn query saved set <name> <query-string>")
 	}
 	queryStr := strings.TrimSpace(req.QueryString)
 	if queryStr == "" {
-		return nil, newError(CodeInvalidInput, "query string is required", "Usage: rvn query saved set <name> <query-string>", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "query string is required").WithSuggestion("Usage: rvn query saved set <name> <query-string>")
 	}
 
 	declaredArgs, err := NormalizeArgs(req.Args)
@@ -156,7 +142,7 @@ func Set(rt *vaultruntime.Runtime, req SetRequest) (*SetResult, error) {
 
 	if !hasTemplateVars(queryStr) {
 		if _, err := query.Parse(queryStr); err != nil {
-			return nil, newError(CodeQueryInvalid, fmt.Sprintf("invalid query: %v", err), "", err)
+			return nil, svcerr.Wrap(codes.ErrQueryInvalid, fmt.Sprintf("invalid query: %v", err), err)
 		}
 	}
 	if err := ValidateInputDeclarations(name, queryStr, declaredArgs); err != nil {
@@ -190,7 +176,7 @@ func Set(rt *vaultruntime.Runtime, req SetRequest) (*SetResult, error) {
 	vaultCfg.Queries[name] = next
 
 	if err := saveRuntimeConfig(rt, vaultCfg); err != nil {
-		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 	}
 
 	return &SetResult{
@@ -202,7 +188,7 @@ func Set(rt *vaultruntime.Runtime, req SetRequest) (*SetResult, error) {
 func Remove(rt *vaultruntime.Runtime, req RemoveRequest) (*RemoveResult, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query saved remove <name>", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "query name is required").WithSuggestion("Usage: rvn query saved remove <name>")
 	}
 
 	vaultCfg, err := runtimeConfig(rt)
@@ -210,12 +196,12 @@ func Remove(rt *vaultruntime.Runtime, req RemoveRequest) (*RemoveResult, error) 
 		return nil, err
 	}
 	if _, exists := vaultCfg.Queries[name]; !exists {
-		return nil, newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query saved list' to see available queries", nil)
+		return nil, svcerr.New(codes.ErrQueryNotFound, fmt.Sprintf("query '%s' not found", name)).WithSuggestion("Run 'rvn query saved list' to see available queries")
 	}
 
 	delete(vaultCfg.Queries, name)
 	if err := saveRuntimeConfig(rt, vaultCfg); err != nil {
-		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 	}
 
 	return &RemoveResult{Name: name, Removed: true}, nil
@@ -223,11 +209,11 @@ func Remove(rt *vaultruntime.Runtime, req RemoveRequest) (*RemoveResult, error) 
 
 func runtimeConfig(rt *vaultruntime.Runtime) (*config.VaultConfig, error) {
 	if err := vaultruntime.Require(rt); err != nil {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if rt.VaultCfg == nil {
 		if err := rt.ReloadConfig(); err != nil {
-			return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+			return nil, svcerr.Wrap(codes.ErrConfigInvalid, "failed to load vault config", err).WithSuggestion("Fix raven.yaml and try again")
 		}
 	}
 	return rt.VaultCfg, nil
@@ -281,10 +267,10 @@ func NormalizeArgs(args []string) ([]string, error) {
 	for _, arg := range args {
 		name := strings.TrimSpace(arg)
 		if name == "" {
-			return nil, newError(CodeInvalidInput, "saved query has an empty arg name", "Use non-empty arg names, e.g. args: [project]", nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, "saved query has an empty arg name").WithSuggestion("Use non-empty arg names, e.g. args: [project]")
 		}
 		if _, exists := seen[name]; exists {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("saved query declares duplicate arg: %s", name), "Each arg name must be unique", nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("saved query declares duplicate arg: %s", name)).WithSuggestion("Each arg name must be unique")
 		}
 		seen[name] = struct{}{}
 		normalized = append(normalized, name)
@@ -302,12 +288,7 @@ func ParseInputsWithKeyValues(queryName string, args []string, keyValueArgs []st
 	}
 
 	if len(declaredArgs) == 0 {
-		return nil, newError(
-			CodeInvalidInput,
-			fmt.Sprintf("saved query '%s' does not declare args", queryName),
-			"Declare args in raven.yaml (args: [name, ...]) or remove input arguments",
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("saved query '%s' does not declare args", queryName)).WithSuggestion("Declare args in raven.yaml (args: [name, ...]) or remove input arguments")
 	}
 
 	declaredSet := make(map[string]struct{}, len(declaredArgs))
@@ -321,29 +302,14 @@ func ParseInputsWithKeyValues(queryName string, args []string, keyValueArgs []st
 		if strings.Contains(arg, "=") {
 			parts := strings.SplitN(arg, "=", 2)
 			if len(parts) != 2 || parts[0] == "" {
-				return newError(
-					CodeInvalidInput,
-					fmt.Sprintf("invalid input argument: %s", arg),
-					"Use format: key=value or positional values matching args order",
-					nil,
-				)
+				return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid input argument: %s", arg)).WithSuggestion("Use format: key=value or positional values matching args order")
 			}
 			key := parts[0]
 			if _, ok := declaredSet[key]; !ok {
-				return newError(
-					CodeInvalidInput,
-					fmt.Sprintf("unknown input key for saved query '%s': %s", queryName, key),
-					fmt.Sprintf("Declared args: %s", strings.Join(declaredArgs, ", ")),
-					nil,
-				)
+				return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("unknown input key for saved query '%s': %s", queryName, key)).WithSuggestion(fmt.Sprintf("Declared args: %s", strings.Join(declaredArgs, ", ")))
 			}
 			if _, exists := keyValues[key]; exists {
-				return newError(
-					CodeInvalidInput,
-					fmt.Sprintf("duplicate input key: %s", key),
-					"Provide each input at most once",
-					nil,
-				)
+				return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("duplicate input key: %s", key)).WithSuggestion("Provide each input at most once")
 			}
 			keyValues[key] = parts[1]
 			return nil
@@ -371,12 +337,7 @@ func ParseInputsWithKeyValues(queryName string, args []string, keyValueArgs []st
 	}
 
 	if len(positional) > len(remaining) {
-		return nil, newError(
-			CodeInvalidInput,
-			fmt.Sprintf("too many positional inputs for saved query '%s' (got %d, expected at most %d)", queryName, len(positional), len(remaining)),
-			fmt.Sprintf("Declared args: %s", strings.Join(declaredArgs, ", ")),
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("too many positional inputs for saved query '%s' (got %d, expected at most %d)", queryName, len(positional), len(remaining))).WithSuggestion(fmt.Sprintf("Declared args: %s", strings.Join(declaredArgs, ", ")))
 	}
 
 	inputs := make(map[string]string, len(keyValues)+len(positional))
@@ -393,7 +354,7 @@ func ParseApplyCommand(applyArgs []string) (*ApplyCommand, error) {
 	applyStr := strings.Join(applyArgs, " ")
 	parts := strings.Fields(applyStr)
 	if len(parts) == 0 {
-		return nil, newError(CodeInvalidInput, "no apply command specified", "Use --apply <command> [args...]", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "no apply command specified").WithSuggestion("Use --apply <command> [args...]")
 	}
 	return &ApplyCommand{
 		Command: parts[0],
@@ -410,12 +371,7 @@ func ValidateInputDeclarations(name, queryStr string, declaredArgs []string) err
 		return nil
 	}
 	if len(declaredArgs) == 0 {
-		return newError(
-			CodeInvalidInput,
-			fmt.Sprintf("saved query '%s' uses {{args.*}} but does not declare args", name),
-			fmt.Sprintf("Declare args in raven.yaml, e.g. args: [%s]", strings.Join(usedInputs, ", ")),
-			nil,
-		)
+		return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("saved query '%s' uses {{args.*}} but does not declare args", name)).WithSuggestion(fmt.Sprintf("Declare args in raven.yaml, e.g. args: [%s]", strings.Join(usedInputs, ", ")))
 	}
 
 	declaredSet := make(map[string]struct{}, len(declaredArgs))
@@ -430,25 +386,20 @@ func ValidateInputDeclarations(name, queryStr string, declaredArgs []string) err
 		}
 	}
 	if len(missing) > 0 {
-		return newError(
-			CodeInvalidInput,
-			fmt.Sprintf("saved query '%s' is missing arg declarations for: %s", name, strings.Join(missing, ", ")),
-			fmt.Sprintf("Declare args in raven.yaml, e.g. args: [%s]", strings.Join(usedInputs, ", ")),
-			nil,
-		)
+		return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("saved query '%s' is missing arg declarations for: %s", name, strings.Join(missing, ", "))).WithSuggestion(fmt.Sprintf("Declare args in raven.yaml, e.g. args: [%s]", strings.Join(usedInputs, ", ")))
 	}
 	return nil
 }
 
 func ResolveQueryString(name string, q *config.SavedQuery, inputs map[string]string) (string, error) {
 	if q == nil || q.Query == "" {
-		return "", newError(CodeQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "", nil)
+		return "", svcerr.New(codes.ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name))
 	}
 
 	queryStr, err := interpolateSavedQueryInputs(normalizeSavedQueryTemplateVars(q.Query), inputs)
 	if err != nil {
 		errMsg := strings.ReplaceAll(err.Error(), "inputs.", "args.")
-		return "", newError(CodeInvalidInput, fmt.Sprintf("failed to resolve saved query '%s': %s", name, errMsg), "", err)
+		return "", svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to resolve saved query '%s': %s", name, errMsg), err)
 	}
 
 	return queryStr, nil
@@ -456,7 +407,7 @@ func ResolveQueryString(name string, q *config.SavedQuery, inputs map[string]str
 
 func ResolveSavedQuery(name string, q *config.SavedQuery, args []string, keyValueArgs []string) (string, error) {
 	if q == nil {
-		return "", newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query saved list' to see available queries", nil)
+		return "", svcerr.New(codes.ErrQueryNotFound, fmt.Sprintf("query '%s' not found", name)).WithSuggestion("Run 'rvn query saved list' to see available queries")
 	}
 
 	declaredArgs, err := NormalizeArgs(q.Args)

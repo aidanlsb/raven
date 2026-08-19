@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -25,10 +27,10 @@ type DeleteFileResult struct {
 
 func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if strings.TrimSpace(req.FilePath) == "" {
-		return nil, newError(ErrorInvalidInput, "file path is required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "file path is required")
 	}
 
 	behavior := strings.TrimSpace(req.Behavior)
@@ -45,17 +47,17 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 
 		trashRoot := filepath.Join(req.VaultPath, trashDir)
 		if err := os.MkdirAll(trashRoot, 0o755); err != nil {
-			return nil, newError(ErrorFileWrite, "failed to create trash directory", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create trash directory", err)
 		}
 
 		relPath, err := filepath.Rel(req.VaultPath, req.FilePath)
 		if err != nil {
-			return nil, newError(ErrorInvalidInput, "failed to compute relative path", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrInvalidInput, "failed to compute relative path", err)
 		}
 		destPath := filepath.Join(trashRoot, relPath)
 
 		if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-			return nil, newError(ErrorFileWrite, "failed to create trash parent directory", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create trash parent directory", err)
 		}
 
 		if _, err := os.Stat(destPath); err == nil {
@@ -70,7 +72,7 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 		}
 
 		if err := os.Rename(req.FilePath, destPath); err != nil {
-			return nil, newError(ErrorFileWrite, "failed to move file to trash", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to move file to trash", err)
 		}
 
 		return &DeleteFileResult{
@@ -80,11 +82,11 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 
 	case "permanent":
 		if err := os.Remove(req.FilePath); err != nil {
-			return nil, newError(ErrorFileWrite, "failed to delete file", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to delete file", err)
 		}
 		return &DeleteFileResult{Behavior: behavior}, nil
 
 	default:
-		return nil, newError(ErrorInvalidInput, fmt.Sprintf("invalid deletion behavior: %s", behavior), "Use 'trash' or 'permanent'", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid deletion behavior: %s", behavior)).WithSuggestion("Use 'trash' or 'permanent'")
 	}
 }

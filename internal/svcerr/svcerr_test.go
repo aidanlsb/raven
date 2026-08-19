@@ -71,3 +71,19 @@ func TestConstructorsAndBuilders(t *testing.T) {
 		t.Fatalf("errors.Is(err, cause) = false, want true")
 	}
 }
+
+func TestValidationError(t *testing.T) {
+	t.Parallel()
+
+	cause := errors.New("walk failed")
+	err := ValidationError(cause)
+	if err.Code != codes.ErrValidationFailed || err.Message != cause.Error() {
+		t.Fatalf("ValidationError() = %#v", err)
+	}
+	if !errors.Is(err, cause) {
+		t.Fatal("ValidationError() should preserve its cause")
+	}
+	if ValidationError(nil) != nil {
+		t.Fatal("ValidationError(nil) should return nil")
+	}
+}

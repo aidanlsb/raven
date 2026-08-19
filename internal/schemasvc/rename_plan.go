@@ -5,8 +5,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schemadoc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 type TypeRenameChange struct {
@@ -77,11 +79,11 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 	}
 
 	if req.SchemaDoc == nil {
-		return nil, newError(ErrorInternal, "schema document is required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInternal, "schema document is required")
 	}
 	typesNode, ok := req.SchemaDoc.Root()["types"].(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, "types section not found")
 	}
 
 	plan.Changes = append(plan.Changes, TypeRenameChange{
@@ -147,7 +149,7 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 
 	coreSchema, err := req.SchemaDoc.Marshal()
 	if err != nil {
-		return nil, MapSchemaDocError(err, "", ErrorSchemaNotFound)
+		return nil, MapSchemaDocError(err, "", codes.ErrSchemaNotFound)
 	}
 	plan.SchemaYAML = coreSchema
 
@@ -166,7 +168,7 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 		}
 		withDefaultPath, err := req.SchemaDoc.Marshal()
 		if err != nil {
-			return nil, MapSchemaDocError(err, "", ErrorSchemaNotFound)
+			return nil, MapSchemaDocError(err, "", codes.ErrSchemaNotFound)
 		}
 		plan.SchemaYAMLWithDefaultPath = withDefaultPath
 	}
@@ -180,52 +182,40 @@ func BuildFieldRenamePlan(req FieldRenamePlanRequest) (*FieldRenamePlan, error) 
 	plan := &FieldRenamePlan{Changes: make([]FieldRenameChange, 0)}
 
 	if req.SchemaDoc == nil {
-		return nil, newError(ErrorInternal, "schema document is required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInternal, "schema document is required")
 	}
 
 	types, ok := req.SchemaDoc.Root()["types"].(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorSchemaInvalid, "types section not found", "", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, "types section not found")
 	}
 	typeNodeAny, ok := types[req.TypeName]
 	if !ok {
-		return nil, newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", req.TypeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", req.TypeName))
 	}
 	typeNode, ok := typeNodeAny.(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorSchemaInvalid, fmt.Sprintf("type '%s' has invalid definition", req.TypeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("type '%s' has invalid definition", req.TypeName))
 	}
 	fieldsAny, ok := typeNode["fields"]
 	if !ok {
-		return nil, newError(ErrorFieldNotFound, fmt.Sprintf("type '%s' has no fields", req.TypeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("type '%s' has no fields", req.TypeName))
 	}
 	fields, ok := fieldsAny.(map[string]interface{})
 	if !ok {
-		return nil, newError(ErrorSchemaInvalid, fmt.Sprintf("type '%s' fields are invalid", req.TypeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("type '%s' fields are invalid", req.TypeName))
 	}
 
 	_, hasOld := fields[req.OldField]
 	_, hasNew := fields[req.NewField]
 	if hasOld && hasNew {
-		return nil, newError(
-			ErrorObjectExists,
-			fmt.Sprintf("type '%s' already has both '%s' and '%s' fields", req.TypeName, req.OldField, req.NewField),
-			"Choose a different new field name or remove one field first",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrObjectExists, fmt.Sprintf("type '%s' already has both '%s' and '%s' fields", req.TypeName, req.OldField, req.NewField)).WithSuggestion("Choose a different new field name or remove one field first")
 	}
 	if hasNew {
-		return nil, newError(
-			ErrorObjectExists,
-			fmt.Sprintf("field '%s' already exists on type '%s'", req.NewField, req.TypeName),
-			"Choose a different new field name",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", req.NewField, req.TypeName)).WithSuggestion("Choose a different new field name")
 	}
 	if !hasOld {
-		return nil, newError(ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", req.OldField, req.TypeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", req.OldField, req.TypeName))
 	}
 
 	fields[req.NewField] = fields[req.OldField]
@@ -248,7 +238,7 @@ func BuildFieldRenamePlan(req FieldRenamePlanRequest) (*FieldRenamePlan, error) 
 	plan.TemplateSpec, _ = typeNode["template"].(string)
 	schemaOut, err := req.SchemaDoc.Marshal()
 	if err != nil {
-		return nil, MapSchemaDocError(err, "", ErrorSchemaNotFound)
+		return nil, MapSchemaDocError(err, "", codes.ErrSchemaNotFound)
 	}
 	plan.SchemaYAML = schemaOut
 	return plan, nil

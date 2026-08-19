@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/frontmatter"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
@@ -17,6 +18,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/schemasvc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -67,7 +69,7 @@ func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertRe
 	req.VaultPath = rt.VaultPath
 	traitName := strings.TrimSpace(req.TraitName)
 	if traitName == "" {
-		return nil, newError(schemasvc.ErrorInvalidInput, "trait name cannot be empty", "Usage: rvn schema convert trait <name> --map-json '<json>'", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "trait name cannot be empty").WithSuggestion("Usage: rvn schema convert trait <name> --map-json '<json>'")
 	}
 
 	schemaDoc, err := loadSchemaDocument(req.VaultPath)
@@ -76,7 +78,7 @@ func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertRe
 	}
 	traitDef, ok := schemaDoc.Schema().Traits[traitName]
 	if !ok || traitDef == nil {
-		return nil, newError(schemasvc.ErrorTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName))
 	}
 
 	sourceType := normalizedConversionType(traitDef.Type, true)
@@ -148,7 +150,7 @@ func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertRe
 		return nil
 	})
 	if err != nil {
-		return nil, newError(schemasvc.ErrorInternal, err.Error(), "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 	}
 	if err := exhaustiveMappingError(missing); err != nil {
 		return nil, err
@@ -181,10 +183,10 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 	typeName := strings.TrimSpace(req.TypeName)
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
-		return nil, newError(schemasvc.ErrorInvalidInput, "type and field names cannot be empty", "Usage: rvn schema convert field <type> <field> --map-json '<json>'", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type and field names cannot be empty").WithSuggestion("Usage: rvn schema convert field <type> <field> --map-json '<json>'")
 	}
 	if schema.IsBuiltinType(typeName) {
-		return nil, newError(schemasvc.ErrorInvalidInput, fmt.Sprintf("cannot convert fields on built-in type '%s'", typeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot convert fields on built-in type '%s'", typeName))
 	}
 
 	schemaDoc, err := loadSchemaDocument(req.VaultPath)
@@ -193,11 +195,11 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 	}
 	typeDef, ok := schemaDoc.Schema().Types[typeName]
 	if !ok || typeDef == nil {
-		return nil, newError(schemasvc.ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName))
 	}
 	fieldDef, ok := typeDef.Fields[fieldName]
 	if !ok || fieldDef == nil {
-		return nil, newError(schemasvc.ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName))
 	}
 
 	sourceType := normalizedConversionType(fieldDef.Type, false)
@@ -206,25 +208,13 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 		return nil, err
 	}
 	if typeDef.NameField == fieldName && targetType != schema.FieldTypeString {
-		return nil, newError(
-			schemasvc.ErrorInvalidInput,
-			fmt.Sprintf("field '%s.%s' is the type's name_field and must remain string", typeName, fieldName),
-			"Change name_field before converting this field to a non-string type",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("field '%s.%s' is the type's name_field and must remain string", typeName, fieldName)).WithSuggestion("Change name_field before converting this field to a non-string type")
 	}
 	if err := validateCollectionConversion(sourceType, targetType); err != nil {
 		return nil, err
 	}
 	if isRefConversionType(targetType) && !isRefConversionType(sourceType) {
-		return nil, newError(
-			schemasvc.ErrorInvalidInput,
-			fmt.Sprintf("cannot convert non-reference field '%s.%s' to '%s' without a reference target", typeName, fieldName, targetType),
-			"The schema convert command does not infer ref targets; convert an existing ref/ref[] field so its target can be preserved",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot convert non-reference field '%s.%s' to '%s' without a reference target", typeName, fieldName, targetType)).WithSuggestion("The schema convert command does not infer ref targets; convert an existing ref/ref[] field so its target can be preserved")
 	}
 	walkOptions, err := conversionWalkOptions(rt)
 	if err != nil {
@@ -293,7 +283,7 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 		return nil
 	})
 	if err != nil {
-		return nil, newError(schemasvc.ErrorInternal, err.Error(), "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 	}
 	if err := exhaustiveMappingError(missing); err != nil {
 		return nil, err
@@ -360,13 +350,13 @@ func applyValueConvertPlan(vaultPath string, plan *valueConvertPlan) (int, error
 	applied := 0
 	if plan.SchemaPlan.SchemaMutations > 0 {
 		if err := schemadoc.Write(vaultPath, plan.SchemaPlan.SchemaYAML); err != nil {
-			return 0, schemasvc.MapSchemaDocError(err, "", schemasvc.ErrorSchemaInvalid)
+			return 0, schemasvc.MapSchemaDocError(err, "", codes.ErrSchemaInvalid)
 		}
 		applied += plan.SchemaPlan.SchemaMutations
 	}
 	for _, path := range sortedStringKeys(plan.MarkdownFiles) {
 		if err := atomicfile.WriteFile(path, plan.MarkdownFiles[path], 0o644); err != nil {
-			return 0, newError(schemasvc.ErrorFileWrite, err.Error(), "Some files may already be converted; review the vault and run 'rvn reindex --full'", nil, err)
+			return 0, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err).WithSuggestion("Some files may already be converted; review the vault and run 'rvn reindex --full'")
 		}
 		applied++
 	}
@@ -380,16 +370,10 @@ func buildConversionMapper(
 	validate func(fieldvalue.FieldValue, bool, []string) error,
 ) (*conversionMapper, []string, error) {
 	if rawMapping == nil {
-		return nil, nil, newError(
-			schemasvc.ErrorInvalidInput,
-			"--map-json must be a JSON object",
-			`Provide an exhaustive map, for example --map-json '{"high":true,"low":false}'`,
-			nil,
-			nil,
-		)
+		return nil, nil, svcerr.New(codes.ErrInvalidInput, "--map-json must be a JSON object").WithSuggestion(`Provide an exhaustive map, for example --map-json '{"high":true,"low":false}'`)
 	}
 	if len(rawMapping) == 0 {
-		return nil, nil, newError(schemasvc.ErrorInvalidInput, "--map-json must contain at least one mapping", "", nil, nil)
+		return nil, nil, svcerr.New(codes.ErrInvalidInput, "--map-json must contain at least one mapping")
 	}
 
 	mapper := &conversionMapper{
@@ -413,7 +397,7 @@ func buildConversionMapper(
 
 	newValues := newEnumValues(mapper.values, orderedKeys, sourceType, targetType)
 	if isEnumConversionType(targetType) && len(newValues) == 0 {
-		return nil, nil, newError(schemasvc.ErrorInvalidInput, "enum conversion must produce at least one string value", "", nil, nil)
+		return nil, nil, svcerr.New(codes.ErrInvalidInput, "enum conversion must produce at least one string value")
 	}
 	for _, key := range orderedKeys {
 		if err := validate(mapper.values[key], elementMapping, newValues); err != nil {
@@ -424,13 +408,7 @@ func buildConversionMapper(
 }
 
 func invalidMappingValueError(key string, targetType schema.FieldType, cause error) error {
-	return newError(
-		schemasvc.ErrorInvalidInput,
-		fmt.Sprintf("mapping for %q is invalid for target type '%s': %v", key, targetType, cause),
-		"Use JSON values in the target type's representation",
-		map[string]interface{}{"map_key": key, "target_type": targetType},
-		cause,
-	)
+	return svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("mapping for %q is invalid for target type '%s': %v", key, targetType, cause), cause).WithSuggestion("Use JSON values in the target type's representation").WithDetails(map[string]interface{}{"map_key": key, "target_type": targetType})
 }
 
 func (m *conversionMapper) convert(value fieldvalue.FieldValue, missing map[string]struct{}) (fieldvalue.FieldValue, bool) {
@@ -601,26 +579,14 @@ func resolveConversionTarget(sourceType schema.FieldType, requested string, trai
 		if trait {
 			validTypes = schema.ValidTraitTypes()
 		}
-		return "", false, newError(
-			schemasvc.ErrorInvalidInput,
-			fmt.Sprintf("unsupported target type '%s'", requested),
-			fmt.Sprintf("Use one of: %s", validTypes),
-			map[string]interface{}{"target_type": requested, "valid_types": validTypes},
-			nil,
-		)
+		return "", false, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("unsupported target type '%s'", requested)).WithSuggestion(fmt.Sprintf("Use one of: %s", validTypes)).WithDetails(map[string]interface{}{"target_type": requested, "valid_types": validTypes})
 	}
 	return targetType, true, nil
 }
 
 func validateCollectionConversion(sourceType, targetType schema.FieldType) error {
 	if isArrayConversionType(sourceType) && !isArrayConversionType(targetType) {
-		return newError(
-			schemasvc.ErrorInvalidInput,
-			fmt.Sprintf("cannot convert collection type '%s' to scalar type '%s'", sourceType, targetType),
-			"Collection-to-scalar conversion has no unambiguous reduction rule; convert to another [] type",
-			nil,
-			nil,
-		)
+		return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot convert collection type '%s' to scalar type '%s'", sourceType, targetType)).WithSuggestion("Collection-to-scalar conversion has no unambiguous reduction rule; convert to another [] type")
 	}
 	return nil
 }
@@ -670,13 +636,7 @@ func exhaustiveMappingError(required map[string]struct{}) error {
 		missing = append(missing, value)
 	}
 	sort.Strings(missing)
-	return newError(
-		schemasvc.ErrorInvalidInput,
-		fmt.Sprintf("mapping is not exhaustive; missing %d value(s): %s", len(missing), strings.Join(quotedValues(missing), ", ")),
-		"Add every schema-allowed and observed live value to --map-json",
-		map[string]interface{}{"missing_values": missing},
-		nil,
-	)
+	return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("mapping is not exhaustive; missing %d value(s): %s", len(missing), strings.Join(quotedValues(missing), ", "))).WithSuggestion("Add every schema-allowed and observed live value to --map-json").WithDetails(map[string]interface{}{"missing_values": missing})
 }
 
 func quotedValues(values []string) []string {
@@ -1008,11 +968,11 @@ func arrayElementType(fieldType schema.FieldType) schema.FieldType {
 
 func conversionWalkOptions(rt *vaultruntime.Runtime) (*vault.WalkOptions, error) {
 	if rt == nil || rt.VaultCfg == nil {
-		return nil, newError(schemasvc.ErrorConfigInvalid, "failed to load raven.yaml", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrConfigInvalid, "failed to load raven.yaml").WithSuggestion("Fix raven.yaml and try again")
 	}
 	matcher, err := ravenignore.NewMatcher(rt.VaultCfg.GetExcludePatterns())
 	if err != nil {
-		return nil, newError(schemasvc.ErrorConfigInvalid, "invalid exclude configuration in raven.yaml", "Fix raven.yaml and try again", nil, err)
+		return nil, svcerr.Wrap(codes.ErrConfigInvalid, "invalid exclude configuration in raven.yaml", err).WithSuggestion("Fix raven.yaml and try again")
 	}
 	return &vault.WalkOptions{ExcludeMatcher: matcher}, nil
 }

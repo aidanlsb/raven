@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestReclassifyMoveWritesUpdatedContentAtDestination(t *testing.T) {
@@ -212,12 +214,12 @@ traits: {}
 				t.Fatalf("Reclassify() error = nil, want validation failure")
 			}
 
-			var svcErr *Error
+			var svcErr *svcerr.Error
 			if !errors.As(err, &svcErr) {
 				t.Fatalf("expected *Error, got %T: %v", err, err)
 			}
-			if svcErr.Code != ErrorValidationFailed {
-				t.Errorf("error code = %s, want %s", svcErr.Code, ErrorValidationFailed)
+			if svcErr.Code != codes.ErrValidationFailed {
+				t.Errorf("error code = %s, want %s", svcErr.Code, codes.ErrValidationFailed)
 			}
 			if !strings.Contains(svcErr.Message, tt.wantErrSubstr) {
 				t.Errorf("error message = %q, want to contain %q", svcErr.Message, tt.wantErrSubstr)
@@ -290,12 +292,12 @@ traits: {}
 		t.Fatal("expected Reclassify() to fail")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorFileWrite {
-		t.Fatalf("error code = %s, want %s", svcErr.Code, ErrorFileWrite)
+	if svcErr.Code != codes.ErrFileWrite {
+		t.Fatalf("error code = %s, want %s", svcErr.Code, codes.ErrFileWrite)
 	}
 
 	content, readErr := os.ReadFile(sourcePath)

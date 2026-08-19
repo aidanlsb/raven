@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -172,7 +173,7 @@ func TestProtectedPrefixesRemoveRequiresExistingPrefix(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected typed service error, got %T", err)
 	}
-	if svcErr.Code != CodePrefixNotFound {
+	if svcErr.Code != codes.ErrPrefixNotFound {
 		t.Fatalf("expected CodePrefixNotFound, got %q", svcErr.Code)
 	}
 }
@@ -191,7 +192,7 @@ func TestProtectedPrefixesRejectInvalidPrefix(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected typed service error, got %T", err)
 	}
-	if svcErr.Code != CodeInvalidInput {
+	if svcErr.Code != codes.ErrInvalidInput {
 		t.Fatalf("expected CodeInvalidInput, got %q", svcErr.Code)
 	}
 }
@@ -309,7 +310,7 @@ func TestDeletionSetNormalizesTrashDirAndRejectsInvalidBehavior(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected typed error, got %T", err)
 	}
-	if svcErr.Code != CodeInvalidInput {
+	if svcErr.Code != codes.ErrInvalidInput {
 		t.Fatalf("expected CodeInvalidInput, got %q", svcErr.Code)
 	}
 }
@@ -370,7 +371,7 @@ func TestExcludeAdd(t *testing.T) {
 		name        string
 		configYAML  string
 		pattern     string
-		wantCode    Code
+		wantCode    codes.ErrorCode
 		wantCreated bool
 		wantChanged bool
 		wantPattern string
@@ -403,12 +404,12 @@ func TestExcludeAdd(t *testing.T) {
 		{
 			name:     "rejects empty pattern",
 			pattern:  " \n ",
-			wantCode: CodeInvalidInput,
+			wantCode: codes.ErrInvalidInput,
 		},
 		{
 			name:     "rejects malformed glob",
 			pattern:  "[",
-			wantCode: CodeInvalidInput,
+			wantCode: codes.ErrInvalidInput,
 		},
 	}
 
@@ -456,7 +457,7 @@ func TestExcludeRemove(t *testing.T) {
 	tests := []struct {
 		name        string
 		pattern     string
-		wantCode    Code
+		wantCode    codes.ErrorCode
 		wantRemoved string
 		wantExclude []string
 	}{
@@ -469,12 +470,12 @@ func TestExcludeRemove(t *testing.T) {
 		{
 			name:     "missing pattern returns stable code",
 			pattern:  "*.missing.md",
-			wantCode: CodePrefixNotFound,
+			wantCode: codes.ErrPrefixNotFound,
 		},
 		{
 			name:     "invalid pattern is rejected",
 			pattern:  "[",
-			wantCode: CodeInvalidInput,
+			wantCode: codes.ErrInvalidInput,
 		},
 	}
 
@@ -516,7 +517,7 @@ func TestExcludeRemove(t *testing.T) {
 	}
 }
 
-func requireVaultConfigCode(t *testing.T, err error, want Code) {
+func requireVaultConfigCode(t *testing.T, err error, want codes.ErrorCode) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("error = nil, want %s", want)

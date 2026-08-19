@@ -6,17 +6,6 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput  Code = codes.ErrInvalidInput
-	CodeDatabaseError Code = codes.ErrDatabase
-)
-
-func newError(code Code, message, suggestion string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
 type StatsResult struct {
 	FileCount   int `json:"file_count"`
 	ObjectCount int `json:"object_count"`
@@ -26,16 +15,16 @@ type StatsResult struct {
 
 func Stats(rt *vaultruntime.Runtime) (*StatsResult, error) {
 	if err := vaultruntime.Require(rt); err != nil {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 
 	if err := rt.OpenDB(); err != nil {
-		return nil, newError(CodeDatabaseError, "failed to open database", "Run 'rvn reindex' to rebuild the database", err)
+		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to open database", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 	}
 
 	stats, err := rt.DB.Stats()
 	if err != nil {
-		return nil, newError(CodeDatabaseError, "failed to query stats", "", err)
+		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to query stats", err)
 	}
 
 	return &StatsResult{

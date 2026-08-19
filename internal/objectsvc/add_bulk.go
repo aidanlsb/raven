@@ -5,11 +5,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -54,7 +56,7 @@ type AddBulkSummary struct {
 
 func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 	if req.VaultConfig == nil {
-		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 
 	items := make([]AddBulkPreviewItem, 0, len(req.ObjectIDs))
@@ -127,7 +129,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 
 func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
 	if req.VaultConfig == nil {
-		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 
 	results := make([]AddBulkResult, 0, len(req.ObjectIDs))

@@ -12,19 +12,6 @@ import (
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput    Code = codes.ErrInvalidInput
-	CodeStringNotFound  Code = codes.ErrStringNotFound
-	CodeMultipleMatches Code = codes.ErrMultipleMatches
-	CodeFileWrite       Code = codes.ErrFileWrite
-)
-
-func newError(code Code, message, suggestion string, details map[string]string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Details: stringDetails(details), Err: err}
-}
-
 // stringDetails widens a string-valued detail map into the shared error's
 // map[string]any shape, preserving nil so empty details stay omitted.
 func stringDetails(details map[string]string) map[string]any {
@@ -66,7 +53,7 @@ type WriteResult struct {
 // by ApplyEditsInMemoryWithScope.
 func WriteAppliedEdits(filePath, relativePath, content string) (*WriteResult, error) {
 	if err := atomicfile.WriteFile(filePath, []byte(content), 0o644); err != nil {
-		return nil, newError(CodeFileWrite, err.Error(), "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err).WithDetails(stringDetails(nil))
 	}
 	changes := mutation.NewChangeSet()
 	changes.AddChanged(relativePath)
@@ -85,20 +72,20 @@ func ParseEditsJSON(raw string) ([]EditSpec, error) {
 	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
-		return nil, newError(CodeInvalidInput, "invalid --edits-json payload", `Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`, map[string]string{"error": err.Error()}, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "invalid --edits-json payload", err).WithSuggestion(`Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`).WithDetails(stringDetails(map[string]string{"error": err.Error()}))
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		if err == nil {
-			return nil, newError(CodeInvalidInput, "invalid --edits-json payload", `Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`, map[string]string{"error": "unexpected trailing content"}, nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, "invalid --edits-json payload").WithSuggestion(`Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`).WithDetails(stringDetails(map[string]string{"error": "unexpected trailing content"}))
 		}
-		return nil, newError(CodeInvalidInput, "invalid --edits-json payload", `Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`, map[string]string{"error": err.Error()}, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "invalid --edits-json payload", err).WithSuggestion(`Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`).WithDetails(stringDetails(map[string]string{"error": err.Error()}))
 	}
 	if len(input.Edits) == 0 {
-		return nil, newError(CodeInvalidInput, "invalid --edits-json payload", `Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`, map[string]string{"error": "edits must contain at least one item"}, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "invalid --edits-json payload").WithSuggestion(`Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`).WithDetails(stringDetails(map[string]string{"error": "edits must contain at least one item"}))
 	}
 	for i, edit := range input.Edits {
 		if edit.OldStr == "" {
-			return nil, newError(CodeInvalidInput, "invalid --edits-json payload", `Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`, map[string]string{"error": fmt.Sprintf("edits[%d].old_str must be non-empty", i)}, nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, "invalid --edits-json payload").WithSuggestion(`Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`).WithDetails(stringDetails(map[string]string{"error": fmt.Sprintf("edits[%d].old_str must be non-empty", i)}))
 		}
 	}
 	return input.Edits, nil
@@ -127,28 +114,16 @@ func ApplyEditsInMemoryWithScope(content, relPath string, edits []EditSpec, scop
 			if activeScope != nil {
 				message = "old_str not found in selected range"
 			}
-			return "", nil, newError(
-				CodeStringNotFound,
-				message,
-				"Check the exact string including whitespace",
-				errorDetails(relPath, editIndex, edit.OldStr, activeScope),
-				nil,
-			)
+			return "", nil, svcerr.New(codes.ErrStringNotFound, message).WithSuggestion("Check the exact string including whitespace").WithDetails(stringDetails(errorDetails(relPath, editIndex, edit.OldStr, activeScope)))
 		}
 		if count > 1 {
 			message := fmt.Sprintf("old_str found %d times in file", count)
 			if activeScope != nil {
 				message = fmt.Sprintf("old_str found %d times in selected range", count)
 			}
-			return "", nil, newError(
-				CodeMultipleMatches,
-				message,
-				"Include more surrounding context to make the match unique",
-				errorDetails(relPath, editIndex, "", activeScope, map[string]string{
-					"count": fmt.Sprintf("%d", count),
-				}),
-				nil,
-			)
+			return "", nil, svcerr.New(codes.ErrMultipleMatches, message).WithSuggestion("Include more surrounding context to make the match unique").WithDetails(stringDetails(errorDetails(relPath, editIndex, "", activeScope, map[string]string{
+				"count": fmt.Sprintf("%d", count),
+			})))
 		}
 
 		matchIndex := searchStart + strings.Index(searchContent, edit.OldStr)

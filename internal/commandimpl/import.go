@@ -99,15 +99,15 @@ func mapImportFailure(err error, fallbackSuggestion string) commandexec.Result {
 
 	suggestion := fallbackSuggestion
 	switch svcErr.Code {
-	case importsvc.CodeInvalidInput:
+	case codes.ErrInvalidInput:
 		if suggestion == "" {
 			suggestion = "Provide valid JSON input and mapping options"
 		}
-	case importsvc.CodeTypeNotFound:
+	case codes.ErrTypeNotFound:
 		suggestion = "Check schema.yaml for available types"
-	case importsvc.CodeSchemaInvalid:
+	case codes.ErrSchemaInvalid:
 		suggestion = "Fix schema.yaml and try again"
-	case importsvc.CodeConfigInvalid:
+	case codes.ErrConfigInvalid:
 		suggestion = "Fix raven.yaml and try again"
 	}
 

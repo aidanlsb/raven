@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestDeleteFileTrashMovesFile(t *testing.T) {
@@ -131,11 +134,11 @@ func TestDeleteFileInvalidBehavior(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorInvalidInput {
+	if svcErr.Code != codes.ErrInvalidInput {
 		t.Fatalf("expected ErrorInvalidInput, got %s", svcErr.Code)
 	}
 }

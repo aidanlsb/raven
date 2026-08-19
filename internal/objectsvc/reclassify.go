@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
@@ -17,6 +18,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -80,13 +82,13 @@ type ReclassifyResult struct {
 
 func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if req.VaultConfig == nil {
-		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	if req.Schema == nil {
-		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
 	}
 	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
@@ -94,27 +96,27 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	}
 	req.Runtime = rt
 	if strings.TrimSpace(req.FilePath) == "" {
-		return nil, newError(ErrorInvalidInput, "file path is required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "file path is required")
 	}
 	if strings.TrimSpace(req.ObjectID) == "" {
-		return nil, newError(ErrorInvalidInput, "object ID is required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "object ID is required")
 	}
 	if strings.TrimSpace(req.NewTypeName) == "" {
-		return nil, newError(ErrorInvalidInput, "new type is required", "Usage: rvn reclassify <reference> <new-type>", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "new type is required").WithSuggestion("Usage: rvn reclassify <reference> <new-type>")
 	}
 
 	contentBytes, err := os.ReadFile(req.FilePath)
 	if err != nil {
-		return nil, newError(ErrorFileRead, "failed to read file", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read file", err)
 	}
 	content := string(contentBytes)
 
 	fm, err := parser.ParseFrontmatter(content)
 	if err != nil {
-		return nil, newError(ErrorInvalidInput, "failed to parse frontmatter", "The file must have YAML frontmatter (---) to reclassify", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "failed to parse frontmatter", err).WithSuggestion("The file must have YAML frontmatter (---) to reclassify")
 	}
 	if fm == nil {
-		return nil, newError(ErrorInvalidInput, "file has no frontmatter", "The file must have YAML frontmatter (---) to reclassify", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "file has no frontmatter").WithSuggestion("The file must have YAML frontmatter (---) to reclassify")
 	}
 
 	oldType := fm.ObjectType
@@ -123,23 +125,11 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	}
 
 	if req.NewTypeName == oldType {
-		return nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("object is already type '%s'", oldType),
-			"Specify a different target type",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("object is already type '%s'", oldType)).WithSuggestion("Specify a different target type")
 	}
 
 	if schema.IsBuiltinType(req.NewTypeName) {
-		return nil, newError(
-			ErrorInvalidInput,
-			fmt.Sprintf("cannot reclassify to built-in type '%s'", req.NewTypeName),
-			"Built-in types (page, section, date) cannot be used as reclassify targets",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot reclassify to built-in type '%s'", req.NewTypeName)).WithSuggestion("Built-in types (page, section, date) cannot be used as reclassify targets")
 	}
 
 	newTypeDef, typeExists := req.Schema.Types[req.NewTypeName]
@@ -149,13 +139,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 			typeNames = append(typeNames, name)
 		}
 		sort.Strings(typeNames)
-		return nil, newError(
-			ErrorTypeNotFound,
-			fmt.Sprintf("type '%s' not found", req.NewTypeName),
-			fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", ")),
-			map[string]interface{}{"available_types": typeNames},
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", req.NewTypeName)).WithSuggestion(fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", "))).WithDetails(map[string]interface{}{"available_types": typeNames})
 	}
 
 	fieldValues := cloneFieldValues(req.FieldValues)
@@ -179,13 +163,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 			},
 		}
 
-		return nil, newError(
-			ErrorRequiredField,
-			fmt.Sprintf("Missing required fields for type '%s': %s", req.NewTypeName, strings.Join(missingFieldNames, ", ")),
-			fmt.Sprintf("Retry with: field: {%s}", buildFieldTemplateExample(missingFieldNames)),
-			details,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrRequiredFieldMissing, fmt.Sprintf("Missing required fields for type '%s': %s", req.NewTypeName, strings.Join(missingFieldNames, ", "))).WithSuggestion(fmt.Sprintf("Retry with: field: {%s}", buildFieldTemplateExample(missingFieldNames))).WithDetails(details)
 	}
 
 	droppedFields := collectDroppedFieldsForReclassify(fm, newTypeDef)
@@ -229,7 +207,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 
 	newContent, err := updateFrontmatterForReclassify(content, req.NewTypeName, validatedFieldValues)
 	if err != nil {
-		return nil, newError(ErrorFileWrite, "failed to update frontmatter", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to update frontmatter", err)
 	}
 
 	moveDestRelPath := ""
@@ -265,7 +243,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 			return result, nil
 		}
 		if err := atomicfile.WriteFile(req.FilePath, []byte(newContent), 0o644); err != nil {
-			return nil, newError(ErrorFileWrite, "failed to write file", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write file", err)
 		}
 		result.ChangeSet.AddChanged(relPath)
 		return result, nil
@@ -304,7 +282,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 
 func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult, error) {
 	if strings.TrimSpace(req.Reference) == "" {
-		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn reclassify <reference> <new-type>", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "reference is required").WithSuggestion("Usage: rvn reclassify <reference> <new-type>")
 	}
 
 	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
@@ -316,7 +294,7 @@ func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult,
 		return nil, err
 	}
 	if resolved.IsSection {
-		return nil, newError(ErrorInvalidInput, "reclassify only supports file-level objects", "Use a file-level object ID without a section fragment", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "reclassify only supports file-level objects").WithSuggestion("Use a file-level object ID without a section fragment")
 	}
 
 	return Reclassify(ReclassifyRequest{

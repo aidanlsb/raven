@@ -6,12 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -50,10 +52,10 @@ type MoveByReferenceResult struct {
 
 func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error) {
 	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if req.VaultConfig == nil {
-		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
@@ -61,16 +63,10 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	}
 	req.Runtime = rt
 	if strings.TrimSpace(req.Reference) == "" || strings.TrimSpace(req.Destination) == "" {
-		return nil, newError(ErrorInvalidInput, "source and destination are required", "Usage: rvn move <source> <destination>", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "source and destination are required").WithSuggestion("Usage: rvn move <source> <destination>")
 	}
 	if _, _, isSection := paths.ParseSectionID(strings.TrimSpace(req.Reference)); isSection {
-		return nil, newError(
-			ErrorInvalidInput,
-			"rvn move does not accept section sources",
-			`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`,
-			map[string]interface{}{"source": strings.TrimSpace(req.Reference)},
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, "rvn move does not accept section sources").WithSuggestion(`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`).WithDetails(map[string]interface{}{"source": strings.TrimSpace(req.Reference)})
 	}
 
 	sourceFile, sourceRelPath, sourceIsFile, err := resolveLiteralNonMarkdownFileForMutation(rt, req.Reference)
@@ -83,25 +79,19 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 			return nil, resolveErr
 		}
 		if resolved.IsSection {
-			return nil, newError(
-				ErrorInvalidInput,
-				"rvn move does not accept section sources",
-				`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`,
-				map[string]interface{}{"source": resolved.ObjectID},
-				nil,
-			)
+			return nil, svcerr.New(codes.ErrInvalidInput, "rvn move does not accept section sources").WithSuggestion(`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`).WithDetails(map[string]interface{}{"source": resolved.ObjectID})
 		}
 		sourceFile = resolved.FilePath
 	}
 
 	if err := paths.ValidateWithinVault(req.VaultPath, sourceFile); err != nil {
-		return nil, newError(ErrorValidationFailed, "source path is outside vault", "Files can only be moved within the vault", nil, err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, "source path is outside vault", err).WithSuggestion("Files can only be moved within the vault")
 	}
 
 	if sourceRelPath == "" {
 		sourceRelPath, err = filepath.Rel(req.VaultPath, sourceFile)
 		if err != nil {
-			return nil, newError(ErrorUnexpected, "failed to resolve source path", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrInternal, "failed to resolve source path", err)
 		}
 		sourceRelPath = paths.NormalizeVaultRelPath(sourceRelPath)
 	}
@@ -121,7 +111,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 			sourceBase = strings.TrimSuffix(sourceBase, ".md")
 		}
 		if strings.TrimSpace(sourceBase) == "" {
-			return nil, newError(ErrorInvalidInput, "source has an invalid filename", "Use an explicit destination file path", nil, nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, "source has an invalid filename").WithSuggestion("Use an explicit destination file path")
 		}
 		destination = filepath.ToSlash(filepath.Join(destination, sourceBase))
 	}
@@ -134,10 +124,10 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		destinationBase = strings.TrimSuffix(destinationBase, ".md")
 	}
 	if strings.TrimSpace(destinationBase) == "" {
-		return nil, newError(ErrorInvalidInput, "destination has an empty filename", "Use a non-empty destination filename or a directory ending with /", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "destination has an empty filename").WithSuggestion("Use a non-empty destination filename or a directory ending with /")
 	}
 	if sourceIsFile && filepath.Ext(destinationBase) == "" {
-		return nil, newError(ErrorInvalidInput, "file destination must include a file extension", "Use a destination filename with an extension or a directory ending with /", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "file destination must include a file extension").WithSuggestion("Use a destination filename with an extension or a directory ending with /")
 	}
 
 	destPath := destination
@@ -148,14 +138,14 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	destFile := filepath.Join(req.VaultPath, destPath)
 
 	if err := paths.ValidateWithinVault(req.VaultPath, destFile); err != nil {
-		return nil, newError(ErrorValidationFailed, "destination path is outside vault", "Files can only be moved within the vault", nil, err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, "destination path is outside vault", err).WithSuggestion("Files can only be moved within the vault")
 	}
 	relDest, _ := filepath.Rel(req.VaultPath, destFile)
 	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, relDest); err != nil {
 		return nil, err
 	}
 	if _, err := os.Stat(destFile); err == nil {
-		return nil, newError(ErrorValidationFailed, fmt.Sprintf("Destination '%s' already exists", destination), "Choose a different destination or delete the existing file first", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("Destination '%s' already exists", destination)).WithSuggestion("Choose a different destination or delete the existing file first")
 	}
 
 	if sourceIsFile {
@@ -193,11 +183,11 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 
 	content, err := os.ReadFile(sourceFile)
 	if err != nil {
-		return nil, newError(ErrorFileRead, "failed to read source file", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read source file", err)
 	}
 	doc, err := parser.ParseDocumentWithOptions(string(content), sourceFile, req.VaultPath, req.ParseOptions)
 	if err != nil {
-		return nil, newError(ErrorValidationFailed, "failed to parse source file", "Failed to parse source file", nil, err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse source file", err).WithSuggestion("Failed to parse source file")
 	}
 
 	fileType := ""

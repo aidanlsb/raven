@@ -4,12 +4,14 @@ import (
 	"os"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -38,7 +40,7 @@ type SetObjectFileResult struct {
 
 func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 	if req.Schema == nil {
-		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
 	}
 	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.FilePath); err != nil {
 		return nil, err
@@ -50,15 +52,15 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 
 	content, err := os.ReadFile(req.FilePath)
 	if err != nil {
-		return nil, newError(ErrorFileRead, "failed to read file", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read file", err)
 	}
 
 	fm, err := parser.ParseFrontmatter(string(content))
 	if err != nil {
-		return nil, newError(ErrorInvalidInput, "failed to parse frontmatter", "Failed to parse frontmatter", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "failed to parse frontmatter", err).WithSuggestion("Failed to parse frontmatter")
 	}
 	if fm == nil {
-		return nil, newError(ErrorInvalidInput, "file has no frontmatter", "The file must have YAML frontmatter (---) to set fields", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "file has no frontmatter").WithSuggestion("The file must have YAML frontmatter (---) to set fields")
 	}
 
 	objectType := fm.ObjectType
@@ -82,10 +84,10 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 
 	updatedFM, err := parser.ParseFrontmatter(newContent)
 	if err != nil {
-		return nil, newError(ErrorInvalidInput, "failed to parse updated frontmatter", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "failed to parse updated frontmatter", err)
 	}
 	if updatedFM == nil {
-		return nil, newError(ErrorInvalidInput, "file has no frontmatter after update", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "file has no frontmatter after update")
 	}
 
 	resolvedUpdates := make(map[string]string, len(req.TypedUpdates))
@@ -95,7 +97,7 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 
 	if !req.Preview {
 		if err := atomicfile.WriteFile(req.FilePath, []byte(newContent), 0o644); err != nil {
-			return nil, newError(ErrorFileWrite, "failed to write file", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write file", err)
 		}
 	}
 

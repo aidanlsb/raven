@@ -7,8 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestUpsertCreateUpdateUnchanged(t *testing.T) {
@@ -105,11 +107,11 @@ traits: {}
 		t.Fatal("expected required-field error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorRequiredField {
+	if svcErr.Code != codes.ErrRequiredFieldMissing {
 		t.Fatalf("expected ErrorRequiredField, got %s", svcErr.Code)
 	}
 	if !strings.Contains(svcErr.Message, "status") {
@@ -163,11 +165,11 @@ traits: {}
 		t.Fatal("expected type mismatch error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorValidationFailed {
+	if svcErr.Code != codes.ErrValidationFailed {
 		t.Fatalf("expected ErrorValidationFailed, got %s", svcErr.Code)
 	}
 	if !strings.Contains(svcErr.Message, "cannot upsert as") {

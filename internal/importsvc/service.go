@@ -25,19 +25,6 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput  Code = codes.ErrInvalidInput
-	CodeTypeNotFound  Code = codes.ErrTypeNotFound
-	CodeSchemaInvalid Code = codes.ErrSchemaInvalid
-	CodeConfigInvalid Code = codes.ErrConfigInvalid
-)
-
-func newError(code Code, msg string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: msg, Err: err}
-}
-
 type MappingConfig struct {
 	Type         string            `yaml:"type"`
 	Key          string            `yaml:"key"`
@@ -71,10 +58,10 @@ func BuildMappingConfig(req BuildMappingConfigRequest) (*MappingConfig, error) {
 	if strings.TrimSpace(req.MappingFilePath) != "" {
 		data, err := os.ReadFile(req.MappingFilePath)
 		if err != nil {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("failed to read mapping file: %v", err), err)
+			return nil, svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to read mapping file: %v", err), err)
 		}
 		if err := yaml.Unmarshal(data, cfg); err != nil {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("failed to parse mapping file: %v", err), err)
+			return nil, svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to parse mapping file: %v", err), err)
 		}
 	}
 
@@ -85,7 +72,7 @@ func BuildMappingConfig(req BuildMappingConfigRequest) (*MappingConfig, error) {
 	for _, m := range req.MapFlags {
 		parts := strings.SplitN(m, "=", 2)
 		if len(parts) != 2 {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("invalid --map format: %q (expected key=value)", m), nil)
+			return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid --map format: %q (expected key=value)", m))
 		}
 		cfg.Map[parts[0]] = parts[1]
 	}
@@ -98,7 +85,7 @@ func BuildMappingConfig(req BuildMappingConfigRequest) (*MappingConfig, error) {
 	}
 
 	if strings.TrimSpace(cfg.Type) == "" && strings.TrimSpace(cfg.TypeField) == "" {
-		return nil, newError(CodeInvalidInput, "no type specified: provide a type argument or use a mapping file with 'type' or 'type_field'", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "no type specified: provide a type argument or use a mapping file with 'type' or 'type_field'")
 	}
 
 	return cfg, nil
@@ -111,18 +98,18 @@ func ReadJSONInput(filePath string, stdin io.Reader) ([]map[string]interface{}, 
 	if strings.TrimSpace(filePath) != "" {
 		data, err = os.ReadFile(filePath)
 		if err != nil {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("failed to read file %s: %v", filePath, err), err)
+			return nil, svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to read file %s: %v", filePath, err), err)
 		}
 	} else {
 		data, err = io.ReadAll(stdin)
 		if err != nil {
-			return nil, newError(CodeInvalidInput, fmt.Sprintf("failed to read stdin: %v", err), err)
+			return nil, svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to read stdin: %v", err), err)
 		}
 	}
 
 	data = []byte(strings.TrimSpace(string(data)))
 	if len(data) == 0 {
-		return nil, newError(CodeInvalidInput, "empty input", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "empty input")
 	}
 
 	var items []map[string]interface{}
@@ -135,19 +122,19 @@ func ReadJSONInput(filePath string, stdin io.Reader) ([]map[string]interface{}, 
 		return []map[string]interface{}{single}, nil
 	}
 
-	return nil, newError(CodeInvalidInput, "input is not valid JSON (expected array or object)", nil)
+	return nil, svcerr.New(codes.ErrInvalidInput, "input is not valid JSON (expected array or object)")
 }
 
 func ValidateMappingTypes(cfg *MappingConfig, sch *schema.Schema) error {
 	if cfg.Type != "" {
 		if _, ok := sch.Types[cfg.Type]; !ok && !schema.IsBuiltinType(cfg.Type) {
-			return newError(CodeTypeNotFound, fmt.Sprintf("type '%s' not found in schema", cfg.Type), nil)
+			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found in schema", cfg.Type))
 		}
 	}
 
 	for sourceName, typeMapping := range cfg.Types {
 		if _, ok := sch.Types[typeMapping.Type]; !ok && !schema.IsBuiltinType(typeMapping.Type) {
-			return newError(CodeTypeNotFound, fmt.Sprintf("type '%s' (mapped from '%s') not found in schema", typeMapping.Type, sourceName), nil)
+			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' (mapped from '%s') not found in schema", typeMapping.Type, sourceName))
 		}
 	}
 
@@ -311,24 +298,24 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		if rt == nil {
 			message = "vault runtime is required"
 		}
-		return nil, newError(CodeInvalidInput, message, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, message, err)
 	}
 	vaultPath := strings.TrimSpace(rt.VaultPath)
 	if req.MappingConfig == nil {
-		return nil, newError(CodeInvalidInput, "mapping config is required", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "mapping config is required")
 	}
 	if len(req.Items) == 0 {
-		return nil, newError(CodeInvalidInput, "no items to import", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "no items to import")
 	}
 
 	if rt.SchemaLoadErr != nil {
-		return nil, newError(CodeSchemaInvalid, rt.SchemaLoadErr.Error(), rt.SchemaLoadErr)
+		return nil, svcerr.Wrap(codes.ErrSchemaInvalid, rt.SchemaLoadErr.Error(), rt.SchemaLoadErr)
 	}
 	if rt.Schema == nil {
-		return nil, newError(CodeSchemaInvalid, "schema runtime is required", nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, "schema runtime is required")
 	}
 	if rt.VaultCfg == nil {
-		return nil, newError(CodeConfigInvalid, "vault config runtime is required", nil)
+		return nil, svcerr.New(codes.ErrConfigInvalid, "vault config runtime is required")
 	}
 	sch := rt.Schema
 	vaultCfg := rt.VaultCfg

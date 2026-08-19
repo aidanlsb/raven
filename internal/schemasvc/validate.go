@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -17,17 +19,17 @@ type ValidateResult struct {
 
 func Validate(rt *vaultruntime.Runtime) (*ValidateResult, error) {
 	if rt == nil {
-		return nil, newError(ErrorInvalidInput, "vault runtime is required", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "vault runtime is required")
 	}
 	if rt.SchemaLoadErr != nil {
-		code := ErrorSchemaInvalid
+		code := codes.ErrSchemaInvalid
 		if errors.Is(rt.SchemaLoadErr, os.ErrNotExist) {
-			code = ErrorSchemaNotFound
+			code = codes.ErrSchemaNotFound
 		}
-		return nil, newError(code, rt.SchemaLoadErr.Error(), "Fix the errors and try again", nil, rt.SchemaLoadErr)
+		return nil, svcerr.Wrap(code, rt.SchemaLoadErr.Error(), rt.SchemaLoadErr).WithSuggestion("Fix the errors and try again")
 	}
 	if rt.Schema == nil {
-		return nil, newError(ErrorSchemaNotFound, "schema runtime is required", "Fix the errors and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrSchemaNotFound, "schema runtime is required").WithSuggestion("Fix the errors and try again")
 	}
 
 	issues := schema.ValidateSchema(rt.Schema)

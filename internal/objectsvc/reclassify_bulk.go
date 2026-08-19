@@ -198,17 +198,11 @@ func planReclassifyBulk(req ReclassifyBulkRequest) []reclassifyBulkPlan {
 		result, err := reclassifyBulkObject(req, id, true)
 		if err == nil && result.Moved && !result.NeedsConfirm {
 			if firstID, exists := destinations[result.NewPath]; exists {
-				err = newError(
-					ErrorValidationFailed,
-					fmt.Sprintf("bulk destination collision: %s and %s would both move to %s", firstID, id, result.NewPath),
-					"Rename one of the source objects or reclassify the objects separately",
-					map[string]interface{}{
-						"destination": result.NewPath,
-						"first_id":    firstID,
-						"object_id":   id,
-					},
-					nil,
-				)
+				err = svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("bulk destination collision: %s and %s would both move to %s", firstID, id, result.NewPath)).WithSuggestion("Rename one of the source objects or reclassify the objects separately").WithDetails(map[string]interface{}{
+					"destination": result.NewPath,
+					"first_id":    firstID,
+					"object_id":   id,
+				})
 			} else {
 				destinations[result.NewPath] = id
 			}
@@ -226,13 +220,13 @@ func isReclassifyBulkCollision(err error) bool {
 
 func validateReclassifyBulkRequest(req ReclassifyBulkRequest) error {
 	if req.VaultConfig == nil {
-		return newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	if req.Schema == nil {
-		return newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
+		return svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
 	}
 	if req.NewTypeName == "" {
-		return newError(ErrorInvalidInput, "new type is required", "Usage: rvn reclassify <new-type> --stdin", nil, nil)
+		return svcerr.New(codes.ErrInvalidInput, "new type is required").WithSuggestion("Usage: rvn reclassify <new-type> --stdin")
 	}
 	return nil
 }

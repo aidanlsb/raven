@@ -17,24 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput     Code = codes.ErrInvalidInput
-	CodeFileNotFound     Code = codes.ErrFileNotFound
-	CodeFileReadError    Code = codes.ErrFileRead
-	CodeFileWriteError   Code = codes.ErrFileWrite
-	CodeFileOutsideVault Code = codes.ErrFileOutsideVault
-	CodeSchemaInvalid    Code = codes.ErrSchemaInvalid
-	CodeValidationFailed Code = codes.ErrValidationFailed
-	CodeInternal         Code = codes.ErrInternal
-)
-
 const WarningIndexUpdateFailed = codes.WarnIndexUpdateFailed
-
-func newError(code Code, message, suggestion string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
 
 type Warning struct {
 	Code    codes.WarningCode
@@ -102,13 +85,13 @@ type DeleteResult struct {
 
 func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
 	if err := vaultruntime.Require(rt); err != nil {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	req.VaultPath = rt.VaultPath
 
 	root := filepath.Join(req.VaultPath, filepath.FromSlash(req.TemplateDir))
 	if err := paths.ValidateWithinVault(req.VaultPath, root); err != nil {
-		return nil, newError(CodeFileOutsideVault, "template directory must be within the vault", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "template directory must be within the vault", err)
 	}
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return &ListResult{
@@ -116,7 +99,7 @@ func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
 			Templates:   []TemplateFileInfo{},
 		}, nil
 	} else if err != nil {
-		return nil, newError(CodeFileReadError, "failed to read template directory", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read template directory", err)
 	}
 
 	files := make([]TemplateFileInfo, 0)
@@ -142,7 +125,7 @@ func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, newError(CodeFileReadError, "failed to list template files", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to list template files", err)
 	}
 
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
@@ -154,7 +137,7 @@ func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
 
 func Read(req ReadRequest) (*ReadResult, error) {
 	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 
 	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
@@ -172,7 +155,7 @@ func Read(req ReadRequest) (*ReadResult, error) {
 		}, nil
 	}
 	if err != nil {
-		return nil, newError(CodeFileReadError, "failed reading template file", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed reading template file", err)
 	}
 
 	return &ReadResult{
@@ -185,7 +168,7 @@ func Read(req ReadRequest) (*ReadResult, error) {
 
 func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
 	if err := vaultruntime.Require(rt); err != nil {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	req.VaultPath = rt.VaultPath
 
@@ -195,11 +178,11 @@ func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
 	}
 
 	if err := template.ValidateContent(req.Content); err != nil {
-		return nil, newError(CodeValidationFailed, err.Error(), "Template files should contain only body Markdown; Raven writes object frontmatter separately", err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, err.Error(), err).WithSuggestion("Template files should contain only body Markdown; Raven writes object frontmatter separately")
 	}
 
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
-		return nil, newError(CodeFileWriteError, "unable to create template directory", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "unable to create template directory", err)
 	}
 
 	status := "created"
@@ -210,13 +193,13 @@ func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
 			status = "updated"
 		}
 	} else if !os.IsNotExist(readErr) {
-		return nil, newError(CodeFileReadError, "failed reading existing template file", "", readErr)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed reading existing template file", readErr)
 	}
 
 	changed := status != "unchanged"
 	if changed {
 		if err := atomicfile.WriteFile(fullPath, []byte(req.Content), 0o644); err != nil {
-			return nil, newError(CodeFileWriteError, "failed writing template file", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed writing template file", err)
 		}
 	}
 
@@ -231,7 +214,7 @@ func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
 
 func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) {
 	if err := vaultruntime.Require(rt); err != nil {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	req.VaultPath = rt.VaultPath
 
@@ -241,9 +224,9 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 	}
 
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		return nil, newError(CodeFileNotFound, fmt.Sprintf("template file not found: %s", fileRef), "", err)
+		return nil, svcerr.Wrap(codes.ErrFileNotFound, fmt.Sprintf("template file not found: %s", fileRef), err)
 	} else if err != nil {
-		return nil, newError(CodeFileReadError, "failed to read template file metadata", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read template file metadata", err)
 	}
 
 	templateIDs, err := schemaTemplateRefsForFile(rt, fileRef, req.TemplateDir)
@@ -251,17 +234,12 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 		return nil, err
 	}
 	if len(templateIDs) > 0 && !req.Force {
-		return nil, newError(
-			CodeValidationFailed,
-			fmt.Sprintf("template file %q is referenced by schema templates: %s", fileRef, strings.Join(templateIDs, ", ")),
-			"Remove those template definitions first with `rvn schema template remove <template_id>` or use --force",
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("template file %q is referenced by schema templates: %s", fileRef, strings.Join(templateIDs, ", "))).WithSuggestion("Remove those template definitions first with `rvn schema template remove <template_id>` or use --force")
 	}
 
 	trashRef, err := moveTemplateToTrash(req.VaultPath, fileRef)
 	if err != nil {
-		return nil, newError(CodeFileWriteError, "unable to move template file to .trash", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "unable to move template file to .trash", err)
 	}
 
 	warnings := make([]Warning, 0, 1)
@@ -293,12 +271,12 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 func resolveTemplatePath(vaultPath, templateDir, pathArg string) (string, string, error) {
 	fileRef, err := template.ResolveFileRef(pathArg, templateDir)
 	if err != nil {
-		return "", "", newError(CodeInvalidInput, err.Error(), fmt.Sprintf("Use a file path under %s", templateDir), err)
+		return "", "", svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion(fmt.Sprintf("Use a file path under %s", templateDir))
 	}
 
 	fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
 	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-		return "", "", newError(CodeFileOutsideVault, "template files must be within the vault", "", err)
+		return "", "", svcerr.Wrap(codes.ErrFileOutsideVault, "template files must be within the vault", err)
 	}
 
 	return fileRef, fullPath, nil
@@ -306,10 +284,10 @@ func resolveTemplatePath(vaultPath, templateDir, pathArg string) (string, string
 
 func schemaTemplateRefsForFile(rt *vaultruntime.Runtime, fileRef, templateDir string) ([]string, error) {
 	if rt.SchemaLoadErr != nil {
-		return nil, newError(CodeSchemaInvalid, "failed to load schema", "Fix schema.yaml and try again", rt.SchemaLoadErr)
+		return nil, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to load schema", rt.SchemaLoadErr).WithSuggestion("Fix schema.yaml and try again")
 	}
 	if rt.Schema == nil {
-		return nil, newError(CodeSchemaInvalid, "schema runtime is required", "Fix schema.yaml and try again", nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, "schema runtime is required").WithSuggestion("Fix schema.yaml and try again")
 	}
 	sch := rt.Schema
 
