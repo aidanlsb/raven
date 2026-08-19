@@ -397,10 +397,10 @@ func rejectUpdateRemap(kind, target, requestedType, values string) *svcerr.Error
 		codes.ErrInvalidInput,
 		fmt.Sprintf("schema update %s does not support %s", kind, strings.Join(flags, " or ")),
 	).WithSuggestion(fmt.Sprintf(
-			"Use 'rvn schema convert %s %s [--type <target-type>] --map-json <mapping>' to migrate schema and live values",
-			kind,
-			target,
-		)).WithDetails(map[string]interface{}{"unsupported_flags": flags})
+		"Use 'rvn schema convert %s %s [--type <target-type>] --map-json <mapping>' to migrate schema and live values",
+		kind,
+		target,
+	)).WithDetails(map[string]interface{}{"unsupported_flags": flags})
 }
 
 func currentTraitType(def *schema.TraitDefinition) string {
