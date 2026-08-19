@@ -118,7 +118,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 		dailyDir = req.VaultConfig.GetDailyDirectory()
 	}
 
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
 	}

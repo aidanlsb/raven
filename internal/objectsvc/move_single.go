@@ -55,7 +55,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	if req.VaultConfig == nil {
 		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
 	}

@@ -47,7 +47,7 @@ func UnsetByReference(req UnsetByReferenceRequest) (*UnsetByReferenceResult, err
 	if strings.TrimSpace(req.Reference) == "" {
 		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn unset <reference> <field>...", nil, nil)
 	}
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
 	}

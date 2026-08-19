@@ -29,7 +29,7 @@ type DeleteByReferenceResult struct {
 }
 
 func PreviewDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
 	if owned {
 		defer rt.Close()
 	}
@@ -90,7 +90,7 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 }
 
 func DeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
 	if owned {
 		defer rt.Close()
 	}

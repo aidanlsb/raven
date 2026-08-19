@@ -136,7 +136,7 @@ func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
 	errorCount := 0
 	changes := mutation.NewChangeSet()
 	captureCfg := req.VaultConfig.GetCaptureConfig()
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, nil, req.ParseOptions)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, nil, req.ParseOptions)
 	if owned {
 		defer rt.Close()
 	}

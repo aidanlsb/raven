@@ -65,7 +65,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	if req.VaultConfig == nil {
 		return nil, newError(codes.ErrValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
 	}

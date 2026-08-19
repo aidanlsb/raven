@@ -112,7 +112,7 @@ type trackedLine struct {
 
 // Create inserts a new, empty heading at a structural section boundary.
 func Create(req CreateRequest) (*CreateResult, error) {
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
 	}
@@ -218,7 +218,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 // Move reorders or reparents one section and its complete subtree without
 // changing any heading text, level, or slug.
 func Move(req MoveRequest) (*MoveResult, error) {
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
 	}
