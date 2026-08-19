@@ -123,6 +123,9 @@ func TestDiscoverableContractsApplyPolicy(t *testing.T) {
 	if _, ok := byID["serve"]; ok {
 		t.Fatal("did not expect serve to be discoverable")
 	}
+	if _, ok := byID["schema_template_default"]; ok {
+		t.Fatal("did not expect removed schema_template_default command to be discoverable")
+	}
 }
 
 func TestCompactDiscoverReturnsFullCatalogByDefault(t *testing.T) {

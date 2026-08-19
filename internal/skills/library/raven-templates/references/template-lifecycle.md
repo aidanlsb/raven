@@ -5,24 +5,21 @@
 ```bash
 rvn template write meeting/standard.md --content '# Meeting Notes' --json
 rvn schema template set meeting_standard --file templates/meeting/standard.md --json
-rvn schema template bind meeting_standard --type meeting --json
-rvn schema template default meeting_standard --type meeting --json
+rvn schema template bind meeting_standard --type meeting --default --json
 rvn new meeting "Weekly Standup" --json
 ```
 
-Shortcut: `rvn schema template bind meeting_standard --type meeting --default --json` binds and sets the default in one step.
+Re-run the bind command with `--default` to change the default when the template
+ID is already bound.
 
 ## Core type template quick path (`date`)
 
 ```bash
 rvn template write daily.md --content '# Daily Note' --json
 rvn schema template set daily_default --file templates/daily.md --json
-rvn schema template bind daily_default --core date --json
-rvn schema template default daily_default --core date --json
+rvn schema template bind daily_default --core date --default --json
 rvn daily tomorrow --json
 ```
-
-Shortcut: `rvn schema template bind daily_default --core date --default --json` binds and sets the default in one step.
 
 ## Path semantics
 
@@ -42,22 +39,17 @@ rvn schema template list --core date --json
 
 ## Safe teardown order
 
-1. Clear or change defaults:
+1. Unbind IDs, adding `--clear-default` for the current default:
 ```bash
-rvn schema template default --type meeting --clear --json
-rvn schema template default --core date --clear --json
+rvn schema template unbind meeting_standard --type meeting --clear-default --json
+rvn schema template unbind daily_default --core date --clear-default --json
 ```
-2. Unbind IDs:
-```bash
-rvn schema template unbind meeting_standard --type meeting --json
-rvn schema template unbind daily_default --core date --json
-```
-3. Remove schema template IDs:
+2. Remove schema template IDs:
 ```bash
 rvn schema template remove meeting_standard --json
 rvn schema template remove daily_default --json
 ```
-4. Delete template files:
+3. Delete template files:
 ```bash
 rvn template delete meeting/standard.md --json
 rvn template delete daily.md --json

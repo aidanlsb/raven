@@ -17,7 +17,6 @@ coverage:
     - schema template remove
     - schema template bind
     - schema template unbind
-    - schema template default
 execution:
   preferred_transport: cli
   cli_binary: rvn

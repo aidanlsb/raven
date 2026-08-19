@@ -593,7 +593,11 @@ Raven writes object frontmatter separately when applying templates.`,
 	"schema_template_bind": {
 		Name:        "schema template bind",
 		CLIPath:     []string{"schema", "template", "bind"},
-		Description: "Bind a schema template ID to a type or core type",
+		Description: "Bind a schema template ID to a type or core type, optionally as its default",
+		LongDesc: `Bind a schema template ID to a type or core type.
+
+Use --default to also make the template the target's default. This also changes
+the default when the template is already bound.`,
 		Args: []ArgMeta{
 			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
@@ -605,13 +609,17 @@ Raven writes object frontmatter separately when applying templates.`,
 		Examples: []string{
 			"rvn schema template bind interview_technical --type interview --json",
 			"rvn schema template bind interview_technical --type interview --default --json",
-			"rvn schema template bind daily_default --core date --json",
+			"rvn schema template bind daily_default --core date --default --json",
 		},
 	},
 	"schema_template_unbind": {
 		Name:        "schema template unbind",
 		CLIPath:     []string{"schema", "template", "unbind"},
-		Description: "Unbind a schema template ID from a type or core type",
+		Description: "Unbind a schema template ID from a type or core type, clearing its default if requested",
+		LongDesc: `Unbind a schema template ID from a type or core type.
+
+Unbinding the target's current default is blocked unless --clear-default is
+provided, which clears the default before removing the binding.`,
 		Args: []ArgMeta{
 			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
@@ -622,25 +630,8 @@ Raven writes object frontmatter separately when applying templates.`,
 		},
 		Examples: []string{
 			"rvn schema template unbind interview_technical --type interview --json",
+			"rvn schema template unbind interview_technical --type interview --clear-default --json",
 			"rvn schema template unbind daily_default --core date --clear-default --json",
-		},
-	},
-	"schema_template_default": {
-		Name:        "schema template default",
-		CLIPath:     []string{"schema", "template", "default"},
-		Description: "Set or clear the default template for a type or core type",
-		Args: []ArgMeta{
-			{Name: "template_id", Description: "Schema template ID (omit with --clear)", Required: false},
-		},
-		Flags: []FlagMeta{
-			{Name: "type", Description: "Target schema type", Type: FlagTypeString},
-			{Name: "core", Description: "Target core type (date or page)", Type: FlagTypeString},
-			{Name: "clear", Description: "Clear the target default template", Type: FlagTypeBool},
-		},
-		Examples: []string{
-			"rvn schema template default interview_technical --type interview --json",
-			"rvn schema template default daily_default --core date --json",
-			"rvn schema template default --type interview --clear --json",
 		},
 	},
 }

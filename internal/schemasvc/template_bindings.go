@@ -121,7 +121,7 @@ func RemoveTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string, c
 				return newError(
 					ErrorInvalidInput,
 					fmt.Sprintf("template '%s' is the default for type '%s'", templateID, typeName),
-					"Re-run with --clear-default, or change the default first with `rvn schema template default <template_id> --type "+typeName+"`",
+					"Re-run with --clear-default, or change the default with `rvn schema template bind <template_id> --type "+typeName+" --default`",
 					nil,
 					nil,
 				)
@@ -132,7 +132,7 @@ func RemoveTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string, c
 	})
 }
 
-func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID string, clearDefault bool) (string, error) {
+func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID string) (string, error) {
 	templateID = strings.TrimSpace(templateID)
 	normalizedTypeName, err := validateTemplateTypeName(typeName)
 	if err != nil {
@@ -140,7 +140,6 @@ func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID strin
 	}
 	typeName = normalizedTypeName
 
-	newDefault := templateID
 	err = editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		typeDef, err := typeForTemplateConfig(doc.Schema(), typeName)
 		if err != nil {
@@ -153,16 +152,11 @@ func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID strin
 		}
 		typeNode := schemadoc.EnsureMap(typesNode, typeName)
 
-		if clearDefault {
-			delete(typeNode, "default_template")
-			newDefault = ""
-			return nil
-		}
 		if templateID == "" {
 			return newError(
 				ErrorInvalidInput,
-				"default requires template_id or --clear",
-				"Use: rvn schema template default <template_id> --type "+typeName+" OR --clear",
+				"default requires template_id",
+				"Use: rvn schema template bind <template_id> --type "+typeName+" --default",
 				nil,
 				nil,
 			)
@@ -183,7 +177,7 @@ func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID strin
 		return "", err
 	}
 
-	return newDefault, nil
+	return templateID, nil
 }
 
 func ListCoreTemplates(rt *vaultruntime.Runtime, coreTypeName string) (*TemplateBindingState, error) {
@@ -281,7 +275,7 @@ func RemoveCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID strin
 				return newError(
 					ErrorInvalidInput,
 					fmt.Sprintf("template '%s' is the default for core type '%s'", templateID, coreTypeName),
-					"Re-run with --clear-default, or change the default first with `rvn schema template default <template_id> --core "+coreTypeName+"`",
+					"Re-run with --clear-default, or change the default with `rvn schema template bind <template_id> --core "+coreTypeName+" --default`",
 					nil,
 					nil,
 				)
@@ -292,7 +286,7 @@ func RemoveCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID strin
 	})
 }
 
-func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string, clearDefault bool) (string, error) {
+func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string) (string, error) {
 	templateID = strings.TrimSpace(templateID)
 	normalizedCoreTypeName, err := validateTemplateCoreTypeName(coreTypeName)
 	if err != nil {
@@ -300,7 +294,6 @@ func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID s
 	}
 	coreTypeName = normalizedCoreTypeName
 
-	newDefault := templateID
 	err = editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		coreDef, err := coreTypeForTemplateConfig(doc.Schema(), coreTypeName)
 		if err != nil {
@@ -309,16 +302,11 @@ func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID s
 
 		coreNode := schemadoc.EnsureMap(doc.Root(), "core")
 		typeNode := schemadoc.EnsureMap(coreNode, coreTypeName)
-		if clearDefault {
-			delete(typeNode, "default_template")
-			newDefault = ""
-			return nil
-		}
 		if templateID == "" {
 			return newError(
 				ErrorInvalidInput,
-				"default requires template_id or --clear",
-				"Use: rvn schema template default <template_id> --core "+coreTypeName+" OR --clear",
+				"default requires template_id",
+				"Use: rvn schema template bind <template_id> --core "+coreTypeName+" --default",
 				nil,
 				nil,
 			)
@@ -339,7 +327,7 @@ func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID s
 		return "", err
 	}
 
-	return newDefault, nil
+	return templateID, nil
 }
 
 func loadTypeForTemplateConfig(rt *vaultruntime.Runtime, typeName string) (*schema.Schema, *schema.TypeDefinition, error) {

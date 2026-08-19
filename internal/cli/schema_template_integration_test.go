@@ -20,13 +20,12 @@ types:
 		Build()
 
 	v.RunCLI("schema", "template", "set", "interview_technical", "--file", "templates/interview/technical.md").MustSucceed(t)
-	v.RunCLI("schema", "template", "bind", "interview_technical", "--type", "interview").MustSucceed(t)
-	v.RunCLI("schema", "template", "default", "interview_technical", "--type", "interview").MustSucceed(t)
+	v.RunCLI("schema", "template", "bind", "interview_technical", "--type", "interview", "--default").MustSucceed(t)
 
 	v.RunCLI("new", "interview", "Jane Doe").MustSucceed(t)
 	v.AssertFileContains("interviews/jane-doe.md", "## Technical Interview")
 
-	v.RunCLI("schema", "template", "default", "--type", "interview", "--clear").MustSucceed(t)
+	v.RunCLI("schema", "template", "unbind", "interview_technical", "--type", "interview", "--clear-default").MustSucceed(t)
 
 	v.RunCLI("new", "interview", "No Template").MustSucceed(t)
 	v.AssertFileNotContains("interviews/no-template.md", "## Technical Interview")

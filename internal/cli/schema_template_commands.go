@@ -33,19 +33,17 @@ func buildSchemaTemplateCommand() *cobra.Command {
 			Short: "Manage schema templates and bindings",
 		},
 		Renders: map[string]func(*cobra.Command, commandexec.Result) error{
-			"schema_template_list":    renderSchemaTemplateList,
-			"schema_template_get":     renderSchemaTemplateGet,
-			"schema_template_set":     renderSchemaTemplateSet,
-			"schema_template_remove":  renderSchemaTemplateRemove,
-			"schema_template_bind":    renderSchemaTemplateBind,
-			"schema_template_unbind":  renderSchemaTemplateUnbind,
-			"schema_template_default": renderSchemaTemplateDefault,
+			"schema_template_list":   renderSchemaTemplateList,
+			"schema_template_get":    renderSchemaTemplateGet,
+			"schema_template_set":    renderSchemaTemplateSet,
+			"schema_template_remove": renderSchemaTemplateRemove,
+			"schema_template_bind":   renderSchemaTemplateBind,
+			"schema_template_unbind": renderSchemaTemplateUnbind,
 		},
 		Leaves: map[string]canonicalLeafOptions{
-			"schema_template_list":    {BuildArgs: buildSchemaTemplateListArgs},
-			"schema_template_bind":    {BuildArgs: buildSchemaTemplateBindArgs},
-			"schema_template_unbind":  {BuildArgs: buildSchemaTemplateUnbindArgs},
-			"schema_template_default": {BuildArgs: buildSchemaTemplateDefaultArgs},
+			"schema_template_list":   {BuildArgs: buildSchemaTemplateListArgs},
+			"schema_template_bind":   {BuildArgs: buildSchemaTemplateBindArgs},
+			"schema_template_unbind": {BuildArgs: buildSchemaTemplateUnbindArgs},
 		},
 	})
 }
@@ -223,34 +221,6 @@ func renderSchemaTemplateUnbind(_ *cobra.Command, result commandexec.Result) err
 		return nil
 	}
 	fmt.Println(ui.Checkf("Unbound template %s from %s %s", templateID, kind, name))
-	return nil
-}
-
-func buildSchemaTemplateDefaultArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	target, err := resolveSchemaTemplateTarget(cmd, true)
-	if err != nil {
-		return nil, err
-	}
-	argsMap := map[string]interface{}{target.kind: target.name}
-	if len(args) > 0 {
-		argsMap["template_id"] = args[0]
-	}
-	if cmd.Flags().Changed("clear") {
-		value, _ := cmd.Flags().GetBool("clear")
-		argsMap["clear"] = value
-	}
-	return argsMap, nil
-}
-
-func renderSchemaTemplateDefault(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	kind, name := schemaTemplateResultTarget(data)
-	newDefault, _ := data["default_template"].(string)
-	if strings.TrimSpace(newDefault) == "" {
-		fmt.Println(ui.Checkf("Cleared default template for %s %s", kind, name))
-		return nil
-	}
-	fmt.Println(ui.Checkf("Set default template for %s %s -> %s", kind, name, newDefault))
 	return nil
 }
 

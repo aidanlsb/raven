@@ -120,13 +120,14 @@ func runMCPParityTemplateTests(t *testing.T, binary string) {
 		mcpResult := server.callTool("schema_template_bind", map[string]interface{}{
 			"type":        "person",
 			"template_id": "person_profile",
+			"default":     true,
 		})
-		cliResult := vCLI.RunCLI("schema", "template", "bind", "person_profile", "--type", "person")
+		cliResult := vCLI.RunCLI("schema", "template", "bind", "person_profile", "--type", "person", "--default")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"type", "template_id"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"type", "template_id", "default_template"})
 	})
 
-	t.Run("schema_template_default_clear_type", func(t *testing.T) {
+	t.Run("schema_template_unbind_clear_default_type", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
@@ -135,18 +136,17 @@ func runMCPParityTemplateTests(t *testing.T, binary string) {
 		vCLI.WriteFile("templates/person.md", "# Person Template\n")
 		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
-		vMCP.RunCLI("schema", "template", "bind", "person_profile", "--type", "person").MustSucceed(t)
-		vCLI.RunCLI("schema", "template", "bind", "person_profile", "--type", "person").MustSucceed(t)
-		vMCP.RunCLI("schema", "template", "default", "person_profile", "--type", "person").MustSucceed(t)
-		vCLI.RunCLI("schema", "template", "default", "person_profile", "--type", "person").MustSucceed(t)
+		vMCP.RunCLI("schema", "template", "bind", "person_profile", "--type", "person", "--default").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "bind", "person_profile", "--type", "person", "--default").MustSucceed(t)
 
-		mcpResult := server.callTool("schema_template_default", map[string]interface{}{
-			"type":  "person",
-			"clear": true,
+		mcpResult := server.callTool("schema_template_unbind", map[string]interface{}{
+			"type":          "person",
+			"template_id":   "person_profile",
+			"clear-default": true,
 		})
-		cliResult := vCLI.RunCLI("schema", "template", "default", "--type", "person", "--clear")
+		cliResult := vCLI.RunCLI("schema", "template", "unbind", "person_profile", "--type", "person", "--clear-default")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"type", "default_template"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"type", "template_id", "removed", "default_cleared"})
 	})
 
 	t.Run("schema_template_bind_core", func(t *testing.T) {
@@ -162,13 +162,14 @@ func runMCPParityTemplateTests(t *testing.T, binary string) {
 		mcpResult := server.callTool("schema_template_bind", map[string]interface{}{
 			"core":        "date",
 			"template_id": "daily_default",
+			"default":     true,
 		})
-		cliResult := vCLI.RunCLI("schema", "template", "bind", "daily_default", "--core", "date")
+		cliResult := vCLI.RunCLI("schema", "template", "bind", "daily_default", "--core", "date", "--default")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core", "template_id"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core", "template_id", "default_template"})
 	})
 
-	t.Run("schema_template_default_clear_core", func(t *testing.T) {
+	t.Run("schema_template_unbind_clear_default_core", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
@@ -177,17 +178,16 @@ func runMCPParityTemplateTests(t *testing.T, binary string) {
 		vCLI.WriteFile("templates/daily.md", "# Daily Template\n")
 		vMCP.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
-		vMCP.RunCLI("schema", "template", "bind", "daily_default", "--core", "date").MustSucceed(t)
-		vCLI.RunCLI("schema", "template", "bind", "daily_default", "--core", "date").MustSucceed(t)
-		vMCP.RunCLI("schema", "template", "default", "daily_default", "--core", "date").MustSucceed(t)
-		vCLI.RunCLI("schema", "template", "default", "daily_default", "--core", "date").MustSucceed(t)
+		vMCP.RunCLI("schema", "template", "bind", "daily_default", "--core", "date", "--default").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "bind", "daily_default", "--core", "date", "--default").MustSucceed(t)
 
-		mcpResult := server.callTool("schema_template_default", map[string]interface{}{
-			"core":  "date",
-			"clear": true,
+		mcpResult := server.callTool("schema_template_unbind", map[string]interface{}{
+			"core":          "date",
+			"template_id":   "daily_default",
+			"clear-default": true,
 		})
-		cliResult := vCLI.RunCLI("schema", "template", "default", "--core", "date", "--clear")
+		cliResult := vCLI.RunCLI("schema", "template", "unbind", "daily_default", "--core", "date", "--clear-default")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core", "default_template"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core", "template_id", "removed", "default_cleared"})
 	})
 }
