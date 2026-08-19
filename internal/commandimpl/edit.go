@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/editsvc"
@@ -165,7 +166,7 @@ func parseCanonicalEditInput(args map[string]any) ([]editsvc.EditSpec, bool, err
 			encoded, err := json.Marshal(v)
 			if err != nil {
 				return nil, false, &svcerr.Error{
-					Code:       editsvc.CodeInvalidInput,
+					Code:       codes.ErrInvalidInput,
 					Message:    "invalid --edits-json payload",
 					Suggestion: `Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`,
 					Details:    map[string]any{"error": err.Error()},
@@ -186,7 +187,7 @@ func parseCanonicalEditInput(args map[string]any) ([]editsvc.EditSpec, bool, err
 	newStr, hasNew := args["new_str"]
 	if oldStr == "" || !hasNew {
 		return nil, false, &svcerr.Error{
-			Code:       editsvc.CodeInvalidInput,
+			Code:       codes.ErrInvalidInput,
 			Message:    "requires old_str and new_str when --edits-json is not provided",
 			Suggestion: "Usage: rvn edit <reference> <old_str> <new_str> or --edits-json",
 		}

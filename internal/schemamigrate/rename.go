@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -127,13 +128,13 @@ func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameField
 	oldField := strings.TrimSpace(req.OldField)
 	newField := strings.TrimSpace(req.NewField)
 	if typeName == "" || oldField == "" || newField == "" {
-		return nil, newError(schemasvc.ErrorInvalidInput, "type and field names cannot be empty", "Usage: rvn schema rename field <type> <old_field> <new_field>", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type and field names cannot be empty").WithSuggestion("Usage: rvn schema rename field <type> <old_field> <new_field>")
 	}
 	if oldField == newField {
-		return nil, newError(schemasvc.ErrorInvalidInput, "old and new field names are the same", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "old and new field names are the same")
 	}
 	if schema.IsBuiltinType(typeName) {
-		return nil, newError(schemasvc.ErrorInvalidInput, fmt.Sprintf("cannot rename fields on built-in type '%s'", typeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot rename fields on built-in type '%s'", typeName))
 	}
 
 	schemaDoc, err := loadSchemaDocument(req.VaultPath)
@@ -143,16 +144,16 @@ func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameField
 	sch := schemaDoc.Schema()
 	typeDef, exists := sch.Types[typeName]
 	if !exists {
-		return nil, newError(schemasvc.ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName))
 	}
 	if typeDef == nil || typeDef.Fields == nil {
-		return nil, newError(schemasvc.ErrorFieldNotFound, fmt.Sprintf("type '%s' has no fields", typeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("type '%s' has no fields", typeName))
 	}
 	if _, ok := typeDef.Fields[oldField]; !ok {
-		return nil, newError(schemasvc.ErrorFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", oldField, typeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", oldField, typeName))
 	}
 	if _, ok := typeDef.Fields[newField]; ok {
-		return nil, newError(schemasvc.ErrorObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", newField, typeName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", newField, typeName))
 	}
 
 	plan, err := buildFieldRenamePlan(req.VaultPath, schemaDoc, typeName, oldField, newField, rt.VaultCfg)
@@ -160,20 +161,14 @@ func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameField
 		return nil, err
 	}
 	if len(plan.Conflicts) > 0 {
-		return nil, newError(
-			schemasvc.ErrorDataIntegrity,
-			fmt.Sprintf("field rename blocked by %d conflicts", len(plan.Conflicts)),
-			"Resolve conflicts (remove one of the duplicate keys) and retry",
-			map[string]interface{}{
-				"type":       typeName,
-				"old_field":  oldField,
-				"new_field":  newField,
-				"conflicts":  plan.Conflicts,
-				"hint":       "Conflicts occur when both old and new field keys are present in the same object/declaration.",
-				"next_steps": "Fix conflicts, then re-run the command (preview first).",
-			},
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrDataIntegrityBlock, fmt.Sprintf("field rename blocked by %d conflicts", len(plan.Conflicts))).WithSuggestion("Resolve conflicts (remove one of the duplicate keys) and retry").WithDetails(map[string]interface{}{
+			"type":       typeName,
+			"old_field":  oldField,
+			"new_field":  newField,
+			"conflicts":  plan.Conflicts,
+			"hint":       "Conflicts occur when both old and new field keys are present in the same object/declaration.",
+			"next_steps": "Fix conflicts, then re-run the command (preview first).",
+		})
 	}
 
 	if !req.Confirm {
@@ -207,16 +202,16 @@ func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeRes
 	oldName := strings.TrimSpace(req.OldName)
 	newName := strings.TrimSpace(req.NewName)
 	if oldName == "" || newName == "" {
-		return nil, newError(schemasvc.ErrorInvalidInput, "type names cannot be empty", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "type names cannot be empty")
 	}
 	if oldName == newName {
-		return nil, newError(schemasvc.ErrorInvalidInput, "old and new names are the same", "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "old and new names are the same")
 	}
 	if schema.IsBuiltinType(oldName) {
-		return nil, newError(schemasvc.ErrorInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be renamed", oldName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be renamed", oldName))
 	}
 	if schema.IsBuiltinType(newName) {
-		return nil, newError(schemasvc.ErrorInvalidInput, fmt.Sprintf("cannot rename to '%s' - it's a built-in type", newName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot rename to '%s' - it's a built-in type", newName))
 	}
 
 	schemaDoc, err := loadSchemaDocument(req.VaultPath)
@@ -225,15 +220,15 @@ func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeRes
 	}
 	sch := schemaDoc.Schema()
 	if rt.VaultCfg == nil {
-		return nil, newError(schemasvc.ErrorConfigInvalid, "failed to load raven.yaml", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrConfigInvalid, "failed to load raven.yaml").WithSuggestion("Fix raven.yaml and try again")
 	}
 	vaultCfg := rt.VaultCfg
 	oldTypeDef, exists := sch.Types[oldName]
 	if !exists {
-		return nil, newError(schemasvc.ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", oldName), "", nil, nil)
+		return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", oldName))
 	}
 	if _, exists := sch.Types[newName]; exists {
-		return nil, newError(schemasvc.ErrorObjectExists, fmt.Sprintf("type '%s' already exists", newName), "Choose a different name", nil, nil)
+		return nil, svcerr.New(codes.ErrObjectExists, fmt.Sprintf("type '%s' already exists", newName)).WithSuggestion("Choose a different name")
 	}
 
 	plan, err := buildTypeRenamePlan(req.VaultPath, schemaDoc, req.Description, oldName, newName, oldTypeDef, vaultCfg)
@@ -267,13 +262,7 @@ func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeRes
 	applyDefaultPathRename := defaultPathPlan != nil && req.RenameDefaultPath
 	if applyDefaultPathRename {
 		if err := validateTypeDirectoryMoves(req.VaultPath, defaultPathPlan.Moves); err != nil {
-			return nil, newError(
-				schemasvc.ErrorValidation,
-				fmt.Sprintf("cannot rename default directory: %v", err),
-				"Use --confirm without --rename-default-path, or resolve destination conflicts and try again",
-				nil,
-				nil,
-			)
+			return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("cannot rename default directory: %v", err)).WithSuggestion("Use --confirm without --rename-default-path, or resolve destination conflicts and try again")
 		}
 	}
 
@@ -379,7 +368,7 @@ func buildTypeRenamePlan(
 		return nil
 	})
 	if err != nil {
-		return nil, newError(schemasvc.ErrorInternal, err.Error(), "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 	}
 
 	if plan.DefaultPathPlan != nil && len(plan.DefaultPathPlan.Moves) > 0 {
@@ -421,7 +410,7 @@ func buildFieldRenamePlan(
 		absTemplate := filepath.Join(vaultPath, schemaPlan.TemplateSpec)
 		if err := paths.ValidateWithinVault(vaultPath, absTemplate); err != nil {
 			if !errors.Is(err, paths.ErrPathOutsideVault) {
-				return nil, newError(schemasvc.ErrorFileOutside, err.Error(), "", nil, err)
+				return nil, svcerr.Wrap(codes.ErrFileOutsideVault, err.Error(), err)
 			}
 		} else {
 			templateContent, err := os.ReadFile(absTemplate)
@@ -470,7 +459,7 @@ func buildFieldRenamePlan(
 	if changedQueries {
 		configOut, err := yaml.Marshal(vaultCfg)
 		if err != nil {
-			return nil, newError(schemasvc.ErrorInternal, err.Error(), "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 		}
 		plan.RavenYAML = configOut
 	}
@@ -542,7 +531,7 @@ func buildFieldRenamePlan(
 		return nil
 	})
 	if err != nil {
-		return nil, newError(schemasvc.ErrorInternal, err.Error(), "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 	}
 
 	return plan, nil
@@ -552,26 +541,26 @@ func applyFieldRenamePlan(vaultPath string, plan *fieldRenamePlan) (int, error) 
 	appliedChanges := 0
 	if len(plan.SchemaYAML) > 0 {
 		if err := schemadoc.Write(vaultPath, plan.SchemaYAML); err != nil {
-			return 0, schemasvc.MapSchemaDocError(err, "", schemasvc.ErrorSchemaNotFound)
+			return 0, schemasvc.MapSchemaDocError(err, "", codes.ErrSchemaNotFound)
 		}
 		appliedChanges++
 	}
 	for _, path := range sortedStringKeys(plan.TemplateFiles) {
 		if err := atomicfile.WriteFile(path, plan.TemplateFiles[path], 0o644); err != nil {
-			return 0, newError(schemasvc.ErrorFileWrite, err.Error(), "", nil, err)
+			return 0, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err)
 		}
 		appliedChanges++
 	}
 	if len(plan.RavenYAML) > 0 {
 		configPath := filepath.Join(vaultPath, "raven.yaml")
 		if err := atomicfile.WriteFile(configPath, plan.RavenYAML, 0o644); err != nil {
-			return 0, newError(schemasvc.ErrorFileWrite, err.Error(), "", nil, err)
+			return 0, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err)
 		}
 		appliedChanges++
 	}
 	for _, path := range sortedStringKeys(plan.MarkdownFiles) {
 		if err := atomicfile.WriteFile(path, plan.MarkdownFiles[path], 0o644); err != nil {
-			return 0, newError(schemasvc.ErrorFileWrite, err.Error(), "", nil, err)
+			return 0, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err)
 		}
 		appliedChanges++
 	}
@@ -588,11 +577,11 @@ func applyTypeRenamePlan(vaultPath string, plan *typeRenamePlan, applyDefaultPat
 		}
 	}
 	if err := schemadoc.Write(vaultPath, schemaBytes); err != nil {
-		return 0, 0, 0, schemasvc.MapSchemaDocError(err, "", schemasvc.ErrorSchemaNotFound)
+		return 0, 0, 0, schemasvc.MapSchemaDocError(err, "", codes.ErrSchemaNotFound)
 	}
 	for _, path := range sortedStringKeys(plan.MarkdownFiles) {
 		if err := atomicfile.WriteFile(path, plan.MarkdownFiles[path], 0o644); err != nil {
-			return 0, 0, 0, newError(schemasvc.ErrorFileWrite, err.Error(), "", nil, err)
+			return 0, 0, 0, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err)
 		}
 		appliedChanges++
 	}
@@ -602,12 +591,12 @@ func applyTypeRenamePlan(vaultPath string, plan *typeRenamePlan, applyDefaultPat
 	if applyDefaultPathRename {
 		moved, err := applyTypeDirectoryMoves(vaultPath, plan.DefaultPathPlan.Moves)
 		if err != nil {
-			return 0, 0, 0, newError(schemasvc.ErrorFileWrite, err.Error(), "Some files may have been renamed; review the vault and run 'rvn reindex --full'", nil, err)
+			return 0, 0, 0, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err).WithSuggestion("Some files may have been renamed; review the vault and run 'rvn reindex --full'")
 		}
 		movedFiles = moved
 		for _, path := range sortedStringKeys(plan.ReferenceFiles) {
 			if err := atomicfile.WriteFile(path, plan.ReferenceFiles[path], 0o644); err != nil {
-				return 0, 0, 0, newError(schemasvc.ErrorFileWrite, err.Error(), "Some files may have been renamed; review the vault and run 'rvn reindex --full'", nil, err)
+				return 0, 0, 0, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err).WithSuggestion("Some files may have been renamed; review the vault and run 'rvn reindex --full'")
 			}
 			referenceFilesUpdated++
 		}
@@ -819,24 +808,9 @@ func defaultPathValue(plan *typeDefaultPathRenamePlan, old bool) string {
 func loadSchemaDocument(vaultPath string) (*schemadoc.Document, error) {
 	doc, err := schemadoc.Load(vaultPath)
 	if err != nil {
-		return nil, schemasvc.MapSchemaDocError(err, "Run 'rvn init' first", schemasvc.ErrorSchemaNotFound)
+		return nil, schemasvc.MapSchemaDocError(err, "Run 'rvn init' first", codes.ErrSchemaNotFound)
 	}
 	return doc, nil
-}
-
-func newError(
-	code schemasvc.ErrorCode,
-	message, suggestion string,
-	details map[string]interface{},
-	cause error,
-) *svcerr.Error {
-	return &svcerr.Error{
-		Code:       code,
-		Message:    message,
-		Suggestion: suggestion,
-		Details:    details,
-		Err:        cause,
-	}
 }
 
 func sortedStringKeys[V any](values map[string]V) []string {

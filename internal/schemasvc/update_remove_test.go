@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
@@ -28,8 +29,8 @@ func TestUpdateField_RejectsInvalidFieldSpecs(t *testing.T) {
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected schemasvc error, got %T: %v", err, err)
 	}
-	if svcErr.Code != ErrorInvalidInput {
-		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorInvalidInput)
+	if svcErr.Code != codes.ErrInvalidInput {
+		t.Fatalf("error code = %q, want %q", svcErr.Code, codes.ErrInvalidInput)
 	}
 	if !strings.Contains(svcErr.Message, "--target is only valid for ref fields") {
 		t.Fatalf("unexpected error message: %q", svcErr.Message)

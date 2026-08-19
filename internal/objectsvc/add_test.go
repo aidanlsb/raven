@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/filelock"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -166,8 +167,8 @@ func TestAppendUnderHeadingRejectsMissingHeading(t *testing.T) {
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T: %v", err, err)
 	}
-	if svcErr.Code != ErrorRefNotFound {
-		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorRefNotFound)
+	if svcErr.Code != codes.ErrRefNotFound {
+		t.Fatalf("error code = %q, want %q", svcErr.Code, codes.ErrRefNotFound)
 	}
 	if got := string(mustReadFile(t, destPath)); got != content {
 		t.Fatalf("missing heading add changed file: %q", got)
@@ -187,8 +188,8 @@ func TestAppendToFileMissingTargetReportsFileNotFound(t *testing.T) {
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T: %v", err, err)
 	}
-	if svcErr.Code != ErrorFileNotFound {
-		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorFileNotFound)
+	if svcErr.Code != codes.ErrFileNotFound {
+		t.Fatalf("error code = %q, want %q", svcErr.Code, codes.ErrFileNotFound)
 	}
 }
 

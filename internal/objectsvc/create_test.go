@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
@@ -151,7 +152,7 @@ traits: {}
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorRequiredField {
+	if svcErr.Code != codes.ErrRequiredFieldMissing {
 		t.Fatalf("expected ErrorRequiredField, got %s", svcErr.Code)
 	}
 }
@@ -190,7 +191,7 @@ traits: {}
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorValidationFailed {
+	if svcErr.Code != codes.ErrValidationFailed {
 		t.Fatalf("expected ErrorValidationFailed, got %s", svcErr.Code)
 	}
 	if !strings.Contains(svcErr.Message, "unknown field 'favorite_color'") {
@@ -236,7 +237,7 @@ traits: {}
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorFileExists {
+	if svcErr.Code != codes.ErrFileExists {
 		t.Fatalf("expected ErrorFileExists, got %s", svcErr.Code)
 	}
 }
@@ -292,7 +293,7 @@ traits: {}
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorValidationFailed {
+	if svcErr.Code != codes.ErrValidationFailed {
 		t.Fatalf("expected ErrorValidationFailed, got %s", svcErr.Code)
 	}
 	if !strings.Contains(svcErr.Message, "expected 'page'") {
@@ -336,7 +337,7 @@ traits: {}
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorValidationFailed {
+	if svcErr.Code != codes.ErrValidationFailed {
 		t.Fatalf("expected ErrorValidationFailed, got %s", svcErr.Code)
 	}
 	if !strings.Contains(svcErr.Message, "unsupported field type 'enum-ish'") {

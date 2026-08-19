@@ -17,6 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -125,7 +126,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, err
 	}
 	if req.Level < 1 || req.Level > 6 {
-		return nil, newError(codes.ErrInvalidInput, "section level must be between 1 and 6", "Pass --level N with an integer from 1 through 6", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "section level must be between 1 and 6").WithSuggestion("Pass --level N with an integer from 1 through 6")
 	}
 	placement, err := parsePlacement(req.Placement)
 	if err != nil {
@@ -137,7 +138,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, err
 	}
 	if resolvedFile.IsSection {
-		return nil, newError(codes.ErrInvalidInput, "section create target must be a file, not a section", "Pass the containing file before the title", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "section create target must be a file, not a section").WithSuggestion("Pass the containing file before the title")
 	}
 
 	state, err := ctx.loadDocument(resolvedFile.FilePath, resolvedFile.FileObjectID)
@@ -163,26 +164,20 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	updatedContent := joinTrackedLines(updatedLines, state.trailingNewline)
 	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, state.filePath, ctx.vaultPath, ctx.parseOptions)
 	if err != nil {
-		return nil, newError(codes.ErrValidationFailed, "failed to parse created section", "Check the heading title and level", nil, err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse created section", err).WithSuggestion("Check the heading title and level")
 	}
 
 	createdLine := insertIndex + 1
 	created := sectionAtLine(updatedDoc.Sections, createdLine)
 	if created == nil || created.Title != title || created.Level != req.Level {
-		return nil, newError(codes.ErrValidationFailed, "new heading does not parse as the requested section", "Use plain, single-line title text", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "new heading does not parse as the requested section").WithSuggestion("Use plain, single-line title text")
 	}
 	expectedSlug := parser.Slugify(title)
 	if expectedSlug == "" {
 		expectedSlug = "section"
 	}
 	if created.Slug != expectedSlug {
-		return nil, newError(
-			codes.ErrValidationFailed,
-			fmt.Sprintf("creating would duplicate section slug '%s' in %s", expectedSlug, state.fileID),
-			"Choose a heading title that is unique within the file",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("creating would duplicate section slug '%s' in %s", expectedSlug, state.fileID)).WithSuggestion("Choose a heading title that is unique within the file")
 	}
 	if err := validateOriginalSectionSlugs(state, updatedDoc, updatedLines, createdLine); err != nil {
 		return nil, err
@@ -241,13 +236,13 @@ func Move(req MoveRequest) (*MoveResult, error) {
 	}
 	source := state.sectionsByID[resolvedSource.ObjectID]
 	if source == nil {
-		return nil, newError(codes.ErrRefNotFound, fmt.Sprintf("section not found: %s", resolvedSource.ObjectID), "Run 'rvn reindex' if the index is stale", nil, nil)
+		return nil, svcerr.New(codes.ErrRefNotFound, fmt.Sprintf("section not found: %s", resolvedSource.ObjectID)).WithSuggestion("Run 'rvn reindex' if the index is stale")
 	}
 
 	sourceStart := source.LineStart - 1
 	sourceEnd := sectionSubtreeEnd(source, len(state.lines))
 	if sourceStart < 0 || sourceStart >= sourceEnd || sourceEnd > len(state.lines) {
-		return nil, newError(codes.ErrInternal, "source section range is invalid", "Run 'rvn reindex' and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrInternal, "source section range is invalid").WithSuggestion("Run 'rvn reindex' and try again")
 	}
 
 	destinationIndex := len(state.lines)
@@ -258,13 +253,7 @@ func Move(req MoveRequest) (*MoveResult, error) {
 			return nil, err
 		}
 		if anchor.LineStart-1 >= sourceStart && anchor.LineStart-1 < sourceEnd {
-			return nil, newError(
-				codes.ErrInvalidInput,
-				"cannot move a section relative to itself or its descendant",
-				"Choose an anchor outside the section's subtree",
-				nil,
-				nil,
-			)
+			return nil, svcerr.New(codes.ErrInvalidInput, "cannot move a section relative to itself or its descendant").WithSuggestion("Choose an anchor outside the section's subtree")
 		}
 		if err := validatePlacementLevel(source.Level, anchor, placement.kind); err != nil {
 			return nil, err
@@ -278,13 +267,13 @@ func Move(req MoveRequest) (*MoveResult, error) {
 	if destinationIndex >= sourceEnd {
 		destinationIndex -= sourceEnd - sourceStart
 	} else if destinationIndex > sourceStart {
-		return nil, newError(codes.ErrInvalidInput, "move destination is inside the source subtree", "Choose an anchor outside the section's subtree", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "move destination is inside the source subtree").WithSuggestion("Choose an anchor outside the section's subtree")
 	}
 	updatedLines := insertTrackedLines(remaining, destinationIndex, movedLines)
 	updatedContent := joinTrackedLines(updatedLines, state.trailingNewline)
 	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, state.filePath, ctx.vaultPath, ctx.parseOptions)
 	if err != nil {
-		return nil, newError(codes.ErrValidationFailed, "failed to parse moved section", "Choose a structurally compatible anchor", nil, err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse moved section", err).WithSuggestion("Choose a structurally compatible anchor")
 	}
 	if err := validateOriginalSectionSlugs(state, updatedDoc, updatedLines, 0); err != nil {
 		return nil, err
@@ -293,13 +282,7 @@ func Move(req MoveRequest) (*MoveResult, error) {
 	movedHeadingLine := trackedLineNumber(updatedLines, source.LineStart)
 	moved := sectionAtLine(updatedDoc.Sections, movedHeadingLine)
 	if moved == nil || moved.ID != source.ID || moved.Title != source.Title || moved.Level != source.Level {
-		return nil, newError(
-			codes.ErrValidationFailed,
-			"moving the section would change its identity",
-			"Choose an anchor at a compatible heading depth",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrValidationFailed, "moving the section would change its identity").WithSuggestion("Choose an anchor at a compatible heading depth")
 	}
 	if anchor != nil {
 		if err := validateResultingPlacement(moved, anchor, placement.kind); err != nil {
@@ -330,10 +313,10 @@ func Move(req MoveRequest) (*MoveResult, error) {
 
 func newLifecycleContext(rt *vaultruntime.Runtime, vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, parseOptions *parser.ParseOptions) (*lifecycleContext, error) {
 	if err := vaultruntime.RequirePath(vaultPath); err != nil {
-		return nil, newError(codes.ErrInvalidInput, "vault path is required", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if vaultCfg == nil {
-		return nil, newError(codes.ErrValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	return &lifecycleContext{
 		vaultPath:    vaultPath,
@@ -348,11 +331,11 @@ func validateCreateTitle(raw string) (string, error) {
 	title := strings.TrimSpace(raw)
 	switch {
 	case title == "":
-		return "", newError(codes.ErrInvalidInput, "section title is required", `Usage: rvn section create <file> "<title>" --level N`, nil, nil)
+		return "", svcerr.New(codes.ErrInvalidInput, "section title is required").WithSuggestion(`Usage: rvn section create <file> "<title>" --level N`)
 	case strings.ContainsAny(title, "\r\n"):
-		return "", newError(codes.ErrInvalidInput, "section title must be a single line", "Pass plain title text without line breaks", nil, nil)
+		return "", svcerr.New(codes.ErrInvalidInput, "section title must be a single line").WithSuggestion("Pass plain title text without line breaks")
 	case strings.HasPrefix(title, "#"):
-		return "", newError(codes.ErrInvalidInput, "section title must be plain text, not a Markdown heading", `Pass "Tasks" with --level 2 instead of "## Tasks"`, nil, nil)
+		return "", svcerr.New(codes.ErrInvalidInput, "section title must be plain text, not a Markdown heading").WithSuggestion(`Pass "Tasks" with --level 2 instead of "## Tasks"`)
 	default:
 		return title, nil
 	}
@@ -373,13 +356,7 @@ func parsePlacement(raw Placement) (parsedPlacement, error) {
 			continue
 		}
 		if result.kind != placementEOF {
-			return parsedPlacement{}, newError(
-				codes.ErrInvalidInput,
-				"--after, --before, and --under are mutually exclusive",
-				"Pass at most one structural anchor",
-				nil,
-				nil,
-			)
+			return parsedPlacement{}, svcerr.New(codes.ErrInvalidInput, "--after, --before, and --under are mutually exclusive").WithSuggestion("Pass at most one structural anchor")
 		}
 		result = parsedPlacement{kind: candidate.kind, reference: candidate.value}
 	}
@@ -388,7 +365,7 @@ func parsePlacement(raw Placement) (parsedPlacement, error) {
 
 func (ctx *lifecycleContext) resolveReference(reference string) (*refresolve.ResolveResult, error) {
 	if reference == "" {
-		return nil, newError(codes.ErrInvalidInput, "file reference is required", "Pass an existing Markdown file", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "file reference is required").WithSuggestion("Pass an existing Markdown file")
 	}
 	resolved, err := refresolve.Resolve(reference, ctx.runtime, false)
 	if err == nil {
@@ -396,13 +373,13 @@ func (ctx *lifecycleContext) resolveReference(reference string) (*refresolve.Res
 	}
 	var ambiguousErr *refresolve.AmbiguousRefError
 	if errors.As(err, &ambiguousErr) {
-		return nil, newError(codes.ErrRefAmbiguous, ambiguousErr.Error(), "Use a full object or section ID to disambiguate", map[string]any{"matches": ambiguousErr.Matches}, err)
+		return nil, svcerr.Wrap(codes.ErrRefAmbiguous, ambiguousErr.Error(), err).WithSuggestion("Use a full object or section ID to disambiguate").WithDetails(map[string]any{"matches": ambiguousErr.Matches})
 	}
 	var notFoundErr *refresolve.RefNotFoundError
 	if errors.As(err, &notFoundErr) {
-		return nil, newError(codes.ErrRefNotFound, notFoundErr.Error(), "Check the reference and run 'rvn reindex' if needed", nil, err)
+		return nil, svcerr.Wrap(codes.ErrRefNotFound, notFoundErr.Error(), err).WithSuggestion("Check the reference and run 'rvn reindex' if needed")
 	}
-	return nil, newError(codes.ErrInternal, fmt.Sprintf("failed to resolve reference: %v", err), "Run 'rvn reindex' and try again", nil, err)
+	return nil, svcerr.Wrap(codes.ErrInternal, fmt.Sprintf("failed to resolve reference: %v", err), err).WithSuggestion("Run 'rvn reindex' and try again")
 }
 
 func (ctx *lifecycleContext) resolveSection(reference string) (*refresolve.ResolveResult, error) {
@@ -411,7 +388,7 @@ func (ctx *lifecycleContext) resolveSection(reference string) (*refresolve.Resol
 		return nil, err
 	}
 	if !resolved.IsSection {
-		return nil, newError(codes.ErrInvalidInput, fmt.Sprintf("section reference required: %s", reference), "Use a section ID like project/website#tasks", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("section reference required: %s", reference)).WithSuggestion("Use a section ID like project/website#tasks")
 	}
 	return resolved, nil
 }
@@ -422,16 +399,16 @@ func (ctx *lifecycleContext) loadDocument(filePath, fileID string) (*documentSta
 	}
 	contentBytes, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, newError(codes.ErrFileRead, "failed to read section file", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read section file", err)
 	}
 	content := string(contentBytes)
 	doc, err := parser.ParseDocumentWithOptions(content, filePath, ctx.vaultPath, ctx.parseOptions)
 	if err != nil {
-		return nil, newError(codes.ErrValidationFailed, "failed to parse section file", "Fix the file content and try again", nil, err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse section file", err).WithSuggestion("Fix the file content and try again")
 	}
 	relative, err := filepath.Rel(ctx.vaultPath, filePath)
 	if err != nil {
-		return nil, newError(codes.ErrInternal, "failed to resolve section file path", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to resolve section file path", err)
 	}
 	lines, trailingNewline := splitTrackedLines(content)
 	sectionsByID := make(map[string]*model.Section, len(doc.Sections))
@@ -457,24 +434,18 @@ func (ctx *lifecycleContext) resolveAnchor(state *documentState, reference strin
 		return nil, err
 	}
 	if resolved.FileObjectID != state.fileID {
-		return nil, newError(
-			codes.ErrInvalidInput,
-			fmt.Sprintf("anchor %s is not in %s", resolved.ObjectID, state.fileID),
-			"Choose a section in the same file",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("anchor %s is not in %s", resolved.ObjectID, state.fileID)).WithSuggestion("Choose a section in the same file")
 	}
 	anchor := state.sectionsByID[resolved.ObjectID]
 	if anchor == nil {
-		return nil, newError(codes.ErrRefNotFound, fmt.Sprintf("anchor section not found: %s", resolved.ObjectID), "Run 'rvn reindex' if the index is stale", nil, nil)
+		return nil, svcerr.New(codes.ErrRefNotFound, fmt.Sprintf("anchor section not found: %s", resolved.ObjectID)).WithSuggestion("Run 'rvn reindex' if the index is stale")
 	}
 	return anchor, nil
 }
 
 func validatePlacementLevel(level int, anchor *model.Section, kind placementKind) error {
 	if anchor == nil {
-		return newError(codes.ErrInternal, "anchor section is required", "", nil, nil)
+		return svcerr.New(codes.ErrInternal, "anchor section is required")
 	}
 	requiredLevel := anchor.Level
 	relation := "sibling"
@@ -483,32 +454,26 @@ func validatePlacementLevel(level int, anchor *model.Section, kind placementKind
 		relation = "direct child"
 	}
 	if requiredLevel > 6 {
-		return newError(codes.ErrInvalidInput, fmt.Sprintf("section %s cannot have a child heading below level 6", anchor.ID), "Choose a shallower parent section", nil, nil)
+		return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("section %s cannot have a child heading below level 6", anchor.ID)).WithSuggestion("Choose a shallower parent section")
 	}
 	if level != requiredLevel {
-		return newError(
-			codes.ErrInvalidInput,
-			fmt.Sprintf("heading level %d is not a legal %s level for %s; expected level %d", level, relation, anchor.ID, requiredLevel),
-			"Choose an anchor at the same depth, or pass the required level without changing it implicitly",
-			map[string]any{"anchor": anchor.ID, "actual_level": level, "required_level": requiredLevel},
-			nil,
-		)
+		return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("heading level %d is not a legal %s level for %s; expected level %d", level, relation, anchor.ID, requiredLevel)).WithSuggestion("Choose an anchor at the same depth, or pass the required level without changing it implicitly").WithDetails(map[string]any{"anchor": anchor.ID, "actual_level": level, "required_level": requiredLevel})
 	}
 	return nil
 }
 
 func validateResultingPlacement(section, anchor *model.Section, kind placementKind) error {
 	if section == nil || anchor == nil {
-		return newError(codes.ErrInternal, "section placement validation failed", "", nil, nil)
+		return svcerr.New(codes.ErrInternal, "section placement validation failed")
 	}
 	if kind == placementUnder {
 		if section.ParentScopeID() != anchor.ID {
-			return newError(codes.ErrValidationFailed, fmt.Sprintf("section would not be a direct child of %s", anchor.ID), "Choose a compatible --under anchor", nil, nil)
+			return svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("section would not be a direct child of %s", anchor.ID)).WithSuggestion("Choose a compatible --under anchor")
 		}
 		return nil
 	}
 	if section.ParentScopeID() != anchor.ParentScopeID() {
-		return newError(codes.ErrValidationFailed, fmt.Sprintf("section would not be a sibling of %s", anchor.ID), "Choose a compatible --before or --after anchor", nil, nil)
+		return svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("section would not be a sibling of %s", anchor.ID)).WithSuggestion("Choose a compatible --before or --after anchor")
 	}
 	return nil
 }
@@ -600,7 +565,7 @@ func validateOriginalSectionSlugs(state *documentState, updatedDoc *parser.Parse
 			continue
 		}
 		if section.LineStart < 1 || section.LineStart > len(updatedLines) {
-			return newError(codes.ErrInternal, "updated section line is out of range", "", nil, nil)
+			return svcerr.New(codes.ErrInternal, "updated section line is out of range")
 		}
 		originalLine := updatedLines[section.LineStart-1].originalLine
 		original := originalByLine[originalLine]
@@ -609,17 +574,11 @@ func validateOriginalSectionSlugs(state *documentState, updatedDoc *parser.Parse
 		}
 		seen[originalLine] = true
 		if section.Slug != original.Slug {
-			return newError(
-				codes.ErrValidationFailed,
-				fmt.Sprintf("section placement would shift slug '%s' to '%s'", original.Slug, section.Slug),
-				"Choose a unique heading title or a placement that preserves section identities",
-				map[string]any{"section": original.ID, "new_slug": section.Slug},
-				nil,
-			)
+			return svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("section placement would shift slug '%s' to '%s'", original.Slug, section.Slug)).WithSuggestion("Choose a unique heading title or a placement that preserves section identities").WithDetails(map[string]any{"section": original.ID, "new_slug": section.Slug})
 		}
 	}
 	if len(seen) != len(originalByLine) {
-		return newError(codes.ErrValidationFailed, "section placement would change the existing outline", "Choose a structurally compatible placement", nil, nil)
+		return svcerr.New(codes.ErrValidationFailed, "section placement would change the existing outline").WithSuggestion("Choose a structurally compatible placement")
 	}
 	return nil
 }
@@ -628,7 +587,7 @@ func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnInd
 	var warnings []string
 	if err := ctx.runtime.OpenDB(); err != nil {
 		if failOnIndexErr || errors.Is(err, index.ErrIndexRebuildRequired) {
-			return nil, nil, newError(codes.ErrValidationFailed, "failed to open index database for section mutation", "Run 'rvn reindex' to rebuild the database", nil, err)
+			return nil, nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to open index database for section mutation", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 		}
 		warnings = append(warnings, fmt.Sprintf("Failed to open index database for section mutation: %v", err))
 	}
@@ -639,7 +598,7 @@ func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnInd
 		perm = st.Mode()
 	}
 	if err := atomicfile.WriteFile(filePath, []byte(content), perm); err != nil {
-		return nil, nil, newError(codes.ErrFileWrite, "failed to write section mutation", "", nil, err)
+		return nil, nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write section mutation", err)
 	}
 	var indexWarnings []IndexWarning
 	if db != nil && ctx.schema != nil {

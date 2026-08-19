@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/refresolve"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -18,31 +20,13 @@ func resolveReferenceForMutation(rt *vaultruntime.Runtime, reference string) (*r
 	if err != nil {
 		var ambiguousErr *refresolve.AmbiguousRefError
 		if errors.As(err, &ambiguousErr) {
-			return nil, newError(
-				ErrorRefAmbiguous,
-				ambiguousErr.Error(),
-				"Use a full object ID/path to disambiguate",
-				map[string]interface{}{"matches": ambiguousErr.Matches},
-				err,
-			)
+			return nil, svcerr.Wrap(codes.ErrRefAmbiguous, ambiguousErr.Error(), err).WithSuggestion("Use a full object ID/path to disambiguate").WithDetails(map[string]interface{}{"matches": ambiguousErr.Matches})
 		}
 		var notFoundErr *refresolve.RefNotFoundError
 		if errors.As(err, &notFoundErr) {
-			return nil, newError(
-				ErrorRefNotFound,
-				notFoundErr.Error(),
-				"Check the object reference and run 'rvn reindex' if needed",
-				nil,
-				err,
-			)
+			return nil, svcerr.Wrap(codes.ErrRefNotFound, notFoundErr.Error(), err).WithSuggestion("Check the object reference and run 'rvn reindex' if needed")
 		}
-		return nil, newError(
-			ErrorUnexpected,
-			fmt.Sprintf("failed to resolve object reference: %v", err),
-			"Check the object reference and run 'rvn reindex' if needed",
-			nil,
-			err,
-		)
+		return nil, svcerr.Wrap(codes.ErrInternal, fmt.Sprintf("failed to resolve object reference: %v", err), err).WithSuggestion("Check the object reference and run 'rvn reindex' if needed")
 	}
 
 	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, resolved.FilePath); err != nil {

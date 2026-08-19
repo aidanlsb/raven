@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
@@ -345,8 +346,8 @@ func assertMissingMappingValue(t *testing.T, err error, value string) {
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected schemasvc.Error, got %T: %v", err, err)
 	}
-	if svcErr.Code != schemasvc.ErrorInvalidInput {
-		t.Fatalf("error code=%s, want %s", svcErr.Code, schemasvc.ErrorInvalidInput)
+	if svcErr.Code != codes.ErrInvalidInput {
+		t.Fatalf("error code=%s, want %s", svcErr.Code, codes.ErrInvalidInput)
 	}
 	if !strings.Contains(svcErr.Message, value) {
 		t.Fatalf("error %q does not mention missing value %q", svcErr.Message, value)

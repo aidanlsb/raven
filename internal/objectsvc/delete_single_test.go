@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
@@ -118,8 +119,8 @@ func TestDeleteByReferenceRejectsSection(t *testing.T) {
 		t.Fatal("PreviewDeleteByReference() succeeded for a section ID")
 	}
 	var serviceErr *Error
-	if !errors.As(err, &serviceErr) || serviceErr.Code != ErrorInvalidInput {
-		t.Fatalf("error = %v, want %s", err, ErrorInvalidInput)
+	if !errors.As(err, &serviceErr) || serviceErr.Code != codes.ErrInvalidInput {
+		t.Fatalf("error = %v, want %s", err, codes.ErrInvalidInput)
 	}
 	v.AssertFileExists("notes/sectioned.md")
 }

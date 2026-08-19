@@ -3,13 +3,14 @@ package maintsvc
 import (
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-func assertCode(t *testing.T, err error, want Code) {
+func assertCode(t *testing.T, err error, want codes.ErrorCode) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected error code %q, got nil", want)
@@ -26,7 +27,7 @@ func assertCode(t *testing.T, err error, want Code) {
 func TestStats_InvalidInput(t *testing.T) {
 	t.Parallel()
 	_, err := Stats(&vaultruntime.Runtime{VaultPath: " "})
-	assertCode(t, err, CodeInvalidInput)
+	assertCode(t, err, codes.ErrInvalidInput)
 }
 
 func TestStats_HappyPath(t *testing.T) {

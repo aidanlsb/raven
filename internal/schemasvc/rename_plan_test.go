@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 )
 
@@ -186,19 +187,19 @@ func TestBuildTypeRenamePlanErrors(t *testing.T) {
 	tests := []struct {
 		name string
 		doc  func(*testing.T) *schemadoc.Document
-		code ErrorCode
+		code codes.ErrorCode
 	}{
 		{
 			name: "nil document",
 			doc:  func(*testing.T) *schemadoc.Document { return nil },
-			code: ErrorInternal,
+			code: codes.ErrInternal,
 		},
 		{
 			name: "missing types section",
 			doc: func(t *testing.T) *schemadoc.Document {
 				return loadRenameDocument(t, []byte("version: 2\ntraits: {}\n"))
 			},
-			code: ErrorSchemaInvalid,
+			code: codes.ErrSchemaInvalid,
 		},
 	}
 
@@ -233,7 +234,7 @@ traits: {}
 		typeName     string
 		oldField     string
 		newField     string
-		wantCode     ErrorCode
+		wantCode     codes.ErrorCode
 		wantChanges  int
 		wantContains []string
 	}{
@@ -261,7 +262,7 @@ traits: {}
 			typeName: "person",
 			oldField: "name",
 			newField: "full_name",
-			wantCode: ErrorInternal,
+			wantCode: codes.ErrInternal,
 		},
 		{
 			name: "missing types section",
@@ -271,7 +272,7 @@ traits: {}
 			typeName: "person",
 			oldField: "name",
 			newField: "full_name",
-			wantCode: ErrorSchemaInvalid,
+			wantCode: codes.ErrSchemaInvalid,
 		},
 		{
 			name:     "missing type",
@@ -279,7 +280,7 @@ traits: {}
 			typeName: "company",
 			oldField: "name",
 			newField: "full_name",
-			wantCode: ErrorTypeNotFound,
+			wantCode: codes.ErrTypeNotFound,
 		},
 		{
 			name: "type has no fields",
@@ -289,7 +290,7 @@ traits: {}
 			typeName: "person",
 			oldField: "name",
 			newField: "full_name",
-			wantCode: ErrorFieldNotFound,
+			wantCode: codes.ErrFieldNotFound,
 		},
 		{
 			name:     "old field missing",
@@ -297,7 +298,7 @@ traits: {}
 			typeName: "person",
 			oldField: "missing",
 			newField: "full_name",
-			wantCode: ErrorFieldNotFound,
+			wantCode: codes.ErrFieldNotFound,
 		},
 		{
 			name:     "new field already exists",
@@ -305,7 +306,7 @@ traits: {}
 			typeName: "person",
 			oldField: "name",
 			newField: "email",
-			wantCode: ErrorObjectExists,
+			wantCode: codes.ErrObjectExists,
 		},
 	}
 
@@ -384,7 +385,7 @@ func loadRenameDocument(t *testing.T, schemaYAML []byte) *schemadoc.Document {
 	return doc
 }
 
-func requireRenamePlanCode(t *testing.T, err error, want ErrorCode) {
+func requireRenamePlanCode(t *testing.T, err error, want codes.ErrorCode) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("error = nil, want %s", want)

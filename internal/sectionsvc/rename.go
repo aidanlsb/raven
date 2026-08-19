@@ -60,10 +60,10 @@ type fileRewrite struct {
 // new slug is derived using the same rules the parser applies to headings.
 func Rename(req RenameRequest) (*RenameResult, error) {
 	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, newError(codes.ErrInvalidInput, "vault path is required", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if req.VaultConfig == nil {
-		return nil, newError(codes.ErrValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
@@ -74,36 +74,18 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	reference := strings.TrimSpace(req.Reference)
 	fileID, oldSlug, isSection := paths.ParseSectionID(reference)
 	if !isSection || fileID == "" || oldSlug == "" {
-		return nil, newError(
-			codes.ErrInvalidInput,
-			fmt.Sprintf("invalid section ID: %s", reference),
-			"Use a section ID like project/website#tasks",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid section ID: %s", reference)).WithSuggestion("Use a section ID like project/website#tasks")
 	}
 
 	newTitle := strings.TrimSpace(req.NewHeadingText)
 	if newTitle == "" {
-		return nil, newError(codes.ErrInvalidInput, "new heading text is required", `Usage: rvn section rename <file#section> "<new heading text>"`, nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "new heading text is required").WithSuggestion(`Usage: rvn section rename <file#section> "<new heading text>"`)
 	}
 	if strings.HasPrefix(newTitle, "#") {
-		return nil, newError(
-			codes.ErrInvalidInput,
-			"section destination must be the new heading text, not a markdown heading or fragment",
-			`Pass plain heading text, e.g. rvn section rename project/website#tasks "Completed Tasks"; the heading level is preserved`,
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, "section destination must be the new heading text, not a markdown heading or fragment").WithSuggestion(`Pass plain heading text, e.g. rvn section rename project/website#tasks "Completed Tasks"; the heading level is preserved`)
 	}
 	if _, _, destinationIsSection := paths.ParseSectionID(newTitle); destinationIsSection {
-		return nil, newError(
-			codes.ErrInvalidInput,
-			"section destination must be the new heading text, not a section ID",
-			`Pass plain heading text, e.g. rvn section rename project/website#tasks "Completed Tasks"`,
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, "section destination must be the new heading text, not a section ID").WithSuggestion(`Pass plain heading text, e.g. rvn section rename project/website#tasks "Completed Tasks"`)
 	}
 
 	resolved, err := resolveSectionReference(req, reference)
@@ -113,7 +95,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	oldSectionID := resolved.ObjectID
 	fileID, oldSlug, isSection = paths.ParseSectionID(oldSectionID)
 	if !isSection || oldSlug == "" {
-		return nil, newError(codes.ErrInvalidInput, fmt.Sprintf("invalid section ID: %s", oldSectionID), "Use a section ID like project/website#tasks", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid section ID: %s", oldSectionID)).WithSuggestion("Use a section ID like project/website#tasks")
 	}
 
 	sourceFile := resolved.FilePath
@@ -122,19 +104,19 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	}
 	sourceRelPath, err := filepath.Rel(req.VaultPath, sourceFile)
 	if err != nil {
-		return nil, newError(codes.ErrInternal, "failed to resolve source path", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to resolve source path", err)
 	}
 	sourceRelPath = paths.NormalizeVaultRelPath(sourceRelPath)
 
 	contentBytes, err := os.ReadFile(sourceFile)
 	if err != nil {
-		return nil, newError(codes.ErrFileRead, "failed to read source file", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read source file", err)
 	}
 	content := string(contentBytes)
 
 	doc, err := parser.ParseDocumentWithOptions(content, sourceFile, req.VaultPath, req.ParseOptions)
 	if err != nil {
-		return nil, newError(codes.ErrValidationFailed, "failed to parse source file", "Fix the file content and try again", nil, err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse source file", err).WithSuggestion("Fix the file content and try again")
 	}
 	var target *model.Section
 	for _, section := range doc.Sections {
@@ -144,12 +126,12 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 		}
 	}
 	if target == nil {
-		return nil, newError(codes.ErrRefNotFound, fmt.Sprintf("section not found: %s", oldSectionID), "Run 'rvn reindex' if the index is stale", nil, nil)
+		return nil, svcerr.New(codes.ErrRefNotFound, fmt.Sprintf("section not found: %s", oldSectionID)).WithSuggestion("Run 'rvn reindex' if the index is stale")
 	}
 
 	lines := strings.Split(content, "\n")
 	if target.LineStart < 1 || target.LineStart > len(lines) {
-		return nil, newError(codes.ErrInternal, fmt.Sprintf("section heading line %d is out of range", target.LineStart), "Run 'rvn reindex' and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrInternal, fmt.Sprintf("section heading line %d is out of range", target.LineStart)).WithSuggestion("Run 'rvn reindex' and try again")
 	}
 	lines[target.LineStart-1] = strings.Repeat("#", target.Level) + " " + newTitle
 	updatedContent := strings.Join(lines, "\n")
@@ -158,7 +140,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	// indexer would derive it (including duplicate suffixes).
 	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, sourceFile, req.VaultPath, req.ParseOptions)
 	if err != nil {
-		return nil, newError(codes.ErrValidationFailed, "failed to parse renamed content", "Check the new heading text and try again", nil, err)
+		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse renamed content", err).WithSuggestion("Check the new heading text and try again")
 	}
 	var renamed *model.Section
 	for _, section := range updatedDoc.Sections {
@@ -168,7 +150,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 		}
 	}
 	if renamed == nil {
-		return nil, newError(codes.ErrValidationFailed, "renamed heading no longer parses as a section", "Check the new heading text and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "renamed heading no longer parses as a section").WithSuggestion("Check the new heading text and try again")
 	}
 
 	expectedSlug := parser.Slugify(newTitle)
@@ -176,13 +158,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 		expectedSlug = "section"
 	}
 	if renamed.Slug != expectedSlug {
-		return nil, newError(
-			codes.ErrValidationFailed,
-			fmt.Sprintf("renaming would create a duplicate section slug: '%s' already exists in %s", expectedSlug, fileID),
-			"Choose a heading that is unique within the file",
-			nil,
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("renaming would create a duplicate section slug: '%s' already exists in %s", expectedSlug, fileID)).WithSuggestion("Choose a heading that is unique within the file")
 	}
 
 	// Renaming must not shift any other section's slug (e.g. by introducing a
@@ -198,13 +174,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 			continue
 		}
 		if before, seen := originalSlugs[section.LineStart]; seen && before != section.Slug {
-			return nil, newError(
-				codes.ErrValidationFailed,
-				fmt.Sprintf("renaming would create a duplicate section slug: '%s' would change section '%s#%s' to '%s#%s'", expectedSlug, fileID, before, fileID, section.Slug),
-				"Choose a heading that is unique within the file",
-				nil,
-				nil,
-			)
+			return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("renaming would create a duplicate section slug: '%s' would change section '%s#%s' to '%s#%s'", expectedSlug, fileID, before, fileID, section.Slug)).WithSuggestion("Choose a heading that is unique within the file")
 		}
 	}
 	newSectionID := renamed.ID
@@ -219,7 +189,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	var db *index.Database
 	if err := rt.OpenDB(); err != nil {
 		if req.FailOnIndexErr || errors.Is(err, index.ErrIndexRebuildRequired) {
-			return nil, newError(codes.ErrValidationFailed, "failed to open index database for section rename", "Run 'rvn reindex' to rebuild the database", nil, err)
+			return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to open index database for section rename", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 		}
 		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for section rename: %v", err))
 	} else {
@@ -309,7 +279,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 		perm = st.Mode()
 	}
 	if err := atomicfile.WriteFile(sourceFile, []byte(updatedContent), perm); err != nil {
-		return nil, newError(codes.ErrFileWrite, "failed to write renamed section", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write renamed section", err)
 	}
 	writtenFiles := []string{sourceFile}
 	for _, rewrite := range rewriteOrder {
@@ -339,34 +309,16 @@ func resolveSectionReference(req RenameRequest, reference string) (*refresolve.R
 	if err != nil {
 		var ambiguousErr *refresolve.AmbiguousRefError
 		if errors.As(err, &ambiguousErr) {
-			return nil, newError(
-				codes.ErrRefAmbiguous,
-				ambiguousErr.Error(),
-				"Use a full section ID/path to disambiguate",
-				map[string]any{"matches": ambiguousErr.Matches},
-				err,
-			)
+			return nil, svcerr.Wrap(codes.ErrRefAmbiguous, ambiguousErr.Error(), err).WithSuggestion("Use a full section ID/path to disambiguate").WithDetails(map[string]any{"matches": ambiguousErr.Matches})
 		}
 		var notFoundErr *refresolve.RefNotFoundError
 		if errors.As(err, &notFoundErr) {
-			return nil, newError(
-				codes.ErrRefNotFound,
-				notFoundErr.Error(),
-				"Check the section reference and run 'rvn reindex' if needed",
-				nil,
-				err,
-			)
+			return nil, svcerr.Wrap(codes.ErrRefNotFound, notFoundErr.Error(), err).WithSuggestion("Check the section reference and run 'rvn reindex' if needed")
 		}
-		return nil, newError(
-			codes.ErrInternal,
-			fmt.Sprintf("failed to resolve section reference: %v", err),
-			"Check the section reference and run 'rvn reindex' if needed",
-			nil,
-			err,
-		)
+		return nil, svcerr.Wrap(codes.ErrInternal, fmt.Sprintf("failed to resolve section reference: %v", err), err).WithSuggestion("Check the section reference and run 'rvn reindex' if needed")
 	}
 	if !resolved.IsSection {
-		return nil, newError(codes.ErrInvalidInput, "source must be a section ID", "Use a section ID like project/website#tasks", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "source must be a section ID").WithSuggestion("Use a section ID like project/website#tasks")
 	}
 	return resolved, nil
 }
@@ -375,17 +327,7 @@ func normalizeMutationError(err error) error {
 	if _, ok := svcerr.AsError(err); ok {
 		return err
 	}
-	return newError(codes.ErrInternal, err.Error(), "", nil, err)
-}
-
-func newError(code codes.ErrorCode, message, suggestion string, details map[string]any, err error) *svcerr.Error {
-	return &svcerr.Error{
-		Code:       code,
-		Message:    message,
-		Suggestion: suggestion,
-		Details:    details,
-		Err:        err,
-	}
+	return svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 }
 
 func readFileRewrite(path, reportSourceID string) (*fileRewrite, error) {

@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 type FixType string
@@ -189,7 +190,7 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
-			return result, validationErrorf("failed to read %s: %w", filePath, err)
+			return result, svcerr.ValidationError(fmt.Errorf("failed to read %s: %w", filePath, err))
 		}
 
 		newContent := string(content)
@@ -239,7 +240,7 @@ func applyTextFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 
 		if fixedCount > 0 {
 			if err := atomicfile.WriteFile(fullPath, []byte(newContent), 0); err != nil {
-				return result, validationErrorf("failed to write %s: %w", filePath, err)
+				return result, svcerr.ValidationError(fmt.Errorf("failed to write %s: %w", filePath, err))
 			}
 			result.FileCount++
 			result.IssueCount += fixedCount

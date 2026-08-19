@@ -19,21 +19,6 @@ import (
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput   Code = codes.ErrInvalidInput
-	CodeValidation     Code = codes.ErrValidationFailed
-	CodeDatabaseError  Code = codes.ErrDatabase
-	CodeFileReadError  Code = codes.ErrFileRead
-	CodeFileWriteError Code = codes.ErrFileWrite
-	CodeInternalError  Code = codes.ErrInternal
-)
-
-func newError(code Code, message, suggestion string, details map[string]interface{}, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Details: details, Err: err}
-}
-
 type ValueValidationError struct {
 	TraitType string
 	Cause     error
@@ -96,7 +81,7 @@ func ResolveTraitIDs(db *index.Database, ids []string) ([]model.Trait, []BulkRes
 
 		trait, err := db.GetTrait(id)
 		if err != nil {
-			return nil, nil, newError(CodeDatabaseError, "failed to fetch trait from index", "Run 'rvn reindex' to rebuild the database", nil, err)
+			return nil, nil, svcerr.Wrap(codes.ErrDatabase, "failed to fetch trait from index", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 		}
 		if trait == nil {
 			filePath := strings.SplitN(id, ":trait:", 2)[0]

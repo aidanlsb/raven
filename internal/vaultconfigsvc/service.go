@@ -13,19 +13,6 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput   Code = codes.ErrInvalidInput
-	CodeConfigInvalid  Code = codes.ErrConfigInvalid
-	CodeFileWriteError Code = codes.ErrFileWrite
-	CodePrefixNotFound Code = codes.ErrPrefixNotFound
-)
-
-func newError(code Code, message, suggestion string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
 type ShowRequest struct {
 	VaultPath string
 }
@@ -316,7 +303,7 @@ func GetDirectories(rt *vaultruntime.Runtime, req GetDirectoriesRequest) (*GetDi
 
 func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDirectoriesResult, error) {
 	if req.Daily == nil && req.Object == nil && req.Page == nil && req.Template == nil {
-		return nil, newError(CodeInvalidInput, "specify at least one directories field", "Use --daily, --type, --page, or --template", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one directories field").WithSuggestion("Use --daily, --type, --page, or --template")
 	}
 
 	cfg, exists, configPath, err := load(rt)
@@ -363,7 +350,7 @@ func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDi
 	if changed {
 		cfg.Directories = next
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -377,7 +364,7 @@ func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDi
 
 func UnsetDirectories(rt *vaultruntime.Runtime, req UnsetDirectoriesRequest) (*UnsetDirectoriesResult, error) {
 	if !req.Daily && !req.Object && !req.Page && !req.Template {
-		return nil, newError(CodeInvalidInput, "specify at least one directories field to clear", "Use --daily, --type, --page, or --template", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one directories field to clear").WithSuggestion("Use --daily, --type, --page, or --template")
 	}
 
 	cfg, _, configPath, err := load(rt)
@@ -408,7 +395,7 @@ func UnsetDirectories(rt *vaultruntime.Runtime, req UnsetDirectoriesRequest) (*U
 	if changed {
 		cfg.Directories = next
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -436,7 +423,7 @@ func GetCapture(rt *vaultruntime.Runtime, req GetCaptureRequest) (*GetCaptureRes
 
 func SetCapture(rt *vaultruntime.Runtime, req SetCaptureRequest) (*SetCaptureResult, error) {
 	if req.Destination == nil && req.Heading == nil {
-		return nil, newError(CodeInvalidInput, "specify at least one capture field", "Use --destination or --heading", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one capture field").WithSuggestion("Use --destination or --heading")
 	}
 
 	cfg, exists, configPath, err := load(rt)
@@ -470,7 +457,7 @@ func SetCapture(rt *vaultruntime.Runtime, req SetCaptureRequest) (*SetCaptureRes
 	if changed {
 		cfg.Capture = next
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -486,7 +473,7 @@ func SetCapture(rt *vaultruntime.Runtime, req SetCaptureRequest) (*SetCaptureRes
 
 func UnsetCapture(rt *vaultruntime.Runtime, req UnsetCaptureRequest) (*UnsetCaptureResult, error) {
 	if !req.Destination && !req.Heading {
-		return nil, newError(CodeInvalidInput, "specify at least one capture field to clear", "Use --destination or --heading", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one capture field to clear").WithSuggestion("Use --destination or --heading")
 	}
 
 	cfg, _, configPath, err := load(rt)
@@ -512,7 +499,7 @@ func UnsetCapture(rt *vaultruntime.Runtime, req UnsetCaptureRequest) (*UnsetCapt
 	if changed {
 		cfg.Capture = next
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -542,7 +529,7 @@ func GetDeletion(rt *vaultruntime.Runtime, req GetDeletionRequest) (*GetDeletion
 
 func SetDeletion(rt *vaultruntime.Runtime, req SetDeletionRequest) (*SetDeletionResult, error) {
 	if req.Behavior == nil && req.TrashDir == nil {
-		return nil, newError(CodeInvalidInput, "specify at least one deletion field", "Use --behavior or --trash-dir", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one deletion field").WithSuggestion("Use --behavior or --trash-dir")
 	}
 
 	cfg, exists, configPath, err := load(rt)
@@ -576,7 +563,7 @@ func SetDeletion(rt *vaultruntime.Runtime, req SetDeletionRequest) (*SetDeletion
 	if changed {
 		cfg.Deletion = next
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -592,7 +579,7 @@ func SetDeletion(rt *vaultruntime.Runtime, req SetDeletionRequest) (*SetDeletion
 
 func UnsetDeletion(rt *vaultruntime.Runtime, req UnsetDeletionRequest) (*UnsetDeletionResult, error) {
 	if !req.Behavior && !req.TrashDir {
-		return nil, newError(CodeInvalidInput, "specify at least one deletion field to clear", "Use --behavior or --trash-dir", nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one deletion field to clear").WithSuggestion("Use --behavior or --trash-dir")
 	}
 
 	cfg, _, configPath, err := load(rt)
@@ -618,7 +605,7 @@ func UnsetDeletion(rt *vaultruntime.Runtime, req UnsetDeletionRequest) (*UnsetDe
 	if changed {
 		cfg.Deletion = next
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -642,7 +629,7 @@ func SetAutoReindex(rt *vaultruntime.Runtime, req SetAutoReindexRequest) (*SetAu
 		value := req.Value
 		cfg.AutoReindex = &value
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -665,7 +652,7 @@ func UnsetAutoReindex(rt *vaultruntime.Runtime, req UnsetAutoReindexRequest) (*U
 	if changed {
 		cfg.AutoReindex = nil
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -714,7 +701,7 @@ func AddProtectedPrefix(rt *vaultruntime.Runtime, req AddProtectedPrefixRequest)
 		sort.Strings(prefixes)
 		cfg.ProtectedPrefixes = prefixes
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -749,12 +736,12 @@ func RemoveProtectedPrefix(rt *vaultruntime.Runtime, req RemoveProtectedPrefixRe
 		next = append(next, existing)
 	}
 	if !found {
-		return nil, newError(CodePrefixNotFound, fmt.Sprintf("protected prefix '%s' not found", prefix), "Run 'rvn vault config protected-prefixes list' to see configured prefixes", nil)
+		return nil, svcerr.New(codes.ErrPrefixNotFound, fmt.Sprintf("protected prefix '%s' not found", prefix)).WithSuggestion("Run 'rvn vault config protected-prefixes list' to see configured prefixes")
 	}
 
 	cfg.ProtectedPrefixes = next
 	if err := save(rt, cfg); err != nil {
-		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 	}
 
 	return &RemoveProtectedPrefixResult{
@@ -801,7 +788,7 @@ func AddExclude(rt *vaultruntime.Runtime, req AddExcludeRequest) (*AddExcludeRes
 		patterns = append(patterns, pattern)
 		cfg.Exclude = patterns
 		if err := save(rt, cfg); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
@@ -836,12 +823,12 @@ func RemoveExclude(rt *vaultruntime.Runtime, req RemoveExcludeRequest) (*RemoveE
 		next = append(next, existing)
 	}
 	if !found {
-		return nil, newError(CodePrefixNotFound, fmt.Sprintf("exclude pattern %q not found", pattern), "Run 'rvn vault config exclude list' to see configured patterns", nil)
+		return nil, svcerr.New(codes.ErrPrefixNotFound, fmt.Sprintf("exclude pattern %q not found", pattern)).WithSuggestion("Run 'rvn vault config exclude list' to see configured patterns")
 	}
 
 	cfg.Exclude = next
 	if err := save(rt, cfg); err != nil {
-		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 	}
 
 	return &RemoveExcludeResult{
@@ -854,11 +841,11 @@ func RemoveExclude(rt *vaultruntime.Runtime, req RemoveExcludeRequest) (*RemoveE
 
 func load(rt *vaultruntime.Runtime) (*config.VaultConfig, bool, string, error) {
 	if err := vaultruntime.Require(rt); err != nil {
-		return nil, false, "", newError(CodeInvalidInput, "vault path is required", "Resolve a vault before invoking the command", err)
+		return nil, false, "", svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err).WithSuggestion("Resolve a vault before invoking the command")
 	}
 	if rt.VaultCfg == nil {
 		if err := rt.ReloadConfig(); err != nil {
-			return nil, rt.VaultConfigExists, rt.VaultConfigPath, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+			return nil, rt.VaultConfigExists, rt.VaultConfigPath, svcerr.Wrap(codes.ErrConfigInvalid, "failed to load vault config", err).WithSuggestion("Fix raven.yaml and try again")
 		}
 	}
 	return rt.VaultCfg, rt.VaultConfigExists, rt.VaultConfigPath, nil
@@ -898,7 +885,7 @@ func normalizedProtectedPrefixes(prefixes []string) []string {
 func normalizeProtectedPrefix(raw string) (string, error) {
 	normalized := paths.NormalizeDirRoot(paths.NormalizeVaultRelPath(raw))
 	if normalized == "" || !paths.IsValidVaultRelPath(normalized) {
-		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid protected prefix: %q", raw), "Use a vault-relative directory prefix such as 'private/'", nil)
+		return "", svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid protected prefix: %q", raw)).WithSuggestion("Use a vault-relative directory prefix such as 'private/'")
 	}
 	return normalized, nil
 }
@@ -910,10 +897,10 @@ func normalizedExcludePatterns(patterns []string) []string {
 func normalizeExcludePattern(raw string) (string, error) {
 	normalized := ravenignore.NormalizePatterns([]string{raw})
 	if len(normalized) == 0 {
-		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid exclude pattern: %q", raw), "Use a gitignore-style pattern such as 'AGENTS.md', '.cursor/', or '*.plan.md'", nil)
+		return "", svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid exclude pattern: %q", raw)).WithSuggestion("Use a gitignore-style pattern such as 'AGENTS.md', '.cursor/', or '*.plan.md'")
 	}
 	if _, err := ravenignore.NewMatcher(normalized); err != nil {
-		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid exclude pattern: %q", raw), err.Error(), nil)
+		return "", svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid exclude pattern: %q", raw)).WithSuggestion(err.Error())
 	}
 	return normalized[0], nil
 }
@@ -1073,7 +1060,7 @@ func deletionConfigEqual(a, b *config.DeletionConfig) bool {
 func normalizeDirValue(raw, field string) (string, error) {
 	normalized := paths.NormalizeDirRoot(paths.NormalizeVaultRelPath(raw))
 	if normalized == "" || !paths.IsValidVaultRelPath(normalized) {
-		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid directories.%s: %q", field, raw), "Use a vault-relative directory such as 'daily/'", nil)
+		return "", svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid directories.%s: %q", field, raw)).WithSuggestion("Use a vault-relative directory such as 'daily/'")
 	}
 	return normalized, nil
 }
@@ -1081,14 +1068,14 @@ func normalizeDirValue(raw, field string) (string, error) {
 func normalizeCaptureDestination(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return "", newError(CodeInvalidInput, "capture destination cannot be empty", "Use 'daily' or a vault-relative file path", nil)
+		return "", svcerr.New(codes.ErrInvalidInput, "capture destination cannot be empty").WithSuggestion("Use 'daily' or a vault-relative file path")
 	}
 	if value == "daily" {
 		return "daily", nil
 	}
 	value = paths.NormalizeVaultRelPath(value)
 	if !paths.IsValidVaultRelPath(value) {
-		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid capture destination: %q", raw), "Use 'daily' or a vault-relative file path such as 'inbox.md'", nil)
+		return "", svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid capture destination: %q", raw)).WithSuggestion("Use 'daily' or a vault-relative file path such as 'inbox.md'")
 	}
 	return value, nil
 }
@@ -1096,7 +1083,7 @@ func normalizeCaptureDestination(raw string) (string, error) {
 func normalizeHeading(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return "", newError(CodeInvalidInput, "heading cannot be empty", "Use a heading such as '## Captured'", nil)
+		return "", svcerr.New(codes.ErrInvalidInput, "heading cannot be empty").WithSuggestion("Use a heading such as '## Captured'")
 	}
 	return value, nil
 }
@@ -1107,14 +1094,14 @@ func normalizeDeletionBehavior(raw string) (string, error) {
 	case "trash", "permanent":
 		return value, nil
 	default:
-		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid deletion behavior: %q", raw), "Use 'trash' or 'permanent'", nil)
+		return "", svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid deletion behavior: %q", raw)).WithSuggestion("Use 'trash' or 'permanent'")
 	}
 }
 
 func normalizeTrashDir(raw string) (string, error) {
 	value := paths.NormalizeVaultRelPath(raw)
 	if value == "" || !paths.IsValidVaultRelPath(value) {
-		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid trash_dir: %q", raw), "Use a vault-relative path such as '.trash' or 'archive/trash'", nil)
+		return "", svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid trash_dir: %q", raw)).WithSuggestion("Use a vault-relative path such as '.trash' or 'archive/trash'")
 	}
 	return value, nil
 }

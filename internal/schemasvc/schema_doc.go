@@ -3,17 +3,19 @@ package schemasvc
 import (
 	"errors"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schemadoc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func editSchema(vaultPath, loadSuggestion string, mutate func(*schemadoc.Document) error) error {
-	return editSchemaWithLoadError(vaultPath, loadSuggestion, ErrorSchemaNotFound, mutate)
+	return editSchemaWithLoadError(vaultPath, loadSuggestion, codes.ErrSchemaNotFound, mutate)
 }
 
 func editSchemaWithLoadError(
 	vaultPath string,
 	loadSuggestion string,
-	loadErrorCode ErrorCode,
+	loadErrorCode codes.ErrorCode,
 	mutate func(*schemadoc.Document) error,
 ) error {
 	if err := schemadoc.Edit(vaultPath, mutate); err != nil {
@@ -24,7 +26,7 @@ func editSchemaWithLoadError(
 
 // MapSchemaDocError converts schemadoc failures to schemasvc's stable error
 // codes so schema mutation orchestrators share the same response contract.
-func MapSchemaDocError(err error, loadSuggestion string, loadErrorCode ErrorCode) error {
+func MapSchemaDocError(err error, loadSuggestion string, loadErrorCode codes.ErrorCode) error {
 	if err == nil {
 		return nil
 	}
@@ -36,16 +38,16 @@ func MapSchemaDocError(err error, loadSuggestion string, loadErrorCode ErrorCode
 
 	switch docErr.Operation {
 	case schemadoc.OperationRead:
-		return newError(ErrorFileRead, docErr.Error(), "", nil, docErr)
+		return svcerr.Wrap(codes.ErrFileRead, docErr.Error(), docErr)
 	case schemadoc.OperationLoad:
-		return newError(loadErrorCode, docErr.Error(), loadSuggestion, nil, docErr)
+		return svcerr.Wrap(loadErrorCode, docErr.Error(), docErr).WithSuggestion(loadSuggestion)
 	case schemadoc.OperationDecode, schemadoc.OperationValidate:
-		return newError(ErrorSchemaInvalid, docErr.Error(), "", nil, docErr)
+		return svcerr.Wrap(codes.ErrSchemaInvalid, docErr.Error(), docErr)
 	case schemadoc.OperationMarshal:
-		return newError(ErrorInternal, docErr.Error(), "", nil, docErr)
+		return svcerr.Wrap(codes.ErrInternal, docErr.Error(), docErr)
 	case schemadoc.OperationWrite:
-		return newError(ErrorFileWrite, docErr.Error(), "", nil, docErr)
+		return svcerr.Wrap(codes.ErrFileWrite, docErr.Error(), docErr)
 	default:
-		return newError(ErrorInternal, docErr.Error(), "", nil, docErr)
+		return svcerr.Wrap(codes.ErrInternal, docErr.Error(), docErr)
 	}
 }

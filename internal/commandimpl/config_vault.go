@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -171,9 +172,9 @@ func HandleVaultAdd(_ context.Context, req commandexec.Request) commandexec.Resu
 	if err != nil {
 		if svcErr, ok := svcerr.AsError(err); ok {
 			switch svcErr.Code {
-			case configsvc.CodeFileNotFound:
+			case codes.ErrFileNotFound:
 				return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn init "+rawPath+"' to create it first")
-			case configsvc.CodeDuplicateName:
+			case codes.ErrDuplicateName:
 				return commandexec.FromServiceErrorWithFallback(err, "Use --replace to update the path")
 			}
 		}
@@ -199,7 +200,7 @@ func HandleVaultRemove(_ context.Context, req commandexec.Request) commandexec.R
 		ClearActive:    boolArg(req.Args, "clear-active"),
 	})
 	if err != nil {
-		if svcErr, ok := svcerr.AsError(err); ok && svcErr.Code == configsvc.CodeConfirmationNeeded {
+		if svcErr, ok := svcerr.AsError(err); ok && svcErr.Code == codes.ErrConfirmationRequired {
 			if strings.Contains(svcErr.Message, "default vault") {
 				return commandexec.FromServiceErrorWithFallback(err, "Use --clear-default to clear default_vault as part of removal, or pin another vault first")
 			}

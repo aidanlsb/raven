@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -98,7 +99,7 @@ traits: {}
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorRefNotFound {
+	if svcErr.Code != codes.ErrRefNotFound {
 		t.Fatalf("expected ErrorRefNotFound, got %s", svcErr.Code)
 	}
 }

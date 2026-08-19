@@ -1,6 +1,7 @@
 package checkfixsvc
 
 import (
+	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -97,7 +99,7 @@ func CreateMissingPage(vaultPath string, sch *schema.Schema, targetPath, typeNam
 		PagesRoot:                   createPagesRoot,
 	})
 	if err != nil {
-		return validationError(err)
+		return svcerr.ValidationError(err)
 	}
 	return nil
 }
@@ -133,12 +135,12 @@ func AddTrait(vaultPath string, s *schema.Schema, traitName, traitType string, e
 	}
 
 	if err := rt.ReloadSchema(true); err != nil {
-		return validationErrorf("failed to reload schema after adding trait: %w", err)
+		return svcerr.ValidationError(fmt.Errorf("failed to reload schema after adding trait: %w", err))
 	}
 	loaded := rt.Schema
 	traitDef, ok := loaded.Traits[traitName]
 	if !ok {
-		return validationErrorf("added trait '%s' was not found after reload", traitName)
+		return svcerr.ValidationError(fmt.Errorf("added trait '%s' was not found after reload", traitName))
 	}
 
 	if s.Traits == nil {
@@ -161,12 +163,12 @@ func AddType(vaultPath string, s *schema.Schema, typeName, defaultPath string) e
 	}
 
 	if err := rt.ReloadSchema(true); err != nil {
-		return validationErrorf("failed to reload schema after adding type: %w", err)
+		return svcerr.ValidationError(fmt.Errorf("failed to reload schema after adding type: %w", err))
 	}
 	loaded := rt.Schema
 	typeDef, ok := loaded.Types[typeName]
 	if !ok {
-		return validationErrorf("added type '%s' was not found after reload", typeName)
+		return svcerr.ValidationError(fmt.Errorf("added type '%s' was not found after reload", typeName))
 	}
 
 	if s.Types == nil {

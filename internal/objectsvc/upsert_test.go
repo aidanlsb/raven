@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -109,7 +110,7 @@ traits: {}
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorRequiredField {
+	if svcErr.Code != codes.ErrRequiredFieldMissing {
 		t.Fatalf("expected ErrorRequiredField, got %s", svcErr.Code)
 	}
 	if !strings.Contains(svcErr.Message, "status") {
@@ -167,7 +168,7 @@ traits: {}
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
-	if svcErr.Code != ErrorValidationFailed {
+	if svcErr.Code != codes.ErrValidationFailed {
 		t.Fatalf("expected ErrorValidationFailed, got %s", svcErr.Code)
 	}
 	if !strings.Contains(svcErr.Message, "cannot upsert as") {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -16,7 +17,7 @@ func templateTestRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
 	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
 }
 
-func assertTemplateCode(t *testing.T, err error, want Code) *svcerr.Error {
+func assertTemplateCode(t *testing.T, err error, want codes.ErrorCode) *svcerr.Error {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected error code %q, got nil", want)
@@ -155,7 +156,7 @@ func TestWriteRejectsFrontmatter(t *testing.T) {
 		Path:        "daily.md",
 		Content:     "---\ntype: date\n---\n# {{date}}\n",
 	})
-	svcErr := assertTemplateCode(t, err, CodeValidationFailed)
+	svcErr := assertTemplateCode(t, err, codes.ErrValidationFailed)
 	if !strings.Contains(svcErr.Message, "frontmatter") {
 		t.Fatalf("expected frontmatter validation message, got %q", svcErr.Message)
 	}
@@ -189,7 +190,7 @@ templates:
 		Path:        "meeting.md",
 		Force:       false,
 	})
-	svcErr := assertTemplateCode(t, err, CodeValidationFailed)
+	svcErr := assertTemplateCode(t, err, codes.ErrValidationFailed)
 	if !strings.Contains(svcErr.Message, "meeting_template") {
 		t.Fatalf("expected schema template id in error message, got %q", svcErr.Message)
 	}
@@ -236,5 +237,5 @@ func TestWriteRejectsPathOutsideTemplateDirectory(t *testing.T) {
 		Path:        "other/meeting.md",
 		Content:     "# Meeting\n",
 	})
-	assertTemplateCode(t, err, CodeInvalidInput)
+	assertTemplateCode(t, err, codes.ErrInvalidInput)
 }

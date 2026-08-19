@@ -4,8 +4,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -19,7 +21,7 @@ type deleteTarget struct {
 func deleteTargetFromFilePath(vaultPath string, vaultCfg *config.VaultConfig, filePath, objectID string) (*deleteTarget, error) {
 	relPath, err := filepath.Rel(vaultPath, filePath)
 	if err != nil {
-		return nil, newError(ErrorUnexpected, "failed to resolve delete target path", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to resolve delete target path", err)
 	}
 	relPath = paths.NormalizeVaultRelPath(relPath)
 

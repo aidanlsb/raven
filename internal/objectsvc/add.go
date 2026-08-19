@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/filelock"
@@ -16,6 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -41,7 +43,7 @@ func Append(
 	}
 	relPath, err := filepath.Rel(rt.VaultPath, destPath)
 	if err != nil {
-		return nil, newError(ErrorUnexpected, "failed to resolve appended file path", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrInternal, "failed to resolve appended file path", err)
 	}
 	changes := mutation.NewChangeSet()
 	changes.AddChanged(relPath)
@@ -58,7 +60,7 @@ func AppendToFile(
 	targetObjectID string,
 ) (int, error) {
 	if rt == nil {
-		return 0, newError(ErrorValidationFailed, "vault runtime is required", "", nil, nil)
+		return 0, svcerr.New(codes.ErrValidationFailed, "vault runtime is required")
 	}
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
@@ -85,10 +87,10 @@ func AppendToFile(
 			dailyDir = "daily"
 		}
 		if rt.SchemaLoadErr != nil {
-			return 0, newError(ErrorValidationFailed, "failed to load schema", "Fix schema.yaml and try again", nil, rt.SchemaLoadErr)
+			return 0, svcerr.Wrap(codes.ErrValidationFailed, "failed to load schema", rt.SchemaLoadErr).WithSuggestion("Fix schema.yaml and try again")
 		}
 		if rt.Schema == nil {
-			return 0, newError(ErrorValidationFailed, "schema runtime is required", "Fix schema.yaml and try again", nil, nil)
+			return 0, svcerr.New(codes.ErrValidationFailed, "schema runtime is required").WithSuggestion("Fix schema.yaml and try again")
 		}
 		if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, rt.Schema, vaultCfg.GetTemplateDirectory(), vaultCfg.ProtectedPrefixes); err != nil {
 			return 0, addFileWriteError(destPath, "failed to create daily note", "Check the daily note path and try again", err)
@@ -165,7 +167,7 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *p
 
 	doc, err := parser.ParseDocumentWithOptions(content, destPath, vaultPath, parseOpts)
 	if err != nil {
-		return 0, newError(ErrorInvalidInput, "failed to parse target file", "Fix the target file content and try again", nil, err)
+		return 0, svcerr.Wrap(codes.ErrInvalidInput, "failed to parse target file", err).WithSuggestion("Fix the target file content and try again")
 	}
 
 	var target *model.Section
@@ -176,7 +178,7 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *p
 		}
 	}
 	if target == nil {
-		return 0, newError(ErrorRefNotFound, fmt.Sprintf("target section not found: %s", objectID), "Use an existing section slug/id or heading text", nil, nil)
+		return 0, svcerr.New(codes.ErrRefNotFound, fmt.Sprintf("target section not found: %s", objectID)).WithSuggestion("Use an existing section slug/id or heading text")
 	}
 
 	insertIdx := len(lines)
@@ -240,13 +242,7 @@ func appendUnderHeading(destPath, line, heading string) (int, error) {
 		insertedLine int
 	)
 	if headingIdx == -1 {
-		return 0, newError(
-			ErrorRefNotFound,
-			fmt.Sprintf("configured capture heading not found: %s", heading),
-			`Create it with 'rvn section create <file> "<title>" --level N', then retry the add`,
-			nil,
-			nil,
-		)
+		return 0, svcerr.New(codes.ErrRefNotFound, fmt.Sprintf("configured capture heading not found: %s", heading)).WithSuggestion(`Create it with 'rvn section create <file> "<title>" --level N', then retry the add`)
 	} else if nextHeadingIdx == -1 {
 		insertIdx := len(lines)
 		for insertIdx > headingIdx+1 && strings.TrimSpace(lines[insertIdx-1]) == "" {
@@ -285,25 +281,19 @@ func appendedLineNumber(content []byte) int {
 }
 
 func addFileNotFoundError(destPath string, cause error) error {
-	return newError(
-		ErrorFileNotFound,
-		fmt.Sprintf("file does not exist: %s", destPath),
-		"Create the file first or choose an existing file",
-		nil,
-		cause,
-	)
+	return svcerr.Wrap(codes.ErrFileNotFound, fmt.Sprintf("file does not exist: %s", destPath), cause).WithSuggestion("Create the file first or choose an existing file")
 }
 
 func addFileReadError(destPath, message, suggestion string, cause error) error {
 	if os.IsNotExist(cause) {
 		return addFileNotFoundError(destPath, cause)
 	}
-	return newError(ErrorFileRead, message, suggestion, nil, cause)
+	return svcerr.Wrap(codes.ErrFileRead, message, cause).WithSuggestion(suggestion)
 }
 
 func addFileWriteError(destPath, message, suggestion string, cause error) error {
 	if os.IsNotExist(cause) {
 		return addFileNotFoundError(destPath, cause)
 	}
-	return newError(ErrorFileWrite, message, suggestion, nil, cause)
+	return svcerr.Wrap(codes.ErrFileWrite, message, cause).WithSuggestion(suggestion)
 }

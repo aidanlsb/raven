@@ -21,37 +21,6 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type ErrorCode = codes.ErrorCode
-
-const (
-	ErrorTypeNotFound     ErrorCode = codes.ErrTypeNotFound
-	ErrorRequiredField    ErrorCode = codes.ErrRequiredFieldMissing
-	ErrorInvalidInput     ErrorCode = codes.ErrInvalidInput
-	ErrorFileNotFound     ErrorCode = codes.ErrFileNotFound
-	ErrorFileExists       ErrorCode = codes.ErrFileExists
-	ErrorRefNotFound      ErrorCode = codes.ErrRefNotFound
-	ErrorRefAmbiguous     ErrorCode = codes.ErrRefAmbiguous
-	ErrorDatabase         ErrorCode = codes.ErrDatabase
-	ErrorValidationFailed ErrorCode = codes.ErrValidationFailed
-	ErrorFileRead         ErrorCode = codes.ErrFileRead
-	ErrorFileWrite        ErrorCode = codes.ErrFileWrite
-	ErrorUnexpected       ErrorCode = codes.ErrInternal
-)
-
-// Error is kept as a compatibility alias for internal callers that previously
-// matched objectsvc's package-local error type. New code should use svcerr.
-type Error = svcerr.Error
-
-func newError(code ErrorCode, message, suggestion string, details map[string]interface{}, cause error) *svcerr.Error {
-	return &svcerr.Error{
-		Code:       code,
-		Message:    message,
-		Suggestion: suggestion,
-		Details:    details,
-		Err:        cause,
-	}
-}
-
 type UpsertRequest struct {
 	VaultPath   string
 	TypeName    string
@@ -78,7 +47,7 @@ type UpsertResult struct {
 
 func Upsert(req UpsertRequest) (*UpsertResult, error) {
 	if req.Schema == nil {
-		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
 	}
 	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
 	if owned {
@@ -113,22 +82,16 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		missingRequired := requiredFieldGapNames(requiredFieldGaps(typeDef, fieldValues))
 		if len(missingRequired) > 0 {
 			msg := fmt.Sprintf("Missing required fields: %s", strings.Join(missingRequired, ", "))
-			return nil, newError(
-				ErrorRequiredField,
-				msg,
-				"Provide missing fields with --field",
-				map[string]interface{}{
-					"type":           req.TypeName,
-					"title":          req.Title,
-					"missing_fields": missingRequired,
-					"retry_with": map[string]interface{}{
-						"type":  req.TypeName,
-						"title": req.Title,
-						"field": buildFieldTemplate(missingRequired),
-					},
+			return nil, svcerr.New(codes.ErrRequiredFieldMissing, msg).WithSuggestion("Provide missing fields with --field").WithDetails(map[string]interface{}{
+				"type":           req.TypeName,
+				"title":          req.Title,
+				"missing_fields": missingRequired,
+				"retry_with": map[string]interface{}{
+					"type":  req.TypeName,
+					"title": req.Title,
+					"field": buildFieldTemplate(missingRequired),
 				},
-				nil,
-			)
+			})
 		}
 
 		refCtx := createRefValidationContext(rt, nil)
@@ -165,47 +128,35 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		if req.ReplaceBody {
 			createdBytes, err := os.ReadFile(filePath)
 			if err != nil {
-				return nil, newError(ErrorFileRead, "failed to read created object", "", nil, err)
+				return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read created object", err)
 			}
 			createdContent := replaceBodyContent(string(createdBytes), req.Content)
 			if createdContent != string(createdBytes) {
 				if err := atomicfile.WriteFile(filePath, []byte(createdContent), 0o644); err != nil {
-					return nil, newError(ErrorFileWrite, "failed to write updated object", "", nil, err)
+					return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write updated object", err)
 				}
 			}
 		}
 
 		status = "created"
 	} else if err != nil {
-		return nil, newError(ErrorFileRead, "failed to inspect existing object", "", nil, err)
+		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to inspect existing object", err)
 	} else {
 		originalBytes, err := os.ReadFile(filePath)
 		if err != nil {
-			return nil, newError(ErrorFileRead, "failed to read existing object", "", nil, err)
+			return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read existing object", err)
 		}
 		original := string(originalBytes)
 
 		fm, err := parser.ParseFrontmatter(original)
 		if err != nil {
-			return nil, newError(ErrorInvalidInput, "failed to parse frontmatter", "The file must have YAML frontmatter (---) for upsert", nil, err)
+			return nil, svcerr.Wrap(codes.ErrInvalidInput, "failed to parse frontmatter", err).WithSuggestion("The file must have YAML frontmatter (---) for upsert")
 		}
 		if fm == nil {
-			return nil, newError(
-				ErrorInvalidInput,
-				"file has no frontmatter",
-				"The file must have YAML frontmatter (---) for upsert",
-				nil,
-				nil,
-			)
+			return nil, svcerr.New(codes.ErrInvalidInput, "file has no frontmatter").WithSuggestion("The file must have YAML frontmatter (---) for upsert")
 		}
 		if fm.ObjectType != "" && fm.ObjectType != req.TypeName {
-			return nil, newError(
-				ErrorValidationFailed,
-				fmt.Sprintf("existing object type is '%s', cannot upsert as '%s'", fm.ObjectType, req.TypeName),
-				"Choose a different title/path, or update the existing type first",
-				nil,
-				nil,
-			)
+			return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("existing object type is '%s', cannot upsert as '%s'", fm.ObjectType, req.TypeName)).WithSuggestion("Choose a different title/path, or update the existing type first")
 		}
 
 		updates := make(map[string]fieldvalue.FieldValue, len(fieldValues)+1)
@@ -246,7 +197,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 
 		if nextContent != original {
 			if err := atomicfile.WriteFile(filePath, []byte(nextContent), 0o644); err != nil {
-				return nil, newError(ErrorFileWrite, "failed to write updated object", "", nil, err)
+				return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write updated object", err)
 			}
 			status = "updated"
 		}

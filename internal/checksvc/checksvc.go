@@ -17,6 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/resolver"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -100,7 +101,7 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 	includeIssues, excludeIssues := parseIssueFilter(opts)
 	excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
 	if err != nil {
-		return nil, validationErrorf("invalid exclude config: %w", err)
+		return nil, svcerr.ValidationError(fmt.Errorf("invalid exclude config: %w", err))
 	}
 
 	result := &RunResult{
@@ -228,7 +229,7 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 		return nil
 	})
 	if walkErr != nil {
-		return nil, validationErrorf("error walking vault: %w", walkErr)
+		return nil, svcerr.ValidationError(fmt.Errorf("error walking vault: %w", walkErr))
 	}
 
 	validator := check.NewValidatorWithTypesAliasesAndResolver(sch, allObjectInfos, aliases, canonicalResolver)
@@ -605,7 +606,7 @@ func resolveScope(rt *vaultruntime.Runtime, opts Options) (*Scope, error) {
 
 	resolved, err := refresolve.Resolve(pathArg, rt, false)
 	if err != nil {
-		return nil, validationErrorf("could not resolve '%s': %w", pathArg, err)
+		return nil, svcerr.ValidationError(fmt.Errorf("could not resolve '%s': %w", pathArg, err))
 	}
 
 	scope.Type = "file"

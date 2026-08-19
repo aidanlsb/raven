@@ -19,21 +19,6 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput  Code = codes.ErrInvalidInput
-	CodeSchemaInvalid Code = codes.ErrSchemaInvalid
-	CodeConfigInvalid Code = codes.ErrConfigInvalid
-	CodeDatabaseError Code = codes.ErrDatabase
-	CodeFileReadError Code = codes.ErrFileRead
-	CodeInternal      Code = codes.ErrInternal
-)
-
-func newError(code Code, message, suggestion string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
 type RunRequest struct {
 	VaultPath string
 	Full      bool
@@ -97,7 +82,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		if rt == nil {
 			message = "vault runtime is required"
 		}
-		return nil, newError(CodeInvalidInput, message, "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, message, err)
 	}
 	vaultPath := strings.TrimSpace(rt.VaultPath)
 
@@ -107,15 +92,15 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	}
 
 	if rt.SchemaLoadErr != nil {
-		return nil, newError(CodeSchemaInvalid, fmt.Sprintf("failed to load schema: %v", rt.SchemaLoadErr), "Run 'rvn init' to create a schema", rt.SchemaLoadErr)
+		return nil, svcerr.Wrap(codes.ErrSchemaInvalid, fmt.Sprintf("failed to load schema: %v", rt.SchemaLoadErr), rt.SchemaLoadErr).WithSuggestion("Run 'rvn init' to create a schema")
 	}
 	if rt.Schema == nil {
-		return nil, newError(CodeSchemaInvalid, "failed to load schema: schema runtime is required", "Run 'rvn init' to create a schema", nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, "failed to load schema: schema runtime is required").WithSuggestion("Run 'rvn init' to create a schema")
 	}
 	sch := rt.Schema
 	vaultCfg := rt.VaultCfg
 	if vaultCfg == nil {
-		return nil, newError(CodeConfigInvalid, "failed to load raven.yaml: vault config runtime is required", "Fix raven.yaml and try again", nil)
+		return nil, svcerr.New(codes.ErrConfigInvalid, "failed to load raven.yaml: vault config runtime is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 
 	db, rebuildSession, wasRebuilt, err := openRunDatabase(vaultPath, req.Full, req.DryRun)
@@ -124,7 +109,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		if errors.Is(err, index.ErrIndexLocked) {
 			suggestion = "Another process (such as rvn lsp) is holding the index; stop the LSP or wait for the other process to finish, then try again"
 		}
-		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to open database: %v", err), suggestion, err)
+		return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to open database: %v", err), err).WithSuggestion(suggestion)
 	}
 	if rebuildSession != nil {
 		defer rebuildSession.Close()
@@ -140,13 +125,13 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	if !incremental && !req.DryRun {
 		if rebuildSession == nil {
 			err := errors.New("full reindex requires an exclusive rebuild session")
-			return nil, newError(CodeInternal, err.Error(), "", err)
+			return nil, svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 		}
 		if err := rebuildSession.BeginFullRebuild(); err != nil {
-			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to mark index for full reindex: %v", err), "", err)
+			return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to mark index for full reindex: %v", err), err)
 		}
 		if err := db.ClearAllData(); err != nil {
-			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to clear database for full reindex: %v", err), "", err)
+			return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to clear database for full reindex: %v", err), err)
 		}
 	}
 
@@ -163,19 +148,19 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 
 	excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, fmt.Sprintf("invalid exclude config: %v", err), "Fix raven.yaml exclude patterns and try again", err)
+		return nil, svcerr.Wrap(codes.ErrConfigInvalid, fmt.Sprintf("invalid exclude config: %v", err), err).WithSuggestion("Fix raven.yaml exclude patterns and try again")
 	}
 	var projectionLock *indexjournal.ProjectionLock
 	if !req.DryRun {
 		projectionLock, err = indexjournal.LockProjection(vaultPath)
 		if err != nil {
-			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to lock index projection: %v", err), "Wait for the active write or refresh to finish, then retry", err)
+			return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to lock index projection: %v", err), err).WithSuggestion("Wait for the active write or refresh to finish, then retry")
 		}
 		defer func() { _ = projectionLock.Close() }()
 	}
 	pending, err := indexjournal.Load(vaultPath)
 	if err != nil {
-		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to load index dirty journal: %v", err), "Run 'rvn reindex --full' after repairing or removing disposable .raven metadata", err)
+		return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to load index dirty journal: %v", err), err).WithSuggestion("Run 'rvn reindex --full' after repairing or removing disposable .raven metadata")
 	}
 	dirtyPaths := make(map[string]struct{})
 	for _, relPath := range pending.Paths() {
@@ -357,7 +342,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		return nil
 	})
 	if walkErr != nil {
-		return nil, newError(CodeFileReadError, fmt.Sprintf("error walking vault: %v", walkErr), "", walkErr)
+		return nil, svcerr.Wrap(codes.ErrFileRead, fmt.Sprintf("error walking vault: %v", walkErr), walkErr)
 	}
 
 	if incremental && !req.DryRun {
@@ -374,12 +359,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 
 	if !req.DryRun && !incremental && len(result.Errors) > 0 {
 		err := fmt.Errorf("%d file(s) failed during full reindex; first failure: %s", len(result.Errors), result.Errors[0])
-		return nil, newError(
-			CodeFileReadError,
-			err.Error(),
-			"Fix invalid or unreadable vault files and run 'rvn reindex --full' again",
-			err,
-		)
+		return nil, svcerr.Wrap(codes.ErrFileRead, err.Error(), err).WithSuggestion("Fix invalid or unreadable vault files and run 'rvn reindex --full' again")
 	}
 
 	if req.DryRun {
@@ -387,7 +367,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 			removedFiles := uniqueStrings(result.DeletedFiles, result.ExcludedFiles)
 			projected, err := projectedDryRunStats(db, removedFiles, dryRunFileStats)
 			if err != nil {
-				return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to project dry-run stats: %v", err), "", err)
+				return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to project dry-run stats: %v", err), err)
 			}
 			result.Objects = projected.ObjectCount
 			result.Traits = projected.TraitCount
@@ -423,7 +403,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 
 	stats, err := db.Stats()
 	if err != nil {
-		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to get stats: %v", err), "", err)
+		return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to get stats: %v", err), err)
 	}
 	result.Objects = stats.ObjectCount
 	result.Traits = stats.TraitCount
@@ -431,7 +411,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 
 	if rebuildSession != nil {
 		if err := rebuildSession.Complete(); err != nil {
-			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to complete index rebuild: %v", err), "Run 'rvn reindex --full' to rebuild the database", err)
+			return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to complete index rebuild: %v", err), err).WithSuggestion("Run 'rvn reindex --full' to rebuild the database")
 		}
 	}
 	if !req.DryRun {

@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -63,19 +65,13 @@ type MoveBulkSummary struct {
 
 func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 	if req.VaultConfig == nil {
-		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	if !strings.HasSuffix(req.DestinationDir, "/") {
-		return nil, newError(ErrorInvalidInput, "destination must be a directory (end with /)", "Example: rvn move --stdin archive/projects/", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "destination must be a directory (end with /)").WithSuggestion("Example: rvn move --stdin archive/projects/")
 	}
 	if sectionIDs := moveBulkSectionIDs(req.ObjectIDs); len(sectionIDs) > 0 {
-		return nil, newError(
-			ErrorInvalidInput,
-			"rvn move does not accept section sources",
-			`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`,
-			map[string]interface{}{"section_ids": sectionIDs},
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, "rvn move does not accept section sources").WithSuggestion(`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`).WithDetails(map[string]interface{}{"section_ids": sectionIDs})
 	}
 
 	items := make([]MoveBulkPreviewItem, 0, len(req.ObjectIDs))
@@ -125,19 +121,13 @@ func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 
 func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 	if req.VaultConfig == nil {
-		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	if !strings.HasSuffix(req.DestinationDir, "/") {
-		return nil, newError(ErrorInvalidInput, "destination must be a directory (end with /)", "Example: rvn move --stdin archive/projects/", nil, nil)
+		return nil, svcerr.New(codes.ErrInvalidInput, "destination must be a directory (end with /)").WithSuggestion("Example: rvn move --stdin archive/projects/")
 	}
 	if sectionIDs := moveBulkSectionIDs(req.ObjectIDs); len(sectionIDs) > 0 {
-		return nil, newError(
-			ErrorInvalidInput,
-			"rvn move does not accept section sources",
-			`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`,
-			map[string]interface{}{"section_ids": sectionIDs},
-			nil,
-		)
+		return nil, svcerr.New(codes.ErrInvalidInput, "rvn move does not accept section sources").WithSuggestion(`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`).WithDetails(map[string]interface{}{"section_ids": sectionIDs})
 	}
 
 	results := make([]MoveBulkResult, 0, len(req.ObjectIDs))

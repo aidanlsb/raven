@@ -7,7 +7,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -36,9 +35,9 @@ func renderVaultStats(_ *cobra.Command, result commandexec.Result) error {
 
 func mapMaintSvcCode(code codes.ErrorCode) codes.ErrorCode {
 	switch code {
-	case maintsvc.CodeInvalidInput:
+	case codes.ErrInvalidInput:
 		return ErrInvalidInput
-	case maintsvc.CodeDatabaseError:
+	case codes.ErrDatabase:
 		return ErrDatabase
 	default:
 		return ErrInternal

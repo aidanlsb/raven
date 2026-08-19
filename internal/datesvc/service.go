@@ -15,21 +15,6 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type Code = codes.ErrorCode
-
-const (
-	CodeInvalidInput  Code = codes.ErrInvalidInput
-	CodeConfigInvalid Code = codes.ErrConfigInvalid
-	CodeSchemaInvalid Code = codes.ErrSchemaInvalid
-	CodeDatabaseError Code = codes.ErrDatabase
-	CodeQueryFailed   Code = codes.ErrQueryFailed
-	CodeFileWriteErr  Code = codes.ErrFileWrite
-)
-
-func newError(code Code, message, suggestion string, err error) *svcerr.Error {
-	return &svcerr.Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
 type EnsureDailyRequest struct {
 	VaultPath  string
 	DateArg    string
@@ -46,17 +31,17 @@ type EnsureDailyResult struct {
 
 func EnsureDaily(rt *vaultruntime.Runtime, req EnsureDailyRequest) (*EnsureDailyResult, error) {
 	if err := vaultruntime.Require(rt); err != nil {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if rt.VaultCfg == nil {
-		return nil, newError(CodeConfigInvalid, "vault config runtime is required", "Fix raven.yaml and try again", nil)
+		return nil, svcerr.New(codes.ErrConfigInvalid, "vault config runtime is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
 
 	targetDate, err := vault.ParseDateArg(strings.TrimSpace(req.DateArg))
 	if err != nil {
-		return nil, newError(CodeInvalidInput, err.Error(), "Use today/yesterday/tomorrow or YYYY-MM-DD", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use today/yesterday/tomorrow or YYYY-MM-DD")
 	}
 
 	dateStr := vault.FormatDateISO(targetDate)
@@ -76,10 +61,10 @@ func EnsureDaily(rt *vaultruntime.Runtime, req EnsureDailyRequest) (*EnsureDaily
 	}
 
 	if rt.SchemaLoadErr != nil {
-		return nil, newError(CodeSchemaInvalid, "failed to load schema", "Fix schema.yaml and try again", rt.SchemaLoadErr)
+		return nil, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to load schema", rt.SchemaLoadErr).WithSuggestion("Fix schema.yaml and try again")
 	}
 	if rt.Schema == nil {
-		return nil, newError(CodeSchemaInvalid, "schema runtime is required", "Fix schema.yaml and try again", nil)
+		return nil, svcerr.New(codes.ErrSchemaInvalid, "schema runtime is required").WithSuggestion("Fix schema.yaml and try again")
 	}
 	sch := rt.Schema
 
@@ -88,7 +73,7 @@ func EnsureDaily(rt *vaultruntime.Runtime, req EnsureDailyRequest) (*EnsureDaily
 	if templateID != "" {
 		templateFile, err := schema.ResolveTypeTemplateFile(sch, "date", templateID)
 		if err != nil {
-			return nil, newError(CodeInvalidInput, err.Error(), "Use `rvn schema template list --core date` to see available template IDs", err)
+			return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use `rvn schema template list --core date` to see available template IDs")
 		}
 		created, err = pages.CreateDailyNoteWithTemplate(
 			vaultPath,
@@ -100,7 +85,7 @@ func EnsureDaily(rt *vaultruntime.Runtime, req EnsureDailyRequest) (*EnsureDaily
 			vaultCfg.ProtectedPrefixes,
 		)
 		if err != nil {
-			return nil, newError(CodeFileWriteErr, "failed to create daily note", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create daily note", err)
 		}
 	} else {
 		created, err = pages.CreateDailyNoteWithSchema(
@@ -113,7 +98,7 @@ func EnsureDaily(rt *vaultruntime.Runtime, req EnsureDailyRequest) (*EnsureDaily
 			vaultCfg.ProtectedPrefixes,
 		)
 		if err != nil {
-			return nil, newError(CodeFileWriteErr, "failed to create daily note", "", err)
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create daily note", err)
 		}
 	}
 
@@ -159,16 +144,16 @@ type DateHubResult struct {
 
 func DateHub(rt *vaultruntime.Runtime, req DateHubRequest) (*DateHubResult, error) {
 	if err := vaultruntime.Require(rt); err != nil {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if rt.VaultCfg == nil {
-		return nil, newError(CodeConfigInvalid, "vault config runtime is required", "Fix raven.yaml and try again", nil)
+		return nil, svcerr.New(codes.ErrConfigInvalid, "vault config runtime is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	vaultCfg := rt.VaultCfg
 
 	targetDate, err := vault.ParseDateArg(strings.TrimSpace(req.DateArg))
 	if err != nil {
-		return nil, newError(CodeInvalidInput, err.Error(), "Use today/yesterday/tomorrow or YYYY-MM-DD", err)
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use today/yesterday/tomorrow or YYYY-MM-DD")
 	}
 
 	dateStr := vault.FormatDateISO(targetDate)
@@ -182,20 +167,20 @@ func DateHub(rt *vaultruntime.Runtime, req DateHubRequest) (*DateHubResult, erro
 	}
 
 	if err := rt.OpenDB(); err != nil {
-		return nil, newError(CodeDatabaseError, "failed to open database", "Run 'rvn reindex' to rebuild the database", err)
+		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to open database", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 	}
 	db := rt.DB
 
 	dailyNote, err := db.GetObject(result.DailyNoteID)
 	if err != nil {
-		return nil, newError(CodeQueryFailed, "failed to query daily note", "", err)
+		return nil, svcerr.Wrap(codes.ErrQueryFailed, "failed to query daily note", err)
 	}
 	result.DailyNote = dailyNote
 	result.DailyExists = dailyNote != nil
 
 	items, err := db.QueryDateIndex(dateStr)
 	if err != nil {
-		return nil, newError(CodeQueryFailed, "failed to query date index", "", err)
+		return nil, svcerr.Wrap(codes.ErrQueryFailed, "failed to query date index", err)
 	}
 
 	associations := make([]DateAssociation, 0, len(items))
@@ -211,13 +196,13 @@ func DateHub(rt *vaultruntime.Runtime, req DateHubRequest) (*DateHubResult, erro
 		case "trait":
 			trait, err := db.GetTrait(item.SourceID)
 			if err != nil {
-				return nil, newError(CodeQueryFailed, fmt.Sprintf("failed to query trait %s", item.SourceID), "", err)
+				return nil, svcerr.Wrap(codes.ErrQueryFailed, fmt.Sprintf("failed to query trait %s", item.SourceID), err)
 			}
 			assoc.Trait = trait
 		case "object":
 			obj, err := db.GetObject(item.SourceID)
 			if err != nil {
-				return nil, newError(CodeQueryFailed, fmt.Sprintf("failed to query object %s", item.SourceID), "", err)
+				return nil, svcerr.Wrap(codes.ErrQueryFailed, fmt.Sprintf("failed to query object %s", item.SourceID), err)
 			}
 			assoc.Object = obj
 		}
@@ -227,7 +212,7 @@ func DateHub(rt *vaultruntime.Runtime, req DateHubRequest) (*DateHubResult, erro
 
 	backlinks, err := db.Backlinks(result.DailyNoteID)
 	if err != nil {
-		return nil, newError(CodeQueryFailed, "failed to query backlinks", "", err)
+		return nil, svcerr.Wrap(codes.ErrQueryFailed, "failed to query backlinks", err)
 	}
 	result.Backlinks = backlinks
 	return result, nil

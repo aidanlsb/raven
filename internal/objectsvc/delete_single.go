@@ -3,10 +3,12 @@ package objectsvc
 import (
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -40,13 +42,13 @@ func PreviewDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 
 func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, *deleteTarget, error) {
 	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, nil, newError(ErrorInvalidInput, "vault path is required", "", nil, err)
+		return nil, nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if req.VaultConfig == nil {
-		return nil, nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	if strings.TrimSpace(req.Reference) == "" {
-		return nil, nil, newError(ErrorInvalidInput, "reference or file path is required", "Usage: rvn delete <reference-or-file-path>", nil, nil)
+		return nil, nil, svcerr.New(codes.ErrInvalidInput, "reference or file path is required").WithSuggestion("Usage: rvn delete <reference-or-file-path>")
 	}
 
 	filePath, relPath, isFile, err := resolveLiteralNonMarkdownFileForMutation(req.Runtime, req.Reference)
@@ -62,7 +64,7 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 			return nil, nil, resolveErr
 		}
 		if resolved.IsSection {
-			return nil, nil, newError(ErrorInvalidInput, "delete only supports file-level objects", "Use a file-level object ID without a section fragment", nil, nil)
+			return nil, nil, svcerr.New(codes.ErrInvalidInput, "delete only supports file-level objects").WithSuggestion("Use a file-level object ID without a section fragment")
 		}
 		target, err = deleteTargetFromFilePath(req.VaultPath, req.VaultConfig, resolved.FilePath, resolved.ObjectID)
 	}
@@ -71,14 +73,14 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 	}
 
 	if err := req.Runtime.OpenDB(); err != nil {
-		return nil, nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
+		return nil, nil, svcerr.Wrap(codes.ErrDatabase, "failed to open index database", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 	}
 
 	var backlinks []model.Reference
 	if target.RavenObject {
 		backlinks, err = req.Runtime.DB.Backlinks(target.ObjectID)
 		if err != nil {
-			return nil, nil, newError(ErrorDatabase, "failed to read backlinks", "Run 'rvn reindex' to rebuild the database", nil, err)
+			return nil, nil, svcerr.Wrap(codes.ErrDatabase, "failed to read backlinks", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 		}
 	}
 

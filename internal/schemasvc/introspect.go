@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -120,7 +122,7 @@ func FullSchema(rt *vaultruntime.Runtime) (*SchemaResult, error) {
 	}
 
 	if rt.VaultCfg == nil {
-		return nil, newError(ErrorConfigInvalid, "failed to load raven.yaml: vault config runtime is required", "Fix raven.yaml and try again", nil, nil)
+		return nil, svcerr.New(codes.ErrConfigInvalid, "failed to load raven.yaml: vault config runtime is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	vaultCfg := rt.VaultCfg
 
@@ -248,7 +250,7 @@ func CoreByName(rt *vaultruntime.Runtime, coreTypeName string) (*CoreTypeResult,
 		return nil, err
 	}
 	if !schema.IsBuiltinType(coreTypeName) {
-		return nil, newError(ErrorTypeNotFound, fmt.Sprintf("core type '%s' not found", coreTypeName), "Available core types: date, page, section", nil, nil)
+		return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("core type '%s' not found", coreTypeName)).WithSuggestion("Available core types: date, page, section")
 	}
 	return &CoreTypeResult{Core: buildCoreTypeSchema(coreTypeName, sch.Core[coreTypeName])}, nil
 }
@@ -265,7 +267,7 @@ func TypeByName(rt *vaultruntime.Runtime, typeName string) (*TypeResult, error) 
 
 	typeDef, ok := sch.Types[typeName]
 	if !ok {
-		return nil, newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "Run 'rvn schema types' to see available types", nil, nil)
+		return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName)).WithSuggestion("Run 'rvn schema types' to see available types")
 	}
 
 	return &TypeResult{Type: buildTypeSchema(typeName, typeDef, false)}, nil
@@ -279,7 +281,7 @@ func TraitByName(rt *vaultruntime.Runtime, traitName string) (*TraitResult, erro
 
 	traitDef, ok := sch.Traits[traitName]
 	if !ok {
-		return nil, newError(ErrorTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "Run 'rvn schema traits' to see available traits", nil, nil)
+		return nil, svcerr.New(codes.ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName)).WithSuggestion("Run 'rvn schema traits' to see available traits")
 	}
 
 	return &TraitResult{Trait: buildTraitSchema(traitName, traitDef)}, nil
