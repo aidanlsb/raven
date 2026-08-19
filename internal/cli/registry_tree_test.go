@@ -195,7 +195,7 @@ func TestSchemaUpdateHelpDirectsTypeAndValueRemapsToConvert(t *testing.T) {
 		if !ok {
 			t.Fatalf("command missing for path %q", path)
 		}
-		if !strings.Contains(cmd.Long, "rejects --type and --values") {
+		if !strings.Contains(cmd.Long, "--type and --values are rejected") {
 			t.Fatalf("%s help does not reject update remaps:\n%s", path, cmd.Long)
 		}
 		if !strings.Contains(cmd.Long, "schema convert") || !strings.Contains(cmd.Long, "--map-json") {
