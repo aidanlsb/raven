@@ -108,7 +108,7 @@ func RemoveTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string, c
 		}
 		if currentDefault, ok := typeNode["default_template"].(string); ok && currentDefault == templateID {
 			if !clearDefault {
-				return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("template '%s' is the default for type '%s'", templateID, typeName)).WithSuggestion("Re-run with --clear-default, or change the default with `rvn schema template bind <template_id> --type "+typeName+" --default`")
+				return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("template '%s' is the default for type '%s'", templateID, typeName)).WithSuggestion("Re-run with --clear-default, or change the default with `rvn schema template bind <template_id> --type " + typeName + " --default`")
 			}
 			delete(typeNode, "default_template")
 		}
@@ -137,7 +137,7 @@ func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID strin
 		typeNode := schemadoc.EnsureMap(typesNode, typeName)
 
 		if templateID == "" {
-			return svcerr.New(codes.ErrInvalidInput, "default requires template_id").WithSuggestion("Use: rvn schema template bind <template_id> --type "+typeName+" --default")
+			return svcerr.New(codes.ErrInvalidInput, "default requires template_id").WithSuggestion("Use: rvn schema template bind <template_id> --type " + typeName + " --default")
 		}
 		if !containsTemplateID(typeDef.Templates, templateID) {
 			return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("type '%s' does not include template '%s'", typeName, templateID)).WithSuggestion("Use `rvn schema template list --type " + typeName + "` to see available template IDs")
@@ -232,7 +232,7 @@ func RemoveCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID strin
 		}
 		if currentDefault, ok := typeNode["default_template"].(string); ok && currentDefault == templateID {
 			if !clearDefault {
-				return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("template '%s' is the default for core type '%s'", templateID, coreTypeName)).WithSuggestion("Re-run with --clear-default, or change the default with `rvn schema template bind <template_id> --core "+coreTypeName+" --default`")
+				return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("template '%s' is the default for core type '%s'", templateID, coreTypeName)).WithSuggestion("Re-run with --clear-default, or change the default with `rvn schema template bind <template_id> --core " + coreTypeName + " --default`")
 			}
 			delete(typeNode, "default_template")
 		}
@@ -257,7 +257,7 @@ func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID s
 		coreNode := schemadoc.EnsureMap(doc.Root(), "core")
 		typeNode := schemadoc.EnsureMap(coreNode, coreTypeName)
 		if templateID == "" {
-			return svcerr.New(codes.ErrInvalidInput, "default requires template_id").WithSuggestion("Use: rvn schema template bind <template_id> --core "+coreTypeName+" --default")
+			return svcerr.New(codes.ErrInvalidInput, "default requires template_id").WithSuggestion("Use: rvn schema template bind <template_id> --core " + coreTypeName + " --default")
 		}
 		if !containsTemplateID(coreDef.Templates, templateID) {
 			return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("core type '%s' does not include template '%s'", coreTypeName, templateID)).WithSuggestion("Use `rvn schema template list --core " + coreTypeName + "` to see available template IDs")
