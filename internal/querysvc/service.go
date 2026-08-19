@@ -32,7 +32,6 @@ type SavedQueryInfo struct {
 	Query       string
 	Args        []string
 	Description string
-	Options     *config.QueryOptions
 }
 
 // Payload returns the transport-neutral JSON representation of a saved query. It
@@ -45,9 +44,6 @@ func (q SavedQueryInfo) Payload() map[string]interface{} {
 		"query":       q.Query,
 		"args":        q.Args,
 		"description": q.Description,
-	}
-	if !q.Options.IsEmpty() {
-		data["options"] = q.Options
 	}
 	return data
 }
@@ -75,7 +71,6 @@ type SetRequest struct {
 	QueryString string
 	Args        []string
 	Description string
-	Options     *config.QueryOptions
 }
 
 type SetStatus string
@@ -180,10 +175,6 @@ func Set(rt *vaultruntime.Runtime, req SetRequest) (*SetResult, error) {
 		Query:       queryStr,
 		Args:        declaredArgs,
 		Description: req.Description,
-		Options:     cloneQueryOptions(req.Options),
-	}
-	if next.Options.IsEmpty() {
-		next.Options = nil
 	}
 
 	status := SetStatusCreated
@@ -260,7 +251,6 @@ func savedQueryInfo(name string, q *config.SavedQuery) SavedQueryInfo {
 		Query:       q.Query,
 		Args:        append([]string(nil), q.Args...),
 		Description: q.Description,
-		Options:     cloneQueryOptions(q.Options),
 	}
 }
 
@@ -279,58 +269,7 @@ func savedQueriesEqual(a, b *config.SavedQuery) bool {
 			return false
 		}
 	}
-	return queryOptionsEqual(a.Options, b.Options)
-}
-
-func cloneQueryOptions(in *config.QueryOptions) *config.QueryOptions {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	out.Apply = append([]string(nil), in.Apply...)
-	return &out
-}
-
-func queryOptionsEqual(a, b *config.QueryOptions) bool {
-	if a.IsEmpty() && b.IsEmpty() {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	if !boolPtrEqual(a.Refresh, b.Refresh) ||
-		!boolPtrEqual(a.IDs, b.IDs) ||
-		!intPtrEqual(a.Limit, b.Limit) ||
-		!intPtrEqual(a.Offset, b.Offset) ||
-		!boolPtrEqual(a.CountOnly, b.CountOnly) ||
-		!boolPtrEqual(a.Confirm, b.Confirm) ||
-		!boolPtrEqual(a.Pipe, b.Pipe) ||
-		!boolPtrEqual(a.Browse, b.Browse) {
-		return false
-	}
-	if len(a.Apply) != len(b.Apply) {
-		return false
-	}
-	for i := range a.Apply {
-		if a.Apply[i] != b.Apply[i] {
-			return false
-		}
-	}
 	return true
-}
-
-func boolPtrEqual(a, b *bool) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
-}
-
-func intPtrEqual(a, b *int) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
 }
 
 func NormalizeArgs(args []string) ([]string, error) {

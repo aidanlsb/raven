@@ -8,7 +8,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -86,6 +85,9 @@ Boolean operators:
 
 Saved query inputs must be declared with args: in raven.yaml when using {{args.<name>}}.
 You can then pass inputs either by position (following args order) or as key=value pairs.
+Saved queries store only their RQL definition, declared args, and description.
+Pass execution flags such as --refresh, --limit, --apply, and --confirm each time
+you invoke the saved query.
 
 Use --browse to open an interactive Raven picker with filtering, preview, and
 editor handoff for the selected result.
@@ -111,10 +113,8 @@ Examples:
 
 		rawQuery := joinQueryArgs(args)
 
-		// Saved-query resolution and option merging both live in querysvc so the
-		// CLI never reimplements them: it supplies only the flags the user set
-		// explicitly, and querysvc overlays them on any saved-query defaults and
-		// returns the resolved query string used for human rendering.
+		// Saved-query resolution lives in querysvc so the CLI never reimplements
+		// it. Runtime behavior comes only from flags on this invocation.
 		rt, err := vaultruntime.New(getVaultPath(), vaultruntime.Options{SkipSchema: true})
 		if err != nil {
 			return handleCanonicalFailure(commandexec.Failure(
@@ -130,7 +130,7 @@ Examples:
 			return handleCanonicalFailure(commandexec.FromServiceError(err))
 		}
 
-		browse := effectiveQueryBrowse(runOpts.Browse, cmd.Flags().Changed("browse"))
+		browse := runOpts.Browse
 		SetPipeFormat(runOpts.Pipe)
 		if browse {
 			if handled, err := validateInteractiveBrowse(true); handled || err != nil {
@@ -260,11 +260,10 @@ func joinQueryArgs(args []string) string {
 	return strings.Join(args, " ")
 }
 
-// savedQueryOptionsFromFlags builds a QueryOptions from the flags the user set
-// explicitly on cmd. It is used both to persist saved-query defaults and to
-// supply the explicit overrides that querysvc merges over stored defaults.
-func savedQueryOptionsFromFlags(cmd *cobra.Command) *config.QueryOptions {
-	options := &config.QueryOptions{}
+// savedQueryOptionsFromFlags builds invocation-scoped query options from only
+// the flags the user explicitly set on cmd.
+func savedQueryOptionsFromFlags(cmd *cobra.Command) *querysvc.RunOptionOverrides {
+	options := &querysvc.RunOptionOverrides{}
 	if cmd.Flags().Changed("refresh") {
 		value, _ := cmd.Flags().GetBool("refresh")
 		options.Refresh = &value

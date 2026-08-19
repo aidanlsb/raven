@@ -67,9 +67,38 @@ func MatchInvocation(vaultCfg *config.VaultConfig, rawQueryString string) (name 
 	return tokens[0], q, tokens[1:], true
 }
 
-// RunOptions holds the effective options for a `rvn query` invocation after
-// merging explicit flags over a saved query's stored defaults, plus the
-// resolved query string used for rendering.
+// RunOptionOverrides holds the runtime flags explicitly supplied for one
+// `rvn query` invocation. Saved query definitions never populate these fields.
+type RunOptionOverrides struct {
+	Refresh   *bool
+	IDs       *bool
+	Limit     *int
+	Offset    *int
+	CountOnly *bool
+	Apply     []string
+	Confirm   *bool
+	Pipe      *bool
+	Browse    *bool
+}
+
+// IsEmpty reports whether no runtime query flags were supplied.
+func (o *RunOptionOverrides) IsEmpty() bool {
+	if o == nil {
+		return true
+	}
+	return o.Refresh == nil &&
+		o.IDs == nil &&
+		o.Limit == nil &&
+		o.Offset == nil &&
+		o.CountOnly == nil &&
+		len(o.Apply) == 0 &&
+		o.Confirm == nil &&
+		o.Pipe == nil &&
+		o.Browse == nil
+}
+
+// RunOptions holds the effective options and resolved query string for one
+// `rvn query` invocation.
 type RunOptions struct {
 	// ResolvedQuery is the executable query string. For a saved query it is the
 	// interpolated query; otherwise it is the raw input unchanged.
@@ -87,19 +116,13 @@ type RunOptions struct {
 	Apply     []string
 	Confirm   bool
 	Browse    bool
-	// Pipe carries the explicit/saved pipe override (nil means auto-detect).
+	// Pipe carries the explicit pipe override (nil means auto-detect).
 	Pipe *bool
 }
 
 // ResolveRunOptions resolves rawQueryString (expanding a saved-query invocation
-// when one is named), and merges the caller's explicit
-// flag values over the saved query's stored option defaults. Explicit values
-// always win; unset explicit fields fall back to saved defaults, then to zero
-// values.
-//
-// It exists so saved-query resolution and option merging live in one shared
-// service rather than being reimplemented in the CLI.
-func ResolveRunOptions(rt *vaultruntime.Runtime, rawQueryString string, explicit *config.QueryOptions) (*RunOptions, error) {
+// when one is named) and applies only the caller's invocation-scoped flags.
+func ResolveRunOptions(rt *vaultruntime.Runtime, rawQueryString string, explicit *RunOptionOverrides) (*RunOptions, error) {
 	vaultCfg, err := runtimeConfig(rt)
 	if err != nil {
 		return nil, err
@@ -107,72 +130,31 @@ func ResolveRunOptions(rt *vaultruntime.Runtime, rawQueryString string, explicit
 
 	name, saved, inputTokens, matched := MatchInvocation(vaultCfg, rawQueryString)
 	resolved := rawQueryString
-	var savedOpts *config.QueryOptions
 	if matched {
 		resolvedQuery, resolveErr := ResolveSavedQuery(name, saved, inputTokens, nil)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
 		resolved = resolvedQuery
-		savedOpts = saved.Options
+	}
+	if explicit == nil {
+		explicit = &RunOptionOverrides{}
 	}
 
-	merged := mergeRunOptions(explicit, savedOpts)
 	return &RunOptions{
 		ResolvedQuery: resolved,
 		IsSaved:       matched,
 		SavedName:     name,
-		Refresh:       derefBool(merged.Refresh),
-		IDs:           derefBool(merged.IDs),
-		Limit:         derefInt(merged.Limit),
-		Offset:        derefInt(merged.Offset),
-		CountOnly:     derefBool(merged.CountOnly),
-		Apply:         merged.Apply,
-		Confirm:       derefBool(merged.Confirm),
-		Browse:        derefBool(merged.Browse),
-		Pipe:          merged.Pipe,
+		Refresh:       derefBool(explicit.Refresh),
+		IDs:           derefBool(explicit.IDs),
+		Limit:         derefInt(explicit.Limit),
+		Offset:        derefInt(explicit.Offset),
+		CountOnly:     derefBool(explicit.CountOnly),
+		Apply:         append([]string(nil), explicit.Apply...),
+		Confirm:       derefBool(explicit.Confirm),
+		Browse:        derefBool(explicit.Browse),
+		Pipe:          explicit.Pipe,
 	}, nil
-}
-
-// mergeRunOptions overlays explicit option values on top of saved defaults,
-// returning a combined options set. Only fields present in explicit override the
-// saved value.
-func mergeRunOptions(explicit, saved *config.QueryOptions) *config.QueryOptions {
-	merged := &config.QueryOptions{}
-	if saved != nil {
-		*merged = *saved
-		merged.Apply = append([]string(nil), saved.Apply...)
-	}
-	if explicit != nil {
-		if explicit.Refresh != nil {
-			merged.Refresh = explicit.Refresh
-		}
-		if explicit.IDs != nil {
-			merged.IDs = explicit.IDs
-		}
-		if explicit.Limit != nil {
-			merged.Limit = explicit.Limit
-		}
-		if explicit.Offset != nil {
-			merged.Offset = explicit.Offset
-		}
-		if explicit.CountOnly != nil {
-			merged.CountOnly = explicit.CountOnly
-		}
-		if explicit.Apply != nil {
-			merged.Apply = append([]string(nil), explicit.Apply...)
-		}
-		if explicit.Confirm != nil {
-			merged.Confirm = explicit.Confirm
-		}
-		if explicit.Pipe != nil {
-			merged.Pipe = explicit.Pipe
-		}
-		if explicit.Browse != nil {
-			merged.Browse = explicit.Browse
-		}
-	}
-	return merged
 }
 
 func derefBool(v *bool) bool {

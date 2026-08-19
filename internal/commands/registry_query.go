@@ -104,6 +104,9 @@ Datetime literals compare as datetimes, for example .value>="2026-03-01T09:30".
 
 Saved query inputs must be declared in the saved query definition when using {{args.<name>}}.
 You can then pass inputs by position (in args order) or as key=value pairs.
+Saved query definitions contain only RQL, declared args, and a description.
+Pass runtime flags such as --refresh, --limit, --apply, and --confirm on each
+query invocation; they are never persisted with the saved query.
 
 Use --ids to output just IDs (one per line) for piping to other commands.
 For link queries, --ids projects each matching edge's source_id.
@@ -163,8 +166,10 @@ For trait queries (trait:...):
 			"rvn query 'type:project .status==active' --apply 'set status=done' --confirm --json",
 			"rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json",
 			"rvn query tasks --json",
+			"rvn query tasks --limit 100 --json",
 			"rvn query project-todos raven --json",
 			"rvn query project-todos project=projects/raven --json",
+			"rvn query open-projects --apply 'set status=done' --confirm --json",
 		},
 		UseCases: []string{
 			"Find items matching specific criteria",
@@ -196,6 +201,11 @@ For trait queries (trait:...):
 	"query_saved_set": {
 		Name:        "query saved set",
 		Description: "Create or replace a saved query in raven.yaml",
+		LongDesc: `Create or replace a named RQL definition in raven.yaml.
+
+Saved queries persist only the query string, declared args, and description.
+Runtime execution flags belong on "rvn query <saved-query>" and cannot be saved
+as part of the definition.`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name for the saved query", Required: true},
 			{Name: "query_string", Description: "Query string (e.g., 'type:project .status==active' or 'trait:due .value<today')", Required: true},
@@ -203,23 +213,12 @@ For trait queries (trait:...):
 		Flags: []FlagMeta{
 			{Name: "description", Description: "Human-readable description", Type: FlagTypeString},
 			{Name: "arg", Description: "Declare saved query input name (repeatable, sets positional order)", Type: FlagTypeStringSlice},
-			{Name: "refresh", Description: "Save --refresh as a default option for this query", Type: FlagTypeBool},
-			{Name: "ids", Description: "Save --ids as a default option for this query", Type: FlagTypeBool},
-			{Name: "limit", Description: "Save a default result limit for this query", Type: FlagTypeInt},
-			{Name: "offset", Description: "Save a default result offset for this query", Type: FlagTypeInt},
-			{Name: "count-only", Description: "Save --count-only as a default option for this query", Type: FlagTypeBool},
-			{Name: "apply", Description: "Save a default bulk operation for this query", Type: FlagTypeStringSlice},
-			{Name: "confirm", Description: "Save --confirm as a default option for this query", Type: FlagTypeBool},
-			{Name: "pipe", Description: "Save pipe-friendly output as a default option for this query", Type: FlagTypeBool},
-			{Name: "no-pipe", Description: "Save human-readable output as a default option for this query", Type: FlagTypeBool},
-			{Name: "browse", Description: "Save interactive browse/open as a default option for this query (applies only on an interactive terminal; JSON and piped output degrade to normal results)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn query saved set tasks 'trait:due' --json",
 			"rvn query saved set overdue 'trait:due .value<today' --json",
 			"rvn query saved set active-projects 'type:project .status==active' --json",
 			"rvn query saved set project-todos 'trait:todo refs([[{{args.project}}]])' --arg project --json",
-			"rvn query saved set open-issues 'type:issue .status==open' --browse --limit 100 --json",
 		},
 	},
 	"query_saved_remove": {

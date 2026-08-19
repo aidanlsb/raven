@@ -247,8 +247,8 @@ func TestSavedQueriesResourceMatchesCommand(t *testing.T) {
 		t.Fatalf("resource queries != command queries\nresource=%#v\ncommand=%#v", resourcePayload["queries"], commandEnvelope.Data["queries"])
 	}
 
-	// Delegating to the shared service must carry the full saved-query shape,
-	// not just name/query/description.
+	// Legacy runtime options remain readable but are not part of the saved
+	// definition exposed by either surface.
 	queries, ok := resourcePayload["queries"].([]interface{})
 	if !ok || len(queries) != 1 {
 		t.Fatalf("expected one saved query, got %#v", resourcePayload["queries"])
@@ -260,8 +260,8 @@ func TestSavedQueriesResourceMatchesCommand(t *testing.T) {
 	if _, ok := first["args"]; !ok {
 		t.Fatalf("expected args in saved query payload: %#v", first)
 	}
-	if _, ok := first["options"]; !ok {
-		t.Fatalf("expected options in saved query payload: %#v", first)
+	if _, ok := first["options"]; ok {
+		t.Fatalf("did not expect legacy options in saved query payload: %#v", first)
 	}
 }
 

@@ -506,15 +506,14 @@ rvn query project-todos project=project/raven --json         # key=value
 
 Saved query placeholders use `{{args.<name>}}` syntax. Every placeholder must be declared with `--arg`, which also fixes the positional input order.
 
-You can also save default query options with the same flags you would pass to `rvn query`:
+Saved queries are reusable definitions: they persist the RQL, declared arguments, and optional description. Pass execution options each time you invoke one:
 
 ```bash
-rvn query saved set open-projects 'type:project .status==active' --browse --limit 100 --json
+rvn query open-projects --limit 100 --json
+rvn query open-projects --apply 'set status=done' --confirm --json
 ```
 
-This stores the RQL separately from the default options in `raven.yaml`; explicit flags passed when running the saved query override those defaults.
-
-A saved `browse` default only applies when the query runs on an interactive terminal. With `--json` or piped output, the query degrades to normal non-interactive output, so saved queries stay safe for scripts and agents.
+Flags such as `--refresh`, `--ids`, `--limit`, `--offset`, `--count-only`, `--apply`, `--confirm`, `--pipe`, `--no-pipe`, and `--browse` are runtime policy and are never stored by `query saved set`.
 
 ### Bulk Operations by Query Type
 

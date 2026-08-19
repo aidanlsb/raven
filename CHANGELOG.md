@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Removed the internal `skillsvc` pass-through layer so skill commands call the shared skills implementation directly.
 - Reference and ref-field post-index resolution now share batching and outcome handling, keeping resolved, missing, and ambiguous behavior aligned.
+- Saved queries now persist only RQL, declared arguments, and descriptions; runtime flags are supplied per invocation, and legacy saved `options` blocks are ignored.
 
 ### Fixed
 - Installation and docs-fetch examples now pin the current v0.0.33 release.

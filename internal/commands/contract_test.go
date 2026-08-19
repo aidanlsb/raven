@@ -284,14 +284,8 @@ func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
 func TestConfirmFlagsHaveExplicitPreviewPolicy(t *testing.T) {
 	t.Parallel()
 
-	confirmFlagNonApplyCommands := map[string]struct{}{
-		"query_saved_set": {},
-	}
 	for commandID, meta := range Registry {
 		if !hasConfirmFlag(meta) {
-			continue
-		}
-		if _, ok := confirmFlagNonApplyCommands[commandID]; ok {
 			continue
 		}
 		if got := PreviewModeForCommandID(commandID); got == PreviewModeNone {
@@ -331,9 +325,6 @@ func TestShouldPreviewByDefaultOnlyEnablesBulkPolicyForBulkInputs(t *testing.T) 
 	}
 	if ShouldPreviewByDefault("edit", map[string]interface{}{"reference": "note/example"}) {
 		t.Fatal("edit applies by default and should not request preview")
-	}
-	if ShouldPreviewByDefault("query_saved_set", map[string]interface{}{"confirm": true}) {
-		t.Fatal("query saved set confirm option should not imply command preview")
 	}
 }
 

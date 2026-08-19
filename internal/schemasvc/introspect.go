@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -59,11 +58,10 @@ type TraitSchema struct {
 }
 
 type SavedQueryInfo struct {
-	Name        string               `json:"name"`
-	Query       string               `json:"query"`
-	Args        []string             `json:"args,omitempty"`
-	Description string               `json:"description,omitempty"`
-	Options     *config.QueryOptions `json:"options,omitempty"`
+	Name        string   `json:"name"`
+	Query       string   `json:"query"`
+	Args        []string `json:"args,omitempty"`
+	Description string   `json:"description,omitempty"`
 }
 
 type TypesHint struct {
@@ -170,7 +168,6 @@ func FullSchema(rt *vaultruntime.Runtime) (*SchemaResult, error) {
 				Query:       q.Query,
 				Args:        q.Args,
 				Description: q.Description,
-				Options:     q.Options,
 			}
 		}
 	}

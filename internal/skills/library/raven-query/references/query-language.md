@@ -210,6 +210,8 @@ type:date .date>=2026-05-01 .date<=today
 - Declare placeholders in query text: `{{args.name}}`
 - Declare matching inputs with `rvn query saved set <name> '<rql>' --arg name --json`
 - Invoke by position or `key=value` inputs
+- Pass runtime flags on each `rvn query <name>` invocation; saved definitions
+  do not persist refresh, output, pagination, browse, or apply policy.
 
 ## Apply support by query kind
 

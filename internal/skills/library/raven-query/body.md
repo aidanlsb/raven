@@ -47,6 +47,9 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - With declared inputs: `rvn query saved set <name> '<rql with {{args.x}}>' --arg x --json`
 - Remove: `rvn query saved remove <name> --json`
 - Run a saved query: `rvn query <name> [inputs...] --json`
+- Saved definitions persist only RQL, declared args, and description. Put
+  `--refresh`, pagination/output flags, `--browse`, and `--apply`/`--confirm`
+  on each `rvn query <name>` invocation.
 
 ## Cross-references
 

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/query"
@@ -46,6 +47,50 @@ func TestLoadVaultConfig(t *testing.T) {
 		}
 		if cfg.GetTemplateDirectory() != "templates/" {
 			t.Errorf("expected default directories.template 'templates/', got %q", cfg.GetTemplateDirectory())
+		}
+	})
+
+	t.Run("ignores legacy saved query runtime options", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+		content := `queries:
+  open-projects:
+    query: "type:project .status==active"
+    args: [status]
+    description: "Active projects"
+    options:
+      refresh: true
+      ids: true
+      limit: 10
+      offset: 2
+      count_only: true
+      apply: ["set status=done"]
+      confirm: true
+      pipe: true
+      browse: true
+`
+		if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("legacy runtime options must not fail config load: %v", err)
+		}
+		saved := cfg.Queries["open-projects"]
+		if saved == nil || saved.Query != "type:project .status==active" {
+			t.Fatalf("saved query definition = %#v", saved)
+		}
+
+		if err := SaveVaultConfig(tmpDir, cfg); err != nil {
+			t.Fatalf("SaveVaultConfig() unexpected error: %v", err)
+		}
+		migrated, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("read migrated config: %v", err)
+		}
+		if strings.Contains(string(migrated), "options:") {
+			t.Fatalf("legacy runtime options persisted after save:\n%s", migrated)
 		}
 	})
 

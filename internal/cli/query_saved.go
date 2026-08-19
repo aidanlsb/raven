@@ -53,52 +53,7 @@ func buildQuerySavedSetArgs(cmd *cobra.Command, args []string) (map[string]inter
 		"arg":          declaredArgs,
 		"description":  description,
 	}
-	addSavedQueryOptionArgs(cmd, argsMap)
 	return argsMap, nil
-}
-
-func addSavedQueryOptionArgs(cmd *cobra.Command, argsMap map[string]interface{}) {
-	if cmd.Flags().Changed("refresh") {
-		value, _ := cmd.Flags().GetBool("refresh")
-		argsMap["refresh"] = value
-	}
-	if cmd.Flags().Changed("ids") {
-		value, _ := cmd.Flags().GetBool("ids")
-		argsMap["ids"] = value
-	}
-	if cmd.Flags().Changed("limit") {
-		value, _ := cmd.Flags().GetInt("limit")
-		argsMap["limit"] = value
-	}
-	if cmd.Flags().Changed("offset") {
-		value, _ := cmd.Flags().GetInt("offset")
-		argsMap["offset"] = value
-	}
-	if cmd.Flags().Changed("count-only") {
-		value, _ := cmd.Flags().GetBool("count-only")
-		argsMap["count-only"] = value
-	}
-	if cmd.Flags().Changed("apply") {
-		value, _ := cmd.Flags().GetStringArray("apply")
-		argsMap["apply"] = value
-	}
-	if cmd.Flags().Changed("confirm") {
-		value, _ := cmd.Flags().GetBool("confirm")
-		argsMap["confirm"] = value
-	}
-	if cmd.Flags().Changed("pipe") {
-		value, _ := cmd.Flags().GetBool("pipe")
-		argsMap["pipe"] = value
-	} else if cmd.Flags().Changed("no-pipe") {
-		noPipe, _ := cmd.Flags().GetBool("no-pipe")
-		if noPipe {
-			argsMap["pipe"] = false
-		}
-	}
-	if cmd.Flags().Changed("browse") {
-		value, _ := cmd.Flags().GetBool("browse")
-		argsMap["browse"] = value
-	}
 }
 
 func renderQuerySavedList(_ *cobra.Command, result commandexec.Result) error {
