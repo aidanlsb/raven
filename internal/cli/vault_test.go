@@ -46,82 +46,6 @@ func TestVaultRows(t *testing.T) {
 	}
 }
 
-func TestResolveCurrentVault(t *testing.T) {
-	t.Run("prefers active vault", func(t *testing.T) {
-		cfg := &config.Config{
-			DefaultVault: "work",
-			Vaults: map[string]string{
-				"work":     "/vault/work",
-				"personal": "/vault/personal",
-			},
-		}
-		state := &config.State{ActiveVault: "personal"}
-
-		got, err := resolveCurrentVault(cfg, state)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got.Name != "personal" {
-			t.Fatalf("expected name=personal, got %q", got.Name)
-		}
-		if got.Path != "/vault/personal" {
-			t.Fatalf("expected path=/vault/personal, got %q", got.Path)
-		}
-		if got.Source != "active_vault" {
-			t.Fatalf("expected source=active_vault, got %q", got.Source)
-		}
-	})
-
-	t.Run("errors when active vault is missing", func(t *testing.T) {
-		cfg := &config.Config{
-			DefaultVault: "work",
-			Vaults: map[string]string{
-				"work": "/vault/work",
-			},
-		}
-		state := &config.State{ActiveVault: "personal"}
-
-		got, err := resolveCurrentVault(cfg, state)
-		if err == nil {
-			t.Fatalf("expected error, got %#v", got)
-		}
-		if !strings.Contains(err.Error(), "active vault 'personal' not found in config") {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("uses default when active vault is empty", func(t *testing.T) {
-		cfg := &config.Config{
-			DefaultVault: "work",
-			Vaults: map[string]string{
-				"work": "/vault/work",
-			},
-		}
-		state := &config.State{}
-
-		got, err := resolveCurrentVault(cfg, state)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got.Name != "work" || got.Path != "/vault/work" {
-			t.Fatalf("current vault = %#v, want work default", got)
-		}
-		if got.Source != "default_vault" {
-			t.Fatalf("expected source=default_vault, got %q", got.Source)
-		}
-	})
-
-	t.Run("errors when neither active nor default is available", func(t *testing.T) {
-		cfg := &config.Config{}
-		state := &config.State{ActiveVault: "missing"}
-
-		_, err := resolveCurrentVault(cfg, state)
-		if err == nil {
-			t.Fatalf("expected error")
-		}
-	})
-}
-
 func TestVaultUseCreatesStateFile(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
@@ -235,6 +159,9 @@ func TestVaultListHumanOutputShowsConfiguredVaults(t *testing.T) {
 	}
 	if !strings.Contains(text, "personal") {
 		t.Fatalf("expected personal vault in output, got:\n%s", text)
+	}
+	if !strings.Contains(text, "current:") || !strings.Contains(text, "active_vault") {
+		t.Fatalf("expected resolved current vault details in output, got:\n%s", text)
 	}
 }
 

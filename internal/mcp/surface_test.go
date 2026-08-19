@@ -374,6 +374,67 @@ func TestCompactInvokeUsesWrapperVaultNameOverride(t *testing.T) {
 	}
 }
 
+func TestCompactInvokeVaultInspectAliasesRemainCompatible(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	vaultPath := filepath.Join(root, "vault")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	configPath := filepath.Join(root, "config.toml")
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(
+		"default_vault = \"work\"\n[vaults]\nwork = %q\n",
+		vaultPath,
+	)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	server := NewServerWithBaseArgs([]string{
+		"--config", configPath,
+		"--vault-path", vaultPath,
+	})
+
+	parseData := func(raw string) map[string]interface{} {
+		t.Helper()
+		var envelope struct {
+			OK   bool                   `json:"ok"`
+			Data map[string]interface{} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
+			t.Fatalf("unmarshal response: %v\n%s", err, raw)
+		}
+		if !envelope.OK {
+			t.Fatalf("response failed: %s", raw)
+		}
+		return envelope.Data
+	}
+
+	currentOut, currentErr := server.callCompactInvoke(map[string]interface{}{
+		"command": "vault_current",
+	})
+	if currentErr {
+		t.Fatalf("vault_current alias failed: %s", currentOut)
+	}
+	current, ok := parseData(currentOut)["current_vault"].(map[string]interface{})
+	if !ok || current["name"] != "work" || current["path"] != vaultPath {
+		t.Fatalf("vault_current alias result = %s", currentOut)
+	}
+
+	for _, invocation := range []map[string]interface{}{
+		{"command": "vault_path"},
+		{"command": "vault_list", "args": map[string]interface{}{"path-only": true}},
+	} {
+		out, isErr := server.callCompactInvoke(invocation)
+		if isErr {
+			t.Fatalf("%s failed: %s", invocation["command"], out)
+		}
+		data := parseData(out)
+		if data["path"] != vaultPath {
+			t.Fatalf("%s path = %#v, want %q", invocation["command"], data["path"], vaultPath)
+		}
+	}
+}
+
 func TestCompactInvokeRejectsConflictingVaultOverrides(t *testing.T) {
 	t.Parallel()
 	server := NewServer("")

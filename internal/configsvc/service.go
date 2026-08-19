@@ -408,12 +408,13 @@ func ResolveCurrentVault(cfg *config.Config, state *config.State) (*CurrentVault
 }
 
 type VaultListResult struct {
-	ConfigPath    string     `json:"config_path"`
-	StatePath     string     `json:"state_path"`
-	DefaultVault  string     `json:"default_vault"`
-	ActiveVault   string     `json:"active_vault"`
-	ActiveMissing bool       `json:"active_missing"`
-	Vaults        []VaultRow `json:"vaults"`
+	ConfigPath    string            `json:"config_path"`
+	StatePath     string            `json:"state_path"`
+	DefaultVault  string            `json:"default_vault"`
+	ActiveVault   string            `json:"active_vault"`
+	ActiveMissing bool              `json:"active_missing"`
+	Current       *CurrentVaultInfo `json:"current_vault"`
+	Vaults        []VaultRow        `json:"vaults"`
 }
 
 func ListVaults(opts ContextOptions) (*VaultListResult, error) {
@@ -422,12 +423,17 @@ func ListVaults(opts ContextOptions) (*VaultListResult, error) {
 		return nil, err
 	}
 	rows, defaultName, activeName, activeMissing := VaultRows(ctx.Cfg, ctx.State)
+	// Listing remains diagnostic when no valid current route exists. Callers can
+	// distinguish a stale active name via ActiveMissing and otherwise see a nil
+	// Current when neither active nor default resolves.
+	current, _ := ResolveCurrentVault(ctx.Cfg, ctx.State)
 	return &VaultListResult{
 		ConfigPath:    ctx.ConfigPath,
 		StatePath:     ctx.StatePath,
 		DefaultVault:  defaultName,
 		ActiveVault:   activeName,
 		ActiveMissing: activeMissing,
+		Current:       current,
 		Vaults:        rows,
 	}, nil
 }

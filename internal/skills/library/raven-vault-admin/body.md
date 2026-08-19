@@ -24,15 +24,15 @@ Use explicit `--vault` or `--vault-path` when operating across multiple vaults o
 
 ## Unknown environment first pass
 
-1. Resolve the current vault: `rvn vault current --json`, `rvn vault path --json`.
-2. Inspect what is configured: `rvn vault list --json`, `rvn vault stats --json`.
+1. Inspect configured vaults and the current selection: `rvn vault list --json`.
+2. If a script needs only the resolved path, use `rvn vault list --path-only --json`; use `rvn vault stats --json` for index details.
 3. If routing is still unclear, inspect machine config: `rvn config show --json`.
 
 ## Typical flow
 
 1. Bootstrap or register vaults (`rvn init`, `rvn vault add`).
 2. Set routing defaults (`rvn vault use`, optional `rvn vault pin`).
-3. Confirm current resolution (`rvn vault current`, `rvn vault path`, `rvn vault stats`).
+3. Confirm current resolution (`rvn vault list`, optional `--path-only`, and `rvn vault stats`).
 4. Manage machine-level settings with `rvn config show`, `rvn config set`, `rvn config unset`.
 5. Manage vault-local `raven.yaml` settings with `rvn vault config ...`.
 

@@ -145,11 +145,10 @@ func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Re
 	// where args were validated by the invoker before the handler's own
 	// empty-path guard fired. Emit the stable VAULT_NOT_SPECIFIED code
 	// because it is the documented contract for a missing vault (see
-	// AGENTS.md and internal/codes) and matches the code the specialized
-	// `vault_path` and read handlers already emitted for this condition;
+	// AGENTS.md and internal/codes) and matches existing CLI/MCP behavior;
 	// INVALID_INPUT was a misleading defensive default in the removed
 	// per-handler boilerplate.
-	if commands.RequiresVault(req.CommandID) && strings.TrimSpace(req.VaultPath) == "" {
+	if commands.RequiresVaultForInvocation(req.CommandID, req.Args) && strings.TrimSpace(req.VaultPath) == "" {
 		return req, commandexec.Failure(
 			codes.ErrVaultNotSpecified,
 			"no vault path resolved",

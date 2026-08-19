@@ -241,6 +241,12 @@ This tool list is generated from the command registry and should stay in sync wi
 - `schema_add_type`
 
 Use canonical registry command IDs with `raven_describe` and `raven_invoke`.
+For machine-level vault inspection, use `vault_list`. Its result includes the
+configured vaults plus `default_vault`, `active_vault`, and `current_vault`.
+Pass `args: {"path-only": true}` when only the resolved path is needed. The
+older `vault_current` and `vault_path` IDs remain invokable compatibility
+aliases but are omitted from discovery. Path-only mode is vault-scoped, so MCP
+still requires a per-call target, session focus, or launch pin.
 
 `raven_describe` returns both a short `summary` and a fuller `description` from the command registry. Use `description` for command-specific syntax guidance, such as Raven query language examples for `query`.
 

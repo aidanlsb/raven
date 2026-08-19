@@ -15,7 +15,6 @@ rvn vault add work /path/to/work-vault --pin --json
 rvn vault add personal /path/to/personal-vault --json
 rvn vault use work --json
 rvn vault list --json
-rvn vault current --json
 ```
 
 Use `--pin` when the newly added vault should become `default_vault`.
@@ -33,14 +32,17 @@ If `active_vault` is set but missing from `[vaults]`, resolution fails instead
 of falling back to `default_vault`. Repair the selection with `rvn vault use
 <name>` or `rvn vault clear`.
 
-## Inspect resolved vault path
+## Inspect vault routing
 
 ```bash
-rvn vault path --json
+rvn vault list --json
+rvn vault list --path-only --json
 rvn vault stats --json
 ```
 
-Use `vault path` to confirm resolution and `vault stats` to confirm you are pointed at the expected index.
+Use `vault list` to inspect configured, active, default, and current selections
+together. Add `--path-only` when only the resolved path is needed, and use
+`vault stats` to confirm you are pointed at the expected index.
 
 ## Global machine config lifecycle
 
@@ -105,8 +107,7 @@ If the target is currently default or active, clear those bindings in the same c
 
 ```bash
 rvn vault list --json
-rvn vault current --json
-rvn vault path --json
+rvn vault list --path-only --json
 rvn vault stats --json
 ```
 

@@ -4,12 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/configsvc"
 )
 
 func TestHandleConfigShowReturnsEffectiveDefaults(t *testing.T) {
@@ -46,7 +45,7 @@ func TestHandleConfigShowReturnsEffectiveDefaults(t *testing.T) {
 	}
 }
 
-func TestHandleVaultCurrentRejectsMissingActiveVault(t *testing.T) {
+func TestHandleVaultListSurfacesMissingActiveVault(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -68,24 +67,56 @@ func TestHandleVaultCurrentRejectsMissingActiveVault(t *testing.T) {
 		t.Fatalf("save state: %v", err)
 	}
 
-	result := HandleVaultCurrent(context.Background(), commandexec.Request{
+	result := HandleVaultList(context.Background(), commandexec.Request{
+		CommandID:  "vault_current",
 		ConfigPath: configPath,
 		StatePath:  statePath,
 	})
-	if result.OK {
-		t.Fatalf("HandleVaultCurrent() succeeded: %#v", result.Data)
+	if !result.OK {
+		t.Fatalf("HandleVaultList() failed: %+v", result.Error)
 	}
-	if result.Error == nil {
-		t.Fatal("HandleVaultCurrent() returned no error details")
+	data, ok := result.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("data = %#v, want map", result.Data)
 	}
-	if got := result.Error.Code; got != codes.ErrVaultNotFound {
-		t.Fatalf("error code = %q, want %q", got, codes.ErrVaultNotFound)
+	if data["active_missing"] != true {
+		t.Fatalf("active_missing = %#v, want true", data["active_missing"])
 	}
-	if got := result.Error.Message; !strings.Contains(got, "active vault 'personal' not found in config") {
-		t.Fatalf("error message = %q, want missing active vault name", got)
+	if data["active_vault"] != "personal" {
+		t.Fatalf("active_vault = %#v, want personal", data["active_vault"])
 	}
-	if got := result.Error.Suggestion; !strings.Contains(got, "rvn vault clear") || !strings.Contains(got, "rvn vault list") {
-		t.Fatalf("error suggestion = %q, want clear/list guidance", got)
+	if data["current_vault"] != (*configsvc.CurrentVaultInfo)(nil) {
+		t.Fatalf("current_vault = %#v, want nil", data["current_vault"])
+	}
+}
+
+func TestHandleVaultListPathOnlyAndPathAliasShareOutput(t *testing.T) {
+	t.Parallel()
+
+	rawPath := filepath.Join(t.TempDir(), "parent", "..", "vault")
+	wantPath := filepath.Clean(rawPath)
+	for _, req := range []commandexec.Request{
+		{
+			CommandID: "vault_list",
+			VaultPath: rawPath,
+			Args:      map[string]interface{}{"path-only": true},
+		},
+		{
+			CommandID: "vault_path",
+			VaultPath: rawPath,
+		},
+	} {
+		result := HandleVaultList(context.Background(), req)
+		if !result.OK {
+			t.Fatalf("HandleVaultList(%s) failed: %+v", req.CommandID, result.Error)
+		}
+		data, ok := result.Data.(map[string]interface{})
+		if !ok {
+			t.Fatalf("data = %#v, want map", result.Data)
+		}
+		if data["path"] != wantPath || len(data) != 1 {
+			t.Fatalf("HandleVaultList(%s) data = %#v, want only path %q", req.CommandID, data, wantPath)
+		}
 	}
 }
 

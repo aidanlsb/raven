@@ -63,8 +63,15 @@ func HandleConfigUnset(_ context.Context, req commandexec.Request) commandexec.R
 	return commandexec.Success(data, nil)
 }
 
-// HandleVaultList executes the canonical `vault_list` command.
+// HandleVaultList executes the canonical `vault_list` command and its
+// compatibility aliases, `vault_current` and `vault_path`.
 func HandleVaultList(_ context.Context, req commandexec.Request) commandexec.Result {
+	if boolArg(req.Args, "path-only") || req.CommandID == "vault_path" {
+		return commandexec.Success(map[string]interface{}{
+			"path": filepath.Clean(strings.TrimSpace(req.VaultPath)),
+		}, nil)
+	}
+
 	result, err := configsvc.ListVaults(configContextOptions(req))
 	if err != nil {
 		return commandexec.FromServiceErrorWithFallback(err, "")
@@ -75,25 +82,9 @@ func HandleVaultList(_ context.Context, req commandexec.Request) commandexec.Res
 		"default_vault":  result.DefaultVault,
 		"active_vault":   result.ActiveVault,
 		"active_missing": result.ActiveMissing,
+		"current_vault":  result.Current,
 		"vaults":         result.Vaults,
 	}, &commandexec.Meta{Count: len(result.Vaults)})
-}
-
-// HandleVaultCurrent executes the canonical `vault_current` command.
-func HandleVaultCurrent(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := configsvc.CurrentVault(configContextOptions(req))
-	if err != nil {
-		return commandexec.FromServiceErrorWithFallback(err, "Use 'rvn vault use <name>' or 'rvn vault pin <name>'")
-	}
-	return commandexec.Success(map[string]interface{}{
-		"name":           result.Current.Name,
-		"path":           result.Current.Path,
-		"source":         result.Current.Source,
-		"active_vault":   result.ActiveVault,
-		"active_missing": result.Current.ActiveMissing,
-		"config_path":    result.ConfigPath,
-		"state_path":     result.StatePath,
-	}, nil)
 }
 
 // HandleVaultUse executes the canonical `vault_use` command.
@@ -226,14 +217,6 @@ func HandleVaultRemove(_ context.Context, req commandexec.Request) commandexec.R
 		"config_path":     result.ConfigPath,
 		"state_path":      result.StatePath,
 	}, nil)
-}
-
-// HandleVaultPath executes the canonical `vault_path` command. The shared
-// invoker validateRequest step guarantees req.VaultPath is non-empty for
-// vault-scoped commands, so this handler can render the resolved path directly.
-func HandleVaultPath(_ context.Context, req commandexec.Request) commandexec.Result {
-	vaultPath := strings.TrimSpace(req.VaultPath)
-	return commandexec.Success(map[string]interface{}{"path": filepath.Clean(vaultPath)}, nil)
 }
 
 func configContextOptions(req commandexec.Request) configsvc.ContextOptions {

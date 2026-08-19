@@ -20,7 +20,7 @@ func (s *Server) callCanonicalCommandWithContext(ctx context.Context, commandID 
 
 	var vaultCtx *commandexec.VaultContext
 	vaultPath := ""
-	if commands.RequiresVault(commandID) {
+	if commands.RequiresVaultForInvocation(commandID, args) {
 		res, err := s.resolveVaultForInvocation(vaultName, vaultPathOverride)
 		if err != nil {
 			var vErr *vaultResolutionError

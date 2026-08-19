@@ -102,12 +102,14 @@ Clearing default_vault is supported here; set it with
 The active vault is stored in state.toml.
 The default vault is stored in config.toml and used when no active vault is set.
 If the active vault name is not configured, CLI vault resolution fails until it
-is switched or cleared.`,
+is switched or cleared.
+
+Use 'rvn vault list' as the single inspection surface. The legacy 'current' and
+'path' subcommands remain compatibility aliases.`,
 		Examples: []string{
 			"rvn vault --json",
 			"rvn vault list --json",
-			"rvn vault current --json",
-			"rvn vault path --json",
+			"rvn vault list --path-only",
 			"rvn vault stats --json",
 			"rvn vault config show --json",
 			"rvn vault add work /Users/you/work-notes --json",
@@ -130,23 +132,42 @@ is switched or cleared.`,
 	},
 	"vault_list": {
 		Name:        "vault list",
-		Description: "List configured vaults",
+		Description: "Inspect configured and current vaults",
 		VaultScope:  VaultScopeNone,
+		LongDesc: `Inspect configured vaults and the current CLI vault selection.
+
+The full result includes default_vault, active_vault, current_vault, active and
+default markers on every configured vault, and the config/state file paths.
+current_vault is null when no valid active/default selection exists.
+
+Use --path-only to print only the resolved vault path. Path-only mode follows
+normal CLI/MCP vault routing and fails when no vault can be resolved.`,
+		Flags: []FlagMeta{
+			{Name: "path-only", Description: "Print only the resolved current vault path", Type: FlagTypeBool},
+		},
 		Examples: []string{
 			"rvn vault list --json",
+			"rvn vault list --path-only",
+			"rvn vault list --path-only --json",
+		},
+		UseCases: []string{
+			"Inspect configured vaults and active/default/current selection in one response",
+			"Resolve only the selected vault path for a script",
 		},
 	},
 	"vault_current": {
 		Name:        "vault current",
-		Description: "Show the current resolved vault",
+		Description: "Compatibility alias for vault list",
 		VaultScope:  VaultScopeNone,
+		LongDesc:    "Compatibility alias for 'rvn vault list'. Use vault_list for new CLI and MCP integrations.",
 		Examples: []string{
 			"rvn vault current --json",
 		},
 	},
 	"vault_path": {
 		Name:        "vault path",
-		Description: "Print the resolved vault directory path",
+		Description: "Compatibility alias for vault list --path-only",
+		LongDesc:    "Compatibility alias for 'rvn vault list --path-only'. Use vault_list with path-only for new CLI and MCP integrations.",
 		Examples: []string{
 			"rvn vault path --json",
 		},

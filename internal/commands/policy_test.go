@@ -28,6 +28,12 @@ func TestPolicyForCommandID(t *testing.T) {
 			wantInvokable: false,
 			wantDiscover:  false,
 		},
+		{
+			name:          "invokable compatibility alias",
+			commandID:     "vault_current",
+			wantInvokable: true,
+			wantDiscover:  false,
+		},
 	}
 
 	for _, tc := range tests {

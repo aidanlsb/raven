@@ -71,6 +71,77 @@ func TestResolveCurrentVaultRejectsMissingActiveVault(t *testing.T) {
 	}
 }
 
+func TestListVaultsIncludesCurrentSelection(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	statePath := filepath.Join(root, "state.toml")
+	if err := config.SaveTo(configPath, &config.Config{
+		DefaultVault: "work",
+		Vaults: map[string]string{
+			"work":     "/vault/work",
+			"personal": "/vault/personal",
+		},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	if err := config.SaveState(statePath, &config.State{
+		Version:     config.StateVersion,
+		ActiveVault: "personal",
+	}); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	result, err := ListVaults(ContextOptions{
+		ConfigPathOverride: configPath,
+		StatePathOverride:  statePath,
+	})
+	if err != nil {
+		t.Fatalf("ListVaults() error = %v", err)
+	}
+	if result.Current == nil {
+		t.Fatal("ListVaults() Current = nil, want active vault")
+	}
+	if result.Current.Name != "personal" || result.Current.Path != "/vault/personal" || result.Current.Source != "active_vault" {
+		t.Fatalf("ListVaults() Current = %#v", result.Current)
+	}
+}
+
+func TestListVaultsKeepsDiagnosticResultWhenCurrentSelectionIsInvalid(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	statePath := filepath.Join(root, "state.toml")
+	if err := config.SaveTo(configPath, &config.Config{
+		DefaultVault: "work",
+		Vaults:       map[string]string{"work": "/vault/work"},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	if err := config.SaveState(statePath, &config.State{
+		Version:     config.StateVersion,
+		ActiveVault: "missing",
+	}); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	result, err := ListVaults(ContextOptions{
+		ConfigPathOverride: configPath,
+		StatePathOverride:  statePath,
+	})
+	if err != nil {
+		t.Fatalf("ListVaults() error = %v", err)
+	}
+	if !result.ActiveMissing {
+		t.Fatal("ListVaults() ActiveMissing = false, want true")
+	}
+	if result.Current != nil {
+		t.Fatalf("ListVaults() Current = %#v, want nil", result.Current)
+	}
+}
+
 func TestAddVaultPersistsLoadedSinglePathMigration(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
