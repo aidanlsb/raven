@@ -2,13 +2,25 @@ package readsvc
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/resolver"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func writeCorruptSchemaVault(t *testing.T) string {
+	t.Helper()
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("version: 1\ntypes: [unterminated\n"), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+	return vaultPath
+}
 
 type catalogReaderStub struct {
 	generations []int64
@@ -167,7 +179,7 @@ func TestBuildCatalogConsistentRejectsContinuouslyChangingIndex(t *testing.T) {
 func TestCatalogOpensRuntimeDatabaseOnDemand(t *testing.T) {
 	t.Parallel()
 
-	rt := &Runtime{
+	rt := &vaultruntime.Runtime{
 		VaultPath: t.TempDir(),
 		VaultCfg:  &config.VaultConfig{},
 	}
@@ -185,9 +197,9 @@ func TestCatalogOpensRuntimeDatabaseOnDemand(t *testing.T) {
 func TestCatalogBuildsResolverWithDegradedSchema(t *testing.T) {
 	t.Parallel()
 
-	rt, err := NewRuntime(writeCorruptSchemaVault(t), RuntimeOptions{})
+	rt, err := vaultruntime.New(writeCorruptSchemaVault(t), vaultruntime.Options{})
 	if err != nil {
-		t.Fatalf("NewRuntime() error = %v", err)
+		t.Fatalf("vaultruntime.New() error = %v", err)
 	}
 	t.Cleanup(rt.Close)
 	if rt.SchemaLoadErr == nil {

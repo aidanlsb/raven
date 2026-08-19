@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/refresolve"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type OpenTarget struct {
@@ -21,16 +24,15 @@ type OpenFailure struct {
 	Message   string `json:"message"`
 }
 
-func ResolveOpenTarget(rt *Runtime, reference string) (*OpenTarget, error) {
-	resolveOp, err := newResolveOperation(rt)
+func ResolveOpenTarget(rt *vaultruntime.Runtime, reference string) (*OpenTarget, error) {
+	resolveOp, err := refresolve.New(rt)
 	if err != nil {
 		return nil, err
 	}
-	defer resolveOp.Close()
 	return resolveOpenTargetWithOperation(rt, reference, resolveOp)
 }
 
-func resolveOpenTargetWithOperation(rt *Runtime, reference string, resolveOp *resolveOperation) (*OpenTarget, error) {
+func resolveOpenTargetWithOperation(rt *vaultruntime.Runtime, reference string, resolveOp *refresolve.Operation) (*OpenTarget, error) {
 	if rt == nil {
 		return nil, fmt.Errorf("runtime is required")
 	}
@@ -40,13 +42,13 @@ func resolveOpenTargetWithOperation(rt *Runtime, reference string, resolveOp *re
 	}
 
 	var (
-		resolved *ResolveResult
+		resolved *refresolve.ResolveResult
 		err      error
 	)
 	if resolveOp != nil {
-		resolved, err = resolveOp.resolveReferenceWithDynamicDates(ref, false)
+		resolved, err = resolveOp.ResolveDynamic(ref, false)
 	} else {
-		resolved, err = ResolveReferenceWithDynamicDates(ref, rt, false)
+		resolved, err = refresolve.ResolveDynamic(ref, rt, false)
 	}
 	if err != nil {
 		return nil, err
@@ -71,14 +73,13 @@ func resolveOpenTargetWithOperation(rt *Runtime, reference string, resolveOp *re
 	}, nil
 }
 
-func ResolveOpenTargets(rt *Runtime, references []string) ([]OpenTarget, []OpenFailure) {
+func ResolveOpenTargets(rt *vaultruntime.Runtime, references []string) ([]OpenTarget, []OpenFailure) {
 	targets := make([]OpenTarget, 0, len(references))
 	failures := make([]OpenFailure, 0)
-	resolveOp, err := newResolveOperation(rt)
+	resolveOp, err := refresolve.New(rt)
 	if err != nil {
 		return nil, []OpenFailure{{Reference: "", Message: err.Error()}}
 	}
-	defer resolveOp.Close()
 
 	for _, reference := range references {
 		ref := strings.TrimSpace(reference)

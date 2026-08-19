@@ -9,8 +9,10 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestResolveReferenceLiteralPathsAndErrors(t *testing.T) {
@@ -30,14 +32,14 @@ func TestResolveReferenceLiteralPathsAndErrors(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	rt := &Runtime{
+	rt := &vaultruntime.Runtime{
 		VaultPath: vaultPath,
 		VaultCfg:  &config.VaultConfig{},
 		DB:        db,
 	}
 
 	t.Run("literal path resolution", func(t *testing.T) {
-		result, err := ResolveReference("people/freya", rt, false)
+		result, err := refresolve.Resolve("people/freya", rt, false)
 		if err != nil {
 			t.Fatalf("ResolveReference failed: %v", err)
 		}
@@ -47,7 +49,7 @@ func TestResolveReferenceLiteralPathsAndErrors(t *testing.T) {
 	})
 
 	t.Run("literal path with .md extension", func(t *testing.T) {
-		result, err := ResolveReference("people/freya.md", rt, false)
+		result, err := refresolve.Resolve("people/freya.md", rt, false)
 		if err != nil {
 			t.Fatalf("ResolveReference failed: %v", err)
 		}
@@ -57,11 +59,11 @@ func TestResolveReferenceLiteralPathsAndErrors(t *testing.T) {
 	})
 
 	t.Run("not found error", func(t *testing.T) {
-		_, err := ResolveReference("people/nonexistent", rt, false)
+		_, err := refresolve.Resolve("people/nonexistent", rt, false)
 		if err == nil {
 			t.Fatal("expected error for nonexistent file")
 		}
-		if !IsRefNotFound(err) {
+		if !refresolve.IsRefNotFound(err) {
 			t.Fatalf("expected RefNotFoundError, got %T", err)
 		}
 	})
@@ -72,11 +74,11 @@ func TestResolveReferenceLiteralPathsAndErrors(t *testing.T) {
 			t.Fatalf("write outside.md: %v", err)
 		}
 
-		_, err := ResolveReference(outsidePath, rt, false)
+		_, err := refresolve.Resolve(outsidePath, rt, false)
 		if err == nil {
 			t.Fatal("expected error for outside-vault path")
 		}
-		if !IsRefNotFound(err) {
+		if !refresolve.IsRefNotFound(err) {
 			t.Fatalf("expected RefNotFoundError, got %T", err)
 		}
 	})
@@ -85,11 +87,11 @@ func TestResolveReferenceLiteralPathsAndErrors(t *testing.T) {
 func TestResolveErrorHelpers(t *testing.T) {
 	t.Parallel()
 
-	ambiguous := &AmbiguousRefError{
+	ambiguous := &refresolve.AmbiguousRefError{
 		Reference: "freya",
 		Matches:   []string{"people/freya", "clients/freya"},
 	}
-	if !IsAmbiguousRef(ambiguous) {
+	if !refresolve.IsAmbiguousRef(ambiguous) {
 		t.Fatal("IsAmbiguousRef should return true")
 	}
 	if ambiguous.Error() == "" {
@@ -103,8 +105,8 @@ func TestResolveErrorHelpers(t *testing.T) {
 		t.Fatalf("ambiguous service details = %#v, want matches", ambiguousSvcErr.Details)
 	}
 
-	notFound := &RefNotFoundError{Reference: "freya", Detail: "file was deleted"}
-	if !IsRefNotFound(notFound) {
+	notFound := &refresolve.RefNotFoundError{Reference: "freya", Detail: "file was deleted"}
+	if !refresolve.IsRefNotFound(notFound) {
 		t.Fatal("IsRefNotFound should return true")
 	}
 	if got := notFound.Error(); got != "reference 'freya' not found: file was deleted" {
@@ -124,9 +126,9 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 
 		vaultPath := t.TempDir()
 		vaultCfg := &config.VaultConfig{DailyDirectory: "journal"}
-		rt := &Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
+		rt := &vaultruntime.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
 
-		result, err := ResolveReferenceWithDynamicDates("today", rt, true)
+		result, err := refresolve.ResolveDynamic("today", rt, true)
 		if err != nil {
 			t.Fatalf("ResolveReferenceWithDynamicDates failed: %v", err)
 		}
@@ -151,9 +153,9 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 
 		vaultPath := t.TempDir()
 		vaultCfg := &config.VaultConfig{DailyDirectory: "daily"}
-		rt := &Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
+		rt := &vaultruntime.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
 
-		result, err := ResolveReferenceWithDynamicDates("tomorrow#notes", rt, true)
+		result, err := refresolve.ResolveDynamic("tomorrow#notes", rt, true)
 		if err != nil {
 			t.Fatalf("ResolveReferenceWithDynamicDates failed: %v", err)
 		}
@@ -171,12 +173,12 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 	t.Run("rejects missing dynamic keyword when not allowed", func(t *testing.T) {
 		t.Parallel()
 
-		rt := &Runtime{VaultPath: t.TempDir(), VaultCfg: &config.VaultConfig{DailyDirectory: "daily"}}
-		_, err := ResolveReferenceWithDynamicDates("yesterday", rt, false)
+		rt := &vaultruntime.Runtime{VaultPath: t.TempDir(), VaultCfg: &config.VaultConfig{DailyDirectory: "daily"}}
+		_, err := refresolve.ResolveDynamic("yesterday", rt, false)
 		if err == nil {
 			t.Fatal("expected missing dynamic note error")
 		}
-		if !IsRefNotFound(err) {
+		if !refresolve.IsRefNotFound(err) {
 			t.Fatalf("expected RefNotFoundError, got %T", err)
 		}
 	})
@@ -210,19 +212,18 @@ func TestResolveOperationCachesResolverWithinOperation(t *testing.T) {
 		t.Fatalf("failed to seed objects: %v", err)
 	}
 
-	rt := &Runtime{
+	rt := &vaultruntime.Runtime{
 		VaultPath: vaultPath,
 		VaultCfg:  &config.VaultConfig{},
 		DB:        db,
 	}
 
-	op, err := newResolveOperation(rt)
+	op, err := refresolve.New(rt)
 	if err != nil {
-		t.Fatalf("newResolveOperation returned error: %v", err)
+		t.Fatalf("refresolve.New returned error: %v", err)
 	}
-	defer op.Close()
 
-	first, err := op.resolveReference("raven", false)
+	first, err := op.Resolve("raven", false)
 	if err != nil {
 		t.Fatalf("first resolve failed: %v", err)
 	}
@@ -230,7 +231,7 @@ func TestResolveOperationCachesResolverWithinOperation(t *testing.T) {
 		t.Fatalf("first resolved object ID = %q, want %q", first.ObjectID, "projects/raven")
 	}
 
-	second, err := op.resolveReference("atlas", false)
+	second, err := op.Resolve("atlas", false)
 	if err != nil {
 		t.Fatalf("second resolve failed: %v", err)
 	}
@@ -266,18 +267,18 @@ func TestResolveReferenceWithDynamicDates_AmbiguousISODateLiteralPath(t *testing
 		t.Fatalf("failed to seed daily object: %v", err)
 	}
 
-	rt := &Runtime{
+	rt := &vaultruntime.Runtime{
 		VaultPath: vaultPath,
 		VaultCfg:  &config.VaultConfig{DailyDirectory: "daily"},
 		DB:        db,
 	}
 
-	_, err = ResolveReferenceWithDynamicDates("2025-02-01", rt, false)
+	_, err = refresolve.ResolveDynamic("2025-02-01", rt, false)
 	if err == nil {
 		t.Fatal("expected ambiguous ISO date collision")
 	}
 
-	var ambiguous *AmbiguousRefError
+	var ambiguous *refresolve.AmbiguousRefError
 	if !errors.As(err, &ambiguous) {
 		t.Fatalf("expected AmbiguousRefError, got %T: %v", err, err)
 	}
@@ -326,17 +327,17 @@ func TestResolveReferenceLiteralPathCollidesWithTypedObject(t *testing.T) {
 		t.Fatalf("failed to seed objects: %v", err)
 	}
 
-	rt := &Runtime{
+	rt := &vaultruntime.Runtime{
 		VaultPath: vaultPath,
 		VaultCfg:  &config.VaultConfig{},
 		DB:        db,
 	}
 
-	_, err = ResolveReference("freya", rt, false)
+	_, err = refresolve.Resolve("freya", rt, false)
 	if err == nil {
 		t.Fatal("expected ambiguous page-vs-typed collision, got nil error")
 	}
-	var ambiguous *AmbiguousRefError
+	var ambiguous *refresolve.AmbiguousRefError
 	if !errors.As(err, &ambiguous) {
 		t.Fatalf("expected AmbiguousRefError, got %T: %v", err, err)
 	}
@@ -351,7 +352,7 @@ func TestResolveReferenceLiteralPathCollidesWithTypedObject(t *testing.T) {
 	}
 
 	// The qualified typed reference stays unambiguous.
-	resolved, err := ResolveReference("people/freya", rt, false)
+	resolved, err := refresolve.Resolve("people/freya", rt, false)
 	if err != nil {
 		t.Fatalf("ResolveReference(people/freya) failed: %v", err)
 	}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type ExecuteQueryRequest struct {
@@ -49,7 +50,7 @@ func (r *ExecuteQueryResult) NextOffset() int {
 	return r.Offset + r.Returned
 }
 
-func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, error) {
+func ExecuteQuery(rt *vaultruntime.Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, error) {
 	if rt == nil || rt.DB == nil {
 		return nil, fmt.Errorf("runtime with database is required")
 	}

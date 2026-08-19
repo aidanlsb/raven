@@ -11,9 +11,10 @@ import (
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-func CheckStaleness(rt *Runtime) (bool, []string, error) {
+func CheckStaleness(rt *vaultruntime.Runtime) (bool, []string, error) {
 	if rt == nil || rt.DB == nil {
 		return false, nil, fmt.Errorf("runtime with database is required")
 	}
@@ -50,7 +51,7 @@ type SmartReindexReport struct {
 	ReferenceResolutionWarnings []SmartReindexWarning
 }
 
-func SmartReindex(rt *Runtime) (SmartReindexReport, error) {
+func SmartReindex(rt *vaultruntime.Runtime) (SmartReindexReport, error) {
 	if rt == nil || rt.DB == nil {
 		return SmartReindexReport{}, fmt.Errorf("runtime with database is required")
 	}
@@ -211,7 +212,7 @@ func recordReferenceResolutionRecovery(vaultPath, relPath string, resolutionErr 
 	return err
 }
 
-func recoverRemovedDirtyPaths(rt *Runtime, pending indexjournal.Snapshot, matcher *ravenignore.Matcher) error {
+func recoverRemovedDirtyPaths(rt *vaultruntime.Runtime, pending indexjournal.Snapshot, matcher *ravenignore.Matcher) error {
 	for _, relPath := range pending.Paths() {
 		fullPath := filepath.Join(rt.VaultPath, filepath.FromSlash(relPath))
 		_, statErr := os.Stat(fullPath)
@@ -233,7 +234,7 @@ func recoverRemovedDirtyPaths(rt *Runtime, pending indexjournal.Snapshot, matche
 	return nil
 }
 
-func excludeMatcher(rt *Runtime) (*ravenignore.Matcher, error) {
+func excludeMatcher(rt *vaultruntime.Runtime) (*ravenignore.Matcher, error) {
 	if rt == nil {
 		return ravenignore.NewMatcher(nil)
 	}
@@ -243,7 +244,7 @@ func excludeMatcher(rt *Runtime) (*ravenignore.Matcher, error) {
 	return ravenignore.NewMatcher(rt.VaultCfg.GetExcludePatterns())
 }
 
-func removeExcludedIndexedFiles(rt *Runtime, matcher *ravenignore.Matcher) error {
+func removeExcludedIndexedFiles(rt *vaultruntime.Runtime, matcher *ravenignore.Matcher) error {
 	indexedPaths, err := rt.DB.AllIndexedFilePaths()
 	if err != nil {
 		return err

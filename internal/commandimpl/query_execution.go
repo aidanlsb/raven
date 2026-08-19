@@ -11,13 +11,14 @@ import (
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // queryExecution owns the invocation-scoped runtime and resolved query needed
 // by the canonical query command. Keeping setup here gives CLI and MCP callers
 // one path for config/schema loading, resolver readiness, and index refresh.
 type queryExecution struct {
-	runtime         *readsvc.Runtime
+	runtime         *vaultruntime.Runtime
 	resolvedQuery   string
 	queryName       string
 	isSavedQuery    bool

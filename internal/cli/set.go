@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -34,7 +35,7 @@ func buildSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 		if err != nil {
 			return nil, err
 		}
-		typedUpdates, err := parseFieldValuesJSON(fieldsJSON)
+		typedUpdates, err := fieldmutation.ParseFieldValuesJSON(fieldsJSON)
 		if err != nil {
 			return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
 		}
@@ -79,7 +80,7 @@ func buildSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 		return nil, err
 	}
 
-	typedUpdates, err := parseFieldValuesJSON(fieldsJSON)
+	typedUpdates, err := fieldmutation.ParseFieldValuesJSON(fieldsJSON)
 	if err != nil {
 		return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
 	}

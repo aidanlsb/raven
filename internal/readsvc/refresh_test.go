@@ -34,7 +34,7 @@ func TestSmartReindexReportsParseFailures(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	rt := &Runtime{
+	rt := &vaultruntime.Runtime{
 		VaultPath: vault.Path,
 		VaultCfg:  &config.VaultConfig{},
 		Schema:    sch,
@@ -77,7 +77,7 @@ func TestSmartReindexSkipsParsingUnchangedMarkdown(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	rt := &Runtime{
+	rt := &vaultruntime.Runtime{
 		VaultPath: testVault.Path,
 		VaultCfg:  &config.VaultConfig{},
 		Schema:    sch,
@@ -255,7 +255,7 @@ func TestSmartReindexWarnsOnUnknownFrontmatter(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	rt := &Runtime{
+	rt := &vaultruntime.Runtime{
 		VaultPath: vault.Path,
 		VaultCfg:  &config.VaultConfig{},
 		Schema:    sch,
