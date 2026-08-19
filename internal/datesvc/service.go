@@ -45,8 +45,8 @@ type EnsureDailyResult struct {
 }
 
 func EnsureDaily(rt *vaultruntime.Runtime, req EnsureDailyRequest) (*EnsureDailyResult, error) {
-	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
 	}
 	if rt.VaultCfg == nil {
 		return nil, newError(CodeConfigInvalid, "vault config runtime is required", "Fix raven.yaml and try again", nil)
@@ -158,8 +158,8 @@ type DateHubResult struct {
 }
 
 func DateHub(rt *vaultruntime.Runtime, req DateHubRequest) (*DateHubResult, error) {
-	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
 	}
 	if rt.VaultCfg == nil {
 		return nil, newError(CodeConfigInvalid, "vault config runtime is required", "Fix raven.yaml and try again", nil)

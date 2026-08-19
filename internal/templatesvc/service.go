@@ -101,8 +101,8 @@ type DeleteResult struct {
 }
 
 func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
-	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
 	}
 	req.VaultPath = rt.VaultPath
 
@@ -153,8 +153,8 @@ func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
 }
 
 func Read(req ReadRequest) (*ReadResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
 	}
 
 	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
@@ -184,8 +184,8 @@ func Read(req ReadRequest) (*ReadResult, error) {
 }
 
 func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
-	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
 	}
 	req.VaultPath = rt.VaultPath
 
@@ -230,8 +230,8 @@ func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
 }
 
 func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) {
-	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
 	}
 	req.VaultPath = rt.VaultPath
 

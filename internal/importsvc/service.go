@@ -306,13 +306,14 @@ type RunResult struct {
 }
 
 func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
-	if rt == nil {
-		return nil, newError(CodeInvalidInput, "vault runtime is required", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		message := "vault path is required"
+		if rt == nil {
+			message = "vault runtime is required"
+		}
+		return nil, newError(CodeInvalidInput, message, err)
 	}
 	vaultPath := strings.TrimSpace(rt.VaultPath)
-	if vaultPath == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", nil)
-	}
 	if req.MappingConfig == nil {
 		return nil, newError(CodeInvalidInput, "mapping config is required", nil)
 	}

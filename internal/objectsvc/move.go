@@ -87,8 +87,8 @@ var (
 )
 
 func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, nil)
+	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
+		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, err)
 	}
 	if strings.TrimSpace(req.SourceFile) == "" || strings.TrimSpace(req.DestinationFile) == "" {
 		return nil, newError(ErrorInvalidInput, "source and destination files are required", "", nil, nil)

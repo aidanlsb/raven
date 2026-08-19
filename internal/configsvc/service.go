@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type Code = codes.ErrorCode
@@ -662,8 +663,8 @@ func AddVault(req VaultAddRequest) (*VaultAddResult, error) {
 	if name == "" {
 		return nil, newError(CodeMissingArgument, "vault name is required", nil)
 	}
-	if rawPath == "" {
-		return nil, newError(CodeMissingArgument, "vault path is required", nil)
+	if err := vaultruntime.RequirePath(rawPath); err != nil {
+		return nil, newError(CodeMissingArgument, "vault path is required", err)
 	}
 
 	ctx, err := LoadVaultContext(req.ContextOptions)

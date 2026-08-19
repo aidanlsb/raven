@@ -1,8 +1,6 @@
 package maintsvc
 
 import (
-	"strings"
-
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -27,8 +25,8 @@ type StatsResult struct {
 }
 
 func Stats(rt *vaultruntime.Runtime) (*StatsResult, error) {
-	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
 	}
 
 	if err := rt.OpenDB(); err != nil {

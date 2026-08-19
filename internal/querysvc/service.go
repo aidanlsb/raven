@@ -222,8 +222,8 @@ func Remove(rt *vaultruntime.Runtime, req RemoveRequest) (*RemoveResult, error) 
 }
 
 func runtimeConfig(rt *vaultruntime.Runtime) (*config.VaultConfig, error) {
-	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", err)
 	}
 	if rt.VaultCfg == nil {
 		if err := rt.ReloadConfig(); err != nil {

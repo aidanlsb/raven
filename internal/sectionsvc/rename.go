@@ -59,8 +59,8 @@ type fileRewrite struct {
 // NewHeadingText is plain heading text. The heading level is preserved and the
 // new slug is derived using the same rules the parser applies to headings.
 func Rename(req RenameRequest) (*RenameResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(codes.ErrInvalidInput, "vault path is required", "", nil, nil)
+	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
+		return nil, newError(codes.ErrInvalidInput, "vault path is required", "", nil, err)
 	}
 	if req.VaultConfig == nil {
 		return nil, newError(codes.ErrValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)

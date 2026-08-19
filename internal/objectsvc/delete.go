@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type DeleteFileRequest struct {
@@ -22,8 +24,8 @@ type DeleteFileResult struct {
 }
 
 func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, nil)
+	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
+		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, err)
 	}
 	if strings.TrimSpace(req.FilePath) == "" {
 		return nil, newError(ErrorInvalidInput, "file path is required", "", nil, nil)
