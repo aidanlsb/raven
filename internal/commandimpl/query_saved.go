@@ -21,7 +21,7 @@ func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexe
 
 	result, err := querysvc.List(rt, querysvc.ListRequest{VaultPath: vaultPath})
 	if err != nil {
-		return mapQuerySvcFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	queries := make([]map[string]interface{}, 0, len(result.Queries))
@@ -48,7 +48,7 @@ func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec
 		Name:      strings.TrimSpace(stringArg(req.Args, "name")),
 	})
 	if err != nil {
-		return mapQuerySvcFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	return commandexec.Success(savedQueryData(result.Query), nil)
@@ -73,7 +73,7 @@ func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec
 		Options:     savedQueryOptionsFromArgs(req.Args),
 	})
 	if err != nil {
-		return mapQuerySvcFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	data := savedQueryData(result.Query)
@@ -96,7 +96,7 @@ func HandleQuerySavedRemove(_ context.Context, req commandexec.Request) commande
 		Name:      strings.TrimSpace(stringArg(req.Args, "name")),
 	})
 	if err != nil {
-		return mapQuerySvcFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	return commandexec.Success(map[string]interface{}{

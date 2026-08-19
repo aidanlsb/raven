@@ -16,7 +16,7 @@ func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandex
 	defer rt.Close()
 	result, err := vaultconfigsvc.Show(rt, vaultConfigShowRequest(req))
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path":           result.ConfigPath,
@@ -58,7 +58,7 @@ func HandleVaultConfigAutoReindexSet(_ context.Context, req commandexec.Request)
 		Value:     boolArgDefault(req.Args, "value", true),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path":           result.ConfigPath,
@@ -79,7 +79,7 @@ func HandleVaultConfigAutoReindexUnset(_ context.Context, req commandexec.Reques
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path":           result.ConfigPath,
@@ -99,7 +99,7 @@ func HandleVaultConfigProtectedPrefixesList(_ context.Context, req commandexec.R
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path":        result.ConfigPath,
@@ -119,7 +119,7 @@ func HandleVaultConfigProtectedPrefixesAdd(_ context.Context, req commandexec.Re
 		Prefix:    strings.TrimSpace(stringArg(req.Args, "prefix")),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path":        result.ConfigPath,
@@ -141,7 +141,7 @@ func HandleVaultConfigProtectedPrefixesRemove(_ context.Context, req commandexec
 		Prefix:    strings.TrimSpace(stringArg(req.Args, "prefix")),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path":        result.ConfigPath,
@@ -161,7 +161,7 @@ func HandleVaultConfigExcludeList(_ context.Context, req commandexec.Request) co
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path": result.ConfigPath,
@@ -181,7 +181,7 @@ func HandleVaultConfigExcludeAdd(_ context.Context, req commandexec.Request) com
 		Pattern:   strings.TrimSpace(stringArg(req.Args, "pattern")),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path": result.ConfigPath,
@@ -203,7 +203,7 @@ func HandleVaultConfigExcludeRemove(_ context.Context, req commandexec.Request) 
 		Pattern:   strings.TrimSpace(stringArg(req.Args, "pattern")),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{
 		"config_path": result.ConfigPath,
@@ -223,7 +223,7 @@ func HandleVaultConfigDirectoriesGet(_ context.Context, req commandexec.Request)
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(vaultDirectoriesData(result.ConfigPath, result.Exists, result.Directories), nil)
 }
@@ -242,7 +242,7 @@ func HandleVaultConfigDirectoriesSet(_ context.Context, req commandexec.Request)
 		Template:  optionalStringArg(req.Args, "template"),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	data := vaultDirectoriesData(result.ConfigPath, true, result.Directories)
 	data["created"] = result.Created
@@ -264,7 +264,7 @@ func HandleVaultConfigDirectoriesUnset(_ context.Context, req commandexec.Reques
 		Template:  boolArg(req.Args, "template"),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	data := vaultDirectoriesData(result.ConfigPath, true, result.Directories)
 	data["changed"] = result.Changed
@@ -281,7 +281,7 @@ func HandleVaultConfigCaptureGet(_ context.Context, req commandexec.Request) com
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(vaultCaptureData(result.ConfigPath, result.Exists, result.Configured, result.Capture), nil)
 }
@@ -298,7 +298,7 @@ func HandleVaultConfigCaptureSet(_ context.Context, req commandexec.Request) com
 		Heading:     optionalStringArg(req.Args, "heading"),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	data := vaultCaptureData(result.ConfigPath, true, result.Configured, result.Capture)
 	data["created"] = result.Created
@@ -318,7 +318,7 @@ func HandleVaultConfigCaptureUnset(_ context.Context, req commandexec.Request) c
 		Heading:     boolArg(req.Args, "heading"),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	data := vaultCaptureData(result.ConfigPath, true, result.Configured, result.Capture)
 	data["changed"] = result.Changed
@@ -335,7 +335,7 @@ func HandleVaultConfigDeletionGet(_ context.Context, req commandexec.Request) co
 		VaultPath: req.VaultPath,
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(vaultDeletionData(result.ConfigPath, result.Exists, result.Configured, result.Deletion), nil)
 }
@@ -352,7 +352,7 @@ func HandleVaultConfigDeletionSet(_ context.Context, req commandexec.Request) co
 		TrashDir:  optionalStringArg(req.Args, "trash-dir"),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	data := vaultDeletionData(result.ConfigPath, true, result.Configured, result.Deletion)
 	data["created"] = result.Created
@@ -372,15 +372,11 @@ func HandleVaultConfigDeletionUnset(_ context.Context, req commandexec.Request) 
 		TrashDir:  boolArg(req.Args, "trash-dir"),
 	})
 	if err != nil {
-		return mapVaultConfigFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	data := vaultDeletionData(result.ConfigPath, true, result.Configured, result.Deletion)
 	data["changed"] = result.Changed
 	return commandexec.Success(data, nil)
-}
-
-func mapVaultConfigFailure(err error) commandexec.Result {
-	return commandexec.FromServiceError(err)
 }
 
 func vaultConfigShowRequest(req commandexec.Request) vaultconfigsvc.ShowRequest {

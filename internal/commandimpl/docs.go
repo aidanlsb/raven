@@ -18,13 +18,13 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	source, err := docssvc.LoadGlobalDocsSource(req.ConfigPath, docsCLIVersion(req))
 	if err != nil {
-		return mapDocsSvcFailure(err, "Run 'rvn docs fetch' to download docs")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs fetch' to download docs")
 	}
 	warnings := canonicalDocsWarnings(source.Warnings)
 
 	sections, err := docssvc.ListSectionsFS(source.FS, ".")
 	if err != nil {
-		return mapDocsSvcFailure(err, "Run 'rvn docs fetch' to refresh docs")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs fetch' to refresh docs")
 	}
 
 	if sectionInput == "" {
@@ -51,7 +51,7 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	topics, err := docssvc.ListTopicsFS(source.FS, ".", section.ID)
 	if err != nil {
-		return mapDocsSvcFailure(err, "Run 'rvn docs fetch' to refresh docs")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs fetch' to refresh docs")
 	}
 
 	if topicInput == "" {
@@ -85,7 +85,7 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	content, err := docssvc.ReadTopicContentFS(source.FS, topic)
 	if err != nil {
-		return mapDocsSvcFailure(err, "Run 'rvn docs fetch' to refresh docs")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs fetch' to refresh docs")
 	}
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
@@ -101,7 +101,7 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 func HandleDocsList(_ context.Context, req commandexec.Request) commandexec.Result {
 	sections, warnings, err := docssvc.ListSections(req.ConfigPath, docsCLIVersion(req))
 	if err != nil {
-		return mapDocsSvcFailure(err, "Run 'rvn docs fetch' to download docs")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs fetch' to download docs")
 	}
 	return commandexec.SuccessWithWarnings(docsSectionsData(sections), canonicalDocsWarnings(warnings), &commandexec.Meta{Count: len(sections)})
 }
@@ -128,7 +128,7 @@ func HandleDocsSearch(_ context.Context, req commandexec.Request) commandexec.Re
 
 	result, warnings, err := docssvc.Search(req.ConfigPath, docsCLIVersion(req), query, strings.TrimSpace(stringArg(req.Args, "section")), limit, offset)
 	if err != nil {
-		return mapDocsSvcFailure(err, "Run 'rvn docs' to list sections")
+		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs' to list sections")
 	}
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
@@ -151,7 +151,7 @@ func HandleDocsFetch(_ context.Context, req commandexec.Request) commandexec.Res
 		CLIVersion: docsCLIVersion(req),
 	})
 	if err != nil {
-		return mapDocsSvcFailure(err, "Check your network connection and run 'rvn docs fetch' again")
+		return commandexec.FromServiceErrorWithFallback(err, "Check your network connection and run 'rvn docs fetch' again")
 	}
 
 	return commandexec.Success(map[string]interface{}{
@@ -204,8 +204,4 @@ func docsTopicItems(topics []docssvc.TopicRecord) []map[string]interface{} {
 		})
 	}
 	return items
-}
-
-func mapDocsSvcFailure(err error, fallbackSuggestion string) commandexec.Result {
-	return commandexec.FromServiceErrorWithFallback(err, fallbackSuggestion)
 }

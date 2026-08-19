@@ -36,7 +36,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	edits, batchMode, err := parseCanonicalEditInput(req.Args)
 	if err != nil {
-		return mapEditFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	// Reject explicit non-content file paths before reference resolution. Files
@@ -74,7 +74,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	newContent, results, err := editsvc.ApplyEditsInMemoryWithScope(string(content), relPath, edits, scope)
 	if err != nil {
-		return mapEditFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	if len(results) == 0 {
 		return commandexec.Failure("INVALID_INPUT", "no edits provided", nil, "Provide at least one edit")
@@ -117,7 +117,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	writeResult, err := editsvc.WriteAppliedEdits(resolved.FilePath, relPath, newContent)
 	if err != nil {
-		return mapEditFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	postData, warnings := applyChangeSet(rt, writeResult.ChangeSet, req.IndexJournalOperation)
 
@@ -196,10 +196,6 @@ func parseCanonicalEditInput(args map[string]any) ([]editsvc.EditSpec, bool, err
 		OldStr: oldStr,
 		NewStr: toAnyString(newStr),
 	}}, false, nil
-}
-
-func mapEditFailure(err error) commandexec.Result {
-	return commandexec.FromServiceError(err)
 }
 
 func toAnyString(value any) string {

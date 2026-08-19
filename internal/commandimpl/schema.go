@@ -33,7 +33,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 	if subcommand == "" {
 		result, err := schemasvc.FullSchema(rt)
 		if err != nil {
-			return mapSchemaFailure(err)
+			return commandexec.FromServiceError(err)
 		}
 
 		data := map[string]interface{}{
@@ -57,7 +57,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 	case "types":
 		result, err := schemasvc.Types(rt)
 		if err != nil {
-			return mapSchemaFailure(err)
+			return commandexec.FromServiceError(err)
 		}
 		data := map[string]interface{}{"types": result.Types}
 		if result.Hint != nil {
@@ -67,20 +67,20 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 	case "traits":
 		result, err := schemasvc.Traits(rt)
 		if err != nil {
-			return mapSchemaFailure(err)
+			return commandexec.FromServiceError(err)
 		}
 		return commandexec.Success(map[string]interface{}{"traits": result.Traits}, &commandexec.Meta{Count: len(result.Traits), QueryTimeMs: time.Since(start).Milliseconds()})
 	case "core":
 		if name == "" {
 			result, err := schemasvc.CoreList(rt)
 			if err != nil {
-				return mapSchemaFailure(err)
+				return commandexec.FromServiceError(err)
 			}
 			return commandexec.Success(map[string]interface{}{"core": result.Core}, &commandexec.Meta{Count: len(result.Core), QueryTimeMs: time.Since(start).Milliseconds()})
 		}
 		result, err := schemasvc.CoreByName(rt, name)
 		if err != nil {
-			return mapSchemaFailure(err)
+			return commandexec.FromServiceError(err)
 		}
 		return commandexec.Success(map[string]interface{}{"core": result.Core}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	case "type":
@@ -89,7 +89,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 		}
 		result, err := schemasvc.TypeByName(rt, name)
 		if err != nil {
-			return mapSchemaFailure(err)
+			return commandexec.FromServiceError(err)
 		}
 		return commandexec.Success(map[string]interface{}{"type": result.Type}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	case "trait":
@@ -98,7 +98,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 		}
 		result, err := schemasvc.TraitByName(rt, name)
 		if err != nil {
-			return mapSchemaFailure(err)
+			return commandexec.FromServiceError(err)
 		}
 		return commandexec.Success(map[string]interface{}{"trait": result.Trait}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	default:
@@ -116,7 +116,7 @@ func HandleSchemaValidate(_ context.Context, req commandexec.Request) commandexe
 	defer rt.Close()
 	result, err := schemasvc.Validate(rt)
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.Validate(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -137,7 +137,7 @@ func HandleSchemaAddType(_ context.Context, req commandexec.Request) commandexec
 		Description: stringArg(req.Args, "description"),
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.AddType(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -158,7 +158,7 @@ func HandleSchemaAddTrait(_ context.Context, req commandexec.Request) commandexe
 		Default:   stringArg(req.Args, "default"),
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.AddTrait(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -183,7 +183,7 @@ func HandleSchemaAddField(_ context.Context, req commandexec.Request) commandexe
 		Description: stringArg(req.Args, "description"),
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.AddField(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -207,7 +207,7 @@ func HandleSchemaUpdateType(_ context.Context, req commandexec.Request) commande
 		RemoveTrait: stringArg(req.Args, "remove-trait"),
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.Update("type", name, "", "", result.Changes), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -229,7 +229,7 @@ func HandleSchemaUpdateTrait(_ context.Context, req commandexec.Request) command
 		Default:   stringArg(req.Args, "default"),
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.Update("trait", name, "", "", result.Changes), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -256,7 +256,7 @@ func HandleSchemaUpdateField(_ context.Context, req commandexec.Request) command
 		Description: stringArg(req.Args, "description"),
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.Update("field", "", typeName, fieldName, result.Changes), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -276,7 +276,7 @@ func HandleSchemaRemoveType(_ context.Context, req commandexec.Request) commande
 		Interactive: false,
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	data := schemapayload.Remove("type", stringArg(req.Args, "name"), "", "")
 	warnings := canonicalSchemaWarnings(result.Warnings)
@@ -301,7 +301,7 @@ func HandleSchemaRemoveTrait(_ context.Context, req commandexec.Request) command
 		Interactive: false,
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	data := schemapayload.Remove("trait", stringArg(req.Args, "name"), "", "")
 	warnings := canonicalSchemaWarnings(result.Warnings)
@@ -326,7 +326,7 @@ func HandleSchemaRemoveField(_ context.Context, req commandexec.Request) command
 		TypeName:  typeName,
 		FieldName: fieldName,
 	}); err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.Remove("field", "", typeName, fieldName), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -348,7 +348,7 @@ func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commande
 		RenameDefaultPath: boolArg(req.Args, "rename-default-path"),
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.RenameType(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -369,7 +369,7 @@ func HandleSchemaRenameField(_ context.Context, req commandexec.Request) command
 		Confirm:   req.Confirm,
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.RenameField(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -394,7 +394,7 @@ func HandleSchemaConvertTrait(_ context.Context, req commandexec.Request) comman
 		Confirm:    req.Confirm,
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.Convert(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -420,7 +420,7 @@ func HandleSchemaConvertField(_ context.Context, req commandexec.Request) comman
 		Confirm:    req.Confirm,
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemapayload.Convert(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -451,7 +451,7 @@ func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) comman
 			return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
 		}
 		if err != nil {
-			return mapSchemaFailure(err)
+			return commandexec.FromServiceError(err)
 		}
 		return commandexec.Success(map[string]interface{}{
 			scopeKey:           scopeValue,
@@ -462,7 +462,7 @@ func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) comman
 
 	items, err := schemasvc.ListTemplates(rt)
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{"templates": items}, &commandexec.Meta{Count: len(items), QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -477,7 +477,7 @@ func HandleSchemaTemplateGet(_ context.Context, req commandexec.Request) command
 	defer rt.Close()
 	item, err := schemasvc.GetTemplate(rt, stringArg(req.Args, "template_id"))
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemaTemplateDefinitionPayload(item.ID, item.File, item.Description), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -498,7 +498,7 @@ func HandleSchemaTemplateSet(_ context.Context, req commandexec.Request) command
 		Description: description,
 	})
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(schemaTemplateDefinitionPayload(item.ID, item.File, strings.TrimSpace(description)), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -513,7 +513,7 @@ func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) comm
 	}
 	defer rt.Close()
 	if err := schemasvc.RemoveTemplate(rt, templateID); err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 	return commandexec.Success(map[string]interface{}{"removed": true, "id": templateID}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -553,7 +553,7 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
 	}
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	data := map[string]interface{}{
@@ -595,7 +595,7 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
 	}
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	data := map[string]interface{}{
@@ -638,7 +638,7 @@ func HandleSchemaTemplateDefault(_ context.Context, req commandexec.Request) com
 		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
 	}
 	if err != nil {
-		return mapSchemaFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	return commandexec.Success(map[string]interface{}{
@@ -662,7 +662,7 @@ func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
 	})
 	if err != nil {
-		return mapTemplateFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	return commandexec.Success(map[string]interface{}{
@@ -698,7 +698,7 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 		Content:     stringArg(req.Args, "content"),
 	})
 	if err != nil {
-		return mapTemplateFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	var warnings []commandexec.Warning
@@ -741,7 +741,7 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 		Force:       boolArg(req.Args, "force"),
 	})
 	if err != nil {
-		return mapTemplateFailure(err)
+		return commandexec.FromServiceError(err)
 	}
 
 	data := map[string]interface{}{
@@ -755,14 +755,6 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 		return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	}
 	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
-}
-
-func mapSchemaFailure(err error) commandexec.Result {
-	return commandexec.FromServiceError(err)
-}
-
-func mapTemplateFailure(err error) commandexec.Result {
-	return commandexec.FromServiceError(err)
 }
 
 func canonicalSchemaWarnings(serviceWarnings []schemasvc.Warning) []commandexec.Warning {
