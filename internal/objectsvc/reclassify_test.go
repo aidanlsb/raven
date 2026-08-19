@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestReclassifyMoveWritesUpdatedContentAtDestination(t *testing.T) {
@@ -213,7 +214,7 @@ traits: {}
 				t.Fatalf("Reclassify() error = nil, want validation failure")
 			}
 
-			var svcErr *Error
+			var svcErr *svcerr.Error
 			if !errors.As(err, &svcErr) {
 				t.Fatalf("expected *Error, got %T: %v", err, err)
 			}
@@ -291,7 +292,7 @@ traits: {}
 		t.Fatal("expected Reclassify() to fail")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}

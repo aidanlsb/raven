@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -118,7 +119,7 @@ func TestDeleteByReferenceRejectsSection(t *testing.T) {
 	if err == nil {
 		t.Fatal("PreviewDeleteByReference() succeeded for a section ID")
 	}
-	var serviceErr *Error
+	var serviceErr *svcerr.Error
 	if !errors.As(err, &serviceErr) || serviceErr.Code != codes.ErrInvalidInput {
 		t.Fatalf("error = %v, want %s", err, codes.ErrInvalidInput)
 	}

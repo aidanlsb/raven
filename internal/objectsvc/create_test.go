@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestCreateObjectSuccess(t *testing.T) {
@@ -148,7 +149,7 @@ traits: {}
 		t.Fatal("expected required field error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
@@ -187,7 +188,7 @@ traits: {}
 		t.Fatal("expected validation error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
@@ -233,7 +234,7 @@ traits: {}
 		t.Fatal("expected file exists error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
@@ -289,7 +290,7 @@ traits: {}
 		t.Fatal("expected validation error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
@@ -333,7 +334,7 @@ traits: {}
 		t.Fatal("expected validation error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}

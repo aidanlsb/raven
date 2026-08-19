@@ -217,7 +217,7 @@ func ApplySetBulk(req SetBulkRequest) (*SetBulkSummary, error) {
 }
 
 func setBulkReasonFromError(err error) string {
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	var unknownErr *fieldmutation.UnknownFieldMutationError
 	var validationErr *fieldmutation.ValidationError
 

@@ -193,7 +193,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 		})
 		if err != nil {
 			result.Status = "error"
-			var svcErr *Error
+			var svcErr *svcerr.Error
 			if errors.As(err, &svcErr) {
 				result.Reason = svcErr.Message
 			} else {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestMoveByReferenceSuccess(t *testing.T) {
@@ -186,7 +187,7 @@ func TestMoveByReferenceRejectsSectionSource(t *testing.T) {
 	if !strings.Contains(err.Error(), "does not accept section sources") {
 		t.Fatalf("error = %v, want hard section-source rejection", err)
 	}
-	var serviceErr *Error
+	var serviceErr *svcerr.Error
 	if !errors.As(err, &serviceErr) {
 		t.Fatalf("error type = %T, want *Error", err)
 	}

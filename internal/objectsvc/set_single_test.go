@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestSetByReferenceSuccess(t *testing.T) {
@@ -98,7 +99,7 @@ traits: {}
 		t.Fatal("expected missing reference error")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}

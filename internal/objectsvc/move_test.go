@@ -15,6 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -205,7 +206,7 @@ func TestMoveFileRenameFailureDoesNotRewriteBacklinks(t *testing.T) {
 		t.Fatal("expected MoveFile() to fail")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
@@ -298,7 +299,7 @@ func TestMoveFileRollsBackWhenRefRewriteWriteFails(t *testing.T) {
 		t.Fatal("expected MoveFile() to fail")
 	}
 
-	var svcErr *Error
+	var svcErr *svcerr.Error
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected *Error, got %T", err)
 	}
@@ -620,7 +621,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 				t.Fatalf("MoveFile() error = nil, want error with code %s", tt.wantErrCode)
 			}
 
-			var svcErr *Error
+			var svcErr *svcerr.Error
 			if !errors.As(err, &svcErr) {
 				t.Fatalf("expected *Error, got %T: %v", err, err)
 			}

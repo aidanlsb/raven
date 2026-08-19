@@ -237,7 +237,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, linkPla
 	for _, linkPlan := range linkPlans {
 		rewrite, err := planRewriteForLinkSource(req.VaultPath, req.VaultConfig, linkPlan)
 		if err != nil {
-			var svcErr *Error
+			var svcErr *svcerr.Error
 			if errors.As(err, &svcErr) && svcErr.Code == codes.ErrValidationFailed {
 				return nil, warnings, err
 			}
@@ -275,7 +275,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, linkPla
 
 		rewrite, err := planRewriteForSource(req.VaultPath, req.VaultConfig, refPlan)
 		if err != nil {
-			var svcErr *Error
+			var svcErr *svcerr.Error
 			if errors.As(err, &svcErr) && svcErr.Code == codes.ErrValidationFailed {
 				return nil, warnings, err
 			}
