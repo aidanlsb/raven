@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Inlined internal command service-error pass-throughs at their call sites.
+- **Breaking:** `rvn schema update field|trait` now rejects `--type` and `--values`; type and allowed-value remaps must use `rvn schema convert field|trait` with exhaustive `--map-json` preview/confirm migration.
 - Removed the internal `skillsvc` pass-through layer so skill commands call the shared skills implementation directly.
 - Reference and ref-field post-index resolution now share batching and outcome handling, keeping resolved, missing, and ambiguous behavior aligned.
 - Saved queries now persist only RQL, declared arguments, and descriptions; runtime flags are supplied per invocation, and legacy saved `options` blocks are ignored.

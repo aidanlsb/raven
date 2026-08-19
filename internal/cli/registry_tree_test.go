@@ -188,3 +188,22 @@ func TestSchemaConvertHelpDocumentsExhaustiveMapping(t *testing.T) {
 		}
 	}
 }
+
+func TestSchemaUpdateHelpDirectsTypeAndValueRemapsToConvert(t *testing.T) {
+	for _, path := range []string{"schema update trait", "schema update field"} {
+		cmd, ok := findCommandByPath(rootCmd, path)
+		if !ok {
+			t.Fatalf("command missing for path %q", path)
+		}
+		if !strings.Contains(cmd.Long, "--type and --values are rejected") {
+			t.Fatalf("%s help does not reject update remaps:\n%s", path, cmd.Long)
+		}
+		if !strings.Contains(cmd.Long, "schema convert") || !strings.Contains(cmd.Long, "--map-json") {
+			t.Fatalf("%s help does not direct remaps to schema convert:\n%s", path, cmd.Long)
+		}
+	}
+
+	if !strings.Contains(schemaUpdateCmd.Long, "requires --confirm") {
+		t.Fatalf("schema update group help does not explain convert apply semantics:\n%s", schemaUpdateCmd.Long)
+	}
+}

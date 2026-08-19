@@ -4,17 +4,19 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
-func TestHandleSchemaUpdateFieldAcceptsArrayValues(t *testing.T) {
+func TestHandleSchemaUpdateFieldRejectsValueRemap(t *testing.T) {
 	t.Parallel()
 
 	vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+	before := vault.ReadFile("schema.yaml")
 
 	result := HandleSchemaUpdateField(context.Background(), commandexec.Request{
 		VaultPath: vault.Path,
@@ -24,55 +26,38 @@ func TestHandleSchemaUpdateFieldAcceptsArrayValues(t *testing.T) {
 			"values":     []any{"active", "paused", "done", "archived"},
 		},
 	})
-	if !result.OK {
-		t.Fatalf("expected success, got error: %#v", result.Error)
+	if result.OK || result.Error == nil || result.Error.Code != codes.ErrInvalidInput {
+		t.Fatalf("expected INVALID_INPUT, got: %#v", result)
 	}
-
-	loaded, err := schema.Load(vault.Path)
-	if err != nil {
-		t.Fatalf("load schema: %v", err)
+	if !strings.Contains(result.Error.Suggestion, "schema convert field") {
+		t.Fatalf("unexpected suggestion: %q", result.Error.Suggestion)
 	}
-	want := []string{"active", "paused", "done", "archived"}
-	got := loaded.Types["project"].Fields["status"].Values
-	if len(got) != len(want) {
-		t.Fatalf("values = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("values = %v, want %v", got, want)
-		}
+	if got := vault.ReadFile("schema.yaml"); got != before {
+		t.Fatalf("rejected update changed schema.yaml:\n%s", got)
 	}
 }
 
-func TestHandleSchemaUpdateTraitAcceptsArrayValues(t *testing.T) {
+func TestHandleSchemaUpdateTraitRejectsTypeChange(t *testing.T) {
 	t.Parallel()
 
 	vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+	before := vault.ReadFile("schema.yaml")
 
 	result := HandleSchemaUpdateTrait(context.Background(), commandexec.Request{
 		VaultPath: vault.Path,
 		Args: map[string]any{
-			"name":   "priority",
-			"values": []string{"low", "medium", "high", "critical"},
+			"name": "priority",
+			"type": "bool",
 		},
 	})
-	if !result.OK {
-		t.Fatalf("expected success, got error: %#v", result.Error)
+	if result.OK || result.Error == nil || result.Error.Code != codes.ErrInvalidInput {
+		t.Fatalf("expected INVALID_INPUT, got: %#v", result)
 	}
-
-	loaded, err := schema.Load(vault.Path)
-	if err != nil {
-		t.Fatalf("load schema: %v", err)
+	if !strings.Contains(result.Error.Suggestion, "schema convert trait") {
+		t.Fatalf("unexpected suggestion: %q", result.Error.Suggestion)
 	}
-	want := []string{"low", "medium", "high", "critical"}
-	got := loaded.Traits["priority"].Values
-	if len(got) != len(want) {
-		t.Fatalf("values = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("values = %v, want %v", got, want)
-		}
+	if got := vault.ReadFile("schema.yaml"); got != before {
+		t.Fatalf("rejected update changed schema.yaml:\n%s", got)
 	}
 }
 

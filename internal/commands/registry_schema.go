@@ -258,46 +258,60 @@ Use --name-field="-" to remove the name_field setting.`,
 	"schema_update_trait": {
 		Name:        "schema update trait",
 		CLIPath:     []string{"schema", "update", "trait"},
-		Description: "Update an existing trait in the schema",
+		Description: "Update non-conversion metadata on an existing trait",
+		LongDesc: `Update non-conversion metadata on an existing trait.
+
+Use --default to change the default without rewriting live annotations.
+
+--type and --values are rejected because changing either without migrating live
+values can invalidate vault data. Use 'rvn schema convert trait' with the
+required --map-json mapping instead; it previews by default and applies only
+with --confirm.`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name of the trait to update", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "type", Description: "Update trait value type: string, number, url, date, datetime, enum, bool, ref (add [] for arrays)", Type: FlagTypeString},
-			{Name: "values", Description: "Update enum values (comma-separated)", Type: FlagTypeString},
+			{Name: "type", Description: "Rejected by update; use schema convert trait with --map-json", Type: FlagTypeString},
+			{Name: "values", Description: "Rejected by update; use schema convert trait with --map-json", Type: FlagTypeString},
 			{Name: "default", Description: "Update default value", Type: FlagTypeString},
 		},
 		Examples: []string{
-			"rvn schema update trait priority --values critical,high,medium,low --json",
+			"rvn schema update trait priority --default high --json",
+			`rvn schema convert trait priority --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"}' --json`,
 		},
 	},
 	"schema_update_field": {
 		Name:        "schema update field",
 		CLIPath:     []string{"schema", "update", "field"},
-		Description: "Update a field on an existing type",
-		LongDesc: `Update an existing field's properties.
+		Description: "Update non-conversion metadata on an existing field",
+		LongDesc: `Update an existing field's non-conversion properties.
 
 Note: Making a field required will be blocked if any objects lack that field.
 Add the field to all objects first, then make it required.
 Use --description to set optional context for this field.
-Use --description="-" to remove an existing description.`,
+Use --description="-" to remove an existing description.
+
+--type and --values are rejected because changing either without migrating live
+values can invalidate vault data. Use 'rvn schema convert field' with the
+required --map-json mapping instead; it previews by default and applies only
+with --confirm.`,
 		Args: []ArgMeta{
 			{Name: "type_name", Description: "Type containing the field", Required: true},
 			{Name: "field_name", Description: "Field to update", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "type", Description: "Update field type", Type: FlagTypeString},
+			{Name: "type", Description: "Rejected by update; use schema convert field with --map-json", Type: FlagTypeString},
 			{Name: "required", Description: "Update required status (true/false)", Type: FlagTypeString},
 			{Name: "default", Description: "Update default value", Type: FlagTypeString},
-			{Name: "values", Description: "Update enum values (comma-separated)", Type: FlagTypeString},
+			{Name: "values", Description: "Rejected by update; use schema convert field with --map-json", Type: FlagTypeString},
 			{Name: "target", Description: "Update target type for ref fields", Type: FlagTypeString},
 			{Name: "description", Description: "Set/update description (use '-' to remove)", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn schema update field person email --required=true --json",
 			"rvn schema update field project status --default=active --json",
-			"rvn schema update field project status --values active,paused,done,archived --json",
 			"rvn schema update field person email --description \"Primary contact email\" --json",
+			`rvn schema convert field project status --map-json '{"backlog":"todo","active":"active","done":"done"}' --json`,
 		},
 	},
 	"schema_remove_type": {
@@ -359,6 +373,9 @@ Existing field values will remain in files but no longer be validated.`,
 		Description: "Convert a trait's type or values and migrate every annotation",
 		LongDesc: `Convert a trait's values, optionally changing its type, and migrate schema.yaml plus all matching annotations.
 
+This is the only supported command for changing an existing trait's type or
+allowed values; schema update trait rejects --type and --values.
+
 --map-json must be a JSON object whose keys are old values and whose values use
 the target type's JSON representation. The map must cover every finite
 schema-allowed value (all enum members or true/false for bool), the current
@@ -398,6 +415,9 @@ After applying, run 'rvn reindex --full --json' and 'rvn check --json'.`,
 		CLIPath:     []string{"schema", "convert", "field"},
 		Description: "Convert a field's type or values and migrate every object",
 		LongDesc: `Convert a field's values, optionally changing its type, and migrate schema.yaml plus matching object frontmatter.
+
+This is the only supported command for changing an existing field's type or
+allowed values; schema update field rejects --type and --values.
 
 --map-json must be a JSON object whose keys are old values and whose values use
 the target type's JSON representation. The map must cover every finite

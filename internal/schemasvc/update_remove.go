@@ -230,6 +230,9 @@ func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResul
 	if traitName == "" {
 		return nil, newError(ErrorInvalidInput, "trait name cannot be empty", "", nil, nil)
 	}
+	if err := rejectUpdateRemap("trait", traitName, req.TraitType, req.Values); err != nil {
+		return nil, err
+	}
 
 	changes := make([]string, 0)
 	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
@@ -247,25 +250,8 @@ func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResul
 		traitsNode := schemadoc.EnsureMap(doc.Root(), "traits")
 		traitNode := schemadoc.EnsureMap(traitsNode, traitName)
 
-		if strings.TrimSpace(req.TraitType) != "" {
-			traitType := normalizeTraitTypeInput(req.TraitType)
-			traitNode["type"] = traitType
-			changes = append(changes, fmt.Sprintf("type=%s", traitType))
-		}
-		if strings.TrimSpace(req.Values) != "" {
-			values := splitCommaValues(req.Values)
-			if len(values) > 0 {
-				traitNode["values"] = values
-			} else {
-				delete(traitNode, "values")
-			}
-			changes = append(changes, fmt.Sprintf("values=%s", strings.Join(values, ",")))
-		}
 		if strings.TrimSpace(req.Default) != "" {
 			effectiveType := currentTraitType(traitDef)
-			if strings.TrimSpace(req.TraitType) != "" {
-				effectiveType = normalizeTraitTypeInput(req.TraitType)
-			}
 			if normalizedDefault, ok := normalizeTraitDefaultValue(effectiveType, req.Default); ok {
 				traitNode["default"] = normalizedDefault
 				changes = append(changes, fmt.Sprintf("default=%v", normalizedDefault))
@@ -276,7 +262,7 @@ func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResul
 			return newError(
 				ErrorInvalidInput,
 				"no changes specified",
-				"Use flags like --type, --values, --default",
+				"Use --default; use 'rvn schema convert trait' for type or value changes",
 				nil,
 				nil,
 			)
@@ -298,6 +284,9 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
 		return nil, newError(ErrorInvalidInput, "type and field names are required", "", nil, nil)
+	}
+	if err := rejectUpdateRemap("field", typeName+" "+fieldName, req.FieldType, req.Values); err != nil {
+		return nil, err
 	}
 
 	changes := make([]string, 0)
@@ -336,31 +325,17 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 			)
 		}
 
-		requestedBaseType := ""
-		if strings.TrimSpace(req.FieldType) != "" {
-			requestedBaseType = normalizeFieldTypeAlias(strings.TrimSuffix(strings.TrimSpace(req.FieldType), "[]"))
-		}
 		effectiveFieldType := currentFieldType(currentFieldDef)
-		if strings.TrimSpace(req.FieldType) != "" {
-			effectiveFieldType = strings.TrimSpace(req.FieldType)
-		}
 		effectiveTarget := ""
 		if currentFieldDef != nil {
 			effectiveTarget = strings.TrimSpace(currentFieldDef.Target)
 		}
-		if requestedBaseType != "" && requestedBaseType != "ref" && strings.TrimSpace(req.Target) == "" {
-			effectiveTarget = ""
-		} else if strings.TrimSpace(req.Target) != "" {
+		if strings.TrimSpace(req.Target) != "" {
 			effectiveTarget = strings.TrimSpace(req.Target)
 		}
 		effectiveValues := ""
 		if currentFieldDef != nil {
 			effectiveValues = strings.Join(currentFieldDef.Values, ",")
-		}
-		if requestedBaseType != "" && requestedBaseType != "enum" && strings.TrimSpace(req.Values) == "" {
-			effectiveValues = ""
-		} else if strings.TrimSpace(req.Values) != "" {
-			effectiveValues = strings.Join(splitCommaValues(req.Values), ",")
 		}
 		validation := ValidateFieldTypeSpec(effectiveFieldType, effectiveTarget, effectiveValues, sch)
 		if !validation.Valid {
@@ -444,29 +419,6 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 		}
 		fieldNode := schemadoc.EnsureMap(fieldsNode, fieldName)
 
-		if strings.TrimSpace(req.FieldType) != "" {
-			fieldType := validation.BaseType
-			if fieldType == "" {
-				fieldType = "string"
-			}
-			if validation.IsArray {
-				fieldType += "[]"
-			}
-			fieldNode["type"] = fieldType
-			changes = append(changes, fmt.Sprintf("type=%s", fieldType))
-			if validation.BaseType != "ref" && strings.TrimSpace(req.Target) == "" {
-				if _, exists := fieldNode["target"]; exists {
-					delete(fieldNode, "target")
-					changes = append(changes, "removed target")
-				}
-			}
-			if validation.BaseType != "enum" && strings.TrimSpace(req.Values) == "" {
-				if _, exists := fieldNode["values"]; exists {
-					delete(fieldNode, "values")
-					changes = append(changes, "removed values")
-				}
-			}
-		}
 		if strings.TrimSpace(req.Required) != "" {
 			required := req.Required == "true"
 			fieldNode["required"] = required
@@ -475,15 +427,6 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 		if strings.TrimSpace(req.Default) != "" {
 			fieldNode["default"] = req.Default
 			changes = append(changes, fmt.Sprintf("default=%s", req.Default))
-		}
-		if strings.TrimSpace(req.Values) != "" {
-			values := splitCommaValues(req.Values)
-			if len(values) > 0 {
-				fieldNode["values"] = values
-			} else {
-				delete(fieldNode, "values")
-			}
-			changes = append(changes, fmt.Sprintf("values=%s", strings.Join(values, ",")))
 		}
 		if strings.TrimSpace(req.Target) != "" {
 			fieldNode["target"] = strings.TrimSpace(req.Target)
@@ -503,7 +446,7 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 			return newError(
 				ErrorInvalidInput,
 				"no changes specified",
-				"Use flags like --type, --required, --default, --values, --target, --description",
+				"Use flags like --required, --default, --target, --description; use 'rvn schema convert field' for type or value changes",
 				nil,
 				nil,
 			)
@@ -519,6 +462,31 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 		Field:   fieldName,
 		Changes: changes,
 	}, nil
+}
+
+func rejectUpdateRemap(kind, target, requestedType, values string) *Error {
+	flags := make([]string, 0, 2)
+	if strings.TrimSpace(requestedType) != "" {
+		flags = append(flags, "--type")
+	}
+	if strings.TrimSpace(values) != "" {
+		flags = append(flags, "--values")
+	}
+	if len(flags) == 0 {
+		return nil
+	}
+
+	return newError(
+		ErrorInvalidInput,
+		fmt.Sprintf("schema update %s does not support %s", kind, strings.Join(flags, " or ")),
+		fmt.Sprintf(
+			"Use 'rvn schema convert %s %s [--type <target-type>] --map-json <mapping>' to migrate schema and live values",
+			kind,
+			target,
+		),
+		map[string]interface{}{"unsupported_flags": flags},
+		nil,
+	)
 }
 
 func currentTraitType(def *schema.TraitDefinition) string {
