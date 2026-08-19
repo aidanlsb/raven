@@ -45,7 +45,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	if strings.TrimSpace(req.Title) == "" {
 		return nil, newError(ErrorInvalidInput, "title is required", "Usage: rvn new <type> <title> --json", nil, nil)
 	}
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
 	if owned {
 		defer rt.Close()
 	}

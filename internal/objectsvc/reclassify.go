@@ -88,7 +88,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	if req.Schema == nil {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
 	}
@@ -307,7 +307,7 @@ func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult,
 		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn reclassify <reference> <new-type>", nil, nil)
 	}
 
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
 	}

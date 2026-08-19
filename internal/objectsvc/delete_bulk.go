@@ -57,7 +57,7 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, nil, nil)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, nil, nil)
 	if owned {
 		defer rt.Close()
 	}
@@ -128,7 +128,7 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 
-	rt, owned := requestRuntime(req.Runtime, req.VaultPath, req.VaultConfig, nil, nil)
+	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, nil, nil)
 	if owned {
 		defer rt.Close()
 	}

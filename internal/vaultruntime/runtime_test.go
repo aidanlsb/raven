@@ -5,7 +5,44 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/schema"
 )
+
+func TestFromRequest(t *testing.T) {
+	t.Parallel()
+
+	existing := &Runtime{VaultPath: "existing"}
+	got, constructed := FromRequest(existing, "ignored", nil, nil, nil)
+	if got != existing {
+		t.Fatalf("FromRequest() runtime = %p, want existing runtime %p", got, existing)
+	}
+	if constructed {
+		t.Fatal("FromRequest() constructed = true, want false for existing runtime")
+	}
+
+	vaultCfg := &config.VaultConfig{}
+	sch := &schema.Schema{}
+	parseOptions := &parser.ParseOptions{}
+	got, constructed = FromRequest(nil, "vault", vaultCfg, sch, parseOptions)
+	if !constructed {
+		t.Fatal("FromRequest() constructed = false, want true for new runtime")
+	}
+	if got.VaultPath != "vault" {
+		t.Fatalf("FromRequest() VaultPath = %q, want %q", got.VaultPath, "vault")
+	}
+	if got.VaultCfg != vaultCfg {
+		t.Fatal("FromRequest() did not preserve VaultCfg")
+	}
+	if got.Schema != sch {
+		t.Fatal("FromRequest() did not preserve Schema")
+	}
+	if got.ParseOptions != parseOptions {
+		t.Fatal("FromRequest() did not preserve ParseOptions")
+	}
+}
 
 func TestNewBuildsInvocationScopedDependencies(t *testing.T) {
 	t.Parallel()

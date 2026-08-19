@@ -81,6 +81,26 @@ type Runtime struct {
 	SchemaLoadErr error
 }
 
+// FromRequest reuses rt when provided or constructs a runtime from the request
+// dependencies. The returned bool reports whether a new runtime was constructed.
+func FromRequest(
+	rt *Runtime,
+	vaultPath string,
+	vaultCfg *config.VaultConfig,
+	sch *schema.Schema,
+	parseOptions *parser.ParseOptions,
+) (*Runtime, bool) {
+	if rt != nil {
+		return rt, false
+	}
+	return &Runtime{
+		VaultPath:    vaultPath,
+		VaultCfg:     vaultCfg,
+		Schema:       sch,
+		ParseOptions: parseOptions,
+	}, true
+}
+
 // New loads a vault runtime according to opts.
 func New(vaultPath string, opts Options) (*Runtime, error) {
 	if vaultPath == "" {
