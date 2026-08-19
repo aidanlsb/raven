@@ -218,8 +218,8 @@ func assertUpdateRemapRejected(t *testing.T, err error, flag, convertCommand str
 	if !errors.As(err, &svcErr) {
 		t.Fatalf("expected schemasvc error, got %T: %v", err, err)
 	}
-	if svcErr.Code != ErrorInvalidInput {
-		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorInvalidInput)
+	if svcErr.Code != codes.ErrInvalidInput {
+		t.Fatalf("error code = %q, want %q", svcErr.Code, codes.ErrInvalidInput)
 	}
 	if !strings.Contains(svcErr.Message, flag) {
 		t.Fatalf("error message %q does not mention %s", svcErr.Message, flag)
