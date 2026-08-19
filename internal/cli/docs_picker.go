@@ -33,7 +33,7 @@ func prepareDocsCommand(_ *cobra.Command, args []string) ([]string, bool, error)
 		return nil, false, handleError(ErrInternal, err, "Run 'rvn docs fetch' to refresh docs")
 	}
 	if err := runDocsPickerNavigator(source.FS, sections); err != nil {
-		return nil, false, handleError(ErrInternal, err, "Run 'rvn docs list' for non-interactive output")
+		return nil, false, handleError(ErrInternal, err, "Run 'rvn docs --json' for non-interactive output")
 	}
 	return nil, true, nil
 }

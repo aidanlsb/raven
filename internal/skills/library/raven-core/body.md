@@ -57,7 +57,7 @@ Key distinctions:
 
 Raven ships its own long-form documentation. Use these when you need usage details or examples beyond what `rvn <command> --help` shows.
 
-- List doc sections: `rvn docs list --json`
+- List doc sections: `rvn docs --json`
 - Read a topic: `rvn docs <section> <topic> --json`
 - Search docs: `rvn docs search "<query>" --json` (continue with `--offset` when `has_more` is true)
 - Existing stale caches refresh lazily on those docs reads; a failed refresh returns `DOCS_FETCH_FAILED` while serving cached content.

@@ -36,25 +36,6 @@ func runMCPParityMetaTests(t *testing.T, binary string) {
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"sections", "command_docs", "navigation_tip"})
 	})
 
-	t.Run("docs_list", func(t *testing.T) {
-		docsIndex := `sections:
-  getting-started:
-    topics:
-      installation:
-        path: installation.md
-`
-		configPath := seedGlobalDocsConfig(t, map[string]string{
-			"index.yaml":                      docsIndex,
-			"getting-started/installation.md": "# Installation\n\nWelcome.\n",
-		})
-		server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
-
-		mcpResult := server.callTool("docs_list", map[string]interface{}{})
-		cliResult := runCLIWithConfig(t, binary, configPath, "docs", "list")
-
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"sections", "command_docs", "navigation_tip"})
-	})
-
 	t.Run("docs_search", func(t *testing.T) {
 		docsIndex := `sections:
   querying:

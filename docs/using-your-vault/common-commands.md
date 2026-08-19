@@ -492,11 +492,13 @@ incompatible index without replacing it.
 
 ### `rvn docs`
 
-Browse Raven's documentation from the CLI. Bare `rvn docs` opens the interactive picker; subcommands provide scripted access.
+Browse Raven's documentation from the CLI. Bare `rvn docs` opens the interactive
+picker; with `--json`, the same command returns the sections list for scripted
+access.
 
 ```bash
 rvn docs                                         # Interactive section/topic picker
-rvn docs list                                    # List sections and their commands
+rvn docs --json                                  # List sections and their commands
 rvn docs getting-started                         # List topics in a section
 rvn docs search "saved query"                    # Full-text search across docs
 rvn docs search "exclude" --section using-your-vault --limit 10

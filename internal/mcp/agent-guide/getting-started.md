@@ -22,7 +22,7 @@ Use this guide after quickstart when you need an operational first pass through 
 3. Check saved queries:
    `raven://queries/saved` or `raven_invoke(command="query_saved_list")`
 4. Ensure docs are available in Raven's global docs directory:
-   `raven_invoke(command="docs_list")`
+   `raven_invoke(command="docs")`
    Existing caches from older releases refresh lazily on this read. If refresh
    fails, `DOCS_FETCH_FAILED` warns that Raven served the existing cache.
    If this returns `FILE_NOT_FOUND`, fetch the missing cache:

@@ -38,10 +38,9 @@ limited to:
 
 - `rvn init` and `rvn docs fetch` download the documentation archive from
   GitHub (`codeload.github.com`, overridable with `--source`)
-- docs read commands (`rvn docs`, `rvn docs list`, and `rvn docs search`) may
-  lazily download docs from the installed CLI version tag when an existing
-  cache was created by an older release; failures warn and fall back to that
-  cache
+- docs read commands (`rvn docs` and `rvn docs search`) may lazily download docs
+  from the installed CLI version tag when an existing cache was created by an
+  older release; failures warn and fall back to that cache
 - installs and upgrades via Homebrew or `go install`
 
 ### Vault scoping

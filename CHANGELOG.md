@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - Removed the internal read-runtime, reference-resolution, and CLI field-JSON compatibility facades so callers use the shared extracted packages directly.
+- **Breaking:** Removed the redundant `rvn docs list` leaf and `docs_list` MCP command ID. Use `rvn docs --json` or `raven_invoke(command="docs")` for the same sections payload.
 - Removed the orphaned internal `rvnexec` subprocess helper.
 
 ## [v0.0.33] - 2026-07-28

@@ -45,6 +45,11 @@ func TestDocsParentUsesCanonicalAdapter(t *testing.T) {
 	if commandID, ok := registryCommandIDForCommand(docsCmd); !ok || commandID != "docs" {
 		t.Fatalf("docs registry command = %q (ok=%v), want docs", commandID, ok)
 	}
+	for _, child := range docsCmd.Commands() {
+		if child.Name() == "list" {
+			t.Fatal("docs parent still exposes the removed list leaf")
+		}
+	}
 }
 
 func TestRewriteCanonicalDocsFailurePreservesCommandRedirect(t *testing.T) {
@@ -94,7 +99,7 @@ func TestOutputDocsSectionsTextListsSectionCommands(t *testing.T) {
 		"rvn docs querying",
 		"Querying (1 topic)",
 		"General docs commands",
-		"rvn docs list",
+		"Browse sections and topics",
 		"rvn docs <section>",
 		"rvn docs <section> <topic>",
 		"rvn docs search <query>",
@@ -104,6 +109,9 @@ func TestOutputDocsSectionsTextListsSectionCommands(t *testing.T) {
 		if !strings.Contains(out, snippet) {
 			t.Fatalf("output missing %q\nfull output:\n%s", snippet, out)
 		}
+	}
+	if strings.Contains(out, "rvn docs list") {
+		t.Fatalf("output still suggests removed docs list command:\n%s", out)
 	}
 }
 
@@ -134,12 +142,15 @@ func TestOutputDocsTopicsTextListsTopicCommands(t *testing.T) {
 		"General docs commands",
 		"rvn docs reference",
 		"rvn docs search <query> --section reference",
-		"rvn docs list",
+		"Browse sections and topics",
 	}
 	for _, snippet := range wantSnippets {
 		if !strings.Contains(out, snippet) {
 			t.Fatalf("output missing %q\nfull output:\n%s", snippet, out)
 		}
+	}
+	if strings.Contains(out, "rvn docs list") {
+		t.Fatalf("output still suggests removed docs list command:\n%s", out)
 	}
 }
 
@@ -162,13 +173,16 @@ func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
 		"Documentation topic commands for Vault Management [vault-management]",
 		"(no topics)",
 		"General docs commands",
-		"rvn docs list",
+		"Browse sections and topics",
 		"rvn docs search <query> --section vault-management",
 	}
 	for _, snippet := range wantSnippets {
 		if !strings.Contains(out, snippet) {
 			t.Fatalf("output missing %q\nfull output:\n%s", snippet, out)
 		}
+	}
+	if strings.Contains(out, "rvn docs list") {
+		t.Fatalf("output still suggests removed docs list command:\n%s", out)
 	}
 }
 

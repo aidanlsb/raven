@@ -114,6 +114,12 @@ func TestDiscoverableContractsApplyPolicy(t *testing.T) {
 	if _, ok := byID["query"]; !ok {
 		t.Fatal("expected discoverable contract for query")
 	}
+	if _, ok := byID["docs"]; !ok {
+		t.Fatal("expected discoverable contract for docs")
+	}
+	if _, ok := byID["docs_list"]; ok {
+		t.Fatal("did not expect removed docs_list command to be discoverable")
+	}
 	if _, ok := byID["serve"]; ok {
 		t.Fatal("did not expect serve to be discoverable")
 	}
