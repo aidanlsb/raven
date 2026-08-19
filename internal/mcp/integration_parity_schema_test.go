@@ -112,10 +112,10 @@ func runMCPParitySchemaTests(t *testing.T, binary string) {
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("schema_update_trait", map[string]interface{}{
-			"name":   "priority",
-			"values": "low,medium,high,critical",
+			"name":    "priority",
+			"default": "high",
 		})
-		cliResult := vCLI.RunCLI("schema", "update", "trait", "priority", "--values", "low,medium,high,critical")
+		cliResult := vCLI.RunCLI("schema", "update", "trait", "priority", "--default", "high")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"updated", "name", "changes"})
 	})
@@ -128,9 +128,9 @@ func runMCPParitySchemaTests(t *testing.T, binary string) {
 		mcpResult := server.callTool("schema_update_field", map[string]interface{}{
 			"type_name":  "project",
 			"field_name": "status",
-			"values":     "active,paused,done,archived",
+			"default":    "active",
 		})
-		cliResult := vCLI.RunCLI("schema", "update", "field", "project", "status", "--values", "active,paused,done,archived")
+		cliResult := vCLI.RunCLI("schema", "update", "field", "project", "status", "--default", "active")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"updated", "type", "field", "changes"})
 	})

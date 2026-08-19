@@ -552,6 +552,19 @@ Usage: `@highlight` (no value needed)
 
 What happens when you change the schema.
 
+### Updating Metadata vs. Converting Values
+
+`schema update` changes metadata that does not remap existing field or trait
+values. Examples include field descriptions, required status, defaults and
+reference targets; trait defaults; and type-level settings such as descriptions
+and default paths.
+
+Changing an existing field or trait's declared type or allowed enum values is a
+data migration. `schema update field|trait` rejects `--type` and `--values`.
+Use `schema convert field|trait` with the required exhaustive `--map-json`
+mapping. Conversion previews the schema and live-data changes by default and
+applies them only with `--confirm`.
+
 ### Removing a Type
 
 ```bash
@@ -644,9 +657,9 @@ rvn schema convert trait priority \
   --map-json '{"high":true,"medium":true}'
 ```
 
-`schema update ... --values` remains an immediate, schema-only edit. Use it when
-you intentionally do not want Raven to touch existing data; removed values can
-then surface as `invalid_enum_value` on `rvn check`.
+`schema update field|trait --values` is rejected. This prevents a schema-only
+allow-list edit from silently leaving invalid values in frontmatter or trait
+annotations.
 
 ### Changing Value Types
 
@@ -783,7 +796,7 @@ rvn schema add field person email --description "Primary contact email"
 # Update schema
 rvn schema update type person --name-field name
 rvn schema update type person --description "People and contacts"
-rvn schema update trait priority --values critical,high,medium,low
+rvn schema update trait priority --default high
 rvn schema update field person email --required=true
 rvn schema update field person email --description -
 

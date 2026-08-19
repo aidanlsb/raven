@@ -369,11 +369,11 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("schema_update_field", map[string]interface{}{
-			"type_name":  "person",
-			"field_name": "missing",
-			"type":       "string",
+			"type_name":   "person",
+			"field_name":  "missing",
+			"description": "Missing field",
 		})
-		cliResult := vCLI.RunCLI("schema", "update", "field", "person", "missing", "--type", "string")
+		cliResult := vCLI.RunCLI("schema", "update", "field", "person", "missing", "--description", "Missing field")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})

@@ -103,3 +103,64 @@ traits: {}
 	v.AssertFileContains("schema.yaml", "- todo")
 	v.AssertFileContains("projects/a.md", "status: done")
 }
+
+func TestSchemaUpdateRejectsTypeAndValueRemaps(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		convertPath string
+	}{
+		{
+			name:        "trait type",
+			args:        []string{"schema", "update", "trait", "priority", "--type", "bool"},
+			convertPath: "schema convert trait",
+		},
+		{
+			name:        "trait values",
+			args:        []string{"schema", "update", "trait", "priority", "--values", "high,low"},
+			convertPath: "schema convert trait",
+		},
+		{
+			name:        "field type",
+			args:        []string{"schema", "update", "field", "project", "status", "--type", "string"},
+			convertPath: "schema convert field",
+		},
+		{
+			name:        "field values",
+			args:        []string{"schema", "update", "field", "project", "status", "--values", "todo,done"},
+			convertPath: "schema convert field",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := testutil.NewTestVault(t).
+				WithSchema(`version: 1
+types:
+  project:
+    fields:
+      status:
+        type: enum
+        values: [todo, active, done]
+traits:
+  priority:
+    type: enum
+    values: [high, medium, low]
+`).
+				WithFile("projects/a.md", "---\ntype: project\nstatus: active\n---\n@priority(medium)\n").
+				Build()
+			beforeSchema := v.ReadFile("schema.yaml")
+			beforeObject := v.ReadFile("projects/a.md")
+
+			result := v.RunCLI(tt.args...)
+			result.MustFail(t, "INVALID_INPUT")
+			result.MustFailWithMessage(t, tt.convertPath)
+			if got := v.ReadFile("schema.yaml"); got != beforeSchema {
+				t.Fatalf("rejected update changed schema.yaml:\n%s", got)
+			}
+			if got := v.ReadFile("projects/a.md"); got != beforeObject {
+				t.Fatalf("rejected update changed live data:\n%s", got)
+			}
+		})
+	}
+}

@@ -140,13 +140,14 @@ func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
 	v.AssertFileNotContains("schema.yaml", "description: Primary contact email")
 }
 
-// TestMCPIntegration_SchemaFieldEnumValuesViaToolCall verifies enum field values
-// can be updated via MCP without removing/recreating the field.
+// TestMCPIntegration_SchemaFieldEnumValuesViaToolCall verifies enum value
+// remaps are rejected in favor of the migration-aware convert command.
 func TestMCPIntegration_SchemaFieldEnumValuesViaToolCall(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
+	before := v.ReadFile("schema.yaml")
 
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
@@ -156,12 +157,15 @@ func TestMCPIntegration_SchemaFieldEnumValuesViaToolCall(t *testing.T) {
 		"field_name": "status",
 		"values":     "active,paused,done,archived",
 	})
-	if updateFieldResult.IsError {
-		t.Fatalf("schema update field values failed: %s", updateFieldResult.Text)
+	if !updateFieldResult.IsError {
+		t.Fatalf("schema update field values unexpectedly succeeded: %s", updateFieldResult.Text)
 	}
-
-	v.AssertFileContains("schema.yaml", "status:")
-	v.AssertFileContains("schema.yaml", "- archived")
+	if !strings.Contains(updateFieldResult.Text, "schema convert field") {
+		t.Fatalf("schema update field rejection did not direct callers to convert: %s", updateFieldResult.Text)
+	}
+	if got := v.ReadFile("schema.yaml"); got != before {
+		t.Fatalf("rejected update changed schema.yaml:\n%s", got)
+	}
 }
 
 func TestMCPIntegration_SchemaUpdateTypeAndTraitViaToolCall(t *testing.T) {
@@ -185,13 +189,13 @@ func TestMCPIntegration_SchemaUpdateTypeAndTraitViaToolCall(t *testing.T) {
 	v.AssertFileContains("schema.yaml", "- priority")
 
 	updateTraitResult := server.callTool("schema_update_trait", map[string]interface{}{
-		"name":   "priority",
-		"values": "low,medium,high,critical",
+		"name":    "priority",
+		"default": "high",
 	})
 	if updateTraitResult.IsError {
 		t.Fatalf("schema update trait failed: %s", updateTraitResult.Text)
 	}
-	v.AssertFileContains("schema.yaml", "- critical")
+	v.AssertFileContains("schema.yaml", "default: high")
 }
 
 func TestMCPIntegration_SchemaRemoveTypeAndTraitWarningsViaToolCall(t *testing.T) {

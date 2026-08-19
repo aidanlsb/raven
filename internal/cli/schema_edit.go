@@ -53,12 +53,17 @@ const schemaUpdateLong = `Update existing definitions in schema.yaml.
 
 Subcommands:
   type <name>              Update an existing type
-  trait <name>             Update an existing trait  
-  field <type> <field>     Update a field on an existing type
+  trait <name>             Update non-conversion trait metadata
+  field <type> <field>     Update non-conversion field metadata
+
+Update does not change an existing field or trait's type or allowed values.
+The --type and --values flags are rejected for those subcommands. Use schema
+convert field|trait with the required --map-json mapping for type or value
+remaps; conversion previews by default and requires --confirm to apply.
 
 Examples:
   rvn schema update type person --default-path person/
-  rvn schema update trait priority --values critical,high,medium,low
+  rvn schema update trait priority --default high
   rvn schema update field person email --required=true
   rvn schema update type meeting --add-trait due`
 
@@ -130,6 +135,9 @@ const schemaConvertLong = `Convert trait or field values and migrate schema.yaml
 Subcommands:
   trait <name>
   field <type> <field>
+
+This is the only supported path for changing an existing field or trait's type
+or allowed values; schema update field|trait rejects --type and --values.
 
 --map-json is required and must exhaustively cover enum/bool allowed values,
 the current default, and every observed live value. Conversion is preview-only
