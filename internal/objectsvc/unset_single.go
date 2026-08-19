@@ -35,8 +35,8 @@ type UnsetByReferenceResult struct {
 }
 
 func UnsetByReference(req UnsetByReferenceRequest) (*UnsetByReferenceResult, error) {
-	if strings.TrimSpace(req.VaultPath) == "" {
-		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, nil)
+	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
+		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, err)
 	}
 	if req.VaultConfig == nil {
 		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)

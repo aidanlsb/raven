@@ -92,13 +92,14 @@ func (r *RunResult) Data() map[string]interface{} {
 }
 
 func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
-	if rt == nil {
-		return nil, newError(CodeInvalidInput, "vault runtime is required", "", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		message := "vault path is required"
+		if rt == nil {
+			message = "vault runtime is required"
+		}
+		return nil, newError(CodeInvalidInput, message, "", err)
 	}
 	vaultPath := strings.TrimSpace(rt.VaultPath)
-	if vaultPath == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
-	}
 
 	ctx := req.Context
 	if ctx == nil {

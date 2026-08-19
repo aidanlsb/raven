@@ -329,8 +329,8 @@ func Move(req MoveRequest) (*MoveResult, error) {
 }
 
 func newLifecycleContext(rt *vaultruntime.Runtime, vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, parseOptions *parser.ParseOptions) (*lifecycleContext, error) {
-	if strings.TrimSpace(vaultPath) == "" {
-		return nil, newError(codes.ErrInvalidInput, "vault path is required", "", nil, nil)
+	if err := vaultruntime.RequirePath(vaultPath); err != nil {
+		return nil, newError(codes.ErrInvalidInput, "vault path is required", "", nil, err)
 	}
 	if vaultCfg == nil {
 		return nil, newError(codes.ErrValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)

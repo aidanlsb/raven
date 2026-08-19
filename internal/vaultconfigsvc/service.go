@@ -853,8 +853,8 @@ func RemoveExclude(rt *vaultruntime.Runtime, req RemoveExcludeRequest) (*RemoveE
 }
 
 func load(rt *vaultruntime.Runtime) (*config.VaultConfig, bool, string, error) {
-	if rt == nil || strings.TrimSpace(rt.VaultPath) == "" {
-		return nil, false, "", newError(CodeInvalidInput, "vault path is required", "Resolve a vault before invoking the command", nil)
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, false, "", newError(CodeInvalidInput, "vault path is required", "Resolve a vault before invoking the command", err)
 	}
 	if rt.VaultCfg == nil {
 		if err := rt.ReloadConfig(); err != nil {

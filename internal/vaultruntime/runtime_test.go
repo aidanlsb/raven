@@ -44,6 +44,49 @@ func TestFromRequest(t *testing.T) {
 	}
 }
 
+func TestRequire(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		runtime *Runtime
+		wantErr bool
+	}{
+		{name: "nil runtime", runtime: nil, wantErr: true},
+		{name: "empty path", runtime: &Runtime{}, wantErr: true},
+		{name: "whitespace path", runtime: &Runtime{VaultPath: " \t\n"}, wantErr: true},
+		{name: "vault path", runtime: &Runtime{VaultPath: "/tmp/vault"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := Require(tt.runtime)
+			if tt.wantErr {
+				if !errors.Is(err, ErrVaultPathRequired) {
+					t.Fatalf("Require() error = %v, want ErrVaultPathRequired", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Require() error = %v, want nil", err)
+			}
+		})
+	}
+}
+
+func TestRequirePath(t *testing.T) {
+	t.Parallel()
+
+	if err := RequirePath(" \t\n"); !errors.Is(err, ErrVaultPathRequired) {
+		t.Fatalf("RequirePath() error = %v, want ErrVaultPathRequired", err)
+	}
+	if err := RequirePath("/tmp/vault"); err != nil {
+		t.Fatalf("RequirePath() error = %v, want nil", err)
+	}
+}
+
 func TestNewBuildsInvocationScopedDependencies(t *testing.T) {
 	t.Parallel()
 

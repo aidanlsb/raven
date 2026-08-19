@@ -3,9 +3,11 @@
 package vaultruntime
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
@@ -13,6 +15,26 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
+
+// ErrVaultPathRequired reports a missing vault path at a service boundary.
+var ErrVaultPathRequired = errors.New("vault path is required")
+
+// Require validates that rt identifies a vault.
+func Require(rt *Runtime) error {
+	if rt == nil {
+		return ErrVaultPathRequired
+	}
+	return RequirePath(rt.VaultPath)
+}
+
+// RequirePath validates a vault path for compatibility service boundaries that
+// do not yet receive a Runtime.
+func RequirePath(vaultPath string) error {
+	if strings.TrimSpace(vaultPath) == "" {
+		return ErrVaultPathRequired
+	}
+	return nil
+}
 
 // Stage identifies the dependency-loading stage that failed while constructing
 // a Runtime. Callers use it to preserve transport-specific error contracts.
@@ -103,8 +125,8 @@ func FromRequest(
 
 // New loads a vault runtime according to opts.
 func New(vaultPath string, opts Options) (*Runtime, error) {
-	if vaultPath == "" {
-		return nil, fmt.Errorf("vault path is required")
+	if err := RequirePath(vaultPath); err != nil {
+		return nil, err
 	}
 
 	rt := &Runtime{
