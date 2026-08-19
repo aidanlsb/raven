@@ -16,7 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -138,7 +138,7 @@ func runAddSingle(rt *vaultruntime.Runtime, text, toRef, journalOperation string
 	var targetObjectID string
 
 	if strings.TrimSpace(toRef) != "" {
-		resolved, err := readsvc.ResolveReferenceWithDynamicDates(toRef, rt, true)
+		resolved, err := refresolve.ResolveDynamic(toRef, rt, true)
 		if err != nil {
 			return mapResolveFailure(err, toRef)
 		}

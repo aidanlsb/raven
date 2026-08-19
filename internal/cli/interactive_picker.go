@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt, header string) ([]string, bool, error) {
@@ -44,7 +45,7 @@ func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt
 }
 
 func indexedReferenceTargetItems(vaultPath string, vaultCfg *config.VaultConfig) ([]picker.Item, error) {
-	rt := &readsvc.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
+	rt := &vaultruntime.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
 	defer rt.Close()
 
 	catalog, err := readsvc.Catalog(rt, readsvc.CatalogOptions{
@@ -194,7 +195,7 @@ func ambiguousReferenceItem(match, source string) picker.Item {
 }
 
 func indexedVaultFilePaths(vaultPath string, vaultCfg *config.VaultConfig) ([]string, error) {
-	rt := &readsvc.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
+	rt := &vaultruntime.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
 	defer rt.Close()
 
 	catalog, err := readsvc.Catalog(rt, readsvc.CatalogOptions{FilePaths: true})

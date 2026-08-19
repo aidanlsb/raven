@@ -12,7 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/editsvc"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -50,7 +50,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		}
 	}
 
-	resolved, err := readsvc.ResolveReference(reference, rt, false)
+	resolved, err := refresolve.Resolve(reference, rt, false)
 	if err != nil {
 		return mapResolveFailure(err, reference)
 	}

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Index writes now distinguish pre-commit failures from post-commit reference-resolution failures, reporting successful indexing with potentially stale backlinks and preserving the required recovery scope.
 
 ### Removed
+- Removed the internal read-runtime, reference-resolution, and CLI field-JSON compatibility facades so callers use the shared extracted packages directly.
 - Removed the orphaned internal `rvnexec` subprocess helper.
 
 ## [v0.0.33] - 2026-07-28

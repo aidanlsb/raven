@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestExecuteQuery_InvalidInput(t *testing.T) {
@@ -21,7 +22,7 @@ func TestExecuteQuery_InvalidInput(t *testing.T) {
 		t.Fatalf("failed to open in-memory db: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	rt := &Runtime{DB: db}
+	rt := &vaultruntime.Runtime{DB: db}
 
 	_, err = ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "type:project", Limit: -1})
 	if err == nil || err.Error() != "limit must be >= 0" {
@@ -385,7 +386,7 @@ func TestExecuteQuery_AmbiguousISODateRefReturnsError(t *testing.T) {
 	}
 }
 
-func seededRuntime(t *testing.T) *Runtime {
+func seededRuntime(t *testing.T) *vaultruntime.Runtime {
 	t.Helper()
 
 	db, err := index.OpenInMemory()
@@ -435,7 +436,7 @@ func seededRuntime(t *testing.T) *Runtime {
 		t.Fatalf("failed to seed links: %v", err)
 	}
 
-	return &Runtime{
+	return &vaultruntime.Runtime{
 		VaultPath: t.TempDir(),
 		DB:        db,
 	}

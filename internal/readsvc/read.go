@@ -9,7 +9,9 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
@@ -80,7 +82,7 @@ func (e *InvalidLineRangeError) Unwrap() error {
 	return svcerr.New(codes.ErrInvalidInput, e.Error()).WithSuggestion(e.Suggestion())
 }
 
-func Read(rt *Runtime, req ReadRequest) (*ReadResult, error) {
+func Read(rt *vaultruntime.Runtime, req ReadRequest) (*ReadResult, error) {
 	if rt == nil {
 		return nil, fmt.Errorf("runtime is required")
 	}
@@ -90,13 +92,12 @@ func Read(rt *Runtime, req ReadRequest) (*ReadResult, error) {
 		return nil, fmt.Errorf("reference is required")
 	}
 
-	resolveOp, err := newResolveOperation(rt)
+	resolveOp, err := refresolve.New(rt)
 	if err != nil {
 		return nil, err
 	}
-	defer resolveOp.Close()
 
-	resolved, err := resolveOp.resolveReferenceWithDynamicDates(reference, false)
+	resolved, err := resolveOp.ResolveDynamic(reference, false)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +257,7 @@ func splitFrontmatterBody(content string) (frontmatter, body string) {
 	return frontmatter, body
 }
 
-func collectReadReferences(body string, rt *Runtime, resolveOp *resolveOperation) []ReadReference {
+func collectReadReferences(body string, rt *vaultruntime.Runtime, resolveOp *refresolve.Operation) []ReadReference {
 	lines := strings.Split(body, "\n")
 	refs := make([]ReadReference, 0)
 	fence := parser.FenceState{}
@@ -287,15 +288,15 @@ func collectReadReferences(body string, rt *Runtime, resolveOp *resolveOperation
 	return refs
 }
 
-func resolveReferenceTargetToRelPath(target string, rt *Runtime, resolveOp *resolveOperation) (string, bool) {
+func resolveReferenceTargetToRelPath(target string, rt *vaultruntime.Runtime, resolveOp *refresolve.Operation) (string, bool) {
 	var (
-		resolved *ResolveResult
+		resolved *refresolve.ResolveResult
 		err      error
 	)
 	if resolveOp != nil {
-		resolved, err = resolveOp.resolveReference(target, false)
+		resolved, err = resolveOp.Resolve(target, false)
 	} else {
-		resolved, err = ResolveReference(target, rt, false)
+		resolved, err = refresolve.Resolve(target, rt, false)
 	}
 	if err != nil {
 		return "", false
@@ -307,7 +308,7 @@ func resolveReferenceTargetToRelPath(target string, rt *Runtime, resolveOp *reso
 	return relPath, true
 }
 
-func readBacklinksWithContext(rt *Runtime, targetObjectID string) ([]ReadBacklinkGroup, int, error) {
+func readBacklinksWithContext(rt *vaultruntime.Runtime, targetObjectID string) ([]ReadBacklinkGroup, int, error) {
 	if err := ensureReadDB(rt); err != nil {
 		return nil, 0, err
 	}
@@ -383,7 +384,7 @@ func dedupeStringsPreserveOrder(values []string) []string {
 	return out
 }
 
-func ensureReadDB(rt *Runtime) error {
+func ensureReadDB(rt *vaultruntime.Runtime) error {
 	if rt == nil {
 		return fmt.Errorf("runtime is required")
 	}

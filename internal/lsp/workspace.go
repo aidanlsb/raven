@@ -13,13 +13,14 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // workspace holds the resolved vault and a read-side catalog. The catalog is
 // rebuilt on save and when another database handle changes resolver-relevant
 // index state.
 type workspace struct {
-	rt *readsvc.Runtime
+	rt *vaultruntime.Runtime
 
 	catalog     readsvc.CatalogSnapshot
 	objectInfos []check.ObjectInfo
@@ -49,7 +50,7 @@ func openWorkspace(vaultPath string) (*workspace, error) {
 		return nil, fmt.Errorf("vault directory not found: %s", absPath)
 	}
 
-	rt, err := readsvc.NewRuntime(absPath, readsvc.RuntimeOptions{OpenDB: true})
+	rt, err := vaultruntime.New(absPath, vaultruntime.Options{OpenDB: true})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open vault %s: %w", absPath, err)
 	}

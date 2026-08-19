@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestReadSectionDefaultsToSubtreeRange(t *testing.T) {
@@ -71,7 +72,7 @@ func TestResolveOpenTargetIncludesSectionLine(t *testing.T) {
 	}
 }
 
-func seededSectionRuntime(t *testing.T) *Runtime {
+func seededSectionRuntime(t *testing.T) *vaultruntime.Runtime {
 	t.Helper()
 
 	vaultPath := t.TempDir()
@@ -103,7 +104,7 @@ func seededSectionRuntime(t *testing.T) *Runtime {
 		t.Fatalf("seed index: %v", err)
 	}
 
-	return &Runtime{
+	return &vaultruntime.Runtime{
 		VaultPath: vaultPath,
 		VaultCfg:  &config.VaultConfig{},
 		DB:        db,

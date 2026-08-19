@@ -9,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 const maxReferenceCompletionResults = 200
@@ -52,7 +53,7 @@ func completeReferenceValues(cmd *cobra.Command, toComplete string, includeDynam
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{
+	rt, err := vaultruntime.New(vaultPath, vaultruntime.Options{
 		SkipConfig: true,
 		SkipSchema: true,
 	})

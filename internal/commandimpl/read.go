@@ -16,8 +16,10 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // HandleSearch executes the canonical `search` command.
@@ -33,7 +35,7 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("MISSING_ARGUMENT", "requires search query", nil, "Usage: rvn search <query>")
 	}
 
-	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: true})
 	if failure.Error != nil {
 		return failure
 	}
@@ -81,7 +83,7 @@ func isSearchSyntaxError(err error) bool {
 func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 
-	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: true})
 	if failure.Error != nil {
 		return failure
 	}
@@ -95,7 +97,7 @@ func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Res
 	if strings.TrimSpace(reference) == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires reference argument", nil, "Usage: rvn backlinks <reference> or rvn backlinks --stdin")
 	}
-	resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
+	resolved, err := refresolve.ResolveDynamic(reference, rt, true)
 	if err != nil {
 		return mapResolveFailure(err, reference)
 	}
@@ -115,7 +117,7 @@ func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Res
 func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 
-	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: true})
 	if failure.Error != nil {
 		return failure
 	}
@@ -129,7 +131,7 @@ func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Resu
 	if strings.TrimSpace(reference) == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires reference argument", nil, "Usage: rvn outlinks <reference> or rvn outlinks --stdin")
 	}
-	resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
+	resolved, err := refresolve.ResolveDynamic(reference, rt, true)
 	if err != nil {
 		return mapResolveFailure(err, reference)
 	}
@@ -145,7 +147,7 @@ func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Resu
 	}, &commandexec.Meta{Count: len(links), QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
-func handleBacklinksStdin(rt *readsvc.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
+func handleBacklinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 	references := stringSliceArg(req.Args["references"])
 	if len(references) == 0 {
 		return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe references to stdin, one per line")
@@ -155,7 +157,7 @@ func handleBacklinksStdin(rt *readsvc.Runtime, req commandexec.Request, start ti
 	errors := make([]model.ReferenceInputError, 0)
 	total := 0
 	for _, reference := range references {
-		resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
+		resolved, err := refresolve.ResolveDynamic(reference, rt, true)
 		if err != nil {
 			errors = append(errors, referenceInputError(reference, mapResolveFailure(err, reference)))
 			continue
@@ -187,7 +189,7 @@ func backlinksStdinMode(args map[string]interface{}) bool {
 	return boolArg(args, "stdin") || len(stringSliceArg(args["references"])) > 0
 }
 
-func handleOutlinksStdin(rt *readsvc.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
+func handleOutlinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 	references := stringSliceArg(req.Args["references"])
 	if len(references) == 0 {
 		return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe references to stdin, one per line")
@@ -197,7 +199,7 @@ func handleOutlinksStdin(rt *readsvc.Runtime, req commandexec.Request, start tim
 	errors := make([]model.ReferenceInputError, 0)
 	total := 0
 	for _, reference := range references {
-		resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
+		resolved, err := refresolve.ResolveDynamic(reference, rt, true)
 		if err != nil {
 			errors = append(errors, referenceInputError(reference, mapResolveFailure(err, reference)))
 			continue
@@ -250,15 +252,15 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 	start := time.Now()
 	reference := stringArg(req.Args, "reference")
 
-	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: true})
 	if failure.Error != nil {
 		return failure
 	}
 	defer rt.Close()
 
-	resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
+	resolved, err := refresolve.ResolveDynamic(reference, rt, true)
 
-	var ambiguousErr *readsvc.AmbiguousRefError
+	var ambiguousErr *refresolve.AmbiguousRefError
 	if errors.As(err, &ambiguousErr) {
 		matches := make([]map[string]interface{}, 0, len(ambiguousErr.Matches))
 		for _, match := range ambiguousErr.Matches {
@@ -336,7 +338,7 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	startLine, _ := intArg(req.Args, "start-line")
 	endLine, _ := intArg(req.Args, "end-line")
 
-	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: false})
+	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: false})
 	if failure.Error != nil {
 		return failure
 	}
@@ -399,7 +401,7 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 // successful read result when the runtime tolerated a schema load failure
 // (RequireSchema=false). It ensures degraded read paths surface the failure
 // instead of silently returning schema-free output.
-func withSchemaLoadWarning(rt *readsvc.Runtime, result commandexec.Result) commandexec.Result {
+func withSchemaLoadWarning(rt *vaultruntime.Runtime, result commandexec.Result) commandexec.Result {
 	if rt == nil || rt.SchemaLoadErr == nil || !result.OK {
 		return result
 	}
@@ -430,7 +432,7 @@ func sectionOutlineItems(sections []model.Section) []commandpayload.ReadSectionI
 // HandleOpen executes the canonical `open` command.
 func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	rt, failure := newReadRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: false})
+	rt, failure := newReadRuntime(vaultPath, vaultruntime.Options{OpenDB: false})
 	if failure.Error != nil {
 		return failure
 	}
@@ -550,8 +552,8 @@ func mapOpenFailure(err error) commandexec.Result {
 	return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 }
 
-func newReadRuntime(vaultPath string, opts readsvc.RuntimeOptions) (*readsvc.Runtime, commandexec.Result) {
-	rt, err := readsvc.NewRuntime(strings.TrimSpace(vaultPath), opts)
+func newReadRuntime(vaultPath string, opts vaultruntime.Options) (*vaultruntime.Runtime, commandexec.Result) {
+	rt, err := vaultruntime.New(strings.TrimSpace(vaultPath), opts)
 	if err != nil {
 		return nil, mapReadRuntimeSetupFailure(err)
 	}

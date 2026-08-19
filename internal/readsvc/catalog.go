@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 const catalogReadAttempts = 3
@@ -66,7 +67,7 @@ type catalogReader interface {
 
 // Catalog loads a selective read-side catalog, opening the runtime database on
 // demand. Consistent catalogs are retried when index writes overlap the reads.
-func Catalog(rt *Runtime, opts CatalogOptions) (CatalogSnapshot, error) {
+func Catalog(rt *vaultruntime.Runtime, opts CatalogOptions) (CatalogSnapshot, error) {
 	if rt == nil {
 		return CatalogSnapshot{}, fmt.Errorf("runtime is required")
 	}
@@ -168,7 +169,7 @@ func readCatalog(db catalogReader, opts CatalogOptions, resolverOpts indexschema
 	return snapshot, nil
 }
 
-func catalogResolverOptions(rt *Runtime) indexschema.ResolverOptions {
+func catalogResolverOptions(rt *vaultruntime.Runtime) indexschema.ResolverOptions {
 	sch := rt.Schema
 	if sch == nil {
 		sch = schema.New()

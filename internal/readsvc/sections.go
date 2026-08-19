@@ -9,6 +9,8 @@ import (
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/refresolve"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 // SectionsResult is the outline of a file's sections.
@@ -22,7 +24,7 @@ type SectionsResult struct {
 // ReadSections returns the section outline for a reference. The file is parsed
 // directly so the outline is always current, even if the index is stale. When
 // the reference is a section, the outline is scoped to that section's subtree.
-func ReadSections(rt *Runtime, reference string) (*SectionsResult, error) {
+func ReadSections(rt *vaultruntime.Runtime, reference string) (*SectionsResult, error) {
 	if rt == nil {
 		return nil, fmt.Errorf("runtime is required")
 	}
@@ -31,13 +33,12 @@ func ReadSections(rt *Runtime, reference string) (*SectionsResult, error) {
 		return nil, fmt.Errorf("reference is required")
 	}
 
-	resolveOp, err := newResolveOperation(rt)
+	resolveOp, err := refresolve.New(rt)
 	if err != nil {
 		return nil, err
 	}
-	defer resolveOp.Close()
 
-	resolved, err := resolveOp.resolveReferenceWithDynamicDates(reference, false)
+	resolved, err := resolveOp.ResolveDynamic(reference, false)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +72,7 @@ func ReadSections(rt *Runtime, reference string) (*SectionsResult, error) {
 			}
 		}
 		if scopeStart == 0 {
-			return nil, &RefNotFoundError{Reference: reference, Detail: "section not found in file; run 'rvn reindex' if the index is stale"}
+			return nil, &refresolve.RefNotFoundError{Reference: reference, Detail: "section not found in file; run 'rvn reindex' if the index is stale"}
 		}
 	}
 

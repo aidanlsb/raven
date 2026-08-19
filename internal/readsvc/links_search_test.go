@@ -5,6 +5,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestBacklinksWithOptionsIncludesRootedReferences(t *testing.T) {
@@ -29,7 +30,7 @@ func TestBacklinksWithOptionsIncludesRootedReferences(t *testing.T) {
 		t.Fatalf("insert reference: %v", err)
 	}
 
-	rt := &Runtime{
+	rt := &vaultruntime.Runtime{
 		VaultPath: t.TempDir(),
 		VaultCfg:  &config.VaultConfig{},
 		DB:        db,
