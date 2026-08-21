@@ -308,8 +308,9 @@ func resolveTrashRootFromDir(vaultPath, rawTrashDir string) (string, string, err
 		return "", "", svcerr.New(codes.ErrConfigInvalid, fmt.Sprintf("invalid deletion.trash_dir: %q", rawTrashDir)).
 			WithSuggestion("Use a vault-relative path such as '.trash' or 'archive/trash'")
 	}
+	lowerTrashDir := strings.ToLower(trashDir)
 	for _, reserved := range []string{".git", ".raven"} {
-		if trashDir == reserved || strings.HasPrefix(trashDir, reserved+"/") {
+		if lowerTrashDir == reserved || strings.HasPrefix(lowerTrashDir, reserved+"/") {
 			return "", "", svcerr.New(codes.ErrConfigInvalid, fmt.Sprintf("deletion.trash_dir uses reserved path %q", trashDir)).
 				WithSuggestion("Use a dedicated vault-relative path such as '.trash' or 'archive/trash'")
 		}
@@ -383,6 +384,30 @@ func ensureTrashParent(trashRoot, relFilePath string) error {
 	return nil
 }
 
+func moveRegularFileByLinkNoReplace(sourcePath, destinationPath string) error {
+	info, err := os.Lstat(sourcePath)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("atomic no-replace move is unsupported for non-regular file %s", sourcePath)
+	}
+	if err := os.Link(sourcePath, destinationPath); err != nil {
+		return err
+	}
+	if err := os.Remove(sourcePath); err != nil {
+		removeErr := os.Remove(destinationPath)
+		if removeErr != nil {
+			return errors.Join(
+				fmt.Errorf("remove source after linking: %w", err),
+				fmt.Errorf("roll back destination link: %w", removeErr),
+			)
+		}
+		return err
+	}
+	return nil
+}
+
 func symlinkRestoresWithinVault(vaultPath, sourcePath, restorePath string) bool {
 	target, err := os.Readlink(sourcePath)
 	if err != nil {
@@ -429,19 +454,6 @@ func restorePathFromTrashRelative(relTrashPath string) string {
 		}
 	}
 
-	// Legacy collision names carried only the timestamp. The old delete layout
-	// reserved this suffix for collisions, so decode it deterministically even
-	// after another trash version has already been restored.
-	const legacyTimestampLength = len("2006-01-02-150405")
-	if len(stem) > legacyTimestampLength+1 {
-		separator := len(stem) - legacyTimestampLength - 1
-		if stem[separator] == '-' {
-			timestamp := stem[separator+1:]
-			if _, err := time.Parse("2006-01-02-150405", timestamp); err == nil {
-				return paths.NormalizeVaultRelPath(filepath.Join(dir, stem[:separator]+ext))
-			}
-		}
-	}
 	return normalized
 }
 

@@ -206,6 +206,8 @@ func TestDeleteFileRejectsUnsafeTrashDirectories(t *testing.T) {
 		`C:\outside`,
 		".raven/trash",
 		".git/trash",
+		".RAVEN/trash",
+		".GIT/trash",
 	}
 	for _, trashDir := range tests {
 		t.Run(trashDir, func(t *testing.T) {

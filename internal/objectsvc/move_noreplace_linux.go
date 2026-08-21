@@ -2,14 +2,22 @@
 
 package objectsvc
 
-import "golang.org/x/sys/unix"
+import (
+	"errors"
+
+	"golang.org/x/sys/unix"
+)
 
 func moveFileNoReplace(sourcePath, destinationPath string) error {
-	return unix.Renameat2(
+	err := unix.Renameat2(
 		unix.AT_FDCWD,
 		sourcePath,
 		unix.AT_FDCWD,
 		destinationPath,
 		unix.RENAME_NOREPLACE,
 	)
+	if errors.Is(err, unix.ENOSYS) || errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EOPNOTSUPP) {
+		return moveRegularFileByLinkNoReplace(sourcePath, destinationPath)
+	}
+	return err
 }

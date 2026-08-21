@@ -156,12 +156,12 @@ func TestListTrashDoesNotDecodeUnverifiedCollisionMarker(t *testing.T) {
 	}
 }
 
-func TestListTrashDecodesLegacyCollisionWithoutBaseSibling(t *testing.T) {
+func TestListTrashPreservesTimestampedLiteralPath(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
-	legacyPath := ".trash/people/freya-2026-03-10-112233.md"
-	writeTrashTestFile(t, vaultPath, legacyPath, "legacy")
+	timestampedPath := ".trash/people/freya-2026-03-10-112233.md"
+	writeTrashTestFile(t, vaultPath, timestampedPath, "literal")
 
 	result, err := ListTrash(ListTrashRequest{
 		VaultPath:   vaultPath,
@@ -173,8 +173,9 @@ func TestListTrashDecodesLegacyCollisionWithoutBaseSibling(t *testing.T) {
 	if len(result.Entries) != 1 {
 		t.Fatalf("entries = %#v, want one", result.Entries)
 	}
-	if got := result.Entries[0]; got.Reference != "people/freya" || got.RestorePath != "people/freya.md" {
-		t.Fatalf("legacy entry lost original identity: %#v", got)
+	if got := result.Entries[0]; got.Reference != "people/freya-2026-03-10-112233" ||
+		got.RestorePath != "people/freya-2026-03-10-112233.md" {
+		t.Fatalf("timestamped literal entry was decoded: %#v", got)
 	}
 }
 
