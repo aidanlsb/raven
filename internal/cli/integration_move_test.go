@@ -266,30 +266,86 @@ status: active
 	v.AssertFileNotExists("archive/website.md")
 }
 
-// TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef verifies that
-// schema-typed ref fields written as bare YAML strings are also updated.
-func TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef(t *testing.T) {
+// TestIntegration_MoveWithReferenceUpdate_FrontmatterRefFields verifies that
+// scalar and array ref fields are previewed and rewritten with body wikilinks.
+func TestIntegration_MoveWithReferenceUpdate_FrontmatterRefFields(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
-		WithSchema(testutil.PersonProjectSchema()).
+		WithSchema(`version: 1
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+  meeting:
+    default_path: meetings/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      host:
+        type: ref
+        target: person
+      with:
+        type: ref[]
+        target: person
+`).
+		WithFile("people/alice.md", "---\ntype: person\nname: Alice\n---\n").
+		WithFile("meetings/kickoff.md", "---\ntype: meeting\ntitle: Kickoff\nhost: people/alice\nwith:\n  - people/alice\n---\n\nSee [[people/alice]].\n").
 		Build()
 
-	// Create a person.
-	v.RunCLI("new", "person", "Alice").MustSucceed(t)
+	v.RunCLI("reindex").MustSucceed(t)
 
-	// Create a project with a bare frontmatter ref (not [[wikilink]] syntax).
-	v.RunCLI("new", "project", "Website", "--field", "owner=people/alice").MustSucceed(t)
+	preview := v.RunCLI("move", "people/alice", "people/alice-archived", "--dry-run")
+	preview.MustSucceed(t)
+	assertMoveRefFieldUpdates(t, preview, "host", "with")
+	v.AssertFileContains("meetings/kickoff.md", "host: people/alice")
+	v.AssertFileContains("meetings/kickoff.md", "  - people/alice")
+	v.AssertFileContains("meetings/kickoff.md", "[[people/alice]]")
 
-	// Move Alice within the people directory (rename).
-	result := v.RunCLI("move", "people/alice", "people/alice-archived", "--confirm")
+	result := v.RunCLI("move", "people/alice", "people/alice-archived")
 	result.MustSucceed(t)
+	assertMoveRefFieldUpdates(t, result, "host", "with")
+	if hasWarningCode(result, "REF_TARGET_MISSING") {
+		t.Fatalf("move returned stale REF_TARGET_MISSING warning: %#v\nraw: %s", result.Warnings, result.RawJSON)
+	}
 
-	// Verify the move happened.
 	v.AssertFileNotExists("people/alice.md")
 	v.AssertFileExists("people/alice-archived.md")
+	v.AssertFileContains("meetings/kickoff.md", "host: people/alice-archived")
+	v.AssertFileContains("meetings/kickoff.md", "  - people/alice-archived")
+	v.AssertFileContains("meetings/kickoff.md", "[[people/alice-archived]]")
+	v.AssertFileNotContains("meetings/kickoff.md", "people/alice\n")
+}
 
-	// The bare frontmatter ref should be rewritten too.
-	v.AssertFileContains("projects/website.md", "owner: people/alice-archived")
+func assertMoveRefFieldUpdates(t *testing.T, result *testutil.CLIResult, wantFields ...string) {
+	t.Helper()
+	raw, ok := result.Data["updated_ref_fields"].([]interface{})
+	if !ok {
+		t.Fatalf("updated_ref_fields = %#v, want fields %v; raw: %s", result.Data["updated_ref_fields"], wantFields, result.RawJSON)
+	}
+	got := make(map[string]bool, len(raw))
+	for _, item := range raw {
+		update, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("updated_ref_fields item = %#v, want object", item)
+		}
+		field, _ := update["field"].(string)
+		file, _ := update["file"].(string)
+		if file != "meetings/kickoff.md" {
+			t.Fatalf("updated_ref_fields file = %q, want meetings/kickoff.md; raw: %s", file, result.RawJSON)
+		}
+		got[field] = true
+	}
+	for _, field := range wantFields {
+		if !got[field] {
+			t.Fatalf("updated_ref_fields = %#v, missing %q; raw: %s", raw, field, result.RawJSON)
+		}
+	}
 }
 
 // TestIntegration_MoveWithShortSourceReference ensures source refs are resolved

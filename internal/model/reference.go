@@ -33,6 +33,16 @@ type Reference struct {
 	DisplayText *string `json:"display_text,omitempty"`
 }
 
+// FieldReference represents a reference stored in a schema-typed ref/ref[]
+// frontmatter field.
+type FieldReference struct {
+	SourceID  string `json:"source_id"`
+	FieldName string `json:"field_name"`
+	TargetRaw string `json:"target_raw"`
+	FilePath  string `json:"file_path"`
+	Line      *int   `json:"line,omitempty"`
+}
+
 // IntPtr returns a pointer to v. Useful when constructing References.
 func IntPtr(v int) *int {
 	return &v

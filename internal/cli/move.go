@@ -160,18 +160,50 @@ func renderMoveResult(_ *cobra.Command, result commandexec.Result) error {
 		if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
 			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Would update %d references", len(updatedRefs))))
 		}
+		renderMoveRefFieldUpdates(data["updated_ref_fields"], true)
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
 		return nil
 	}
 	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(source), ui.FilePath(destination)))
 	if updatedRefs, ok := data["updated_refs"].([]string); ok && len(updatedRefs) > 0 {
 		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))
-		return nil
-	}
-	if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
+	} else if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
 		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))
 	}
+	renderMoveRefFieldUpdates(data["updated_ref_fields"], false)
 	return nil
+}
+
+func renderMoveRefFieldUpdates(raw interface{}, preview bool) {
+	for _, update := range moveRefFieldUpdates(raw) {
+		file, _ := update["file"].(string)
+		field, _ := update["field"].(string)
+		if file == "" || field == "" {
+			continue
+		}
+		action := "Updated"
+		if preview {
+			action = "Would update"
+		}
+		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("%s ref field %s: %s", action, file, field)))
+	}
+}
+
+func moveRefFieldUpdates(raw interface{}) []map[string]interface{} {
+	switch updates := raw.(type) {
+	case []map[string]interface{}:
+		return updates
+	case []interface{}:
+		result := make([]map[string]interface{}, 0, len(updates))
+		for _, update := range updates {
+			if item, ok := update.(map[string]interface{}); ok {
+				result = append(result, item)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
 }
 
 func sourceDestinationArgs(source, destination string) map[string]interface{} {

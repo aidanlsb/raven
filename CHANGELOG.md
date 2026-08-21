@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Human-readable link query tables now make in-vault file targets clickable alongside source locations, with `--no-links` available to disable terminal hyperlinks.
+- `rvn move --update-refs` now rewrites schema-typed frontmatter `ref` and `ref[]` fields, and previews identify the affected files and fields.
 - Installation and docs-fetch examples now pin the current v0.0.33 release.
 - Check auto-fixes now replace text only on each issue's reported line, so repeated or conflicting patterns are applied and counted independently.
 - `rvn check --fix` now replaces modified vault notes atomically, preventing interrupted writes from truncating note content while preserving existing file permissions.

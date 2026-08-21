@@ -232,6 +232,36 @@ func TestRewriteContentFrontmatter(t *testing.T) {
 	}
 }
 
+func TestRewriteContentFrontmatterFieldContext(t *testing.T) {
+	t.Parallel()
+
+	content := `---
+owner: people/tido
+with:
+  - people/tido
+notes: people/tido
+---
+See [[people/tido]].
+`
+	got, changed := RewriteContent(content, func(occ Occurrence) (string, bool) {
+		if occ.FieldName == "owner" || occ.FieldName == "with" {
+			return "person/tido", true
+		}
+		return "", false
+	})
+	want := `---
+owner: person/tido
+with:
+  - person/tido
+notes: people/tido
+---
+See [[people/tido]].
+`
+	if !changed || got != want {
+		t.Fatalf("RewriteContent() = %q, changed=%v, want %q", got, changed, want)
+	}
+}
+
 func TestRewriteContentAtLine(t *testing.T) {
 	t.Parallel()
 

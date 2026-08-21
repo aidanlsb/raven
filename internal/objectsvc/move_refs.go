@@ -28,6 +28,20 @@ func ApplyAllRefVariantsAtLine(content string, line int, oldID, oldBase, newRef,
 	return out
 }
 
+// ReplaceRefFieldVariants rewrites references only within the named
+// frontmatter field. It uses the shared structural rewriter so scalar, flow
+// sequence, block sequence, and wikilink representations stay aligned.
+func ReplaceRefFieldVariants(content, fieldName, oldID, oldBase, newRef, objectRoot, pageRoot string) string {
+	decide := moveRefDecider(oldID, oldBase, newRef, objectRoot, pageRoot)
+	out, _ := refs.RewriteContent(content, func(occ refs.Occurrence) (string, bool) {
+		if occ.FieldName != fieldName {
+			return "", false
+		}
+		return decide(occ)
+	})
+	return out
+}
+
 // moveRefDecider builds a refs.Decider that maps any recognized written form of
 // the moved object's base target to newRef. The recognized forms mirror the
 // variants a reference may take: the canonical object ID, the base as written

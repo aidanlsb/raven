@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -517,6 +518,96 @@ func TestMoveFileUpdatesFrontmatterBareRef(t *testing.T) {
 	if !strings.Contains(content, "owner: archive/freya") {
 		t.Fatalf("frontmatter ref not updated, content:\n%s", content)
 	}
+}
+
+func TestMoveFileUpdatesAndPreviewsFrontmatterRefFields(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+  meeting:
+    default_path: meetings/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      host:
+        type: ref
+        target: person
+      with:
+        type: ref[]
+        target: person
+`).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		WithFile("meetings/kickoff.md", "---\ntype: meeting\ntitle: Kickoff\nhost: people/freya\nwith:\n  - people/freya\n---\n\nSee [[people/freya]].\n").
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "people/freya.md", "meetings/kickoff.md")
+	resolveVaultRefs(t, v.Path, sch)
+
+	request := MoveFileRequest{
+		VaultPath:         v.Path,
+		VaultConfig:       config.DefaultVaultConfig(),
+		Schema:            sch,
+		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
+		DestinationFile:   filepath.Join(v.Path, "people/freya-renamed.md"),
+		SourceObjectID:    "people/freya",
+		DestinationObject: "people/freya-renamed",
+		UpdateRefs:        true,
+		Preview:           true,
+	}
+	preview, err := MoveFile(request)
+	if err != nil {
+		t.Fatalf("MoveFile(preview) error = %v", err)
+	}
+	if len(preview.UpdatedRefs) != 1 || preview.UpdatedRefs[0] != "meetings/kickoff" {
+		t.Fatalf("preview UpdatedRefs = %#v, want [meetings/kickoff]", preview.UpdatedRefs)
+	}
+	if got := refFieldUpdateNames(preview.UpdatedRefFields); !slices.Equal(got, []string{"host", "with"}) {
+		t.Fatalf("preview UpdatedRefFields = %#v, fields = %#v, want [host with]", preview.UpdatedRefFields, got)
+	}
+	v.AssertFileContains("meetings/kickoff.md", "host: people/freya")
+	v.AssertFileContains("meetings/kickoff.md", "  - people/freya")
+
+	request.Preview = false
+	result, err := MoveFile(request)
+	if err != nil {
+		t.Fatalf("MoveFile() error = %v", err)
+	}
+	if len(result.WarningMessages) != 0 {
+		t.Fatalf("unexpected warnings: %#v", result.WarningMessages)
+	}
+	if got := refFieldUpdateNames(result.UpdatedRefFields); !slices.Equal(got, []string{"host", "with"}) {
+		t.Fatalf("UpdatedRefFields = %#v, fields = %#v, want [host with]", result.UpdatedRefFields, got)
+	}
+	content := v.ReadFile("meetings/kickoff.md")
+	for _, want := range []string{
+		"host: people/freya-renamed",
+		"  - people/freya-renamed",
+		"[[people/freya-renamed]]",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("updated meeting missing %q:\n%s", want, content)
+		}
+	}
+}
+
+func refFieldUpdateNames(updates []RefFieldUpdate) []string {
+	names := make([]string, 0, len(updates))
+	for _, update := range updates {
+		names = append(names, update.Field)
+	}
+	return names
 }
 
 // TestMoveFileGuardsProtectedAndExcludedPaths covers the primitive MoveFile

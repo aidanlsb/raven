@@ -149,6 +149,17 @@ func TestApplyAllRefVariantsAtLineFallsBackWhenLineHasNoMatch(t *testing.T) {
 	}
 }
 
+func TestReplaceRefFieldVariants(t *testing.T) {
+	t.Parallel()
+
+	content := "---\nhost: people/tido\nwith:\n  - people/tido\nnotes: people/tido\n---\nSee [[people/tido]].\n"
+	got := ReplaceRefFieldVariants(content, "with", "people/tido", "people/tido", "people/tido-renamed", "", "")
+	want := "---\nhost: people/tido\nwith:\n  - people/tido-renamed\nnotes: people/tido\n---\nSee [[people/tido]].\n"
+	if got != want {
+		t.Fatalf("ReplaceRefFieldVariants() = %q, want %q", got, want)
+	}
+}
+
 func TestChooseReplacementRefBase(t *testing.T) {
 	t.Parallel()
 

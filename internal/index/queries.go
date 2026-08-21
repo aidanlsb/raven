@@ -202,34 +202,14 @@ func (d *Database) Outlinks(sourceID string) ([]model.Reference, error) {
 // including refs that use directory-prefixed paths (e.g., [[objects/people/freya]]).
 // This is important for move operations to find all variants of a reference.
 func (d *Database) BacklinksWithRoots(targetID, objectRoot, pageRoot string) ([]model.Reference, error) {
-	patterns := []string{targetID}
-	if objectRoot != "" {
-		patterns = append(patterns, objectRoot+targetID)
-	}
-	if pageRoot != "" && pageRoot != objectRoot {
-		patterns = append(patterns, pageRoot+targetID)
-	}
-
-	// Build query with all patterns
-	var conditions []string
-	var args []interface{}
-
-	for _, pattern := range patterns {
-		conditions = append(conditions,
-			"r.target_raw = ?",
-			"r.target_raw LIKE ?",
-			"r.target_id = ?",
-			"r.target_id LIKE ?",
-		)
-		args = append(args, pattern, pattern+"#%", pattern, pattern+"#%")
-	}
+	conditions, args := refTargetConditions("r", targetID, objectRoot, pageRoot)
 
 	query := `
 		SELECT r.source_id, COALESCE(o.type, CASE WHEN s.id IS NOT NULL THEN 'section' END), r.target_raw, r.file_path, r.line_number, r.position_start, r.position_end, r.display_text
 		FROM refs r
 		LEFT JOIN objects o ON r.source_id = o.id
 		LEFT JOIN sections s ON r.source_id = s.id
-		WHERE ` + strings.Join(conditions, " OR ")
+		WHERE ` + conditions
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
@@ -251,6 +231,57 @@ func (d *Database) BacklinksWithRoots(targetID, objectRoot, pageRoot string) ([]
 	}
 
 	return results, rows.Err()
+}
+
+// FieldBacklinksWithRoots returns schema-typed ref/ref[] frontmatter fields
+// that reference targetID, including directory-prefixed target forms.
+func (d *Database) FieldBacklinksWithRoots(targetID, objectRoot, pageRoot string) ([]model.FieldReference, error) {
+	conditions, args := refTargetConditions("fr", targetID, objectRoot, pageRoot)
+	query := `
+		SELECT fr.source_id, fr.field_name, fr.target_raw, fr.file_path, fr.line_number
+		FROM field_refs fr
+		WHERE ` + conditions + `
+		ORDER BY fr.file_path, fr.source_id, fr.field_name, fr.id
+	`
+
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.FieldReference
+	for rows.Next() {
+		var result model.FieldReference
+		if err := rows.Scan(&result.SourceID, &result.FieldName, &result.TargetRaw, &result.FilePath, &result.Line); err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	return results, rows.Err()
+}
+
+func refTargetConditions(alias, targetID, objectRoot, pageRoot string) (string, []interface{}) {
+	patterns := []string{targetID}
+	if objectRoot != "" {
+		patterns = append(patterns, objectRoot+targetID)
+	}
+	if pageRoot != "" && pageRoot != objectRoot {
+		patterns = append(patterns, pageRoot+targetID)
+	}
+
+	var conditions []string
+	var args []interface{}
+	for _, pattern := range patterns {
+		conditions = append(conditions,
+			alias+".target_raw = ?",
+			alias+".target_raw LIKE ?",
+			alias+".target_id = ?",
+			alias+".target_id LIKE ?",
+		)
+		args = append(args, pattern, pattern+"#%", pattern, pattern+"#%")
+	}
+	return strings.Join(conditions, " OR "), args
 }
 
 // GetObject retrieves a single object by ID.
