@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
@@ -85,6 +86,13 @@ func TestHandleQueryApplyEmptyResultSetsMutationPhase(t *testing.T) {
 			}
 			if result.Meta.Mutation == nil || result.Meta.Mutation.Phase != tt.wantPhase {
 				t.Fatalf("mutation = %#v, want %q", result.Meta.Mutation, tt.wantPhase)
+			}
+			payload, ok := result.Data.(commandpayload.QueryApplyEmptyResult)
+			if !ok {
+				t.Fatalf("Data type = %T, want commandpayload.QueryApplyEmptyResult", result.Data)
+			}
+			if payload.Preview != !tt.confirm || payload.Action != "delete" || len(payload.Items) != 0 || payload.Total != 0 {
+				t.Fatalf("payload = %#v, want stable empty bulk result", payload)
 			}
 		})
 	}

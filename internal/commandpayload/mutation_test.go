@@ -64,6 +64,13 @@ func TestMutationPayloadJSONKeysRemainStable(t *testing.T) {
 			keys: []string{"action", "fields", "items", "preview", "skipped", "total", "warnings"},
 		},
 		{
+			name: "empty query apply retains minimal bulk shape",
+			data: QueryApplyEmptyResult{
+				Preview: true, Action: "delete", Items: []interface{}{},
+			},
+			keys: []string{"action", "items", "preview", "total"},
+		},
+		{
 			name: "vault unset omits set-only created",
 			data: VaultConfigAutoReindexResult{
 				ConfigPath: "raven.yaml", Changed: false, AutoReindex: true,

@@ -31,6 +31,12 @@ func renderCanonicalBulkResult(result commandexec.Result) error {
 			Skipped: reclassifyBulkResults(data.Skipped),
 			Total:   data.Total,
 		})
+	case commandpayload.QueryApplyEmptyResult:
+		if data.Preview {
+			PrintBulkPreview(&BulkPreview{Action: data.Action, Total: data.Total})
+		} else {
+			PrintBulkSummary(&BulkSummary{Action: data.Action, Total: data.Total})
+		}
 	case commandpayload.TraitUpdatePreviewResult:
 		printTraitBulkPreview(&traitsvc.BulkPreview{
 			Action:  data.Action,

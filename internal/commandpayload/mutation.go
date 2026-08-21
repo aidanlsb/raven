@@ -301,6 +301,15 @@ type MoveBulkResult struct {
 	Destination string `json:"destination"`
 }
 
+// QueryApplyEmptyResult is the no-match payload for `query --apply`. It keeps
+// the legacy minimal bulk shape because no nested mutation command runs.
+type QueryApplyEmptyResult struct {
+	Preview bool          `json:"preview"`
+	Action  string        `json:"action"`
+	Items   []interface{} `json:"items"`
+	Total   int           `json:"total"`
+}
+
 // TraitUpdatePreviewResult is the success payload for an update preview.
 type TraitUpdatePreviewResult struct {
 	Preview bool                       `json:"preview"`
