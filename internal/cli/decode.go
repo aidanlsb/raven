@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 )
 
@@ -46,22 +45,6 @@ func int64Value(raw interface{}) int64 {
 		return int64(value)
 	default:
 		return 0
-	}
-}
-
-func decodeSchemaCount(raw interface{}) (int, error) {
-	switch value := raw.(type) {
-	case int:
-		return value, nil
-	case int64:
-		return int(value), nil
-	case float64:
-		return int(value), nil
-	case json.Number:
-		parsed, err := value.Int64()
-		return int(parsed), err
-	default:
-		return 0, fmt.Errorf("unexpected numeric value type %T", raw)
 	}
 }
 
