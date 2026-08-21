@@ -122,6 +122,8 @@ The JSON envelope includes total, returned, offset, limit, and has_more (plus
 next_offset when has_more is true) so you can loop without guessing.
 Use --browse to open an interactive Raven picker with filtering and editor
 handoff for the selected result.
+Use --no-links to disable clickable terminal hyperlinks in human-readable
+results.
 Use --apply to run a bulk operation directly on query results.
 Section queries return stable IDs but only support move with --apply.
 Link queries return edge rows and do not support --apply.
@@ -149,6 +151,7 @@ For trait queries (trait:...):
 			{Name: "pipe", Description: "Force pipe-friendly output for shell pipelines (jq, head, sort)", Type: FlagTypeBool},
 			{Name: "no-pipe", Description: "Force human-readable output format", Type: FlagTypeBool},
 			{Name: "browse", Description: "Interactively browse results in Raven's picker and open the selected result in the configured editor", Type: FlagTypeBool},
+			{Name: "no-links", Description: "Disable clickable hyperlinks in terminal output", Type: FlagTypeBool},
 			{Name: "inputs", Description: "Saved query inputs as key=value pairs", Type: FlagTypePosKeyValue, Examples: []string{`{"project": "projects/raven"}`}},
 		},
 		Examples: []string{

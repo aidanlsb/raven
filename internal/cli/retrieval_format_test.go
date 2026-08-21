@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -239,5 +242,126 @@ func TestPrintQueryTraitResultsIncludesColumnHeaders(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected trait query output to include %q, got: %q", want, out)
 		}
+	}
+}
+
+func TestPrintQueryLinkResultsHyperlinksVaultFileTarget(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	prevVaultPath := resolvedVaultPath
+	prevCfg := cfg
+	jsonOutput = false
+	hyperlinksDisabled = false
+	enabled := true
+	hyperlinkEnabled = &enabled
+	resolvedVaultPath = t.TempDir()
+	cfg = &config.Config{Editor: "cursor"}
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+		resolvedVaultPath = prevVaultPath
+		cfg = prevCfg
+	})
+
+	link := model.Link{
+		SourceID:      "projects/raven",
+		FilePath:      "projects/raven.md",
+		Line:          12,
+		RawTarget:     "../files/spec.pdf",
+		Display:       "Spec",
+		Scheme:        "file",
+		Ext:           "pdf",
+		NormalizedKey: "files/spec.pdf",
+	}
+	out := captureStdout(t, func() {
+		printQueryLinkResults("link .ext==pdf", []model.Link{link})
+	})
+
+	targetURL := buildEditorURL(cfg, filepath.Join(resolvedVaultPath, filepath.FromSlash(link.NormalizedKey)), 1)
+	if !strings.Contains(out, "\x1b]8;;"+targetURL+"\x07Spec (../files/spec.pdf)\x1b]8;;\x07") {
+		t.Fatalf("expected target cell to hyperlink the in-vault file, got: %q", out)
+	}
+	sourceURL := buildEditorURL(cfg, filepath.Join(resolvedVaultPath, link.FilePath), link.Line)
+	if !strings.Contains(out, "\x1b]8;;"+sourceURL+"\x07") {
+		t.Fatalf("expected source location to remain hyperlinked, got: %q", out)
+	}
+}
+
+func TestPrintQueryLinkResultsNoLinksDisablesHyperlinks(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	prevVaultPath := resolvedVaultPath
+	jsonOutput = false
+	resolvedVaultPath = t.TempDir()
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+		resolvedVaultPath = prevVaultPath
+	})
+
+	out := captureStdout(t, func() {
+		printQueryLinkResults("link .ext==pdf", []model.Link{{
+			FilePath:      "projects/raven.md",
+			Line:          12,
+			RawTarget:     "../files/spec.pdf",
+			Display:       "Spec",
+			Scheme:        "file",
+			NormalizedKey: "files/spec.pdf",
+		}})
+	})
+
+	if strings.Contains(out, "\x1b]8;;") {
+		t.Fatalf("--no-links output unexpectedly contains OSC 8: %q", out)
+	}
+	if !strings.Contains(out, "Spec (../files/spec.pdf)") {
+		t.Fatalf("expected plain target text, got: %q", out)
+	}
+}
+
+func TestRenderCanonicalQueryHumanLinkPipeHasNoHyperlinks(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	prevPipeOverride := pipeFormatOverride
+	jsonOutput = false
+	hyperlinksDisabled = false
+	enabled := true
+	hyperlinkEnabled = &enabled
+	usePipe := true
+	SetPipeFormat(&usePipe)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+		pipeFormatOverride = prevPipeOverride
+	})
+
+	out := captureStdout(t, func() {
+		err := renderCanonicalQueryHuman("link .ext==pdf", commandpayload.QueryLinkResult{
+			Items: []commandpayload.LinkItem{{
+				SourceID:      "projects/raven",
+				FilePath:      "projects/raven.md",
+				Line:          12,
+				RawTarget:     "../files/spec.pdf",
+				Display:       "Spec",
+				Scheme:        "file",
+				NormalizedKey: "files/spec.pdf",
+			}},
+		}, false)
+		if err != nil {
+			t.Fatalf("renderCanonicalQueryHuman() error = %v", err)
+		}
+	})
+
+	if strings.Contains(out, "\x1b]8;;") {
+		t.Fatalf("pipe output unexpectedly contains OSC 8: %q", out)
+	}
+	if !strings.Contains(out, "projects/raven\tSpec (../files/spec.pdf)\tprojects/raven.md:12") {
+		t.Fatalf("expected plain pipe row, got: %q", out)
 	}
 }

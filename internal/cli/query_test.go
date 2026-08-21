@@ -3,12 +3,14 @@ package cli
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 )
 
 func TestJoinQueryArgs(t *testing.T) {
@@ -92,6 +94,46 @@ func TestRenderCanonicalQueryResultJSONPreservesCanonicalErrorCodes(t *testing.T
 				t.Fatalf("details = %#v, want canonical source", response.Error.Details)
 			}
 		})
+	}
+}
+
+func TestRenderCanonicalQueryLinkJSONHasNoHyperlinks(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = true
+	hyperlinksDisabled = false
+	enabled := true
+	hyperlinkEnabled = &enabled
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	result := commandexec.Success(commandpayload.QueryLinkResult{
+		QueryKind: "link",
+		Items: []commandpayload.LinkItem{{
+			SourceID:      "projects/raven",
+			FilePath:      "projects/raven.md",
+			Line:          12,
+			RawTarget:     "../files/spec.pdf",
+			Display:       "Spec",
+			Scheme:        "file",
+			NormalizedKey: "files/spec.pdf",
+		}},
+	}, nil)
+	out := captureStdout(t, func() {
+		if err := renderCanonicalQueryResult("link .ext==pdf", nil, result); err != nil {
+			t.Fatalf("renderCanonicalQueryResult() error = %v", err)
+		}
+	})
+
+	if strings.Contains(out, "\x1b]8;;") {
+		t.Fatalf("JSON output unexpectedly contains OSC 8: %q", out)
+	}
+	if !strings.Contains(out, `"normalized_key": "files/spec.pdf"`) {
+		t.Fatalf("expected unchanged link payload, got: %q", out)
 	}
 }
 

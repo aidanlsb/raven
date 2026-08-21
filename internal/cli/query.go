@@ -91,6 +91,8 @@ you invoke the saved query.
 
 Use --browse to open an interactive Raven picker with filtering, preview, and
 editor handoff for the selected result.
+Use --no-links to disable clickable terminal hyperlinks in human-readable
+results.
 
 
 Examples:
@@ -107,6 +109,9 @@ Examples:
   rvn query saved list               # Manage saved queries`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		noLinks, _ := cmd.Flags().GetBool("no-links")
+		setHyperlinksDisabled(noLinks)
+
 		if len(args) == 0 {
 			return handleErrorMsg(ErrMissingArgument, "specify a query string", "Run 'rvn query saved list' to see saved queries")
 		}
@@ -323,6 +328,7 @@ func init() {
 	queryCmd.Flags().Bool("pipe", false, "Force pipe-friendly output for shell pipelines (jq, head, sort)")
 	queryCmd.Flags().Bool("no-pipe", false, "Force human-readable output format")
 	queryCmd.Flags().Bool("browse", false, "Interactively browse query results in Raven's picker and open the selected result")
+	queryCmd.Flags().Bool("no-links", false, "Disable clickable hyperlinks in terminal output")
 
 	querySavedCmd.AddCommand(querySavedListCmd)
 	querySavedCmd.AddCommand(querySavedGetCmd)

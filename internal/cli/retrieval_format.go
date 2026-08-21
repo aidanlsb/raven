@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/linktarget"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -130,10 +131,14 @@ func printQueryLinkResults(queryStr string, results []model.Link) {
 		if r.IsImage {
 			kind += " image"
 		}
+		target = ui.TruncateWithEllipsis(target, table.GetColumnWidth(1))
+		if r.Scheme == string(linktarget.SchemeFile) && linktarget.IsVaultRelativeFileKey(r.NormalizedKey) {
+			target = formatVaultFileLinkSimpleStyled(target, r.NormalizedKey, 1, nil)
+		}
 		location := formatLocationLinkSimpleStyled(r.FilePath, r.Line, ui.Muted.Render)
 		table.AddRow(ui.ResultRow{
 			Num:      i + 1,
-			Cells:    []string{ui.FormatRowNum(i+1, len(results)), ui.TruncateWithEllipsis(target, table.GetColumnWidth(1)), kind, location},
+			Cells:    []string{ui.FormatRowNum(i+1, len(results)), target, kind, location},
 			Location: fmt.Sprintf("%s:%d", r.FilePath, r.Line),
 		})
 	}

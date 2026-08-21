@@ -90,6 +90,10 @@ func buildEditorURL(cfg *config.Config, absPath string, line int) string {
 
 func formatLocationLinkSimpleStyled(relPath string, line int, render func(...string) string) string {
 	location := fmt.Sprintf("%s:%d", relPath, line)
+	return formatVaultFileLinkSimpleStyled(location, relPath, line, render)
+}
+
+func formatVaultFileLinkSimpleStyled(label, relPath string, line int, render func(...string) string) string {
 	if render == nil {
 		render = func(strs ...string) string {
 			if len(strs) == 0 {
@@ -100,7 +104,7 @@ func formatLocationLinkSimpleStyled(relPath string, line int, render func(...str
 	}
 
 	if !shouldEmitHyperlinks() {
-		return render(location)
+		return render(label)
 	}
 
 	// Get vault path and config
@@ -108,11 +112,11 @@ func formatLocationLinkSimpleStyled(relPath string, line int, render func(...str
 	cfg := getConfig()
 
 	if vaultPath == "" {
-		return render(location)
+		return render(label)
 	}
 
 	absPath := filepath.Join(vaultPath, relPath)
 	url := buildEditorURL(cfg, absPath, line)
 
-	return render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
+	return render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, label))
 }
