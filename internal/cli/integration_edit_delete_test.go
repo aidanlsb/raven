@@ -120,6 +120,7 @@ func TestIntegration_DeleteFilesBulkRequiresConfirmAndSkipsSections(t *testing.T
 
 	sectionDelete := v.RunCLI("delete", sectionID, "--dry-run")
 	sectionDelete.MustFail(t, "INVALID_INPUT")
+	sectionDelete.MustFailWithMessage(t, "rvn section delete")
 	v.AssertFileExists("notes/reference.md")
 
 	stdin := strings.Join([]string{firstFile, sectionID, secondFile}, "\n") + "\n"

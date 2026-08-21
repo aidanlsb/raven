@@ -78,7 +78,8 @@ Each command narrows that grammar to the targets it can safely handle:
 | `open` | Objects and sections; also accepts bulk `references` |
 | `read` | Managed Markdown files and sections |
 | `set`, `unset` | File-level Markdown objects; sections are rejected |
-| `delete` | File-backed objects, or explicit non-Markdown file paths; sections are rejected |
+| `delete` | File-backed objects, or explicit non-Markdown file paths; section IDs are rejected in favor of `section delete` |
+| `section delete` | Sections only; previews the complete subtree and affected backlinks, then requires `--confirm` |
 | `move` | File-backed objects, or explicit non-Markdown file paths; section sources are rejected |
 | `reclassify` | File-level Markdown objects; sections are rejected; also accepts bulk `references` |
 | `edit` | Managed Markdown files and section subtrees; config, schema, templates, excluded files, and non-Markdown files are rejected |

@@ -54,7 +54,10 @@ Restrictions still apply by command:
 - `resolve` and `open`: objects or sections.
 - `read`: managed Markdown files or sections.
 - `set`, `unset`, and `reclassify`: file-level Markdown objects only.
-- `delete`: file-backed objects or explicit non-Markdown file paths, never sections.
+- `delete`: file-backed objects or explicit non-Markdown file paths; section IDs
+  are rejected in favor of preview-first `section_delete`.
+- `section_delete`: section references only; reports the complete subtree and
+  affected backlinks, then requires `confirm=true`.
 - `edit`: managed Markdown files or section subtrees, not config/schema/templates/non-Markdown files.
 - `check` and `check fix`: file, directory, or object scope; omit `reference` for the whole vault.
 - `backlinks`: objects or sections.

@@ -383,7 +383,9 @@ rvn delete files/old-paper.pdf --dry-run --json
 ```
 
 Bulk deletion previews by default and only applies with `--confirm`. Section IDs
-remain unsupported: single deletes reject them, while bulk deletes skip them.
+remain unsupported by this file-level command: single deletes reject them,
+while bulk deletes skip them. Use preview-first
+`rvn section delete <file#section>` for a heading and its complete subtree.
 
 Check backlinks before deleting to avoid broken references:
 
