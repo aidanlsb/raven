@@ -175,6 +175,34 @@ func TestListTrashDoesNotDecodeUnverifiedCollisionMarker(t *testing.T) {
 	}
 }
 
+func TestListTrashMatchesMetadataPathCaseInsensitively(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	entryPath := ".trash/People/Freya.raven-trash-version.md"
+	writeTrashTestFile(t, vaultPath, entryPath, "version")
+	writeTrashTestFile(
+		t,
+		vaultPath,
+		entryPath+trashMetadataSuffix,
+		`{"version":1,"trash_path":"people/freya.raven-trash-version.md","restore_path":"people/freya.md"}`+"\n",
+	)
+
+	result, err := ListTrash(ListTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+	})
+	if err != nil {
+		t.Fatalf("ListTrash() error = %v", err)
+	}
+	if len(result.Entries) != 1 {
+		t.Fatalf("entries = %#v, want one", result.Entries)
+	}
+	if got := result.Entries[0]; got.Reference != "people/freya" || got.RestorePath != "people/freya.md" {
+		t.Fatalf("case-variant metadata was not applied: %#v", got)
+	}
+}
+
 func TestListTrashPreservesTimestampedLiteralPath(t *testing.T) {
 	t.Parallel()
 

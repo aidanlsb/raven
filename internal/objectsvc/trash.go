@@ -463,7 +463,7 @@ func restoreDestinationExistsError(entry *TrashEntry) error {
 func trashMetadataForEntry(trashRoot, relTrashPath string) (trashEntryMetadata, string, bool) {
 	sidecarPath := relTrashPath + trashMetadataSuffix
 	metadata, ok := readTrashMetadata(filepath.Join(trashRoot, filepath.FromSlash(sidecarPath)))
-	if !ok || metadata.TrashPath != relTrashPath || !isSafeMetadataRestorePath(metadata.RestorePath) {
+	if !ok || !strings.EqualFold(metadata.TrashPath, relTrashPath) || !isSafeMetadataRestorePath(metadata.RestorePath) {
 		return trashEntryMetadata{}, "", false
 	}
 	return metadata, sidecarPath, true
@@ -475,7 +475,7 @@ func isTrashMetadataFile(trashRoot, relTrashPath string) bool {
 	}
 	targetPath := strings.TrimSuffix(relTrashPath, trashMetadataSuffix)
 	metadata, ok := readTrashMetadata(filepath.Join(trashRoot, filepath.FromSlash(relTrashPath)))
-	return ok && metadata.TrashPath == targetPath && isSafeMetadataRestorePath(metadata.RestorePath)
+	return ok && strings.EqualFold(metadata.TrashPath, targetPath) && isSafeMetadataRestorePath(metadata.RestorePath)
 }
 
 func readTrashMetadata(metadataPath string) (trashEntryMetadata, bool) {
