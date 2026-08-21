@@ -262,7 +262,6 @@ func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
 		"schema_rename_type",
 		"skill_install",
 		"skill_remove",
-		"skill_sync",
 	} {
 		t.Run(commandID, func(t *testing.T) {
 			t.Parallel()

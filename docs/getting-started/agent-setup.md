@@ -19,35 +19,44 @@ from a shell. MCP is not required, but it provides a structured tool interface.
 ## Install Raven skills
 
 Raven packages skills using the open [Agent Skills](https://agentskills.io/)
-standard. The primary first-run path is `rvn skill install`, which installs the
-shipped skills in one command:
+standard. `rvn skill install` is the single command for installing and aligning
+the packaged catalog:
 
 ```bash
-rvn skill install          # interactive: prints the plan and prompts [y/N]
-rvn skill install --yes    # agents / CI: apply without prompting
+rvn skill install                   # interactive: prints the plan and prompts [y/N]
+rvn skill install --confirm --json  # agents / CI: apply without prompting
 ```
 
 In an interactive terminal `rvn skill install` prints the plan (what will be
-installed or updated) and prompts `Install these skills? [y/N]` before writing.
+installed, updated, or removed) and prompts before writing.
 
 In non-interactive or `--json` runs it never prompts — agents cannot answer a
-`y/N` prompt. Pass `--yes` to apply; without it the command returns a preview
-and sets `needs_confirm: true`. The preview lists each skill with its planned
-action (`install`, `update`, or `up to date`) so an agent can tell whether a
-confirm is still required. `--confirm` is accepted as an alias for `--yes`.
-After confirmation, the response reports
-`mode: "applied"` and the number of file changes made:
+`y/N` prompt. Pass `--confirm` to apply; without it the command returns a
+preview and sets `needs_confirm: true`. The preview lists each skill with its
+planned action (`install`, `update`, `remove`, or `up to date`) so an agent can
+tell whether confirmation is still required. After confirmation, the response
+reports `mode: "applied"` and the number of file changes made:
 
 ```bash
 rvn skill install --json          # Preview only — needs_confirm: true
-rvn skill install --yes --json    # Installs all shipped skills
+rvn skill install --confirm --json
 ```
 
-By default it installs every shipped skill. Pass one or more names to narrow
-the install:
+With no names, install reconciles the full Raven-managed set to the catalog
+shipped by the current `rvn` version:
+
+- installs shipped skills that are missing
+- replaces existing Raven-managed skills with the shipped version
+- removes old Raven-managed skills that are no longer shipped
+
+Removal is receipt-based. Raven removes only files recorded in its receipt and
+leaves other files and non-Raven skill directories untouched.
+
+Pass one or more names to install or align only those shipped skills. A named
+install does not remove unrelated old Raven-managed skills:
 
 ```bash
-rvn skill install raven-core raven-query --yes --json
+rvn skill install raven-core raven-query --confirm --json
 ```
 
 You can also list the catalog first:
@@ -70,26 +79,23 @@ User-scoped skills install to `~/.agents/skills`. To install into the current
 project instead:
 
 ```bash
-rvn skill install --scope project --yes --json
+rvn skill install --scope project --confirm --json
 ```
 
 That writes to `.agents/skills`. Use `--dest /path/to/skills` with any skill
 command when an agent needs a different location.
 
-### Updating already-installed skills
+### Keeping packaged skills current
 
-`rvn skill install` is for first-time installation. To refresh skills that are
-already installed, use `rvn skill sync`:
+Run the same install command after upgrading `rvn`:
 
 ```bash
-rvn skill sync --confirm --json
+rvn skill install --confirm --json
 ```
 
-The no-name sync updates or removes existing Raven-managed skills and reports
-shipped skills that are not installed. It does **not** install missing skills
-unless you name one explicitly — use `rvn skill install` to install missing
-skills, or `rvn skill sync <name> --confirm` to install/realign a specific
-skill.
+The no-name form reconciles the entire catalog, including adding newly shipped
+skills and removing receipt-managed skills no longer shipped. To update only
+specific packaged skills, name them explicitly.
 
 ## Inspect and remove skills
 

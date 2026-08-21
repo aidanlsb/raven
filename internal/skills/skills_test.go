@@ -3,6 +3,7 @@ package skills
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -228,7 +229,7 @@ func TestPlanSyncNamedUpdatesManagedSkill(t *testing.T) {
 	}
 }
 
-func TestPlanSyncWithoutNameSurfacesMissingSkillsOnly(t *testing.T) {
+func TestPlanSyncWithoutNamePlansMissingSkillInstalls(t *testing.T) {
 	t.Parallel()
 	catalog, err := LoadCatalog()
 	if err != nil {
@@ -240,14 +241,20 @@ func TestPlanSyncWithoutNameSurfacesMissingSkillsOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanSync() error = %v", err)
 	}
-	if len(plan.Actions) != 0 {
-		t.Fatalf("PlanSync() actions = %#v, want none", plan.Actions)
+	if plan.Installed != len(catalog) {
+		t.Fatalf("PlanSync() installed = %d, want %d", plan.Installed, len(catalog))
 	}
-	if len(plan.MissingAvailable) != len(catalog) {
-		t.Fatalf("PlanSync() missing = %d, want %d", len(plan.MissingAvailable), len(catalog))
+	if len(plan.Actions) != len(catalog) {
+		t.Fatalf("PlanSync() actions = %d, want %d", len(plan.Actions), len(catalog))
 	}
-	if _, err := os.Stat(filepath.Join(root, "raven-core")); !os.IsNotExist(err) {
-		t.Fatalf("no-name sync created raven-core, err = %v", err)
+	if !plan.NeedsConfirm {
+		t.Fatal("PlanSync() needs_confirm = false, want true")
+	}
+	if _, err := ApplySync(plan); err != nil {
+		t.Fatalf("ApplySync() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "raven-core", "SKILL.md")); err != nil {
+		t.Fatalf("full plan did not install raven-core: %v", err)
 	}
 }
 
@@ -332,5 +339,107 @@ func TestPlanSyncSkipsUnreceiptedSkillDirectory(t *testing.T) {
 	}
 	if string(got) != "handcrafted" {
 		t.Fatalf("custom skill was overwritten: %q", got)
+	}
+}
+
+func TestPlanSyncRejectsReceiptPathThroughSymlink(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink tests are not reliable on windows")
+	}
+
+	root := t.TempDir()
+	external := t.TempDir()
+	externalPath := filepath.Join(external, "outside.md")
+	if err := os.WriteFile(externalPath, []byte("outside"), 0o644); err != nil {
+		t.Fatalf("WriteFile() external error = %v", err)
+	}
+
+	skillPath := filepath.Join(root, "raven-retired")
+	if err := os.MkdirAll(skillPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll() skill path error = %v", err)
+	}
+	if err := os.Symlink(external, filepath.Join(skillPath, "references")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := writeReceipt(filepath.Join(skillPath, receiptFileName), &Receipt{
+		Skill:   "raven-retired",
+		Version: 1,
+		Scope:   "project",
+		Files:   []string{"references/outside.md"},
+	}); err != nil {
+		t.Fatalf("writeReceipt() error = %v", err)
+	}
+
+	if _, err := PlanSync(map[string]*Skill{}, "", ScopeProject, root); err == nil {
+		t.Fatal("PlanSync() accepted receipt path through symlink")
+	}
+	got, err := os.ReadFile(externalPath)
+	if err != nil {
+		t.Fatalf("ReadFile() external error = %v", err)
+	}
+	if string(got) != "outside" {
+		t.Fatalf("external file changed: %q", got)
+	}
+}
+
+func TestWriteSkillFilesRejectsPathThroughSymlink(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink tests are not reliable on windows")
+	}
+
+	skillPath := t.TempDir()
+	external := t.TempDir()
+	externalPath := filepath.Join(external, "outside.md")
+	if err := os.WriteFile(externalPath, []byte("outside"), 0o644); err != nil {
+		t.Fatalf("WriteFile() external error = %v", err)
+	}
+	if err := os.Symlink(external, filepath.Join(skillPath, "references")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := writeSkillFiles(skillPath, map[string][]byte{
+		"references/outside.md": []byte("managed"),
+	}); err == nil {
+		t.Fatal("writeSkillFiles() accepted path through symlink")
+	}
+	got, err := os.ReadFile(externalPath)
+	if err != nil {
+		t.Fatalf("ReadFile() external error = %v", err)
+	}
+	if string(got) != "outside" {
+		t.Fatalf("external file changed: %q", got)
+	}
+}
+
+func TestWriteSkillFilesRejectsSymlinkedSkillRoot(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink tests are not reliable on windows")
+	}
+
+	installRoot := t.TempDir()
+	externalSkill := t.TempDir()
+	externalPath := filepath.Join(externalSkill, "SKILL.md")
+	if err := os.WriteFile(externalPath, []byte("outside"), 0o644); err != nil {
+		t.Fatalf("WriteFile() external error = %v", err)
+	}
+	skillPath := filepath.Join(installRoot, "raven-core")
+	if err := os.Symlink(externalSkill, skillPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := writeSkillFiles(skillPath, map[string][]byte{
+		"SKILL.md": []byte("managed"),
+	}); err == nil {
+		t.Fatal("writeSkillFiles() accepted symlinked skill root")
+	}
+	got, err := os.ReadFile(externalPath)
+	if err != nil {
+		t.Fatalf("ReadFile() external error = %v", err)
+	}
+	if string(got) != "outside" {
+		t.Fatalf("external file changed: %q", got)
 	}
 }

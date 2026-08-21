@@ -31,23 +31,23 @@ func TestListInstalledUsesResolvedRootWithoutTarget(t *testing.T) {
 	}
 }
 
-func TestSyncDefaultsToAgentSkillsRoot(t *testing.T) {
+func TestInstallDefaultsToAgentSkillsRoot(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Chdir(cwd)
 
-	result, err := Sync(SyncRequest{Name: "raven-core"})
+	result, err := Install(InstallRequest{Names: []string{"raven-core"}})
 	if err != nil {
-		t.Fatalf("Sync() error = %v", err)
+		t.Fatalf("Install() error = %v", err)
 	}
 	wantRoot := filepath.Join(home, ".agents", "skills")
-	if result.Plan.Root != wantRoot {
-		t.Fatalf("Sync() root = %q, want %q", result.Plan.Root, wantRoot)
+	if result.Root != wantRoot {
+		t.Fatalf("Install() root = %q, want %q", result.Root, wantRoot)
 	}
-	if result.Plan.Scope != "user" {
-		t.Fatalf("Sync() scope = %q, want user", result.Plan.Scope)
+	if result.Scope != "user" {
+		t.Fatalf("Install() scope = %q, want user", result.Scope)
 	}
 }
 
@@ -127,6 +127,87 @@ func TestInstallConfirmInstallsAllShippedSkills(t *testing.T) {
 	}
 }
 
+func TestInstallConfirmReconcilesFullManagedSet(t *testing.T) {
+	t.Parallel()
+
+	catalog, err := LoadCatalog()
+	if err != nil {
+		t.Fatalf("LoadCatalog() error = %v", err)
+	}
+	root := t.TempDir()
+	if _, err := Install(InstallRequest{
+		Names:   []string{"raven-core"},
+		Scope:   "project",
+		Dest:    root,
+		Confirm: true,
+	}); err != nil {
+		t.Fatalf("Install() initial raven-core error = %v", err)
+	}
+
+	corePath := filepath.Join(root, "raven-core", "SKILL.md")
+	if err := os.WriteFile(corePath, []byte("outdated managed content"), 0o644); err != nil {
+		t.Fatalf("WriteFile() raven-core error = %v", err)
+	}
+
+	retiredPath := filepath.Join(root, "raven-retired")
+	if err := os.MkdirAll(retiredPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll() retired skill error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(retiredPath, "SKILL.md"), []byte("retired managed content"), 0o644); err != nil {
+		t.Fatalf("WriteFile() retired SKILL.md error = %v", err)
+	}
+	userFile := filepath.Join(retiredPath, "notes.md")
+	if err := os.WriteFile(userFile, []byte("keep me"), 0o644); err != nil {
+		t.Fatalf("WriteFile() retired notes.md error = %v", err)
+	}
+	if err := writeReceipt(filepath.Join(retiredPath, receiptFileName), &Receipt{
+		Skill:   "raven-retired",
+		Version: 1,
+		Scope:   "project",
+		Files:   []string{"SKILL.md"},
+	}); err != nil {
+		t.Fatalf("writeReceipt() error = %v", err)
+	}
+
+	result, err := Install(InstallRequest{Scope: "project", Dest: root, Confirm: true})
+	if err != nil {
+		t.Fatalf("Install() reconcile error = %v", err)
+	}
+	if result.Installed != len(catalog)-1 || result.Updated != 1 || result.Deleted != 1 {
+		t.Fatalf(
+			"Install() summary installed=%d updated=%d deleted=%d, want %d/1/1",
+			result.Installed,
+			result.Updated,
+			result.Deleted,
+			len(catalog)-1,
+		)
+	}
+
+	renderedCore, err := RenderFiles(catalog["raven-core"])
+	if err != nil {
+		t.Fatalf("RenderFiles() error = %v", err)
+	}
+	gotCore, err := os.ReadFile(corePath)
+	if err != nil {
+		t.Fatalf("ReadFile() raven-core error = %v", err)
+	}
+	if string(gotCore) != string(renderedCore["SKILL.md"]) {
+		t.Fatal("Install() did not replace existing Raven-managed skill content")
+	}
+	if _, err := os.Stat(filepath.Join(root, "raven-query", "SKILL.md")); err != nil {
+		t.Fatalf("Install() did not install missing shipped skill: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(retiredPath, "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("Install() left retired managed file in place, err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(retiredPath, receiptFileName)); !os.IsNotExist(err) {
+		t.Fatalf("Install() left retired receipt in place, err = %v", err)
+	}
+	if _, err := os.Stat(userFile); err != nil {
+		t.Fatalf("Install() removed non-Raven file from retired skill path: %v", err)
+	}
+}
+
 func TestInstallNarrowsToRequestedSkills(t *testing.T) {
 	t.Parallel()
 
@@ -150,6 +231,40 @@ func TestInstallNarrowsToRequestedSkills(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "raven-onboarding")); !os.IsNotExist(err) {
 		t.Fatalf("Install() installed an unrequested skill, err = %v", err)
+	}
+}
+
+func TestInstallNamedDoesNotDeleteUnrelatedUnshippedSkill(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	retiredPath := filepath.Join(root, "raven-retired")
+	if err := os.MkdirAll(retiredPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	managedPath := filepath.Join(retiredPath, "SKILL.md")
+	if err := os.WriteFile(managedPath, []byte("retired managed content"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if err := writeReceipt(filepath.Join(retiredPath, receiptFileName), &Receipt{
+		Skill:   "raven-retired",
+		Version: 1,
+		Scope:   "project",
+		Files:   []string{"SKILL.md"},
+	}); err != nil {
+		t.Fatalf("writeReceipt() error = %v", err)
+	}
+
+	if _, err := Install(InstallRequest{
+		Names:   []string{"raven-core"},
+		Scope:   "project",
+		Dest:    root,
+		Confirm: true,
+	}); err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if _, err := os.Stat(managedPath); err != nil {
+		t.Fatalf("named Install() touched unrelated unshipped skill: %v", err)
 	}
 }
 
@@ -199,6 +314,86 @@ func TestInstallRealignsManagedSkillOnConfirm(t *testing.T) {
 	if string(got) == "local edit" {
 		t.Fatalf("Install() did not realign modified raven-core SKILL.md")
 	}
+}
+
+func TestInstallUpdateRetainsOldReceiptWhenStaleCleanupFails(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if _, err := Install(InstallRequest{
+		Names:   []string{"raven-core"},
+		Scope:   "project",
+		Dest:    root,
+		Confirm: true,
+	}); err != nil {
+		t.Fatalf("Install() initial error = %v", err)
+	}
+
+	skillPath := filepath.Join(root, "raven-core")
+	receiptPath := filepath.Join(skillPath, receiptFileName)
+	receipt, err := readReceipt(receiptPath)
+	if err != nil {
+		t.Fatalf("readReceipt() error = %v", err)
+	}
+	receipt.Files = append(receipt.Files, "stale")
+	if err := writeReceipt(receiptPath, receipt); err != nil {
+		t.Fatalf("writeReceipt() error = %v", err)
+	}
+	stalePath := filepath.Join(skillPath, "stale")
+	if err := os.MkdirAll(stalePath, 0o755); err != nil {
+		t.Fatalf("MkdirAll() stale path error = %v", err)
+	}
+	blockerPath := filepath.Join(stalePath, "keep.md")
+	if err := os.WriteFile(blockerPath, []byte("blocks directory removal"), 0o644); err != nil {
+		t.Fatalf("WriteFile() blocker error = %v", err)
+	}
+
+	if _, err := Install(InstallRequest{
+		Names:   []string{"raven-core"},
+		Scope:   "project",
+		Dest:    root,
+		Confirm: true,
+	}); err == nil {
+		t.Fatal("Install() succeeded despite stale cleanup failure")
+	}
+	failedReceipt, err := readReceipt(receiptPath)
+	if err != nil {
+		t.Fatalf("readReceipt() after failure error = %v", err)
+	}
+	if !containsReceiptFile(failedReceipt.Files, "stale") {
+		t.Fatalf("failed update replaced old receipt: files = %#v", failedReceipt.Files)
+	}
+
+	if err := os.Remove(blockerPath); err != nil {
+		t.Fatalf("Remove() blocker error = %v", err)
+	}
+	if _, err := Install(InstallRequest{
+		Names:   []string{"raven-core"},
+		Scope:   "project",
+		Dest:    root,
+		Confirm: true,
+	}); err != nil {
+		t.Fatalf("Install() retry error = %v", err)
+	}
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Fatalf("Install() retry left stale path in place, err = %v", err)
+	}
+	finalReceipt, err := readReceipt(receiptPath)
+	if err != nil {
+		t.Fatalf("readReceipt() final error = %v", err)
+	}
+	if containsReceiptFile(finalReceipt.Files, "stale") {
+		t.Fatalf("Install() retry retained stale path in receipt: %#v", finalReceipt.Files)
+	}
+}
+
+func containsReceiptFile(files []string, want string) bool {
+	for _, file := range files {
+		if file == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDoctorReturnsSingleResolvedRoot(t *testing.T) {

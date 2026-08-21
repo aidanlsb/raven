@@ -36,23 +36,20 @@ func TestValidateRequestNormalizesConfirmArg(t *testing.T) {
 	}
 }
 
-func TestValidateRequestNormalizesYesArgToConfirm(t *testing.T) {
+func TestValidateRequestRejectsRetiredYesArg(t *testing.T) {
 	t.Parallel()
 
-	req, result, ok := validateRequest(context.Background(), commandexec.Request{
+	_, result, ok := validateRequest(context.Background(), commandexec.Request{
 		CommandID: "skill_install",
 		Args: map[string]any{
 			"yes": true,
 		},
 	})
-	if !ok {
-		t.Fatalf("validateRequest failed: %#v", result)
+	if ok {
+		t.Fatal("validateRequest accepted retired yes arg")
 	}
-	if !req.Confirm {
-		t.Fatal("Confirm = false, want true from normalized yes arg")
-	}
-	if req.Preview {
-		t.Fatal("Preview = true, want false when yes is true")
+	if result.Error == nil || result.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("validateRequest error = %#v, want INVALID_ARGS", result.Error)
 	}
 }
 
@@ -70,7 +67,7 @@ func TestValidateRequestDefaultsPreviewForSkillInstall(t *testing.T) {
 		t.Fatal("Confirm = true, want false")
 	}
 	if !req.Preview {
-		t.Fatal("Preview = false, want true for skill install without yes")
+		t.Fatal("Preview = false, want true for skill install without confirm")
 	}
 }
 

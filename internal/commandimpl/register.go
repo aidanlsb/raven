@@ -74,7 +74,6 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("docs_fetch", HandleDocsFetch)
 	registry.Register("docs_search", HandleDocsSearch)
 	registry.Register("skill_list", HandleSkillList)
-	registry.Register("skill_sync", HandleSkillSync)
 	registry.Register("skill_install", HandleSkillInstall)
 	registry.Register("skill_remove", HandleSkillRemove)
 	registry.Register("skill_doctor", HandleSkillDoctor)

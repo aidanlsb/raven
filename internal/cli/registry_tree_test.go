@@ -88,6 +88,33 @@ func TestRemovedAssetCommandIsAbsent(t *testing.T) {
 	}
 }
 
+func TestSkillSyncIsRemovedWithoutCompatibilityAlias(t *testing.T) {
+	t.Parallel()
+
+	if _, ok := findCommandByPath(rootCmd, "skill sync"); ok {
+		t.Fatal("removed skill sync command is still registered")
+	}
+	if _, ok := commands.EffectiveMeta("skill_sync"); ok {
+		t.Fatal("removed skill_sync command is still in the registry")
+	}
+	handlers := commandexec.NewHandlerRegistry()
+	commandimpl.RegisterAll(handlers)
+	if _, ok := handlers.Lookup("skill_sync"); ok {
+		t.Fatal("removed skill_sync handler is still registered")
+	}
+
+	install, ok := findCommandByPath(rootCmd, "skill install")
+	if !ok {
+		t.Fatal("skill install command is missing")
+	}
+	if install.Flags().Lookup("yes") != nil {
+		t.Fatal("skill install still exposes retired --yes flag")
+	}
+	if install.Flags().Lookup("confirm") == nil {
+		t.Fatal("skill install must expose --confirm")
+	}
+}
+
 func TestSchemaTemplateDefaultIsFoldedIntoBindAndUnbind(t *testing.T) {
 	t.Parallel()
 

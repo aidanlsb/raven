@@ -20,20 +20,6 @@ type ListResult struct {
 	Skills []Summary `json:"skills"`
 }
 
-type SyncRequest struct {
-	Name    string
-	Scope   string
-	Dest    string
-	Confirm bool
-}
-
-type SyncResult struct {
-	Mode           string    `json:"mode"`
-	SkillName      string    `json:"skill_name,omitempty"`
-	Plan           *SyncPlan `json:"plan,omitempty"`
-	ActionsApplied int       `json:"actions_applied,omitempty"`
-}
-
 type InstallRequest struct {
 	Names   []string
 	Scope   string
@@ -41,7 +27,7 @@ type InstallRequest struct {
 	Confirm bool
 }
 
-// InstallSkillResult reports the sync plan for a single shipped skill.
+// InstallSkillResult reports the plan for one shipped or receipt-managed skill.
 type InstallSkillResult struct {
 	Name string    `json:"name"`
 	Plan *SyncPlan `json:"plan"`
@@ -56,6 +42,7 @@ type InstallResult struct {
 	Skills         []InstallSkillResult `json:"skills"`
 	Installed      int                  `json:"installed"`
 	Updated        int                  `json:"updated"`
+	Deleted        int                  `json:"deleted"`
 	Skipped        int                  `json:"skipped"`
 	ActionsApplied int                  `json:"actions_applied,omitempty"`
 }
@@ -116,69 +103,18 @@ func List(req ListRequest) (*ListResult, error) {
 	}, nil
 }
 
-func Sync(req SyncRequest) (*SyncResult, error) {
-	skillName := strings.TrimSpace(req.Name)
-	catalog, err := LoadCatalog()
-	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrInternal, "failed to load skill catalog", err)
-	}
-
-	if skillName != "" {
-		if _, ok := catalog[skillName]; !ok {
-			available := SortedSummaries(catalog)
-			names := make([]string, 0, len(available))
-			for _, item := range available {
-				names = append(names, item.Name)
-			}
-			return nil, svcerr.New(codes.ErrSkillNotFound, fmt.Sprintf("skill '%s' not found", skillName)).WithSuggestion("Run 'rvn skill list' to see available skills").WithDetails(map[string]interface{}{"available": names})
-		}
-	}
-
-	scope, err := ParseScope(strings.TrimSpace(req.Scope))
-	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use --scope user|project")
-	}
-	root, err := ResolveInstallRoot(scope, strings.TrimSpace(req.Dest), "")
-	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrSkillPathUnresolved, err.Error(), err).WithSuggestion("Use --dest to set an explicit install root")
-	}
-
-	plan, err := PlanSync(catalog, skillName, scope, root)
-	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrInternal, "failed to build sync plan", err)
-	}
-
-	if !req.Confirm {
-		return &SyncResult{
-			Mode:      "preview",
-			SkillName: skillName,
-			Plan:      plan,
-		}, nil
-	}
-
-	applied, err := ApplySync(plan)
-	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to apply sync", err)
-	}
-	return &SyncResult{
-		Mode:           "applied",
-		SkillName:      skillName,
-		Plan:           plan,
-		ActionsApplied: applied,
-	}, nil
-}
-
-// Install installs shipped Raven skills in one shot. With no names it installs
-// the full shipped catalog; names narrow it to specific shipped skills. It
-// previews by default and applies writes only when req.Confirm is set. Missing
-// skills are installed and existing Raven-managed skills are aligned with the
-// shipped version, reusing the same receipt-based sync machinery as Sync.
+// Install reconciles shipped Raven skills in one shot. With no names it aligns
+// the complete Raven-managed set with the shipped catalog, including installing
+// missing skills and removing receipt-managed skills that are no longer
+// shipped. Names narrow changes to those specific shipped skills. It previews
+// by default and applies writes only when req.Confirm is set.
 func Install(req InstallRequest) (*InstallResult, error) {
 	catalog, err := LoadCatalog()
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrInternal, "failed to load skill catalog", err)
 	}
 
+	fullCatalog := installRequestIsFullCatalog(req.Names)
 	names, err := resolveInstallNames(catalog, req.Names)
 	if err != nil {
 		return nil, err
@@ -200,17 +136,33 @@ func Install(req InstallRequest) (*InstallResult, error) {
 		Requested: names,
 	}
 
-	for _, name := range names {
-		plan, err := PlanSync(catalog, name, scope, root)
+	var applyPlans []*SyncPlan
+	if fullCatalog {
+		plan, err := PlanSync(catalog, "", scope, root)
 		if err != nil {
 			return nil, svcerr.Wrap(codes.ErrInternal, "failed to build install plan", err)
 		}
-		result.Skills = append(result.Skills, InstallSkillResult{Name: name, Plan: plan})
-		result.Installed += plan.Installed
-		result.Updated += plan.Updated
-		result.Skipped += plan.Skipped
-		if plan.NeedsConfirm {
-			result.NeedsConfirm = true
+		result.Skills = installSkillResults(plan, names)
+		result.Installed = plan.Installed
+		result.Updated = plan.Updated
+		result.Deleted = plan.Deleted
+		result.Skipped = plan.Skipped
+		result.NeedsConfirm = plan.NeedsConfirm
+		applyPlans = append(applyPlans, plan)
+	} else {
+		for _, name := range names {
+			plan, err := PlanSync(catalog, name, scope, root)
+			if err != nil {
+				return nil, svcerr.Wrap(codes.ErrInternal, "failed to build install plan", err)
+			}
+			result.Skills = append(result.Skills, InstallSkillResult{Name: name, Plan: plan})
+			result.Installed += plan.Installed
+			result.Updated += plan.Updated
+			result.Skipped += plan.Skipped
+			if plan.NeedsConfirm {
+				result.NeedsConfirm = true
+			}
+			applyPlans = append(applyPlans, plan)
 		}
 	}
 
@@ -219,8 +171,8 @@ func Install(req InstallRequest) (*InstallResult, error) {
 	}
 
 	applied := 0
-	for i := range result.Skills {
-		n, err := ApplySync(result.Skills[i].Plan)
+	for _, plan := range applyPlans {
+		n, err := ApplySync(plan)
 		if err != nil {
 			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to apply install", err)
 		}
@@ -230,6 +182,15 @@ func Install(req InstallRequest) (*InstallResult, error) {
 	result.NeedsConfirm = false
 	result.ActionsApplied = applied
 	return result, nil
+}
+
+func installRequestIsFullCatalog(requested []string) bool {
+	for _, raw := range requested {
+		if strings.TrimSpace(raw) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 // resolveInstallNames returns the ordered, de-duplicated set of skills to
