@@ -1,6 +1,7 @@
 package objectsvc
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -44,23 +46,38 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 		if trashDir == "" {
 			trashDir = ".trash"
 		}
-
-		trashRoot := filepath.Join(req.VaultPath, trashDir)
+		trashDir, trashRoot, err := resolveTrashRootFromDir(req.VaultPath, trashDir)
+		if err != nil {
+			return nil, err
+		}
 		if err := os.MkdirAll(trashRoot, 0o755); err != nil {
 			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create trash directory", err)
+		}
+		if err := validateTrashRoot(req.VaultPath, trashRoot); err != nil {
+			return nil, err
 		}
 
 		relPath, err := filepath.Rel(req.VaultPath, req.FilePath)
 		if err != nil {
 			return nil, svcerr.Wrap(codes.ErrInvalidInput, "failed to compute relative path", err)
 		}
+		relPath = filepath.Clean(relPath)
+		if !paths.IsCleanRelSubpath(filepath.ToSlash(relPath)) {
+			return nil, svcerr.New(codes.ErrFileOutsideVault, "file path is outside the vault")
+		}
 		destPath := filepath.Join(trashRoot, relPath)
 
 		if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create trash parent directory", err)
 		}
+		if err := paths.ValidateWithinVault(req.VaultPath, destPath); err != nil {
+			return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "trash destination is outside the vault", err)
+		}
 
-		if _, err := os.Stat(destPath); err == nil {
+		if err := moveRegularFileNoReplace(req.FilePath, destPath); err != nil {
+			if !errors.Is(err, os.ErrExist) {
+				return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to move file to trash", err)
+			}
 			nowFn := req.Now
 			if nowFn == nil {
 				nowFn = time.Now
@@ -68,11 +85,15 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 			timestamp := nowFn().Format("2006-01-02-150405")
 			ext := filepath.Ext(destPath)
 			base := strings.TrimSuffix(filepath.Base(destPath), ext)
-			destPath = filepath.Join(filepath.Dir(destPath), fmt.Sprintf("%s-%s%s", base, timestamp, ext))
-		}
-
-		if err := os.Rename(req.FilePath, destPath); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to move file to trash", err)
+			for version := 1; ; version++ {
+				candidate := filepath.Join(filepath.Dir(destPath), fmt.Sprintf("%s.raven-trash-%s-%d%s", base, timestamp, version, ext))
+				if err := moveRegularFileNoReplace(req.FilePath, candidate); err == nil {
+					destPath = candidate
+					break
+				} else if !errors.Is(err, os.ErrExist) {
+					return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to move file to trash", err)
+				}
+			}
 		}
 
 		return &DeleteFileResult{

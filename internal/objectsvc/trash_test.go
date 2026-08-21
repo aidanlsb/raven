@@ -84,6 +84,76 @@ func TestListTrashUsesConfiguredDirectory(t *testing.T) {
 	}
 }
 
+func TestListTrashPreservesOriginalReferenceForVersionedCollisions(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "oldest")
+	versionPath := ".trash/people/freya.raven-trash-2026-03-10-112233-1.md"
+	writeTrashTestFile(t, vaultPath, versionPath, "newest")
+	vaultCfg := config.DefaultVaultConfig()
+
+	result, err := ListTrash(ListTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+		Reference:   "people/freya",
+	})
+	if err != nil {
+		t.Fatalf("ListTrash() error = %v", err)
+	}
+	if len(result.Entries) != 2 {
+		t.Fatalf("entries = %#v, want two versions", result.Entries)
+	}
+	for _, entry := range result.Entries {
+		if entry.Reference != "people/freya" || entry.RestorePath != "people/freya.md" {
+			t.Fatalf("versioned entry lost original identity: %#v", entry)
+		}
+	}
+
+	_, err = PreviewRestoreByReference(RestoreByReferenceRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+		Reference:   "people/freya",
+	})
+	requireTrashServiceErrorCode(t, err, codes.ErrRefAmbiguous)
+
+	restored, err := RestoreByReference(RestoreByReferenceRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+		Reference:   versionPath,
+	})
+	if err != nil {
+		t.Fatalf("RestoreByReference(exact path) error = %v", err)
+	}
+	if restored.Entry.Reference != "people/freya" || restored.Entry.RestorePath != "people/freya.md" {
+		t.Fatalf("restored entry = %#v", restored.Entry)
+	}
+	requireTrashTestPath(t, vaultPath, "people/freya.md", true)
+	requireTrashTestPath(t, vaultPath, ".trash/people/freya.md", true)
+	requireTrashTestPath(t, vaultPath, versionPath, false)
+}
+
+func TestListTrashSkipsNonRegularEntries(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTrashTestFile(t, vaultPath, ".trash/files/regular.txt", "regular")
+	if err := os.Symlink("../../outside.txt", filepath.Join(vaultPath, ".trash/files/link.txt")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	result, err := ListTrash(ListTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+	})
+	if err != nil {
+		t.Fatalf("ListTrash() error = %v", err)
+	}
+	if len(result.Entries) != 1 || result.Entries[0].Reference != "files/regular.txt" {
+		t.Fatalf("entries = %#v, want only regular file", result.Entries)
+	}
+}
+
 func TestRestoreByReferencePreviewAndApply(t *testing.T) {
 	t.Parallel()
 

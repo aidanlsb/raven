@@ -78,12 +78,63 @@ func TestDeleteFileTrashCollisionAddsTimestamp(t *testing.T) {
 		t.Fatalf("DeleteFile: %v", err)
 	}
 
-	expected := filepath.Join(vaultPath, ".trash/people/freya-2026-03-10-112233.md")
+	expected := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-2026-03-10-112233-1.md")
 	if result.TrashPath != expected {
 		t.Fatalf("expected timestamped trash path %q, got %q", expected, result.TrashPath)
 	}
 	if _, err := os.Stat(expected); err != nil {
 		t.Fatalf("expected timestamped trashed file: %v", err)
+	}
+}
+
+func TestDeleteFileTrashCollisionAllocatesSequenceWithoutOverwrite(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	filePath := filepath.Join(vaultPath, "people/freya.md")
+	trashPath := filepath.Join(vaultPath, ".trash/people/freya.md")
+	firstVersion := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-2026-03-10-112233-1.md")
+
+	for path, content := range map[string]string{
+		filePath:     "newest",
+		trashPath:    "oldest",
+		firstVersion: "older",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("seed %s: %v", path, err)
+		}
+	}
+
+	now := time.Date(2026, 3, 10, 11, 22, 33, 0, time.UTC)
+	result, err := DeleteFile(DeleteFileRequest{
+		VaultPath: vaultPath,
+		FilePath:  filePath,
+		Behavior:  "trash",
+		TrashDir:  ".trash",
+		Now:       func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("DeleteFile: %v", err)
+	}
+
+	expected := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-2026-03-10-112233-2.md")
+	if result.TrashPath != expected {
+		t.Fatalf("TrashPath = %q, want %q", result.TrashPath, expected)
+	}
+	for path, want := range map[string]string{
+		trashPath:    "oldest",
+		firstVersion: "older",
+		expected:     "newest",
+	} {
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("read %s: %v", path, readErr)
+		}
+		if string(content) != want {
+			t.Fatalf("%s content = %q, want %q", path, content, want)
+		}
 	}
 }
 
@@ -140,5 +191,85 @@ func TestDeleteFileInvalidBehavior(t *testing.T) {
 	}
 	if svcErr.Code != codes.ErrInvalidInput {
 		t.Fatalf("expected ErrorInvalidInput, got %s", svcErr.Code)
+	}
+}
+
+func TestDeleteFileRejectsUnsafeTrashDirectories(t *testing.T) {
+	t.Parallel()
+
+	tests := []string{
+		"../outside",
+		"/tmp/outside",
+		`C:\outside`,
+		".raven/trash",
+		".git/trash",
+	}
+	for _, trashDir := range tests {
+		trashDir := trashDir
+		t.Run(trashDir, func(t *testing.T) {
+			t.Parallel()
+			vaultPath := t.TempDir()
+			filePath := filepath.Join(vaultPath, "people/freya.md")
+			if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+				t.Fatalf("seed file: %v", err)
+			}
+
+			_, err := DeleteFile(DeleteFileRequest{
+				VaultPath: vaultPath,
+				FilePath:  filePath,
+				Behavior:  "trash",
+				TrashDir:  trashDir,
+			})
+			if err == nil {
+				t.Fatal("DeleteFile() succeeded with unsafe trash directory")
+			}
+			var serviceErr *svcerr.Error
+			if !errors.As(err, &serviceErr) || serviceErr.Code != codes.ErrConfigInvalid {
+				t.Fatalf("error = %v, want %s", err, codes.ErrConfigInvalid)
+			}
+			if _, statErr := os.Stat(filePath); statErr != nil {
+				t.Fatalf("source changed after rejected delete: %v", statErr)
+			}
+		})
+	}
+}
+
+func TestDeleteFileRejectsSymlinkedTrashDirectory(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	realTrash := filepath.Join(vaultPath, "real-trash")
+	if err := os.MkdirAll(realTrash, 0o755); err != nil {
+		t.Fatalf("mkdir real trash: %v", err)
+	}
+	if err := os.Symlink(realTrash, filepath.Join(vaultPath, "linked-trash")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	filePath := filepath.Join(vaultPath, "people/freya.md")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("seed source: %v", err)
+	}
+
+	_, err := DeleteFile(DeleteFileRequest{
+		VaultPath: vaultPath,
+		FilePath:  filePath,
+		Behavior:  "trash",
+		TrashDir:  "linked-trash",
+	})
+	if err == nil {
+		t.Fatal("DeleteFile() succeeded with symlinked trash directory")
+	}
+	var serviceErr *svcerr.Error
+	if !errors.As(err, &serviceErr) || serviceErr.Code != codes.ErrConfigInvalid {
+		t.Fatalf("error = %v, want %s", err, codes.ErrConfigInvalid)
+	}
+	if _, statErr := os.Stat(filePath); statErr != nil {
+		t.Fatalf("source changed after rejected delete: %v", statErr)
 	}
 }

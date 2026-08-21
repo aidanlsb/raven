@@ -104,3 +104,17 @@ func TestIntegration_TrashUsesConfiguredDirectoryForFiles(t *testing.T) {
 	v.AssertFileExists(filePath)
 	v.AssertFileNotExists("archive/trash/" + filePath)
 }
+
+func TestIntegration_TrashRejectsUnsafeConfiguredDirectory(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML("deletion:\n  behavior: trash\n  trash_dir: ../outside\n").
+		WithFile("notes/keep.md", "# Keep\n").
+		Build()
+
+	v.RunCLI("delete", "notes/keep").MustFail(t, "CONFIG_INVALID")
+	v.AssertFileExists("notes/keep.md")
+	v.RunCLI("trash", "list").MustFail(t, "CONFIG_INVALID")
+}
