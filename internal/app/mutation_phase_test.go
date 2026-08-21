@@ -198,8 +198,8 @@ func TestMutationPhaseMoveNeedsConfirmPreviews(t *testing.T) {
 		"source": "people/freya", "destination": "projects/freya",
 	}, nil)
 	requirePhase(t, res, commandexec.MutationPhasePreview)
-	data, _ := res.Data.(map[string]interface{})
-	if needs, _ := data["needs_confirm"].(bool); !needs {
+	data, ok := res.Data.(commandpayload.MoveConfirmationResult)
+	if !ok || !data.NeedsConfirm {
 		t.Fatalf("expected needs_confirm=true, got data=%#v", data)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -32,7 +33,7 @@ old body
 	if !result.OK {
 		t.Fatalf("HandleEdit() failed: %#v", result.Error)
 	}
-	if got := dataString(result, "status"); got != "applied" {
+	if got := result.Data.(commandpayload.EditSingleResult).Status; got != "applied" {
 		t.Fatalf("status = %q, want applied", got)
 	}
 	if !strings.Contains(v.ReadFile("note/example.md"), "new body") {
@@ -64,7 +65,7 @@ old body
 	if !result.OK {
 		t.Fatalf("HandleEdit() failed: %#v", result.Error)
 	}
-	if got := dataString(result, "status"); got != "preview" {
+	if got := result.Data.(commandpayload.EditSinglePreviewResult).Status; got != "preview" {
 		t.Fatalf("status = %q, want preview", got)
 	}
 	if strings.Contains(v.ReadFile("note/example.md"), "new body") {
@@ -96,7 +97,7 @@ body
 	if !preview.OK {
 		t.Fatalf("HandleAdd preview failed: %#v", preview.Error)
 	}
-	if !dataBool(preview, "preview") {
+	if !preview.Data.(commandpayload.AddBulkPreviewResult).Preview {
 		t.Fatalf("preview data = %#v, want preview=true", preview.Data)
 	}
 	if strings.Contains(v.ReadFile("note/example.md"), "bulk note") {
@@ -141,7 +142,7 @@ owner: "[[freya]]"
 	if !preview.OK {
 		t.Fatalf("HandleCheck preview failed: %#v", preview.Error)
 	}
-	if !dataBool(preview, "preview") {
+	if !preview.Data.(commandpayload.CheckFixPreviewResult).Preview {
 		t.Fatalf("preview data = %#v, want preview=true", preview.Data)
 	}
 	if strings.Contains(v.ReadFile("projects/roadmap.md"), "[[people/freya]]") {
@@ -156,20 +157,8 @@ owner: "[[freya]]"
 	if !apply.OK {
 		t.Fatalf("HandleCheck apply failed: %#v", apply.Error)
 	}
-	if dataBool(apply, "preview") {
+	if apply.Data.(commandpayload.CheckFixResult).Preview {
 		t.Fatalf("apply data = %#v, want preview=false", apply.Data)
 	}
 	v.AssertFileContains("projects/roadmap.md", `owner: "[[people/freya]]"`)
-}
-
-func dataBool(result commandexec.Result, key string) bool {
-	data, _ := result.Data.(map[string]interface{})
-	value, _ := data[key].(bool)
-	return value
-}
-
-func dataString(result commandexec.Result, key string) string {
-	data, _ := result.Data.(map[string]interface{})
-	value, _ := data[key].(string)
-	return value
 }

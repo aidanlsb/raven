@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 )
 
 func TestHandleAddBulkAppendsWithinSection(t *testing.T) {
@@ -39,13 +40,13 @@ some notes
 	if !preview.OK {
 		t.Fatalf("HandleAdd preview failed: %#v", preview.Error)
 	}
-	previewData, _ := preview.Data.(map[string]interface{})
-	items, _ := previewData["items"].([]canonicalBulkPreviewItem)
+	previewData, _ := preview.Data.(commandpayload.AddBulkPreviewResult)
+	items := previewData.Items
 	if len(items) != 1 || items[0].ID != "note/example#tasks" {
 		t.Fatalf("preview items = %#v, want one item for note/example#tasks", items)
 	}
-	if warnings, ok := previewData["warnings"].([]commandexec.Warning); ok && len(warnings) > 0 {
-		t.Fatalf("preview warnings = %#v, want none", warnings)
+	if len(previewData.Warnings) > 0 {
+		t.Fatalf("preview warnings = %#v, want none", previewData.Warnings)
 	}
 
 	apply := HandleAdd(context.Background(), commandexec.Request{
@@ -100,9 +101,9 @@ title: Example
 	if !apply.OK {
 		t.Fatalf("HandleAdd apply failed: %#v", apply.Error)
 	}
-	data, _ := apply.Data.(map[string]interface{})
-	if added, _ := data["added"].(int); added != 2 {
-		t.Fatalf("added = %v, want 2 (data = %#v)", data["added"], data)
+	data, _ := apply.Data.(commandpayload.AddBulkResult)
+	if data.Added != 2 {
+		t.Fatalf("added = %d, want 2 (data = %#v)", data.Added, data)
 	}
 	if got := strings.Count(v.ReadFile("note/example.md"), "- mixed line"); got != 2 {
 		t.Fatalf("expected 2 appended lines, got %d:\n%s", got, v.ReadFile("note/example.md"))
@@ -218,12 +219,12 @@ title: Example
 	if !result.OK {
 		t.Fatalf("HandleSet preview failed: %#v", result.Error)
 	}
-	data, _ := result.Data.(map[string]interface{})
-	warnings, _ := data["warnings"].([]commandexec.Warning)
+	data, _ := result.Data.(commandpayload.SetBulkPreviewResult)
+	warnings := data.Warnings
 	if len(warnings) != 1 || warnings[0].Code != warnSectionSkipped {
 		t.Fatalf("warnings = %#v, want one SECTION_SKIPPED warning", warnings)
 	}
-	items, _ := data["items"].([]canonicalBulkPreviewItem)
+	items := data.Items
 	if len(items) != 1 || items[0].ID != "note/example" {
 		t.Fatalf("preview items = %#v, want only note/example", items)
 	}

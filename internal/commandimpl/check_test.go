@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/checksvc"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -46,20 +46,19 @@ owner: "[[people/freya]]"
 		t.Fatalf("warning code = %q, want %q", result.Warnings[0].Code, checkApplyIncompleteWarningCode)
 	}
 
-	data := result.Data.(map[string]interface{})
-	if got, ok := data["ok"].(bool); !ok || got {
-		t.Fatalf("data ok = %#v, want false", data["ok"])
+	data := result.Data.(commandpayload.CheckFixResult)
+	if data.OK {
+		t.Fatalf("data ok = true, want false")
 	}
-	if got, ok := data["fixed_issues"].(int); !ok || got != 0 {
-		t.Fatalf("fixed_issues = %#v, want 0", data["fixed_issues"])
+	if data.FixedIssues != 0 {
+		t.Fatalf("fixed_issues = %d, want 0", data.FixedIssues)
 	}
-	if got, ok := data["skipped_issues"].(int); !ok || got != 1 {
-		t.Fatalf("skipped_issues = %#v, want 1", data["skipped_issues"])
+	if data.SkippedIssues != 1 {
+		t.Fatalf("skipped_issues = %d, want 1", data.SkippedIssues)
 	}
 
-	skipped, ok := data["skipped_items"].([]checkfixsvc.SkippedFix)
-	if !ok || len(skipped) != 1 {
-		t.Fatalf("skipped_items = %#v, want 1 skipped item", data["skipped_items"])
+	if len(data.SkippedItems) != 1 {
+		t.Fatalf("skipped_items = %#v, want 1 skipped item", data.SkippedItems)
 	}
 }
 
@@ -89,19 +88,18 @@ func TestHandleCheckCreateMissing_WarnsWhenPageCreationFails(t *testing.T) {
 		t.Fatalf("warning code = %q, want %q", result.Warnings[0].Code, checkApplyIncompleteWarningCode)
 	}
 
-	data := result.Data.(map[string]interface{})
-	if got, ok := data["ok"].(bool); !ok || got {
-		t.Fatalf("data ok = %#v, want false", data["ok"])
+	data := result.Data.(commandpayload.CheckCreateMissingResult)
+	if data.OK == nil || *data.OK {
+		t.Fatalf("data ok = %#v, want false", data.OK)
 	}
-	if got, ok := data["created_pages"].(int); !ok || got != 0 {
-		t.Fatalf("created_pages = %#v, want 0", data["created_pages"])
+	if data.CreatedPages == nil || *data.CreatedPages != 0 {
+		t.Fatalf("created_pages = %#v, want 0", data.CreatedPages)
 	}
-	if got, ok := data["failed_pages"].(int); !ok || got != 1 {
-		t.Fatalf("failed_pages = %#v, want 1", data["failed_pages"])
+	if data.FailedPages == nil || *data.FailedPages != 1 {
+		t.Fatalf("failed_pages = %#v, want 1", data.FailedPages)
 	}
 
-	failed, ok := data["failed_page_items"].([]checkfixsvc.CreateMissingFailure)
-	if !ok || len(failed) != 1 {
-		t.Fatalf("failed_page_items = %#v, want 1 failure", data["failed_page_items"])
+	if data.FailedPageItems == nil || len(*data.FailedPageItems) != 1 {
+		t.Fatalf("failed_page_items = %#v, want 1 failure", data.FailedPageItems)
 	}
 }

@@ -24,6 +24,8 @@ var (
 	reclassifyConfirm    bool
 )
 
+type ReclassifyResult = commandpayload.ReclassifyResult
+
 var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	Args:        cobra.MaximumNArgs(2),
