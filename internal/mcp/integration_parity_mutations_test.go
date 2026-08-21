@@ -374,6 +374,65 @@ type: page
 		vCLI.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
 	})
 
+	t.Run("section_delete_preview_and_apply", func(t *testing.T) {
+		const content = `---
+type: project
+title: Site
+status: active
+---
+
+## Alpha
+
+Alpha body
+
+### Child
+
+Child body
+
+## Beta
+
+Beta body
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/site.md", content).
+			WithFile("notes/ref.md", "See [[projects/site#alpha]] and [[projects/site#child]].\n").
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/site.md", content).
+			WithFile("notes/ref.md", "See [[projects/site#alpha]] and [[projects/site#child]].\n").
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+		server.callTool("reindex", nil)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpPreview := server.callTool("section_delete", map[string]interface{}{
+			"reference": "projects/site#alpha",
+		})
+		cliPreview := vCLI.RunCLI("section", "delete", "projects/site#alpha")
+		assertEnvelopeParity(t, mcpPreview, cliPreview, []string{
+			"section", "file", "line_start", "line_end", "removed_content",
+			"deleted_sections", "backlinks", "preview", "status",
+		})
+		vMCP.AssertFileContains("projects/site.md", "## Alpha")
+		vCLI.AssertFileContains("projects/site.md", "## Alpha")
+
+		mcpApplied := server.callTool("section_delete", map[string]interface{}{
+			"reference": "projects/site#alpha",
+			"confirm":   true,
+		})
+		cliApplied := vCLI.RunCLI("section", "delete", "projects/site#alpha", "--confirm")
+		assertEnvelopeParity(t, mcpApplied, cliApplied, []string{
+			"section", "file", "line_start", "line_end", "removed_content",
+			"deleted_sections", "backlinks", "status",
+		})
+		vMCP.AssertFileNotContains("projects/site.md", "## Alpha")
+		vMCP.AssertFileContains("projects/site.md", "## Beta")
+		vCLI.AssertFileNotContains("projects/site.md", "## Alpha")
+		vCLI.AssertFileContains("projects/site.md", "## Beta")
+	})
+
 	t.Run("delete", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()

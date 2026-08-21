@@ -247,6 +247,69 @@ func TestIntegration_SectionMoveDryRunAndErrors(t *testing.T) {
 	}
 }
 
+func TestIntegration_SectionDeletePreviewAndConfirm(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", sectionLifecycleFixture).
+		WithFile("notes/ref.md", "See [[projects/site#alpha]] and [[projects/site#alpha-child]].\n").
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	preview := v.RunCLI("section", "delete", "projects/site#alpha")
+	preview.MustSucceed(t)
+	if preview.DataString("status") != "preview" || preview.Data["preview"] != true {
+		t.Fatalf("delete should preview by default: %s", preview.RawJSON)
+	}
+	if preview.Data["line_start"] != float64(9) || preview.Data["line_end"] != float64(16) {
+		t.Fatalf("preview line range = %#v-%#v, want 9-16: %s", preview.Data["line_start"], preview.Data["line_end"], preview.RawJSON)
+	}
+	removed, _ := preview.Data["removed_content"].(string)
+	if !strings.Contains(removed, "## Alpha") || !strings.Contains(removed, "### Alpha Child") || strings.Contains(removed, "## Beta") {
+		t.Fatalf("preview removed_content does not contain the exact subtree: %q", removed)
+	}
+	deletedSections, _ := preview.Data["deleted_sections"].([]interface{})
+	if len(deletedSections) != 2 {
+		t.Fatalf("deleted_sections = %#v, want parent and child: %s", deletedSections, preview.RawJSON)
+	}
+	backlinks, _ := preview.Data["backlinks"].([]interface{})
+	if len(backlinks) != 2 {
+		t.Fatalf("backlinks = %#v, want both inbound refs: %s", backlinks, preview.RawJSON)
+	}
+	if got := v.ReadFile("projects/site.md"); got != sectionLifecycleFixture {
+		t.Fatalf("default preview changed source file:\n%s", got)
+	}
+
+	applied := v.RunCLI("section", "delete", "projects/site#alpha", "--confirm")
+	applied.MustSucceed(t)
+	if applied.DataString("status") != "deleted" {
+		t.Fatalf("applied status = %q, want deleted: %s", applied.DataString("status"), applied.RawJSON)
+	}
+	content := v.ReadFile("projects/site.md")
+	if strings.Contains(content, "## Alpha") || strings.Contains(content, "### Alpha Child") {
+		t.Fatalf("confirmed delete left subtree headings:\n%s", content)
+	}
+	if !strings.Contains(content, "# Project") || !strings.Contains(content, "## Beta\n\nBeta body") {
+		t.Fatalf("confirmed delete disturbed parent or sibling:\n%s", content)
+	}
+	if got := v.ReadFile("notes/ref.md"); got != "See [[projects/site#alpha]] and [[projects/site#alpha-child]].\n" {
+		t.Fatalf("confirmed delete changed reported inbound refs:\n%s", got)
+	}
+}
+
+func TestIntegration_SectionDeleteRejectsNonSectionReference(t *testing.T) {
+	t.Parallel()
+
+	v := newSectionLifecycleVault(t, sectionLifecycleFixture)
+	result := v.RunCLI("section", "delete", "projects/site", "--confirm")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "section reference required")
+	if got := v.ReadFile("projects/site.md"); got != sectionLifecycleFixture {
+		t.Fatalf("rejected delete changed source file:\n%s", got)
+	}
+}
+
 func newSectionLifecycleVault(t *testing.T, content string) *testutil.TestVault {
 	t.Helper()
 	v := testutil.NewTestVault(t).

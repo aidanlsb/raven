@@ -122,6 +122,7 @@ Queries expose additional structural fields on section rows: `.slug`, `.file_obj
 - Created with `rvn section create project/website "Tasks" --level 2`
 - Reordered or reparented with `rvn section move project/website#tasks`; the complete subtree moves and identity stays unchanged
 - Renamed safely with `rvn section rename project/website#tasks "New Heading"`, which rewrites inbound refs
+- Deleted with preview-first `rvn section delete project/website#tasks`; the complete subtree is removed with `--confirm`, and affected inbound refs are reported
 
 ### `date`
 

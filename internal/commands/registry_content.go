@@ -391,6 +391,43 @@ receive the canonical new section ID without writing.`,
 			"Create a direct child at an explicit heading level",
 		},
 	},
+	"section_delete": {
+		Name:        "section delete",
+		CLIPath:     []string{"section", "delete"},
+		Use:         "delete <reference>",
+		Description: "Delete a section heading and its complete subtree",
+		Category:    CategoryContent,
+		Access:      AccessWrite,
+		Risk:        RiskDestructive,
+		LongDesc: `Delete a Markdown section heading and its complete subtree.
+
+The reference must be a section ID such as project/website#tasks. File/object
+references and non-Markdown file paths are rejected. Raven removes the heading,
+its direct body, and every descendant heading and body up to the same complete
+subtree boundary used by 'section move'. Parent and sibling sections are left
+in place.
+
+This destructive command previews by default. The preview reports the exact
+inclusive line range, removed Markdown content, every section ID in the
+subtree, and inbound references that would become stale. Raven leaves those
+inbound references unchanged because it cannot infer a safe replacement target;
+repair or remove them explicitly. Pass --confirm to apply the deletion.`,
+		Args: []ArgMeta{
+			{Name: "reference", Description: "Section reference to delete (e.g., project/website#tasks)", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "confirm", Description: "Delete the section subtree (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			`rvn section delete project/website#tasks --json`,
+			`rvn section delete project/website#tasks --confirm --json`,
+		},
+		UseCases: []string{
+			"Preview the exact heading subtree and inbound references before deletion",
+			"Delete a section subtree without disturbing its parent or siblings",
+			"Remove a heading through Raven instead of hand-editing Markdown",
+		},
+	},
 	"section_move": {
 		Name:        "section move",
 		CLIPath:     []string{"section", "move"},

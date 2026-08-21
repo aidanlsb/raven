@@ -95,7 +95,7 @@ Read this field to decide whether a write happened. Do **not** infer it from
 heterogeneous `data` fields (`data.status`, `data.preview`, `data.needs_confirm`,
 etc.), which vary by command and remain only for backward compatibility. The
 phase is consistent across every mutating command (`new`, `upsert`, `add`, `set`,
-`unset`, `delete`, `move`, `section_create`, `section_move`, `section_rename`,
+`unset`, `delete`, `move`, `section_create`, `section_delete`, `section_move`, `section_rename`,
 `reclassify`, `update`, `edit`, `import`, `check fix`,
 `check create-missing`, `schema` writes/renames, `template` writes, saved-query
 writes, and skill installs) and across the CLI and MCP surfaces.
@@ -140,7 +140,8 @@ There are two mutation classes with different defaults:
 2. High-blast-radius operations are preview-first (`meta.mutation.phase =
    "preview"`) and require `confirm=true` to apply: any bulk write (an MCP bulk
    ID array or CLI `--stdin`), `query` with `apply`, `schema rename`, `schema
-   convert`, and the `check fix` / `check create-missing` repair subcommands.
+   convert`, `section_delete`, and the `check fix` / `check create-missing`
+   repair subcommands.
 
 Examples:
 
@@ -156,6 +157,8 @@ raven_invoke(command="section_rename", args={"section_id":"project/website#tasks
 raven_invoke(command="edit", args={"reference":"project/website.md", "old_str":"A", "new_str":"B", "dry-run":true})
 
 # Preview-first; apply only after explicit approval with confirm=true:
+raven_invoke(command="section_delete", args={"reference":"project/website#old-plan"})
+raven_invoke(command="section_delete", args={"reference":"project/website#old-plan", "confirm":true})
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "apply":["update done"]})
 raven_invoke(command="delete", args={"references":["project/one","project/two"], "confirm":true})
 raven_invoke(command="move", args={"object_ids":["project/one","project/two"], "destination":"archive/", "confirm":true})

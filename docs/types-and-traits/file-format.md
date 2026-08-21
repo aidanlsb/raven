@@ -64,8 +64,11 @@ parsing—they have no frontmatter of their own, and their index entries are
 rebuilt on every reindex. Use `rvn section create` to add headings,
 `rvn section move` to reorder/reparent a complete subtree, and
 `rvn section rename` to change heading identity while rewriting inbound
-references. `rvn add` is body-only and rejects heading content. Section IDs
-combine the file object ID with a heading-derived fragment:
+references. Use preview-first `rvn section delete <file#section>` to inspect and
+then remove a heading's complete subtree; apply with `--confirm`. Delete reports
+inbound references but leaves them unchanged when no safe replacement exists.
+`rvn add` is body-only and rejects heading content. Section IDs combine the file
+object ID with a heading-derived fragment:
 
 ```
 <file-id>#<fragment>

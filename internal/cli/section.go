@@ -19,6 +19,7 @@ var sectionCmd = buildRegistrySubtree(registrySubtreeSpec{
 	},
 	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
 		"section_create": renderSectionCreateResult,
+		"section_delete": renderSectionDeleteResult,
 		"section_move":   renderSectionMoveResult,
 		"section_rename": renderSectionRenameResult,
 	},
@@ -73,6 +74,45 @@ func renderSectionMoveResult(_ *cobra.Command, result commandexec.Result) error 
 	}
 
 	fmt.Println(ui.Checkf("Moved section %s %s", ui.FilePath(sectionID), description))
+	return nil
+}
+
+func renderSectionDeleteResult(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	sectionID := stringValue(data["section"])
+	file := stringValue(data["file"])
+	lineStart := intValue(data["line_start"])
+	lineEnd := intValue(data["line_end"])
+	backlinkCount := len(deletePreviewBacklinks(data["backlinks"]))
+
+	if boolValue(data["preview"]) {
+		fmt.Println(ui.Star(fmt.Sprintf(
+			"Would delete section %s from %s (lines %d-%d)",
+			ui.FilePath(sectionID),
+			ui.FilePath(file),
+			lineStart,
+			lineEnd,
+		)))
+		if removedContent := stringValue(data["removed_content"]); removedContent != "" {
+			fmt.Printf("\n%s\n", removedContent)
+		}
+		if backlinkCount > 0 {
+			fmt.Printf("  %s\n", ui.Warning(fmt.Sprintf(
+				"Would leave %d inbound reference(s) unchanged; repair or remove them explicitly",
+				backlinkCount,
+			)))
+		}
+		fmt.Println(ui.Hint("Preview only: re-run with --confirm to delete"))
+		return nil
+	}
+
+	fmt.Println(ui.Checkf("Deleted section %s from %s (lines %d-%d)", ui.FilePath(sectionID), ui.FilePath(file), lineStart, lineEnd))
+	if backlinkCount > 0 {
+		fmt.Printf("  %s\n", ui.Warning(fmt.Sprintf(
+			"Left %d inbound reference(s) unchanged; repair or remove them explicitly",
+			backlinkCount,
+		)))
+	}
 	return nil
 }
 

@@ -293,8 +293,11 @@ Section fragments are derived from heading text. Create headings with
 `rvn section move`; moving preserves the heading text, level, slug, and
 references. To rename a heading without breaking inbound references, use
 `rvn section rename project/website#tasks "New Heading"`—it updates the heading
-and rewrites every `[[...#tasks]]` reference to the new slug. The file/object
-`rvn move` command rejects section sources.
+and rewrites every `[[...#tasks]]` reference to the new slug. To remove a
+heading and every descendant, preview `rvn section delete
+project/website#tasks`; the preview reports every inbound reference that would
+become stale, and `--confirm` applies without guessing a replacement for those
+references. The file/object `rvn move` command rejects section sources.
 
 ## Related docs
 

@@ -156,12 +156,16 @@ Manage heading lifecycle explicitly:
 rvn section create project/website "Tasks" --level 2
 rvn section move project/website#tasks --after project/website#overview
 rvn section rename project/website#tasks "Completed Tasks"
+rvn section delete project/website#completed-tasks          # Preview
+rvn section delete project/website#completed-tasks --confirm
 ```
 
 Create requires plain title text plus an explicit level. Move preserves the
 heading's identity and carries its complete subtree. Rename changes the
-heading-derived slug and rewrites inbound fragment references. `rvn add` only
-appends body content and rejects Markdown headings.
+heading-derived slug and rewrites inbound fragment references. Delete previews
+the exact subtree and affected inbound references by default, then removes the
+subtree only with `--confirm`; reported references are left for explicit repair.
+`rvn add` only appends body content and rejects Markdown headings.
 
 ## Daily Notes
 

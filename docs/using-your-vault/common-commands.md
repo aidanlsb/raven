@@ -306,6 +306,26 @@ changes. `--before`/`--after` require equal source and anchor levels, while
 anchors, missing anchors, depth mismatches, and anchors inside the source
 subtree are hard errors.
 
+### `rvn section delete`
+
+Delete a heading and its complete subtree:
+
+```bash
+rvn section delete project/website#tasks             # Preview only
+rvn section delete project/website#tasks --confirm   # Apply
+```
+
+This destructive command previews by default. The JSON preview includes the
+inclusive `line_start`/`line_end`, exact `removed_content`, all
+`deleted_sections`, and `backlinks` that point at any section in the subtree.
+The command accepts only a section reference; file/object and non-Markdown file
+references are rejected.
+
+Raven leaves reported inbound references unchanged because deleting a section
+does not provide a safe replacement target. Repair or remove those references
+explicitly after applying. Parent and sibling sections remain in place. A
+deletion that would shift a surviving duplicate heading's slug is rejected.
+
 ### `rvn section rename`
 
 Rename a section heading without breaking inbound fragment references:
@@ -317,8 +337,9 @@ rvn section rename project/website#tasks "Completed Tasks" --dry-run
 
 The destination is plain heading text without a leading `#`. Raven preserves the heading level, derives the new slug, and rewrites every inbound `[[...#old-slug]]` reference. The command fails without writing if the rename would duplicate a slug or shift another section's slug.
 
-Section lifecycle placement and body appends use different boundaries:
-`section create`/`section move` place headings using complete subtrees, while
+Section lifecycle placement/deletion and body appends use different boundaries:
+`section create`/`section move` place headings using complete subtrees, and
+`section delete` removes a complete subtree. By contrast,
 `rvn add <text> --to file#section` appends at the end of that section's direct
 body, before its first child heading. `add` rejects Markdown heading content;
 create headings with `section create` first.
