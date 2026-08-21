@@ -23,7 +23,10 @@ func ApplyInstall(plan *InstallPlan) (*Receipt, int, error) {
 	applied := 0
 	relPaths := sortedRenderedPaths(plan.rendered)
 	for _, relPath := range relPaths {
-		absPath := filepath.Join(plan.SkillPath, filepath.FromSlash(relPath))
+		absPath, err := safeSkillPath(plan.SkillPath, relPath)
+		if err != nil {
+			return nil, applied, err
+		}
 		if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
 			return nil, applied, fmt.Errorf("create parent directory for %s: %w", absPath, err)
 		}
@@ -34,7 +37,10 @@ func ApplyInstall(plan *InstallPlan) (*Receipt, int, error) {
 	}
 
 	receipt := newReceipt(plan.spec.ID, plan.spec.Version, plan.Scope, plan.rendered)
-	receiptPath := filepath.Join(plan.SkillPath, receiptFileName)
+	receiptPath, err := safeSkillPath(plan.SkillPath, receiptFileName)
+	if err != nil {
+		return nil, applied, err
+	}
 	if err := writeReceipt(receiptPath, receipt); err != nil {
 		return nil, applied, err
 	}
@@ -44,6 +50,15 @@ func ApplyInstall(plan *InstallPlan) (*Receipt, int, error) {
 }
 
 func writeSkill(skill *Skill, scope, skillPath string, rendered map[string][]byte) (int, error) {
+	written, err := writeSkillFiles(skillPath, rendered)
+	if err != nil {
+		return written, err
+	}
+	receiptWritten, err := writeSkillReceipt(skill, scope, skillPath, rendered)
+	return written + receiptWritten, err
+}
+
+func writeSkillFiles(skillPath string, rendered map[string][]byte) (int, error) {
 	if err := os.MkdirAll(skillPath, 0o755); err != nil {
 		return 0, fmt.Errorf("create skill directory: %w", err)
 	}
@@ -51,7 +66,10 @@ func writeSkill(skill *Skill, scope, skillPath string, rendered map[string][]byt
 	applied := 0
 	relPaths := sortedRenderedPaths(rendered)
 	for _, relPath := range relPaths {
-		absPath := filepath.Join(skillPath, filepath.FromSlash(relPath))
+		absPath, err := safeSkillPath(skillPath, relPath)
+		if err != nil {
+			return applied, err
+		}
 		if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
 			return applied, fmt.Errorf("create parent directory for %s: %w", absPath, err)
 		}
@@ -60,13 +78,17 @@ func writeSkill(skill *Skill, scope, skillPath string, rendered map[string][]byt
 		}
 		applied++
 	}
-
-	receipt := newReceipt(skill.Spec.ID, skill.Spec.Version, scope, rendered)
-	receiptPath := filepath.Join(skillPath, receiptFileName)
-	if err := writeReceipt(receiptPath, receipt); err != nil {
-		return applied, err
-	}
-	applied++
-
 	return applied, nil
+}
+
+func writeSkillReceipt(skill *Skill, scope, skillPath string, rendered map[string][]byte) (int, error) {
+	receipt := newReceipt(skill.Spec.ID, skill.Spec.Version, scope, rendered)
+	receiptPath, err := safeSkillPath(skillPath, receiptFileName)
+	if err != nil {
+		return 0, err
+	}
+	if err := writeReceipt(receiptPath, receipt); err != nil {
+		return 0, err
+	}
+	return 1, nil
 }

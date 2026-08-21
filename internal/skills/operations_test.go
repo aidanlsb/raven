@@ -316,6 +316,86 @@ func TestInstallRealignsManagedSkillOnConfirm(t *testing.T) {
 	}
 }
 
+func TestInstallUpdateRetainsOldReceiptWhenStaleCleanupFails(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if _, err := Install(InstallRequest{
+		Names:   []string{"raven-core"},
+		Scope:   "project",
+		Dest:    root,
+		Confirm: true,
+	}); err != nil {
+		t.Fatalf("Install() initial error = %v", err)
+	}
+
+	skillPath := filepath.Join(root, "raven-core")
+	receiptPath := filepath.Join(skillPath, receiptFileName)
+	receipt, err := readReceipt(receiptPath)
+	if err != nil {
+		t.Fatalf("readReceipt() error = %v", err)
+	}
+	receipt.Files = append(receipt.Files, "stale")
+	if err := writeReceipt(receiptPath, receipt); err != nil {
+		t.Fatalf("writeReceipt() error = %v", err)
+	}
+	stalePath := filepath.Join(skillPath, "stale")
+	if err := os.MkdirAll(stalePath, 0o755); err != nil {
+		t.Fatalf("MkdirAll() stale path error = %v", err)
+	}
+	blockerPath := filepath.Join(stalePath, "keep.md")
+	if err := os.WriteFile(blockerPath, []byte("blocks directory removal"), 0o644); err != nil {
+		t.Fatalf("WriteFile() blocker error = %v", err)
+	}
+
+	if _, err := Install(InstallRequest{
+		Names:   []string{"raven-core"},
+		Scope:   "project",
+		Dest:    root,
+		Confirm: true,
+	}); err == nil {
+		t.Fatal("Install() succeeded despite stale cleanup failure")
+	}
+	failedReceipt, err := readReceipt(receiptPath)
+	if err != nil {
+		t.Fatalf("readReceipt() after failure error = %v", err)
+	}
+	if !containsReceiptFile(failedReceipt.Files, "stale") {
+		t.Fatalf("failed update replaced old receipt: files = %#v", failedReceipt.Files)
+	}
+
+	if err := os.Remove(blockerPath); err != nil {
+		t.Fatalf("Remove() blocker error = %v", err)
+	}
+	if _, err := Install(InstallRequest{
+		Names:   []string{"raven-core"},
+		Scope:   "project",
+		Dest:    root,
+		Confirm: true,
+	}); err != nil {
+		t.Fatalf("Install() retry error = %v", err)
+	}
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Fatalf("Install() retry left stale path in place, err = %v", err)
+	}
+	finalReceipt, err := readReceipt(receiptPath)
+	if err != nil {
+		t.Fatalf("readReceipt() final error = %v", err)
+	}
+	if containsReceiptFile(finalReceipt.Files, "stale") {
+		t.Fatalf("Install() retry retained stale path in receipt: %#v", finalReceipt.Files)
+	}
+}
+
+func containsReceiptFile(files []string, want string) bool {
+	for _, file := range files {
+		if file == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestDoctorReturnsSingleResolvedRoot(t *testing.T) {
 	t.Parallel()
 

@@ -254,19 +254,28 @@ func ApplySync(plan *SyncPlan) (int, error) {
 	applied := 0
 	for _, item := range plan.items {
 		switch item.op {
-		case syncOpInstall, syncOpUpdate:
+		case syncOpInstall:
 			written, err := writeSkill(item.skill, plan.Scope, item.path, item.rendered)
 			if err != nil {
 				return applied, err
 			}
 			applied += written
-			if item.receipt != nil {
-				removed, err := removeStaleReceiptFiles(item.path, item.receipt, item.rendered)
-				if err != nil {
-					return applied, err
-				}
-				applied += removed
+		case syncOpUpdate:
+			written, err := writeSkillFiles(item.path, item.rendered)
+			if err != nil {
+				return applied, err
 			}
+			applied += written
+			removed, err := removeStaleReceiptFiles(item.path, item.receipt, item.rendered)
+			if err != nil {
+				return applied, err
+			}
+			applied += removed
+			receiptWritten, err := writeSkillReceipt(item.skill, plan.Scope, item.path, item.rendered)
+			if err != nil {
+				return applied, err
+			}
+			applied += receiptWritten
 		case syncOpDelete:
 			removed, err := removeReceiptManagedFiles(item.path, item.receipt)
 			if err != nil {
@@ -441,7 +450,30 @@ func removeManagedFile(skillPath, relPath string) (int, error) {
 func safeSkillPath(skillPath, relPath string) (string, error) {
 	cleaned := filepath.Clean(filepath.FromSlash(strings.TrimSpace(relPath)))
 	if cleaned == "" || cleaned == "." || filepath.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("receipt path escapes skill root: %s", relPath)
+		return "", fmt.Errorf("skill path escapes skill root: %s", relPath)
+	}
+
+	rootInfo, err := os.Lstat(skillPath)
+	if err != nil {
+		return "", fmt.Errorf("inspect skill root %s: %w", skillPath, err)
+	}
+	if rootInfo.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("skill root is a symlink: %s", skillPath)
+	}
+
+	current := skillPath
+	for _, component := range strings.Split(cleaned, string(filepath.Separator)) {
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if err != nil {
+			if os.IsNotExist(err) {
+				break
+			}
+			return "", fmt.Errorf("inspect skill path %s: %w", current, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("skill path traverses symlink: %s", current)
+		}
 	}
 	return filepath.Join(skillPath, cleaned), nil
 }

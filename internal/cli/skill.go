@@ -146,12 +146,17 @@ func renderSkillInstall(_ *cobra.Command, result commandexec.Result) error {
 	case "applied":
 		fmt.Println(ui.Checkf("Reconciled Raven skills at %s", ui.FilePath(root)))
 		fmt.Println(ui.Hint(fmt.Sprintf("Applied %d file changes", intValue(data["actions_applied"]))))
+		if skipped := intValue(data["skipped"]); skipped > 0 {
+			fmt.Println(ui.Warning(fmt.Sprintf("%d skill paths were skipped because Raven does not manage them.", skipped)))
+		}
 		return nil
 	}
 
 	printSkillInstallPlan(data)
 	if boolValue(data["needs_confirm"]) {
 		fmt.Println(ui.Warning("Preview only — re-run with --confirm to apply."))
+	} else if skipped := intValue(data["skipped"]); skipped > 0 {
+		fmt.Println(ui.Warning(fmt.Sprintf("No managed changes are pending; %d skill paths were skipped.", skipped)))
 	} else {
 		fmt.Println(ui.Hint("The requested Raven-managed skill set is already aligned."))
 	}
