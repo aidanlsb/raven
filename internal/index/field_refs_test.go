@@ -77,6 +77,14 @@ func TestFieldRefsResolveUnambiguous(t *testing.T) {
 	if status != "resolved" {
 		t.Errorf("expected status 'resolved', got '%s'", status)
 	}
+
+	backlinks, err := db.FieldBacklinksWithRoots("companies/cursor", "", "")
+	if err != nil {
+		t.Fatalf("FieldBacklinksWithRoots() error = %v", err)
+	}
+	if len(backlinks) != 1 || backlinks[0].SourceID != "people/ada" || backlinks[0].FieldName != "company" {
+		t.Fatalf("FieldBacklinksWithRoots() = %#v, want people/ada.company", backlinks)
+	}
 }
 
 func TestFieldRefsResolveAmbiguous(t *testing.T) {

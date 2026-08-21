@@ -43,6 +43,9 @@ type Occurrence struct {
 	Base        string
 	Fragment    string
 	HasFragment bool
+	// FieldName is set for occurrences inside a top-level frontmatter field.
+	// It is empty for body references.
+	FieldName string
 }
 
 // Decider returns the replacement target for a matched occurrence, plus
@@ -73,8 +76,12 @@ func RewriteContent(content string, decide Decider) (string, bool) {
 
 	bodyStart := 0
 	if start, end, ok := parser.FrontmatterBounds(lines); ok && end != -1 {
+		fieldName := ""
 		for i := start + 1; i < end; i++ {
-			if updated, c := rewriteFrontmatterLine(lines[i], decide); c {
+			if nextField, found := frontmatterTopLevelField(lines[i]); found {
+				fieldName = nextField
+			}
+			if updated, c := rewriteFrontmatterLine(lines[i], fieldName, decide); c {
 				lines[i] = updated
 				changed = true
 			}
@@ -142,20 +149,20 @@ type span struct {
 // body line, skipping inline code spans.
 func rewriteBodyLine(line string, decide Decider) (string, bool) {
 	masked := parser.RemoveInlineCode(line)
-	return applySpans(line, wikilinkSpans(line, masked, decide))
+	return applySpans(line, wikilinkSpans(line, masked, "", decide))
 }
 
 // rewriteWikilinksOnLine rewrites only wikilink references on a line, skipping
 // inline code spans. It is used for frontmatter lines, where markdown link
 // syntax is not a reference form.
-func rewriteWikilinksOnLine(line string, decide Decider) (string, bool) {
+func rewriteWikilinksOnLine(line, fieldName string, decide Decider) (string, bool) {
 	masked := parser.RemoveInlineCode(line)
-	return applySpans(line, wikilinkSpans(line, masked, decide))
+	return applySpans(line, wikilinkSpans(line, masked, fieldName, decide))
 }
 
 // wikilinkSpans collects replacement spans for wikilinks on a line. It scans the
 // masked line (code spans blanked) but reconstructs from the original text.
-func wikilinkSpans(line, masked string, decide Decider) []span {
+func wikilinkSpans(line, masked, fieldName string, decide Decider) []span {
 	matches := wikilink.FindAllInLine(masked, false)
 	if len(matches) == 0 {
 		return nil
@@ -174,6 +181,7 @@ func wikilinkSpans(line, masked string, decide Decider) []span {
 			Base:        base,
 			Fragment:    fragment,
 			HasFragment: isSection,
+			FieldName:   fieldName,
 		}
 		newTarget, replace := decide(occ)
 		if !replace {

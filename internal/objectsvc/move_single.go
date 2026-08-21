@@ -42,6 +42,7 @@ type MoveByReferenceResult struct {
 	DestinationID     string
 	DestinationRel    string
 	UpdatedRefs       []string
+	UpdatedRefFields  []RefFieldUpdate
 	WarningMessages   []string
 	NeedsConfirm      bool
 	Reason            string
@@ -166,13 +167,14 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 			return nil, err
 		}
 		return &MoveByReferenceResult{
-			SourceID:        sourceID,
-			SourceRelative:  sourceRelPath,
-			DestinationID:   destPath,
-			DestinationRel:  destPath,
-			UpdatedRefs:     serviceResult.UpdatedRefs,
-			WarningMessages: serviceResult.WarningMessages,
-			ChangeSet:       serviceResult.ChangeSet,
+			SourceID:         sourceID,
+			SourceRelative:   sourceRelPath,
+			DestinationID:    destPath,
+			DestinationRel:   destPath,
+			UpdatedRefs:      serviceResult.UpdatedRefs,
+			UpdatedRefFields: serviceResult.UpdatedRefFields,
+			WarningMessages:  serviceResult.WarningMessages,
+			ChangeSet:        serviceResult.ChangeSet,
 		}, nil
 	}
 
@@ -236,12 +238,13 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	}
 
 	return &MoveByReferenceResult{
-		SourceID:        sourceID,
-		SourceRelative:  sourceRelPath,
-		DestinationID:   req.VaultConfig.FilePathToObjectID(destPath),
-		DestinationRel:  destPath,
-		UpdatedRefs:     serviceResult.UpdatedRefs,
-		WarningMessages: serviceResult.WarningMessages,
-		ChangeSet:       serviceResult.ChangeSet,
+		SourceID:         sourceID,
+		SourceRelative:   sourceRelPath,
+		DestinationID:    req.VaultConfig.FilePathToObjectID(destPath),
+		DestinationRel:   destPath,
+		UpdatedRefs:      serviceResult.UpdatedRefs,
+		UpdatedRefFields: serviceResult.UpdatedRefFields,
+		WarningMessages:  serviceResult.WarningMessages,
+		ChangeSet:        serviceResult.ChangeSet,
 	}, nil
 }

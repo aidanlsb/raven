@@ -250,16 +250,17 @@ IMPORTANT:
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
 Using 'mv' directly will NOT update references to the file, causing broken links
-throughout the vault. The raven_move command automatically updates [[references]]
-and indexed Markdown file links/images that point to the moved file.
+throughout the vault. The raven_move command automatically updates [[references]],
+schema-typed frontmatter ref/ref[] fields, and indexed Markdown file links/images
+that point to the moved file.
 
 SECURITY: Both source and destination must be within the vault.
 Files cannot be moved outside the vault, and external files cannot be moved in.
 
 This command:
 - Validates paths are within the vault
-- Updates all references and normalized-key-matched file links to the moved file
-  (--update-refs, default: true)
+- Updates all body references, schema-typed frontmatter ref/ref[] fields, and
+  normalized-key-matched file links to the moved file (--update-refs, default: true)
 - Preserves non-Markdown filenames and extensions
 - Warns if moving to a type's default directory with mismatched type
 - Creates destination directories if needed
@@ -270,7 +271,9 @@ The agent should ask the user how to proceed and re-run with --skip-type-check.
 
 Single-object move:
 Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
-move and the references it would update without applying.
+move and the references it would update without applying. Preview/apply responses
+list affected source objects in updated_refs and identify frontmatter fields in
+updated_ref_fields with source_id, file, and field.
 
 Section IDs are not valid move sources. Use 'rvn section move <file#section>' to
 reorder or reparent a heading without changing its identity. Use 'rvn section
@@ -288,7 +291,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
-			{Name: "update-refs", Description: "Update references to moved file", Type: FlagTypeBool, Default: "true"},
+			{Name: "update-refs", Description: "Update body, frontmatter ref-field, and file-link references to moved file", Type: FlagTypeBool, Default: "true"},
 			{Name: "skip-type-check", Description: "Skip type-directory mismatch warning", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin (one per line)", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk move (without this flag, bulk shows preview only)", Type: FlagTypeBool},

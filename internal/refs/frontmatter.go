@@ -11,30 +11,48 @@ import (
 // It first rewrites any wikilinks (which may appear bare or inside quotes, e.g.
 // `owner: [[people/tido]]`), then rewrites bare/quoted plain-path references in
 // scalar values, inline flow arrays, and block sequence items.
-func rewriteFrontmatterLine(line string, decide Decider) (string, bool) {
+func rewriteFrontmatterLine(line, fieldName string, decide Decider) (string, bool) {
 	changed := false
 
 	// Wikilinks anywhere on the line (code spans are skipped, matching the
 	// parser's frontmatter ref extraction which also skips inline code).
-	if updated, c := rewriteWikilinksOnLine(line, decide); c {
+	if updated, c := rewriteWikilinksOnLine(line, fieldName, decide); c {
 		line = updated
 		changed = true
 	}
 
 	if prefix, value, ok := splitFrontmatterMapping(line); ok {
-		if updated, c := rewriteFrontmatterValue(value, decide); c {
+		if updated, c := rewriteFrontmatterValue(value, fieldName, decide); c {
 			return prefix + updated, true
 		}
 		return line, changed
 	}
 	if prefix, value, ok := splitFrontmatterSequence(line); ok {
-		if updated, c := rewriteFrontmatterValue(value, decide); c {
+		if updated, c := rewriteFrontmatterValue(value, fieldName, decide); c {
 			return prefix + updated, true
 		}
 		return line, changed
 	}
 
 	return line, changed
+}
+
+// frontmatterTopLevelField returns the field introduced by an unindented YAML
+// mapping line. Keeping this context lets block-sequence values inherit their
+// owning field without reparsing or re-rendering the YAML document.
+func frontmatterTopLevelField(line string) (string, bool) {
+	if line == "" || line[0] == ' ' || line[0] == '\t' || line[0] == '#' || line[0] == '-' {
+		return "", false
+	}
+	colon := strings.IndexByte(line, ':')
+	if colon <= 0 {
+		return "", false
+	}
+	fieldName := strings.TrimSpace(line[:colon])
+	if len(fieldName) >= 2 && (fieldName[0] == '"' || fieldName[0] == '\'') && fieldName[len(fieldName)-1] == fieldName[0] {
+		fieldName = fieldName[1 : len(fieldName)-1]
+	}
+	return fieldName, fieldName != ""
 }
 
 // splitFrontmatterMapping splits a `key: value` (or `- key: value`) line into
@@ -60,20 +78,20 @@ func splitFrontmatterSequence(line string) (prefix, value string, ok bool) {
 // rewriteFrontmatterValue rewrites a YAML value region (which may carry a
 // trailing comment). It handles inline flow arrays and scalar values, leaving
 // wikilink values (already handled upstream) untouched.
-func rewriteFrontmatterValue(rest string, decide Decider) (string, bool) {
+func rewriteFrontmatterValue(rest, fieldName string, decide Decider) (string, bool) {
 	value, comment := splitTrailingComment(rest)
 	core := strings.TrimRight(value, " \t")
 	trailing := value[len(core):]
 
 	if strings.HasPrefix(core, "[") && strings.HasSuffix(core, "]") && len(core) >= 2 {
 		inner := core[1 : len(core)-1]
-		if updated, c := rewriteFlowSequence(inner, decide); c {
+		if updated, c := rewriteFlowSequence(inner, fieldName, decide); c {
 			return "[" + updated + "]" + trailing + comment, true
 		}
 		return rest, false
 	}
 
-	if updated, c := rewriteScalarToken(core, decide); c {
+	if updated, c := rewriteScalarToken(core, fieldName, decide); c {
 		return updated + trailing + comment, true
 	}
 	return rest, false
@@ -81,7 +99,7 @@ func rewriteFrontmatterValue(rest string, decide Decider) (string, bool) {
 
 // rewriteFlowSequence rewrites each element of an inline flow array, preserving
 // the surrounding whitespace of each element.
-func rewriteFlowSequence(inner string, decide Decider) (string, bool) {
+func rewriteFlowSequence(inner, fieldName string, decide Decider) (string, bool) {
 	elems := splitTopLevelCommas(inner)
 	changed := false
 	for i, raw := range elems {
@@ -92,7 +110,7 @@ func rewriteFlowSequence(inner string, decide Decider) (string, bool) {
 			continue
 		}
 		trailStart := lead + len(core)
-		if updated, c := rewriteScalarToken(core, decide); c {
+		if updated, c := rewriteScalarToken(core, fieldName, decide); c {
 			elems[i] = raw[:lead] + updated + raw[trailStart:]
 			changed = true
 		}
@@ -106,7 +124,7 @@ func rewriteFlowSequence(inner string, decide Decider) (string, bool) {
 // rewriteScalarToken rewrites a single YAML scalar reference token, preserving
 // the original quote style. Tokens containing a wikilink literal are skipped
 // (handled by the wikilink pass).
-func rewriteScalarToken(token string, decide Decider) (string, bool) {
+func rewriteScalarToken(token, fieldName string, decide Decider) (string, bool) {
 	if token == "" || strings.Contains(token, "[[") {
 		return token, false
 	}
@@ -127,6 +145,7 @@ func rewriteScalarToken(token string, decide Decider) (string, bool) {
 		Base:        base,
 		Fragment:    fragment,
 		HasFragment: isSection,
+		FieldName:   fieldName,
 	}
 	newTarget, ok := decide(occ)
 	if !ok {

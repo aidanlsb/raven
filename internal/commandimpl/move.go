@@ -95,6 +95,9 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	if len(serviceResult.UpdatedRefs) > 0 {
 		data["updated_refs"] = serviceResult.UpdatedRefs
 	}
+	if len(serviceResult.UpdatedRefFields) > 0 {
+		data["updated_ref_fields"] = canonicalMoveRefFieldUpdates(serviceResult.UpdatedRefFields)
+	}
 	if !req.Preview {
 		postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 		data = mergeDataFields(data, postData)
@@ -102,6 +105,18 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
+}
+
+func canonicalMoveRefFieldUpdates(updates []objectsvc.RefFieldUpdate) []map[string]interface{} {
+	items := make([]map[string]interface{}, 0, len(updates))
+	for _, update := range updates {
+		items = append(items, map[string]interface{}{
+			"source_id": update.SourceID,
+			"file":      update.FilePath,
+			"field":     update.Field,
+		})
+	}
+	return items
 }
 
 func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, updateRefs bool, confirm bool, journalOperation string) commandexec.Result {
