@@ -12,12 +12,12 @@ type SchemaValidateResult struct {
 
 // SchemaAddTypeResult is the success payload for `schema add type`.
 type SchemaAddTypeResult struct {
-	Added            string `json:"added"`
-	Name             string `json:"name"`
-	DefaultPath      string `json:"default_path"`
-	Description      string `json:"description,omitempty"`
-	NameField        string `json:"name_field,omitempty"`
-	AutoCreatedField *bool  `json:"auto_created_field,omitempty"`
+	Added            string  `json:"added"`
+	Name             string  `json:"name"`
+	DefaultPath      string  `json:"default_path"`
+	Description      string  `json:"description,omitempty"`
+	NameField        string  `json:"name_field,omitempty"`
+	AutoCreatedField *string `json:"auto_created_field,omitempty"`
 }
 
 // SchemaAddTraitResult is the success payload for `schema add trait`.
