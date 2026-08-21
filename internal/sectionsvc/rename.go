@@ -364,7 +364,28 @@ func rewriteSectionRefAtLine(content string, line int, oldRaw, newRaw string) st
 		return "", false
 	}
 	updated, _ := refs.RewriteContentAtLine(content, line, decide)
-	return updated
+	return rewriteMarkdownSectionRefAtLine(updated, line, oldRaw, newRaw)
+}
+
+// rewriteMarkdownSectionRefAtLine preserves section rename's compatibility
+// with direct Markdown links that share an indexed backlink line. Direct
+// Markdown links are deliberately not Raven references, so refs.RewriteContent
+// does not rewrite them. Limiting this fallback to the indexed line also keeps
+// unindexed examples in fenced code blocks untouched.
+func rewriteMarkdownSectionRefAtLine(content string, line int, oldRaw, newRaw string) string {
+	if line <= 0 {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	idx := line - 1
+	if idx < 0 || idx >= len(lines) {
+		return content
+	}
+	lines[idx] = strings.NewReplacer(
+		"]("+oldRaw+")", "]("+newRaw+")",
+		"](<"+oldRaw+">)", "](<"+newRaw+">)",
+	).Replace(lines[idx])
+	return strings.Join(lines, "\n")
 }
 
 func reindexRenamedFile(db *index.Database, req RenameRequest, filePath string) *IndexWarning {

@@ -120,7 +120,7 @@ status: active
 
 - do a thing
 `).
-		WithFile("notes/ref.md", "Body [[projects/site#tasks]] and alias [[projects/site#tasks|the tasks]].\n\n```markdown\n[[projects/site#tasks]]\n```\n").
+		WithFile("notes/ref.md", "Body [[projects/site#tasks]], alias [[projects/site#tasks|the tasks]], and Markdown [tasks](projects/site#tasks) / [angle](<projects/site#tasks>).\n\n```markdown\n[[projects/site#tasks]] and [tasks](projects/site#tasks)\n```\n").
 		WithFile("projects/consumer.md", `---
 type: project
 title: Consumer
@@ -155,7 +155,11 @@ related: projects/site#tasks
 	if !strings.Contains(ref, "[[projects/site#completed-tasks|the tasks]]") {
 		t.Fatalf("alias ref not rewritten:\n%s", ref)
 	}
-	if !strings.Contains(ref, "```markdown\n[[projects/site#tasks]]\n```") {
+	if !strings.Contains(ref, "[tasks](projects/site#completed-tasks)") ||
+		!strings.Contains(ref, "[angle](<projects/site#completed-tasks>)") {
+		t.Fatalf("Markdown refs not rewritten:\n%s", ref)
+	}
+	if !strings.Contains(ref, "```markdown\n[[projects/site#tasks]] and [tasks](projects/site#tasks)\n```") {
 		t.Fatalf("fenced-code ref was rewritten:\n%s", ref)
 	}
 
