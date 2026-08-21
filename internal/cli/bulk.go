@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -22,29 +23,24 @@ const (
 	BulkOpReclassify BulkOperation = "reclassify"
 )
 
-// BulkResult represents the result of a single bulk operation on one object.
-type BulkResult struct {
-	ID      string `json:"id"`
-	Status  string `json:"status"` // "modified", "deleted", "added", "moved", "reclassified", "skipped", "error"
-	Reason  string `json:"reason,omitempty"`
-	Details string `json:"details,omitempty"`
-}
+// BulkResult represents the result of one canonical object bulk operation.
+type BulkResult = commandpayload.BulkResult
 
-// BulkPreviewItem represents a single item in a bulk operation preview.
+// BulkPreviewItem is the CLI presentation shape for object bulk previews.
 type BulkPreviewItem struct {
-	ID            string            `json:"id"`
-	Changes       map[string]string `json:"changes,omitempty"` // field -> "new_value (was: old_value)"
-	Action        string            `json:"action"`            // "set", "delete", "add", "move", "reclassify"
-	Details       string            `json:"details,omitempty"` // Additional info like destination for move
-	OldType       string            `json:"old_type,omitempty"`
-	NewType       string            `json:"new_type,omitempty"`
-	Moved         bool              `json:"moved,omitempty"`
-	OldPath       string            `json:"old_path,omitempty"`
-	NewPath       string            `json:"new_path,omitempty"`
-	UpdatedRefs   []string          `json:"updated_refs,omitempty"`
-	AddedFields   []string          `json:"added_fields,omitempty"`
-	DroppedFields []string          `json:"dropped_fields,omitempty"`
-	NeedsConfirm  bool              `json:"needs_confirm,omitempty"`
+	ID            string
+	Changes       map[string]string
+	Action        string
+	Details       string
+	OldType       string   `json:"old_type,omitempty"`
+	NewType       string   `json:"new_type,omitempty"`
+	Moved         bool     `json:"moved,omitempty"`
+	OldPath       string   `json:"old_path,omitempty"`
+	NewPath       string   `json:"new_path,omitempty"`
+	UpdatedRefs   []string `json:"updated_refs,omitempty"`
+	AddedFields   []string `json:"added_fields,omitempty"`
+	DroppedFields []string `json:"dropped_fields,omitempty"`
+	NeedsConfirm  bool     `json:"needs_confirm,omitempty"`
 }
 
 // BulkPreview represents a preview of bulk operations before confirmation.

@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -40,88 +41,49 @@ func renderEditResult(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderCanonicalEditResult(result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	status, _ := data["status"].(string)
-	if status == "preview" {
-		if edits := editItems(data["edits"]); len(edits) > 0 {
-			path, _ := data["path"].(string)
-			fmt.Printf("%s %s\n\n", ui.SectionHeader("Preview edits"), ui.FilePath(path))
-			for _, edit := range edits {
-				line, _ := edit["line"].(float64)
-				index, _ := edit["index"].(float64)
-				preview := stringMapValue(edit["preview"])
-				before := preview["before"]
-				after := preview["after"]
-				fmt.Println(ui.Muted.Render(fmt.Sprintf("EDIT %d (line %d):", int(index), int(line))))
-				fmt.Println(ui.Muted.Render("BEFORE:"))
-				fmt.Println(indent(before, "  "))
-				fmt.Println()
-				fmt.Println(ui.Bold.Render("AFTER:"))
-				fmt.Println(indent(after, "  "))
-				fmt.Println()
-			}
-			fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply this edit"))
-			return nil
+	switch data := result.Data.(type) {
+	case commandpayload.EditBatchPreviewResult:
+		fmt.Printf("%s %s\n\n", ui.SectionHeader("Preview edits"), ui.FilePath(data.Path))
+		for _, edit := range data.Edits {
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("EDIT %d (line %d):", edit.Index, edit.Line)))
+			fmt.Println(ui.Muted.Render("BEFORE:"))
+			fmt.Println(indent(edit.Preview.Before, "  "))
+			fmt.Println()
+			fmt.Println(ui.Bold.Render("AFTER:"))
+			fmt.Println(indent(edit.Preview.After, "  "))
+			fmt.Println()
 		}
-
-		path, _ := data["path"].(string)
-		line, _ := data["line"].(float64)
-		preview := stringMapValue(data["preview"])
-		before := preview["before"]
-		after := preview["after"]
-		fmt.Printf("%s %s\n\n", ui.SectionHeader("Preview edit"), ui.FilePath(fmt.Sprintf("%s:%d", path, int(line))))
+		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply this edit"))
+		return nil
+	case commandpayload.EditSinglePreviewResult:
+		fmt.Printf("%s %s\n\n", ui.SectionHeader("Preview edit"), ui.FilePath(fmt.Sprintf("%s:%d", data.Path, data.Line)))
 		fmt.Println(ui.Muted.Render("BEFORE:"))
-		fmt.Println(indent(before, "  "))
+		fmt.Println(indent(data.Preview.Before, "  "))
 		fmt.Println()
 		fmt.Println(ui.Bold.Render("AFTER:"))
-		fmt.Println(indent(after, "  "))
+		fmt.Println(indent(data.Preview.After, "  "))
 		fmt.Println()
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply this edit"))
 		return nil
-	}
-
-	if edits := editItems(data["edits"]); len(edits) > 0 {
-		path, _ := data["path"].(string)
-		fmt.Println(ui.Checkf("Applied %d edits in %s", len(edits), ui.FilePath(path)))
+	case commandpayload.EditBatchResult:
+		fmt.Println(ui.Checkf("Applied %d edits in %s", len(data.Edits), ui.FilePath(data.Path)))
 		fmt.Println()
-		for _, edit := range edits {
-			line, _ := edit["line"].(float64)
-			index, _ := edit["index"].(float64)
-			contextText, _ := edit["context"].(string)
-			fmt.Println(ui.Muted.Render(fmt.Sprintf("EDIT %d (line %d):", int(index), int(line))))
-			fmt.Println(indent(contextText, "  "))
+		for _, edit := range data.Edits {
+			fmt.Println(ui.Muted.Render(fmt.Sprintf("EDIT %d (line %d):", edit.Index, edit.Line)))
+			fmt.Println(indent(edit.Context, "  "))
 			fmt.Println()
 		}
 		promptCreateMissingRefsFromResult(getVaultPath(), result)
 		return nil
-	}
-
-	path, _ := data["path"].(string)
-	line, _ := data["line"].(float64)
-	contextText, _ := data["context"].(string)
-	fmt.Println(ui.Checkf("Applied edit in %s", ui.FilePath(fmt.Sprintf("%s:%d", path, int(line)))))
-	fmt.Println()
-	fmt.Println(ui.Muted.Render("Context:"))
-	fmt.Println(indent(contextText, "  "))
-	promptCreateMissingRefsFromResult(getVaultPath(), result)
-	return nil
-}
-
-func editItems(raw interface{}) []map[string]interface{} {
-	switch items := raw.(type) {
-	case []map[string]interface{}:
-		return items
-	case []interface{}:
-		out := make([]map[string]interface{}, 0, len(items))
-		for _, item := range items {
-			typed, ok := item.(map[string]interface{})
-			if ok {
-				out = append(out, typed)
-			}
-		}
-		return out
-	default:
+	case commandpayload.EditSingleResult:
+		fmt.Println(ui.Checkf("Applied edit in %s", ui.FilePath(fmt.Sprintf("%s:%d", data.Path, data.Line))))
+		fmt.Println()
+		fmt.Println(ui.Muted.Render("Context:"))
+		fmt.Println(indent(data.Context, "  "))
+		promptCreateMissingRefsFromResult(getVaultPath(), result)
 		return nil
+	default:
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 }
 

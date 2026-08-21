@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -97,7 +97,7 @@ func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string
 		return preview
 	}
 	if !renderDeletePreviewPrompt(preview) {
-		return commandexec.Success(map[string]interface{}{"cancelled": true}, nil)
+		return commandexec.Success(commandpayload.CancelledResult{Cancelled: true}, nil)
 	}
 
 	return executeCanonicalRequest(commandexec.Request{
@@ -109,38 +109,30 @@ func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string
 }
 
 func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(map[string]interface{})
-	if !ok {
-		return handleErrorMsg(ErrInternal, "command execution failed", "")
-	}
-	if boolValue(data["cancelled"]) {
+	switch data := result.Data.(type) {
+	case commandpayload.CancelledResult:
 		fmt.Println(ui.Star("Cancelled."))
 		return nil
-	}
-	if boolValue(data["bulk"]) || boolValue(data["stdin"]) {
+	case commandpayload.DeleteBulkPreviewResult, commandpayload.DeleteBulkResult:
 		return renderCanonicalBulkResult(result)
-	}
-	if boolValue(data["preview"]) {
+	case commandpayload.DeletePreviewResult:
 		printDeletePreview(data)
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to delete"))
 		return nil
-	}
-	behavior, _ := data["behavior"].(string)
-	if behavior == "trash" {
-		if trashPath, ok := data["trash_path"].(string); ok && strings.TrimSpace(trashPath) != "" {
-			fmt.Println(ui.Checkf("Moved to %s", ui.FilePath(trashPath)))
+	case commandpayload.DeleteResult:
+		if data.Behavior == "trash" && strings.TrimSpace(data.TrashPath) != "" {
+			fmt.Println(ui.Checkf("Moved to %s", ui.FilePath(data.TrashPath)))
 			return nil
 		}
-	}
-	if deleted, ok := data["deleted"].(string); ok {
-		fmt.Println(ui.Checkf("Deleted %s", ui.FilePath(deleted)))
+		fmt.Println(ui.Checkf("Deleted %s", ui.FilePath(data.Deleted)))
 		return nil
+	default:
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
-	return handleErrorMsg(ErrInternal, "command execution failed", "")
 }
 
 func renderDeletePreviewPrompt(result commandexec.Result) bool {
-	data, ok := result.Data.(map[string]interface{})
+	data, ok := result.Data.(commandpayload.DeletePreviewResult)
 	if !ok {
 		return false
 	}
@@ -148,14 +140,12 @@ func renderDeletePreviewPrompt(result commandexec.Result) bool {
 	return promptForConfirm("Confirm?")
 }
 
-func printDeletePreview(data map[string]interface{}) {
-	objectID, _ := data["object_id"].(string)
-	fmt.Printf("%s %s?\n", ui.SectionHeader("Delete"), ui.Bold.Render(objectID))
+func printDeletePreview(data commandpayload.DeletePreviewResult) {
+	fmt.Printf("%s %s?\n", ui.SectionHeader("Delete"), ui.Bold.Render(data.ObjectID))
 
-	backlinks := deletePreviewBacklinks(data["backlinks"])
-	if len(backlinks) > 0 {
-		fmt.Printf("%s\n", ui.Warningf("Referenced by %d objects:", len(backlinks)))
-		for _, bl := range backlinks {
+	if len(data.Backlinks) > 0 {
+		fmt.Printf("%s\n", ui.Warningf("Referenced by %d objects:", len(data.Backlinks)))
+		for _, bl := range data.Backlinks {
 			line := 0
 			if bl.Line != nil {
 				line = *bl.Line
@@ -164,23 +154,16 @@ func printDeletePreview(data map[string]interface{}) {
 		}
 	}
 
-	behavior, _ := data["behavior"].(string)
-	fmt.Printf("\n%s %s", ui.Hint("Behavior:"), behavior)
-	if behavior == "trash" {
-		if trashDir, ok := data["trash_dir"].(string); ok && strings.TrimSpace(trashDir) != "" {
-			fmt.Printf(" %s\n", ui.Hint("(to "+trashDir+"/)"))
+	fmt.Printf("\n%s %s", ui.Hint("Behavior:"), data.Behavior)
+	if data.Behavior == "trash" {
+		if strings.TrimSpace(data.TrashDir) != "" {
+			fmt.Printf(" %s\n", ui.Hint("(to "+data.TrashDir+"/)"))
 		} else {
 			fmt.Println()
 		}
 	} else {
 		fmt.Println()
 	}
-}
-
-func deletePreviewBacklinks(raw interface{}) []model.Reference {
-	var backlinks []model.Reference
-	_ = decodeResultData(raw, &backlinks)
-	return backlinks
 }
 
 func init() {

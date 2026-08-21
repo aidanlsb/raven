@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -91,25 +92,25 @@ func buildUpsertArgs(cmd *cobra.Command, args []string) (map[string]interface{},
 }
 
 func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
-	data, _ := result.Data.(map[string]interface{})
-	status, _ := data["status"].(string)
-	relativePath, _ := data["file"].(string)
-	objectID, _ := data["id"].(string)
-	switch status {
-	case "created":
-		fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
-	case "updated":
-		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
-	default:
-		fmt.Println(ui.Checkf("Unchanged %s", ui.FilePath(relativePath)))
+	data, ok := result.Data.(commandpayload.UpsertResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
-	if objectID != "" {
-		fmt.Println(ui.LinkAs(objectID))
+	switch data.Status {
+	case "created":
+		fmt.Println(ui.Checkf("Created %s", ui.FilePath(data.File)))
+	case "updated":
+		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(data.File)))
+	default:
+		fmt.Println(ui.Checkf("Unchanged %s", ui.FilePath(data.File)))
+	}
+	if data.ID != "" {
+		fmt.Println(ui.LinkAs(data.ID))
 	}
 	for _, warning := range result.Warnings {
 		fmt.Println(ui.Warning(warning.Message))
 	}
-	if status == "created" || status == "updated" {
+	if data.Status == "created" || data.Status == "updated" {
 		promptCreateMissingRefsFromResult(getVaultPath(), result)
 	}
 	return nil

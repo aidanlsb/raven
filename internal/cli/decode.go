@@ -91,3 +91,14 @@ func detailStringSlice(details map[string]interface{}, key string) []string {
 		return nil
 	}
 }
+
+func decodeResultData(raw interface{}, out interface{}) error {
+	if raw == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(encoded, out)
+}

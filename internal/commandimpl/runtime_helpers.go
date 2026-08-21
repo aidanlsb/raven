@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -267,10 +268,10 @@ func recordIndexProjectionRecovery(vaultPath, filePath string, projectionErr err
 // so callers can surface the missing target (interactively in the CLI, or via
 // the warning/data for agents). Detection failures are non-fatal and produce no
 // annotations.
-func missingRefEnvelope(rt *vaultruntime.Runtime, relPaths ...string) (map[string]interface{}, []commandexec.Warning) {
+func missingRefEnvelope(rt *vaultruntime.Runtime, relPaths ...string) (commandpayload.MissingReferences, []commandexec.Warning) {
 	refs, err := checksvc.DetectMissingRefs(rt, relPaths...)
 	if err != nil || len(refs) == 0 {
-		return nil, nil
+		return commandpayload.MissingReferences{}, nil
 	}
 	sort.Slice(refs, func(i, j int) bool {
 		return refs[i].TargetPath < refs[j].TargetPath
@@ -280,9 +281,9 @@ func missingRefEnvelope(rt *vaultruntime.Runtime, relPaths ...string) (map[strin
 	for _, ref := range refs {
 		warnings = append(warnings, missingRefWarning(ref))
 	}
-	data := map[string]interface{}{
-		"missing_refs":      len(refs),
-		"missing_ref_items": refs,
+	data := commandpayload.MissingReferences{
+		MissingRefs:     len(refs),
+		MissingRefItems: refs,
 	}
 	return data, warnings
 }
@@ -330,20 +331,6 @@ func missingRefTitle(targetPath string) string {
 		return "new-object"
 	}
 	return base
-}
-
-// mergeDataFields copies src entries into dst, allocating dst when needed.
-func mergeDataFields(dst map[string]interface{}, src map[string]interface{}) map[string]interface{} {
-	if len(src) == 0 {
-		return dst
-	}
-	if dst == nil {
-		dst = make(map[string]interface{}, len(src))
-	}
-	for key, value := range src {
-		dst[key] = value
-	}
-	return dst
 }
 
 func appendCommandWarnings(groups ...[]commandexec.Warning) []commandexec.Warning {

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -10,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -20,9 +20,12 @@ import (
 // delegated to checkfixsvc appliers via collectMissingRefDecisions +
 // checkfixsvc.ApplyMissingRefResolutions (and the trait equivalents).
 func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	missingRefs := decodeMissingRefs(data["missing_ref_items"])
-	undefinedTraits := decodeUndefinedTraits(data["undefined_trait_items"])
+	data, ok := result.Data.(commandpayload.CheckCreateMissingResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+	missingRefs := data.MissingRefItems
+	undefinedTraits := data.UndefinedTraitItems
 
 	vaultCfg, err := loadVaultConfigSafe(vaultPath)
 	if err != nil {
@@ -67,8 +70,11 @@ func promptCreateMissingRefsFromResult(vaultPath string, result commandexec.Resu
 	if jsonOutput || !canUseInteractiveTerminal() {
 		return
 	}
-	data := canonicalDataMap(result)
-	missingRefs := decodeMissingRefs(data["missing_ref_items"])
+	payload, ok := result.Data.(commandpayload.MissingReferencePayload)
+	if !ok {
+		return
+	}
+	missingRefs := payload.MissingReferenceItems()
 	if len(missingRefs) == 0 {
 		return
 	}
@@ -87,26 +93,6 @@ func promptCreateMissingRefsFromResult(vaultPath string, result commandexec.Resu
 	if created > 0 {
 		fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 	}
-}
-
-func decodeMissingRefs(raw interface{}) []*check.MissingRef {
-	var refs []*check.MissingRef
-	decodeCanonicalValue(raw, &refs)
-	return refs
-}
-
-func decodeUndefinedTraits(raw interface{}) []*check.UndefinedTrait {
-	var traits []*check.UndefinedTrait
-	decodeCanonicalValue(raw, &traits)
-	return traits
-}
-
-func decodeCanonicalValue(raw interface{}, target interface{}) bool {
-	encoded, err := json.Marshal(raw)
-	if err != nil {
-		return false
-	}
-	return json.Unmarshal(encoded, target) == nil
 }
 
 // runMissingRefsInteractive prompts for missing-reference creation decisions and

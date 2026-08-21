@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/editsvc"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
@@ -83,35 +84,35 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	if req.Preview {
 		if batchMode {
-			editsPreview := make([]map[string]interface{}, 0, len(results))
+			editsPreview := make([]commandpayload.EditPreviewItem, 0, len(results))
 			for _, result := range results {
-				editsPreview = append(editsPreview, map[string]interface{}{
-					"index":   result.Index,
-					"line":    result.Line,
-					"old_str": result.OldStr,
-					"new_str": result.NewStr,
-					"preview": map[string]string{
-						"before": result.Before,
-						"after":  result.After,
+				editsPreview = append(editsPreview, commandpayload.EditPreviewItem{
+					Index:  result.Index,
+					Line:   result.Line,
+					OldStr: result.OldStr,
+					NewStr: result.NewStr,
+					Preview: commandpayload.EditPreview{
+						Before: result.Before,
+						After:  result.After,
 					},
 				})
 			}
-			return commandexec.Success(map[string]interface{}{
-				"status": "preview",
-				"path":   relPath,
-				"count":  len(editsPreview),
-				"edits":  editsPreview,
+			return commandexec.Success(commandpayload.EditBatchPreviewResult{
+				Status: "preview",
+				Path:   relPath,
+				Count:  len(editsPreview),
+				Edits:  editsPreview,
 			}, nil)
 		}
 
 		result := results[0]
-		return commandexec.Success(map[string]interface{}{
-			"status": "preview",
-			"path":   relPath,
-			"line":   result.Line,
-			"preview": map[string]string{
-				"before": result.Before,
-				"after":  result.After,
+		return commandexec.Success(commandpayload.EditSinglePreviewResult{
+			Status: "preview",
+			Path:   relPath,
+			Line:   result.Line,
+			Preview: commandpayload.EditPreview{
+				Before: result.Before,
+				After:  result.After,
 			},
 		}, nil)
 	}
@@ -120,39 +121,39 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	postData, warnings := applyChangeSet(rt, writeResult.ChangeSet, req.IndexJournalOperation)
+	missingRefs, warnings := applyChangeSet(rt, writeResult.ChangeSet, req.IndexJournalOperation)
 
 	if batchMode {
-		applied := make([]map[string]interface{}, 0, len(results))
+		applied := make([]commandpayload.EditAppliedItem, 0, len(results))
 		for _, result := range results {
-			applied = append(applied, map[string]interface{}{
-				"index":   result.Index,
-				"line":    result.Line,
-				"old_str": result.OldStr,
-				"new_str": result.NewStr,
-				"context": result.Context,
+			applied = append(applied, commandpayload.EditAppliedItem{
+				Index:   result.Index,
+				Line:    result.Line,
+				OldStr:  result.OldStr,
+				NewStr:  result.NewStr,
+				Context: result.Context,
 			})
 		}
-		data := map[string]interface{}{
-			"status": "applied",
-			"path":   relPath,
-			"count":  len(applied),
-			"edits":  applied,
+		data := commandpayload.EditBatchResult{
+			Status:            "applied",
+			Path:              relPath,
+			Count:             len(applied),
+			Edits:             applied,
+			MissingReferences: missingRefs,
 		}
-		data = mergeDataFields(data, postData)
 		return commandexec.SuccessWithWarnings(data, warnings, nil)
 	}
 
 	result := results[0]
-	data := map[string]interface{}{
-		"status":  "applied",
-		"path":    relPath,
-		"line":    result.Line,
-		"old_str": result.OldStr,
-		"new_str": result.NewStr,
-		"context": result.Context,
+	data := commandpayload.EditSingleResult{
+		Status:            "applied",
+		Path:              relPath,
+		Line:              result.Line,
+		OldStr:            result.OldStr,
+		NewStr:            result.NewStr,
+		Context:           result.Context,
+		MissingReferences: missingRefs,
 	}
-	data = mergeDataFields(data, postData)
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 

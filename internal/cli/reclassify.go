@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -40,8 +40,6 @@ var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 		"confirm":     &reclassifyConfirm,
 	},
 })
-
-type ReclassifyResult = objectsvc.ReclassifyResult
 
 func buildReclassifyArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
 	fieldJSONRaw, err := parseFieldJSONObject(reclassifyFieldJSON)
@@ -131,13 +129,13 @@ func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[st
 			return result
 		}
 
-		data := canonicalDataMap(result)
-		if boolValue(data["needs_confirm"]) && !boolValue(fieldValues["force"]) {
+		data, typed := result.Data.(commandpayload.ReclassifyResult)
+		if typed && data.NeedsConfirm && !boolValue(fieldValues["force"]) {
 			if isJSONOutput() {
 				return result
 			}
 			fmt.Fprintf(os.Stderr, "The following fields are not defined on type '%s' and will be dropped:\n", stringValue(fieldValues["new-type"]))
-			for _, f := range stringSliceFromAny(data["dropped_fields"]) {
+			for _, f := range data.DroppedFields {
 				fmt.Fprintf(os.Stderr, "  - %s\n", f)
 			}
 			fmt.Fprint(os.Stderr, "\nProceed? [y/N]: ")
@@ -148,7 +146,7 @@ func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[st
 			}
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response != "y" && response != "yes" {
-				return commandexec.Success(map[string]interface{}{"cancelled": true}, nil)
+				return commandexec.Success(commandpayload.CancelledResult{Cancelled: true}, nil)
 			}
 			fieldValues["force"] = true
 			continue
@@ -158,26 +156,28 @@ func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[st
 }
 
 func renderReclassifyResult(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if stringValue(data["action"]) == "reclassify" {
+	switch data := result.Data.(type) {
+	case commandpayload.ReclassifyBulkPreviewResult, commandpayload.ReclassifyBulkResult:
 		return renderCanonicalBulkResult(result)
-	}
-	if boolValue(data["cancelled"]) {
+	case commandpayload.CancelledResult:
 		fmt.Fprintln(os.Stderr, "Cancelled.")
 		return nil
-	}
-	fmt.Println(ui.Checkf("Reclassified %s: %s → %s", ui.FilePath(stringValue(data["file"])), stringValue(data["old_type"]), stringValue(data["new_type"])))
-	if added := stringSliceFromAny(data["added_fields"]); len(added) > 0 {
-		fmt.Printf("  %s\n", ui.Hint("Added fields: "+strings.Join(added, ", ")))
-	}
-	if dropped := stringSliceFromAny(data["dropped_fields"]); len(dropped) > 0 {
-		fmt.Printf("  %s\n", ui.Hint("Dropped fields: "+strings.Join(dropped, ", ")))
-	}
-	if boolValue(data["moved"]) {
-		fmt.Printf("  %s %s → %s\n", ui.Hint("Moved:"), ui.FilePath(stringValue(data["old_path"])), ui.FilePath(stringValue(data["new_path"])))
-	}
-	if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
-		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))
+	case commandpayload.ReclassifyResult:
+		fmt.Println(ui.Checkf("Reclassified %s: %s → %s", ui.FilePath(data.File), data.OldType, data.NewType))
+		if len(data.AddedFields) > 0 {
+			fmt.Printf("  %s\n", ui.Hint("Added fields: "+strings.Join(data.AddedFields, ", ")))
+		}
+		if len(data.DroppedFields) > 0 {
+			fmt.Printf("  %s\n", ui.Hint("Dropped fields: "+strings.Join(data.DroppedFields, ", ")))
+		}
+		if data.Moved {
+			fmt.Printf("  %s %s → %s\n", ui.Hint("Moved:"), ui.FilePath(data.OldPath), ui.FilePath(data.NewPath))
+		}
+		if len(data.UpdatedRefs) > 0 {
+			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(data.UpdatedRefs))))
+		}
+	default:
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 	for _, warning := range result.Warnings {
 		fmt.Printf("  %s\n", ui.Warning(warning.Message))

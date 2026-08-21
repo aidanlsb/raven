@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -44,36 +45,38 @@ func init() {
 }
 
 func renderSectionCreateResult(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	sectionID := stringValue(data["section"])
+	data, ok := result.Data.(commandpayload.SectionLifecycleResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
 
-	if boolValue(data["preview"]) {
-		fmt.Println(ui.Star(fmt.Sprintf("Would create section %s", ui.FilePath(sectionID))))
+	if data.Preview {
+		fmt.Println(ui.Star(fmt.Sprintf("Would create section %s", ui.FilePath(data.Section))))
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
 		return nil
 	}
 
-	fmt.Println(ui.Checkf("Created section %s", ui.FilePath(sectionID)))
+	fmt.Println(ui.Checkf("Created section %s", ui.FilePath(data.Section)))
 	return nil
 }
 
 func renderSectionMoveResult(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	sectionID := stringValue(data["section"])
-	placement := stringValue(data["placement"])
-	anchor := stringValue(data["anchor"])
-	description := placement
-	if anchor != "" {
-		description += " " + anchor
+	data, ok := result.Data.(commandpayload.SectionLifecycleResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+	description := data.Placement
+	if data.Anchor != "" {
+		description += " " + data.Anchor
 	}
 
-	if boolValue(data["preview"]) {
-		fmt.Println(ui.Star(fmt.Sprintf("Would move section %s %s", ui.FilePath(sectionID), description)))
+	if data.Preview {
+		fmt.Println(ui.Star(fmt.Sprintf("Would move section %s %s", ui.FilePath(data.Section), description)))
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
 		return nil
 	}
 
-	fmt.Println(ui.Checkf("Moved section %s %s", ui.FilePath(sectionID), description))
+	fmt.Println(ui.Checkf("Moved section %s %s", ui.FilePath(data.Section), description))
 	return nil
 }
 
@@ -117,22 +120,23 @@ func renderSectionDeleteResult(_ *cobra.Command, result commandexec.Result) erro
 }
 
 func renderSectionRenameResult(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	source := stringValue(data["source"])
-	destination := stringValue(data["destination"])
+	data, ok := result.Data.(commandpayload.SectionRenameResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
 
-	if boolValue(data["preview"]) {
-		fmt.Println(ui.Star(fmt.Sprintf("Would rename section %s → %s", ui.FilePath(source), ui.FilePath(destination))))
-		if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
-			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Would update %d references", len(updatedRefs))))
+	if data.Preview {
+		fmt.Println(ui.Star(fmt.Sprintf("Would rename section %s → %s", ui.FilePath(data.Source), ui.FilePath(data.Destination))))
+		if len(data.UpdatedRefs) > 0 {
+			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Would update %d references", len(data.UpdatedRefs))))
 		}
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
 		return nil
 	}
 
-	fmt.Println(ui.Checkf("Renamed section %s → %s", ui.FilePath(source), ui.FilePath(destination)))
-	if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
-		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))
+	fmt.Println(ui.Checkf("Renamed section %s → %s", ui.FilePath(data.Source), ui.FilePath(data.Destination)))
+	if len(data.UpdatedRefs) > 0 {
+		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(data.UpdatedRefs))))
 	}
 	return nil
 }

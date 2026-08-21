@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -142,26 +143,33 @@ func renderSchemaTemplateBindingTarget(kind, name string, templates []string, de
 }
 
 func renderSchemaTemplateGet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	id, _ := data["id"].(string)
-	file, _ := data["file"].(string)
-	description, _ := data["description"].(string)
-	fmt.Printf("%s %s\n", ui.Hint("Template:"), id)
-	fmt.Printf("  %s %s\n", ui.Hint("File:"), ui.FilePath(file))
-	if description != "" {
-		fmt.Printf("  %s %s\n", ui.Hint("Description:"), description)
+	data, err := commandResultData[commandpayload.SchemaTemplateDefinitionResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s %s\n", ui.Hint("Template:"), data.ID)
+	fmt.Printf("  %s %s\n", ui.Hint("File:"), ui.FilePath(data.File))
+	if data.Description != "" {
+		fmt.Printf("  %s %s\n", ui.Hint("Description:"), data.Description)
 	}
 	return nil
 }
 
 func renderSchemaTemplateSet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Set schema template %s -> %s", data["id"], ui.FilePath(stringValue(data["file"]))))
+	data, err := commandResultData[commandpayload.SchemaTemplateDefinitionResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Println(ui.Checkf("Set schema template %s -> %s", data.ID, ui.FilePath(data.File)))
 	return nil
 }
 
 func renderSchemaTemplateRemove(_ *cobra.Command, result commandexec.Result) error {
-	fmt.Println(ui.Checkf("Removed schema template %s", strings.TrimSpace(stringValue(canonicalDataMap(result)["id"]))))
+	data, err := commandResultData[commandpayload.SchemaTemplateRemoveResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Println(ui.Checkf("Removed schema template %s", strings.TrimSpace(data.ID)))
 	return nil
 }
 
@@ -179,11 +187,14 @@ func buildSchemaTemplateBindArgs(cmd *cobra.Command, args []string) (map[string]
 }
 
 func renderSchemaTemplateBind(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	kind, name := schemaTemplateResultTarget(data)
-	templateID := strings.TrimSpace(stringValue(data["template_id"]))
-	setDefault := strings.TrimSpace(stringValue(data["default_template"])) != ""
-	if boolValue(data["already_set"]) {
+	data, err := commandResultData[commandpayload.SchemaTemplateBindResult](result)
+	if err != nil {
+		return err
+	}
+	kind, name := schemaTemplateResultTarget(data.Type, data.Core)
+	templateID := strings.TrimSpace(data.TemplateID)
+	setDefault := strings.TrimSpace(data.DefaultTemplate) != ""
+	if data.AlreadySet {
 		fmt.Println(ui.Starf("%s %s already includes template %s", schemaTemplateKindLabel(kind), name, templateID))
 		if setDefault {
 			fmt.Println(ui.Checkf("Set default template for %s %s -> %s", kind, name, templateID))
@@ -212,11 +223,13 @@ func buildSchemaTemplateUnbindArgs(cmd *cobra.Command, args []string) (map[strin
 }
 
 func renderSchemaTemplateUnbind(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	kind, name := schemaTemplateResultTarget(data)
-	templateID := strings.TrimSpace(stringValue(data["template_id"]))
-	clearDefault := boolValue(data["default_cleared"])
-	if clearDefault {
+	data, err := commandResultData[commandpayload.SchemaTemplateUnbindResult](result)
+	if err != nil {
+		return err
+	}
+	kind, name := schemaTemplateResultTarget(data.Type, data.Core)
+	templateID := strings.TrimSpace(data.TemplateID)
+	if data.DefaultCleared {
 		fmt.Println(ui.Checkf("Cleared default template and unbound %s from %s %s", templateID, kind, name))
 		return nil
 	}
@@ -233,11 +246,11 @@ func schemaTemplateKindLabel(kind string) string {
 	return string(runes)
 }
 
-func schemaTemplateResultTarget(data map[string]interface{}) (kind string, name string) {
-	if typeName := strings.TrimSpace(stringValue(data["type"])); typeName != "" {
+func schemaTemplateResultTarget(typeName, coreType string) (kind string, name string) {
+	if typeName = strings.TrimSpace(typeName); typeName != "" {
 		return "type", typeName
 	}
-	return "core", strings.TrimSpace(stringValue(data["core"]))
+	return "core", strings.TrimSpace(coreType)
 }
 
 func init() {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/importsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
@@ -66,29 +67,22 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		}
 	}
 
+	data := commandpayload.ImportResult{
+		Total:   len(serviceResult.Results),
+		Created: created,
+		Updated: updated,
+		Skipped: skipped,
+		Errors:  errored,
+		Items:   serviceResult.Results,
+	}
 	if !boolArg(req.Args, "dry-run") {
-		data := map[string]interface{}{
-			"total":   len(serviceResult.Results),
-			"created": created,
-			"updated": updated,
-			"skipped": skipped,
-			"errors":  errored,
-			"items":   serviceResult.Results,
-		}
-		postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
-		data = mergeDataFields(data, postData)
+		missingRefs, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
+		data.MissingReferences = missingRefs
 		serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField)
 		return commandexec.SuccessWithWarnings(data, appendCommandWarnings(serviceWarnings, postWarnings), nil)
 	}
 
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
-		"total":   len(serviceResult.Results),
-		"created": created,
-		"updated": updated,
-		"skipped": skipped,
-		"errors":  errored,
-		"items":   serviceResult.Results,
-	}, warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField), nil)
+	return commandexec.SuccessWithWarnings(data, warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField), nil)
 }
 
 func mapImportFailure(err error, fallbackSuggestion string) commandexec.Result {

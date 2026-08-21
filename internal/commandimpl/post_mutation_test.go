@@ -29,7 +29,7 @@ func TestApplyChangeSetAutoReindexDisabled(t *testing.T) {
 	changes.AddChanged("people/alice.md")
 	data, warnings := applyChangeSet(rt, changes)
 
-	if len(data) != 0 {
+	if data.MissingRefs != 0 || len(data.MissingRefItems) != 0 {
 		t.Fatalf("data = %#v, want no annotations", data)
 	}
 	if len(warnings) != 0 {
@@ -73,7 +73,7 @@ func TestApplyChangeSetAutoReindexDisabledSkipsStaleMoveAnnotations(t *testing.T
 	changes.AddMoved("people/freya.md", "archive/freya.md")
 	changes.AddChanged("notes/ref.md")
 	data, warnings := applyChangeSet(rt, changes)
-	if len(data) != 0 {
+	if data.MissingRefs != 0 || len(data.MissingRefItems) != 0 {
 		t.Fatalf("data = %#v, want no stale missing-ref annotations", data)
 	}
 	if len(warnings) != 0 {
@@ -97,7 +97,7 @@ func TestApplyChangeSetReportsMissingRefsAcrossFiles(t *testing.T) {
 	changes.AddChanged("notes/one.md", "notes/two.md")
 	data, warnings := applyChangeSet(rt, changes)
 
-	if got := data["missing_refs"]; got != 2 {
+	if got := data.MissingRefs; got != 2 {
 		t.Fatalf("missing_refs = %#v, want 2", got)
 	}
 	if len(warnings) != 2 {
@@ -138,7 +138,7 @@ func TestApplyChangeSetProjectsMoveAndDelete(t *testing.T) {
 	changes.AddMoved("people/freya.md", "archive/freya.md")
 	changes.AddDeleted("projects/obsolete.md")
 	data, warnings := applyChangeSet(rt, changes)
-	if len(data) != 0 {
+	if data.MissingRefs != 0 || len(data.MissingRefItems) != 0 {
 		t.Fatalf("data = %#v, want no missing refs", data)
 	}
 	if len(warnings) != 0 {
@@ -213,7 +213,7 @@ func TestApplyChangeSetReportsCommittedResolutionFailureAndFullRecoveryScope(t *
 	changes.AddChanged("target.md")
 	data, warnings := applyChangeSet(rt, changes)
 
-	if len(data) != 0 {
+	if data.MissingRefs != 0 || len(data.MissingRefItems) != 0 {
 		t.Fatalf("data = %#v, want no missing-ref annotations with incomplete resolution", data)
 	}
 	if len(warnings) != 1 {

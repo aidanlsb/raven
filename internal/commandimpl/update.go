@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/traitsvc"
@@ -100,12 +101,12 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 			}
 			return failure
 		}
-		return commandexec.Success(map[string]interface{}{
-			"preview": true,
-			"action":  preview.Action,
-			"items":   preview.Items,
-			"skipped": preview.Skipped,
-			"total":   preview.Total,
+		return commandexec.Success(commandpayload.TraitUpdatePreviewResult{
+			Preview: true,
+			Action:  preview.Action,
+			Items:   preview.Items,
+			Skipped: preview.Skipped,
+			Total:   preview.Total,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
@@ -118,16 +119,16 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		return failure
 	}
 
-	data := map[string]interface{}{
-		"action":   summary.Action,
-		"items":    summary.Results,
-		"total":    summary.Total,
-		"modified": summary.Modified,
-		"skipped":  summary.Skipped,
-		"errors":   summary.Errors,
+	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, req.IndexJournalOperation)
+	data := commandpayload.TraitUpdateResult{
+		Action:            summary.Action,
+		Items:             summary.Results,
+		Total:             summary.Total,
+		Modified:          summary.Modified,
+		Skipped:           summary.Skipped,
+		Errors:            summary.Errors,
+		MissingReferences: missingRefs,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, req.IndexJournalOperation)
-	data = mergeDataFields(data, postData)
 	return commandexec.SuccessWithWarnings(data, postWarnings, &commandexec.Meta{Count: summary.Modified})
 }
 

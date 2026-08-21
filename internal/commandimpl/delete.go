@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -65,12 +66,12 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		}
 
 		warnings := deleteBacklinkCommandWarnings(preview.Backlinks)
-		return commandexec.SuccessWithWarnings(map[string]interface{}{
-			"preview":   true,
-			"object_id": preview.ObjectID,
-			"behavior":  preview.Behavior,
-			"trash_dir": deletionCfg.TrashDir,
-			"backlinks": preview.Backlinks,
+		return commandexec.SuccessWithWarnings(commandpayload.DeletePreviewResult{
+			Preview:   true,
+			ObjectID:  preview.ObjectID,
+			Behavior:  preview.Behavior,
+			TrashDir:  deletionCfg.TrashDir,
+			Backlinks: preview.Backlinks,
 		}, warnings, nil)
 	}
 
@@ -90,18 +91,18 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 	warnings := make([]commandexec.Warning, 0, 1)
 	warnings = append(warnings, deleteBacklinkCommandWarnings(serviceResult.Backlinks)...)
 
-	data := map[string]interface{}{
-		"deleted":  serviceResult.ObjectID,
-		"behavior": serviceResult.Behavior,
+	data := commandpayload.DeleteResult{
+		Deleted:  serviceResult.ObjectID,
+		Behavior: serviceResult.Behavior,
 	}
 	if serviceResult.TrashPath != "" {
 		relDest, relErr := filepath.Rel(vaultPath, serviceResult.TrashPath)
 		if relErr == nil {
-			data["trash_path"] = filepath.ToSlash(relDest)
+			data.TrashPath = filepath.ToSlash(relDest)
 		}
 	}
-	postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
-	data = mergeDataFields(data, postData)
+	missingRefs, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
+	data.MissingReferences = missingRefs
 	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
@@ -127,14 +128,16 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
-		return commandexec.Success(map[string]interface{}{
-			"preview":  true,
-			"action":   preview.Action,
-			"items":    canonicalDeletePreviewItems(preview.Items),
-			"skipped":  canonicalDeleteResults(preview.Skipped),
-			"total":    preview.Total,
-			"warnings": warnings,
-			"behavior": preview.Behavior,
+		return commandexec.Success(commandpayload.DeleteBulkPreviewResult{
+			BulkPreviewResult: commandpayload.BulkPreviewResult{
+				Preview: true,
+				Action:  preview.Action,
+				Items:   canonicalDeletePreviewItems(preview.Items),
+				Skipped: canonicalDeleteResults(preview.Skipped),
+				Total:   preview.Total,
+			},
+			Warnings: warnings,
+			Behavior: preview.Behavior,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
@@ -143,18 +146,20 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 	}
 
-	data := map[string]interface{}{
-		"ok":       summary.Errors == 0,
-		"action":   summary.Action,
-		"items":    canonicalDeleteResults(summary.Results),
-		"total":    summary.Total,
-		"skipped":  summary.Skipped,
-		"errors":   summary.Errors,
-		"deleted":  summary.Deleted,
-		"behavior": summary.Behavior,
+	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
+	data := commandpayload.DeleteBulkResult{
+		BulkSummaryResult: commandpayload.BulkSummaryResult{
+			OK:                summary.Errors == 0,
+			Action:            summary.Action,
+			Items:             canonicalDeleteResults(summary.Results),
+			Total:             summary.Total,
+			Skipped:           summary.Skipped,
+			Errors:            summary.Errors,
+			MissingReferences: missingRefs,
+		},
+		Deleted:  summary.Deleted,
+		Behavior: summary.Behavior,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
-	data = mergeDataFields(data, postData)
 	allWarnings := appendCommandWarnings(warnings, postWarnings)
 	return commandexec.SuccessWithWarnings(data, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }

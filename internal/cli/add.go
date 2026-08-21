@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -78,16 +79,18 @@ func invokeAdd(_ *cobra.Command, commandID, vaultPath string, args map[string]in
 }
 
 func renderAddResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(map[string]interface{})
+	data, ok := result.Data.(commandpayload.AddResult)
 	if !ok {
+		if _, bulk := result.Data.(commandpayload.AddBulkPreviewResult); bulk {
+			return renderCanonicalBulkResult(result)
+		}
+		if _, bulk := result.Data.(commandpayload.AddBulkResult); bulk {
+			return renderCanonicalBulkResult(result)
+		}
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
-	if boolValue(data["bulk"]) || boolValue(data["stdin"]) {
-		return renderCanonicalBulkResult(result)
-	}
 
-	relativePath, _ := data["file"].(string)
-	fmt.Println(ui.Checkf("Added to %s", ui.FilePath(relativePath)))
+	fmt.Println(ui.Checkf("Added to %s", ui.FilePath(data.File)))
 	for _, warning := range result.Warnings {
 		fmt.Printf("  %s\n", ui.Warningf("%s: %s", warning.Code, warning.Message))
 		if warning.CreateCommand != "" {

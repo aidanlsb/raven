@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -101,8 +102,7 @@ func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]i
 	if !result.OK {
 		return result
 	}
-	data := canonicalDataMap(result)
-	if !boolValue(data["needs_confirm"]) {
+	if _, needsConfirm := result.Data.(commandpayload.MoveConfirmationResult); !needsConfirm {
 		return result
 	}
 
@@ -119,7 +119,7 @@ func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]i
 			}
 		}
 		if !promptForConfirm("Proceed anyway?") {
-			return commandexec.Success(map[string]interface{}{"cancelled": true}, nil)
+			return commandexec.Success(commandpayload.CancelledResult{Cancelled: true}, nil)
 		}
 	}
 
@@ -142,67 +142,46 @@ func init() {
 }
 
 func renderMoveResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(map[string]interface{})
-	if !ok {
-		return handleErrorMsg(ErrInternal, "command execution failed", "")
-	}
-	if boolValue(data["cancelled"]) {
+	switch data := result.Data.(type) {
+	case commandpayload.CancelledResult:
 		fmt.Println(ui.Star("Cancelled."))
 		return nil
-	}
-	if boolValue(data["bulk"]) || boolValue(data["stdin"]) {
+	case commandpayload.MoveBulkPreviewResult, commandpayload.MoveBulkResult:
 		return renderCanonicalBulkResult(result)
-	}
-	source, _ := data["source"].(string)
-	destination, _ := data["destination"].(string)
-	if boolValue(data["preview"]) && !boolValue(data["needs_confirm"]) {
-		fmt.Println(ui.Star(fmt.Sprintf("Would move %s → %s", ui.FilePath(source), ui.FilePath(destination))))
-		if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
-			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Would update %d references", len(updatedRefs))))
-		}
-		renderMoveRefFieldUpdates(data["updated_ref_fields"], true)
-		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
+	case commandpayload.MoveConfirmationResult:
+		fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(data.Source), ui.FilePath(data.Destination)))
 		return nil
+	case commandpayload.MoveResult:
+		if data.Preview {
+			fmt.Println(ui.Star(fmt.Sprintf("Would move %s → %s", ui.FilePath(data.Source), ui.FilePath(data.Destination))))
+			if len(data.UpdatedRefs) > 0 {
+				fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Would update %d references", len(data.UpdatedRefs))))
+			}
+			renderMoveRefFieldUpdates(data.UpdatedRefFields, true)
+			fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
+			return nil
+		}
+		fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(data.Source), ui.FilePath(data.Destination)))
+		if len(data.UpdatedRefs) > 0 {
+			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(data.UpdatedRefs))))
+		}
+		renderMoveRefFieldUpdates(data.UpdatedRefFields, false)
+		return nil
+	default:
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
-	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(source), ui.FilePath(destination)))
-	if updatedRefs, ok := data["updated_refs"].([]string); ok && len(updatedRefs) > 0 {
-		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))
-	} else if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
-		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))
-	}
-	renderMoveRefFieldUpdates(data["updated_ref_fields"], false)
-	return nil
 }
 
-func renderMoveRefFieldUpdates(raw interface{}, preview bool) {
-	for _, update := range moveRefFieldUpdates(raw) {
-		file, _ := update["file"].(string)
-		field, _ := update["field"].(string)
-		if file == "" || field == "" {
+func renderMoveRefFieldUpdates(updates []commandpayload.MoveRefFieldUpdate, preview bool) {
+	for _, update := range updates {
+		if update.File == "" || update.Field == "" {
 			continue
 		}
 		action := "Updated"
 		if preview {
 			action = "Would update"
 		}
-		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("%s ref field %s: %s", action, file, field)))
-	}
-}
-
-func moveRefFieldUpdates(raw interface{}) []map[string]interface{} {
-	switch updates := raw.(type) {
-	case []map[string]interface{}:
-		return updates
-	case []interface{}:
-		result := make([]map[string]interface{}, 0, len(updates))
-		for _, update := range updates {
-			if item, ok := update.(map[string]interface{}); ok {
-				result = append(result, item)
-			}
-		}
-		return result
-	default:
-		return nil
+		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("%s ref field %s: %s", action, update.File, update.Field)))
 	}
 }
 

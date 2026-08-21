@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -183,15 +184,16 @@ func promptNewSchemaFields(reader *bufio.Reader, writer io.Writer, vaultPath, ty
 }
 
 func renderNewResult(_ *cobra.Command, result commandexec.Result) error {
-	data, _ := result.Data.(map[string]interface{})
-	relativePath, _ := data["file"].(string)
-	objectID, _ := data["id"].(string)
-	fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
-	if objectID != "" {
-		fmt.Println(ui.LinkAs(objectID))
+	data, ok := result.Data.(commandpayload.NewResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+	fmt.Println(ui.Checkf("Created %s", ui.FilePath(data.File)))
+	if data.ID != "" {
+		fmt.Println(ui.LinkAs(data.ID))
 	}
 	promptCreateMissingRefsFromResult(getVaultPath(), result)
-	vault.OpenInEditorOrPrintPath(getConfig(), filepath.Join(getVaultPath(), filepath.FromSlash(relativePath)))
+	vault.OpenInEditorOrPrintPath(getConfig(), filepath.Join(getVaultPath(), filepath.FromSlash(data.File)))
 	return nil
 }
 

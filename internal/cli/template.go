@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/shellquote"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -171,14 +172,20 @@ func renderTemplateList(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderTemplateWrite(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Template %s: %s", data["status"], ui.FilePath(stringValue(data["path"]))))
+	data, err := commandResultData[commandpayload.TemplateWriteResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Println(ui.Checkf("Template %s: %s", data.Status, ui.FilePath(data.Path)))
 	return nil
 }
 
 func renderTemplateDelete(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Deleted template %s -> %s", ui.FilePath(stringValue(data["deleted"])), ui.FilePath(stringValue(data["trash_path"]))))
+	data, err := commandResultData[commandpayload.TemplateDeleteResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Println(ui.Checkf("Deleted template %s -> %s", ui.FilePath(data.Deleted), ui.FilePath(data.TrashPath)))
 	for _, w := range result.Warnings {
 		fmt.Println(ui.Warning(w.Message))
 	}

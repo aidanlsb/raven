@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -34,6 +35,15 @@ func executeCanonicalRequest(req commandexec.Request) commandexec.Result {
 func canonicalDataMap(result commandexec.Result) map[string]interface{} {
 	data, _ := result.Data.(map[string]interface{})
 	return data
+}
+
+func commandResultData[T any](result commandexec.Result) (T, error) {
+	data, ok := result.Data.(T)
+	if !ok {
+		var zero T
+		return zero, fmt.Errorf("unexpected command result payload %T", result.Data)
+	}
+	return data, nil
 }
 
 func boolValue(raw interface{}) bool {
