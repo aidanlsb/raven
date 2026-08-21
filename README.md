@@ -107,7 +107,10 @@ rvn mcp show
 rvn mcp show --client cursor
 ```
 
-To update already-installed Raven-managed skills later, use `rvn skill sync` (see `rvn skill --help`).
+Run `rvn skill install` again to install newly shipped skills, align existing
+Raven-managed skills, and remove receipt-managed skills no longer shipped by
+the current `rvn` version. For non-interactive use, apply the preview with
+`rvn skill install --confirm --json`.
 
 See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 

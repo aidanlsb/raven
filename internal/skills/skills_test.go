@@ -228,7 +228,7 @@ func TestPlanSyncNamedUpdatesManagedSkill(t *testing.T) {
 	}
 }
 
-func TestPlanSyncWithoutNameSurfacesMissingSkillsOnly(t *testing.T) {
+func TestPlanSyncWithoutNamePlansMissingSkillInstalls(t *testing.T) {
 	t.Parallel()
 	catalog, err := LoadCatalog()
 	if err != nil {
@@ -240,14 +240,20 @@ func TestPlanSyncWithoutNameSurfacesMissingSkillsOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanSync() error = %v", err)
 	}
-	if len(plan.Actions) != 0 {
-		t.Fatalf("PlanSync() actions = %#v, want none", plan.Actions)
+	if plan.Installed != len(catalog) {
+		t.Fatalf("PlanSync() installed = %d, want %d", plan.Installed, len(catalog))
 	}
-	if len(plan.MissingAvailable) != len(catalog) {
-		t.Fatalf("PlanSync() missing = %d, want %d", len(plan.MissingAvailable), len(catalog))
+	if len(plan.Actions) != len(catalog) {
+		t.Fatalf("PlanSync() actions = %d, want %d", len(plan.Actions), len(catalog))
 	}
-	if _, err := os.Stat(filepath.Join(root, "raven-core")); !os.IsNotExist(err) {
-		t.Fatalf("no-name sync created raven-core, err = %v", err)
+	if !plan.NeedsConfirm {
+		t.Fatal("PlanSync() needs_confirm = false, want true")
+	}
+	if _, err := ApplySync(plan); err != nil {
+		t.Fatalf("ApplySync() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "raven-core", "SKILL.md")); err != nil {
+		t.Fatalf("full plan did not install raven-core: %v", err)
 	}
 }
 

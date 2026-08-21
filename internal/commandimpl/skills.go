@@ -27,32 +27,10 @@ func HandleSkillList(_ context.Context, req commandexec.Request) commandexec.Res
 	return commandexec.Success(data, &commandexec.Meta{Count: len(result.Skills)})
 }
 
-// HandleSkillSync executes the canonical `skill sync` command.
-func HandleSkillSync(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := skills.Sync(skills.SyncRequest{
-		Name:    strings.TrimSpace(stringArg(req.Args, "name")),
-		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
-		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
-		Confirm: req.Confirm,
-	})
-	if err != nil {
-		return commandexec.FromServiceError(err)
-	}
-
-	data := map[string]interface{}{
-		"mode":       result.Mode,
-		"skill_name": result.SkillName,
-		"plan":       result.Plan,
-	}
-	if result.ActionsApplied > 0 {
-		data["actions_applied"] = result.ActionsApplied
-	}
-	return commandexec.Success(data, nil)
-}
-
-// HandleSkillInstall executes the canonical `skill install` command, which
-// installs shipped Raven skills in one shot (the full catalog by default, or a
-// narrowed set when names are given). Preview by default; applies on confirm.
+// HandleSkillInstall executes the canonical `skill install` command. With no
+// names it reconciles the full Raven-managed set to the shipped catalog; names
+// narrow installation and alignment to those shipped skills. Preview by
+// default; applies on confirm.
 func HandleSkillInstall(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := skills.Install(skills.InstallRequest{
 		Names:   stringSliceArg(req.Args["names"]),
@@ -73,6 +51,7 @@ func HandleSkillInstall(_ context.Context, req commandexec.Request) commandexec.
 		"skills":        result.Skills,
 		"installed":     result.Installed,
 		"updated":       result.Updated,
+		"deleted":       result.Deleted,
 		"skipped":       result.Skipped,
 	}
 	if result.ActionsApplied > 0 {

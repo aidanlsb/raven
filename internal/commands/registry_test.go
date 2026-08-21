@@ -142,7 +142,6 @@ func TestRequiresVaultMetadata(t *testing.T) {
 		"mcp_status",
 		"mcp_show",
 		"skill_list",
-		"skill_sync",
 		"skill_install",
 		"skill_remove",
 		"skill_doctor",
@@ -166,6 +165,25 @@ func TestRequiresVaultMetadata(t *testing.T) {
 	}
 	if !RequiresVaultForInvocation("vault_list", map[string]interface{}{"path-only": true}) {
 		t.Fatal("vault_list --path-only should require a resolved vault")
+	}
+}
+
+func TestSkillInstallIsOnlyPackagedSkillInstallSurface(t *testing.T) {
+	t.Parallel()
+
+	if _, ok := Registry["skill_sync"]; ok {
+		t.Fatal("skill_sync must not remain registered")
+	}
+	meta, ok := Registry["skill_install"]
+	if !ok {
+		t.Fatal("skill_install missing from registry")
+	}
+	flagNames := make([]string, 0, len(meta.Flags))
+	for _, flag := range meta.Flags {
+		flagNames = append(flagNames, flag.Name)
+	}
+	if got := strings.Join(flagNames, ","); got != "scope,dest,confirm" {
+		t.Fatalf("skill_install flags = %q, want scope,dest,confirm", got)
 	}
 }
 

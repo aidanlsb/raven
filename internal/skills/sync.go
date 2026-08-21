@@ -10,17 +10,16 @@ import (
 )
 
 type SyncPlan struct {
-	Skill            string    `json:"skill,omitempty"`
-	Scope            string    `json:"scope"`
-	Root             string    `json:"root"`
-	NeedsConfirm     bool      `json:"needs_confirm"`
-	Actions          []Action  `json:"actions"`
-	MissingAvailable []Summary `json:"missing_available,omitempty"`
-	Warnings         []string  `json:"warnings,omitempty"`
-	Installed        int       `json:"installed,omitempty"`
-	Updated          int       `json:"updated,omitempty"`
-	Deleted          int       `json:"deleted,omitempty"`
-	Skipped          int       `json:"skipped,omitempty"`
+	Skill        string   `json:"skill,omitempty"`
+	Scope        string   `json:"scope"`
+	Root         string   `json:"root"`
+	NeedsConfirm bool     `json:"needs_confirm"`
+	Actions      []Action `json:"actions"`
+	Warnings     []string `json:"warnings,omitempty"`
+	Installed    int      `json:"installed,omitempty"`
+	Updated      int      `json:"updated,omitempty"`
+	Deleted      int      `json:"deleted,omitempty"`
+	Skipped      int      `json:"skipped,omitempty"`
 
 	items []syncItem
 }
@@ -132,11 +131,11 @@ func planRootSync(plan *SyncPlan, catalog map[string]*Skill, root string) (*Sync
 			}
 			return nil, fmt.Errorf("read receipt for %s: %w", dirName, err)
 		}
+		managed[dirName] = struct{}{}
 		if receipt.Skill != dirName {
 			addSyncSkip(plan, dirName, skillPath, fmt.Sprintf("receipt skill %q does not match directory name", receipt.Skill))
 			continue
 		}
-		managed[dirName] = struct{}{}
 
 		skill, ok := catalog[dirName]
 		if !ok {
@@ -174,10 +173,77 @@ func planRootSync(plan *SyncPlan, catalog map[string]*Skill, root string) (*Sync
 		} else if err != nil && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("inspect %s: %w", skillPath, err)
 		}
-		plan.MissingAvailable = append(plan.MissingAvailable, summary)
+		skill := catalog[summary.Name]
+		rendered, err := RenderFiles(skill)
+		if err != nil {
+			return nil, err
+		}
+		addSyncInstall(plan, skill, skillPath, rendered)
 	}
 	finalizeSyncPlan(plan)
 	return plan, nil
+}
+
+// installSkillResults projects one full-catalog sync plan into the existing
+// per-skill install response shape. The returned plans are display-only; the
+// original plan remains the single plan passed to ApplySync.
+func installSkillResults(plan *SyncPlan, shippedNames []string) []InstallSkillResult {
+	if plan == nil {
+		return nil
+	}
+
+	results := make([]InstallSkillResult, 0, len(shippedNames))
+	byName := make(map[string]*SyncPlan, len(shippedNames))
+	addResult := func(name string) *SyncPlan {
+		skillPlan := &SyncPlan{
+			Skill: name,
+			Scope: plan.Scope,
+			Root:  plan.Root,
+		}
+		results = append(results, InstallSkillResult{Name: name, Plan: skillPlan})
+		byName[name] = skillPlan
+		return skillPlan
+	}
+	for _, name := range shippedNames {
+		addResult(name)
+	}
+
+	for _, item := range plan.items {
+		skillPlan, ok := byName[item.skillID]
+		if !ok {
+			skillPlan = addResult(item.skillID)
+		}
+		for _, action := range plan.Actions {
+			if syncActionBelongsToItem(action, item) {
+				skillPlan.Actions = append(skillPlan.Actions, action)
+			}
+		}
+		switch item.op {
+		case syncOpInstall:
+			skillPlan.Installed++
+			skillPlan.NeedsConfirm = true
+		case syncOpUpdate:
+			skillPlan.Updated++
+			skillPlan.NeedsConfirm = true
+		case syncOpDelete:
+			skillPlan.Deleted++
+			skillPlan.NeedsConfirm = true
+		case syncOpSkip:
+			skillPlan.Skipped++
+			for _, action := range skillPlan.Actions {
+				if action.Op == "skip_conflict" && strings.TrimSpace(action.Reason) != "" {
+					skillPlan.Warnings = append(skillPlan.Warnings, fmt.Sprintf("%s: %s", item.skillID, action.Reason))
+				}
+			}
+		}
+	}
+	return results
+}
+
+func syncActionBelongsToItem(action Action, item syncItem) bool {
+	actionPath := filepath.Clean(action.Path)
+	itemPath := filepath.Clean(item.path)
+	return actionPath == itemPath || strings.HasPrefix(actionPath, itemPath+string(filepath.Separator))
 }
 
 func ApplySync(plan *SyncPlan) (int, error) {
