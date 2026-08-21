@@ -122,19 +122,21 @@ func rewriteScalarToken(token string, decide Decider) (string, bool) {
 	}
 
 	base, fragment, isSection := paths.ParseSectionID(inner)
-	newBase, ok := decide(Occurrence{
+	occ := Occurrence{
 		Kind:        KindFrontmatter,
 		Base:        base,
 		Fragment:    fragment,
 		HasFragment: isSection,
-	})
+	}
+	newTarget, ok := decide(occ)
 	if !ok {
 		return token, false
 	}
 
+	newBase, newFragment, newHasFragment := replacementTargetParts(occ, newTarget)
 	rebuilt := newBase
-	if isSection {
-		rebuilt += "#" + fragment
+	if newHasFragment {
+		rebuilt += "#" + newFragment
 	}
 	if quote != 0 {
 		rebuilt = string(quote) + rebuilt + string(quote)

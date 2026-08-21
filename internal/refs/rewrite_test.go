@@ -112,6 +112,24 @@ func TestRewriteContentSkipsFencedCodeBlocks(t *testing.T) {
 	}
 }
 
+func TestRewriteContentReplacesExactSectionTarget(t *testing.T) {
+	t.Parallel()
+
+	content := "---\nrelated: projects/site#tasks\n---\nSee [[projects/site#tasks|Tasks]] and [[projects/site#notes]].\n"
+	decide := func(occ Occurrence) (string, bool) {
+		if occ.Base == "projects/site" && occ.HasFragment && occ.Fragment == "tasks" {
+			return "projects/site#completed-tasks", true
+		}
+		return "", false
+	}
+
+	got, changed := RewriteContent(content, decide)
+	want := "---\nrelated: projects/site#completed-tasks\n---\nSee [[projects/site#completed-tasks|Tasks]] and [[projects/site#notes]].\n"
+	if !changed || got != want {
+		t.Fatalf("RewriteContent() = %q, changed=%v, want %q", got, changed, want)
+	}
+}
+
 func TestRewriteContentLeavesMarkdownLinksUntouched(t *testing.T) {
 	t.Parallel()
 

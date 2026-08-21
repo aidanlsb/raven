@@ -10,10 +10,10 @@
 // than ad hoc fence detection, and section fragments are split with
 // paths.ParseSectionID.
 //
-// Callers supply a Decider that maps a matched reference base to its
-// replacement base. Wikilink fragments and display text are preserved
-// automatically by the rewriter, so a
-// Decider only needs to answer "given this base target, what is the new base?".
+// Callers supply a Decider that maps a matched reference to its replacement
+// target. Returning a base preserves the existing fragment, while returning a
+// section target replaces both the base and fragment. Display text is always
+// preserved.
 package refs
 
 import (
@@ -45,11 +45,11 @@ type Occurrence struct {
 	HasFragment bool
 }
 
-// Decider returns the replacement base target for a matched occurrence, plus
-// whether to apply the change. The rewriter re-attaches the occurrence's
-// fragment and preserves display text / link titles, so a Decider must return
-// only the new base (without a fragment).
-type Decider func(occ Occurrence) (newBase string, ok bool)
+// Decider returns the replacement target for a matched occurrence, plus
+// whether to apply the change. A replacement without a fragment preserves the
+// occurrence's fragment; a replacement with a fragment replaces it. Display
+// text is preserved in both cases.
+type Decider func(occ Occurrence) (newTarget string, ok bool)
 
 // Frontmatter mapping/sequence value matchers. These capture the value region
 // only; matching against reference targets happens in Go (not the regex), so
@@ -169,22 +169,32 @@ func wikilinkSpans(line, masked string, decide Decider) []span {
 			continue
 		}
 		base, fragment, isSection := paths.ParseSectionID(target)
-		newBase, replace := decide(Occurrence{
+		occ := Occurrence{
 			Kind:        KindWikilink,
 			Base:        base,
 			Fragment:    fragment,
 			HasFragment: isSection,
-		})
+		}
+		newTarget, replace := decide(occ)
 		if !replace {
 			continue
 		}
+		newBase, newFragment, newHasFragment := replacementTargetParts(occ, newTarget)
 		edits = append(edits, span{
 			start: m.Start,
 			end:   m.End,
-			repl:  buildWikilink(newBase, fragment, isSection, display),
+			repl:  buildWikilink(newBase, newFragment, newHasFragment, display),
 		})
 	}
 	return edits
+}
+
+func replacementTargetParts(occ Occurrence, newTarget string) (base, fragment string, hasFragment bool) {
+	base, fragment, hasFragment = paths.ParseSectionID(newTarget)
+	if hasFragment {
+		return base, fragment, true
+	}
+	return base, occ.Fragment, occ.HasFragment
 }
 
 // applySpans applies non-overlapping replacement spans (in any order) to line.

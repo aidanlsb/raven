@@ -90,6 +90,82 @@ func TestRenameRewritesInboundReferences(t *testing.T) {
 	}
 }
 
+func TestRenameRewritesReferencesThroughSharedRewriter(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  project:
+    default_path: projects/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      status:
+        type: enum
+        values: [active, paused, done]
+      related:
+        type: ref
+        target: project
+`).
+		WithFile("projects/site.md", `---
+type: project
+title: Site
+alias: Website
+status: active
+---
+
+## Tasks
+
+- do a thing
+`).
+		WithFile("notes/ref.md", "Body [[projects/site#tasks]] and alias [[Website#tasks|the tasks]].\n\n```markdown\n[[projects/site#tasks]]\n```\n").
+		WithFile("projects/consumer.md", `---
+type: project
+title: Consumer
+status: active
+related: projects/site#tasks
+---
+`).
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "projects/site.md", "notes/ref.md", "projects/consumer.md")
+
+	result, err := Rename(RenameRequest{
+		VaultPath:      v.Path,
+		VaultConfig:    config.DefaultVaultConfig(),
+		Schema:         sch,
+		Reference:      "projects/site#tasks",
+		NewHeadingText: "Completed Tasks",
+		FailOnIndexErr: true,
+	})
+	if err != nil {
+		t.Fatalf("Rename() error = %v", err)
+	}
+	if len(result.WarningMessages) != 0 {
+		t.Fatalf("unexpected warnings: %#v", result.WarningMessages)
+	}
+
+	ref := v.ReadFile("notes/ref.md")
+	if !strings.Contains(ref, "[[projects/site#completed-tasks]]") {
+		t.Fatalf("markdown body ref not rewritten:\n%s", ref)
+	}
+	if !strings.Contains(ref, "[[Website#completed-tasks|the tasks]]") {
+		t.Fatalf("alias ref not rewritten:\n%s", ref)
+	}
+	if !strings.Contains(ref, "```markdown\n[[projects/site#tasks]]\n```") {
+		t.Fatalf("fenced-code ref was rewritten:\n%s", ref)
+	}
+
+	consumer := v.ReadFile("projects/consumer.md")
+	if !strings.Contains(consumer, "related: projects/site#completed-tasks") {
+		t.Fatalf("frontmatter ref not rewritten:\n%s", consumer)
+	}
+}
+
 func TestRenamePreservesPostCommitResolutionErrors(t *testing.T) {
 	t.Parallel()
 

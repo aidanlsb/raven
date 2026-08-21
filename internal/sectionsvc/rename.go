@@ -17,6 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/refresolve"
+	"github.com/aidanlsb/raven/internal/refs"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -237,7 +238,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 			}
 
 			if sourceFileID == fileID {
-				updatedContent = replaceSectionRefAtLine(updatedContent, line, oldRaw, newRaw)
+				updatedContent = rewriteSectionRefAtLine(updatedContent, line, oldRaw, newRaw)
 				addUpdatedRef(fileID)
 				continue
 			}
@@ -262,7 +263,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 				rewritesByPath[refFilePath] = rewrite
 				rewriteOrder = append(rewriteOrder, rewrite)
 			}
-			updated := replaceSectionRefAtLine(string(rewrite.updatedContent), line, oldRaw, newRaw)
+			updated := rewriteSectionRefAtLine(string(rewrite.updatedContent), line, oldRaw, newRaw)
 			if updated != string(rewrite.updatedContent) {
 				rewrite.updatedContent = []byte(updated)
 				addUpdatedRef(sourceFileID)
@@ -348,35 +349,22 @@ func readFileRewrite(path, reportSourceID string) (*fileRewrite, error) {
 	}, nil
 }
 
-// replaceSectionRefAtLine replaces wikilink and markdown-link occurrences of
-// oldRaw with newRaw, preferring the given 1-based line and falling back to the
-// whole content when the line does not contain the reference.
-func replaceSectionRefAtLine(content string, line int, oldRaw, newRaw string) string {
-	if oldRaw == "" || oldRaw == newRaw {
+// rewriteSectionRefAtLine rewrites an exact section target, preserving the
+// authored object base (including aliases) while replacing only its fragment.
+func rewriteSectionRefAtLine(content string, line int, oldRaw, newRaw string) string {
+	oldBase, oldFragment, oldIsSection := paths.ParseSectionID(strings.TrimSpace(oldRaw))
+	if !oldIsSection || oldBase == "" || oldFragment == "" || oldRaw == newRaw {
 		return content
 	}
-	if line > 0 {
-		lines := strings.Split(content, "\n")
-		idx := line - 1
-		if idx >= 0 && idx < len(lines) {
-			updated := replaceSectionRefVariants(lines[idx], oldRaw, newRaw)
-			if updated != lines[idx] {
-				lines[idx] = updated
-				return strings.Join(lines, "\n")
-			}
-		}
-	}
-	return replaceSectionRefVariants(content, oldRaw, newRaw)
-}
 
-func replaceSectionRefVariants(content, oldRaw, newRaw string) string {
-	replacer := strings.NewReplacer(
-		"[["+oldRaw+"]]", "[["+newRaw+"]]",
-		"[["+oldRaw+"|", "[["+newRaw+"|",
-		"]("+oldRaw+")", "]("+newRaw+")",
-		"](<"+oldRaw+">)", "](<"+newRaw+">)",
-	)
-	return replacer.Replace(content)
+	decide := func(occ refs.Occurrence) (string, bool) {
+		if occ.Base == oldBase && occ.HasFragment && occ.Fragment == oldFragment {
+			return newRaw, true
+		}
+		return "", false
+	}
+	updated, _ := refs.RewriteContentAtLine(content, line, decide)
+	return updated
 }
 
 func reindexRenamedFile(db *index.Database, req RenameRequest, filePath string) *IndexWarning {
