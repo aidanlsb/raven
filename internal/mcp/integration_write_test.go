@@ -3,6 +3,7 @@
 package mcp_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -243,6 +244,57 @@ func TestMCPIntegration_DeleteObject(t *testing.T) {
 
 	// Verify it was deleted (moved to trash)
 	v.AssertFileNotExists("people/dave.md")
+}
+
+func TestMCPIntegration_TrashListAndRestore(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	deleted := server.callTool("delete", map[string]interface{}{
+		"reference": "people/freya",
+	})
+	if deleted.IsError {
+		t.Fatalf("delete failed: %s", deleted.Text)
+	}
+	v.AssertFileNotExists("people/freya.md")
+
+	listed := server.callTool("trash_list", map[string]interface{}{})
+	if listed.IsError {
+		t.Fatalf("trash list failed: %s", listed.Text)
+	}
+	if !strings.Contains(listed.Text, `"reference":"people/freya"`) ||
+		!strings.Contains(listed.Text, `"trash_path":".trash/people/freya.md"`) {
+		t.Fatalf("unexpected trash list result: %s", listed.Text)
+	}
+
+	preview := server.callTool("restore", map[string]interface{}{
+		"reference": "people/freya",
+	})
+	if preview.IsError {
+		t.Fatalf("restore preview failed: %s", preview.Text)
+	}
+	if !strings.Contains(preview.Text, `"phase":"preview"`) {
+		t.Fatalf("restore did not preview by default: %s", preview.Text)
+	}
+	v.AssertFileNotExists("people/freya.md")
+
+	restored := server.callTool("restore", map[string]interface{}{
+		"reference": "people/freya",
+		"confirm":   true,
+	})
+	if restored.IsError {
+		t.Fatalf("restore failed: %s", restored.Text)
+	}
+	if !strings.Contains(restored.Text, `"phase":"applied"`) {
+		t.Fatalf("restore did not report applied phase: %s", restored.Text)
+	}
+	v.AssertFileExists("people/freya.md")
 }
 
 // TestMCPIntegration_Search tests full-text search via MCP tool call.

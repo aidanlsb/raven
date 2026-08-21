@@ -222,7 +222,11 @@ func (vc *VaultConfig) GetExcludePatterns() []string {
 	if vc == nil {
 		return nil
 	}
-	return ravenignore.NormalizePatterns(vc.Exclude)
+	patterns := append([]string{}, vc.Exclude...)
+	if trashDir := paths.NormalizeVaultRelPath(vc.GetDeletionConfig().TrashDir); paths.IsValidVaultRelPath(trashDir) {
+		patterns = append(patterns, paths.NormalizeDirRoot(trashDir))
+	}
+	return ravenignore.NormalizePatterns(patterns)
 }
 
 // CaptureConfig defines settings for quick capture via `rvn add`.

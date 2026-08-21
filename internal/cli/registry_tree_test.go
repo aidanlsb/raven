@@ -14,6 +14,7 @@ import (
 // migrated groups should be added here so the parity assertions cover them.
 var registryGeneratedSubtreePrefixes = [][]string{
 	{"section"},
+	{"trash"},
 	{"vault", "config"},
 	{"schema", "template"},
 	{"schema", "add"},

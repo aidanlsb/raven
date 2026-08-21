@@ -372,7 +372,9 @@ items; objects that would drop fields also require `--force`.
 ### `rvn delete`
 
 Remove an object or an explicit non-Markdown file path. Files are moved to
-`.trash/` by default. Raven objects report backlink warnings.
+`.trash/` by default. Raven objects report backlink warnings. Use `rvn trash
+list` and `rvn restore` for recovery; delete and restore are the supported pair
+instead of manual filesystem moves.
 
 ```bash
 rvn delete project/old-project                 # Interactive: preview, then confirm prompt
@@ -380,6 +382,9 @@ rvn delete project/old-project --force         # Skip the confirmation prompt
 rvn delete project/old-project --dry-run       # Preview without deleting
 rvn delete project/old-project --json          # Applies immediately (non-interactive)
 rvn delete files/old-paper.pdf --dry-run --json
+rvn trash list --json
+rvn restore project/old-project                # Preview only
+rvn restore project/old-project --confirm      # Restore and heal the index
 ```
 
 Bulk deletion previews by default and only applies with `--confirm`. Section IDs
@@ -391,6 +396,28 @@ Check backlinks before deleting to avoid broken references:
 
 ```bash
 rvn backlinks project/old-project
+```
+
+### `rvn trash list` and `rvn restore`
+
+`rvn trash list` reads the configured `deletion.trash_dir` and returns each
+entry's canonical `reference`, current `trash_path`, destination `restore_path`,
+and `kind` (`markdown` or `file`). Filter by an exact reference or with
+`--kind markdown|file`.
+
+`rvn restore <trash-reference-or-path>` previews by default and requires
+`--confirm` to apply. It accepts the `reference` or exact paths returned by
+`trash list`. Restore never overwrites an occupied destination; resolve the
+collision and retry. On success, Raven updates the index and re-runs reference
+resolution, making the restored object queryable and healing incoming
+references when possible.
+
+```bash
+rvn trash list
+rvn trash list people/freya --json
+rvn trash list --kind file --json
+rvn restore people/freya --json
+rvn restore .trash/people/freya.md --confirm --json
 ```
 
 ---

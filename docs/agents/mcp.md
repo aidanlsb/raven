@@ -237,6 +237,8 @@ This tool list is generated from the command registry and should stay in sync wi
 - `new`
 - `add`
 - `set`
+- `trash_list`
+- `restore`
 - `schema`
 - `schema_add_type`
 
@@ -582,6 +584,32 @@ inferred; repair them explicitly after applying.
 Because single-object writes apply on the first call, only invoke them when the
 user's intent is clear. For `delete`/`move`, check backlinks or read the object
 first—or pass `dry-run`—when the impact is not already obvious.
+
+Deletion recovery is a separate preview-first flow. List exact entries, preview
+the restore, then confirm it:
+
+```json
+{
+  "command": "trash_list",
+  "args": {
+    "reference": "project/old"
+  }
+}
+```
+
+```json
+{
+  "command": "restore",
+  "args": {
+    "reference": "project/old",
+    "confirm": true
+  }
+}
+```
+
+Omit `confirm` for the restore preview. If a reference is ambiguous, retry with
+an exact `trash_path` returned by `trash_list`. Restore refuses to overwrite an
+occupied `restore_path`.
 
 ### Confirming a write happened
 

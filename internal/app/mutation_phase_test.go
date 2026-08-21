@@ -129,6 +129,24 @@ func TestMutationPhaseSingleObjectWrites(t *testing.T) {
 		requirePhase(t, res, commandexec.MutationPhasePreview)
 	})
 
+	t.Run("restore previews by default", func(t *testing.T) {
+		t.Parallel()
+		v := buildPhaseVault(t)
+		deleted := runInvoked(t, v.Path, "delete", map[string]any{"reference": "projects/scratch"}, nil)
+		requirePhase(t, deleted, commandexec.MutationPhaseApplied)
+		res := runInvoked(t, v.Path, "restore", map[string]any{"reference": "projects/scratch"}, nil)
+		requirePhase(t, res, commandexec.MutationPhasePreview)
+	})
+
+	t.Run("restore applies with confirm", func(t *testing.T) {
+		t.Parallel()
+		v := buildPhaseVault(t)
+		deleted := runInvoked(t, v.Path, "delete", map[string]any{"reference": "projects/scratch"}, nil)
+		requirePhase(t, deleted, commandexec.MutationPhaseApplied)
+		res := runInvoked(t, v.Path, "restore", map[string]any{"reference": "projects/scratch"}, withConfirm)
+		requirePhase(t, res, commandexec.MutationPhaseApplied)
+	})
+
 	t.Run("new applied", func(t *testing.T) {
 		t.Parallel()
 		v := buildPhaseVault(t)

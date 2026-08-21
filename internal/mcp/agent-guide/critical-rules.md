@@ -12,7 +12,8 @@ These rules are non-negotiable.
 | Reorder/reparent sections | `section_move` | `move`, manual cut/paste |
 | Rename section headings | `section_rename` | `section_move`, `move`, manual heading edits |
 | Delete section subtrees | `section_delete` | manual heading/body deletion |
-| Delete files | `delete` | `rm`, `trash` |
+| Delete files | `delete` | `rm`, manual trash moves |
+| Recover deleted files | `trash_list`, then `restore` | manual filesystem moves |
 | Create typed items | `new` | `touch`, `echo >` |
 | Read vault files | `read` | `cat`, `head`, `tail` |
 | Edit content files | `edit` | ad hoc shell text replacement |
@@ -26,13 +27,17 @@ Why:
 - `section_rename` updates inbound fragment references; object `move` rejects section sources.
 - `section_delete` previews exact subtree bounds and affected backlinks, then requires `confirm=true`.
 - `delete` checks impact and uses safe deletion behavior.
+- `trash_list` exposes exact recovery references/paths; `restore` previews,
+  refuses overwrites, and heals the index after confirmation.
 - `new` applies schema and templates.
 - `edit` is for content markdown only; use `vault config`, `schema`, and `template` for control-plane files.
 
 Single-object `delete` applies immediately when invoked (both CLI and MCP). Only
 use it after clear user intent; if deletion impact is uncertain, inspect the
 object, run `backlinks`, or call with `dry-run=true` first. Bulk delete still
-previews unless `confirm=true`.
+previews unless `confirm=true`. To recover, invoke `trash_list`, preview
+`restore` with its returned `reference` or `trash_path`, then repeat with
+`confirm=true`.
 
 Copying a new non-Markdown file into the vault is intentionally a normal
 filesystem operation; run `reindex` afterward. Use `move` for files already in

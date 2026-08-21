@@ -204,10 +204,11 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 Using 'rm' directly will NOT warn about backlinks (other files that reference this one),
 potentially creating broken links throughout the vault. The raven_delete command:
 - Reports incoming backlink warnings
-- Moves files to .trash/ for recovery (not permanent deletion)
+- Moves files to deletion.trash_dir for recovery (not permanent deletion)
 - Updates the index properly
 
-By default, files are moved to a trash directory (.trash/).
+By default, files are moved to a trash directory (.trash/). Recover with trash
+list followed by preview-first restore; do not move entries manually.
 Warns about backlinks to Raven objects. File-link integrity is reported by
 broken_file_link in 'rvn check'.
 
@@ -241,6 +242,44 @@ IMPORTANT:
 			"Delete a file safely (NEVER use 'rm' shell command)",
 			"Remove objects with backlink warnings",
 			"Move files to trash with backlink warnings",
+		},
+	},
+	"restore": {
+		Name:        "restore",
+		Use:         "restore <trash-reference-or-path>",
+		Description: "Restore an object or file from the configured vault trash",
+		LongDesc: `Restores one file from deletion.trash_dir to the mirrored vault path.
+
+Pass a canonical reference returned by trash list, an exact trash_path, the path
+relative to the trash directory, or the restore_path. Resolution is exact and
+fails when a reference matches multiple trash entries; retry with trash_path to
+select one explicitly.
+
+Restore never overwrites an existing destination. Move or delete the occupying
+file before retrying.
+
+Preview is default. Pass --confirm to move the file back into the vault. A
+successful restore updates the derived index and re-runs reference resolution,
+so incoming references to a restored Markdown ID resolve again when possible.`,
+		Category:   CategoryContent,
+		Access:     AccessWrite,
+		Risk:       RiskMutating,
+		VaultScope: VaultScopeRequired,
+		Args: []ArgMeta{
+			{Name: "reference", Description: "Trash reference or exact trash/restore path", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "confirm", Description: "Apply the restore (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn restore people/freya --json",
+			"rvn restore people/freya --confirm --json",
+			"rvn restore .trash/files/paper.pdf --confirm --json",
+		},
+		UseCases: []string{
+			"Preview recovery of a deleted object or file",
+			"Restore a deleted object and heal incoming references",
+			"Recover a specific entry by its exact trash path",
 		},
 	},
 	"move": {

@@ -86,6 +86,18 @@ func TestBuildCommandContractBulkPreviewModes(t *testing.T) {
 	}
 }
 
+func TestBuildCommandContractRestorePreviewsByDefault(t *testing.T) {
+	t.Parallel()
+
+	contract, ok := BuildCommandContract("restore")
+	if !ok {
+		t.Fatal("expected restore contract")
+	}
+	if got := contract.PreviewMode; got != "preview_default" {
+		t.Fatalf("restore preview mode=%q, want preview_default", got)
+	}
+}
+
 func TestBuildCommandContractReclassifyBulkArguments(t *testing.T) {
 	t.Parallel()
 
@@ -123,6 +135,8 @@ func TestTargetCommandsUseReferenceArguments(t *testing.T) {
 		{commandID: "set", retired: []string{"object_id", "object_ids"}, bulk: true},
 		{commandID: "unset", retired: []string{"object_id"}},
 		{commandID: "delete", retired: []string{"object_id", "object_ids"}, bulk: true},
+		{commandID: "trash_list", retired: []string{"object", "object_id"}},
+		{commandID: "restore", retired: []string{"object", "object_id"}},
 		{commandID: "reclassify", retired: []string{"object", "object_ids"}, bulk: true},
 		{commandID: "edit", retired: []string{"path"}},
 		{commandID: "check", retired: []string{"path"}},
