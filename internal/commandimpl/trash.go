@@ -61,8 +61,11 @@ func HandleRestore(_ context.Context, req commandexec.Request) commandexec.Resul
 		return mapContentMutationError(err)
 	}
 	data := restoreResultData(result, false)
-	postData, warnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
-	data = mergeDataFields(data, postData)
+	missingReferences, warnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
+	if missingReferences.MissingRefs > 0 {
+		data["missing_refs"] = missingReferences.MissingRefs
+		data["missing_ref_items"] = missingReferences.MissingRefItems
+	}
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
