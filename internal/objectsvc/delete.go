@@ -65,16 +65,18 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 		if !paths.IsCleanRelSubpath(filepath.ToSlash(relPath)) {
 			return nil, svcerr.New(codes.ErrFileOutsideVault, "file path is outside the vault")
 		}
-		destPath := filepath.Join(trashRoot, relPath)
-
-		if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create trash parent directory", err)
+		if err := paths.ValidateWithinVault(req.VaultPath, req.FilePath); err != nil {
+			return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "file path is outside the vault", err)
 		}
-		if err := paths.ValidateWithinVault(req.VaultPath, destPath); err != nil {
+		if err := ensureTrashParent(trashRoot, relPath); err != nil {
+			return nil, err
+		}
+		destPath := filepath.Join(trashRoot, relPath)
+		if err := paths.ValidateWithinVault(trashRoot, destPath); err != nil {
 			return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "trash destination is outside the vault", err)
 		}
 
-		if err := moveRegularFileNoReplace(req.FilePath, destPath); err != nil {
+		if err := moveFileNoReplace(req.FilePath, destPath); err != nil {
 			if !errors.Is(err, os.ErrExist) {
 				return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to move file to trash", err)
 			}
@@ -85,9 +87,10 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 			timestamp := nowFn().Format("2006-01-02-150405")
 			ext := filepath.Ext(destPath)
 			base := strings.TrimSuffix(filepath.Base(destPath), ext)
+			tag := trashCollisionTag(filepath.ToSlash(relPath))
 			for version := 1; ; version++ {
-				candidate := filepath.Join(filepath.Dir(destPath), fmt.Sprintf("%s.raven-trash-%s-%d%s", base, timestamp, version, ext))
-				if err := moveRegularFileNoReplace(req.FilePath, candidate); err == nil {
+				candidate := filepath.Join(filepath.Dir(destPath), fmt.Sprintf("%s.raven-trash-%s-%s-%d%s", base, tag, timestamp, version, ext))
+				if err := moveFileNoReplace(req.FilePath, candidate); err == nil {
 					destPath = candidate
 					break
 				} else if !errors.Is(err, os.ErrExist) {

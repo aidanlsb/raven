@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -78,7 +79,8 @@ func TestDeleteFileTrashCollisionAddsTimestamp(t *testing.T) {
 		t.Fatalf("DeleteFile: %v", err)
 	}
 
-	expected := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-2026-03-10-112233-1.md")
+	tag := trashCollisionTag("people/freya.md")
+	expected := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-"+tag+"-2026-03-10-112233-1.md")
 	if result.TrashPath != expected {
 		t.Fatalf("expected timestamped trash path %q, got %q", expected, result.TrashPath)
 	}
@@ -92,7 +94,8 @@ func TestDeleteFileTrashCollisionAllocatesSequenceWithoutOverwrite(t *testing.T)
 	vaultPath := t.TempDir()
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	trashPath := filepath.Join(vaultPath, ".trash/people/freya.md")
-	firstVersion := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-2026-03-10-112233-1.md")
+	tag := trashCollisionTag("people/freya.md")
+	firstVersion := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-"+tag+"-2026-03-10-112233-1.md")
 
 	for path, content := range map[string]string{
 		filePath:     "newest",
@@ -119,7 +122,7 @@ func TestDeleteFileTrashCollisionAllocatesSequenceWithoutOverwrite(t *testing.T)
 		t.Fatalf("DeleteFile: %v", err)
 	}
 
-	expected := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-2026-03-10-112233-2.md")
+	expected := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-"+tag+"-2026-03-10-112233-2.md")
 	if result.TrashPath != expected {
 		t.Fatalf("TrashPath = %q, want %q", result.TrashPath, expected)
 	}
@@ -270,5 +273,94 @@ func TestDeleteFileRejectsSymlinkedTrashDirectory(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filePath); statErr != nil {
 		t.Fatalf("source changed after rejected delete: %v", statErr)
+	}
+}
+
+func TestDeleteFileNormalizesRelativeBackslashTrashDirectory(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	filePath := filepath.Join(vaultPath, "people/freya.md")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("seed source: %v", err)
+	}
+
+	result, err := DeleteFile(DeleteFileRequest{
+		VaultPath: vaultPath,
+		FilePath:  filePath,
+		Behavior:  "trash",
+		TrashDir:  `archive\trash`,
+	})
+	if err != nil {
+		t.Fatalf("DeleteFile() error = %v", err)
+	}
+	expected := filepath.Join(vaultPath, "archive/trash/people/freya.md")
+	if result.TrashPath != expected {
+		t.Fatalf("TrashPath = %q, want %q", result.TrashPath, expected)
+	}
+	if _, err := os.Stat(expected); err != nil {
+		t.Fatalf("normalized trash entry missing: %v", err)
+	}
+	vaultCfg := &config.VaultConfig{Deletion: &config.DeletionConfig{TrashDir: `archive\trash`}}
+	listed, err := ListTrash(ListTrashRequest{VaultPath: vaultPath, VaultConfig: vaultCfg})
+	if err != nil {
+		t.Fatalf("ListTrash() error = %v", err)
+	}
+	if len(listed.Entries) != 1 || listed.Entries[0].TrashPath != "archive/trash/people/freya.md" {
+		t.Fatalf("entries = %#v, want normalized trash path", listed.Entries)
+	}
+	if _, err := RestoreByReference(RestoreByReferenceRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+		Reference:   "people/freya",
+	}); err != nil {
+		t.Fatalf("RestoreByReference() error = %v", err)
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Fatalf("restored file missing: %v", err)
+	}
+}
+
+func TestDeleteFileRejectsSymlinkBelowTrashRoot(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	outsidePath := t.TempDir()
+	trashRoot := filepath.Join(vaultPath, ".trash")
+	if err := os.MkdirAll(trashRoot, 0o755); err != nil {
+		t.Fatalf("mkdir trash root: %v", err)
+	}
+	if err := os.Symlink(outsidePath, filepath.Join(trashRoot, "people")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	filePath := filepath.Join(vaultPath, "people/freya.md")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("seed source: %v", err)
+	}
+
+	_, err := DeleteFile(DeleteFileRequest{
+		VaultPath: vaultPath,
+		FilePath:  filePath,
+		Behavior:  "trash",
+		TrashDir:  ".trash",
+	})
+	if err == nil {
+		t.Fatal("DeleteFile() succeeded through symlinked trash parent")
+	}
+	var serviceErr *svcerr.Error
+	if !errors.As(err, &serviceErr) || serviceErr.Code != codes.ErrConfigInvalid {
+		t.Fatalf("error = %v, want %s", err, codes.ErrConfigInvalid)
+	}
+	if _, statErr := os.Stat(filePath); statErr != nil {
+		t.Fatalf("source changed after rejected delete: %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(outsidePath, "freya.md")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("file escaped through trash symlink, stat error = %v", statErr)
 	}
 }

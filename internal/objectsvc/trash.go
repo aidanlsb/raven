@@ -1,10 +1,12 @@
 package objectsvc
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -88,20 +90,20 @@ func ListTrash(req ListTrashRequest) (*ListTrashResult, error) {
 		if entry.IsDir() {
 			return nil
 		}
-		info, infoErr := entry.Info()
-		if infoErr != nil {
-			return infoErr
-		}
-		if !info.Mode().IsRegular() {
-			return nil
-		}
-
 		relTrashPath, relErr := filepath.Rel(trashRoot, filePath)
 		if relErr != nil {
 			return relErr
 		}
-		restorePath := restorePathFromTrashRelative(trashRoot, relTrashPath)
+		restorePath := restorePathFromTrashRelative(relTrashPath)
 		if !paths.IsValidVaultRelPath(restorePath) {
+			return nil
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		if !info.Mode().IsRegular() &&
+			(info.Mode()&os.ModeSymlink == 0 || !symlinkRestoresWithinVault(req.VaultPath, filePath, restorePath)) {
 			return nil
 		}
 
@@ -170,7 +172,7 @@ func RestoreByReference(req RestoreByReferenceRequest) (*RestoreByReferenceResul
 	if err := paths.ValidateWithinVault(req.VaultPath, destinationPath); err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "restore destination is outside the vault", err)
 	}
-	if err := moveRegularFileNoReplace(sourcePath, destinationPath); err != nil {
+	if err := moveFileNoReplace(sourcePath, destinationPath); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return nil, restoreDestinationExistsError(entry)
 		}
@@ -246,7 +248,7 @@ func prepareRestoreByReference(req RestoreByReferenceRequest) (*TrashEntry, erro
 
 	entry := matches[0]
 	sourcePath := filepath.Join(req.VaultPath, filepath.FromSlash(entry.TrashPath))
-	if err := paths.ValidateWithinVault(req.VaultPath, sourcePath); err != nil {
+	if err := paths.ValidateWithinVault(req.VaultPath, filepath.Dir(sourcePath)); err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "trash entry is outside the vault", err)
 	}
 	sourceInfo, err := os.Lstat(sourcePath)
@@ -257,9 +259,10 @@ func prepareRestoreByReference(req RestoreByReferenceRequest) (*TrashEntry, erro
 		}
 		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to inspect trash entry", err)
 	}
-	if !sourceInfo.Mode().IsRegular() {
-		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("trash entry is not a regular file: %s", entry.TrashPath)).
-			WithSuggestion("Only regular Markdown and non-Markdown files can be restored")
+	if !sourceInfo.Mode().IsRegular() &&
+		(sourceInfo.Mode()&os.ModeSymlink == 0 || !symlinkRestoresWithinVault(req.VaultPath, sourcePath, entry.RestorePath)) {
+		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("trash entry is not a restorable file: %s", entry.TrashPath)).
+			WithSuggestion("Only regular files and symlinks that remain within the vault can be restored")
 	}
 
 	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, entry.RestorePath); err != nil {
@@ -295,11 +298,12 @@ func resolveTrashRootFromDir(vaultPath, rawTrashDir string) (string, string, err
 	if rawTrashDir == "" {
 		rawTrashDir = ".trash"
 	}
-	if filepath.IsAbs(rawTrashDir) || filepath.VolumeName(rawTrashDir) != "" || isWindowsDrivePath(rawTrashDir) {
+	if filepath.IsAbs(rawTrashDir) || filepath.VolumeName(rawTrashDir) != "" ||
+		isWindowsDrivePath(rawTrashDir) || strings.HasPrefix(rawTrashDir, `\`) {
 		return "", "", svcerr.New(codes.ErrConfigInvalid, fmt.Sprintf("invalid deletion.trash_dir: %q", rawTrashDir)).
 			WithSuggestion("Use a vault-relative path such as '.trash' or 'archive/trash'")
 	}
-	trashDir := filepath.ToSlash(filepath.Clean(rawTrashDir))
+	trashDir := path.Clean(strings.ReplaceAll(rawTrashDir, `\`, "/"))
 	if !paths.IsCleanRelSubpath(trashDir) {
 		return "", "", svcerr.New(codes.ErrConfigInvalid, fmt.Sprintf("invalid deletion.trash_dir: %q", rawTrashDir)).
 			WithSuggestion("Use a vault-relative path such as '.trash' or 'archive/trash'")
@@ -345,28 +349,50 @@ func validateTrashRoot(vaultPath, trashRoot string) error {
 	return nil
 }
 
-func moveRegularFileNoReplace(sourcePath, destinationPath string) error {
-	info, err := os.Lstat(sourcePath)
-	if err != nil {
-		return err
+func ensureTrashParent(trashRoot, relFilePath string) error {
+	relFilePath = strings.ReplaceAll(filepath.ToSlash(relFilePath), `\`, "/")
+	if !paths.IsCleanRelSubpath(relFilePath) {
+		return svcerr.New(codes.ErrFileOutsideVault, "trash destination is outside the configured trash directory")
 	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("source is not a regular file: %s", sourcePath)
+
+	parent := path.Dir(relFilePath)
+	if parent == "." {
+		return nil
 	}
-	if err := os.Link(sourcePath, destinationPath); err != nil {
-		return err
-	}
-	if err := os.Remove(sourcePath); err != nil {
-		removeErr := os.Remove(destinationPath)
-		if removeErr != nil {
-			return errors.Join(
-				fmt.Errorf("remove source after linking: %w", err),
-				fmt.Errorf("roll back destination link: %w", removeErr),
-			)
+	current := trashRoot
+	for _, segment := range strings.Split(parent, "/") {
+		current = filepath.Join(current, filepath.FromSlash(segment))
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			if err := os.Mkdir(current, 0o755); err != nil {
+				return svcerr.Wrap(codes.ErrFileWrite, "failed to create trash parent directory", err)
+			}
+			continue
 		}
-		return err
+		if err != nil {
+			return svcerr.Wrap(codes.ErrFileWrite, "failed to inspect trash parent directory", err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return svcerr.New(codes.ErrConfigInvalid, fmt.Sprintf("trash destination contains a symlink: %s", parent)).
+				WithSuggestion("Remove symlinks from the configured trash directory and retry")
+		}
+		if !info.IsDir() {
+			return svcerr.New(codes.ErrFileWrite, fmt.Sprintf("trash parent is not a directory: %s", parent))
+		}
 	}
 	return nil
+}
+
+func symlinkRestoresWithinVault(vaultPath, sourcePath, restorePath string) bool {
+	target, err := os.Readlink(sourcePath)
+	if err != nil {
+		return false
+	}
+	if !filepath.IsAbs(target) {
+		destinationPath := filepath.Join(vaultPath, filepath.FromSlash(restorePath))
+		target = filepath.Join(filepath.Dir(destinationPath), target)
+	}
+	return paths.ValidateWithinVault(vaultPath, target) == nil
 }
 
 func restoreDestinationExistsError(entry *TrashEntry) error {
@@ -379,7 +405,7 @@ func restoreDestinationExistsError(entry *TrashEntry) error {
 		})
 }
 
-func restorePathFromTrashRelative(trashRoot, relTrashPath string) string {
+func restorePathFromTrashRelative(relTrashPath string) string {
 	normalized := paths.NormalizeVaultRelPath(relTrashPath)
 	dir, filename := filepath.Split(filepath.FromSlash(normalized))
 	ext := filepath.Ext(filename)
@@ -388,31 +414,40 @@ func restorePathFromTrashRelative(trashRoot, relTrashPath string) string {
 	const marker = ".raven-trash-"
 	if markerAt := strings.LastIndex(stem, marker); markerAt > 0 {
 		version := stem[markerAt+len(marker):]
-		if separator := strings.LastIndex(version, "-"); separator > 0 {
-			timestamp := version[:separator]
-			sequence, sequenceErr := strconv.Atoi(version[separator+1:])
-			if _, timeErr := time.Parse("2006-01-02-150405", timestamp); timeErr == nil && sequenceErr == nil && sequence > 0 {
-				return paths.NormalizeVaultRelPath(filepath.Join(dir, stem[:markerAt]+ext))
+		parts := strings.Split(version, "-")
+		if len(parts) == 6 {
+			candidate := paths.NormalizeVaultRelPath(filepath.Join(dir, stem[:markerAt]+ext))
+			timestamp := strings.Join(parts[1:5], "-")
+			sequence, sequenceErr := strconv.Atoi(parts[5])
+			if parts[0] == trashCollisionTag(candidate) &&
+				len(parts[0]) == 12 &&
+				sequenceErr == nil && sequence > 0 {
+				if _, timeErr := time.Parse("2006-01-02-150405", timestamp); timeErr == nil {
+					return candidate
+				}
 			}
 		}
 	}
 
-	// Legacy collision names carried only the timestamp. Recover the original
-	// path while an unsuffixed sibling still proves the collision relationship.
+	// Legacy collision names carried only the timestamp. The old delete layout
+	// reserved this suffix for collisions, so decode it deterministically even
+	// after another trash version has already been restored.
 	const legacyTimestampLength = len("2006-01-02-150405")
 	if len(stem) > legacyTimestampLength+1 {
 		separator := len(stem) - legacyTimestampLength - 1
 		if stem[separator] == '-' {
 			timestamp := stem[separator+1:]
 			if _, err := time.Parse("2006-01-02-150405", timestamp); err == nil {
-				candidate := paths.NormalizeVaultRelPath(filepath.Join(dir, stem[:separator]+ext))
-				if info, statErr := os.Lstat(filepath.Join(trashRoot, filepath.FromSlash(candidate))); statErr == nil && info.Mode().IsRegular() {
-					return candidate
-				}
+				return paths.NormalizeVaultRelPath(filepath.Join(dir, stem[:separator]+ext))
 			}
 		}
 	}
 	return normalized
+}
+
+func trashCollisionTag(restorePath string) string {
+	sum := sha256.Sum256([]byte(paths.NormalizeVaultRelPath(restorePath)))
+	return fmt.Sprintf("%x", sum[:6])
 }
 
 func isWindowsDrivePath(value string) bool {

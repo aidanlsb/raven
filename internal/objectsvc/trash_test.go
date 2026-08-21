@@ -89,7 +89,7 @@ func TestListTrashPreservesOriginalReferenceForVersionedCollisions(t *testing.T)
 
 	vaultPath := t.TempDir()
 	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "oldest")
-	versionPath := ".trash/people/freya.raven-trash-2026-03-10-112233-1.md"
+	versionPath := ".trash/people/freya.raven-trash-" + trashCollisionTag("people/freya.md") + "-2026-03-10-112233-1.md"
 	writeTrashTestFile(t, vaultPath, versionPath, "newest")
 	vaultCfg := config.DefaultVaultConfig()
 
@@ -133,6 +133,51 @@ func TestListTrashPreservesOriginalReferenceForVersionedCollisions(t *testing.T)
 	requireTrashTestPath(t, vaultPath, versionPath, false)
 }
 
+func TestListTrashDoesNotDecodeUnverifiedCollisionMarker(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	literalPath := ".trash/people/freya.raven-trash-deadbeefdead-2026-03-10-112233-1.md"
+	writeTrashTestFile(t, vaultPath, literalPath, "literal")
+
+	result, err := ListTrash(ListTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+	})
+	if err != nil {
+		t.Fatalf("ListTrash() error = %v", err)
+	}
+	if len(result.Entries) != 1 {
+		t.Fatalf("entries = %#v, want one", result.Entries)
+	}
+	if got := result.Entries[0]; got.Reference != "people/freya.raven-trash-deadbeefdead-2026-03-10-112233-1" ||
+		got.RestorePath != "people/freya.raven-trash-deadbeefdead-2026-03-10-112233-1.md" {
+		t.Fatalf("literal marker-shaped entry was decoded: %#v", got)
+	}
+}
+
+func TestListTrashDecodesLegacyCollisionWithoutBaseSibling(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	legacyPath := ".trash/people/freya-2026-03-10-112233.md"
+	writeTrashTestFile(t, vaultPath, legacyPath, "legacy")
+
+	result, err := ListTrash(ListTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+	})
+	if err != nil {
+		t.Fatalf("ListTrash() error = %v", err)
+	}
+	if len(result.Entries) != 1 {
+		t.Fatalf("entries = %#v, want one", result.Entries)
+	}
+	if got := result.Entries[0]; got.Reference != "people/freya" || got.RestorePath != "people/freya.md" {
+		t.Fatalf("legacy entry lost original identity: %#v", got)
+	}
+}
+
 func TestListTrashSkipsNonRegularEntries(t *testing.T) {
 	t.Parallel()
 
@@ -151,6 +196,56 @@ func TestListTrashSkipsNonRegularEntries(t *testing.T) {
 	}
 	if len(result.Entries) != 1 || result.Entries[0].Reference != "files/regular.txt" {
 		t.Fatalf("entries = %#v, want only regular file", result.Entries)
+	}
+}
+
+func TestTrashRoundTripPreservesSafeVaultSymlink(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTrashTestFile(t, vaultPath, "files/target.txt", "target")
+	sourcePath := filepath.Join(vaultPath, "files/link.txt")
+	if err := os.Symlink("target.txt", sourcePath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	deleted, err := DeleteFile(DeleteFileRequest{
+		VaultPath: vaultPath,
+		FilePath:  sourcePath,
+		Behavior:  "trash",
+		TrashDir:  ".trash",
+	})
+	if err != nil {
+		t.Fatalf("DeleteFile() error = %v", err)
+	}
+	if info, statErr := os.Lstat(deleted.TrashPath); statErr != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("trashed symlink info = %#v, error = %v", info, statErr)
+	}
+
+	listed, err := ListTrash(ListTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+	})
+	if err != nil {
+		t.Fatalf("ListTrash() error = %v", err)
+	}
+	if len(listed.Entries) != 1 || listed.Entries[0].Reference != "files/link.txt" {
+		t.Fatalf("entries = %#v, want safe symlink", listed.Entries)
+	}
+
+	if _, err := RestoreByReference(RestoreByReferenceRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+		Reference:   "files/link.txt",
+	}); err != nil {
+		t.Fatalf("RestoreByReference() error = %v", err)
+	}
+	content, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatalf("read restored symlink: %v", err)
+	}
+	if string(content) != "target" {
+		t.Fatalf("restored symlink content = %q, want target", content)
 	}
 }
 
