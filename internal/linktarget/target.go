@@ -141,6 +141,17 @@ func ResolveFileKey(normalizedKey, vaultPath string) string {
 	return filepath.Clean(filepath.Join(vaultPath, target))
 }
 
+// IsVaultRelativeFileKey reports whether a normalized file-link key identifies
+// a target inside the vault rather than an absolute external file.
+func IsVaultRelativeFileKey(normalizedKey string) bool {
+	target := filepath.FromSlash(normalizedKey)
+	return normalizedKey != "" &&
+		target != "." &&
+		!filepath.IsAbs(target) &&
+		!isWindowsAbsolute(normalizedKey) &&
+		isInsideRelativePath(target)
+}
+
 // AuthoredFilePath returns the Markdown-semantic path portion of an authored
 // file destination, without angle brackets or a query/fragment suffix.
 func AuthoredFilePath(rawTarget string) string {

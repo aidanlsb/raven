@@ -77,6 +77,32 @@ func TestAnalyzeKeepsAbsolutePathsOutsideVaultAbsolute(t *testing.T) {
 	}
 }
 
+func TestIsVaultRelativeFileKey(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		key  string
+		want bool
+	}{
+		{name: "vault file", key: "assets/report.pdf", want: true},
+		{name: "parent traversal", key: "../report.pdf", want: false},
+		{name: "unix absolute", key: "/tmp/report.pdf", want: false},
+		{name: "windows drive absolute", key: `C:\files\report.pdf`, want: false},
+		{name: "windows UNC absolute", key: `\\server\share\report.pdf`, want: false},
+		{name: "empty", key: "", want: false},
+		{name: "current directory", key: ".", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsVaultRelativeFileKey(tt.key); got != tt.want {
+				t.Errorf("IsVaultRelativeFileKey(%q) = %v, want %v", tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAnalyzeAuthoredPreservesEscapedFilenameDelimiters(t *testing.T) {
 	t.Parallel()
 

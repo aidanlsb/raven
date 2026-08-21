@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Saved queries now persist only RQL, declared arguments, and descriptions; runtime flags are supplied per invocation, and legacy saved `options` blocks are ignored.
 
 ### Fixed
+- Human-readable link query tables now make in-vault file targets clickable alongside source locations, with `--no-links` available to disable terminal hyperlinks.
 - Installation and docs-fetch examples now pin the current v0.0.33 release.
 - Check auto-fixes now replace text only on each issue's reported line, so repeated or conflicting patterns are applied and counted independently.
 - `rvn check --fix` now replaces modified vault notes atomically, preventing interrupted writes from truncating note content while preserving existing file permissions.
