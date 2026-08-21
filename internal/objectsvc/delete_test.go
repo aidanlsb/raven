@@ -205,7 +205,6 @@ func TestDeleteFileRejectsUnsafeTrashDirectories(t *testing.T) {
 		".git/trash",
 	}
 	for _, trashDir := range tests {
-		trashDir := trashDir
 		t.Run(trashDir, func(t *testing.T) {
 			t.Parallel()
 			vaultPath := t.TempDir()

@@ -46,7 +46,7 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 		if trashDir == "" {
 			trashDir = ".trash"
 		}
-		trashDir, trashRoot, err := resolveTrashRootFromDir(req.VaultPath, trashDir)
+		_, trashRoot, err := resolveTrashRootFromDir(req.VaultPath, trashDir)
 		if err != nil {
 			return nil, err
 		}

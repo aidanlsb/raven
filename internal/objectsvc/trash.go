@@ -359,7 +359,10 @@ func moveRegularFileNoReplace(sourcePath, destinationPath string) error {
 	if err := os.Remove(sourcePath); err != nil {
 		removeErr := os.Remove(destinationPath)
 		if removeErr != nil {
-			return fmt.Errorf("remove source after linking: %w (rollback failed: %v)", err, removeErr)
+			return errors.Join(
+				fmt.Errorf("remove source after linking: %w", err),
+				fmt.Errorf("roll back destination link: %w", removeErr),
+			)
 		}
 		return err
 	}
