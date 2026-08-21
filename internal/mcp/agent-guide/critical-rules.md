@@ -11,6 +11,7 @@ These rules are non-negotiable.
 | Create section headings | `section_create` | `add`, manual heading edits |
 | Reorder/reparent sections | `section_move` | `move`, manual cut/paste |
 | Rename section headings | `section_rename` | `section_move`, `move`, manual heading edits |
+| Delete section subtrees | `section_delete` | manual heading/body deletion |
 | Delete files | `delete` | `rm`, `trash` |
 | Create typed items | `new` | `touch`, `echo >` |
 | Read vault files | `read` | `cat`, `head`, `tail` |
@@ -23,6 +24,7 @@ Why:
 - `section_create` validates levels and slug stability; `add` is body-only.
 - `section_move` preserves heading identity and moves the complete subtree.
 - `section_rename` updates inbound fragment references; object `move` rejects section sources.
+- `section_delete` previews exact subtree bounds and affected backlinks, then requires `confirm=true`.
 - `delete` checks impact and uses safe deletion behavior.
 - `new` applies schema and templates.
 - `edit` is for content markdown only; use `vault config`, `schema`, and `template` for control-plane files.

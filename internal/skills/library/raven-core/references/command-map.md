@@ -26,6 +26,7 @@
 - Create a section: `rvn section create <file> "<title>" --level N [--after|--before|--under <section>] --json`.
 - Reorder/reparent a complete section subtree: `rvn section move <file#section> [--after|--before|--under <section>] --json`.
 - Rename a section heading with ref updates: `rvn section rename <file#section> "<new heading text>" --json`.
+- Delete a complete section subtree: `rvn section delete <file#section> --json` previews exact bounds/content and affected backlinks; add `--confirm` to apply.
 - Safe delete with backlink warnings: `rvn delete <reference> --json` (applies immediately; add `--dry-run` to preview). Bulk `--stdin` deletes require `--confirm`.
 
 ## Daily notes

@@ -64,7 +64,8 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 			return nil, nil, resolveErr
 		}
 		if resolved.IsSection {
-			return nil, nil, svcerr.New(codes.ErrInvalidInput, "delete only supports file-level objects").WithSuggestion("Use a file-level object ID without a section fragment")
+			return nil, nil, svcerr.New(codes.ErrInvalidInput, "delete only supports file-level objects").
+				WithSuggestion("Use 'rvn section delete <file#section>' to preview the section subtree, then add --confirm to delete it")
 		}
 		target, err = deleteTargetFromFilePath(req.VaultPath, req.VaultConfig, resolved.FilePath, resolved.ObjectID)
 	}

@@ -94,9 +94,9 @@ var compatibilityAliasCommandIDs = map[string]struct{}{
 // apply immediately and only preview when the caller passes `dry-run`; these
 // are either absent (PreviewModeNone) or use PreviewModeBulkPreviewDefault,
 // which previews only when a bulk input (stdin/references/object_ids/trait_ids) is
-// present. High-blast-radius operations (bulk writes, query --apply, schema
-// rename, check fixes, skill install/remove) preview by default and require
-// `confirm` to apply.
+// present. High-blast-radius operations (section deletion, bulk writes, query
+// --apply, schema rename, check fixes, skill install/remove) preview by
+// default and require `confirm` to apply.
 var previewModeByCommandID = map[string]PreviewMode{
 	"add":        PreviewModeBulkPreviewDefault,
 	"delete":     PreviewModeBulkPreviewDefault,
@@ -114,6 +114,7 @@ var previewModeByCommandID = map[string]PreviewMode{
 	"schema_rename_type":   PreviewModePreviewDefault,
 	"skill_install":        PreviewModePreviewDefault,
 	"skill_remove":         PreviewModePreviewDefault,
+	"section_delete":       PreviewModePreviewDefault,
 }
 
 // mutationPhaseCommandIDs enumerates canonical commands that write durable
@@ -140,6 +141,7 @@ var mutationPhaseCommandIDs = map[string]struct{}{
 	"delete":         {},
 	"move":           {},
 	"section_create": {},
+	"section_delete": {},
 	"section_move":   {},
 	"section_rename": {},
 	"reclassify":     {},

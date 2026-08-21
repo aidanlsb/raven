@@ -17,6 +17,7 @@ Use this guide to choose the right mutation primitive.
 | Create a section heading | `section_create` | Plain title + required level; returns canonical `file#slug` |
 | Reorder/reparent a section | `section_move` | Moves the complete subtree without changing heading identity |
 | Rename a section heading | `section_rename` | Source `file#section`, destination plain heading text; rewrites inbound `[[...#slug]]` refs |
+| Delete a section subtree | `section_delete` | Section-only, preview-first deletion with exact bounds and affected backlinks |
 | Update trait value | `update` | Targeted trait mutation by trait ID |
 | Delete one object or file | `delete` | Safe deletion behavior with backlink warnings for objects and trash support |
 
@@ -29,6 +30,7 @@ Rules:
 
 - Create a heading: `section_create` with `file`, plain `title`, and required integer `level`. Optionally pass exactly one of `after`, `before`, or `under`; no anchor appends at EOF.
 - Reorder/reparent without renaming: `section_move` with `section_id` and optionally one of `after`, `before`, or `under`. The source's complete subtree moves.
+- Delete a heading and every descendant: `section_delete` with `reference="file#section"`. It previews by default and reports `line_start`, `line_end`, exact `removed_content`, `deleted_sections`, and affected `backlinks`. Apply with `confirm=true`. Reported backlinks are left unchanged because Raven cannot infer a safe replacement.
 - `after` uses the anchor's complete subtree boundary; `before` uses its heading line; `under` inserts as its last direct child. Sibling levels must match, and a direct child must be exactly one level deeper. Depth mismatches are hard errors—never retry with an inferred level.
 - Append body content inside a section: `add` with `to="file#section"`. Insertion happens at the end of the section's direct content, before any child headings.
 - `add` rejects Markdown heading content. Its removed `heading` and `create-heading` args are invalid; use `section_create`, then `add` to the returned section ID.
@@ -111,10 +113,12 @@ Copy an external file into the vault with the host filesystem, then invoke
 `reindex`. Use `move` when the source is already in the vault.
 
 Single-object `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
-`section_rename`, `delete`, `move`, and `reclassify` all apply immediately. Only call them
-after clear user approval or an unambiguous request, and use `dry-run=true` when
-the command exposes it and you want to confirm the effect first. Bulk operations (`stdin=true`) stay
-preview-first and require `confirm=true`.
+`section_rename`, `delete`, `move`, and `reclassify` all apply immediately. Only
+call them after clear user approval or an unambiguous request, and use
+`dry-run=true` when the command exposes it and you want to confirm the effect
+first. `section_delete` is always preview-first and requires `confirm=true`.
+Bulk operations (`stdin=true`) also stay preview-first and require
+`confirm=true`.
 
 For bulk reclassification, pass `references` plus `new-type`. The preview reports
 planned moves, dropped/added fields, required-field failures, and reference

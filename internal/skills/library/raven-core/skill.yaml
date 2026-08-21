@@ -19,6 +19,7 @@ coverage:
     - reclassify
     - move
     - section create
+    - section delete
     - section move
     - section rename
     - delete

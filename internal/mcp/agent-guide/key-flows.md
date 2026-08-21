@@ -83,6 +83,10 @@ Deletion flow:
 ```text
 raven_invoke(command="backlinks", args={"reference":"project/old-project"})
 raven_invoke(command="delete", args={"reference":"project/old-project"})
+
+# Section deletion previews exact subtree bounds/content and affected backlinks:
+raven_invoke(command="section_delete", args={"reference":"project/website#old-plan"})
+raven_invoke(command="section_delete", args={"reference":"project/website#old-plan", "confirm":true})
 ```
 
 Copy external non-Markdown files into the vault directly, then invoke
@@ -93,9 +97,10 @@ Single-object `delete`, `move`, `section_create`, `section_move`,
 `section_rename`, and `reclassify` apply immediately. Run the backlinks check
 first for delete when impact is not already clear, or use `dry-run=true` on
 commands that expose it to
-preview. Bulk delete/move remain preview-first and require `confirm=true`; bulk
-object move rejects section IDs. Bulk reclassify follows the same preview/apply
-flow and reports required-field or dropped-field blockers per object.
+preview. `section_delete` and bulk delete/move remain preview-first and require
+`confirm=true`; bulk object move rejects section IDs. Bulk reclassify follows
+the same preview/apply flow and reports required-field or dropped-field blockers
+per object.
 
 ## 5. Bulk mutation flow
 

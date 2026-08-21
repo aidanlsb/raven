@@ -549,7 +549,7 @@ Pass `dry-run` to preview a single-object write without applying it:
 
 High-blast-radius operations stay preview-first and require `confirm` to apply:
 bulk writes (bulk ID arrays), `query` with `apply`, `schema rename`, `schema
-convert`, and `check` fixes.
+convert`, `check` fixes, and `section_delete`.
 
 ```json
 {
@@ -560,6 +560,24 @@ convert`, and `check` fixes.
   }
 }
 ```
+
+Section deletion accepts the `reference` argument only when it is a
+`file#section` ID. Omit `confirm` to return exact line bounds,
+`removed_content`, every `deleted_sections` ID, and affected `backlinks`
+without writing. Apply the reviewed plan with:
+
+```json
+{
+  "command": "section_delete",
+  "args": {
+    "reference": "project/website#old-plan",
+    "confirm": true
+  }
+}
+```
+
+Raven leaves those backlinks unchanged because no safe replacement can be
+inferred; repair them explicitly after applying.
 
 Because single-object writes apply on the first call, only invoke them when the
 user's intent is clear. For `delete`/`move`, check backlinks or read the object

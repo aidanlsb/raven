@@ -111,6 +111,68 @@ func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.R
 	)
 }
 
+// HandleSectionDelete executes the canonical `section delete` command.
+func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec.Result {
+	vaultPath := strings.TrimSpace(req.VaultPath)
+
+	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
+	if reference == "" {
+		return commandexec.Failure(
+			"MISSING_ARGUMENT",
+			"requires section reference argument",
+			nil,
+			"Usage: rvn section delete <file#section> [--confirm]",
+		)
+	}
+	projectionLock, lockFailure := lockCommandIndexProjection(rt, req.Preview)
+	if lockFailure.Error != nil {
+		return lockFailure
+	}
+	if projectionLock != nil {
+		defer func() { _ = projectionLock.Close() }()
+	}
+
+	result, err := sectionsvc.Delete(sectionsvc.DeleteRequest{
+		VaultPath:      vaultPath,
+		VaultConfig:    rt.VaultCfg,
+		Schema:         rt.Schema,
+		Reference:      reference,
+		Preview:        req.Preview,
+		ParseOptions:   rt.ParseOptions,
+		FailOnIndexErr: true,
+		Runtime:        rt,
+	})
+	if err != nil {
+		return commandexec.FromServiceError(err)
+	}
+
+	data := map[string]interface{}{
+		"section":          result.SectionID,
+		"file":             result.FileRelative,
+		"line_start":       result.LineStart,
+		"line_end":         result.LineEnd,
+		"removed_content":  result.RemovedContent,
+		"deleted_sections": result.DeletedSections,
+		"backlinks":        result.Backlinks,
+	}
+	if req.Preview {
+		data["preview"] = true
+		data["status"] = "preview"
+	} else {
+		data["status"] = "deleted"
+	}
+
+	warnings := deleteBacklinkCommandWarnings(result.Backlinks)
+	warnings = appendCommandWarnings(warnings, sectionCommandWarnings(rt, result.WarningMessages, result.IndexWarnings))
+	return commandexec.SuccessWithWarnings(data, warnings, nil)
+}
+
 // HandleSectionRename executes the canonical `section rename` command.
 func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)

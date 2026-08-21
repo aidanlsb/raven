@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added preview-first `rvn section delete <file#section>` / `section_delete` to remove a heading's complete subtree with exact line/content previews and affected inbound-reference reporting; `--confirm` applies.
+
 ### Changed
 - Inlined internal command service-error pass-throughs at their call sites.
 - **Breaking:** `rvn schema update field|trait` now rejects `--type` and `--values`; type and allowed-value remaps must use `rvn schema convert field|trait` with exhaustive `--map-json` preview/confirm migration.

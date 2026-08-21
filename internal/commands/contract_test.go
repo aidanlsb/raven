@@ -260,6 +260,7 @@ func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
 		"schema_convert_trait",
 		"schema_rename_field",
 		"schema_rename_type",
+		"section_delete",
 		"skill_install",
 		"skill_remove",
 	} {

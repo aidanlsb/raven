@@ -261,11 +261,17 @@ Path with fragment like `project/website#tasks`:
 rvn query "section .title==Tasks" --ids | rvn add "Review backlog" --stdin --confirm
 ```
 
-- Object mutation commands such as `set` and `delete` skip section IDs because sections are derived from Markdown headings, not editable schema objects. Skipped IDs are reported with a `SECTION_SKIPPED` warning:
+- Object mutation commands such as `set` and file-level `delete` skip section
+  IDs because sections are derived from Markdown headings, not editable schema
+  objects. Skipped IDs are reported with a `SECTION_SKIPPED` warning:
 
 ```
 Skipped 1 section ID(s) - bulk operations only support file-level objects
 ```
+
+- To remove one heading and its complete subtree, use preview-first
+  `rvn section delete <file#section>` and apply with `--confirm`. Section
+  deletion does not have a bulk `--stdin` mode.
 
 - `move` is stricter: if any bulk source is a section ID, the entire move request
   fails. Reorder/reparent one section at a time with

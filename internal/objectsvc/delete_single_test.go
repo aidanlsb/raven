@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -122,6 +123,9 @@ func TestDeleteByReferenceRejectsSection(t *testing.T) {
 	var serviceErr *svcerr.Error
 	if !errors.As(err, &serviceErr) || serviceErr.Code != codes.ErrInvalidInput {
 		t.Fatalf("error = %v, want %s", err, codes.ErrInvalidInput)
+	}
+	if !strings.Contains(serviceErr.Suggestion, "rvn section delete") {
+		t.Fatalf("suggestion = %q, want section delete guidance", serviceErr.Suggestion)
 	}
 	v.AssertFileExists("notes/sectioned.md")
 }

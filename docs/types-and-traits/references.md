@@ -78,7 +78,8 @@ Each command narrows that grammar to the targets it can safely handle:
 | `open` | Objects and sections; also accepts bulk `references` |
 | `read` | Managed Markdown files and sections |
 | `set`, `unset` | File-level Markdown objects; sections are rejected |
-| `delete` | File-backed objects, or explicit non-Markdown file paths; sections are rejected |
+| `delete` | File-backed objects, or explicit non-Markdown file paths; section IDs are rejected in favor of `section delete` |
+| `section delete` | Sections only; previews the complete subtree and affected backlinks, then requires `--confirm` |
 | `move` | File-backed objects, or explicit non-Markdown file paths; section sources are rejected |
 | `reclassify` | File-level Markdown objects; sections are rejected; also accepts bulk `references` |
 | `edit` | Managed Markdown files and section subtrees; config, schema, templates, excluded files, and non-Markdown files are rejected |
@@ -293,8 +294,11 @@ Section fragments are derived from heading text. Create headings with
 `rvn section move`; moving preserves the heading text, level, slug, and
 references. To rename a heading without breaking inbound references, use
 `rvn section rename project/website#tasks "New Heading"`—it updates the heading
-and rewrites every `[[...#tasks]]` reference to the new slug. The file/object
-`rvn move` command rejects section sources.
+and rewrites every `[[...#tasks]]` reference to the new slug. To remove a
+heading and every descendant, preview `rvn section delete
+project/website#tasks`; the preview reports every inbound reference that would
+become stale, and `--confirm` applies without guessing a replacement for those
+references. The file/object `rvn move` command rejects section sources.
 
 ## Related docs
 
