@@ -89,7 +89,7 @@ func TestIsVaultRelativeFileKey(t *testing.T) {
 		{name: "parent traversal", key: "../report.pdf", want: false},
 		{name: "unix absolute", key: "/tmp/report.pdf", want: false},
 		{name: "windows drive absolute", key: `C:\files\report.pdf`, want: false},
-		{name: "windows UNC absolute", key: `\\server\share\report.pdf`, want: false},
+		{name: "windows UNC absolute", key: "//server/share/report.pdf", want: false},
 		{name: "empty", key: "", want: false},
 		{name: "current directory", key: ".", want: false},
 	}

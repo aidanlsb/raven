@@ -132,7 +132,7 @@ func TestRenderCanonicalQueryLinkJSONHasNoHyperlinks(t *testing.T) {
 	if strings.Contains(out, "\x1b]8;;") {
 		t.Fatalf("JSON output unexpectedly contains OSC 8: %q", out)
 	}
-	if !strings.Contains(out, `"normalized_key":"files/spec.pdf"`) {
+	if !strings.Contains(out, `"normalized_key": "files/spec.pdf"`) {
 		t.Fatalf("expected unchanged link payload, got: %q", out)
 	}
 }
