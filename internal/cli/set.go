@@ -153,7 +153,7 @@ func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	for _, name := range fieldNames {
 		oldValue := ""
 		if value, ok := data.PreviousFields[name]; ok {
-			oldValue = fmt.Sprintf("%v", value)
+			oldValue = fieldmutation.SerializeFieldValueLiteral(value)
 		}
 		newValue := data.UpdatedFields[name]
 		if oldValue != "" && oldValue != newValue {
