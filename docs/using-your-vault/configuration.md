@@ -306,12 +306,19 @@ use the configured heading. For per-call section targeting, prefer
 
 ### `deletion`
 
-Behavior for `rvn delete`.
+Behavior for `rvn delete`, `rvn trash list`, and `rvn restore`.
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
 | `behavior` | string | `trash` | `trash` or `permanent` |
 | `trash_dir` | string | `.trash` | Vault-relative trash location when `behavior: trash` |
+
+`rvn delete` mirrors a deleted file's vault-relative path beneath `trash_dir`.
+`rvn trash list` inspects that configured location, and `rvn restore` moves an
+entry back to its mirrored path after an explicit `--confirm`. Listing and
+restoring existing entries remain available if `behavior` is later changed to
+`permanent`. The configured trash directory is always excluded from managed
+content indexing.
 
 ### `queries`
 

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added preview-first `rvn section delete <file#section>` / `section_delete` to remove a heading's complete subtree with exact line/content previews and affected inbound-reference reporting; `--confirm` applies.
+- Added `rvn trash list` and preview-first `rvn restore` with configured trash-directory support, overwrite protection, CLI/MCP parity, and post-restore index/reference healing.
 
 ### Changed
 - Inlined internal command service-error pass-throughs at their call sites.

@@ -20,6 +20,7 @@ Use this guide to choose the right mutation primitive.
 | Delete a section subtree | `section_delete` | Section-only, preview-first deletion with exact bounds and affected backlinks |
 | Update trait value | `update` | Targeted trait mutation by trait ID |
 | Delete one object or file | `delete` | Safe deletion behavior with backlink warnings for objects and trash support |
+| Recover a deleted object or file | `trash_list`, then `restore` | Exact recovery paths, overwrite protection, and index/reference healing |
 
 Rules:
 - Use `upsert` when reruns should produce one current canonical output.
@@ -102,6 +103,17 @@ Immediate single-object delete:
 raven_invoke(command="backlinks", args={"reference":"project/old-project"})
 raven_invoke(command="delete", args={"reference":"project/old-project"})
 ```
+
+Recovery is preview-first:
+
+```text
+trash = raven_invoke(command="trash_list", args={"reference":"project/old-project"})
+preview = raven_invoke(command="restore", args={"reference":trash.data.items[0].reference})
+raven_invoke(command="restore", args={"reference":trash.data.items[0].trash_path, "confirm":true})
+```
+
+Use an exact `trash_path` when a reference is ambiguous. Restore never
+overwrites its `restore_path`; resolve the collision before retrying.
 
 For a non-Markdown file, pass its explicit vault-relative path:
 

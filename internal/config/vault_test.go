@@ -617,3 +617,25 @@ func TestDefaultVaultConfigSavedQueriesMatchDefaultSchema(t *testing.T) {
 		})
 	}
 }
+
+func TestGetExcludePatternsIncludesConfiguredTrashDirectory(t *testing.T) {
+	t.Parallel()
+
+	cfg := &VaultConfig{
+		Exclude: []string{"support/"},
+		Deletion: &DeletionConfig{
+			TrashDir: "archive/trash",
+		},
+	}
+	patterns := cfg.GetExcludePatterns()
+	found := make(map[string]bool, len(patterns))
+	for _, pattern := range patterns {
+		found[pattern] = true
+	}
+	if !found["support/"] {
+		t.Fatalf("exclude patterns = %#v, want support/", patterns)
+	}
+	if !found["archive/trash/"] {
+		t.Fatalf("exclude patterns = %#v, want configured trash directory", patterns)
+	}
+}

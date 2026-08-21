@@ -137,6 +137,7 @@ rvn query "type:date" --ids | head -100 | rvn delete --stdin --confirm
 - Files are moved to `.trash/` by default (configurable)
 - Works on file-level objects and explicit non-Markdown file paths (section IDs are skipped)
 - Does NOT automatically update backlinks
+- Recover deleted files with `rvn trash list` and preview-first `rvn restore`
 
 **Warning:** Always check backlinks before deleting:
 
@@ -147,6 +148,17 @@ for id in $(rvn query "type:project .status==archived" --ids); do
   rvn backlinks "$id"
 done
 ```
+
+To recover one of the deleted references:
+
+```bash
+rvn trash list --json
+rvn restore project/old-project --json             # Preview
+rvn restore project/old-project --confirm --json   # Apply and heal the index
+```
+
+If multiple deleted versions share a reference, select one by the exact
+`trash_path` returned by `trash list`.
 
 ---
 
@@ -303,7 +315,17 @@ selection.
 
 ### Rollback
 
-Raven doesn't have built-in rollback. Use git:
+For `rvn delete`, use Raven's supported recovery flow. This restores the file
+through the configured trash directory and heals the index and references:
+
+```bash
+rvn trash list --json
+rvn restore person/freya --json
+rvn restore person/freya --confirm --json
+```
+
+Other bulk mutations do not have built-in rollback. Use git when the affected
+files are tracked:
 
 ```bash
 # Inspect what changed

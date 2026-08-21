@@ -1,6 +1,43 @@
 package commands
 
 var maintenanceRegistry = map[string]Meta{
+	"trash_list": {
+		Name:        "trash list",
+		Description: "List files available in the configured vault trash",
+		LongDesc: `Lists files beneath deletion.trash_dir without reading from the index.
+
+The trash directory mirrors each deleted file's original vault-relative path.
+Each item returns:
+- reference: canonical Raven reference for Markdown, or the file path otherwise
+- trash_path: current vault-relative location in trash
+- restore_path: destination used by restore
+- kind: markdown or file
+
+Use the optional reference argument for an exact canonical-reference filter.
+Use --kind to restrict results to Markdown objects or non-Markdown files.
+The configured trash directory is inspected even when deletion.behavior is
+currently permanent, so older trash entries remain recoverable.`,
+		Category:   CategoryMaintenance,
+		Access:     AccessRead,
+		Risk:       RiskSafe,
+		VaultScope: VaultScopeRequired,
+		Args: []ArgMeta{
+			{Name: "reference", Description: "Exact canonical reference to list (optional)", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "kind", Description: "Filter by entry kind (markdown|file)", Type: FlagTypeString, Examples: []string{"markdown", "file"}},
+		},
+		Examples: []string{
+			"rvn trash list --json",
+			"rvn trash list people/freya --json",
+			"rvn trash list --kind file --json",
+		},
+		UseCases: []string{
+			"Inspect recoverable deleted files",
+			"Find the exact trash path for an ambiguous restore",
+			"List deleted Markdown objects or non-Markdown files",
+		},
+	},
 	"reindex": {
 		Name:        "reindex",
 		Description: "Rebuild the SQLite index from managed vault files",
