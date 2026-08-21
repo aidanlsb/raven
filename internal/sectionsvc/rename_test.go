@@ -113,7 +113,6 @@ types:
 		WithFile("projects/site.md", `---
 type: project
 title: Site
-alias: Website
 status: active
 ---
 
@@ -121,7 +120,7 @@ status: active
 
 - do a thing
 `).
-		WithFile("notes/ref.md", "Body [[projects/site#tasks]] and alias [[Website#tasks|the tasks]].\n\n```markdown\n[[projects/site#tasks]]\n```\n").
+		WithFile("notes/ref.md", "Body [[projects/site#tasks]] and alias [[projects/site#tasks|the tasks]].\n\n```markdown\n[[projects/site#tasks]]\n```\n").
 		WithFile("projects/consumer.md", `---
 type: project
 title: Consumer
@@ -153,7 +152,7 @@ related: projects/site#tasks
 	if !strings.Contains(ref, "[[projects/site#completed-tasks]]") {
 		t.Fatalf("markdown body ref not rewritten:\n%s", ref)
 	}
-	if !strings.Contains(ref, "[[Website#completed-tasks|the tasks]]") {
+	if !strings.Contains(ref, "[[projects/site#completed-tasks|the tasks]]") {
 		t.Fatalf("alias ref not rewritten:\n%s", ref)
 	}
 	if !strings.Contains(ref, "```markdown\n[[projects/site#tasks]]\n```") {
