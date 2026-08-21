@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -86,61 +87,59 @@ func buildVaultConfigCommand() *cobra.Command {
 }
 
 func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
-	if !boolValue(data["exists"]) {
+	data, err := commandResultData[commandpayload.VaultConfigShowResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
+	if !data.Exists {
 		fmt.Println(ui.Hint("raven.yaml does not exist yet; showing effective defaults."))
 	}
 
 	autoReindexSource := "default"
-	if boolValue(data["auto_reindex_explicit"]) {
+	if data.AutoReindexExplicit {
 		autoReindexSource = "explicit"
 	}
-	fmt.Printf("%s %t (%s)\n", ui.Hint("auto_reindex:"), boolValue(data["auto_reindex"]), autoReindexSource)
-	if dailyTemplate := stringValue(data["daily_template"]); dailyTemplate != "" {
-		fmt.Printf("%s %s\n", ui.Hint("daily_template:"), dailyTemplate)
+	fmt.Printf("%s %t (%s)\n", ui.Hint("auto_reindex:"), data.AutoReindex, autoReindexSource)
+	if data.DailyTemplate != "" {
+		fmt.Printf("%s %s\n", ui.Hint("daily_template:"), data.DailyTemplate)
 	}
 
-	directories, _ := data["directories"].(map[string]interface{})
 	fmt.Println(ui.SectionHeader("directories"))
-	fmt.Printf("%s %s\n", ui.Hint("daily:"), stringValue(directories["daily"]))
-	if v := stringValue(directories["type"]); v != "" {
-		fmt.Printf("%s %s\n", ui.Hint("type:"), v)
+	fmt.Printf("%s %s\n", ui.Hint("daily:"), data.Directories.Daily)
+	if data.Directories.Type != "" {
+		fmt.Printf("%s %s\n", ui.Hint("type:"), data.Directories.Type)
 	}
-	if v := stringValue(directories["page"]); v != "" {
-		fmt.Printf("%s %s\n", ui.Hint("page:"), v)
+	if data.Directories.Page != "" {
+		fmt.Printf("%s %s\n", ui.Hint("page:"), data.Directories.Page)
 	}
-	fmt.Printf("%s %s\n", ui.Hint("template:"), stringValue(directories["template"]))
+	fmt.Printf("%s %s\n", ui.Hint("template:"), data.Directories.Template)
 
-	capture, _ := data["capture"].(map[string]interface{})
 	fmt.Println(ui.SectionHeader("capture"))
-	fmt.Printf("%s %s\n", ui.Hint("destination:"), stringValue(capture["destination"]))
-	if v := stringValue(capture["heading"]); v != "" {
-		fmt.Printf("%s %s\n", ui.Hint("heading:"), v)
+	fmt.Printf("%s %s\n", ui.Hint("destination:"), data.Capture.Destination)
+	if data.Capture.Heading != "" {
+		fmt.Printf("%s %s\n", ui.Hint("heading:"), data.Capture.Heading)
 	}
 
-	deletion, _ := data["deletion"].(map[string]interface{})
 	fmt.Println(ui.SectionHeader("deletion"))
-	fmt.Printf("%s %s\n", ui.Hint("behavior:"), stringValue(deletion["behavior"]))
-	fmt.Printf("%s %s\n", ui.Hint("trash_dir:"), stringValue(deletion["trash_dir"]))
-	fmt.Printf("%s %v\n", ui.Hint("queries:"), data["queries_count"])
+	fmt.Printf("%s %s\n", ui.Hint("behavior:"), data.Deletion.Behavior)
+	fmt.Printf("%s %s\n", ui.Hint("trash_dir:"), data.Deletion.TrashDir)
+	fmt.Printf("%s %v\n", ui.Hint("queries:"), data.QueriesCount)
 
-	prefixes := stringSliceFromAny(data["protected_prefixes"])
-	if len(prefixes) == 0 {
+	if len(data.ProtectedPrefixes) == 0 {
 		fmt.Printf("%s %s\n", ui.Hint("protected_prefixes:"), ui.Hint("(none)"))
 	} else {
 		fmt.Println(ui.SectionHeader("protected_prefixes"))
-		for _, prefix := range prefixes {
+		for _, prefix := range data.ProtectedPrefixes {
 			fmt.Println(ui.Bullet(prefix))
 		}
 	}
 
-	exclude := stringSliceFromAny(data["exclude"])
-	if len(exclude) == 0 {
+	if len(data.Exclude) == 0 {
 		fmt.Printf("%s %s\n", ui.Hint("exclude:"), ui.Hint("(none)"))
 	} else {
 		fmt.Println(ui.SectionHeader("exclude"))
-		for _, pattern := range exclude {
+		for _, pattern := range data.Exclude {
 			fmt.Println(ui.Bullet(pattern))
 		}
 	}
@@ -148,112 +147,140 @@ func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderVaultConfigAutoReindexSet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(stringValue(data["config_path"]))))
-	} else {
-		fmt.Println(ui.Starf("auto_reindex already %t", boolValue(data["auto_reindex"])))
+	data, err := commandResultData[commandpayload.VaultConfigAutoReindexResult](result)
+	if err != nil {
+		return err
 	}
-	fmt.Printf("%s %t\n", ui.Hint("auto_reindex:"), boolValue(data["auto_reindex"]))
+	if data.Changed {
+		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(data.ConfigPath)))
+	} else {
+		fmt.Println(ui.Starf("auto_reindex already %t", data.AutoReindex))
+	}
+	fmt.Printf("%s %t\n", ui.Hint("auto_reindex:"), data.AutoReindex)
 	return nil
 }
 
 func renderVaultConfigAutoReindexUnset(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Cleared explicit auto_reindex in %s", ui.FilePath(stringValue(data["config_path"]))))
+	data, err := commandResultData[commandpayload.VaultConfigAutoReindexResult](result)
+	if err != nil {
+		return err
+	}
+	if data.Changed {
+		fmt.Println(ui.Checkf("Cleared explicit auto_reindex in %s", ui.FilePath(data.ConfigPath)))
 	} else {
 		fmt.Println(ui.Star("auto_reindex already using the default behavior."))
 	}
-	fmt.Printf("%s %t (default)\n", ui.Hint("auto_reindex:"), boolValue(data["auto_reindex"]))
+	fmt.Printf("%s %t (default)\n", ui.Hint("auto_reindex:"), data.AutoReindex)
 	return nil
 }
 
 func renderVaultConfigProtectedPrefixesList(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
-	prefixes := stringSliceFromAny(data["protected_prefixes"])
-	if len(prefixes) == 0 {
+	data, err := commandResultData[commandpayload.VaultConfigProtectedPrefixesListResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
+	if len(data.ProtectedPrefixes) == 0 {
 		fmt.Println(ui.Star("No configured protected prefixes."))
 		return nil
 	}
-	for _, prefix := range prefixes {
+	for _, prefix := range data.ProtectedPrefixes {
 		fmt.Println(ui.Bullet(prefix))
 	}
 	return nil
 }
 
 func renderVaultConfigProtectedPrefixesAdd(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Added protected prefix '%s'", stringValue(data["prefix"])))
-	} else {
-		fmt.Println(ui.Starf("Protected prefix '%s' already configured", stringValue(data["prefix"])))
+	data, err := commandResultData[commandpayload.VaultConfigProtectedPrefixAddResult](result)
+	if err != nil {
+		return err
 	}
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	if data.Changed {
+		fmt.Println(ui.Checkf("Added protected prefix '%s'", data.Prefix))
+	} else {
+		fmt.Println(ui.Starf("Protected prefix '%s' already configured", data.Prefix))
+	}
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
 	return nil
 }
 
 func renderVaultConfigProtectedPrefixesRemove(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Removed protected prefix '%s'", stringValue(data["removed"])))
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	data, err := commandResultData[commandpayload.VaultConfigProtectedPrefixRemoveResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Println(ui.Checkf("Removed protected prefix '%s'", data.Removed))
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
 	return nil
 }
 
 func renderVaultConfigExcludeList(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
-	exclude := stringSliceFromAny(data["exclude"])
-	if len(exclude) == 0 {
+	data, err := commandResultData[commandpayload.VaultConfigExcludeListResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
+	if len(data.Exclude) == 0 {
 		fmt.Println(ui.Star("No configured exclude patterns."))
 		return nil
 	}
-	for _, pattern := range exclude {
+	for _, pattern := range data.Exclude {
 		fmt.Println(ui.Bullet(pattern))
 	}
 	return nil
 }
 
 func renderVaultConfigExcludeAdd(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Added exclude pattern '%s'", stringValue(data["pattern"])))
-	} else {
-		fmt.Println(ui.Starf("Exclude pattern '%s' already configured", stringValue(data["pattern"])))
+	data, err := commandResultData[commandpayload.VaultConfigExcludeAddResult](result)
+	if err != nil {
+		return err
 	}
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	if data.Changed {
+		fmt.Println(ui.Checkf("Added exclude pattern '%s'", data.Pattern))
+	} else {
+		fmt.Println(ui.Starf("Exclude pattern '%s' already configured", data.Pattern))
+	}
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
 	return nil
 }
 
 func renderVaultConfigExcludeRemove(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Removed exclude pattern '%s'", stringValue(data["removed"])))
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	data, err := commandResultData[commandpayload.VaultConfigExcludeRemoveResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Println(ui.Checkf("Removed exclude pattern '%s'", data.Removed))
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
 	return nil
 }
 
 func renderVaultConfigDirectoriesGet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
-	if !boolValue(data["configured"]) {
+	data, err := commandResultData[commandpayload.VaultConfigDirectoriesResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
+	if !data.Configured {
 		fmt.Println(ui.Hint("directories block not explicitly configured; showing effective values."))
 	}
-	fmt.Printf("%s %s\n", ui.Hint("daily:"), stringValue(data["daily"]))
-	if v := stringValue(data["type"]); v != "" {
-		fmt.Printf("%s %s\n", ui.Hint("type:"), v)
+	fmt.Printf("%s %s\n", ui.Hint("daily:"), data.Daily)
+	if data.Type != "" {
+		fmt.Printf("%s %s\n", ui.Hint("type:"), data.Type)
 	}
-	if v := stringValue(data["page"]); v != "" {
-		fmt.Printf("%s %s\n", ui.Hint("page:"), v)
+	if data.Page != "" {
+		fmt.Printf("%s %s\n", ui.Hint("page:"), data.Page)
 	}
-	fmt.Printf("%s %s\n", ui.Hint("template:"), stringValue(data["template"]))
+	fmt.Printf("%s %s\n", ui.Hint("template:"), data.Template)
 	return nil
 }
 
 func renderVaultConfigDirectoriesSet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Updated directories in %s", ui.FilePath(stringValue(data["config_path"]))))
+	data, err := commandResultData[commandpayload.VaultConfigDirectoriesResult](result)
+	if err != nil {
+		return err
+	}
+	if data.Changed != nil && *data.Changed {
+		fmt.Println(ui.Checkf("Updated directories in %s", ui.FilePath(data.ConfigPath)))
 	} else {
 		fmt.Println(ui.Star("Directories config unchanged."))
 	}
@@ -261,9 +288,12 @@ func renderVaultConfigDirectoriesSet(_ *cobra.Command, result commandexec.Result
 }
 
 func renderVaultConfigDirectoriesUnset(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Cleared directories fields in %s", ui.FilePath(stringValue(data["config_path"]))))
+	data, err := commandResultData[commandpayload.VaultConfigDirectoriesResult](result)
+	if err != nil {
+		return err
+	}
+	if data.Changed != nil && *data.Changed {
+		fmt.Println(ui.Checkf("Cleared directories fields in %s", ui.FilePath(data.ConfigPath)))
 	} else {
 		fmt.Println(ui.Star("Directories config unchanged."))
 	}
@@ -271,22 +301,28 @@ func renderVaultConfigDirectoriesUnset(_ *cobra.Command, result commandexec.Resu
 }
 
 func renderVaultConfigCaptureGet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
-	if !boolValue(data["configured"]) {
+	data, err := commandResultData[commandpayload.VaultConfigCaptureResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
+	if !data.Configured {
 		fmt.Println(ui.Hint("capture block not explicitly configured; showing effective values."))
 	}
-	fmt.Printf("%s %s\n", ui.Hint("destination:"), stringValue(data["destination"]))
-	if v := stringValue(data["heading"]); v != "" {
-		fmt.Printf("%s %s\n", ui.Hint("heading:"), v)
+	fmt.Printf("%s %s\n", ui.Hint("destination:"), data.Destination)
+	if data.Heading != "" {
+		fmt.Printf("%s %s\n", ui.Hint("heading:"), data.Heading)
 	}
 	return nil
 }
 
 func renderVaultConfigCaptureSet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Updated capture config in %s", ui.FilePath(stringValue(data["config_path"]))))
+	data, err := commandResultData[commandpayload.VaultConfigCaptureResult](result)
+	if err != nil {
+		return err
+	}
+	if data.Changed != nil && *data.Changed {
+		fmt.Println(ui.Checkf("Updated capture config in %s", ui.FilePath(data.ConfigPath)))
 	} else {
 		fmt.Println(ui.Star("Capture config unchanged."))
 	}
@@ -294,9 +330,12 @@ func renderVaultConfigCaptureSet(_ *cobra.Command, result commandexec.Result) er
 }
 
 func renderVaultConfigCaptureUnset(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Cleared capture fields in %s", ui.FilePath(stringValue(data["config_path"]))))
+	data, err := commandResultData[commandpayload.VaultConfigCaptureResult](result)
+	if err != nil {
+		return err
+	}
+	if data.Changed != nil && *data.Changed {
+		fmt.Println(ui.Checkf("Cleared capture fields in %s", ui.FilePath(data.ConfigPath)))
 	} else {
 		fmt.Println(ui.Star("Capture config unchanged."))
 	}
@@ -304,20 +343,26 @@ func renderVaultConfigCaptureUnset(_ *cobra.Command, result commandexec.Result) 
 }
 
 func renderVaultConfigDeletionGet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
-	if !boolValue(data["configured"]) {
+	data, err := commandResultData[commandpayload.VaultConfigDeletionResult](result)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
+	if !data.Configured {
 		fmt.Println(ui.Hint("deletion block not explicitly configured; showing effective values."))
 	}
-	fmt.Printf("%s %s\n", ui.Hint("behavior:"), stringValue(data["behavior"]))
-	fmt.Printf("%s %s\n", ui.Hint("trash_dir:"), stringValue(data["trash_dir"]))
+	fmt.Printf("%s %s\n", ui.Hint("behavior:"), data.Behavior)
+	fmt.Printf("%s %s\n", ui.Hint("trash_dir:"), data.TrashDir)
 	return nil
 }
 
 func renderVaultConfigDeletionSet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Updated deletion config in %s", ui.FilePath(stringValue(data["config_path"]))))
+	data, err := commandResultData[commandpayload.VaultConfigDeletionResult](result)
+	if err != nil {
+		return err
+	}
+	if data.Changed != nil && *data.Changed {
+		fmt.Println(ui.Checkf("Updated deletion config in %s", ui.FilePath(data.ConfigPath)))
 	} else {
 		fmt.Println(ui.Star("Deletion config unchanged."))
 	}
@@ -325,9 +370,12 @@ func renderVaultConfigDeletionSet(_ *cobra.Command, result commandexec.Result) e
 }
 
 func renderVaultConfigDeletionUnset(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["changed"]) {
-		fmt.Println(ui.Checkf("Cleared deletion fields in %s", ui.FilePath(stringValue(data["config_path"]))))
+	data, err := commandResultData[commandpayload.VaultConfigDeletionResult](result)
+	if err != nil {
+		return err
+	}
+	if data.Changed != nil && *data.Changed {
+		fmt.Println(ui.Checkf("Cleared deletion fields in %s", ui.FilePath(data.ConfigPath)))
 	} else {
 		fmt.Println(ui.Star("Deletion config unchanged."))
 	}

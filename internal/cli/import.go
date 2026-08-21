@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/importsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -166,31 +167,11 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 }
 
 func renderCanonicalImportResult(result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	results := make([]importResult, 0)
-	switch rawResults := data["items"].(type) {
-	case []importResult:
-		results = append(results, rawResults...)
-	case []interface{}:
-		for _, raw := range rawResults {
-			itemMap, ok := raw.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			item := importResult{
-				ID:     stringValue(itemMap["id"]),
-				Action: stringValue(itemMap["action"]),
-				File:   stringValue(itemMap["file"]),
-				Reason: stringValue(itemMap["reason"]),
-				Code:   stringValue(itemMap["code"]),
-			}
-			if details, ok := itemMap["details"].(map[string]interface{}); ok {
-				item.Details = details
-			}
-			results = append(results, item)
-		}
+	data, ok := result.Data.(commandpayload.ImportResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
-	return outputImportResults(results, result.Warnings)
+	return outputImportResults(data.Items, result.Warnings)
 }
 
 func init() {

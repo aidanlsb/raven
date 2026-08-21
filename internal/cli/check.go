@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 )
 
 // checkCmd is the validate-only parent. Repairs live in the `fix` and
@@ -145,6 +146,14 @@ func handleCheckResult(cmd *cobra.Command, result commandexec.Result, render fun
 }
 
 func checkShouldExit(result commandexec.Result, strict bool) bool {
+	switch data := result.Data.(type) {
+	case commandpayload.CheckFixPreviewResult:
+		return data.ErrorCount > 0 || (strict && data.WarningCount > 0)
+	case commandpayload.CheckFixResult:
+		return data.ErrorCount > 0 || (strict && data.WarningCount > 0)
+	case commandpayload.CheckCreateMissingResult:
+		return data.ErrorCount > 0 || (strict && data.WarningCount > 0)
+	}
 	data := canonicalDataMap(result)
 	errorCount := intValue(data["error_count"])
 	warningCount := intValue(data["warning_count"])

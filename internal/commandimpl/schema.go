@@ -9,8 +9,8 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/schemamigrate"
-	"github.com/aidanlsb/raven/internal/schemapayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/templatesvc"
 )
@@ -118,7 +118,12 @@ func HandleSchemaValidate(_ context.Context, req commandexec.Request) commandexe
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.Validate(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(commandpayload.SchemaValidateResult{
+		Valid:  result.Valid,
+		Issues: result.Issues,
+		Types:  result.Types,
+		Traits: result.Traits,
+	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaAddType executes the canonical `schema_add_type` command.
@@ -139,7 +144,17 @@ func HandleSchemaAddType(_ context.Context, req commandexec.Request) commandexec
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.AddType(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	data := commandpayload.SchemaAddTypeResult{
+		Added:       "type",
+		Name:        result.Name,
+		DefaultPath: result.DefaultPath,
+		Description: result.Description,
+		NameField:   result.NameField,
+	}
+	if result.NameField != "" {
+		data.AutoCreatedField = &result.AutoCreatedField
+	}
+	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaAddTrait executes the canonical `schema_add_trait` command.
@@ -160,7 +175,12 @@ func HandleSchemaAddTrait(_ context.Context, req commandexec.Request) commandexe
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.AddTrait(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(commandpayload.SchemaAddTraitResult{
+		Added:  "trait",
+		Name:   result.Name,
+		Type:   result.Type,
+		Values: result.Values,
+	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaAddField executes the canonical `schema_add_field` command.
@@ -185,7 +205,14 @@ func HandleSchemaAddField(_ context.Context, req commandexec.Request) commandexe
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.AddField(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(commandpayload.SchemaAddFieldResult{
+		Added:       "field",
+		Type:        result.TypeName,
+		Field:       result.FieldName,
+		FieldType:   result.FieldType,
+		Required:    result.Required,
+		Description: result.Description,
+	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaUpdateType executes the canonical `schema_update_type` command.
@@ -209,7 +236,11 @@ func HandleSchemaUpdateType(_ context.Context, req commandexec.Request) commande
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.Update("type", name, "", "", result.Changes), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(commandpayload.SchemaUpdateResult{
+		Updated: "type",
+		Changes: result.Changes,
+		Name:    name,
+	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaUpdateTrait executes the canonical `schema_update_trait` command.
@@ -231,7 +262,11 @@ func HandleSchemaUpdateTrait(_ context.Context, req commandexec.Request) command
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.Update("trait", name, "", "", result.Changes), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(commandpayload.SchemaUpdateResult{
+		Updated: "trait",
+		Changes: result.Changes,
+		Name:    name,
+	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaUpdateField executes the canonical `schema_update_field` command.
@@ -258,7 +293,12 @@ func HandleSchemaUpdateField(_ context.Context, req commandexec.Request) command
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.Update("field", "", typeName, fieldName, result.Changes), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(commandpayload.SchemaUpdateResult{
+		Updated: "field",
+		Changes: result.Changes,
+		Type:    typeName,
+		Field:   fieldName,
+	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaRemoveType executes the canonical `schema_remove_type` command.
@@ -278,7 +318,7 @@ func HandleSchemaRemoveType(_ context.Context, req commandexec.Request) commande
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	data := schemapayload.Remove("type", stringArg(req.Args, "name"), "", "")
+	data := commandpayload.SchemaRemoveResult{Removed: "type", Name: stringArg(req.Args, "name")}
 	warnings := canonicalSchemaWarnings(result.Warnings)
 	if len(warnings) > 0 {
 		return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
@@ -303,7 +343,7 @@ func HandleSchemaRemoveTrait(_ context.Context, req commandexec.Request) command
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	data := schemapayload.Remove("trait", stringArg(req.Args, "name"), "", "")
+	data := commandpayload.SchemaRemoveResult{Removed: "trait", Name: stringArg(req.Args, "name")}
 	warnings := canonicalSchemaWarnings(result.Warnings)
 	if len(warnings) > 0 {
 		return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
@@ -328,7 +368,11 @@ func HandleSchemaRemoveField(_ context.Context, req commandexec.Request) command
 	}); err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.Remove("field", "", typeName, fieldName), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(commandpayload.SchemaRemoveResult{
+		Removed: "field",
+		Type:    typeName,
+		Field:   fieldName,
+	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaRenameType executes the canonical `schema_rename_type` command.
@@ -350,7 +394,41 @@ func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commande
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.RenameType(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	if result.Preview {
+		data := commandpayload.SchemaRenameTypePreviewResult{
+			Preview:      true,
+			OldName:      result.OldName,
+			NewName:      result.NewName,
+			TotalChanges: result.TotalChanges,
+			Changes:      result.Changes,
+			Hint:         result.Hint,
+		}
+		if result.DefaultPathRenameAvailable {
+			data.DefaultPathRenameAvailable = &result.DefaultPathRenameAvailable
+			data.DefaultPathOld = &result.DefaultPathOld
+			data.DefaultPathNew = &result.DefaultPathNew
+			data.OptionalTotalChanges = &result.OptionalTotalChanges
+			data.OptionalChanges = &result.OptionalChanges
+			data.FilesToMove = &result.FilesToMove
+		}
+		return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	}
+	data := commandpayload.SchemaRenameTypeResult{
+		Renamed:        true,
+		OldName:        result.OldName,
+		NewName:        result.NewName,
+		ChangesApplied: result.ChangesApplied,
+		Hint:           result.Hint,
+	}
+	if result.DefaultPathRenameAvailable {
+		data.DefaultPathRenameAvailable = &result.DefaultPathRenameAvailable
+		data.DefaultPathRenamed = &result.DefaultPathRenamed
+		data.DefaultPathOld = &result.DefaultPathOld
+		data.DefaultPathNew = &result.DefaultPathNew
+		data.FilesMoved = &result.FilesMoved
+		data.ReferenceFilesUpdated = &result.ReferenceFilesUpdated
+	}
+	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaRenameField executes the canonical `schema_rename_field` command.
@@ -371,7 +449,25 @@ func HandleSchemaRenameField(_ context.Context, req commandexec.Request) command
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.RenameField(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	if result.Preview {
+		return commandexec.Success(commandpayload.SchemaRenameFieldPreviewResult{
+			Preview:      true,
+			Type:         result.TypeName,
+			OldField:     result.OldField,
+			NewField:     result.NewField,
+			TotalChanges: result.TotalChanges,
+			Changes:      result.Changes,
+			Hint:         result.Hint,
+		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	}
+	return commandexec.Success(commandpayload.SchemaRenameFieldResult{
+		Renamed:        true,
+		Type:           result.TypeName,
+		OldField:       result.OldField,
+		NewField:       result.NewField,
+		ChangesApplied: result.ChangesApplied,
+		Hint:           result.Hint,
+	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaConvertTrait executes the canonical `schema_convert_trait` command.
@@ -396,7 +492,7 @@ func HandleSchemaConvertTrait(_ context.Context, req commandexec.Request) comman
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.Convert(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return schemaConvertCommandResult(result, start)
 }
 
 // HandleSchemaConvertField executes the canonical `schema_convert_field` command.
@@ -422,7 +518,34 @@ func HandleSchemaConvertField(_ context.Context, req commandexec.Request) comman
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemapayload.Convert(result), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return schemaConvertCommandResult(result, start)
+}
+
+func schemaConvertCommandResult(result *schemamigrate.ConvertResult, start time.Time) commandexec.Result {
+	meta := &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}
+	if result.Preview {
+		return commandexec.Success(commandpayload.SchemaConvertPreviewResult{
+			Kind:         result.Kind,
+			Name:         result.Name,
+			Type:         result.TypeName,
+			SourceType:   result.SourceType,
+			TargetType:   result.TargetType,
+			Hint:         result.Hint,
+			Preview:      true,
+			TotalChanges: result.TotalChanges,
+			Changes:      result.Changes,
+		}, meta)
+	}
+	return commandexec.Success(commandpayload.SchemaConvertResult{
+		Kind:           result.Kind,
+		Name:           result.Name,
+		Type:           result.TypeName,
+		SourceType:     result.SourceType,
+		TargetType:     result.TargetType,
+		Hint:           result.Hint,
+		Converted:      true,
+		ChangesApplied: result.ChangesApplied,
+	}, meta)
 }
 
 // HandleSchemaTemplateList executes the canonical `schema_template_list` command.
@@ -515,7 +638,10 @@ func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) comm
 	if err := schemasvc.RemoveTemplate(rt, templateID); err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{"removed": true, "id": templateID}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(commandpayload.SchemaTemplateRemoveResult{
+		Removed: true,
+		ID:      templateID,
+	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaTemplateBind executes the canonical `schema_template_bind` command.
@@ -526,7 +652,7 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 		return runtimeFailure
 	}
 	defer rt.Close()
-	targetKind, scopeKey, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
+	targetKind, _, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
 	if failure.Error != nil {
 		return failure
 	}
@@ -556,16 +682,20 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		scopeKey:      scopeValue,
-		"template_id": templateID,
+	data := commandpayload.SchemaTemplateBindResult{
+		TemplateID: templateID,
+	}
+	if targetKind == "type" {
+		data.Type = scopeValue
+	} else {
+		data.Core = scopeValue
 	}
 	if result != nil && result.AlreadySet {
-		data["already_set"] = true
-		data["default_match"] = result.DefaultMatch
+		data.AlreadySet = true
+		data.DefaultMatch = &result.DefaultMatch
 	}
 	if setDefault {
-		data["default_template"] = templateID
+		data.DefaultTemplate = templateID
 	}
 	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -578,7 +708,7 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 		return runtimeFailure
 	}
 	defer rt.Close()
-	targetKind, scopeKey, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
+	targetKind, _, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
 	if failure.Error != nil {
 		return failure
 	}
@@ -598,13 +728,17 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		scopeKey:      scopeValue,
-		"template_id": templateID,
-		"removed":     true,
+	data := commandpayload.SchemaTemplateUnbindResult{
+		TemplateID: templateID,
+		Removed:    true,
+	}
+	if targetKind == "type" {
+		data.Type = scopeValue
+	} else {
+		data.Core = scopeValue
 	}
 	if clearDefault {
-		data["default_cleared"] = true
+		data.DefaultCleared = true
 	}
 	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
@@ -674,10 +808,10 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 		}
 	}
 
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
-		"path":         result.Path,
-		"status":       result.Status,
-		"template_dir": result.TemplateDir,
+	return commandexec.SuccessWithWarnings(commandpayload.TemplateWriteResult{
+		Path:        result.Path,
+		Status:      result.Status,
+		TemplateDir: result.TemplateDir,
 	}, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
@@ -706,11 +840,11 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		"deleted":      result.DeletedPath,
-		"trash_path":   result.TrashPath,
-		"forced":       result.Forced,
-		"template_ids": result.TemplateIDs,
+	data := commandpayload.TemplateDeleteResult{
+		Deleted:     result.DeletedPath,
+		TrashPath:   result.TrashPath,
+		Forced:      result.Forced,
+		TemplateIDs: result.TemplateIDs,
 	}
 	warnings := canonicalTemplateWarnings(result.Warnings)
 	if len(warnings) > 0 {
@@ -720,9 +854,14 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 }
 
 func canonicalSchemaWarnings(serviceWarnings []schemasvc.Warning) []commandexec.Warning {
-	return schemapayload.MapWarnings(serviceWarnings, func(code codes.WarningCode, message string) commandexec.Warning {
-		return commandexec.Warning{Code: code, Message: message}
-	})
+	if len(serviceWarnings) == 0 {
+		return nil
+	}
+	warnings := make([]commandexec.Warning, 0, len(serviceWarnings))
+	for _, warning := range serviceWarnings {
+		warnings = append(warnings, commandexec.Warning{Code: warning.Code, Message: warning.Message})
+	}
+	return warnings
 }
 
 func canonicalTemplateWarnings(serviceWarnings []templatesvc.Warning) []commandexec.Warning {
@@ -758,11 +897,11 @@ func schemaTemplateTarget(args map[string]interface{}, requireTarget bool) (stri
 	}
 }
 
-func schemaTemplateDefinitionPayload(id, file, description string) map[string]interface{} {
-	return map[string]interface{}{
-		"id":          id,
-		"file":        file,
-		"description": description,
+func schemaTemplateDefinitionPayload(id, file, description string) commandpayload.SchemaTemplateDefinitionResult {
+	return commandpayload.SchemaTemplateDefinitionResult{
+		ID:          id,
+		File:        file,
+		Description: description,
 	}
 }
 

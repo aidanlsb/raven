@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -40,12 +41,12 @@ unique phrase
 		t.Fatalf("HandleEdit() failed: %#v", result.Error)
 	}
 
-	data, ok := result.Data.(map[string]interface{})
+	data, ok := result.Data.(commandpayload.EditSingleResult)
 	if !ok {
-		t.Fatalf("Data = %#v, want map", result.Data)
+		t.Fatalf("Data type = %T, want commandpayload.EditSingleResult", result.Data)
 	}
-	if got, want := data["line"], 7; got != want {
-		t.Fatalf("line = %#v, want %d", got, want)
+	if got, want := data.Line, 7; got != want {
+		t.Fatalf("line = %d, want %d", got, want)
 	}
 
 	content := v.ReadFile("note/example.md")

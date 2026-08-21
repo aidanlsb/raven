@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/mutationguard"
@@ -96,14 +97,16 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
-		return commandexec.Success(map[string]interface{}{
-			"preview":  true,
-			"action":   "add",
-			"items":    canonicalAddPreviewItems(preview.Items),
-			"skipped":  canonicalAddResults(preview.Skipped),
-			"total":    preview.Total,
-			"warnings": warnings,
-			"content":  text,
+		return commandexec.Success(commandpayload.AddBulkPreviewResult{
+			BulkPreviewResult: commandpayload.BulkPreviewResult{
+				Preview: true,
+				Action:  "add",
+				Items:   canonicalAddPreviewItems(preview.Items),
+				Skipped: canonicalAddResults(preview.Skipped),
+				Total:   preview.Total,
+			},
+			Warnings: warnings,
+			Content:  text,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
@@ -112,18 +115,20 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 		return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 	}
 
-	data := map[string]interface{}{
-		"ok":      summary.Errors == 0,
-		"action":  summary.Action,
-		"items":   canonicalAddResults(summary.Results),
-		"total":   summary.Total,
-		"skipped": summary.Skipped,
-		"errors":  summary.Errors,
-		"added":   summary.Added,
-		"content": text,
+	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
+	data := commandpayload.AddBulkResult{
+		BulkSummaryResult: commandpayload.BulkSummaryResult{
+			OK:                summary.Errors == 0,
+			Action:            summary.Action,
+			Items:             canonicalAddResults(summary.Results),
+			Total:             summary.Total,
+			Skipped:           summary.Skipped,
+			Errors:            summary.Errors,
+			MissingReferences: missingRefs,
+		},
+		Added:   summary.Added,
+		Content: text,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
-	data = mergeDataFields(data, postData)
 	warnings = appendCommandWarnings(warnings, postWarnings)
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
@@ -176,13 +181,13 @@ func runAddSingle(rt *vaultruntime.Runtime, text, toRef, journalOperation string
 	}
 
 	relPath, _ := filepath.Rel(vaultPath, destPath)
-	data := map[string]interface{}{
-		"file":    filepath.ToSlash(relPath),
-		"line":    appendResult.Line,
-		"content": text,
+	missingRefs, postWarnings := applyChangeSet(rt, appendResult.ChangeSet, journalOperation)
+	data := commandpayload.AddResult{
+		File:              filepath.ToSlash(relPath),
+		Line:              appendResult.Line,
+		Content:           text,
+		MissingReferences: missingRefs,
 	}
-	postData, postWarnings := applyChangeSet(rt, appendResult.ChangeSet, journalOperation)
-	data = mergeDataFields(data, postData)
 	return commandexec.SuccessWithWarnings(data, postWarnings, nil)
 }
 

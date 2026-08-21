@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 )
 
@@ -49,22 +48,6 @@ func int64Value(raw interface{}) int64 {
 	}
 }
 
-func decodeSchemaCount(raw interface{}) (int, error) {
-	switch value := raw.(type) {
-	case int:
-		return value, nil
-	case int64:
-		return int(value), nil
-	case float64:
-		return int(value), nil
-	case json.Number:
-		parsed, err := value.Int64()
-		return int(parsed), err
-	default:
-		return 0, fmt.Errorf("unexpected numeric value type %T", raw)
-	}
-}
-
 func detailInt(details map[string]interface{}, key string) int {
 	if details == nil {
 		return 0
@@ -90,4 +73,15 @@ func detailStringSlice(details map[string]interface{}, key string) []string {
 	default:
 		return nil
 	}
+}
+
+func decodeResultData(raw interface{}, out interface{}) error {
+	if raw == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(encoded, out)
 }

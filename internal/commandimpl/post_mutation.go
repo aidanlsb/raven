@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -17,9 +18,9 @@ import (
 // applyChangeSet coordinates derived post-write work for an applied mutation.
 // Markdown files remain the durable source of truth: projection failures are
 // returned as warnings and never turn a successful write into a failed command.
-func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journalOperations ...string) (map[string]interface{}, []commandexec.Warning) {
+func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journalOperations ...string) (commandpayload.MissingReferences, []commandexec.Warning) {
 	if rt == nil {
-		return nil, nil
+		return commandpayload.MissingReferences{}, nil
 	}
 	journalOperation := ""
 	if len(journalOperations) > 0 {
@@ -35,7 +36,7 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journa
 		trackedOperation = ""
 	}
 	if changes.Empty() {
-		return nil, warnings
+		return commandpayload.MissingReferences{}, warnings
 	}
 
 	autoReindexEnabled := rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled()
@@ -113,7 +114,7 @@ func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journa
 	// failed, or indexing was intentionally deferred, stale IDs can produce
 	// false REF_TARGET_MISSING remediation for files that exist on disk.
 	if len(warnings) > 0 || !autoReindexEnabled {
-		return nil, warnings
+		return commandpayload.MissingReferences{}, warnings
 	}
 
 	missingPaths := make([]string, 0, len(indexPaths))

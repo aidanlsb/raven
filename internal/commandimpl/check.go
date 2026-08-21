@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -80,14 +81,14 @@ func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch 
 	grouped := checkfixsvc.GroupFixesByFile(fixes)
 
 	if !confirm {
-		return commandexec.Success(map[string]interface{}{
-			"preview":        true,
-			"fixable_issues": len(fixes),
-			"files":          grouped,
-			"scope":          checkScopeData(result),
-			"file_count":     result.FileCount,
-			"error_count":    result.ErrorCount,
-			"warning_count":  result.WarningCount,
+		return commandexec.Success(commandpayload.CheckFixPreviewResult{
+			Preview:       true,
+			FixableIssues: len(fixes),
+			Files:         grouped,
+			Scope:         checkScopeData(result),
+			FileCount:     result.FileCount,
+			ErrorCount:    result.ErrorCount,
+			WarningCount:  result.WarningCount,
 		}, nil)
 	}
 
@@ -96,21 +97,21 @@ func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch 
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		"preview":        false,
-		"ok":             len(applied.Skipped) == 0,
-		"fixable_issues": len(fixes),
-		"fixed_issues":   applied.IssueCount,
-		"fixed_files":    applied.FileCount,
-		"skipped_issues": len(applied.Skipped),
-		"skipped_items":  applied.Skipped,
-		"scope":          checkScopeData(result),
-		"file_count":     result.FileCount,
-		"error_count":    result.ErrorCount,
-		"warning_count":  result.WarningCount,
+	missingRefs, postWarnings := applyChangeSet(rt, applied.ChangeSet, journalOperation)
+	data := commandpayload.CheckFixResult{
+		Preview:           false,
+		OK:                len(applied.Skipped) == 0,
+		FixableIssues:     len(fixes),
+		FixedIssues:       applied.IssueCount,
+		FixedFiles:        applied.FileCount,
+		SkippedIssues:     len(applied.Skipped),
+		SkippedItems:      applied.Skipped,
+		Scope:             checkScopeData(result),
+		FileCount:         result.FileCount,
+		ErrorCount:        result.ErrorCount,
+		WarningCount:      result.WarningCount,
+		MissingReferences: missingRefs,
 	}
-	postData, postWarnings := applyChangeSet(rt, applied.ChangeSet, journalOperation)
-	data = mergeDataFields(data, postData)
 	if len(applied.Skipped) > 0 {
 		postWarnings = appendCommandWarnings(postWarnings, []commandexec.Warning{
 			{
@@ -132,18 +133,18 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		return commandexec.Failure("INVALID_INPUT", "check create-missing only supports full-vault scope", nil, "Run without path/--type/--trait filters")
 	}
 
-	data := map[string]interface{}{
-		"preview":               !confirm,
-		"missing_refs":          len(result.MissingRefs),
-		"undefined_traits":      len(result.UndefinedTraits),
-		"requires_confirm":      true,
-		"non_interactive_only":  true,
-		"scope":                 checkScopeData(result),
-		"missing_ref_items":     result.MissingRefs,
-		"undefined_trait_items": result.UndefinedTraits,
-		"file_count":            result.FileCount,
-		"error_count":           result.ErrorCount,
-		"warning_count":         result.WarningCount,
+	data := commandpayload.CheckCreateMissingResult{
+		Preview:             !confirm,
+		MissingRefs:         len(result.MissingRefs),
+		UndefinedTraits:     len(result.UndefinedTraits),
+		RequiresConfirm:     true,
+		NonInteractiveOnly:  true,
+		Scope:               checkScopeData(result),
+		MissingRefItems:     result.MissingRefs,
+		UndefinedTraitItems: result.UndefinedTraits,
+		FileCount:           result.FileCount,
+		ErrorCount:          result.ErrorCount,
+		WarningCount:        result.WarningCount,
 	}
 
 	if !confirm {
@@ -160,12 +161,14 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		vaultCfg.GetTemplateDirectory(),
 		vaultCfg.ProtectedPrefixes,
 	)
-	data["preview"] = false
-	data["ok"] = len(created.Failures) == 0
-	data["created_pages"] = created.Created
-	data["failed_pages"] = len(created.Failures)
-	data["failed_page_items"] = created.Failures
-	data["undefined_traits_note"] = "undefined traits are interactive-only and were not changed in JSON mode"
+	data.Preview = false
+	ok := len(created.Failures) == 0
+	failedPages := len(created.Failures)
+	data.OK = &ok
+	data.CreatedPages = &created.Created
+	data.FailedPages = &failedPages
+	data.FailedPageItems = &created.Failures
+	data.UndefinedTraitsNote = "undefined traits are interactive-only and were not changed in JSON mode"
 	if len(created.Failures) > 0 {
 		return commandexec.SuccessWithWarnings(data, []commandexec.Warning{
 			{
@@ -194,13 +197,13 @@ func structToMap(value any) (map[string]interface{}, error) {
 	return data, nil
 }
 
-func checkScopeData(result *checksvc.RunResult) map[string]interface{} {
+func checkScopeData(result *checksvc.RunResult) commandpayload.CheckScope {
 	if result == nil {
-		return nil
+		return commandpayload.CheckScope{}
 	}
-	return map[string]interface{}{
-		"type":  result.Scope.Type,
-		"value": result.Scope.Value,
+	return commandpayload.CheckScope{
+		Type:  result.Scope.Type,
+		Value: result.Scope.Value,
 	}
 }
 

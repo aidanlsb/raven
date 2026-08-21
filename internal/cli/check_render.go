@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -34,6 +35,9 @@ func printCheckScopeHeader(vaultPath string, scope checksvc.Scope) {
 }
 
 func checkScopeFromResult(result commandexec.Result) checksvc.Scope {
+	if scope, ok := commandpayload.CheckResultScope(result.Data); ok {
+		return scope
+	}
 	data := canonicalDataMap(result)
 	if scopeMap, ok := data["scope"].(map[string]interface{}); ok {
 		return checksvc.Scope{
@@ -106,29 +110,27 @@ func printCheckIssueTotals(result CheckResultJSON) {
 }
 
 func renderCanonicalCheckFix(result commandexec.Result) {
-	data := canonicalDataMap(result)
-	fixableIssues := intValue(data["fixable_issues"])
-	if fixableIssues == 0 {
-		fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
-		return
-	}
-
-	if boolValue(data["preview"]) {
+	switch data := result.Data.(type) {
+	case commandpayload.CheckFixPreviewResult:
+		if data.FixableIssues == 0 {
+			fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
+			return
+		}
 		fmt.Printf("\n%s\n", ui.SectionHeader("Auto-fixable Issues"))
 		fmt.Println(ui.Hint("Use --confirm to apply these fixes."))
 		fmt.Println()
-		switch grouped := data["files"].(type) {
-		case []checkfixsvc.FileFixes:
-			printCheckFileFixes(grouped, fixableIssues)
-		case []interface{}:
-			printCheckFileFixMaps(grouped, fixableIssues)
+		printCheckFileFixes(data.Files, data.FixableIssues)
+	case commandpayload.CheckFixResult:
+		if data.FixableIssues == 0 {
+			fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
+			return
 		}
-		return
-	}
-
-	fmt.Printf("\n%s\n", ui.Checkf("Fixed %d issue(s) in %d file(s).", intValue(data["fixed_issues"]), intValue(data["fixed_files"])))
-	for _, warning := range result.Warnings {
-		fmt.Printf("  %s\n", ui.Warning(warning.Message))
+		fmt.Printf("\n%s\n", ui.Checkf("Fixed %d issue(s) in %d file(s).", data.FixedIssues, data.FixedFiles))
+		for _, warning := range result.Warnings {
+			fmt.Printf("  %s\n", ui.Warning(warning.Message))
+		}
+	default:
+		fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
 	}
 }
 
@@ -137,25 +139,6 @@ func printCheckFileFixes(grouped []checkfixsvc.FileFixes, total int) {
 		fmt.Printf("%s %s\n", ui.FilePath(file.FilePath), ui.Muted.Render(fmt.Sprintf("(%d fix%s)", len(file.Fixes), pluralize(len(file.Fixes)))))
 		for _, fix := range file.Fixes {
 			fmt.Printf("  %s %s\n", ui.Muted.Render(fmt.Sprintf("L%d", fix.Line)), fix.Description)
-		}
-	}
-	fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Total: %d fixable issue(s) in %d file(s)", total, len(grouped))))
-}
-
-func printCheckFileFixMaps(grouped []interface{}, total int) {
-	for _, raw := range grouped {
-		file, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		fixes, _ := file["fixes"].([]interface{})
-		fmt.Printf("%s %s\n", ui.FilePath(stringValue(file["file_path"])), ui.Muted.Render(fmt.Sprintf("(%d fix%s)", len(fixes), pluralize(len(fixes)))))
-		for _, fixRaw := range fixes {
-			fix, ok := fixRaw.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			fmt.Printf("  %s %s\n", ui.Muted.Render(fmt.Sprintf("L%d", intValue(fix["line"]))), stringValue(fix["description"]))
 		}
 	}
 	fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Total: %d fixable issue(s) in %d file(s)", total, len(grouped))))

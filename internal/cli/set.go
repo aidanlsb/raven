@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -18,8 +19,8 @@ var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 	BuildArgs: buildSetArgs,
 	Invoke:    invokeSet,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
-		data := canonicalDataMap(result)
-		if boolValue(data["bulk"]) || boolValue(data["stdin"]) {
+		switch result.Data.(type) {
+		case commandpayload.SetBulkPreviewResult, commandpayload.SetBulkResult:
 			return renderCanonicalBulkResult(result)
 		}
 		return renderCanonicalSetSingleResult(result)
@@ -133,32 +134,28 @@ func invokeSet(cmd *cobra.Command, commandID, vaultPath string, args map[string]
 }
 
 func renderCanonicalSetSingleResult(result commandexec.Result) error {
-	data, ok := result.Data.(map[string]interface{})
+	data, ok := result.Data.(commandpayload.SetResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 
-	relativePath, _ := data["file"].(string)
-	isPreview := boolValue(data["preview"])
-	if isPreview {
-		fmt.Println(ui.Star(fmt.Sprintf("Would update %s", ui.FilePath(relativePath))))
+	if data.Preview {
+		fmt.Println(ui.Star(fmt.Sprintf("Would update %s", ui.FilePath(data.File))))
 	} else {
-		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
+		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(data.File)))
 	}
 
-	updatedFields := stringMapFromAny(data["updated_fields"])
-	previousFields := interfaceMapFromAny(data["previous_fields"])
-	fieldNames := make([]string, 0, len(updatedFields))
-	for name := range updatedFields {
+	fieldNames := make([]string, 0, len(data.UpdatedFields))
+	for name := range data.UpdatedFields {
 		fieldNames = append(fieldNames, name)
 	}
 	sort.Strings(fieldNames)
 	for _, name := range fieldNames {
 		oldValue := ""
-		if value, ok := previousFields[name]; ok {
-			oldValue = fmt.Sprintf("%v", value)
+		if value, ok := data.PreviousFields[name]; ok {
+			oldValue = fieldmutation.SerializeFieldValueLiteral(value)
 		}
-		newValue := updatedFields[name]
+		newValue := data.UpdatedFields[name]
 		if oldValue != "" && oldValue != newValue {
 			fmt.Printf("  %s\n", ui.FieldChange(name, oldValue, newValue))
 		} else if oldValue == "" {
@@ -170,7 +167,7 @@ func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	for _, warning := range result.Warnings {
 		fmt.Printf("  %s\n", ui.Warning(warning.Message))
 	}
-	if isPreview {
+	if data.Preview {
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply"))
 		return nil
 	}
@@ -190,21 +187,6 @@ func stringMapFromAny(raw interface{}) map[string]string {
 		return out
 	default:
 		return map[string]string{}
-	}
-}
-
-func interfaceMapFromAny(raw interface{}) map[string]interface{} {
-	switch values := raw.(type) {
-	case map[string]interface{}:
-		return values
-	case map[string]string:
-		out := make(map[string]interface{}, len(values))
-		for key, value := range values {
-			out[key] = value
-		}
-		return out
-	default:
-		return map[string]interface{}{}
 	}
 }
 

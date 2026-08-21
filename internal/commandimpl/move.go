@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -69,12 +70,12 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		_, journalWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 		// Nothing was written: the move is blocked pending confirmation, so
 		// report a preview phase regardless of the normalized apply resolution.
-		return commandexec.SuccessWithWarnings(map[string]interface{}{
-			"source":        serviceResult.SourceID,
-			"destination":   serviceResult.DestinationID,
-			"preview":       req.Preview,
-			"needs_confirm": true,
-			"reason":        serviceResult.Reason,
+		return commandexec.SuccessWithWarnings(commandpayload.MoveConfirmationResult{
+			Source:       serviceResult.SourceID,
+			Destination:  serviceResult.DestinationID,
+			Preview:      req.Preview,
+			NeedsConfirm: true,
+			Reason:       serviceResult.Reason,
 		}, appendCommandWarnings([]commandexec.Warning{{
 			Code: codes.WarnTypeMismatch,
 			Message: fmt.Sprintf("Moving to '%s/' which is the default directory for type '%s', but file has type '%s'",
@@ -84,36 +85,36 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	warnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, indexUpdateFailedWarningCode)
-	data := map[string]interface{}{
-		"source":      serviceResult.SourceID,
-		"destination": serviceResult.DestinationID,
+	data := commandpayload.MoveResult{
+		Source:      serviceResult.SourceID,
+		Destination: serviceResult.DestinationID,
 	}
 	if req.Preview {
-		data["preview"] = true
-		data["status"] = "preview"
+		data.Preview = true
+		data.Status = "preview"
 	}
 	if len(serviceResult.UpdatedRefs) > 0 {
-		data["updated_refs"] = serviceResult.UpdatedRefs
+		data.UpdatedRefs = serviceResult.UpdatedRefs
 	}
 	if len(serviceResult.UpdatedRefFields) > 0 {
-		data["updated_ref_fields"] = canonicalMoveRefFieldUpdates(serviceResult.UpdatedRefFields)
+		data.UpdatedRefFields = canonicalMoveRefFieldUpdates(serviceResult.UpdatedRefFields)
 	}
 	if !req.Preview {
-		postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
-		data = mergeDataFields(data, postData)
+		missingRefs, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
+		data.MissingReferences = missingRefs
 		warnings = appendCommandWarnings(warnings, postWarnings)
 	}
 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
-func canonicalMoveRefFieldUpdates(updates []objectsvc.RefFieldUpdate) []map[string]interface{} {
-	items := make([]map[string]interface{}, 0, len(updates))
+func canonicalMoveRefFieldUpdates(updates []objectsvc.RefFieldUpdate) []commandpayload.MoveRefFieldUpdate {
+	items := make([]commandpayload.MoveRefFieldUpdate, 0, len(updates))
 	for _, update := range updates {
-		items = append(items, map[string]interface{}{
-			"source_id": update.SourceID,
-			"file":      update.FilePath,
-			"field":     update.Field,
+		items = append(items, commandpayload.MoveRefFieldUpdate{
+			SourceID: update.SourceID,
+			File:     update.FilePath,
+			Field:    update.Field,
 		})
 	}
 	return items
@@ -152,13 +153,15 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
-		return commandexec.Success(map[string]interface{}{
-			"preview":     true,
-			"action":      preview.Action,
-			"items":       canonicalMovePreviewItems(preview.Items),
-			"skipped":     canonicalMoveResults(preview.Skipped),
-			"total":       preview.Total,
-			"destination": preview.Destination,
+		return commandexec.Success(commandpayload.MoveBulkPreviewResult{
+			BulkPreviewResult: commandpayload.BulkPreviewResult{
+				Preview: true,
+				Action:  preview.Action,
+				Items:   canonicalMovePreviewItems(preview.Items),
+				Skipped: canonicalMoveResults(preview.Skipped),
+				Total:   preview.Total,
+			},
+			Destination: preview.Destination,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
@@ -167,18 +170,20 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 		return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 	}
 
-	data := map[string]interface{}{
-		"ok":          summary.Errors == 0,
-		"action":      summary.Action,
-		"items":       canonicalMoveResults(summary.Results),
-		"total":       summary.Total,
-		"skipped":     summary.Skipped,
-		"errors":      summary.Errors,
-		"moved":       summary.Moved,
-		"destination": summary.Destination,
+	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
+	data := commandpayload.MoveBulkResult{
+		BulkSummaryResult: commandpayload.BulkSummaryResult{
+			OK:                summary.Errors == 0,
+			Action:            summary.Action,
+			Items:             canonicalMoveResults(summary.Results),
+			Total:             summary.Total,
+			Skipped:           summary.Skipped,
+			Errors:            summary.Errors,
+			MissingReferences: missingRefs,
+		},
+		Moved:       summary.Moved,
+		Destination: summary.Destination,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
-	data = mergeDataFields(data, postData)
 	allWarnings := appendCommandWarnings(
 		warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode),
 		postWarnings,

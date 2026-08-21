@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -109,15 +110,13 @@ func invokeSchemaRenameType(_ *cobra.Command, commandID, vaultPath string, args 
 		return preview
 	}
 
-	previewData := canonicalDataMap(preview)
+	previewData, ok := preview.Data.(commandpayload.SchemaRenameTypePreviewResult)
+	if !ok {
+		return commandexec.Failure(ErrInternal, fmt.Sprintf("unexpected schema rename preview payload %T", preview.Data), nil, "")
+	}
 	applyDefaultPathRename := boolValue(args["rename-default-path"])
-	if boolValue(previewData["default_path_rename_available"]) && !applyDefaultPathRename && shouldPromptForConfirm() {
-		defaultPathOld, _ := previewData["default_path_old"].(string)
-		defaultPathNew, _ := previewData["default_path_new"].(string)
-		filesToMove, err := decodeSchemaCount(previewData["files_to_move"])
-		if err != nil {
-			return commandexec.Failure(ErrInternal, err.Error(), nil, "")
-		}
+	defaultPathOld, defaultPathNew, filesToMove, renameAvailable := schemaRenameDefaultPathPreview(previewData)
+	if renameAvailable && !applyDefaultPathRename && shouldPromptForConfirm() {
 		prompt := fmt.Sprintf("Also rename default_path '%s' -> '%s'?", defaultPathOld, defaultPathNew)
 		if filesToMove > 0 {
 			prompt = fmt.Sprintf(
@@ -134,4 +133,20 @@ func invokeSchemaRenameType(_ *cobra.Command, commandID, vaultPath string, args 
 	applyArgs["rename-default-path"] = applyDefaultPathRename
 	applyArgs["confirm"] = true
 	return executeCanonicalCommand(commandID, vaultPath, applyArgs)
+}
+
+func schemaRenameDefaultPathPreview(data commandpayload.SchemaRenameTypePreviewResult) (oldPath, newPath string, filesToMove int, available bool) {
+	if data.DefaultPathRenameAvailable == nil || !*data.DefaultPathRenameAvailable {
+		return "", "", 0, false
+	}
+	if data.DefaultPathOld != nil {
+		oldPath = *data.DefaultPathOld
+	}
+	if data.DefaultPathNew != nil {
+		newPath = *data.DefaultPathNew
+	}
+	if data.FilesToMove != nil {
+		filesToMove = *data.FilesToMove
+	}
+	return oldPath, newPath, filesToMove, true
 }

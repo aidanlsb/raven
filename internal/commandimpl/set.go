@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/objectsvc"
@@ -118,18 +119,18 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		return mapContentMutationError(err)
 	}
 
-	data := map[string]interface{}{
-		"file":           serviceResult.RelativePath,
-		"object_id":      serviceResult.ObjectID,
-		"type":           serviceResult.ObjectType,
-		"updated_fields": serviceResult.ResolvedUpdates,
+	data := commandpayload.SetResult{
+		File:          serviceResult.RelativePath,
+		ObjectID:      serviceResult.ObjectID,
+		Type:          serviceResult.ObjectType,
+		UpdatedFields: serviceResult.ResolvedUpdates,
 	}
 	if len(serviceResult.PreviousFields) > 0 {
-		data["previous_fields"] = serviceResult.PreviousFields
+		data.PreviousFields = serviceResult.PreviousFields
 	}
 
 	if req.Preview {
-		data["preview"] = true
+		data.Preview = true
 		return commandexec.SuccessWithWarnings(
 			data,
 			warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
@@ -141,8 +142,8 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
 	)
 
-	postData, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
-	data = mergeDataFields(data, postData)
+	missingRefs, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
+	data.MissingReferences = missingRefs
 	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	return commandexec.SuccessWithWarnings(
@@ -187,18 +188,18 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		return mapContentMutationError(err)
 	}
 
-	postData, warnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
+	missingRefs, warnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 
-	data := map[string]interface{}{
-		"file":            serviceResult.RelativePath,
-		"object_id":       serviceResult.ObjectID,
-		"type":            serviceResult.ObjectType,
-		"removed_fields":  fieldmutation.SerializeFieldValueMap(serviceResult.RemovedFields),
-		"missing_fields":  serviceResult.MissingFields,
-		"modified":        serviceResult.Modified,
-		"previous_fields": serviceResult.PreviousFields,
+	data := commandpayload.UnsetResult{
+		File:              serviceResult.RelativePath,
+		ObjectID:          serviceResult.ObjectID,
+		Type:              serviceResult.ObjectType,
+		RemovedFields:     fieldmutation.SerializeFieldValueMap(serviceResult.RemovedFields),
+		MissingFields:     serviceResult.MissingFields,
+		Modified:          serviceResult.Modified,
+		PreviousFields:    serviceResult.PreviousFields,
+		MissingReferences: missingRefs,
 	}
-	data = mergeDataFields(data, postData)
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
@@ -224,14 +225,16 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
-		return commandexec.Success(map[string]interface{}{
-			"preview":  true,
-			"action":   preview.Action,
-			"items":    canonicalSetPreviewItems(preview.Items),
-			"skipped":  canonicalSetResults(preview.Skipped),
-			"total":    preview.Total,
-			"warnings": warnings,
-			"fields":   serializedUpdates,
+		return commandexec.Success(commandpayload.SetBulkPreviewResult{
+			BulkPreviewResult: commandpayload.BulkPreviewResult{
+				Preview: true,
+				Action:  preview.Action,
+				Items:   canonicalSetPreviewItems(preview.Items),
+				Skipped: canonicalSetResults(preview.Skipped),
+				Total:   preview.Total,
+			},
+			Warnings: warnings,
+			Fields:   serializedUpdates,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
@@ -240,18 +243,20 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 	}
 
-	data := map[string]interface{}{
-		"ok":       summary.Errors == 0,
-		"action":   summary.Action,
-		"items":    canonicalSetResults(summary.Results),
-		"total":    summary.Total,
-		"skipped":  summary.Skipped,
-		"errors":   summary.Errors,
-		"modified": summary.Modified,
-		"fields":   serializedUpdates,
+	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
+	data := commandpayload.SetBulkResult{
+		BulkSummaryResult: commandpayload.BulkSummaryResult{
+			OK:                summary.Errors == 0,
+			Action:            summary.Action,
+			Items:             canonicalSetResults(summary.Results),
+			Total:             summary.Total,
+			Skipped:           summary.Skipped,
+			Errors:            summary.Errors,
+			MissingReferences: missingRefs,
+		},
+		Modified: summary.Modified,
+		Fields:   serializedUpdates,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
-	data = mergeDataFields(data, postData)
 	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})

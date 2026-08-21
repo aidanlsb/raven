@@ -6,25 +6,12 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
 const warnSectionSkipped = codes.WarnSectionSkipped
-
-type canonicalBulkResult struct {
-	ID      string `json:"id"`
-	Status  string `json:"status"`
-	Reason  string `json:"reason,omitempty"`
-	Details string `json:"details,omitempty"`
-}
-
-type canonicalBulkPreviewItem struct {
-	ID      string            `json:"id"`
-	Changes map[string]string `json:"changes,omitempty"`
-	Action  string            `json:"action"`
-	Details string            `json:"details,omitempty"`
-}
 
 func commandIDsArg(args map[string]any, key string) []string {
 	if args == nil {
@@ -122,10 +109,10 @@ func sectionSkipWarnings(sectionIDs []string) []commandexec.Warning {
 	}}
 }
 
-func canonicalAddPreviewItems(items []objectsvc.AddBulkPreviewItem) []canonicalBulkPreviewItem {
-	out := make([]canonicalBulkPreviewItem, 0, len(items))
+func canonicalAddPreviewItems(items []objectsvc.AddBulkPreviewItem) []commandpayload.BulkPreviewItem {
+	out := make([]commandpayload.BulkPreviewItem, 0, len(items))
 	for _, item := range items {
-		out = append(out, canonicalBulkPreviewItem{
+		out = append(out, commandpayload.BulkPreviewItem{
 			ID:      item.ID,
 			Action:  item.Action,
 			Details: item.Details,
@@ -134,10 +121,10 @@ func canonicalAddPreviewItems(items []objectsvc.AddBulkPreviewItem) []canonicalB
 	return out
 }
 
-func canonicalAddResults(items []objectsvc.AddBulkResult) []canonicalBulkResult {
-	out := make([]canonicalBulkResult, 0, len(items))
+func canonicalAddResults(items []objectsvc.AddBulkResult) []commandpayload.BulkResult {
+	out := make([]commandpayload.BulkResult, 0, len(items))
 	for _, item := range items {
-		out = append(out, canonicalBulkResult{
+		out = append(out, commandpayload.BulkResult{
 			ID:     item.ID,
 			Status: item.Status,
 			Reason: item.Reason,
@@ -146,10 +133,10 @@ func canonicalAddResults(items []objectsvc.AddBulkResult) []canonicalBulkResult 
 	return out
 }
 
-func canonicalSetPreviewItems(items []objectsvc.SetBulkPreviewItem) []canonicalBulkPreviewItem {
-	out := make([]canonicalBulkPreviewItem, 0, len(items))
+func canonicalSetPreviewItems(items []objectsvc.SetBulkPreviewItem) []commandpayload.BulkPreviewItem {
+	out := make([]commandpayload.BulkPreviewItem, 0, len(items))
 	for _, item := range items {
-		out = append(out, canonicalBulkPreviewItem{
+		out = append(out, commandpayload.BulkPreviewItem{
 			ID:      item.ID,
 			Action:  item.Action,
 			Changes: item.Changes,
@@ -158,10 +145,10 @@ func canonicalSetPreviewItems(items []objectsvc.SetBulkPreviewItem) []canonicalB
 	return out
 }
 
-func canonicalSetResults(items []objectsvc.SetBulkResult) []canonicalBulkResult {
-	out := make([]canonicalBulkResult, 0, len(items))
+func canonicalSetResults(items []objectsvc.SetBulkResult) []commandpayload.BulkResult {
+	out := make([]commandpayload.BulkResult, 0, len(items))
 	for _, item := range items {
-		out = append(out, canonicalBulkResult{
+		out = append(out, commandpayload.BulkResult{
 			ID:     item.ID,
 			Status: item.Status,
 			Reason: item.Reason,
@@ -170,10 +157,10 @@ func canonicalSetResults(items []objectsvc.SetBulkResult) []canonicalBulkResult 
 	return out
 }
 
-func canonicalDeletePreviewItems(items []objectsvc.DeleteBulkPreviewItem) []canonicalBulkPreviewItem {
-	out := make([]canonicalBulkPreviewItem, 0, len(items))
+func canonicalDeletePreviewItems(items []objectsvc.DeleteBulkPreviewItem) []commandpayload.BulkPreviewItem {
+	out := make([]commandpayload.BulkPreviewItem, 0, len(items))
 	for _, item := range items {
-		out = append(out, canonicalBulkPreviewItem{
+		out = append(out, commandpayload.BulkPreviewItem{
 			ID:      item.ID,
 			Action:  item.Action,
 			Details: item.Details,
@@ -183,10 +170,10 @@ func canonicalDeletePreviewItems(items []objectsvc.DeleteBulkPreviewItem) []cano
 	return out
 }
 
-func canonicalDeleteResults(items []objectsvc.DeleteBulkResult) []canonicalBulkResult {
-	out := make([]canonicalBulkResult, 0, len(items))
+func canonicalDeleteResults(items []objectsvc.DeleteBulkResult) []commandpayload.BulkResult {
+	out := make([]commandpayload.BulkResult, 0, len(items))
 	for _, item := range items {
-		out = append(out, canonicalBulkResult{
+		out = append(out, commandpayload.BulkResult{
 			ID:     item.ID,
 			Status: item.Status,
 			Reason: item.Reason,
@@ -195,10 +182,10 @@ func canonicalDeleteResults(items []objectsvc.DeleteBulkResult) []canonicalBulkR
 	return out
 }
 
-func canonicalMovePreviewItems(items []objectsvc.MoveBulkPreviewItem) []canonicalBulkPreviewItem {
-	out := make([]canonicalBulkPreviewItem, 0, len(items))
+func canonicalMovePreviewItems(items []objectsvc.MoveBulkPreviewItem) []commandpayload.BulkPreviewItem {
+	out := make([]commandpayload.BulkPreviewItem, 0, len(items))
 	for _, item := range items {
-		out = append(out, canonicalBulkPreviewItem{
+		out = append(out, commandpayload.BulkPreviewItem{
 			ID:      item.ID,
 			Action:  item.Action,
 			Details: item.Details,
@@ -207,10 +194,10 @@ func canonicalMovePreviewItems(items []objectsvc.MoveBulkPreviewItem) []canonica
 	return out
 }
 
-func canonicalMoveResults(items []objectsvc.MoveBulkResult) []canonicalBulkResult {
-	out := make([]canonicalBulkResult, 0, len(items))
+func canonicalMoveResults(items []objectsvc.MoveBulkResult) []commandpayload.BulkResult {
+	out := make([]commandpayload.BulkResult, 0, len(items))
 	for _, item := range items {
-		out = append(out, canonicalBulkResult{
+		out = append(out, commandpayload.BulkResult{
 			ID:      item.ID,
 			Status:  item.Status,
 			Reason:  item.Reason,

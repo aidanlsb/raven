@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/vaultconfigsvc"
 )
 
@@ -18,32 +19,32 @@ func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandex
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path":           result.ConfigPath,
-		"exists":                result.Exists,
-		"auto_reindex":          result.AutoReindex,
-		"auto_reindex_explicit": result.AutoReindexExplicit,
-		"daily_template":        result.DailyTemplate,
-		"directories": map[string]interface{}{
-			"configured": result.Directories.Configured,
-			"daily":      result.Directories.Daily,
-			"type":       result.Directories.Object,
-			"page":       result.Directories.Page,
-			"template":   result.Directories.Template,
+	return commandexec.Success(commandpayload.VaultConfigShowResult{
+		ConfigPath:          result.ConfigPath,
+		Exists:              result.Exists,
+		AutoReindex:         result.AutoReindex,
+		AutoReindexExplicit: result.AutoReindexExplicit,
+		DailyTemplate:       result.DailyTemplate,
+		Directories: commandpayload.VaultDirectories{
+			Configured: result.Directories.Configured,
+			Daily:      result.Directories.Daily,
+			Type:       result.Directories.Object,
+			Page:       result.Directories.Page,
+			Template:   result.Directories.Template,
 		},
-		"capture": map[string]interface{}{
-			"destination": result.Capture.Destination,
-			"heading":     result.Capture.Heading,
+		Capture: commandpayload.VaultCapture{
+			Destination: result.Capture.Destination,
+			Heading:     result.Capture.Heading,
 		},
-		"deletion": map[string]interface{}{
-			"behavior":  result.Deletion.Behavior,
-			"trash_dir": result.Deletion.TrashDir,
+		Deletion: commandpayload.VaultDeletion{
+			Behavior: result.Deletion.Behavior,
+			TrashDir: result.Deletion.TrashDir,
 		},
-		"queries_count":            result.QueriesCount,
-		"protected_prefixes":       result.ProtectedPrefixes,
-		"protected_prefixes_count": len(result.ProtectedPrefixes),
-		"exclude":                  result.Exclude,
-		"exclude_count":            len(result.Exclude),
+		QueriesCount:           result.QueriesCount,
+		ProtectedPrefixes:      result.ProtectedPrefixes,
+		ProtectedPrefixesCount: len(result.ProtectedPrefixes),
+		Exclude:                result.Exclude,
+		ExcludeCount:           len(result.Exclude),
 	}, &commandexec.Meta{Count: len(result.ProtectedPrefixes) + len(result.Exclude)})
 }
 
@@ -60,12 +61,12 @@ func HandleVaultConfigAutoReindexSet(_ context.Context, req commandexec.Request)
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path":           result.ConfigPath,
-		"created":               result.Created,
-		"changed":               result.Changed,
-		"auto_reindex":          result.AutoReindex,
-		"auto_reindex_explicit": result.AutoReindexExplicit,
+	return commandexec.Success(commandpayload.VaultConfigAutoReindexResult{
+		ConfigPath:          result.ConfigPath,
+		Created:             &result.Created,
+		Changed:             result.Changed,
+		AutoReindex:         result.AutoReindex,
+		AutoReindexExplicit: result.AutoReindexExplicit,
 	}, nil)
 }
 
@@ -81,11 +82,11 @@ func HandleVaultConfigAutoReindexUnset(_ context.Context, req commandexec.Reques
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path":           result.ConfigPath,
-		"changed":               result.Changed,
-		"auto_reindex":          result.AutoReindex,
-		"auto_reindex_explicit": result.AutoReindexExplicit,
+	return commandexec.Success(commandpayload.VaultConfigAutoReindexResult{
+		ConfigPath:          result.ConfigPath,
+		Changed:             result.Changed,
+		AutoReindex:         result.AutoReindex,
+		AutoReindexExplicit: result.AutoReindexExplicit,
 	}, nil)
 }
 
@@ -101,10 +102,10 @@ func HandleVaultConfigProtectedPrefixesList(_ context.Context, req commandexec.R
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path":        result.ConfigPath,
-		"exists":             result.Exists,
-		"protected_prefixes": result.ProtectedPrefixes,
+	return commandexec.Success(commandpayload.VaultConfigProtectedPrefixesListResult{
+		ConfigPath:        result.ConfigPath,
+		Exists:            result.Exists,
+		ProtectedPrefixes: result.ProtectedPrefixes,
 	}, &commandexec.Meta{Count: len(result.ProtectedPrefixes)})
 }
 
@@ -121,12 +122,12 @@ func HandleVaultConfigProtectedPrefixesAdd(_ context.Context, req commandexec.Re
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path":        result.ConfigPath,
-		"created":            result.Created,
-		"changed":            result.Changed,
-		"prefix":             result.Prefix,
-		"protected_prefixes": result.ProtectedPrefixes,
+	return commandexec.Success(commandpayload.VaultConfigProtectedPrefixAddResult{
+		ConfigPath:        result.ConfigPath,
+		Created:           result.Created,
+		Changed:           result.Changed,
+		Prefix:            result.Prefix,
+		ProtectedPrefixes: result.ProtectedPrefixes,
 	}, nil)
 }
 
@@ -143,11 +144,11 @@ func HandleVaultConfigProtectedPrefixesRemove(_ context.Context, req commandexec
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path":        result.ConfigPath,
-		"changed":            result.Changed,
-		"removed":            result.Removed,
-		"protected_prefixes": result.ProtectedPrefixes,
+	return commandexec.Success(commandpayload.VaultConfigProtectedPrefixRemoveResult{
+		ConfigPath:        result.ConfigPath,
+		Changed:           result.Changed,
+		Removed:           result.Removed,
+		ProtectedPrefixes: result.ProtectedPrefixes,
 	}, nil)
 }
 
@@ -163,10 +164,10 @@ func HandleVaultConfigExcludeList(_ context.Context, req commandexec.Request) co
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path": result.ConfigPath,
-		"exists":      result.Exists,
-		"exclude":     result.Exclude,
+	return commandexec.Success(commandpayload.VaultConfigExcludeListResult{
+		ConfigPath: result.ConfigPath,
+		Exists:     result.Exists,
+		Exclude:    result.Exclude,
 	}, &commandexec.Meta{Count: len(result.Exclude)})
 }
 
@@ -183,12 +184,12 @@ func HandleVaultConfigExcludeAdd(_ context.Context, req commandexec.Request) com
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path": result.ConfigPath,
-		"created":     result.Created,
-		"changed":     result.Changed,
-		"pattern":     result.Pattern,
-		"exclude":     result.Exclude,
+	return commandexec.Success(commandpayload.VaultConfigExcludeAddResult{
+		ConfigPath: result.ConfigPath,
+		Created:    result.Created,
+		Changed:    result.Changed,
+		Pattern:    result.Pattern,
+		Exclude:    result.Exclude,
 	}, nil)
 }
 
@@ -205,11 +206,11 @@ func HandleVaultConfigExcludeRemove(_ context.Context, req commandexec.Request) 
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path": result.ConfigPath,
-		"changed":     result.Changed,
-		"removed":     result.Removed,
-		"exclude":     result.Exclude,
+	return commandexec.Success(commandpayload.VaultConfigExcludeRemoveResult{
+		ConfigPath: result.ConfigPath,
+		Changed:    result.Changed,
+		Removed:    result.Removed,
+		Exclude:    result.Exclude,
 	}, nil)
 }
 
@@ -245,8 +246,8 @@ func HandleVaultConfigDirectoriesSet(_ context.Context, req commandexec.Request)
 		return commandexec.FromServiceError(err)
 	}
 	data := vaultDirectoriesData(result.ConfigPath, true, result.Directories)
-	data["created"] = result.Created
-	data["changed"] = result.Changed
+	data.Created = &result.Created
+	data.Changed = &result.Changed
 	return commandexec.Success(data, nil)
 }
 
@@ -267,7 +268,7 @@ func HandleVaultConfigDirectoriesUnset(_ context.Context, req commandexec.Reques
 		return commandexec.FromServiceError(err)
 	}
 	data := vaultDirectoriesData(result.ConfigPath, true, result.Directories)
-	data["changed"] = result.Changed
+	data.Changed = &result.Changed
 	return commandexec.Success(data, nil)
 }
 
@@ -301,8 +302,8 @@ func HandleVaultConfigCaptureSet(_ context.Context, req commandexec.Request) com
 		return commandexec.FromServiceError(err)
 	}
 	data := vaultCaptureData(result.ConfigPath, true, result.Configured, result.Capture)
-	data["created"] = result.Created
-	data["changed"] = result.Changed
+	data.Created = &result.Created
+	data.Changed = &result.Changed
 	return commandexec.Success(data, nil)
 }
 
@@ -321,7 +322,7 @@ func HandleVaultConfigCaptureUnset(_ context.Context, req commandexec.Request) c
 		return commandexec.FromServiceError(err)
 	}
 	data := vaultCaptureData(result.ConfigPath, true, result.Configured, result.Capture)
-	data["changed"] = result.Changed
+	data.Changed = &result.Changed
 	return commandexec.Success(data, nil)
 }
 
@@ -355,8 +356,8 @@ func HandleVaultConfigDeletionSet(_ context.Context, req commandexec.Request) co
 		return commandexec.FromServiceError(err)
 	}
 	data := vaultDeletionData(result.ConfigPath, true, result.Configured, result.Deletion)
-	data["created"] = result.Created
-	data["changed"] = result.Changed
+	data.Created = &result.Created
+	data.Changed = &result.Changed
 	return commandexec.Success(data, nil)
 }
 
@@ -375,7 +376,7 @@ func HandleVaultConfigDeletionUnset(_ context.Context, req commandexec.Request) 
 		return commandexec.FromServiceError(err)
 	}
 	data := vaultDeletionData(result.ConfigPath, true, result.Configured, result.Deletion)
-	data["changed"] = result.Changed
+	data.Changed = &result.Changed
 	return commandexec.Success(data, nil)
 }
 
@@ -385,35 +386,35 @@ func vaultConfigShowRequest(req commandexec.Request) vaultconfigsvc.ShowRequest 
 	}
 }
 
-func vaultDirectoriesData(configPath string, exists bool, info vaultconfigsvc.DirectoriesInfo) map[string]interface{} {
-	return map[string]interface{}{
-		"config_path": configPath,
-		"exists":      exists,
-		"configured":  info.Configured,
-		"daily":       info.Daily,
-		"type":        info.Object,
-		"page":        info.Page,
-		"template":    info.Template,
+func vaultDirectoriesData(configPath string, exists bool, info vaultconfigsvc.DirectoriesInfo) commandpayload.VaultConfigDirectoriesResult {
+	return commandpayload.VaultConfigDirectoriesResult{
+		ConfigPath: configPath,
+		Exists:     exists,
+		Configured: info.Configured,
+		Daily:      info.Daily,
+		Type:       info.Object,
+		Page:       info.Page,
+		Template:   info.Template,
 	}
 }
 
-func vaultCaptureData(configPath string, exists, configured bool, info vaultconfigsvc.CaptureInfo) map[string]interface{} {
-	return map[string]interface{}{
-		"config_path": configPath,
-		"exists":      exists,
-		"configured":  configured,
-		"destination": info.Destination,
-		"heading":     info.Heading,
+func vaultCaptureData(configPath string, exists, configured bool, info vaultconfigsvc.CaptureInfo) commandpayload.VaultConfigCaptureResult {
+	return commandpayload.VaultConfigCaptureResult{
+		ConfigPath:  configPath,
+		Exists:      exists,
+		Configured:  configured,
+		Destination: info.Destination,
+		Heading:     info.Heading,
 	}
 }
 
-func vaultDeletionData(configPath string, exists, configured bool, info vaultconfigsvc.DeletionInfo) map[string]interface{} {
-	return map[string]interface{}{
-		"config_path": configPath,
-		"exists":      exists,
-		"configured":  configured,
-		"behavior":    info.Behavior,
-		"trash_dir":   info.TrashDir,
+func vaultDeletionData(configPath string, exists, configured bool, info vaultconfigsvc.DeletionInfo) commandpayload.VaultConfigDeletionResult {
+	return commandpayload.VaultConfigDeletionResult{
+		ConfigPath: configPath,
+		Exists:     exists,
+		Configured: configured,
+		Behavior:   info.Behavior,
+		TrashDir:   info.TrashDir,
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/sectionsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -59,7 +60,7 @@ func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec
 	}
 
 	data := sectionLifecycleData(result.SectionID, result.FileRelative, result.Placement, result.AnchorID, req.Preview)
-	data["level"] = result.Level
+	data.Level = result.Level
 	return commandexec.SuccessWithWarnings(
 		data,
 		sectionCommandWarnings(rt, result.WarningMessages, result.IndexWarnings),
@@ -152,20 +153,20 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		"section":          result.SectionID,
-		"file":             result.FileRelative,
-		"line_start":       result.LineStart,
-		"line_end":         result.LineEnd,
-		"removed_content":  result.RemovedContent,
-		"deleted_sections": result.DeletedSections,
-		"backlinks":        result.Backlinks,
+	data := commandpayload.SectionDeleteResult{
+		Section:         result.SectionID,
+		File:            result.FileRelative,
+		LineStart:       result.LineStart,
+		LineEnd:         result.LineEnd,
+		RemovedContent:  result.RemovedContent,
+		DeletedSections: result.DeletedSections,
+		Backlinks:       result.Backlinks,
 	}
 	if req.Preview {
-		data["preview"] = true
-		data["status"] = "preview"
+		data.Preview = true
+		data.Status = "preview"
 	} else {
-		data["status"] = "deleted"
+		data.Status = "deleted"
 	}
 
 	warnings := deleteBacklinkCommandWarnings(result.Backlinks)
@@ -216,16 +217,16 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		"source":      result.SourceID,
-		"destination": result.DestinationID,
+	data := commandpayload.SectionRenameResult{
+		Source:      result.SourceID,
+		Destination: result.DestinationID,
 	}
 	if req.Preview {
-		data["preview"] = true
-		data["status"] = "preview"
+		data.Preview = true
+		data.Status = "preview"
 	}
 	if len(result.UpdatedRefs) > 0 {
-		data["updated_refs"] = result.UpdatedRefs
+		data.UpdatedRefs = result.UpdatedRefs
 	}
 
 	return commandexec.SuccessWithWarnings(
@@ -256,18 +257,18 @@ func sectionPlacementArg(args map[string]any) sectionsvc.Placement {
 	}
 }
 
-func sectionLifecycleData(sectionID, file, placement, anchor string, preview bool) map[string]interface{} {
-	data := map[string]interface{}{
-		"section":   sectionID,
-		"file":      file,
-		"placement": placement,
+func sectionLifecycleData(sectionID, file, placement, anchor string, preview bool) commandpayload.SectionLifecycleResult {
+	data := commandpayload.SectionLifecycleResult{
+		Section:   sectionID,
+		File:      file,
+		Placement: placement,
 	}
 	if anchor != "" {
-		data["anchor"] = anchor
+		data.Anchor = anchor
 	}
 	if preview {
-		data["preview"] = true
-		data["status"] = "preview"
+		data.Preview = true
+		data.Status = "preview"
 	}
 	return data
 }

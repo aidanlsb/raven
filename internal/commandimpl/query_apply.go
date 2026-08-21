@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/bulkops"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
@@ -67,11 +68,11 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, result *read
 		if !req.Confirm {
 			phase = commandexec.MutationPhasePreview
 		}
-		return commandexec.Success(map[string]interface{}{
-			"preview": !req.Confirm,
-			"action":  rawApply.Command,
-			"items":   []interface{}{},
-			"total":   0,
+		return commandexec.Success(commandpayload.QueryApplyEmptyResult{
+			Preview: !req.Confirm,
+			Action:  rawApply.Command,
+			Items:   []interface{}{},
+			Total:   0,
 		}, &commandexec.Meta{Count: 0, QueryTimeMs: queryTimeMs}).WithMutationPhase(phase)
 	}
 

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -57,30 +58,27 @@ func normalizedUnsetCLIFields(fields []string) []string {
 }
 
 func renderCanonicalUnsetResult(result commandexec.Result) error {
-	data, ok := result.Data.(map[string]interface{})
+	data, ok := result.Data.(commandpayload.UnsetResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 
-	relativePath, _ := data["file"].(string)
-	modified := boolValue(data["modified"])
-	if modified {
-		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
+	if data.Modified {
+		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(data.File)))
 	} else {
-		fmt.Println(ui.Hint(fmt.Sprintf("No fields removed from %s", relativePath)))
+		fmt.Println(ui.Hint(fmt.Sprintf("No fields removed from %s", data.File)))
 	}
 
-	removedFields := stringMapFromAny(data["removed_fields"])
-	fieldNames := make([]string, 0, len(removedFields))
-	for name := range removedFields {
+	fieldNames := make([]string, 0, len(data.RemovedFields))
+	for name := range data.RemovedFields {
 		fieldNames = append(fieldNames, name)
 	}
 	sort.Strings(fieldNames)
 	for _, name := range fieldNames {
-		fmt.Printf("  - %s: %s\n", name, ui.Muted.Render(removedFields[name]))
+		fmt.Printf("  - %s: %s\n", name, ui.Muted.Render(data.RemovedFields[name]))
 	}
 
-	missingFields := stringSliceFromAny(data["missing_fields"])
+	missingFields := append([]string(nil), data.MissingFields...)
 	sort.Strings(missingFields)
 	for _, name := range missingFields {
 		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("%s was already absent", name)))

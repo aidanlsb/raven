@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -84,21 +85,6 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		return mapContentMutationError(err)
 	}
 
-	data := map[string]interface{}{
-		"object_id":      result.ObjectID,
-		"old_type":       result.OldType,
-		"new_type":       result.NewType,
-		"file":           result.File,
-		"moved":          result.Moved,
-		"old_path":       result.OldPath,
-		"new_path":       result.NewPath,
-		"updated_refs":   result.UpdatedRefs,
-		"added_fields":   result.AddedFields,
-		"dropped_fields": result.DroppedFields,
-		"needs_confirm":  result.NeedsConfirm,
-		"reason":         result.Reason,
-	}
-
 	warnings := make([]commandexec.Warning, 0, len(result.WarningMessages))
 	for _, warning := range result.WarningMessages {
 		warnings = append(warnings, commandexec.Warning{
@@ -106,9 +92,23 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 			Message: warning,
 		})
 	}
-	postData, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
-	data = mergeDataFields(data, postData)
+	missingRefs, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
 	warnings = appendCommandWarnings(warnings, postWarnings)
+	data := commandpayload.ReclassifyResult{
+		ObjectID:          result.ObjectID,
+		OldType:           result.OldType,
+		NewType:           result.NewType,
+		File:              result.File,
+		Moved:             result.Moved,
+		OldPath:           result.OldPath,
+		NewPath:           result.NewPath,
+		UpdatedRefs:       result.UpdatedRefs,
+		AddedFields:       result.AddedFields,
+		DroppedFields:     result.DroppedFields,
+		NeedsConfirm:      result.NeedsConfirm,
+		Reason:            result.Reason,
+		MissingReferences: missingRefs,
+	}
 
 	res := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	if result.NeedsConfirm {
@@ -146,13 +146,13 @@ func runReclassifyBulk(
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
 		warnings := warningMessagesToCommandWarnings(preview.WarningMessages, indexUpdateFailedWarningCode)
-		return commandexec.SuccessWithWarnings(map[string]interface{}{
-			"preview":  true,
-			"action":   preview.Action,
-			"new_type": preview.NewType,
-			"items":    preview.Items,
-			"skipped":  preview.Skipped,
-			"total":    preview.Total,
+		return commandexec.SuccessWithWarnings(commandpayload.ReclassifyBulkPreviewResult{
+			Preview: true,
+			Action:  preview.Action,
+			NewType: preview.NewType,
+			Items:   preview.Items,
+			Skipped: preview.Skipped,
+			Total:   preview.Total,
 		}, warnings, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
@@ -161,18 +161,18 @@ func runReclassifyBulk(
 		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 	}
 
-	data := map[string]interface{}{
-		"ok":           summary.Errors == 0,
-		"action":       summary.Action,
-		"new_type":     summary.NewType,
-		"items":        summary.Results,
-		"total":        summary.Total,
-		"skipped":      summary.Skipped,
-		"errors":       summary.Errors,
-		"reclassified": summary.Reclassified,
+	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, req.IndexJournalOperation)
+	data := commandpayload.ReclassifyBulkResult{
+		OK:                summary.Errors == 0,
+		Action:            summary.Action,
+		NewType:           summary.NewType,
+		Items:             summary.Results,
+		Total:             summary.Total,
+		Skipped:           summary.Skipped,
+		Errors:            summary.Errors,
+		Reclassified:      summary.Reclassified,
+		MissingReferences: missingRefs,
 	}
-	postData, postWarnings := applyChangeSet(rt, summary.ChangeSet, req.IndexJournalOperation)
-	data = mergeDataFields(data, postData)
 	warnings := warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)
 	warnings = appendCommandWarnings(warnings, postWarnings)
 

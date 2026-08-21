@@ -11,6 +11,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/objectsvc"
@@ -64,14 +65,16 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 		return mapContentMutationError(err)
 	}
 
-	data := map[string]interface{}{
-		"file":  result.RelativePath,
-		"id":    vaultCfg.FilePathToObjectID(result.RelativePath),
-		"title": title,
-		"type":  typeName,
+	missingRefs, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
+	data := commandpayload.NewResult{
+		ObjectMutation: commandpayload.ObjectMutation{
+			File:  result.RelativePath,
+			ID:    vaultCfg.FilePathToObjectID(result.RelativePath),
+			Title: title,
+			Type:  typeName,
+		},
+		MissingReferences: missingRefs,
 	}
-	postData, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
-	data = mergeDataFields(data, postData)
 
 	return commandexec.SuccessWithWarnings(data, postWarnings, nil)
 }
@@ -148,15 +151,17 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 	}
 
 	warnings := warningMessagesToCommandWarnings(result.WarningMessages, codes.WarnUnknownField)
-	data := map[string]interface{}{
-		"status": result.Status,
-		"id":     vaultCfg.FilePathToObjectID(result.RelativePath),
-		"file":   result.RelativePath,
-		"type":   typeName,
-		"title":  title,
+	missingRefs, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
+	data := commandpayload.UpsertResult{
+		Status: result.Status,
+		ObjectMutation: commandpayload.ObjectMutation{
+			ID:    vaultCfg.FilePathToObjectID(result.RelativePath),
+			File:  result.RelativePath,
+			Type:  typeName,
+			Title: title,
+		},
+		MissingReferences: missingRefs,
 	}
-	postData, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
-	data = mergeDataFields(data, postData)
 	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	return commandexec.SuccessWithWarnings(
