@@ -444,6 +444,19 @@ type SectionLifecycleResult struct {
 	Level     int    `json:"level,omitempty"`
 }
 
+// SectionDeleteResult is the success payload for section subtree deletion.
+type SectionDeleteResult struct {
+	Section         string            `json:"section"`
+	File            string            `json:"file"`
+	LineStart       int               `json:"line_start"`
+	LineEnd         int               `json:"line_end"`
+	RemovedContent  string            `json:"removed_content"`
+	DeletedSections []string          `json:"deleted_sections"`
+	Backlinks       []model.Reference `json:"backlinks"`
+	Preview         bool              `json:"preview,omitempty"`
+	Status          string            `json:"status"`
+}
+
 // SectionRenameResult is the success payload for section rename.
 type SectionRenameResult struct {
 	Source      string   `json:"source"`

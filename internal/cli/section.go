@@ -81,23 +81,22 @@ func renderSectionMoveResult(_ *cobra.Command, result commandexec.Result) error 
 }
 
 func renderSectionDeleteResult(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	sectionID := stringValue(data["section"])
-	file := stringValue(data["file"])
-	lineStart := intValue(data["line_start"])
-	lineEnd := intValue(data["line_end"])
-	backlinkCount := len(deletePreviewBacklinks(data["backlinks"]))
+	data, ok := result.Data.(commandpayload.SectionDeleteResult)
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+	backlinkCount := len(data.Backlinks)
 
-	if boolValue(data["preview"]) {
+	if data.Preview {
 		fmt.Println(ui.Star(fmt.Sprintf(
 			"Would delete section %s from %s (lines %d-%d)",
-			ui.FilePath(sectionID),
-			ui.FilePath(file),
-			lineStart,
-			lineEnd,
+			ui.FilePath(data.Section),
+			ui.FilePath(data.File),
+			data.LineStart,
+			data.LineEnd,
 		)))
-		if removedContent := stringValue(data["removed_content"]); removedContent != "" {
-			fmt.Printf("\n%s\n", removedContent)
+		if data.RemovedContent != "" {
+			fmt.Printf("\n%s\n", data.RemovedContent)
 		}
 		if backlinkCount > 0 {
 			fmt.Printf("  %s\n", ui.Warning(fmt.Sprintf(
@@ -109,7 +108,13 @@ func renderSectionDeleteResult(_ *cobra.Command, result commandexec.Result) erro
 		return nil
 	}
 
-	fmt.Println(ui.Checkf("Deleted section %s from %s (lines %d-%d)", ui.FilePath(sectionID), ui.FilePath(file), lineStart, lineEnd))
+	fmt.Println(ui.Checkf(
+		"Deleted section %s from %s (lines %d-%d)",
+		ui.FilePath(data.Section),
+		ui.FilePath(data.File),
+		data.LineStart,
+		data.LineEnd,
+	))
 	if backlinkCount > 0 {
 		fmt.Printf("  %s\n", ui.Warning(fmt.Sprintf(
 			"Left %d inbound reference(s) unchanged; repair or remove them explicitly",

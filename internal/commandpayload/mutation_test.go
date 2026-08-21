@@ -71,6 +71,13 @@ func TestMutationPayloadJSONKeysRemainStable(t *testing.T) {
 			keys: []string{"action", "items", "preview", "total"},
 		},
 		{
+			name: "section delete retains subtree details",
+			data: SectionDeleteResult{
+				Section: "project/raven#tasks", File: "projects/raven.md", Status: "deleted",
+			},
+			keys: []string{"backlinks", "deleted_sections", "file", "line_end", "line_start", "removed_content", "section", "status"},
+		},
+		{
 			name: "vault unset omits set-only created",
 			data: VaultConfigAutoReindexResult{
 				ConfigPath: "raven.yaml", Changed: false, AutoReindex: true,

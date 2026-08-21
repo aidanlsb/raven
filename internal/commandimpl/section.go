@@ -153,20 +153,20 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		"section":          result.SectionID,
-		"file":             result.FileRelative,
-		"line_start":       result.LineStart,
-		"line_end":         result.LineEnd,
-		"removed_content":  result.RemovedContent,
-		"deleted_sections": result.DeletedSections,
-		"backlinks":        result.Backlinks,
+	data := commandpayload.SectionDeleteResult{
+		Section:         result.SectionID,
+		File:            result.FileRelative,
+		LineStart:       result.LineStart,
+		LineEnd:         result.LineEnd,
+		RemovedContent:  result.RemovedContent,
+		DeletedSections: result.DeletedSections,
+		Backlinks:       result.Backlinks,
 	}
 	if req.Preview {
-		data["preview"] = true
-		data["status"] = "preview"
+		data.Preview = true
+		data.Status = "preview"
 	} else {
-		data["status"] = "deleted"
+		data.Status = "deleted"
 	}
 
 	warnings := deleteBacklinkCommandWarnings(result.Backlinks)
