@@ -253,7 +253,9 @@ IMPORTANT:
 Pass a canonical reference returned by trash list, an exact trash_path, the path
 relative to the trash directory, or the restore_path. Resolution is exact and
 fails when a reference matches multiple trash entries; retry with trash_path to
-select one explicitly.
+select one explicitly. Versioned collision entries retain their original
+reference and restore path through Raven-owned metadata in the configured trash
+directory.
 
 Restore never overwrites an existing destination. Move or delete the occupying
 file before retrying.

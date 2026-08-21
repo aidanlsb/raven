@@ -3,5 +3,5 @@
 package objectsvc
 
 func moveFileNoReplace(sourcePath, destinationPath string) error {
-	return moveRegularFileByLinkNoReplace(sourcePath, destinationPath)
+	return moveFileByCreateNoReplace(sourcePath, destinationPath)
 }

@@ -2,6 +2,7 @@ package objectsvc
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -9,9 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
@@ -25,15 +24,24 @@ import (
 const (
 	TrashKindMarkdown = "markdown"
 	TrashKindFile     = "file"
+
+	trashMetadataSuffix = ".raven-trash-meta.json"
 )
 
 // TrashEntry describes one file in the configured trash directory. RestorePath
 // is derived from the mirrored path used by DeleteFile.
 type TrashEntry struct {
-	Reference   string `json:"reference"`
+	Reference    string `json:"reference"`
+	TrashPath    string `json:"trash_path"`
+	RestorePath  string `json:"restore_path"`
+	Kind         string `json:"kind"`
+	MetadataPath string `json:"-"`
+}
+
+type trashEntryMetadata struct {
+	Version     int    `json:"version"`
 	TrashPath   string `json:"trash_path"`
 	RestorePath string `json:"restore_path"`
-	Kind        string `json:"kind"`
 }
 
 type ListTrashRequest struct {
@@ -94,7 +102,16 @@ func ListTrash(req ListTrashRequest) (*ListTrashResult, error) {
 		if relErr != nil {
 			return relErr
 		}
-		restorePath := restorePathFromTrashRelative(relTrashPath)
+		relTrashPath = paths.NormalizeVaultRelPath(relTrashPath)
+		if isTrashMetadataFile(trashRoot, relTrashPath) {
+			return nil
+		}
+		restorePath := relTrashPath
+		metadataPath := ""
+		if metadata, sidecarPath, ok := trashMetadataForEntry(trashRoot, relTrashPath); ok {
+			restorePath = metadata.RestorePath
+			metadataPath = paths.NormalizeVaultRelPath(filepath.Join(trashDir, sidecarPath))
+		}
 		if !paths.IsValidVaultRelPath(restorePath) {
 			return nil
 		}
@@ -121,10 +138,11 @@ func ListTrash(req ListTrashRequest) (*ListTrashResult, error) {
 		}
 
 		result.Entries = append(result.Entries, TrashEntry{
-			Reference:   reference,
-			TrashPath:   paths.NormalizeVaultRelPath(filepath.Join(trashDir, relTrashPath)),
-			RestorePath: restorePath,
-			Kind:        entryKind,
+			Reference:    reference,
+			TrashPath:    paths.NormalizeVaultRelPath(filepath.Join(trashDir, relTrashPath)),
+			RestorePath:  restorePath,
+			Kind:         entryKind,
+			MetadataPath: metadataPath,
 		})
 		return nil
 	})
@@ -177,6 +195,9 @@ func RestoreByReference(req RestoreByReferenceRequest) (*RestoreByReferenceResul
 			return nil, restoreDestinationExistsError(entry)
 		}
 		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to restore trash entry", err)
+	}
+	if entry.MetadataPath != "" {
+		_ = os.Remove(filepath.Join(req.VaultPath, filepath.FromSlash(entry.MetadataPath)))
 	}
 
 	changes := mutation.NewChangeSet()
@@ -384,23 +405,32 @@ func ensureTrashParent(trashRoot, relFilePath string) error {
 	return nil
 }
 
-func moveRegularFileByLinkNoReplace(sourcePath, destinationPath string) error {
+func moveFileByCreateNoReplace(sourcePath, destinationPath string) error {
 	info, err := os.Lstat(sourcePath)
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("atomic no-replace move is unsupported for non-regular file %s", sourcePath)
+	switch {
+	case info.Mode().IsRegular():
+		err = os.Link(sourcePath, destinationPath)
+	case info.Mode()&os.ModeSymlink != 0:
+		var target string
+		target, err = os.Readlink(sourcePath)
+		if err == nil {
+			err = os.Symlink(target, destinationPath)
+		}
+	default:
+		return fmt.Errorf("no-replace move is unsupported for file mode %s", info.Mode())
 	}
-	if err := os.Link(sourcePath, destinationPath); err != nil {
+	if err != nil {
 		return err
 	}
 	if err := os.Remove(sourcePath); err != nil {
 		removeErr := os.Remove(destinationPath)
 		if removeErr != nil {
 			return errors.Join(
-				fmt.Errorf("remove source after linking: %w", err),
-				fmt.Errorf("roll back destination link: %w", removeErr),
+				fmt.Errorf("remove source after creating destination: %w", err),
+				fmt.Errorf("roll back destination: %w", removeErr),
 			)
 		}
 		return err
@@ -430,31 +460,78 @@ func restoreDestinationExistsError(entry *TrashEntry) error {
 		})
 }
 
-func restorePathFromTrashRelative(relTrashPath string) string {
-	normalized := paths.NormalizeVaultRelPath(relTrashPath)
-	dir, filename := filepath.Split(filepath.FromSlash(normalized))
-	ext := filepath.Ext(filename)
-	stem := strings.TrimSuffix(filename, ext)
-
-	const marker = ".raven-trash-"
-	if markerAt := strings.LastIndex(stem, marker); markerAt > 0 {
-		version := stem[markerAt+len(marker):]
-		parts := strings.Split(version, "-")
-		if len(parts) == 6 {
-			candidate := paths.NormalizeVaultRelPath(filepath.Join(dir, stem[:markerAt]+ext))
-			timestamp := strings.Join(parts[1:5], "-")
-			sequence, sequenceErr := strconv.Atoi(parts[5])
-			if parts[0] == trashCollisionTag(candidate) &&
-				len(parts[0]) == 12 &&
-				sequenceErr == nil && sequence > 0 {
-				if _, timeErr := time.Parse("2006-01-02-150405", timestamp); timeErr == nil {
-					return candidate
-				}
-			}
-		}
+func trashMetadataForEntry(trashRoot, relTrashPath string) (trashEntryMetadata, string, bool) {
+	sidecarPath := relTrashPath + trashMetadataSuffix
+	metadata, ok := readTrashMetadata(filepath.Join(trashRoot, filepath.FromSlash(sidecarPath)))
+	if !ok || metadata.TrashPath != relTrashPath || !isSafeMetadataRestorePath(metadata.RestorePath) {
+		return trashEntryMetadata{}, "", false
 	}
+	return metadata, sidecarPath, true
+}
 
-	return normalized
+func isTrashMetadataFile(trashRoot, relTrashPath string) bool {
+	if !strings.HasSuffix(relTrashPath, trashMetadataSuffix) {
+		return false
+	}
+	targetPath := strings.TrimSuffix(relTrashPath, trashMetadataSuffix)
+	metadata, ok := readTrashMetadata(filepath.Join(trashRoot, filepath.FromSlash(relTrashPath)))
+	return ok && metadata.TrashPath == targetPath && isSafeMetadataRestorePath(metadata.RestorePath)
+}
+
+func readTrashMetadata(metadataPath string) (trashEntryMetadata, bool) {
+	content, err := os.ReadFile(metadataPath)
+	if err != nil {
+		return trashEntryMetadata{}, false
+	}
+	var metadata trashEntryMetadata
+	if err := json.Unmarshal(content, &metadata); err != nil || metadata.Version != 1 {
+		return trashEntryMetadata{}, false
+	}
+	return metadata, true
+}
+
+func createTrashMetadataNoReplace(trashRoot, trashPath, restorePath string) (string, error) {
+	metadata := trashEntryMetadata{
+		Version:     1,
+		TrashPath:   paths.NormalizeVaultRelPath(trashPath),
+		RestorePath: paths.NormalizeVaultRelPath(restorePath),
+	}
+	content, err := json.Marshal(metadata)
+	if err != nil {
+		return "", err
+	}
+	content = append(content, '\n')
+
+	metadataPath := filepath.Join(trashRoot, filepath.FromSlash(metadata.TrashPath+trashMetadataSuffix))
+	file, err := os.OpenFile(metadataPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", err
+	}
+	cleanup := true
+	defer func() {
+		_ = file.Close()
+		if cleanup {
+			_ = os.Remove(metadataPath)
+		}
+	}()
+	if _, err := file.Write(content); err != nil {
+		return "", err
+	}
+	if err := file.Sync(); err != nil {
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		return "", err
+	}
+	cleanup = false
+	return metadataPath, nil
+}
+
+func isSafeMetadataRestorePath(restorePath string) bool {
+	portablePath := strings.ReplaceAll(restorePath, `\`, "/")
+	return restorePath == portablePath &&
+		portablePath == path.Clean(portablePath) &&
+		paths.IsCleanRelSubpath(portablePath)
 }
 
 func trashCollisionTag(restorePath string) string {

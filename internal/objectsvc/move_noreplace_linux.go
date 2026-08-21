@@ -17,7 +17,7 @@ func moveFileNoReplace(sourcePath, destinationPath string) error {
 		unix.RENAME_NOREPLACE,
 	)
 	if errors.Is(err, unix.ENOSYS) || errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EOPNOTSUPP) {
-		return moveRegularFileByLinkNoReplace(sourcePath, destinationPath)
+		return moveFileByCreateNoReplace(sourcePath, destinationPath)
 	}
 	return err
 }

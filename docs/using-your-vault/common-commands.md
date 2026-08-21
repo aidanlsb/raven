@@ -412,6 +412,12 @@ collision and retry. On success, Raven updates the index and re-runs reference
 resolution, making the restored object queryable and healing incoming
 references when possible.
 
+If the same path is deleted more than once, `trash list` returns multiple rows
+with the same `reference`; restore one by its exact `trash_path`. Raven keeps a
+small hidden metadata sidecar next to versioned collision entries so every row
+retains its original restore path. These sidecars are internal to the existing
+configured trash layout and are omitted from list results.
+
 ```bash
 rvn trash list
 rvn trash list people/freya --json

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
@@ -89,8 +90,23 @@ func TestListTrashPreservesOriginalReferenceForVersionedCollisions(t *testing.T)
 
 	vaultPath := t.TempDir()
 	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "oldest")
-	versionPath := ".trash/people/freya.raven-trash-" + trashCollisionTag("people/freya.md") + "-2026-03-10-112233-1.md"
-	writeTrashTestFile(t, vaultPath, versionPath, "newest")
+	writeTrashTestFile(t, vaultPath, "people/freya.md", "newest")
+	now := time.Date(2026, 3, 10, 11, 22, 33, 0, time.UTC)
+	deleted, err := DeleteFile(DeleteFileRequest{
+		VaultPath: vaultPath,
+		FilePath:  filepath.Join(vaultPath, "people/freya.md"),
+		Behavior:  "trash",
+		TrashDir:  ".trash",
+		Now:       func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("DeleteFile() error = %v", err)
+	}
+	versionPath, err := filepath.Rel(vaultPath, deleted.TrashPath)
+	if err != nil {
+		t.Fatalf("resolve version path: %v", err)
+	}
+	versionPath = filepath.ToSlash(versionPath)
 	vaultCfg := config.DefaultVaultConfig()
 
 	result, err := ListTrash(ListTrashRequest{
@@ -104,6 +120,7 @@ func TestListTrashPreservesOriginalReferenceForVersionedCollisions(t *testing.T)
 	if len(result.Entries) != 2 {
 		t.Fatalf("entries = %#v, want two versions", result.Entries)
 	}
+	requireTrashTestPath(t, vaultPath, versionPath+trashMetadataSuffix, true)
 	for _, entry := range result.Entries {
 		if entry.Reference != "people/freya" || entry.RestorePath != "people/freya.md" {
 			t.Fatalf("versioned entry lost original identity: %#v", entry)
@@ -131,13 +148,15 @@ func TestListTrashPreservesOriginalReferenceForVersionedCollisions(t *testing.T)
 	requireTrashTestPath(t, vaultPath, "people/freya.md", true)
 	requireTrashTestPath(t, vaultPath, ".trash/people/freya.md", true)
 	requireTrashTestPath(t, vaultPath, versionPath, false)
+	requireTrashTestPath(t, vaultPath, versionPath+trashMetadataSuffix, false)
 }
 
 func TestListTrashDoesNotDecodeUnverifiedCollisionMarker(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
-	literalPath := ".trash/people/freya.raven-trash-deadbeefdead-2026-03-10-112233-1.md"
+	tag := trashCollisionTag("people/freya.md")
+	literalPath := ".trash/people/freya.raven-trash-" + tag + "-2026-03-10-112233-1.md"
 	writeTrashTestFile(t, vaultPath, literalPath, "literal")
 
 	result, err := ListTrash(ListTrashRequest{
@@ -150,8 +169,8 @@ func TestListTrashDoesNotDecodeUnverifiedCollisionMarker(t *testing.T) {
 	if len(result.Entries) != 1 {
 		t.Fatalf("entries = %#v, want one", result.Entries)
 	}
-	if got := result.Entries[0]; got.Reference != "people/freya.raven-trash-deadbeefdead-2026-03-10-112233-1" ||
-		got.RestorePath != "people/freya.raven-trash-deadbeefdead-2026-03-10-112233-1.md" {
+	if got := result.Entries[0]; got.Reference != "people/freya.raven-trash-"+tag+"-2026-03-10-112233-1" ||
+		got.RestorePath != "people/freya.raven-trash-"+tag+"-2026-03-10-112233-1.md" {
 		t.Fatalf("literal marker-shaped entry was decoded: %#v", got)
 	}
 }

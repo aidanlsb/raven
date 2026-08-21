@@ -87,6 +87,9 @@ func TestDeleteFileTrashCollisionAddsTimestamp(t *testing.T) {
 	if _, err := os.Stat(expected); err != nil {
 		t.Fatalf("expected timestamped trashed file: %v", err)
 	}
+	if _, err := os.Stat(expected + trashMetadataSuffix); err != nil {
+		t.Fatalf("expected collision restore metadata: %v", err)
+	}
 }
 
 func TestDeleteFileTrashCollisionAllocatesSequenceWithoutOverwrite(t *testing.T) {
@@ -125,6 +128,9 @@ func TestDeleteFileTrashCollisionAllocatesSequenceWithoutOverwrite(t *testing.T)
 	expected := filepath.Join(vaultPath, ".trash/people/freya.raven-trash-"+tag+"-2026-03-10-112233-2.md")
 	if result.TrashPath != expected {
 		t.Fatalf("TrashPath = %q, want %q", result.TrashPath, expected)
+	}
+	if _, err := os.Stat(expected + trashMetadataSuffix); err != nil {
+		t.Fatalf("expected collision restore metadata: %v", err)
 	}
 	for path, want := range map[string]string{
 		trashPath:    "oldest",

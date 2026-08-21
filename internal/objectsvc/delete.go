@@ -90,11 +90,25 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 			tag := trashCollisionTag(filepath.ToSlash(relPath))
 			for version := 1; ; version++ {
 				candidate := filepath.Join(filepath.Dir(destPath), fmt.Sprintf("%s.raven-trash-%s-%s-%d%s", base, tag, timestamp, version, ext))
+				candidateRel, relErr := filepath.Rel(trashRoot, candidate)
+				if relErr != nil {
+					return nil, svcerr.Wrap(codes.ErrInternal, "failed to resolve trash collision path", relErr)
+				}
+				metadataPath, metadataErr := createTrashMetadataNoReplace(trashRoot, filepath.ToSlash(candidateRel), filepath.ToSlash(relPath))
+				if metadataErr != nil {
+					if errors.Is(metadataErr, os.ErrExist) {
+						continue
+					}
+					return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to record trash restore path", metadataErr)
+				}
 				if err := moveFileNoReplace(req.FilePath, candidate); err == nil {
 					destPath = candidate
 					break
-				} else if !errors.Is(err, os.ErrExist) {
-					return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to move file to trash", err)
+				} else {
+					_ = os.Remove(metadataPath)
+					if !errors.Is(err, os.ErrExist) {
+						return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to move file to trash", err)
+					}
 				}
 			}
 		}
