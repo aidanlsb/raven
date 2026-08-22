@@ -1,11 +1,11 @@
-# Query Language
+# Query language
 
-> **Shell Tip:** Wrap query strings in single quotes to avoid shell interpretation of `(`, `)`, `|`, and `!`.
+> Wrap query strings in single quotes so the shell does not eat `(`, `)`, `|`, and `!`.
 > This page is a reference and decision guide for Raven Query Language (RQL).
 
-## Start Here
+## Start here
 
-### Choose the Right Tool
+### Choose the right tool
 
 | Use this | When you want |
 |----------|---------------|
@@ -28,7 +28,7 @@ Retrieval commands overlap. When several could work, this table picks the sharpe
 | Resolve an alias, date, or other reference input | `rvn resolve <reference>` | Use the returned canonical ID when authoring references; `rvn read <reference>` also resolves, but returns full content |
 | Everything on a date | `rvn date <date>` / `rvn daily <date>` | `rvn query 'type:date .date==<date>'` for the daily-note object; `rvn query 'trait:due .value==<date>'` for items due that date |
 
-### Choose Query Type
+### Choose query type
 
 | Query type | Returns | Best for |
 |------------|---------|----------|
@@ -42,7 +42,7 @@ Core rules:
 2. Queries can nest arbitrarily, e.g. `type:project contains(trait:...)`.
 3. Boolean composition is `AND` (space), `OR` (`|`), and `NOT` (`!`).
 
-## Predicate-by-Root Capability Matrix
+## Predicate-by-root capability matrix
 
 Which predicates are legal depends on the query root. Predicates rejected for a root produce a validation error. Field, string, and array predicates are also subject to schema field types (see the per-root predicate sections below).
 
@@ -52,15 +52,15 @@ Which predicates are legal depends on the query root. Predicates rejected for a 
 | `oneof(.field, [...])` | yes | yes | yes (`.value`) | yes |
 | String funcs (`includes`, `startswith`, `endswith`, `matches`) | yes (string fields) | yes (non-numeric fields) | yes (`.value` only) | yes (string fields) |
 | Array quantifiers (`any`, `all`, `none`) | yes (array fields) | no | yes (array-valued `.value`) | no |
-| `has(...)` — direct downward | yes | yes | no | no |
-| `contains(...)` — recursive downward | yes | yes | no | no |
-| `in(...)` — direct upward scope | no | yes | yes | no |
-| `within(...)` — recursive upward scope | no | yes | yes | yes |
-| `at(trait:...)` — co-located trait | no | no | yes | no |
-| `refs(...)` — outgoing reference | yes | yes | yes | no |
-| `links(...)` — outgoing external/file/URL link | yes | yes | yes | no |
-| `refd(...)` — incoming reference | yes | yes | no | no |
-| `content("term")` — full-text | yes | yes | yes | no |
+| `has(...)`: direct downward | yes | yes | no | no |
+| `contains(...)`: recursive downward | yes | yes | no | no |
+| `in(...)`: direct upward scope | no | yes | yes | no |
+| `within(...)`: recursive upward scope | no | yes | yes | yes |
+| `at(trait:...)`: co-located trait | no | no | yes | no |
+| `refs(...)`: outgoing reference | yes | yes | yes | no |
+| `links(...)`: outgoing external/file/URL link | yes | yes | yes | no |
+| `refd(...)`: incoming reference | yes | yes | no | no |
+| `content("term")`: full-text | yes | yes | yes | no |
 
 Reading the scope rows:
 
@@ -86,12 +86,12 @@ fields remains case-insensitive.
 It is outgoing-only: unlike `refs()`/`refd()`, there is no `linkd()` because
 external files and URLs are leaf targets that cannot link back.
 
-### Common Mistake: Todos Under a Heading
+### Common mistake: todos under a heading
 
 Traits attach to the **nearest section**, not to the file object. A `@todo` written under a `## Tasks` heading is nested in that section, so it is not *directly* on the project object. As a result:
 
 - `type:project has(trait:todo)` usually returns **nothing** (no todo directly on the object).
-- `type:project contains(trait:todo .value==todo)` is correct — it searches the whole section tree.
+- `type:project contains(trait:todo .value==todo)` searches the whole section tree. That is the usual form.
 - From the trait side, use `trait:todo within(type:project)`, not `in(type:project)`.
 
 In the starter schema, `todo` is an enum with `todo`/`done` values and a
@@ -99,9 +99,9 @@ default of `todo`, so a bare `@todo` matches `.value==todo`.
 
 Lead with the forgiving forms `contains`/`within` unless you specifically want a direct-only match.
 
-### Naming Collision: `in()` vs `oneof()`
+### Naming collision: `in()` vs `oneof()`
 
-`in(...)` is a **scope** predicate (containment) on `trait:`/`section` queries — it has nothing to do with set membership. If you come from SQL and want "field is one of these values," use `oneof(.field, [a,b,c])` instead:
+`in(...)` is a **scope** predicate (containment) on `trait:`/`section` queries. It has nothing to do with set membership. If you come from SQL and want "field is one of these values," use `oneof(.field, [a,b,c])` instead:
 
 ```text
 trait:todo in(type:project)               # scope: todos directly in a project
@@ -110,9 +110,9 @@ type:project oneof(.status, [active,paused])  # membership: status is one of a s
 
 There is no `in()` set-membership form and no `inside()` alias; the containment predicate is always `in()`/`within()`, and membership is always `oneof()`.
 
-## Query Shapes
+## Query shapes
 
-### Object Query
+### Object query
 
 ```text
 type:<type> [predicates...]
@@ -127,7 +127,7 @@ type:meeting has(trait:due .value<today)
 type:project contains(trait:todo .value==todo)
 ```
 
-### Section Query
+### Section query
 
 ```text
 section [predicates...]
@@ -145,7 +145,7 @@ section contains(trait:todo .value==todo)
 
 Section rows expose structural fields including `.id`, `.file_object_id`, `.file_path`, `.slug`, `.title`, `.level`, `.line_start`, `.line_end`/`.direct_line_end`, `.subtree_line_end`, and `.parent_section_id`. `line_end` is the direct range end before the next heading of any level; `subtree_line_end` includes nested child sections up to the next same-or-higher heading.
 
-### Trait Query
+### Trait query
 
 ```text
 trait:<name> [predicates...]
@@ -159,7 +159,7 @@ trait:due .value<today
 trait:highlight in(type:book .status==reading)
 ```
 
-### Link Query
+### Link query
 
 ```text
 link [predicates...]
@@ -174,7 +174,7 @@ link .scheme==url includes(.display, "documentation")
 link within(section .title==Resources)
 ```
 
-## Syntax Building Blocks
+## Syntax building blocks
 
 | Element | Syntax | Example |
 |---------|--------|---------|
@@ -193,9 +193,9 @@ Notes:
 - String functions are case-insensitive by default. Pass `true` as a third argument for case-sensitive matching.
 - `matches()` accepts either a quoted pattern or regex literal (`/pattern/`).
 
-## Object Query Predicates
+## Object query predicates
 
-### Field Predicates
+### Field predicates
 
 | Predicate | Meaning |
 |-----------|---------|
@@ -224,7 +224,7 @@ are accepted as resolution sugar but can become ambiguous.
 
 The built-in `date` type has a generated `.date` field derived from the daily note's canonical `YYYY-MM-DD` object ID. It is queryable but not authored in frontmatter.
 
-### String Matching
+### String matching
 
 | Function | Meaning |
 |----------|---------|
@@ -239,7 +239,7 @@ Case-sensitive example:
 includes(.name, "API", true)
 ```
 
-### Array Predicates
+### Array predicates
 
 Use quantifiers for array fields. `_` represents the current array element.
 
@@ -249,7 +249,7 @@ type:project all(.tags, startswith(_, "feature-"))
 type:project none(.tags, _ == "deprecated")
 ```
 
-### Structural Predicates
+### Structural predicates
 
 | Predicate | Meaning |
 |-----------|---------|
@@ -278,7 +278,7 @@ type:project links(.ext==pdf)
 type:project refd(type:meeting)
 ```
 
-## Link Query Predicates
+## Link query predicates
 
 The bare `link` root returns one row per indexed outgoing Markdown link or
 image to a non-Raven file or URL. It reads the derived `links` table directly
@@ -325,9 +325,9 @@ array predicates. In particular, `link` has no `in()`: to find traits whose
 line contains a matching link, use `trait:<name> links(...)`, not
 `link within(trait:<name>)`.
 
-## Trait Query Predicates
+## Trait query predicates
 
-### Value Predicates
+### Value predicates
 
 | Predicate | Meaning |
 |-----------|---------|
@@ -359,7 +359,7 @@ trait:remind .value>="2026-03-01T09:30"
 type:brief .date==today
 ```
 
-### Trait Structural Predicates
+### Trait structural predicates
 
 | Predicate | Meaning |
 |-----------|---------|
@@ -371,7 +371,7 @@ type:brief .date==today
 | `content("term")` | Trait's line contains term |
 | `any(.value, ...)`, `all(.value, ...)`, `none(.value, ...)` | Element predicates for array-valued traits |
 
-`in(...)` matches only when the trait sits *directly* in the named scope; `within(...)` matches any ancestor scope. Since a `@todo` under `## Tasks` sits in that section (not directly on the project object), prefer `within(type:project ...)` over `in(type:project ...)`. Note `in(...)` is scope containment, not set membership — for "value is one of a set" use `oneof(.value, [...])`. See [Naming Collision: `in()` vs `oneof()`](#naming-collision-in-vs-oneof).
+`in(...)` matches only when the trait sits *directly* in the named scope; `within(...)` matches any ancestor scope. Since a `@todo` under `## Tasks` sits in that section (not directly on the project object), prefer `within(type:project ...)` over `in(type:project ...)`. Note `in(...)` is scope containment, not set membership. For "value is one of a set" use `oneof(.value, [...])`. See [Naming collision: `in()` vs `oneof()`](#naming-collision-in-vs-oneof).
 
 Examples:
 
@@ -387,7 +387,7 @@ trait:reviewers any(.value, _ == [[person/freya]])
 
 `refd(...)` is available on type queries, not trait queries.
 
-## Boolean Composition
+## Boolean composition
 
 | Operator | Syntax | Precedence |
 |----------|--------|------------|
@@ -404,9 +404,9 @@ type:project (.status==active | .status==backlog) !.archived==true
 type:meeting (has(trait:due .value<today) | has(trait:remind .value<today))
 ```
 
-## Running and Applying Queries
+## Running and applying queries
 
-### Inspect Results
+### Inspect results
 
 ```bash
 rvn query 'type:project .status==active' --json
@@ -418,13 +418,13 @@ rvn query 'trait:todo .value==todo' --pipe | rvn pick --multi | rvn update --std
 ```
 
 Key flags:
-- `--json` — structured JSON output (recommended for agents and scripts)
-- `--ids` — output one ID per row; link queries project `source_id` once per matching edge
-- `--count-only` — return only the total match count (no items or IDs)
-- `--limit` / `--offset` — page through results (see [Counting and Pagination](#counting-and-pagination); unlimited by default)
-- `--pipe` — output tab-separated rows for pipe workflows, including `rvn pick`
-- `--refresh` — reindex changed files before running the query (useful after editing files outside Raven)
-- `--browse` — open an interactive Raven picker and open the selected result in your configured editor
+- `--json`: structured JSON output (recommended for agents and scripts)
+- `--ids`: output one ID per row; link queries project `source_id` once per matching edge
+- `--count-only`: return only the total match count (no items or IDs)
+- `--limit` / `--offset`: page through results (see [Counting and pagination](#counting-and-pagination); unlimited by default)
+- `--pipe`: output tab-separated rows for pipe workflows, including `rvn pick`
+- `--refresh`: reindex changed files before running the query (useful after editing files outside Raven)
+- `--browse`: open an interactive Raven picker and open the selected result in your configured editor
 
 Use `rvn pick` when you want Raven-native interactive selection in a pipeline. It reads `--pipe` output, opens a picker on the terminal, and writes selected IDs to stdout. Cancelling the picker exits with code 130 (and prints nothing), so scripts can distinguish cancellation from a selection.
 
@@ -432,9 +432,9 @@ Section query IDs are stable `file#slug` IDs. Link rows have no durable edge ID,
 so `link --ids` emits the source object ID once per edge. Link queries do not
 support `--apply`; section queries only support move.
 
-### Counting and Pagination
+### Counting and pagination
 
-Results are **unlimited by default** (`--limit 0`) — omitting `--limit` returns the full result set.
+Results are **unlimited by default** (`--limit 0`). Omitting `--limit` returns the full result set.
 
 Use `--count-only` to return just the total match count, with no items or IDs. This is the cheapest way to probe how large a result set is before deciding how to read it:
 
@@ -450,10 +450,10 @@ rvn query 'type:project' --limit 20 --offset 20       # Next 20
 rvn query 'trait:todo' --limit 50 --json                 # Cap results at 50
 ```
 
-The JSON response includes `total`, `returned`, `offset`, and `limit`, plus paging affordances so you can loop without guessing:
+The JSON response includes `total`, `returned`, `offset`, and `limit`, plus the fields you need to page without guessing:
 
-- `has_more` — `true` when more results exist beyond the returned window.
-- `next_offset` — the offset to use for the next page (only present when `has_more` is `true`).
+- `has_more`: `true` when more results exist beyond the returned window.
+- `next_offset`: the offset to use for the next page (only present when `has_more` is `true`).
 
 The batch pattern is: probe with `--count-only`, then page with `--limit`/`--offset`, requesting the next page at `next_offset` while `has_more` is `true`. For an unlimited (default) query the full set is returned in one call, so `has_more` is `false` and `next_offset` is omitted.
 
@@ -474,7 +474,7 @@ The batch pattern is: probe with `--count-only`, then page with `--limit`/`--off
 }
 ```
 
-### Save and Reuse Queries
+### Save and reuse queries
 
 Saved queries live in `raven.yaml` under `queries:` and are managed via dedicated commands:
 
@@ -515,7 +515,7 @@ rvn query open-projects --apply 'set status=done' --confirm --json
 
 Flags such as `--refresh`, `--ids`, `--limit`, `--offset`, `--count-only`, `--apply`, `--confirm`, `--pipe`, `--no-pipe`, and `--browse` are runtime policy and are never stored by `query saved set`.
 
-### Bulk Operations by Query Type
+### Bulk operations by query type
 
 - Object query `--apply` supports: `set`, `add`, `delete`, `move`.
 - Trait query `--apply` supports only: `update <new_value>`.
@@ -532,7 +532,7 @@ rvn query 'type:project has(trait:due .value<today)' --apply 'set status=overdue
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 ```
 
-## Related Docs
+## Related docs
 
 - RQL implementation notes: `querying/internals.md`
 - Query-driven bulk changes: `vault-management/bulk-operations.md`

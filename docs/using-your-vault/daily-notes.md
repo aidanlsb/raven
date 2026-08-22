@@ -1,6 +1,6 @@
-# Daily Notes
+# Daily notes
 
-Daily notes give you a date-stamped file for each day. Use them for journaling, quick capture, meeting notes, or anything you want anchored to a date. Each daily note is a `date`-typed item managed by Raven.
+Daily notes are one file per day. Journaling, quick capture, meeting notes, anything you want tied to a date. Each daily note is a `date`-typed item.
 
 ## Creating daily notes
 
@@ -19,7 +19,7 @@ Daily notes land under `directories.daily` (default `daily/`) as `YYYY-MM-DD.md`
 
 ## Capturing content
 
-The fastest way to add content to a daily note is `rvn add`:
+`rvn add` appends a line to a daily note without opening it:
 
 ```bash
 rvn add "Met with [[person/freya]] about the rollout"
@@ -128,7 +128,7 @@ rvn date 2026-03-15
 rvn date today --json
 ```
 
-Unlike `rvn daily`, it never creates the note — it is a read-only view for reviewing a day's activity.
+Unlike `rvn daily`, it never creates the note. It is a read-only view of a day's activity.
 
 ### Date references
 
@@ -143,9 +143,9 @@ These resolve to the corresponding daily note. The canonical object ID of a dail
 note is the bare ISO date (`2026-03-15`), so `[[2026-03-15]]` is unambiguous date
 identity regardless of where the file lives on disk.
 
-For backward compatibility, older references that include the daily directory —
-`[[daily/2026-03-15]]` or `[[<your-daily-dir>/2026-03-15]]` — still resolve to the
-same daily note as compatibility aliases. Prefer the bare form in new content.
+Older references that include the daily directory still resolve as compatibility
+aliases: `[[daily/2026-03-15]]` or `[[<your-daily-dir>/2026-03-15]]`. Prefer the
+bare form in new content.
 
 ## Directory configuration
 

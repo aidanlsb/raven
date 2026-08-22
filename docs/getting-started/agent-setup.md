@@ -1,7 +1,6 @@
-# Agent Setup
+# Agent setup
 
-Raven is designed to work well both as a CLI and as a tool-backed system for
-local AI agents.
+Raven is a CLI. Agents drive the same commands through skills, and optionally through MCP.
 
 This guide starts with Raven's packaged Agent Skills, then covers optional MCP
 setup for clients that support it.
@@ -14,12 +13,13 @@ There are two distinct layers:
 - MCP server setup that lets compatible agents call Raven tools directly
 
 The skills teach CLI-first workflows and work with agents that can run `rvn`
-from a shell. MCP is not required, but it provides a structured tool interface.
+from a shell. MCP is not required. It is a structured tool interface for clients
+that speak it.
 
 ## Install Raven skills
 
 Raven packages skills using the open [Agent Skills](https://agentskills.io/)
-standard. `rvn skill install` is the single command for installing and aligning
+standard. `rvn skill install` is the command for installing and aligning
 the packaged catalog:
 
 ```bash
@@ -30,15 +30,15 @@ rvn skill install --confirm --json  # agents / CI: apply without prompting
 In an interactive terminal `rvn skill install` prints the plan (what will be
 installed, updated, or removed) and prompts before writing.
 
-In non-interactive or `--json` runs it never prompts — agents cannot answer a
-`y/N` prompt. Pass `--confirm` to apply; without it the command returns a
+In non-interactive or `--json` runs it never prompts. Agents cannot answer a
+`y/N` prompt. Pass `--confirm` to apply. Without it the command returns a
 preview and sets `needs_confirm: true`. The preview lists each skill with its
 planned action (`install`, `update`, `remove`, or `up to date`) so an agent can
 tell whether confirmation is still required. After confirmation, the response
 reports `mode: "applied"` and the number of file changes made:
 
 ```bash
-rvn skill install --json          # Preview only — needs_confirm: true
+rvn skill install --json          # Preview only. needs_confirm: true
 rvn skill install --confirm --json
 ```
 
@@ -158,7 +158,7 @@ up Raven from scratch:
 
 1. Install the CLI and install the skills with `rvn skill install` (above).
 2. Open your agent.
-3. Paste the recommended first prompt below. A vault is optional — if you don't
+3. Paste the recommended first prompt below. A vault is optional. If you don't
    have one yet, the agent will help you create it.
 
 The agent detects your vault state, creates a first vault with `rvn init` when
@@ -191,7 +191,7 @@ Agents should read the `post_init` object in the response:
   change and exact restore command. The agent should surface that switch before continuing;
   changing the default remains a separate explicit choice.
 
-MCP intentionally ignores both `active_vault` and `default_vault`. After `init`
+MCP ignores both `active_vault` and `default_vault`. After `init`
 over MCP, invoke `vault_focus` with the new name/path, pass `vault`/`vault_path`
 on each vault-scoped call, or restart the server with a launch pin. CLI-based
 agents can use the active/default routing described above.
@@ -202,14 +202,14 @@ After installing the onboarding skill, a good first prompt is:
 
 > Use the raven-onboarding skill to help me set up Raven. Ask me what I'm trying to keep track of, then propose a small schema (a few types) in plain English before changing anything. Once I agree, set it up and seed it with my real projects, people, and tasks, then show me one query, one backlinks lookup, and one check against my own data, explaining each step.
 
-That prompt keeps the agent intent-first: it designs a small model around your goals — asking before it applies any schema change — and validates the setup end-to-end against your real content instead of running a generic feature tour.
+That prompt keeps the agent intent-first. It designs a small model around your goals, asks before it applies any schema change, then runs a query, a backlinks lookup, and a check against your own notes instead of a generic feature tour.
 
 ## What a healthy setup looks like
 
 Your agent should be able to:
 
 - inspect the schema and reuse what's already there
-- propose a small, personalized schema from what you're trying to track — and ask before applying it
+- propose a small, personalized schema from what you're trying to track, and ask before applying it
 - create a typed item through Raven instead of direct file writes
 - query the vault and explain what it found
 
@@ -225,6 +225,6 @@ If the agent can do those things, the integration is in good shape.
 ## Where to go deeper
 
 - Read `agents/mcp.md` for the compact MCP contract
-- Read `using-your-vault/common-commands.md` for the full command surface agents can invoke
+- Read `using-your-vault/common-commands.md` for the full command set agents can invoke
 - Read `getting-started/core-concepts.md` if the agent is using terms like object, trait, or reference before you are comfortable with them
 - Read `types-and-traits/schema-intro.md` before asking an agent to make major schema changes

@@ -1,4 +1,4 @@
-# RQL Internals
+# RQL internals
 
 This note is for maintainers changing Raven Query Language (RQL) behavior. For user-facing syntax, see `querying/query-language.md`.
 
@@ -11,7 +11,7 @@ RQL runs through four main layers:
 
 The index is a derived cache. Query code should never treat SQLite rows as durable source data; Markdown files and schema definitions remain the source of truth.
 
-## Query Roots
+## Query roots
 
 Every parsed query has exactly one root kind:
 
@@ -28,7 +28,7 @@ The `link` root and `links(...)` predicate must consume the single link-field
 vocabulary and SQL compiler in `link_fields.go` / `sql_predicates_link.go`.
 That vocabulary includes target, source, and numeric location columns.
 
-## Layer Boundaries
+## Layer boundaries
 
 The parser only understands syntax. It should build AST nodes, preserve literal values, and produce clear parse errors. It should not decide whether a type, trait, field, or reference exists.
 
@@ -38,7 +38,7 @@ The executor owns index-aware behavior. It resolves query-time references with t
 
 The command and service layers own ergonomics around saved queries, pagination, `--ids`, `--count-only`, `--apply`, refresh, and JSON output. Keep RQL semantics in `internal/query` unless the behavior is specifically about CLI/MCP command flow.
 
-## Predicate Implementation
+## Predicate implementation
 
 Most predicates need changes in several places:
 
@@ -53,7 +53,7 @@ Most predicates need changes in several places:
 
 Keep SQL builders parameterized. Do not interpolate user query values into SQL strings; return SQL fragments plus argument slices.
 
-## Reference Semantics
+## Reference semantics
 
 Reference-like syntax can mean either a literal target or a nested query result set:
 
@@ -69,7 +69,7 @@ targets intentionally match nothing instead of creating implicit objects.
 
 For schema `ref` and `ref[]` fields, field comparisons use reference-aware semantics. Preserve explicit ambiguity errors for shorthand values that could match multiple objects.
 
-## Testing Guidance
+## Testing guidance
 
 Add tests at the lowest layer that owns the behavior:
 
@@ -80,7 +80,7 @@ Add tests at the lowest layer that owns the behavior:
 
 Prefer focused table-driven cases over broad fixtures. Query behavior has many interacting dimensions, so tests should name the root kind, predicate shape, and expected edge case explicitly.
 
-## Change Checklist
+## Change checklist
 
 Before changing RQL behavior, check:
 

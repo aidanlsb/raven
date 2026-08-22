@@ -1,4 +1,4 @@
-# Vault Creation & Management
+# Vault creation and management
 
 Use this guide to:
 - initialize your first vault
@@ -44,12 +44,12 @@ Raven's long-form docs cache is global and lives next to global config, not insi
 `rvn init` also applies Raven's first-run vault policy so the CLI can find the new vault:
 
 - It auto-registers the vault in global config under a suggested name.
-- If this is the **first vault** on the machine (no `default_vault`, no `active_vault`, no other registered vault), it also sets the vault as `default_vault` and `active_vault` — first run just works.
+- If this is the **first vault** on the machine (no `default_vault`, no `active_vault`, no other registered vault), it also sets the vault as `default_vault` and `active_vault`. The next command can find it without extra flags.
 - If you already have another vault, `rvn init` registers and activates the new one immediately while leaving `default_vault` unchanged. Output identifies the new active vault, the previous active/resolved vault, and the exact `rvn vault use ...` (or `rvn vault clear`) command that restores the prior routing.
 
 This is the same in interactive and `--json` mode. In `--json` mode, the `post_init` object reports what happened (`is_first_vault`, `has_existing_default`, `registered`, `is_default`, `is_active`, `activated`), structured `active_vault`, `previous_active_vault`, and `previous_vault` details, plus `switch_back`, invocable actions, and guidance. Interactive output prints the same switch clearly and only prompts about changing the default.
 
-If Raven cannot load global config/state or persist registration/activation, `init` fails loudly even though the vault-local files were created. JSON error details include `initialized: true`, the path, and `post_init`; fix global config/state access and rerun init.
+If Raven cannot load global config/state or persist registration/activation, `init` fails loudly even though the vault-local files were created. JSON error details include `initialized: true`, the path, and `post_init`. Fix global config/state access and rerun init.
 
 ## Sanity-check the new vault
 
@@ -159,4 +159,4 @@ The first `rvn init` registers `~/notes` and sets it as the default and active v
 - Read `getting-started/core-concepts.md` for the Raven mental model
 - Read `getting-started/agent-setup.md` if you want MCP and skills next
 - Read `using-your-vault/configuration.md` for the full configuration reference
-- Try `rvn daily` to create your first daily note — see `using-your-vault/daily-notes.md`
+- Try `rvn daily` to create your first daily note. See `using-your-vault/daily-notes.md`

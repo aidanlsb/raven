@@ -1,6 +1,6 @@
 # Import
 
-`rvn import` lets you bulk-load objects from external JSON data into your vault. Use it when migrating from another tool, syncing from an external source, or bulk-creating objects from structured data.
+`rvn import` loads objects from JSON into your vault. Use it to migrate from another tool, sync from an external source, or create many objects from structured data.
 
 ## Quick start
 
@@ -84,7 +84,7 @@ By default, `rvn import` upserts: it creates new objects and updates existing on
 
 | Flag | Behavior |
 |------|----------|
-| *(default)* | Upsert — create or update |
+| *(default)* | Upsert: create or update |
 | `--create-only` | Only create new objects, skip existing |
 | `--update-only` | Only update existing objects, skip new |
 
@@ -164,6 +164,6 @@ Review the output, add `--map` flags as needed, and then rerun without `--dry-ru
 
 ## Related docs
 
-- `vault-management/bulk-operations.md` — query-driven bulk changes with `--apply` and `--ids`
-- `using-your-vault/common-commands.md` — `rvn upsert`, `rvn set`, and other editing commands
-- `types-and-traits/schema.md` — field types and validation rules
+- `vault-management/bulk-operations.md`: query-driven bulk changes with `--apply` and `--ids`
+- `using-your-vault/common-commands.md`: `rvn upsert`, `rvn set`, and other editing commands
+- `types-and-traits/schema.md`: field types and validation rules

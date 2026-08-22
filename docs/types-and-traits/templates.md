@@ -1,4 +1,4 @@
-# Templates Guide
+# Templates
 
 Use templates when you want new notes to start with consistent, reusable content.
 
@@ -8,9 +8,9 @@ This guide covers:
 - type template bindings (which template IDs a type can use)
 - core-type templates for built-ins like `date`
 
-Goal: set up complete template lifecycles with both:
-- `rvn template ...` for file lifecycle
-- `rvn schema ... template ...` for schema bindings/defaults
+The usual setup uses both:
+- `rvn template ...` for the template files
+- `rvn schema ... template ...` for schema bindings and defaults
 
 Out of scope:
 - full command/flag reference (run `rvn help <command>`)
@@ -168,7 +168,7 @@ rvn daily tomorrow
 - Add `--clear-default` when unbinding the target's current default. Raven
   clears the default and removes the binding together.
 
-## Important behavior
+## Rules
 
 - If a type has no `default_template`, `rvn new` creates the object without template content.
 - `--template <template_id>` on `rvn new` can override the default for that create call.

@@ -82,9 +82,9 @@ Then restart your shell and rerun:
 rvn version
 ```
 
-## First validation pass
+## Before you create a vault
 
-Before creating a vault, make sure the CLI responds normally:
+Check that the CLI responds:
 
 ```bash
 rvn version

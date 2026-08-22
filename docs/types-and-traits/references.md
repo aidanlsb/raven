@@ -1,8 +1,9 @@
 # References
 
 References connect Raven objects and sections across your vault. Wiki-style
-links power navigation, backlinks, query predicates like `refs(...)` and
-`refd(...)`, and automatic updates when you move Markdown objects.
+links are how you point at other notes. They also drive backlinks, query
+predicates like `refs(...)` and `refd(...)`, and automatic updates when you
+move Markdown objects.
 
 ## Syntax
 
@@ -47,11 +48,11 @@ See [paper](../files/paper.pdf).
 When Raven encounters a reference, it resolves it to a canonical object or
 section ID by checking these match sources:
 
-1. **Alias** — the `alias` frontmatter field
-2. **Name field** — the type's `name_field` value (e.g., `title`, `name`)
-3. **Date** — absolute `YYYY-MM-DD` patterns resolve to daily notes
-4. **Object ID / path** — full or suffix path match
-5. **Short name** — the last segment of an object ID (e.g., `freya` for `person/freya`)
+1. **Alias**: the `alias` frontmatter field
+2. **Name field**: the type's `name_field` value (e.g., `title`, `name`)
+3. **Date**: absolute `YYYY-MM-DD` patterns resolve to daily notes
+4. **Object ID / path**: full or suffix path match
+5. **Short name**: the last segment of an object ID (e.g., `freya` for `person/freya`)
 
 If multiple candidates match, the reference is ambiguous and is not resolved automatically.
 
@@ -133,7 +134,7 @@ explicit:
 This applies equally to a bare name that matches **both** an untyped page and a
 typed object. Raven has no page-over-typed (or typed-over-page) preference: if
 `freya` names both an untyped page and `person/freya`, the bare reference is
-ambiguous. Qualify it to resolve — for example `person/freya` for the typed
+ambiguous. Qualify it to resolve. For example `person/freya` for the typed
 object, or the page's own path (`page/freya`) for the page:
 
 ```markdown
@@ -171,7 +172,7 @@ person/thor (body)
 company/acme (body)
 ```
 
-Backlinks are a powerful way to see how an object is used across the vault without maintaining manual indexes.
+Backlinks show how an object is used across the vault without you maintaining a separate index.
 
 For bulk graph traversal, pipe references to `--stdin`. Backlinks group JSON results under `items_by_target`; outlinks group JSON results under `items_by_source`.
 
@@ -234,7 +235,7 @@ rvn check --issues ambiguous_reference,id_collision,alias_collision
 
 Writes are permissive. If you create or edit an object with a reference (a `ref`
 field value or a body `[[wikilink]]`) whose target does not exist yet, the write
-still succeeds — link integrity is a vault-health concern, not a write-time error.
+still succeeds. Link integrity is a vault-health concern, not a write-time error.
 
 When this happens, Raven surfaces the missing target instead of silently leaving it:
 
@@ -293,7 +294,7 @@ Section fragments are derived from heading text. Create headings with
 `rvn section create`, and reorder/reparent a complete section subtree with
 `rvn section move`; moving preserves the heading text, level, slug, and
 references. To rename a heading without breaking inbound references, use
-`rvn section rename project/website#tasks "New Heading"`—it updates the heading
+`rvn section rename project/website#tasks "New Heading"`. It updates the heading
 and rewrites every `[[...#tasks]]` reference to the new slug. To remove a
 heading and every descendant, preview `rvn section delete
 project/website#tasks`; the preview reports every inbound reference that would
@@ -302,8 +303,8 @@ references. The file/object `rvn move` command rejects section sources.
 
 ## Related docs
 
-- `types-and-traits/file-format.md` — full resolution model, slug generation, and ambiguity handling
-- `using-your-vault/file-links.md` — linking and moving non-Markdown files
-- `querying/query-language.md` — `refs()`, `refd()`, and other structural predicates
-- `using-your-vault/common-commands.md` — `rvn backlinks`, `rvn outlinks`, `rvn resolve`, `rvn check`
-- `types-and-traits/schema.md` — `ref` and `ref[]` field types, `alias` reserved key
+- `types-and-traits/file-format.md`: full resolution model, slug generation, and ambiguity handling
+- `using-your-vault/file-links.md`: linking and moving non-Markdown files
+- `querying/query-language.md`: `refs()`, `refd()`, and other structural predicates
+- `using-your-vault/common-commands.md`: `rvn backlinks`, `rvn outlinks`, `rvn resolve`, `rvn check`
+- `types-and-traits/schema.md`: `ref` and `ref[]` field types, `alias` reserved key

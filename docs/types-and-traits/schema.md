@@ -1,18 +1,18 @@
-# `schema.yaml` Reference
+# `schema.yaml` reference
 
 `schema.yaml` defines the structure of your vault:
-- **Types** — what objects are (e.g., `person`, `project`)
-- **Traits** — inline annotations (e.g., `@due`, `@priority`)
+- **Types**: what objects are (e.g., `person`, `project`)
+- **Traits**: inline annotations (e.g., `@due`, `@priority`)
 
 It lives at the root of your vault.
 For first-session schema setup, start with `types-and-traits/schema-intro.md`.
 This page is lookup-oriented and intentionally exhaustive.
 
-## Schema Version
+## Schema version
 
-The top-level `version` key declares the schema format version. The current version is `1`. Raven uses this to ensure backward compatibility when the schema format evolves. If omitted, Raven assumes version 1 and emits a warning.
+The top-level `version` key declares the schema format version. The current version is `1`. Raven uses this when the schema format changes so older files still load. If omitted, Raven assumes version 1 and emits a warning.
 
-## Complete Example
+## Complete example
 
 ```yaml
 version: 1
@@ -73,7 +73,7 @@ traits:
 
 ---
 
-## Built-in Types
+## Built-in types
 
 Raven has three built-in types that are always available and cannot be modified or removed:
 
@@ -148,14 +148,14 @@ Markdown and query their outgoing edges through the link model.
 
 ---
 
-## Type Definitions
+## Type definitions
 
-### Type Properties
+### Type properties
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `description` | string | Optional human/agent context for the type |
-| `name_field` | string | Field that serves as the display name |
+| `name_field` | string | Field used as the display name |
 | `default_path` | string | Directory where new files are created |
 | `templates` | string[] | Template IDs this type can use |
 | `default_template` | string | Default template ID for this type |
@@ -163,7 +163,7 @@ Markdown and query their outgoing edges through the link model.
 
 ### `name_field`
 
-Designates which field serves as the display name for objects of this type.
+Names the field used as the display name for objects of this type.
 
 ```yaml
 types:
@@ -237,9 +237,9 @@ For the full lifecycle (file lifecycle, schema lifecycle, type/core bindings), s
 
 ---
 
-## Field Definitions
+## Field definitions
 
-### Field Properties
+### Field properties
 
 | Property | Type | Description | Applies to |
 |----------|------|-------------|------------|
@@ -252,7 +252,7 @@ For the full lifecycle (file lifecycle, schema lifecycle, type/core bindings), s
 | `min` | number | Minimum value | number |
 | `max` | number | Maximum value | number |
 
-### Field Types
+### Field types
 
 #### `string`
 
@@ -348,7 +348,7 @@ company: company/stark-industries
 ---
 ```
 
-#### Array Types
+#### Array types
 
 Add `[]` suffix for array fields:
 
@@ -375,14 +375,14 @@ collaborators:
 
 ---
 
-## Trait Definitions
+## Trait definitions
 
 Traits are inline annotations in content, written as `@name` or `@name(value)`.
 Traits inside inline code spans (`` `like this` ``) are ignored.
 Traits have one value slot, but that value can use the same scalar or array
 types as object frontmatter fields.
 
-### Trait Properties
+### Trait properties
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -390,7 +390,7 @@ types as object frontmatter fields.
 | `values` | string[] | Allowed values (for enum) |
 | `default` | any | Default value |
 
-### Trait Types
+### Trait types
 
 Traits support the same value types as fields:
 
@@ -461,9 +461,9 @@ traits:
 Usage: `@due(2026-01-15)` or `@due(tomorrow)`
 
 **Special date values for queries:**
-- `today` — Today
-- `tomorrow` — Tomorrow
-- `yesterday` — Yesterday
+- `today`: Today
+- `tomorrow`: Tomorrow
+- `yesterday`: Yesterday
 
 Date fields and date traits normalize relative inputs to the stable
 `YYYY-MM-DD` calendar date when written through Raven commands.
@@ -518,7 +518,7 @@ traits:
 
 Usage: `@priority(high)`, `@todo` (defaults to `todo`), `@todo(done)`
 
-#### Array Types
+#### Array types
 
 Add `[]` to any scalar type to allow an array value:
 
@@ -549,11 +549,11 @@ Usage: `@highlight` (no value needed)
 
 ---
 
-## Schema Evolution
+## Schema evolution
 
 What happens when you change the schema.
 
-### Updating Metadata vs. Converting Values
+### Updating metadata vs. converting values
 
 `schema update` changes metadata that does not remap existing field or trait
 values. Examples include field descriptions, required status, defaults and
@@ -566,7 +566,7 @@ Use `schema convert field|trait` with the required exhaustive `--map-json`
 mapping. Conversion previews the schema and live-data changes by default and
 applies them only with `--confirm`.
 
-### Removing a Type
+### Removing a type
 
 ```bash
 rvn schema remove type old-type
@@ -579,7 +579,7 @@ rvn schema remove type old-type
 
 After removal, run `rvn check` to see `unknown_type` issues, then `rvn reindex --full` to update the index.
 
-### Removing a Trait
+### Removing a trait
 
 ```bash
 rvn schema remove trait old-trait
@@ -594,7 +594,7 @@ The annotations become inert text until you either:
 - Re-add the trait to the schema
 - Manually remove the annotations from files
 
-### Adding a Required Field
+### Adding a required field
 
 ```bash
 rvn schema update field person email --required=true
@@ -616,7 +616,7 @@ rvn query "type:person !exists(.email)" --ids | rvn set --stdin email="" --confi
 rvn schema update field person email --required=true
 ```
 
-### Removing a Required Field
+### Removing a required field
 
 **Protection:**
 - Raven blocks removing a field if it's marked required
@@ -627,7 +627,7 @@ rvn schema update field person email --required=false
 rvn schema remove field person email
 ```
 
-### Changing Enum Values
+### Changing enum values
 
 Use `schema convert` when existing data must move with the schema:
 
@@ -662,7 +662,7 @@ rvn schema convert trait priority \
 allow-list edit from silently leaving invalid values in frontmatter or trait
 annotations.
 
-### Changing Value Types
+### Changing value types
 
 `schema convert` also performs mapped type changes:
 
@@ -690,7 +690,7 @@ does not guess a reference target.
 
 After applying a conversion, run `rvn reindex --full`, then `rvn check`.
 
-### After Schema Changes
+### After schema changes
 
 Validate the schema first, then check vault content:
 
@@ -743,7 +743,7 @@ For reference resolution details and ambiguity behavior, see `types-and-traits/f
 
 ---
 
-## Reserved Keys
+## Reserved keys
 
 These frontmatter keys are always allowed regardless of type:
 
@@ -778,7 +778,7 @@ Aliases are matched case-insensitively and also in slugified form (e.g., `[[the-
 
 ---
 
-## CLI Commands
+## CLI commands
 
 ```bash
 # View schema
