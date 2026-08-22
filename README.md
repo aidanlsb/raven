@@ -1,6 +1,6 @@
 <h1 align="center">Raven</h1>
 
-<p align="center"><strong>A CLI for a folder of markdown notes. You use it. An agent can too.</strong></p>
+<p align="center"><strong>A CLI for plain-text knowledge management, with first-class support for AI agents.</strong></p>
 
 A Raven vault is a folder of markdown files. The CLI adds structure on top of that:
 
