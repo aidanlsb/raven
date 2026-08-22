@@ -1,9 +1,9 @@
-# File Format Reference
+# File format reference
 
 Raven object files are plain Markdown with optional YAML frontmatter.
 Non-Markdown files are ordinary vault files, not Raven objects.
 
-## File Structure Overview
+## File structure overview
 
 ```markdown
 ---
@@ -30,7 +30,7 @@ Meeting notes...
 
 Every object in Raven has a unique ID derived from its location.
 
-### File-Level Objects
+### File-level objects
 
 For file-level objects, the ID is derived from the file path (relative to vault root) without the `.md` extension:
 
@@ -60,7 +60,7 @@ is filesystem layout only and is never part of the daily note's identity.
 ### Sections
 
 Sections are Markdown heading regions. They are derived from headings during
-parsing—they have no frontmatter of their own, and their index entries are
+parsing. They have no frontmatter of their own, and their index entries are
 rebuilt on every reindex. Use `rvn section create` to add headings,
 `rvn section move` to reorder/reparent a complete subtree, and
 `rvn section rename` to change heading identity while rewriting inbound
@@ -80,11 +80,11 @@ object ID with a heading-derived fragment:
 
 ---
 
-## Slug Generation
+## Slug generation
 
 Slugs are URL-friendly identifiers generated from text.
 
-### Heading Slugs (for Fragments)
+### Heading slugs (for fragments)
 
 Heading text is converted to a slug for fragment IDs:
 
@@ -113,7 +113,7 @@ When multiple headings would produce the same slug, a numeric suffix is added:
 ## Tasks        → #tasks-3
 ```
 
-### Path Slugs (for Filenames)
+### Path slugs (for filenames)
 
 When creating files with `rvn new`, the title is a display name (stored verbatim
 in frontmatter) and is slugified into the filename. Path separators and other
@@ -157,7 +157,7 @@ type: project
 ---
 ```
 
-### Reserved Keys
+### Reserved keys
 
 These keys are always allowed regardless of type:
 
@@ -167,11 +167,11 @@ These keys are always allowed regardless of type:
 | `alias` | Alternative name for reference resolution |
 
 Object IDs are derived from the file path and cannot be overridden in
-frontmatter — there is no `id` key. Use `alias` to give an object an alternate
+frontmatter. There is no `id` key. Use `alias` to give an object an alternate
 name for reference resolution. A stray `id:` key is treated as an undeclared
 field and reported as `unknown_frontmatter_key` by `rvn check`.
 
-### Field Values
+### Field values
 
 Field values in frontmatter follow YAML syntax:
 
@@ -221,7 +221,7 @@ This creates:
 - `section` with ID `file-id#overview`
 - `section` with ID `file-id#details`
 
-### Section Fields
+### Section fields
 
 Sections expose structural fields for queries and navigation:
 
@@ -233,7 +233,7 @@ Sections expose structural fields for queries and navigation:
 | `line_end` / `direct_line_end` | number | Direct section end, before the next heading of any level |
 | `subtree_line_end` | number | Full subtree end, before the next same-or-higher heading |
 
-### Section Hierarchy
+### Section hierarchy
 
 Section nesting follows heading levels. A `##` section is a child of the preceding `#` section:
 
@@ -298,7 +298,7 @@ Traits are inline annotations in content:
 | `@name` | Boolean trait (presence = true) |
 | `@name(value)` | Trait with value |
 
-### Trait Position
+### Trait position
 
 Traits can appear anywhere on a line:
 
@@ -310,7 +310,7 @@ Traits can appear anywhere on a line:
 
 Traits inside inline code spans (`` `like this` ``) are ignored.
 
-### Trait Values
+### Trait values
 
 | Type | Example |
 |------|---------|
@@ -320,7 +320,7 @@ Traits inside inline code spans (`` `like this` ``) are ignored.
 | String | `@note(Remember to follow up)` |
 | Boolean | `@highlight` (no value needed) |
 
-### Trait Association
+### Trait association
 
 Traits are associated with the nearest containing object (the section or file they appear in):
 
@@ -343,7 +343,7 @@ trait:highlight within(type:project .status==active)
 
 ---
 
-## Complete Example
+## Complete example
 
 ```markdown
 ---

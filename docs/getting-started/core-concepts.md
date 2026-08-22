@@ -1,10 +1,10 @@
-# Core Concepts
+# Core concepts
 
-This page gives you the mental model for Raven. After reading it, you should understand the key building blocks — types, references, traits, sections, file links, daily notes, and queries — even if you don't yet know every syntax detail.
+This page is the mental model. Types, references, traits, sections, file links, daily notes, queries. Syntax lives in the linked pages.
 
-## Types & Objects
+## Types and objects
 
-Every Markdown file in a Raven vault is an instance of a type; these instances are called "objects." You define types in `schema.yaml`. Raven ships with starter types you can modify or replace. Here is an example:
+Every Markdown file in a Raven vault is an instance of a type. Those instances are called objects. You define types in `schema.yaml`. Raven ships with starter types you can modify or replace. Here is an example:
 
 ```yaml
 types:
@@ -46,7 +46,7 @@ status: active
 
 ```
 
-The `name_field` tells Raven which field to auto-populate from the positional title. Required fields with defaults are filled automatically — `status` has `default: active`, so you don't need to pass it explicitly.
+`name_field` is the field Raven fills from the positional title. Required fields with defaults are filled too. Here `status` has `default: active`, so you don't pass it.
 
 ### Validation
 
@@ -76,7 +76,7 @@ Raven has three built-in types that always exist:
 | `section` | Represents headings inside files | Automatic from markdown structure |
 | `date` | Daily notes | `rvn daily` |
 
-Built-in types cannot be redefined. Your custom types (`project`, `meeting`, `person`, etc.) provide the domain model on top of this foundation. See `types-and-traits/schema.md` for the full reference.
+You cannot redefine built-in types. Custom types (`project`, `meeting`, `person`) sit on top of them. See `types-and-traits/schema.md` for the full reference.
 
 ## References
 
@@ -110,7 +110,7 @@ rvn backlinks person/freya
 
 See `types-and-traits/references.md` for the full reference guide.
 
-## File Links
+## File links
 
 Non-Markdown files such as PDFs and images are ordinary files in the vault, not
 Raven entities. Copy them into the vault directly, run `rvn reindex`, and link
@@ -120,7 +120,7 @@ file. See `using-your-vault/file-links.md`.
 
 ## Traits
 
-Traits are inline annotations that add structured, queryable metadata to your content:
+Traits are inline annotations that add structured, queryable metadata to a line:
 
 ```markdown
 - @due(2026-02-15) Finish homepage design
@@ -129,7 +129,7 @@ Traits are inline annotations that add structured, queryable metadata to your co
 - @highlight Key insight about the architecture
 ```
 
-Traits must be defined in `schema.yaml` to be indexed and queryable. They can have typed values (date, enum, string, boolean) and participate in queries:
+A trait must be defined in `schema.yaml` to be indexed and queryable. Values can be typed (date, enum, string, boolean):
 
 ```bash
 rvn query 'trait:due .value<today'
@@ -138,9 +138,9 @@ rvn query 'trait:todo within(type:project .status==active)'
 
 See `types-and-traits/file-format.md` for trait syntax and `types-and-traits/schema.md` for defining traits.
 
-## Headings & Sections
+## Headings and sections
 
-Every markdown heading automatically creates a `section` object. This gives your content hierarchy that Raven can query:
+Every markdown heading automatically creates a `section` object. Raven can query that hierarchy:
 
 ```markdown
 # Website Redesign        → section (level 1)
@@ -167,9 +167,9 @@ the exact subtree and affected inbound references by default, then removes the
 subtree only with `--confirm`; reported references are left for explicit repair.
 `rvn add` only appends body content and rejects Markdown headings.
 
-## Daily Notes
+## Daily notes
 
-Daily notes give you a date-stamped file for each day:
+Daily notes are one file per day:
 
 ```bash
 rvn daily                              # Today's note
@@ -177,14 +177,14 @@ rvn daily yesterday                    # Yesterday's
 rvn add "@todo Review PR"              # Capture to today's note
 ```
 
-Daily notes are `date`-typed items. They support templates, structured headings, and all the same query/trait features as any other item. See `using-your-vault/daily-notes.md` for the full guide.
+Daily notes are `date`-typed items. They support templates, structured headings, and the same query/trait features as any other item. See `using-your-vault/daily-notes.md`.
 
 Their canonical object ID is always the bare ISO date (`YYYY-MM-DD`), regardless
 of `directories.daily`; author links as `[[2026-03-15]]`.
 
 ## Queries
 
-Raven Query Language (RQL) lets you retrieve objects and traits by structure, not just text:
+RQL finds objects and traits by structure. Use `rvn search` when you only have a word to look for:
 
 ```bash
 # All active projects
@@ -197,14 +197,14 @@ rvn query 'trait:todo within(type:meeting refs([[project/midgard-security-review
 rvn query 'trait:due .value<today'
 ```
 
-Queries return exactly one result kind—objects, sections, traits, or
-outgoing link edges—can nest arbitrarily, and support boolean composition
-(`AND`, `OR`, `NOT`). See
+A query returns exactly one result kind: objects, sections, traits, or
+outgoing link edges. Queries can nest, and they compose with
+`AND`, `OR`, and `NOT`. See
 `querying/query-language.md` for the full syntax.
 
-## Agent-friendly descriptions
+## Type and field descriptions
 
-Add optional `description` text to types and fields in `schema.yaml` to give context to both humans and agents:
+Add optional `description` text to types and fields in `schema.yaml`. Humans and agents both read it:
 
 ```yaml
 types:
@@ -216,7 +216,7 @@ types:
         description: Falsifiable statement of expected behavior change
 ```
 
-Good descriptions focus on intent and constraints, not just repeating the field name.
+Describe intent and constraints. Repeating the field name wastes the slot.
 
 ## Where to go next
 

@@ -1,4 +1,4 @@
-# Configuration Guide
+# Configuration
 
 This guide covers global and vault-level configuration. 
 - global machine config in `config.toml`

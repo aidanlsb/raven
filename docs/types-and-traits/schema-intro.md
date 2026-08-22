@@ -1,8 +1,8 @@
-# Schema Introduction
+# Schema introduction
 
 This is a guide-level introduction to `schema.yaml`.
 
-Goal: make your first safe schema changes without getting lost in full reference details.
+Goal: make your first safe schema changes without getting lost in the full reference.
 
 Out of scope:
 - exhaustive field/trait rules (use `types-and-traits/schema.md`)
@@ -14,9 +14,9 @@ Out of scope:
 - **fields**: validated frontmatter keys per type
 - **traits**: inline annotations like `@due(2026-02-01)` or `@highlight`
 
-When Raven indexes your notes, schema definitions determine what becomes structured, queryable data. Only types, fields, and traits defined in `schema.yaml` are indexed — unknown frontmatter keys are validation errors, and undefined traits are treated as plain text.
+When Raven indexes your notes, only types, fields, and traits defined in `schema.yaml` become structured, queryable data. Unknown frontmatter keys are validation errors. Undefined traits are treated as plain text.
 
-This means the schema is the bridge between your markdown files and Raven's query engine. If something isn't in the schema, you can't query it structurally.
+If a type, field, or trait is not in the schema, you cannot query it as structure.
 
 Non-Markdown files are not schema objects. Link to them with standard Markdown;
 Raven indexes those outgoing link edges separately.
@@ -46,7 +46,7 @@ types:
         description: Falsifiable statement of expected behavior change
 ```
 
-Good descriptions focus on intent and constraints, not just restating the field name. Agents use these descriptions to understand your domain model when creating or querying objects.
+Describe intent and constraints. Repeating the field name wastes the slot. Agents read these descriptions when creating or querying objects.
 
 ## Start from the default schema
 
@@ -65,7 +65,7 @@ rvn schema traits
 rvn schema type project
 ```
 
-## First safe customization (recommended)
+## First safe customization
 
 Add one type and one trait before attempting bigger model changes.
 
@@ -105,14 +105,9 @@ This catches type/field/trait issues early and keeps the index aligned with the 
 
 ## Common first mistakes
 
-- **Making fields required too early**  
-  Start optional, backfill data, then make required.
-
-- **Using a trait that is not defined**  
-  Add it in schema first, or it will not be indexed/queryable.
-
-- **Assuming references auto-resolve to any text**  
-  Use explicit object IDs when learning (`[[book/the-mythical-man-month]]`).
+- **Making fields required too early.** Start optional, backfill data, then make required.
+- **Using a trait that is not defined.** Add it in schema first, or it will not be indexed.
+- **Assuming references auto-resolve to any text.** Use explicit object IDs when learning (`[[book/the-mythical-man-month]]`).
 
 ## What to read next
 

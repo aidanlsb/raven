@@ -347,7 +347,7 @@ func TestRunDocsPickerNavigatorCanGoBackToSections(t *testing.T) {
 		return &ui.DisplayContext{TermWidth: 100, IsTTY: true}
 	}
 	docsMarkdownRender = func(content string, _ int) (string, error) {
-		if !strings.Contains(content, "# Query Language") {
+		if !strings.Contains(content, "# Query language") {
 			t.Fatalf("expected final selected topic to be query language")
 		}
 		return "RENDERED QUERY LANGUAGE\n", nil
@@ -425,7 +425,7 @@ func TestOutputDocsTopicContentRendersMarkdownInTTY(t *testing.T) {
 		if width != 100 {
 			t.Fatalf("render width = %d, want 100", width)
 		}
-		if !strings.Contains(content, "# Query Language") {
+		if !strings.Contains(content, "# Query language") {
 			t.Fatalf("expected topic markdown content to be passed to renderer")
 		}
 		return "RENDERED TOPIC\n", nil
@@ -486,7 +486,7 @@ func TestOutputDocsTopicContentSkipsRendererWhenNotTTY(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(out, "# Query Language") {
+	if !strings.Contains(out, "# Query language") {
 		t.Fatalf("expected raw markdown output when not a TTY, got:\n%s", out)
 	}
 }

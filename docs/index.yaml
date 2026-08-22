@@ -2,49 +2,49 @@
 # This index is authoritative for sections/topics shown in `rvn docs`.
 sections:
   getting-started:
-    title: Getting Started
+    title: Getting started
     topics:
       installation:
         title: Installation
         path: installation.md
       first-vault:
-        title: First Vault
+        title: First vault
         path: first-vault.md
       core-concepts:
-        title: Core Concepts
+        title: Core concepts
         path: core-concepts.md
       agent-setup:
-        title: Agent Setup
+        title: Agent setup
         path: agent-setup.md
   using-your-vault:
-    title: Using Your Vault
+    title: Using your vault
     topics:
       daily-notes:
-        title: Daily Notes
+        title: Daily notes
         path: daily-notes.md
       common-commands:
-        title: Common Commands
+        title: Common commands
         path: common-commands.md
       file-links:
-        title: File Links
+        title: File links
         path: file-links.md
       configuration:
         title: Configuration
         path: configuration.md
       editor-integration:
-        title: Editor Integration (LSP)
+        title: Editor integration (LSP)
         path: editor-integration.md
   types-and-traits:
-    title: Types & Traits
+    title: Types and traits
     topics:
       schema-intro:
-        title: Schema Introduction
+        title: Schema introduction
         path: schema-intro.md
       schema:
-        title: Schema Reference
+        title: Schema reference
         path: schema.md
       file-format:
-        title: File Format
+        title: File format
         path: file-format.md
       references:
         title: References
@@ -56,16 +56,16 @@ sections:
     title: Querying
     topics:
       query-language:
-        title: Query Language
+        title: Query language
         path: query-language.md
       internals:
-        title: RQL Internals
+        title: RQL internals
         path: internals.md
   vault-management:
-    title: Vault Management
+    title: Vault management
     topics:
       bulk-operations:
-        title: Bulk Operations
+        title: Bulk operations
         path: bulk-operations.md
       import:
         title: Import
@@ -74,5 +74,5 @@ sections:
     title: Agents
     topics:
       mcp:
-        title: MCP Reference
+        title: MCP reference
         path: mcp.md

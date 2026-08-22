@@ -1,14 +1,14 @@
-# Editor Integration (LSP)
+# Editor integration (LSP)
 
-Raven ships a built-in Language Server Protocol server, so any editor with an
-LSP client gets first-class support for vault files: diagnostics, completion,
-quick-fix Code Actions, go-to-definition, find-references, and hover.
+Raven ships a Language Server Protocol server. Any editor with an LSP client
+gets diagnostics, completion, quick-fix Code Actions, go-to-definition,
+find-references, and hover on vault files.
 
 ```bash
 rvn lsp
 ```
 
-The server speaks LSP 3.17 over stdio. It is part of the `rvn` binary — there
+The server speaks LSP 3.17 over stdio. It is part of the `rvn` binary. There
 is nothing extra to install.
 
 ## Vault selection

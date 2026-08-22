@@ -1,15 +1,15 @@
-# MCP Reference
+# MCP reference
 
-Raven exposes a compact MCP surface via `rvn serve`.
+Raven speaks MCP through `rvn serve`.
 
-The MCP surface is exactly three tools:
+There are exactly three tools:
 - `raven_discover`
 - `raven_describe`
 - `raven_invoke`
 
 Earlier per-command `raven_*` tools have been removed. Use `raven_invoke` with a registry command ID instead.
 
-## Recommended Setup
+## Recommended setup
 
 Install Raven into a supported MCP client config:
 
@@ -47,7 +47,7 @@ Start the server directly with:
 rvn serve --vault-path /path/to/vault
 ```
 
-## Vault Resolution
+## Vault resolution
 
 Every vault-scoped `raven_invoke` call and vault-scoped resource read resolves a
 vault in this priority order:
@@ -116,7 +116,7 @@ through `raven_invoke` on the running server.
   Single-vault users who pin a vault (for example via
   `rvn mcp install --vault-path`) are unaffected.
 
-## MCP Resources
+## MCP resources
 
 Raven exposes MCP resources that agents can fetch:
 
@@ -131,7 +131,7 @@ Additional topic resources are available under `raven://guide/<topic>`.
 
 Vault-scoped resource content is produced by the same shared services that back the equivalent commands, so a resource read never drifts from the command output: `raven://queries/saved` mirrors `query_saved_list` (each entry carries `name`, `query`, `args`, and `description`), and `raven://schema/current` returns the raw on-disk `schema.yaml`.
 
-Vault-scoped resources use stable URIs. On `resources/read`, `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional `vault` or `vault_path` params to target a different vault for that read. Do not pass both. `resources/list` accepts the same optional `vault`/`vault_path` params, so list and read stay consistent — the list reflects (and reports) the same vault a read with identical params would target.
+Vault-scoped resources use stable URIs. On `resources/read`, `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional `vault` or `vault_path` params to target a different vault for that read. Do not pass both. `resources/list` accepts the same optional `vault`/`vault_path` params, so list and read stay consistent. The list reflects (and reports) the same vault a read with identical params would target.
 
 Both `resources/list` and `resources/read` include a `vault_context` object in the result for vault-scoped requests, mirroring `meta.vault_context` on tool results, so multi-vault sessions can always confirm which vault was used. Resource resolution also honors session focus. A vault-scoped `resources/read` without a per-call target, session focus, or server launch pin fails with `VAULT_AMBIGUOUS`.
 
@@ -144,15 +144,15 @@ Example:
 }
 ```
 
-## Vault Agent Instructions
+## Vault agent instructions
 
 Put a file named `AGENTS.md` at the vault root to give agents vault-specific operating guidance. Raven exposes this file through `raven://vault/agent-instructions` when it exists, so MCP clients can fetch the same instructions alongside the schema and saved queries.
 
 Use `AGENTS.md` for durable rules that are specific to the vault, such as preferred traits, task formatting conventions, naming patterns, or safety constraints. Keep it concise and operational; agents should treat it as guidance for working in the vault, not as a replacement for `schema.yaml` or `raven.yaml`.
 
-## Compact Tool Surface
+## The three tools
 
-The MCP surface is intentionally compact:
+The tool set is small on purpose:
 
 - `raven_discover` lists all discoverable commands with compact metadata.
 - `raven_describe` returns the strict invocation contract for one command.
@@ -170,7 +170,7 @@ Failed bulk mutations preserve the attempted inputs in their original order
 under the command's bulk argument key in `error.details`, together with
 `total`, so callers can inspect or retry the exact selection.
 
-### Discovery Flow
+### Discovery flow
 
 Use this sequence:
 
@@ -190,7 +190,7 @@ Example:
 }
 ```
 
-### `raven_invoke` Wrapper Rules
+### `raven_invoke` wrapper rules
 
 Command arguments must be nested under `args`.
 
@@ -216,7 +216,7 @@ Use `vault` to target a configured vault name for a single call, or `vault_path`
 
 Passing command-specific parameters beside `command` fails with `INVALID_ARGS`.
 
-## Available Tools
+## Available tools
 
 This tool list is generated from the command registry and should stay in sync with `internal/mcp/tools.go`.
 
@@ -252,7 +252,7 @@ still requires a per-call target, session focus, or launch pin.
 
 `raven_describe` returns both a short `summary` and a fuller `description` from the command registry. Use `description` for command-specific syntax guidance, such as Raven query language examples for `query`.
 
-## Parameter Conventions
+## Parameter conventions
 
 ### Positional CLI args become `args` fields
 
@@ -283,7 +283,7 @@ Commands that target one existing vault item use `reference`; the retired
 `object` / `object_id` spellings are not aliases. Bulk target keys are
 `references` for commands such as `set`, `delete`, `reclassify`, `open`,
 `backlinks`, and `outlinks`; `object_ids` for bulk `add` and `move`; and
-`trait_ids` for bulk `update`. MCP does not receive a stdin byte stream—pass the
+`trait_ids` for bulk `update`. MCP does not receive a stdin byte stream. Pass the
 array named by `raven_describe`.
 
 ### Key-value flags become JSON objects or arrays
@@ -417,7 +417,7 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 }
 ```
 
-## Common Patterns
+## Common patterns
 
 ### Read and search
 
@@ -583,7 +583,7 @@ inferred; repair them explicitly after applying.
 
 Because single-object writes apply on the first call, only invoke them when the
 user's intent is clear. For `delete`/`move`, check backlinks or read the object
-first—or pass `dry-run`—when the impact is not already obvious.
+first, or pass `dry-run`, when the impact is not already obvious.
 
 Deletion recovery is a separate preview-first flow. List exact entries, preview
 the restore, then confirm it:
@@ -622,8 +622,8 @@ Every mutating command reports a uniform phase in `meta.mutation.phase`:
 }
 ```
 
-- `applied` — the change was written to the vault.
-- `preview` — nothing was written yet (a dry run, an unconfirmed high-blast-radius
+- `applied`: the change was written to the vault.
+- `preview`: nothing was written yet (a dry run, an unconfirmed high-blast-radius
   operation, or a write blocked pending confirmation).
 
 Branch on this field instead of command-specific `data` fields (`data.status`,
@@ -631,7 +631,7 @@ Branch on this field instead of command-specific `data` fields (`data.status`,
 read-only commands and on failures. `query` with `apply` reports the phase of the
 write it delegates to.
 
-## Best Practices
+## Best practices
 
 1. Check the schema before creating or mutating typed items.
 2. Prefer `query` over `search` when the structure is known.
@@ -642,7 +642,7 @@ write it delegates to.
 7. Reindex after schema-level structural changes or out-of-band file changes when required.
 8. Treat `raven_describe` as the authority for argument shape.
 
-## Related Resources
+## Related resources
 
 - `raven://guide/quickstart`
 - `raven://guide/getting-started`
@@ -650,9 +650,9 @@ write it delegates to.
 - `raven://guide/write-patterns`
 - `raven://guide/key-flows`
 
-## Related Docs
+## Related docs
 
-- `querying/query-language.md` — RQL syntax for `query` commands
-- `vault-management/bulk-operations.md` — `--apply` and `--ids` patterns for bulk changes
-- `using-your-vault/file-links.md` — file-link indexing, checks, and moves
-- `using-your-vault/common-commands.md` — full command surface (read, search, edit, check, etc.)
+- `querying/query-language.md`: RQL syntax for `query` commands
+- `vault-management/bulk-operations.md`: `--apply` and `--ids` patterns for bulk changes
+- `using-your-vault/file-links.md`: file-link indexing, checks, and moves
+- `using-your-vault/common-commands.md`: full command set (read, search, edit, check, etc.)

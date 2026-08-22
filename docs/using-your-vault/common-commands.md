@@ -1,6 +1,6 @@
-# Common Commands
+# Common commands
 
-This guide covers the everyday Raven commands that are not covered by dedicated docs elsewhere. Each command gets a brief description, key flags, and examples. Run `rvn help <command>` for the full flag reference.
+Commands that don't have their own page. Each one gets a short description, key flags, and examples. Run `rvn help <command>` for the full flag list.
 
 For daily notes and quick capture (`rvn daily`, `rvn add`), see `using-your-vault/daily-notes.md`. For query syntax, see `querying/query-language.md`. For bulk operations on query results, see `vault-management/bulk-operations.md`.
 
@@ -14,7 +14,7 @@ exit status and parse `error.code` for the specific failure.
 `rvn check` follows lint-style conventions and can exit 1 with `ok=true` when it
 finds issues (or warnings with `--strict`). Cancelling `rvn pick` exits 130.
 
-## Interactive Pickers
+## Interactive pickers
 
 When Raven is running in an interactive terminal, a few commands open a Raven picker when you omit the target argument:
 
@@ -54,12 +54,12 @@ rvn read                                  # Interactive Raven picker
 ```
 
 Key flags:
-- `--raw` — raw file content only (no backlinks, no rendered links)
-- `--start-line`, `--end-line` — read a specific line range (with `--raw`)
-- `--lines` — include line numbers (useful for agents preparing edits)
-- `--sections` — list the file's headings with section IDs, levels, and line ranges instead of content
+- `--raw`: raw file content only (no backlinks, no rendered links)
+- `--start-line`, `--end-line`: read a specific line range (with `--raw`)
+- `--lines`: include line numbers (useful for agents preparing edits)
+- `--sections`: list the file's headings with section IDs, levels, and line ranges instead of content
 
-Section references (`file#slug`) limit output to that section's subtree — the section itself plus any nested child sections. Use `--sections` first to discover a file's section IDs.
+Section references (`file#slug`) limit output to that section's subtree: the section itself plus any nested child sections. Use `--sections` first to discover a file's section IDs.
 
 ### `rvn open`
 
@@ -76,7 +76,7 @@ rvn open                                  # Interactive Raven picker
 
 ### `rvn search`
 
-Full-text search across all vault content with relevance ranking.
+Search file text by relevance. Use `rvn query` when you already know the type, trait, or link structure.
 
 ```bash
 rvn search "meeting notes"                # Simple search
@@ -97,8 +97,8 @@ Search syntax:
 | `NOT A` | Exclude term | `meeting NOT standup` |
 
 Key flags:
-- `--type` / `-t` — filter results to a specific type
-- `--limit` / `-n` — maximum results (default 20)
+- `--type` / `-t`: filter results to a specific type
+- `--limit` / `-n`: maximum results (default 20)
 
 ### `rvn backlinks`
 
@@ -149,8 +149,8 @@ rvn edit project/website.md --edits-json '{"edits":[{"old_str":"draft","new_str"
 ```
 
 Key flags:
-- `--dry-run` — preview the edit without writing (default is to apply)
-- `--edits-json` — multiple ordered replacements in one call
+- `--dry-run`: preview the edit without writing (default is to apply)
+- `--edits-json`: multiple ordered replacements in one call
 
 ### `rvn set`
 
@@ -214,10 +214,10 @@ rvn upsert person "Freya" --fields-json '{"email":"true"}'
 Use `--field` for shell-friendly literal values. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
 
 Key flags:
-- `--field` — set field values
-- `--fields-json` — set fields as a JSON object
-- `--content` — set the markdown body
-- `--path` — explicit file path (defaults to slugified title)
+- `--field`: set field values
+- `--fields-json`: set fields as a JSON object
+- `--content`: set the markdown body
+- `--path`: explicit file path (defaults to slugified title)
 
 ---
 
@@ -259,11 +259,11 @@ or `rvn section rename` to change its heading identity.
 Single-object moves apply immediately; pass `--dry-run` to preview without writing. Bulk moves (`--stdin`) preview by default and require `--confirm`.
 
 Key flags:
-- `--update-refs` — update all references to the moved file (default: true)
-- `--dry-run` — preview a single-object move without applying it
-- `--force` — skip confirmation
-- `--stdin` — bulk move from piped IDs
-- `--confirm` — apply a bulk move
+- `--update-refs`: update all references to the moved file (default: true)
+- `--dry-run`: preview a single-object move without applying it
+- `--force`: skip confirmation
+- `--stdin`: bulk move from piped IDs
+- `--confirm`: apply a bulk move
 
 ### `rvn section create`
 
@@ -276,7 +276,7 @@ rvn section create project/website "Archive" --level 2 --after project/website#t
 rvn section create project/website "Overview" --level 2 --before project/website#tasks --dry-run
 ```
 
-The title is plain text—pass `"Notes"` with `--level 2`, not `"## Notes"`.
+The title is plain text. Pass `"Notes"` with `--level 2`, not `"## Notes"`.
 `--after`, `--before`, and `--under` are mutually exclusive. `--after` inserts
 after the anchor's complete subtree, `--before` inserts before its heading, and
 `--under` inserts as its last direct child. With no anchor, creation appends at
@@ -357,13 +357,13 @@ rvn query 'type:note' --ids | rvn reclassify doc --stdin --confirm --force --jso
 ```
 
 Key flags:
-- `--field` — supply field values for the new type using Raven field literals
-- `--fields-json` — supply exact typed field values as JSON
-- `--no-move` — keep the file in its current location
-- `--update-refs` — update references if the file moves (default: true)
-- `--force` — skip confirmation for dropped fields
-- `--stdin` — read references (one per line) for a bulk reclassification; the target type is the only positional argument
-- `--confirm` — apply a bulk reclassification (bulk runs preview by default)
+- `--field`: supply field values for the new type using Raven field literals
+- `--fields-json`: supply exact typed field values as JSON
+- `--no-move`: keep the file in its current location
+- `--update-refs`: update references if the file moves (default: true)
+- `--force`: skip confirmation for dropped fields
+- `--stdin`: read references (one per line) for a bulk reclassification; the target type is the only positional argument
+- `--confirm`: apply a bulk reclassification (bulk runs preview by default)
 
 Bulk previews include each planned move, added/dropped fields, required-field
 failures, and references that would be rewritten. `--confirm` applies eligible
@@ -456,21 +456,21 @@ rvn check create-missing --confirm               # Create them
 
 `rvn check fix` handles these unambiguous fixes:
 
-- **`short_ref_could_be_full_path`** — replace short refs with canonical object IDs
-- **`invalid_enum_value`** — remove unnecessary quotes around enum trait values when the unquoted value is valid
-- **`non_canonical_ref`** — strip the configured root prefix from wikilink targets (e.g. `[[type/person/freya]]` → `[[person/freya]]`)
-- **`non_canonical_path`** — move files into the configured directory root for their type and rewrite all references that point at them
+- **`short_ref_could_be_full_path`**: replace short refs with canonical object IDs
+- **`invalid_enum_value`**: remove unnecessary quotes around enum trait values when the unquoted value is valid
+- **`non_canonical_ref`**: strip the configured root prefix from wikilink targets (e.g. `[[type/person/freya]]` → `[[person/freya]]`)
+- **`non_canonical_path`**: move files into the configured directory root for their type and rewrite all references that point at them
 
 Key flags:
-- `--type` / `-t` — check only objects of a specific type
-- `--issues` — only report specific issue types (comma-separated)
-- `--exclude` — exclude specific issue types
-- `--strict` — treat warnings as errors
-- `--verbose` / `-V` — full details for every issue
+- `--type` / `-t`: check only objects of a specific type
+- `--issues`: only report specific issue types (comma-separated)
+- `--exclude`: exclude specific issue types
+- `--strict`: treat warnings as errors
+- `--verbose` / `-V`: full details for every issue
 
 Repairs are separate subcommands, not flags on `rvn check`:
-- `rvn check fix` — preview/apply safe auto-fixes for unambiguous check issues
-- `rvn check create-missing` — preview/create pages for unresolved references
+- `rvn check fix`: preview/apply safe auto-fixes for unambiguous check issues
+- `rvn check create-missing`: preview/create pages for unresolved references
 
 ### `rvn resolve`
 
@@ -570,17 +570,17 @@ still require `rvn docs fetch`; use that command explicitly to force a refresh
 or pin `--ref`.
 
 Key flags (`docs search`):
-- `--limit` / `-n` — maximum matches (default 20)
-- `--offset` — skip matches for pagination
-- `--section` / `-s` — restrict search to one section
+- `--limit` / `-n`: maximum matches (default 20)
+- `--offset`: skip matches for pagination
+- `--section` / `-s`: restrict search to one section
 
 ---
 
 ## Related docs
 
-- `querying/query-language.md` — full RQL syntax for complex queries
-- `using-your-vault/file-links.md` — linking and moving non-Markdown files
-- `vault-management/bulk-operations.md` — `--apply` and `--ids` piping for bulk changes
-- `vault-management/import.md` — bulk importing from JSON
-- `types-and-traits/references.md` — reference syntax, resolution, and maintenance
-- `using-your-vault/configuration.md` — `raven.yaml` and `config.toml` reference
+- `querying/query-language.md`: full RQL syntax for complex queries
+- `using-your-vault/file-links.md`: linking and moving non-Markdown files
+- `vault-management/bulk-operations.md`: `--apply` and `--ids` piping for bulk changes
+- `vault-management/import.md`: bulk importing from JSON
+- `types-and-traits/references.md`: reference syntax, resolution, and maintenance
+- `using-your-vault/configuration.md`: `raven.yaml` and `config.toml` reference

@@ -1,4 +1,4 @@
-# File Links
+# File links
 
 Non-Markdown files such as images, PDFs, audio, videos, and datasets can live
 anywhere inside a Raven vault. They are ordinary files, not Raven entities.
@@ -27,7 +27,7 @@ Use `[[...]]` object or section references for Markdown notes inside the vault.
 in-vault `.md` notes as `markdown_link_to_vault_note` because Raven cannot track
 them as references for backlinks or rewrites.
 
-## Querying Links
+## Querying links
 
 Raven indexes outgoing Markdown links and images as edges. Query the edges
 directly with the `link` root:
@@ -50,7 +50,7 @@ for HTTPS); path case, the query string, trailing slash, and fragment are
 preserved. File targets inside the vault use a vault-relative POSIX key;
 absolute targets outside the vault remain absolute.
 
-## Checking And Moving Files
+## Checking and moving files
 
 `rvn check` reports a `broken_file_link` when a local file target does not
 exist. URL targets are never fetched.

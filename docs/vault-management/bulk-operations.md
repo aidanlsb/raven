@@ -1,21 +1,21 @@
-# Bulk Operations Reference
+# Bulk operations reference
 
 Bulk operations let you act on many objects, sections, files, or trait
-instances selected by a query. Bulk writes preview by default—add `--confirm`
+instances selected by a query. Bulk writes preview by default. Add `--confirm`
 to apply changes.
 
 Use `querying/query-language.md` for query syntax and `using-your-vault/configuration.md` for saved query definitions.
 
 ## Overview
 
-There are two approaches to bulk operations:
+There are two ways to do it:
 
-1. **`--apply` flag** — Run an operation directly on query results
-2. **Piping with `--ids`** — Get IDs and pipe to another command with `--stdin`
+1. **`--apply`.** Run an operation directly on query results.
+2. **Piping with `--ids`.** Get IDs and pipe to another command with `--stdin`.
 
 ---
 
-## `--apply` Operations
+## `--apply` operations
 
 The `--apply` flag runs an operation on all query results.
 
@@ -25,14 +25,14 @@ The `--apply` flag runs an operation on all query results.
 rvn query "<query>" --apply "<command> [args...]" [--confirm]
 ```
 
-### Supported Commands
+### Supported commands
 
 | Query type | `--apply` commands |
 |------------|--------------------|
 | `type:...` | `set field=value...`, `add <text...>`, `delete`, `move <destination/>` |
 | `trait:...` | `update <new_value>` |
 
-### Preview vs Apply
+### Preview vs apply
 
 ```bash
 # Preview (default) - shows what would change
@@ -44,7 +44,7 @@ rvn query "type:project .status==active" --apply "set reviewed=true" --confirm
 
 ---
 
-## Set Fields
+## Set fields
 
 Update frontmatter fields on matching objects.
 
@@ -69,7 +69,7 @@ rvn query "type:project .status==archived" --apply "set priority=" --confirm
 
 ---
 
-## Update Trait Values
+## Update trait values
 
 Use trait queries when you want to update trait values directly.
 
@@ -91,7 +91,7 @@ rvn query "trait:priority .value==urgent" --apply "update critical" --confirm
 
 ---
 
-## Add Text
+## Add text
 
 Append text to the end of matching files.
 
@@ -201,7 +201,7 @@ rvn query "type:project .status==active" --ids
 rvn query "trait:due .value<today" --ids
 ```
 
-### Piping Examples
+### Piping examples
 
 ```bash
 # Set fields via pipe
@@ -224,7 +224,7 @@ rvn query "type:page" --ids | rvn reclassify note --stdin
 rvn query "type:page" --ids | rvn reclassify note --stdin --confirm
 ```
 
-### Combining with Shell Tools
+### Combining with shell tools
 
 ```bash
 # Process first 10 results
@@ -236,7 +236,7 @@ rvn query "type:person" --ids | grep "team-" | rvn set --stdin department=engine
 
 ---
 
-## Commands Supporting `--stdin`
+## Commands supporting `--stdin`
 
 | Command | Behavior |
 |---------|----------|
@@ -253,9 +253,9 @@ Write commands require `--confirm` to apply changes (preview by default). Read-o
 
 ---
 
-## Object Type Limitations
+## Object type limitations
 
-### File-Level Objects
+### File-level objects
 
 Full path like `person/freya`:
 
@@ -293,7 +293,7 @@ Skipped 1 section ID(s) - bulk operations only support file-level objects
 
 ---
 
-## Error Handling
+## Error handling
 
 Bulk operations collect errors and continue processing:
 
@@ -341,44 +341,44 @@ git restore .
 
 ---
 
-## Common Patterns
+## Common patterns
 
-### Mark Items as Reviewed
+### Mark items as reviewed
 
 ```bash
 # Add a reviewed trait to all active projects
 rvn query "type:project .status==active" --apply "add @reviewed($(date +%Y-%m-%d))" --confirm
 ```
 
-### Archive Old Content
+### Archive old content
 
 ```bash
 # Move archived projects to archive folder
 rvn query "type:project .status==archived" --apply "move archive/project/" --confirm
 ```
 
-### Fix Missing Fields
+### Fix missing fields
 
 ```bash
 # Find objects missing a field and set a default
 rvn query "type:person !exists(.status)" --apply "set status=active" --confirm
 ```
 
-### Update Enum Values After Schema Change
+### Update enum values after schema change
 
 ```bash
 # After adding "critical" to priority enum, update old "urgent" values
 rvn query "type:project .priority==urgent" --ids | rvn set --stdin priority=critical --confirm
 ```
 
-### Clean Up Overdue Items
+### Clean up overdue items
 
 ```bash
 # Mark projects with overdue items
 rvn query "type:project has(trait:due .value<today)" --apply "set status=overdue" --confirm
 ```
 
-### Batch Create Tags
+### Batch create tags
 
 ```bash
 # Add a reviewed marker to all frontend projects
@@ -387,15 +387,15 @@ rvn query "type:project .category==frontend" --apply "add @reviewed(2026-01-10)"
 
 ---
 
-## Safety Checklist
+## Safety checklist
 
 Before running bulk operations:
 
-1. **Preview first** — Run without `--confirm` to see what will change
-2. **Check the count** — Make sure the number of affected objects is expected
-3. **Verify the query** — Run `rvn query "..." --json` to inspect full results
-4. **Commit first** — `git commit -am "Before bulk operation"` so you can rollback
-5. **Start small** — Use `| head -5` to test on a few objects first
+1. **Preview first.** Run without `--confirm` to see what will change.
+2. **Check the count.** Make sure the number of affected objects is expected.
+3. **Verify the query.** Run `rvn query "..." --json` to inspect full results.
+4. **Commit first.** `git commit -am "Before bulk operation"` so you can roll back.
+5. **Start small.** Use `| head -5` to test on a few objects first.
 
 ```bash
 # Safe flow
@@ -409,6 +409,6 @@ rvn query "type:project .status==archived" --apply "move archive/" --confirm
 
 ## Related docs
 
-- `vault-management/import.md` — bulk importing from external JSON data
-- `querying/query-language.md` — full RQL syntax for queries
-- `using-your-vault/common-commands.md` — individual commands (`rvn set`, `rvn move`, `rvn delete`, etc.)
+- `vault-management/import.md`: bulk importing from external JSON data
+- `querying/query-language.md`: full RQL syntax for queries
+- `using-your-vault/common-commands.md`: individual commands (`rvn set`, `rvn move`, `rvn delete`, etc.)
