@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.34] - 2026-08-23
+
 ### Added
 - Added preview-first `rvn section delete <file#section>` / `section_delete` to remove a heading's complete subtree with exact line/content previews and affected inbound-reference reporting; `--confirm` applies.
 - Added `rvn trash list` and preview-first `rvn restore` with configured trash-directory support, overwrite protection, CLI/MCP parity, and post-restore index/reference healing.
@@ -27,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Check auto-fixes now replace text only on each issue's reported line, so repeated or conflicting patterns are applied and counted independently.
 - `rvn check --fix` now replaces modified vault notes atomically, preventing interrupted writes from truncating note content while preserving existing file permissions.
 - Index writes now distinguish pre-commit failures from post-commit reference-resolution failures, reporting successful indexing with potentially stale backlinks and preserving the required recovery scope.
+- Windows `IsVaultRelativeFileKey` now correctly identifies Unix-style absolute paths (e.g., `/tmp/report.pdf`) as absolute rather than vault-relative.
+- Bumped Go toolchain from 1.25.12 to 1.25.13, addressing 5 standard library vulnerabilities.
 
 ### Removed
 - Removed the internal read-runtime, reference-resolution, and CLI field-JSON compatibility facades so callers use the shared extracted packages directly.
