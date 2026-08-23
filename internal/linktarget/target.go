@@ -148,6 +148,7 @@ func IsVaultRelativeFileKey(normalizedKey string) bool {
 	return normalizedKey != "" &&
 		target != "." &&
 		!filepath.IsAbs(target) &&
+		!isUnixAbsolute(normalizedKey) &&
 		!isWindowsAbsolute(normalizedKey) &&
 		isInsideRelativePath(target)
 }
@@ -448,4 +449,8 @@ func isWindowsAbsolute(target string) bool {
 	drive := target[0]
 	return ((drive >= 'a' && drive <= 'z') || (drive >= 'A' && drive <= 'Z')) &&
 		target[1] == ':' && (target[2] == '/' || target[2] == '\\')
+}
+
+func isUnixAbsolute(target string) bool {
+	return len(target) > 0 && target[0] == '/'
 }
