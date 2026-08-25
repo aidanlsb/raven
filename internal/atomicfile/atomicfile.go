@@ -72,11 +72,15 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 
 	committed = true
 
-	// Sync the parent directory to persist the rename. Ignore ENOTSUP so
-	// filesystems that don't support directory sync (e.g. some Windows setups)
-	// don't fail the write.
-	if err := syncDir(dir); err != nil && !errors.Is(err, syscall.ENOTSUP) {
-		return fmt.Errorf("sync directory: %w", err)
+	// Sync the parent directory to persist the rename on POSIX systems.
+	// Skip on Windows where opening directories for sync is not supported.
+	if runtime.GOOS != "windows" {
+		if err := syncDir(dir); err != nil {
+			// Ignore ENOTSUP for filesystems that don't support directory sync
+			if !errors.Is(err, syscall.ENOTSUP) {
+				return fmt.Errorf("sync directory: %w", err)
+			}
+		}
 	}
 
 	return nil
@@ -84,8 +88,7 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 
 func syncDir(dir string) error {
 	// Open the directory and call Sync() to flush its metadata (persisting the
-	// rename). On Windows and some unusual filesystems, opening directories may
-	// fail or Sync may return ENOTSUP; callers should ignore ENOTSUP.
+	// rename). Only called on non-Windows systems.
 	d, err := os.Open(dir)
 	if err != nil {
 		return err
