@@ -88,6 +88,31 @@ make check              # fmt-check + lint + test (run before submitting)
 - `internal/model/` defines canonical types used across all layers — do not define parallel types elsewhere.
 - CLI commands in `internal/cli/` map one-to-one to `.go` files.
 
+#### Service Package (`*svc`) Boundaries
+
+A `*svc` package is a use-case façade that:
+
+1. **Invoked by command handlers** — `internal/commandimpl/` calls `*svc` functions to execute business operations
+2. **Returns `svcerr.Error`** — all errors are wrapped with structured error codes from `internal/codes`
+3. **Coordinates multiple subsystems** — services orchestrate domain packages (parser, index, mutation, pages, etc.) to complete operations that span multiple concerns
+4. **Owns transactions and ChangeSets** — services manage file mutations, index updates, and validation workflows
+5. **Shared by CLI and MCP** — service operations are invoked identically through both transport layers
+
+**What does NOT earn a `*svc` package:**
+
+- **Trivial wrappers** — single-function packages that only remap errors belong in their caller
+- **Pure domain logic** — reusable building blocks (path manipulation, parsing, validation) live in plain packages like `internal/paths/`, `internal/parser/`, `internal/schema/`, not services
+- **Transport-specific code** — CLI rendering and MCP serialization stay in `internal/cli/` and `internal/mcp/`
+
+**Shared runtime assembly:** `internal/vaultruntime` provides `Runtime` and `FromRequest` to assemble vault dependencies (config, schema, database, parse options) for both services and direct command handlers.
+
+Examples:
+- **Keep as service:** `objectsvc` (coordinates parser, index, mutation, references, schema validation for multi-step object operations)
+- **Keep as service:** `querysvc` (query parsing, execution, pagination, result assembly)
+- **Fold into caller:** `maintsvc.Stats` (50-line wrapper around `rt.DB.Stats()`)
+- **Fold into caller:** `initsvc.Initialize` (vault setup logic belongs in the init command handler)
+- **Fold into caller:** `datesvc` functions (date-specific operations fold into command handlers and CLI)
+
 ### Error Handling
 
 - Use structured error codes defined in `internal/codes` (e.g., `codes.ErrTypeNotFound`, `codes.ErrRefAmbiguous`). These codes are stable and agents depend on them.

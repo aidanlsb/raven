@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/datesvc"
+	"github.com/aidanlsb/raven/internal/commandimpl"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -32,7 +32,7 @@ func renderDate(_ *cobra.Command, result commandexec.Result) error {
 		fmt.Printf("%s\n\n", ui.Bullet(ui.Hint(fmt.Sprintf("(not created yet - use 'rvn daily %s' to create)", dateValue))))
 	}
 
-	byField := make(map[string][]datesvc.DateAssociation)
+	byField := make(map[string][]commandimpl.DateAssociation)
 	for _, item := range dateAssociationsFromAny(data["items"]) {
 		byField[item.FieldName] = append(byField[item.FieldName], item)
 	}
@@ -87,8 +87,8 @@ func renderDate(_ *cobra.Command, result commandexec.Result) error {
 	return nil
 }
 
-func dateAssociationsFromAny(raw interface{}) []datesvc.DateAssociation {
-	var items []datesvc.DateAssociation
+func dateAssociationsFromAny(raw interface{}) []commandimpl.DateAssociation {
+	var items []commandimpl.DateAssociation
 	_ = decodeResultData(raw, &items)
 	return items
 }
