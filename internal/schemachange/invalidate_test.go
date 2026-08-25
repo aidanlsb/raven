@@ -3,6 +3,7 @@ package schemachange
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/indexjournal"
@@ -220,6 +221,11 @@ func TestApplyInvalidation_AutoReindexEnabled(t *testing.T) {
 }
 
 func TestRecordInvalidation_JournalWriteFailure(t *testing.T) {
+	// Skip on Windows where chmod doesn't reliably make directories read-only
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod-based write permission test not reliable on Windows")
+	}
+
 	t.Parallel()
 	vaultPath := t.TempDir()
 

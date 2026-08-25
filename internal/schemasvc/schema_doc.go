@@ -15,10 +15,6 @@ type editSchemaResult struct {
 	Classification schemachange.Classification
 }
 
-func editSchema(vaultPath, loadSuggestion string, mutate func(*schemadoc.Document) error) error {
-	return editSchemaWithLoadError(vaultPath, loadSuggestion, codes.ErrSchemaNotFound, mutate)
-}
-
 func editSchemaWithInvalidation(vaultPath, loadSuggestion string, mutate func(*schemadoc.Document) error) (*editSchemaResult, error) {
 	return editSchemaWithInvalidationAndLoadError(vaultPath, loadSuggestion, codes.ErrSchemaNotFound, mutate)
 }
