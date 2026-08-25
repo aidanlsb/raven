@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"syscall"
 )
 
 // WriteFile writes data to path atomically (best-effort cross-platform).
 //
-// It writes to a temporary file in the same directory and renames it into place.
+// It writes to a temporary file in the same directory, renames it into place,
+// and syncs the parent directory (where supported) to persist the rename.
 // This avoids torn writes if the process crashes mid-write.
 //
 // perm is used for the temp file. If perm is 0, WriteFile will try to preserve the
@@ -69,7 +71,27 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 	}
 
 	committed = true
+
+	// Sync the parent directory to persist the rename. Ignore ENOTSUP so
+	// filesystems that don't support directory sync (e.g. some Windows setups)
+	// don't fail the write.
+	if err := syncDir(dir); err != nil && !errors.Is(err, syscall.ENOTSUP) {
+		return fmt.Errorf("sync directory: %w", err)
+	}
+
 	return nil
+}
+
+func syncDir(dir string) error {
+	// Open the directory and call Sync() to flush its metadata (persisting the
+	// rename). On Windows and some unusual filesystems, opening directories may
+	// fail or Sync may return ENOTSUP; callers should ignore ENOTSUP.
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }
 
 func fileExists(path string) bool {

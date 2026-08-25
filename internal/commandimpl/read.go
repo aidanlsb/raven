@@ -568,15 +568,23 @@ func mapReadRuntimeSetupFailure(err error) commandexec.Result {
 		return failure
 	}
 
-	message := strings.ToLower(strings.TrimSpace(err.Error()))
-	switch {
-	case strings.Contains(message, "vault path is required"):
+	if errors.Is(err, vaultruntime.ErrVaultPathRequired) {
 		return commandexec.Failure("VAULT_NOT_SPECIFIED", "no vault path resolved", nil, "Use --vault-path, --vault, active_vault, or default_vault")
-	case isReadRuntimeConfigError(message):
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
-	default:
-		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
 	}
+
+	var setupErr *vaultruntime.SetupError
+	if errors.As(err, &setupErr) {
+		switch setupErr.Stage {
+		case vaultruntime.StageConfig:
+			return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+		case vaultruntime.StageSchema:
+			return commandexec.Failure("SCHEMA_INVALID", "failed to load schema.yaml", nil, "Fix schema.yaml and try again")
+		case vaultruntime.StageDatabase:
+			return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
+		}
+	}
+
+	return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
 }
 
 func mapIndexRebuildRequired(err error) (commandexec.Result, bool) {
@@ -589,10 +597,6 @@ func mapIndexRebuildRequired(err error) (commandexec.Result, bool) {
 		nil,
 		"Run 'rvn reindex --full' to rebuild the index",
 	), true
-}
-
-func isReadRuntimeConfigError(message string) bool {
-	return strings.Contains(message, "vault config") || strings.Contains(message, "raven.yaml")
 }
 
 func searchMatchItems(results []model.SearchMatch) []commandpayload.SearchMatchItem {

@@ -232,12 +232,21 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 		return nil, svcerr.ValidationError(fmt.Errorf("error walking vault: %w", walkErr))
 	}
 
-	validator := check.NewValidatorWithTypesAliasesAndResolver(sch, allObjectInfos, aliases, canonicalResolver)
-	validator.SetDuplicateAliases(duplicateAliases)
-	validator.SetDailyDirectoryForInference(vaultCfg.GetDailyDirectory())
+	var objectsRoot, pagesRoot string
 	if vaultCfg.HasDirectoriesConfig() {
-		validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
+		objectsRoot = vaultCfg.GetObjectsRoot()
+		pagesRoot = vaultCfg.GetPagesRoot()
 	}
+	validator := check.New(check.Options{
+		Schema:           sch,
+		ObjectInfos:      allObjectInfos,
+		Aliases:          aliases,
+		Resolver:         canonicalResolver,
+		DuplicateAliases: duplicateAliases,
+		ObjectsRoot:      objectsRoot,
+		PagesRoot:        pagesRoot,
+		DailyDir:         vaultCfg.GetDailyDirectory(),
+	})
 	if canonicalResolver == nil {
 		validator.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 	}

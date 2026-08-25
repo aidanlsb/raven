@@ -157,17 +157,20 @@ func (ws *workspace) rebuildCaches() error {
 
 // newValidator builds a document validator backed by the cached index state.
 func (ws *workspace) newValidator() *check.Validator {
-	validator := check.NewValidatorWithTypesAliasesAndResolver(
-		ws.schema(),
-		ws.objectInfos,
-		ws.catalog.Aliases,
-		ws.catalog.Resolver,
-	)
-	validator.SetDailyDirectoryForInference(ws.vaultConfig().GetDailyDirectory())
+	var objectsRoot, pagesRoot string
 	if ws.vaultConfig().HasDirectoriesConfig() {
-		validator.SetDirectoryRoots(ws.vaultConfig().GetObjectsRoot(), ws.vaultConfig().GetPagesRoot())
+		objectsRoot = ws.vaultConfig().GetObjectsRoot()
+		pagesRoot = ws.vaultConfig().GetPagesRoot()
 	}
-	return validator
+	return check.New(check.Options{
+		Schema:      ws.schema(),
+		ObjectInfos: ws.objectInfos,
+		Aliases:     ws.catalog.Aliases,
+		Resolver:    ws.catalog.Resolver,
+		ObjectsRoot: objectsRoot,
+		PagesRoot:   pagesRoot,
+		DailyDir:    ws.vaultConfig().GetDailyDirectory(),
+	})
 }
 
 // parseBuffer parses in-memory buffer content as the document at absPath.
