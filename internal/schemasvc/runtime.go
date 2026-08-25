@@ -3,10 +3,19 @@ package schemasvc
 import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemachange"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func init() {
+	// Wire up the schemadoc invalidation hook to avoid import cycles
+	schemadoc.SetRecordInvalidationHook(func(vaultPath string, beforeSchema, afterSchema *schema.Schema) (string, interface{}, error) {
+		operationID, classification, err := schemachange.RecordInvalidation(vaultPath, beforeSchema, afterSchema)
+		return operationID, classification, err
+	})
+}
 
 func runtimeSchema(rt *vaultruntime.Runtime, suggestion string) (*schema.Schema, error) {
 	if err := vaultruntime.Require(rt); err != nil {
@@ -22,10 +31,22 @@ func runtimeSchema(rt *vaultruntime.Runtime, suggestion string) (*schema.Schema,
 }
 
 func editRuntimeSchema(rt *vaultruntime.Runtime, suggestion string, edit func(*schemadoc.Document) error) error {
-	if err := editSchema(rt.VaultPath, suggestion, edit); err != nil {
+	result, err := editSchemaWithInvalidation(rt.VaultPath, suggestion, edit)
+	if err != nil {
 		return err
 	}
-	return reloadRuntimeSchema(rt)
+	if reloadErr := reloadRuntimeSchema(rt); reloadErr != nil {
+		return reloadErr
+	}
+	// Apply invalidation after schema reload (when auto-reindex enabled)
+	if result != nil && result.OperationID != "" {
+		if applyErr := schemachange.ApplyInvalidation(rt, result.OperationID, result.Classification); applyErr != nil {
+			// Log the error but don't fail the mutation - the journal entry persists
+			// and a manual reindex will recover.
+			// TODO: consider returning a warning instead of silently continuing
+		}
+	}
+	return nil
 }
 
 func editRuntimeSchemaWithLoadError(

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 
@@ -93,6 +94,9 @@ func Load(vaultPath string) (*Document, error) {
 // Edit runs a mutation against typed and editable views of one schema.yaml
 // snapshot, validates the staged YAML through the typed loader, and writes it
 // atomically.
+//
+// This function does NOT record index invalidation. Callers must use
+// EditWithInvalidation if the mutation requires index recovery tracking.
 func Edit(vaultPath string, mutate func(*Document) error) error {
 	doc, err := Load(vaultPath)
 	if err != nil {
@@ -105,6 +109,117 @@ func Edit(vaultPath string, mutate func(*Document) error) error {
 		return err
 	}
 	return doc.Write()
+}
+
+// EditResult reports the outcome of a schema mutation with invalidation tracking.
+type EditResult struct {
+	// OperationID is the index journal operation ID, if invalidation was recorded.
+	// Empty when the mutation requires no index work.
+	OperationID string
+	// Changed is true if the schema.yaml file was rewritten.
+	Changed bool
+}
+
+// EditWithInvalidation runs a schema mutation and records index invalidation
+// before the durable schema write. It returns the operation ID for tracking
+// and whether the schema changed.
+//
+// If the mutation requires index recovery (PolicyFullScan or
+// PolicyResolverRefresh), this function:
+//  1. Loads the before schema
+//  2. Applies the mutation
+//  3. Classifies the change
+//  4. Records invalidation in the index journal
+//  5. Writes schema.yaml atomically
+//
+// If recording invalidation fails, the mutation aborts before writing schema.yaml.
+// The caller is responsible for running ApplyInvalidation afterward when
+// auto-reindex is enabled.
+func EditWithInvalidation(vaultPath string, mutate func(*Document) error) (*EditResult, error) {
+	// Load before state
+	beforeSchema, beforeErr := schema.Load(vaultPath)
+	if beforeErr != nil {
+		// If schema doesn't exist yet or is corrupt, treat as nil
+		beforeSchema = nil
+	}
+
+	doc, err := Load(vaultPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := mutate(doc); err != nil {
+		if errors.Is(err, ErrNoChange) {
+			return &EditResult{Changed: false}, nil
+		}
+		return nil, err
+	}
+
+	// Validate and parse the staged mutation to get after schema
+	output, marshalErr := yaml.Marshal(doc.root)
+	if marshalErr != nil {
+		return nil, editError(OperationMarshal, marshalErr)
+	}
+	if err := validate(output, paths.SchemaPath(vaultPath)); err != nil {
+		return nil, err
+	}
+
+	afterResult, parseErr := schema.Parse(output, paths.SchemaPath(vaultPath))
+	if parseErr != nil {
+		return nil, editError(OperationValidate, parseErr)
+	}
+	afterSchema := afterResult.Schema
+
+	// Classify and record invalidation before writing
+	operationID, classification, classifyErr := recordInvalidation(vaultPath, beforeSchema, afterSchema)
+	if classifyErr != nil {
+		return nil, classifyErr
+	}
+	classificationState.Lock()
+	classificationState.value = classification
+	classificationState.Unlock()
+
+	// Write schema.yaml atomically
+	if err := atomicfile.WriteFile(paths.SchemaPath(vaultPath), output, 0o644); err != nil {
+		return nil, editError(OperationWrite, err)
+	}
+
+	return &EditResult{
+		OperationID: operationID,
+		Changed:     true,
+	}, nil
+}
+
+// RecordInvalidationFunc is the signature for the schema invalidation hook.
+type RecordInvalidationFunc func(vaultPath string, beforeSchema, afterSchema *schema.Schema) (operationID string, classification interface{}, err error)
+
+// recordInvalidation is the internal hook for schema change classification.
+// It is defined as a variable so tests can override it and so we can avoid
+// import cycles (schemasvc sets this via SetRecordInvalidationHook).
+var recordInvalidation RecordInvalidationFunc = func(vaultPath string, beforeSchema, afterSchema *schema.Schema) (string, interface{}, error) {
+	// Default no-op: no invalidation recorded
+	return "", nil, nil
+}
+
+// SetRecordInvalidationHook wires up the schema change invalidation logic.
+// Called by schemasvc.init() to avoid import cycles.
+func SetRecordInvalidationHook(fn RecordInvalidationFunc) {
+	recordInvalidation = fn
+}
+
+// classificationState stores the classification from the most recent edit.
+// Protected by a mutex for concurrent access.
+var classificationState struct {
+	sync.RWMutex
+	value interface{}
+}
+
+// GetLastClassification returns the classification from the most recent
+// EditWithInvalidation call. This is a workaround for the hook interface.
+func GetLastClassification() interface{} {
+	classificationState.RLock()
+	defer classificationState.RUnlock()
+	return classificationState.value
 }
 
 // Schema returns the typed model loaded from the document's original bytes.
