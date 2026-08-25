@@ -916,7 +916,6 @@ func TestAliasCollisionDetection(t *testing.T) {
 		}
 
 		v := New(Options{Schema: s, ObjectInfos: objectInfos, Aliases: aliases, DuplicateAliases: duplicates})
-		})
 
 		schemaIssues := v.ValidateSchema()
 
