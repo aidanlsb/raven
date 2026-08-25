@@ -32,7 +32,7 @@ func FuzzLexer(f *testing.F) {
 	f.Fuzz(func(t *testing.T, input string) {
 		// The lexer must not panic on any input
 		lexer := NewLexer(input)
-		
+
 		// Tokenize the entire input
 		tokenCount := 0
 		maxTokens := 100000 // Prevent infinite loops
@@ -47,7 +47,7 @@ func FuzzLexer(f *testing.F) {
 			}
 			tokenCount++
 		}
-		
+
 		// Ensure we eventually reach EOF or error
 		if tokenCount >= maxTokens {
 			t.Errorf("Lexer produced too many tokens without EOF")
@@ -69,7 +69,7 @@ func FuzzLexerTokenTypes(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		lexer := NewLexer(input)
-		
+
 		// Lex all tokens
 		var tokens []Token
 		for {
@@ -82,12 +82,12 @@ func FuzzLexerTokenTypes(f *testing.F) {
 				break
 			}
 		}
-		
+
 		// Basic invariants
 		if len(tokens) == 0 {
 			t.Error("Lexer returned no tokens")
 		}
-		
+
 		// Last token should be EOF or Error
 		lastToken := tokens[len(tokens)-1]
 		if lastToken.Type != TokenEOF && lastToken.Type != TokenError {
@@ -110,10 +110,10 @@ func FuzzLexerReferences(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		lexer := NewLexer(input)
-		
+
 		for i := 0; i < 1000; i++ {
 			tok := lexer.NextToken()
-			
+
 			// Verify token positions are sane
 			if tok.Pos < 0 {
 				t.Errorf("Token pos = %d, want >= 0", tok.Pos)
@@ -122,7 +122,7 @@ func FuzzLexerReferences(f *testing.F) {
 			if tok.Pos+len(tok.Value) > len(input) {
 				t.Errorf("Token pos+value length = %d > input length = %d", tok.Pos+len(tok.Value), len(input))
 			}
-			
+
 			if tok.Type == TokenEOF || tok.Type == TokenError {
 				break
 			}
@@ -143,13 +143,13 @@ func FuzzLexerStrings(f *testing.F) {
 	f.Fuzz(func(t *testing.T, input string) {
 		lexer := NewLexer(input)
 		tok := lexer.NextToken()
-		
+
 		// Should always return some token (string, error, or EOF)
 		if tok.Type != TokenString && tok.Type != TokenError && tok.Type != TokenEOF {
 			// Could be other tokens if input doesn't start with quote
 			return
 		}
-		
+
 		// Positions should be valid
 		if tok.Pos < 0 || tok.Pos > len(input) {
 			t.Errorf("Invalid token position: pos=%d input_len=%d", tok.Pos, len(input))
@@ -172,18 +172,18 @@ func FuzzLexerOperators(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		lexer := NewLexer(input)
-		
+
 		// Lex all tokens
 		prevPos := 0
 		for i := 0; i < 100; i++ {
 			tok := lexer.NextToken()
-			
+
 			// Tokens should advance
 			if tok.Pos < prevPos {
 				t.Errorf("Token pos = %d < previous pos = %d", tok.Pos, prevPos)
 			}
 			prevPos = tok.Pos + len(tok.Value)
-			
+
 			if tok.Type == TokenEOF {
 				break
 			}

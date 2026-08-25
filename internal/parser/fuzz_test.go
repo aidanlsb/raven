@@ -42,7 +42,7 @@ func FuzzFrontmatterBounds(f *testing.F) {
 	f.Fuzz(func(t *testing.T, content string) {
 		lines := strings.Split(content, "\n")
 		startLine, endLine, ok := FrontmatterBounds(lines)
-		
+
 		// Sanity checks
 		if ok && startLine < 0 {
 			t.Errorf("FrontmatterBounds returned ok=true but startLine=%d < 0", startLine)
@@ -78,7 +78,7 @@ func FuzzExtractFrontmatterYAML(f *testing.F) {
 			yamlLines = append(yamlLines, lines[i])
 		}
 		yaml := strings.Join(yamlLines, "\n")
-		
+
 		// Just ensure we can construct it without panic
 		_ = yaml
 	})

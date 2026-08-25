@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/schema"
 	_ "modernc.org/sqlite"
+
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestDefaultDailyDirectory(t *testing.T) {

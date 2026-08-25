@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -128,12 +129,15 @@ func TestWriteFile(t *testing.T) {
 
 		assertFileContent(t, path, "hello world")
 
-		stat, err := os.Stat(path)
-		if err != nil {
-			t.Fatalf("stat error: %v", err)
-		}
-		if stat.Mode().Perm() != 0o644 {
-			t.Errorf("file mode = %o, want %o", stat.Mode().Perm(), 0o644)
+		// Skip permission check on Windows where permissions don't work the same way
+		if runtime.GOOS != "windows" {
+			stat, err := os.Stat(path)
+			if err != nil {
+				t.Fatalf("stat error: %v", err)
+			}
+			if stat.Mode().Perm() != 0o644 {
+				t.Errorf("file mode = %o, want %o", stat.Mode().Perm(), 0o644)
+			}
 		}
 	})
 
@@ -150,12 +154,15 @@ func TestWriteFile(t *testing.T) {
 
 		assertFileContent(t, path, "hello")
 
-		stat, err := os.Stat(path)
-		if err != nil {
-			t.Fatalf("stat error: %v", err)
-		}
-		if stat.Mode().Perm() != 0o600 {
-			t.Errorf("file mode = %o, want %o", stat.Mode().Perm(), 0o600)
+		// Skip permission check on Windows where permissions don't work the same way
+		if runtime.GOOS != "windows" {
+			stat, err := os.Stat(path)
+			if err != nil {
+				t.Fatalf("stat error: %v", err)
+			}
+			if stat.Mode().Perm() != 0o600 {
+				t.Errorf("file mode = %o, want %o", stat.Mode().Perm(), 0o600)
+			}
 		}
 	})
 
@@ -175,12 +182,15 @@ func TestWriteFile(t *testing.T) {
 
 		assertFileContent(t, path, "new")
 
-		stat, err := os.Stat(path)
-		if err != nil {
-			t.Fatalf("stat error: %v", err)
-		}
-		if stat.Mode().Perm() != 0o600 {
-			t.Errorf("file mode = %o, want %o (should preserve)", stat.Mode().Perm(), 0o600)
+		// Skip permission check on Windows where permissions don't work the same way
+		if runtime.GOOS != "windows" {
+			stat, err := os.Stat(path)
+			if err != nil {
+				t.Fatalf("stat error: %v", err)
+			}
+			if stat.Mode().Perm() != 0o600 {
+				t.Errorf("file mode = %o, want %o (should preserve)", stat.Mode().Perm(), 0o600)
+			}
 		}
 	})
 
@@ -200,12 +210,15 @@ func TestWriteFile(t *testing.T) {
 
 		assertFileContent(t, path, "new")
 
-		stat, err := os.Stat(path)
-		if err != nil {
-			t.Fatalf("stat error: %v", err)
-		}
-		if stat.Mode().Perm() != 0o644 {
-			t.Errorf("file mode = %o, want %o (explicit override)", stat.Mode().Perm(), 0o644)
+		// Skip permission check on Windows where permissions don't work the same way
+		if runtime.GOOS != "windows" {
+			stat, err := os.Stat(path)
+			if err != nil {
+				t.Fatalf("stat error: %v", err)
+			}
+			if stat.Mode().Perm() != 0o644 {
+				t.Errorf("file mode = %o, want %o (explicit override)", stat.Mode().Perm(), 0o644)
+			}
 		}
 	})
 
