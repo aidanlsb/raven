@@ -759,7 +759,7 @@ func TestValidatorShortRefSuggestion(t *testing.T) {
 	objectInfos := []ObjectInfo{
 		{ID: "people/freya", Type: "person"},
 	}
-	v := NewValidatorWithTypes(s, objectInfos)
+	v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 	doc := &parser.ParsedDocument{
 		FilePath: "notes/test.md",
