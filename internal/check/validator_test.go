@@ -33,7 +33,11 @@ func TestValidatorBasic(t *testing.T) {
 	}
 
 	objectIDs := []string{"people/freya", "projects/bifrost"}
-	v := NewValidator(s, objectIDs)
+	objectInfos := make([]ObjectInfo, len(objectIDs))
+	for i, id := range objectIDs {
+		objectInfos[i] = ObjectInfo{ID: id}
+	}
+	v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 	t.Run("valid document", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
@@ -144,7 +148,11 @@ func TestValidatorUnknownFrontmatterKey(t *testing.T) {
 	}
 
 	objectIDs := []string{"people/freya"}
-	v := NewValidator(s, objectIDs)
+	objectInfos := make([]ObjectInfo, len(objectIDs))
+	for i, id := range objectIDs {
+		objectInfos[i] = ObjectInfo{ID: id}
+	}
+	v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 	doc := &parser.ParsedDocument{
 		FilePath: "people/freya.md",
@@ -190,7 +198,11 @@ func TestValidatorTraitValidation(t *testing.T) {
 	}
 
 	objectIDs := []string{"notes/test"}
-	v := NewValidator(s, objectIDs)
+	objectInfos := make([]ObjectInfo, len(objectIDs))
+	for i, id := range objectIDs {
+		objectInfos[i] = ObjectInfo{ID: id}
+	}
+	v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 	t.Run("valid date trait", func(t *testing.T) {
 		dueValue := fieldvalue.String("2025-02-01")
@@ -361,7 +373,11 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 	}
 
 	objectIDs := []string{"notes/test"}
-	v := NewValidator(s, objectIDs)
+	objectInfos := make([]ObjectInfo, len(objectIDs))
+	for i, id := range objectIDs {
+		objectInfos[i] = ObjectInfo{ID: id}
+	}
+	v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 	t.Run("bare boolean trait is valid", func(t *testing.T) {
 		// @done with no value - should be valid (defaults to true)
@@ -466,7 +482,8 @@ func TestValidatorNilTraitDefinition(t *testing.T) {
 		},
 	}
 
-	v := NewValidator(s, []string{"notes/test"})
+	objectInfos := []ObjectInfo{{ID: "notes/test"}}
+	v := New(Options{Schema: s, ObjectInfos: objectInfos})
 	doc := &parser.ParsedDocument{
 		FilePath: "notes/test.md",
 		Objects: []*model.Object{
@@ -551,7 +568,7 @@ func TestValidatorTargetTypeValidation(t *testing.T) {
 		{ID: "people/freya", Type: "person"},
 		{ID: "projects/website", Type: "project"},
 	}
-	v := NewValidatorWithTypes(s, objectInfos)
+	v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 	t.Run("correct target type", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
@@ -617,7 +634,7 @@ func TestValidatorSchemaIntegrity(t *testing.T) {
 		objectInfos := []ObjectInfo{
 			{ID: "people/freya", Type: "person"},
 		}
-		v := NewValidatorWithTypes(s, objectInfos)
+		v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 		// Validate a document to populate usedTypes
 		doc := &parser.ParsedDocument{
@@ -656,7 +673,7 @@ func TestValidatorSchemaIntegrity(t *testing.T) {
 			Traits: map[string]*schema.TraitDefinition{},
 		}
 
-		v := NewValidatorWithTypes(s, []ObjectInfo{})
+		v := New(Options{Schema: s, ObjectInfos: []ObjectInfo{}})
 		schemaIssues := v.ValidateSchema()
 
 		hasMissingTarget := false
@@ -683,7 +700,7 @@ func TestValidatorSchemaIntegrity(t *testing.T) {
 			Traits: map[string]*schema.TraitDefinition{},
 		}
 
-		v := NewValidatorWithTypes(s, []ObjectInfo{})
+		v := New(Options{Schema: s, ObjectInfos: []ObjectInfo{}})
 		schemaIssues := v.ValidateSchema()
 
 		hasUnknownField := false
@@ -714,7 +731,7 @@ func TestValidatorSchemaIntegrity(t *testing.T) {
 			Traits: map[string]*schema.TraitDefinition{},
 		}
 
-		v := NewValidatorWithTypes(s, []ObjectInfo{})
+		v := New(Options{Schema: s, ObjectInfos: []ObjectInfo{}})
 		schemaIssues := v.ValidateSchema()
 
 		hasSelfRef := false
@@ -742,7 +759,7 @@ func TestValidatorShortRefSuggestion(t *testing.T) {
 	objectInfos := []ObjectInfo{
 		{ID: "people/freya", Type: "person"},
 	}
-	v := NewValidatorWithTypes(s, objectInfos)
+	v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 	doc := &parser.ParsedDocument{
 		FilePath: "notes/test.md",
@@ -784,7 +801,11 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 	}
 
 	objectIDs := []string{"notes/test"}
-	v := NewValidator(s, objectIDs)
+	objectInfos := make([]ObjectInfo, len(objectIDs))
+	for i, id := range objectIDs {
+		objectInfos[i] = ObjectInfo{ID: id}
+	}
+	v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 	t.Run("valid datetime trait", func(t *testing.T) {
 		validValue := fieldvalue.String("2025-02-01T09:00")
@@ -849,11 +870,15 @@ func TestAliasCollisionDetection(t *testing.T) {
 
 	t.Run("alias conflicts with short name reported as error", func(t *testing.T) {
 		objectIDs := []string{"people/freya", "people/thor"}
+		objectInfos := make([]ObjectInfo, len(objectIDs))
+		for i, id := range objectIDs {
+			objectInfos[i] = ObjectInfo{ID: id}
+		}
 		aliases := map[string]string{
 			"thor": "people/freya", // Conflicts with people/thor's short name
 		}
 
-		v := NewValidatorWithAliases(s, objectIDs, aliases)
+		v := New(Options{Schema: s, ObjectInfos: objectInfos, Aliases: aliases})
 		schemaIssues := v.ValidateSchema()
 
 		hasAliasCollision := false
@@ -876,17 +901,21 @@ func TestAliasCollisionDetection(t *testing.T) {
 
 	t.Run("duplicate aliases reported as error", func(t *testing.T) {
 		objectIDs := []string{"people/freya", "people/frigg"}
+		objectInfos := make([]ObjectInfo, len(objectIDs))
+		for i, id := range objectIDs {
+			objectInfos[i] = ObjectInfo{ID: id}
+		}
 		aliases := map[string]string{
 			"goddess": "people/freya", // Only one is stored, but we have duplicates info
 		}
-
-		v := NewValidatorWithAliases(s, objectIDs, aliases)
-		v.SetDuplicateAliases([]resolver.AliasCollision{
+		duplicates := []resolver.AliasCollision{
 			{
 				Alias:     "goddess",
 				ObjectIDs: []string{"people/freya", "people/frigg"},
 			},
-		})
+		}
+
+		v := New(Options{Schema: s, ObjectInfos: objectInfos, Aliases: aliases, DuplicateAliases: duplicates})
 
 		schemaIssues := v.ValidateSchema()
 
@@ -913,11 +942,15 @@ func TestAliasCollisionDetection(t *testing.T) {
 
 	t.Run("unique alias has no collision", func(t *testing.T) {
 		objectIDs := []string{"people/freya", "people/thor"}
+		objectInfos := make([]ObjectInfo, len(objectIDs))
+		for i, id := range objectIDs {
+			objectInfos[i] = ObjectInfo{ID: id}
+		}
 		aliases := map[string]string{
 			"goddess": "people/freya", // Unique - no conflict
 		}
 
-		v := NewValidatorWithAliases(s, objectIDs, aliases)
+		v := New(Options{Schema: s, ObjectInfos: objectInfos, Aliases: aliases})
 		schemaIssues := v.ValidateSchema()
 
 		for _, issue := range schemaIssues {
@@ -931,11 +964,12 @@ func TestAliasCollisionDetection(t *testing.T) {
 		aliases := map[string]string{
 			"thor": "people/freya", // Conflicts with people/thor
 		}
-
-		v := NewValidatorWithTypesAndAliases(s, []ObjectInfo{
+		objectInfos := []ObjectInfo{
 			{ID: "people/freya", Type: "person"},
 			{ID: "people/thor", Type: "person"},
-		}, aliases)
+		}
+
+		v := New(Options{Schema: s, ObjectInfos: objectInfos, Aliases: aliases})
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
@@ -986,7 +1020,11 @@ func TestValidatorStaleFragment(t *testing.T) {
 	t.Run("stale fragment detected when file exists but section missing", func(t *testing.T) {
 		// The file "projects/website" exists, but "projects/website#old-heading" does not
 		objectIDs := []string{"projects/website", "projects/website#current-section"}
-		v := NewValidator(s, objectIDs)
+		objectInfos := make([]ObjectInfo, len(objectIDs))
+		for i, id := range objectIDs {
+			objectInfos[i] = ObjectInfo{ID: id}
+		}
+		v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/roadmap.md",
@@ -1026,7 +1064,11 @@ func TestValidatorStaleFragment(t *testing.T) {
 	t.Run("stale fragment not emitted when file also missing", func(t *testing.T) {
 		// Neither "projects/deleted" nor "projects/deleted#section" exist
 		objectIDs := []string{"projects/website"}
-		v := NewValidator(s, objectIDs)
+		objectInfos := make([]ObjectInfo, len(objectIDs))
+		for i, id := range objectIDs {
+			objectInfos[i] = ObjectInfo{ID: id}
+		}
+		v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/roadmap.md",
@@ -1060,7 +1102,11 @@ func TestValidatorStaleFragment(t *testing.T) {
 	t.Run("valid fragment reference produces no issues", func(t *testing.T) {
 		// Both "projects/website" and "projects/website#overview" exist
 		objectIDs := []string{"projects/website", "projects/website#overview"}
-		v := NewValidator(s, objectIDs)
+		objectInfos := make([]ObjectInfo, len(objectIDs))
+		for i, id := range objectIDs {
+			objectInfos[i] = ObjectInfo{ID: id}
+		}
+		v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/roadmap.md",
@@ -1082,7 +1128,11 @@ func TestValidatorStaleFragment(t *testing.T) {
 
 	t.Run("local fragment reference is invalid", func(t *testing.T) {
 		objectIDs := []string{"notes/roadmap", "notes/roadmap#tasks"}
-		v := NewValidator(s, objectIDs)
+		objectInfos := make([]ObjectInfo, len(objectIDs))
+		for i, id := range objectIDs {
+			objectInfos[i] = ObjectInfo{ID: id}
+		}
+		v := New(Options{Schema: s, ObjectInfos: objectInfos})
 
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/roadmap.md",
@@ -1158,7 +1208,7 @@ func TestValidatorSetDailyDirectoryPreservesResolver(t *testing.T) {
 		},
 	})
 
-	v := NewValidatorWithTypesAliasesAndResolver(s, objectInfos, nil, prebuilt)
+	v := New(Options{Schema: s, ObjectInfos: objectInfos, Resolver: prebuilt})
 
 	// Changing the daily directory must not weaken the resolver.
 	v.SetDailyDirectory("journal")

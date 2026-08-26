@@ -34,95 +34,55 @@ type ObjectInfo struct {
 	Type string
 }
 
-// NewValidator creates a new validator.
-func NewValidator(s *schema.Schema, objectIDs []string) *Validator {
-	return NewValidatorWithAliases(s, objectIDs, nil)
+// Options configures Validator construction.
+type Options struct {
+	Schema           *schema.Schema
+	ObjectInfos      []ObjectInfo
+	Aliases          map[string]string
+	Resolver         *resolver.Resolver
+	DuplicateAliases []resolver.AliasCollision
+	ObjectsRoot      string
+	PagesRoot        string
+	DailyDir         string
 }
 
-// NewValidatorWithAliases creates a new validator with alias support.
-func NewValidatorWithAliases(s *schema.Schema, objectIDs []string, aliases map[string]string) *Validator {
-	allIDs := make(map[string]struct{}, len(objectIDs))
-	for _, id := range objectIDs {
-		allIDs[id] = struct{}{}
-	}
-
-	return &Validator{
-		schema:          s,
-		resolver:        resolver.New(objectIDs, resolver.Options{Aliases: aliases}),
-		allIDs:          allIDs,
-		objectTypes:     make(map[string]string),
-		aliases:         aliases,
-		missingRefs:     make(map[string]*MissingRef),
-		undefinedTraits: make(map[string]*UndefinedTrait),
-		usedTypes:       make(map[string]struct{}),
-		usedTraits:      make(map[string]struct{}),
-		shortRefs:       make(map[string]string),
-		usedShortNames:  make(map[string]struct{}),
-	}
-}
-
-// NewValidatorWithTypes creates a new validator with object type information.
-// objectInfos should contain ID and type for each object in the vault.
-func NewValidatorWithTypes(s *schema.Schema, objectInfos []ObjectInfo) *Validator {
-	return NewValidatorWithTypesAndAliases(s, objectInfos, nil)
-}
-
-// NewValidatorWithTypesAndAliases creates a new validator with type info and aliases.
-func NewValidatorWithTypesAndAliases(s *schema.Schema, objectInfos []ObjectInfo, aliases map[string]string) *Validator {
-	return NewValidatorWithTypesAliasesAndResolver(s, objectInfos, aliases, nil)
-}
-
-// NewValidatorWithTypesAliasesAndResolver creates a new validator with type info,
-// aliases, and an optional pre-built resolver.
+// New creates a new validator with the given options.
 //
-// When resolver is nil, a resolver is constructed from objectInfos and aliases.
-// When resolver is provided, it is used as-is (for example: index.Database.Resolver).
-func NewValidatorWithTypesAliasesAndResolver(
-	s *schema.Schema,
-	objectInfos []ObjectInfo,
-	aliases map[string]string,
-	prebuiltResolver *resolver.Resolver,
-) *Validator {
-	allIDs := make(map[string]struct{}, len(objectInfos))
-	objectTypes := make(map[string]string, len(objectInfos))
-	ids := make([]string, 0, len(objectInfos))
+// When Resolver is nil, a resolver is constructed from ObjectInfos and Aliases.
+// When Resolver is provided, it is used as-is (for example: index.Database.Resolver).
+func New(opts Options) *Validator {
+	allIDs := make(map[string]struct{}, len(opts.ObjectInfos))
+	objectTypes := make(map[string]string, len(opts.ObjectInfos))
+	ids := make([]string, 0, len(opts.ObjectInfos))
 
-	for _, info := range objectInfos {
+	for _, info := range opts.ObjectInfos {
 		allIDs[info.ID] = struct{}{}
 		objectTypes[info.ID] = info.Type
 		ids = append(ids, info.ID)
 	}
-	res := prebuiltResolver
+
+	res := opts.Resolver
 	if res == nil {
-		res = resolver.New(ids, resolver.Options{Aliases: aliases})
+		res = resolver.New(ids, resolver.Options{Aliases: opts.Aliases})
 	}
 
 	return &Validator{
-		schema:          s,
-		resolver:        res,
-		allIDs:          allIDs,
-		objectTypes:     objectTypes,
-		aliases:         aliases,
-		missingRefs:     make(map[string]*MissingRef),
-		undefinedTraits: make(map[string]*UndefinedTrait),
-		usedTypes:       make(map[string]struct{}),
-		usedTraits:      make(map[string]struct{}),
-		shortRefs:       make(map[string]string),
-		usedShortNames:  make(map[string]struct{}),
+		schema:           opts.Schema,
+		resolver:         res,
+		allIDs:           allIDs,
+		objectTypes:      objectTypes,
+		aliases:          opts.Aliases,
+		duplicateAliases: opts.DuplicateAliases,
+		missingRefs:      make(map[string]*MissingRef),
+		undefinedTraits:  make(map[string]*UndefinedTrait),
+		usedTypes:        make(map[string]struct{}),
+		usedTraits:       make(map[string]struct{}),
+		shortRefs:        make(map[string]string),
+		usedShortNames:   make(map[string]struct{}),
+		objectsRoot:      paths.NormalizeDirRoot(opts.ObjectsRoot),
+		pagesRoot:        paths.NormalizeDirRoot(opts.PagesRoot),
+		dailyDir:         strings.TrimSuffix(paths.NormalizeDirRoot(opts.DailyDir), "/"),
 	}
-}
-
-// SetDuplicateAliases sets duplicate alias information for validation.
-// This should be called before ValidateSchema to report duplicate aliases.
-func (v *Validator) SetDuplicateAliases(duplicates []resolver.AliasCollision) {
-	v.duplicateAliases = duplicates
-}
-
-// SetDirectoryRoots sets the directory prefixes for typed objects and pages.
-// When set, suggestions will strip these prefixes for cleaner display.
-func (v *Validator) SetDirectoryRoots(objectsRoot, pagesRoot string) {
-	v.objectsRoot = paths.NormalizeDirRoot(objectsRoot)
-	v.pagesRoot = paths.NormalizeDirRoot(pagesRoot)
 }
 
 // SetDailyDirectory updates the resolver's daily directory in place.
@@ -132,14 +92,9 @@ func (v *Validator) SetDirectoryRoots(objectsRoot, pagesRoot string) {
 // canonical resolver do not silently lose alias-match or name-field
 // resolution when the daily directory changes.
 func (v *Validator) SetDailyDirectory(dailyDir string) {
-	v.SetDailyDirectoryForInference(dailyDir)
+	normalized := strings.TrimSuffix(paths.NormalizeDirRoot(dailyDir), "/")
+	v.dailyDir = normalized
 	v.resolver.SetDailyDirectory(dailyDir)
-}
-
-// SetDailyDirectoryForInference sets the daily directory used for missing-ref
-// type inference without rebuilding the resolver.
-func (v *Validator) SetDailyDirectoryForInference(dailyDir string) {
-	v.dailyDir = strings.TrimSuffix(paths.NormalizeDirRoot(dailyDir), "/")
 }
 
 // displayID returns an object ID suitable for display (with directory prefix stripped).

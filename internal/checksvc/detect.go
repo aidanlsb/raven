@@ -52,11 +52,20 @@ func DetectMissingRefs(rt *vaultruntime.Runtime, relPaths ...string) ([]*check.M
 		return nil, nil
 	}
 
-	validator := check.NewValidatorWithTypesAliasesAndResolver(sch, nil, aliases, canonicalResolver)
-	validator.SetDailyDirectoryForInference(vaultCfg.GetDailyDirectory())
+	var objectsRoot, pagesRoot string
 	if vaultCfg.HasDirectoriesConfig() {
-		validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
+		objectsRoot = vaultCfg.GetObjectsRoot()
+		pagesRoot = vaultCfg.GetPagesRoot()
 	}
+	validator := check.New(check.Options{
+		Schema:      sch,
+		ObjectInfos: nil,
+		Aliases:     aliases,
+		Resolver:    canonicalResolver,
+		ObjectsRoot: objectsRoot,
+		PagesRoot:   pagesRoot,
+		DailyDir:    vaultCfg.GetDailyDirectory(),
+	})
 
 	seen := make(map[string]struct{}, len(relPaths))
 	for _, relPath := range relPaths {
