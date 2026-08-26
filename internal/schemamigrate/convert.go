@@ -16,7 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/schemadoc"
+	"github.com/aidanlsb/raven/internal/schemachange"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -175,7 +175,7 @@ func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertRe
 		MarkdownFiles: markdownFiles,
 		Changes:       append(append([]schemasvc.ValueConvertChange(nil), schemaPlan.Changes...), changes...),
 	}
-	return finishValueConversion(req.VaultPath, req.Confirm, "trait", traitName, "", sourceType, targetType, plan)
+	return finishValueConversion(rt, req.Confirm, "trait", traitName, "", sourceType, targetType, plan)
 }
 
 func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertResult, error) {
@@ -309,11 +309,11 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 		MarkdownFiles: markdownFiles,
 		Changes:       append(append([]schemasvc.ValueConvertChange(nil), schemaPlan.Changes...), changes...),
 	}
-	return finishValueConversion(req.VaultPath, req.Confirm, "field", fieldName, typeName, sourceType, targetType, plan)
+	return finishValueConversion(rt, req.Confirm, "field", fieldName, typeName, sourceType, targetType, plan)
 }
 
 func finishValueConversion(
-	vaultPath string,
+	rt *vaultruntime.Runtime,
 	confirm bool,
 	kind, name, typeName string,
 	sourceType, targetType schema.FieldType,
@@ -334,7 +334,7 @@ func finishValueConversion(
 		return result, nil
 	}
 
-	applied, err := applyValueConvertPlan(vaultPath, plan)
+	applied, err := applyValueConvertPlan(rt, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -346,12 +346,18 @@ func finishValueConversion(
 	return result, nil
 }
 
-func applyValueConvertPlan(vaultPath string, plan *valueConvertPlan) (int, error) {
+func applyValueConvertPlan(rt *vaultruntime.Runtime, plan *valueConvertPlan) (int, error) {
 	applied := 0
+	var operationID string
+	var classification schemachange.Classification
+
 	if plan.SchemaPlan.SchemaMutations > 0 {
-		if err := schemadoc.Write(vaultPath, plan.SchemaPlan.SchemaYAML); err != nil {
-			return 0, schemasvc.MapSchemaDocError(err, "", codes.ErrSchemaInvalid)
+		opID, classif, err := writeSchemaWithInvalidation(rt, plan.SchemaPlan.SchemaYAML)
+		if err != nil {
+			return 0, err
 		}
+		operationID = opID
+		classification = classif
 		applied += plan.SchemaPlan.SchemaMutations
 	}
 	for _, path := range sortedStringKeys(plan.MarkdownFiles) {
@@ -360,6 +366,17 @@ func applyValueConvertPlan(vaultPath string, plan *valueConvertPlan) (int, error
 		}
 		applied++
 	}
+
+	// Apply invalidation (runs auto-reindex if enabled)
+	if operationID != "" {
+		if err := rt.ReloadSchema(true); err != nil {
+			return 0, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to reload schema after convert", err)
+		}
+		// Attempt to apply invalidation. If it fails, the schema write still succeeded
+		// and the journal entry persists, so a manual reindex will recover.
+		_ = schemachange.ApplyInvalidation(rt, operationID, classification)
+	}
+
 	return applied, nil
 }
 

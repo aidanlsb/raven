@@ -61,6 +61,39 @@ func newSchemaOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, 
 	})
 }
 
+// newSchemaMutationCommandVaultRuntime creates a runtime for schema mutation
+// commands that need to optionally run auto-reindex. It loads schema (required),
+// config (best-effort), and opens the database. If config is invalid, the runtime
+// creation succeeds but ApplyInvalidation will skip auto-reindex.
+func newSchemaMutationCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
+	// First try loading everything including config
+	rt, err := vaultruntime.New(strings.TrimSpace(vaultPath), vaultruntime.Options{
+		OpenDB:        true,
+		RequireSchema: true,
+	})
+	if err == nil {
+		return rt, commandexec.Result{}
+	}
+
+	// If it failed, check if it was due to invalid config
+	var setupErr *vaultruntime.SetupError
+	if errors.As(err, &setupErr) && setupErr.Stage == vaultruntime.StageConfig {
+		// Config is invalid - try again without config so schema mutations can proceed
+		rt, err = vaultruntime.New(strings.TrimSpace(vaultPath), vaultruntime.Options{
+			OpenDB:        true,
+			SkipConfig:    true,
+			RequireSchema: true,
+		})
+		if err == nil {
+			// Schema mutation can proceed, but auto-reindex will be skipped
+			return rt, commandexec.Result{}
+		}
+	}
+
+	// Some other failure (schema invalid, DB error, etc.)
+	return nil, mapVaultRuntimeSetupFailure(err)
+}
+
 func newSchemaFirstCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{
 		RequireSchema: true,

@@ -40,9 +40,8 @@ func editRuntimeSchema(rt *vaultruntime.Runtime, suggestion string, edit func(*s
 	}
 	// Apply invalidation after schema reload (when auto-reindex enabled)
 	if result != nil && result.OperationID != "" {
-		// Attempt to apply invalidation, but don't fail the mutation if it errors.
-		// The journal entry persists and a manual reindex will recover.
-		// TODO: consider returning a warning instead of silently continuing.
+		// Attempt to apply invalidation. If it fails, the schema write still succeeded
+		// and the journal entry persists, so a manual reindex will recover.
 		_ = schemachange.ApplyInvalidation(rt, result.OperationID, result.Classification)
 	}
 	return nil

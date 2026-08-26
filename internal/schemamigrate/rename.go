@@ -23,12 +23,43 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemachange"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+// writeSchemaWithInvalidation writes schema.yaml and records invalidation for
+// auto-reindex. It returns the operation ID and classification for later
+// application via schemachange.ApplyInvalidation.
+func writeSchemaWithInvalidation(rt *vaultruntime.Runtime, schemaBytes []byte) (string, schemachange.Classification, error) {
+	vaultPath := rt.VaultPath
+
+	// Load before state
+	beforeSchema, _ := schema.Load(vaultPath)
+
+	// Parse after state from staged bytes
+	afterResult, parseErr := schema.Parse(schemaBytes, paths.SchemaPath(vaultPath))
+	if parseErr != nil {
+		return "", schemachange.Classification{}, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to parse staged schema", parseErr)
+	}
+	afterSchema := afterResult.Schema
+
+	// Record invalidation before writing
+	operationID, classification, err := schemachange.RecordInvalidation(vaultPath, beforeSchema, afterSchema)
+	if err != nil {
+		return "", schemachange.Classification{}, svcerr.Wrap(codes.ErrInternal, "failed to record schema invalidation", err)
+	}
+
+	// Write schema.yaml
+	if err := schemadoc.Write(vaultPath, schemaBytes); err != nil {
+		return "", schemachange.Classification{}, schemasvc.MapSchemaDocError(err, "", codes.ErrSchemaNotFound)
+	}
+
+	return operationID, classification, nil
+}
 
 type FieldRenameConflict struct {
 	FilePath      string `json:"file_path"`
@@ -183,7 +214,7 @@ func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameField
 		}, nil
 	}
 
-	appliedChanges, err := applyFieldRenamePlan(req.VaultPath, plan)
+	appliedChanges, err := applyFieldRenamePlan(rt, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +297,7 @@ func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeRes
 		}
 	}
 
-	appliedChanges, movedFiles, referenceFilesUpdated, err := applyTypeRenamePlan(req.VaultPath, plan, applyDefaultPathRename)
+	appliedChanges, movedFiles, referenceFilesUpdated, err := applyTypeRenamePlan(rt, plan, applyDefaultPathRename)
 	if err != nil {
 		return nil, err
 	}
@@ -537,12 +568,19 @@ func buildFieldRenamePlan(
 	return plan, nil
 }
 
-func applyFieldRenamePlan(vaultPath string, plan *fieldRenamePlan) (int, error) {
+func applyFieldRenamePlan(rt *vaultruntime.Runtime, plan *fieldRenamePlan) (int, error) {
+	vaultPath := rt.VaultPath
 	appliedChanges := 0
+	var operationID string
+	var classification schemachange.Classification
+
 	if len(plan.SchemaYAML) > 0 {
-		if err := schemadoc.Write(vaultPath, plan.SchemaYAML); err != nil {
-			return 0, schemasvc.MapSchemaDocError(err, "", codes.ErrSchemaNotFound)
+		opID, classif, err := writeSchemaWithInvalidation(rt, plan.SchemaYAML)
+		if err != nil {
+			return 0, err
 		}
+		operationID = opID
+		classification = classif
 		appliedChanges++
 	}
 	for _, path := range sortedStringKeys(plan.TemplateFiles) {
@@ -564,10 +602,22 @@ func applyFieldRenamePlan(vaultPath string, plan *fieldRenamePlan) (int, error) 
 		}
 		appliedChanges++
 	}
+
+	// Apply invalidation (runs auto-reindex if enabled)
+	if operationID != "" {
+		if err := rt.ReloadSchema(true); err != nil {
+			return 0, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to reload schema after rename", err)
+		}
+		// Attempt to apply invalidation. If it fails, the schema write still succeeded
+		// and the journal entry persists, so a manual reindex will recover.
+		_ = schemachange.ApplyInvalidation(rt, operationID, classification)
+	}
+
 	return appliedChanges, nil
 }
 
-func applyTypeRenamePlan(vaultPath string, plan *typeRenamePlan, applyDefaultPathRename bool) (int, int, int, error) {
+func applyTypeRenamePlan(rt *vaultruntime.Runtime, plan *typeRenamePlan, applyDefaultPathRename bool) (int, int, int, error) {
+	vaultPath := rt.VaultPath
 	appliedChanges := plan.SchemaPlan.CoreSchemaMutations
 	schemaBytes := plan.SchemaPlan.SchemaYAML
 	if applyDefaultPathRename && plan.SchemaPlan.SchemaYAMLWithDefaultPath != nil {
@@ -576,9 +626,13 @@ func applyTypeRenamePlan(vaultPath string, plan *typeRenamePlan, applyDefaultPat
 			appliedChanges++
 		}
 	}
-	if err := schemadoc.Write(vaultPath, schemaBytes); err != nil {
-		return 0, 0, 0, schemasvc.MapSchemaDocError(err, "", codes.ErrSchemaNotFound)
+
+	// Write schema with invalidation tracking
+	operationID, classification, err := writeSchemaWithInvalidation(rt, schemaBytes)
+	if err != nil {
+		return 0, 0, 0, err
 	}
+
 	for _, path := range sortedStringKeys(plan.MarkdownFiles) {
 		if err := atomicfile.WriteFile(path, plan.MarkdownFiles[path], 0o644); err != nil {
 			return 0, 0, 0, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err)
@@ -602,6 +656,17 @@ func applyTypeRenamePlan(vaultPath string, plan *typeRenamePlan, applyDefaultPat
 		}
 		appliedChanges += movedFiles + referenceFilesUpdated
 	}
+
+	// Apply invalidation (runs auto-reindex if enabled)
+	if operationID != "" {
+		if err := rt.ReloadSchema(true); err != nil {
+			return 0, 0, 0, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to reload schema after rename", err)
+		}
+		// Attempt to apply invalidation. If it fails, the schema write still succeeded
+		// and the journal entry persists, so a manual reindex will recover.
+		_ = schemachange.ApplyInvalidation(rt, operationID, classification)
+	}
+
 	return appliedChanges, movedFiles, referenceFilesUpdated, nil
 }
 
