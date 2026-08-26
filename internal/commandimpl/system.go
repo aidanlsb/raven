@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -12,11 +15,16 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/configsvc"
-	"github.com/aidanlsb/raven/internal/datesvc"
-	"github.com/aidanlsb/raven/internal/initsvc"
+	"github.com/aidanlsb/raven/internal/docsync"
+	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
+	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/shellquote"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
@@ -28,16 +36,12 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	version := versioninfo.CurrentVersionInfo().Version
-	result, err := initsvc.Initialize(initsvc.InitializeRequest{
-		Path:       path,
-		ConfigPath: req.ConfigPath,
-		CLIVersion: version,
-	})
+	result, err := initializeVault(path, req.ConfigPath, version)
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
 
-	postInit, setupWarnings, setupErr := setupInitVault(result.Path, req.ConfigPath, req.StatePath)
+	postInit, setupWarnings, setupErr := setupInitVault(result.path, req.ConfigPath, req.StatePath)
 	if setupErr != nil {
 		errorCode := codes.ErrInternal
 		var initSetupErr *initVaultSetupError
@@ -46,32 +50,32 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 		}
 		return commandexec.Failure(
 			errorCode,
-			fmt.Sprintf("vault initialized at %s, but safe global vault setup could not be completed: %v", result.Path, setupErr),
+			fmt.Sprintf("vault initialized at %s, but safe global vault setup could not be completed: %v", result.path, setupErr),
 			map[string]interface{}{
 				"initialized": true,
-				"path":        result.Path,
+				"path":        result.path,
 				"post_init":   postInit,
 			},
 			"Fix global config/state access and rerun init, or pass --vault/--vault-path explicitly on every vault-scoped command.",
 		)
 	}
 
-	warnings := make([]commandexec.Warning, 0, len(result.Warnings)+len(setupWarnings))
-	for _, warning := range result.Warnings {
+	warnings := make([]commandexec.Warning, 0, len(result.warnings)+len(setupWarnings))
+	for _, warning := range result.warnings {
 		warnings = append(warnings, commandexec.Warning{
-			Code:    warning.Code,
-			Message: warning.Message,
+			Code:    warning.code,
+			Message: warning.message,
 		})
 	}
 	warnings = append(warnings, setupWarnings...)
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
-		"path":            result.Path,
-		"status":          result.Status,
-		"created_config":  result.CreatedConfig,
-		"created_schema":  result.CreatedSchema,
-		"gitignore_state": result.GitignoreState,
-		"docs":            result.Docs,
+		"path":            result.path,
+		"status":          result.status,
+		"created_config":  result.createdConfig,
+		"created_schema":  result.createdSchema,
+		"gitignore_state": result.gitignoreState,
+		"docs":            result.docs,
 		"post_init":       postInit,
 	}, warnings, nil)
 }
@@ -122,22 +126,30 @@ func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result 
 	}
 	defer rt.Close()
 
-	result, err := datesvc.EnsureDaily(rt, datesvc.EnsureDailyRequest{
-		VaultPath:  vaultPath,
-		DateArg:    stringArg(req.Args, "date"),
-		TemplateID: stringArg(req.Args, "template"),
-	})
+	result, err := ensureDaily(rt, stringArg(req.Args, "date"), stringArg(req.Args, "template"))
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
 
 	return commandexec.Success(map[string]interface{}{
-		"file":    result.RelativePath,
-		"id":      result.Date,
-		"date":    result.Date,
-		"created": result.Created,
+		"file":    result.relativePath,
+		"id":      result.date,
+		"date":    result.date,
+		"created": result.created,
 		"opened":  false,
 	}, nil)
+}
+
+// DateAssociation represents a date-field association returned by the date command.
+// This type is public to support CLI rendering in internal/cli/date.go.
+type DateAssociation struct {
+	Date       string        `json:"date"`
+	SourceType string        `json:"source_type"`
+	SourceID   string        `json:"source_id"`
+	FieldName  string        `json:"field_name"`
+	FilePath   string        `json:"file_path"`
+	Trait      *model.Trait  `json:"trait,omitempty"`
+	Object     *model.Object `json:"object,omitempty"`
 }
 
 // HandleDate executes the canonical `date` command.
@@ -150,28 +162,25 @@ func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	defer rt.Close()
 
-	result, err := datesvc.DateHub(rt, datesvc.DateHubRequest{
-		VaultPath: vaultPath,
-		DateArg:   stringArg(req.Args, "date"),
-	})
+	result, err := dateHub(rt, stringArg(req.Args, "date"))
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
 
 	data := map[string]interface{}{
-		"date":          result.Date,
-		"day_of_week":   result.DayOfWeek,
-		"daily_note_id": result.DailyNoteID,
-		"daily_path":    result.DailyPath,
-		"daily_exists":  result.DailyExists,
-		"items":         result.Items,
-		"backlinks":     result.Backlinks,
+		"date":          result.date,
+		"day_of_week":   result.dayOfWeek,
+		"daily_note_id": result.dailyNoteID,
+		"daily_path":    result.dailyPath,
+		"daily_exists":  result.dailyExists,
+		"items":         result.items,
+		"backlinks":     result.backlinks,
 	}
-	if result.DailyNote != nil {
-		data["daily_note"] = result.DailyNote
+	if result.dailyNote != nil {
+		data["daily_note"] = result.dailyNote
 	}
 
-	return commandexec.Success(data, &commandexec.Meta{Count: len(result.Items)})
+	return commandexec.Success(data, &commandexec.Meta{Count: len(result.items)})
 }
 
 // HandleVersion executes the canonical `version` command.
@@ -531,4 +540,310 @@ func initVaultInfoPayload(name, path, source string) interface{} {
 func formatSuggestedCommandPath(path string) string {
 	displayPath := strings.ReplaceAll(filepath.ToSlash(strings.TrimSpace(path)), "\\", "/")
 	return shellquote.Quote(displayPath)
+}
+
+type initDocsResult struct {
+	fetched   bool
+	fileCount int
+	storePath string
+}
+
+type initWarning struct {
+	code    codes.WarningCode
+	message string
+}
+
+type initResult struct {
+	path           string
+	status         string
+	createdConfig  bool
+	createdSchema  bool
+	gitignoreState string
+	docs           initDocsResult
+	warnings       []initWarning
+}
+
+func initializeVault(path, configPath, cliVersion string) (*initResult, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, svcerr.New(codes.ErrInvalidInput, "path is required").WithSuggestion("Usage: rvn init <path>")
+	}
+
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create vault directory", err).WithSuggestion("Check that the destination path is writable")
+	}
+
+	ravenDir := filepath.Join(path, ".raven")
+	if err := os.MkdirAll(ravenDir, 0o755); err != nil {
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create .raven directory", err).WithSuggestion("Check that the destination path is writable")
+	}
+
+	gitignorePath := filepath.Join(path, ".gitignore")
+	gitignoreState := "created"
+	ravenGitignoreEntries := []string{".raven/", ".trash/"}
+
+	existingContent := ""
+	if data, err := os.ReadFile(gitignorePath); err == nil {
+		existingContent = string(data)
+	}
+
+	missingEntries := make([]string, 0)
+	for _, entry := range ravenGitignoreEntries {
+		if !strings.Contains(existingContent, entry) {
+			missingEntries = append(missingEntries, entry)
+		}
+	}
+
+	if len(missingEntries) > 0 {
+		var newContent string
+		if existingContent == "" {
+			newContent = `# Raven (auto-generated)
+# These are derived files - your markdown is the source of truth
+
+# Index database (rebuilt with 'rvn reindex')
+.raven/
+
+# Trashed files
+.trash/
+`
+		} else {
+			gitignoreState = "updated"
+			addition := "\n# Raven\n"
+			for _, entry := range missingEntries {
+				addition += entry + "\n"
+			}
+			newContent = strings.TrimRight(existingContent, "\n") + "\n" + addition
+		}
+		if err := os.WriteFile(gitignorePath, []byte(newContent), 0o644); err != nil {
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write .gitignore", err).WithSuggestion("Check write permissions for .gitignore")
+		}
+	} else if existingContent != "" {
+		gitignoreState = "unchanged"
+	}
+
+	createdConfig, err := config.CreateDefaultVaultConfig(path)
+	if err != nil {
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create raven.yaml", err)
+	}
+	createdSchema, err := schema.CreateDefault(path)
+	if err != nil {
+		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create schema.yaml", err)
+	}
+
+	result := &initResult{
+		path:           path,
+		createdConfig:  createdConfig,
+		createdSchema:  createdSchema,
+		gitignoreState: gitignoreState,
+		docs:           initDocsResult{},
+		warnings:       []initWarning{},
+	}
+
+	if createdConfig || createdSchema {
+		result.status = "initialized"
+	} else {
+		result.status = "existing"
+	}
+
+	fetchResult, fetchErr := docsync.Fetch(docsync.FetchOptions{
+		ConfigPath: strings.TrimSpace(configPath),
+		CLIVersion: strings.TrimSpace(cliVersion),
+		HTTPClient: &http.Client{Timeout: 60 * time.Second},
+	})
+	if fetchErr != nil {
+		result.warnings = append(result.warnings, initWarning{
+			code:    codes.WarnDocsFetchFailed,
+			message: fmt.Sprintf("Docs fetch failed: %v. Run 'rvn docs fetch' to retry.", fetchErr),
+		})
+	} else {
+		result.docs = initDocsResult{
+			fetched:   true,
+			fileCount: fetchResult.FileCount,
+			storePath: fetchResult.DocsPath,
+		}
+	}
+
+	return result, nil
+}
+
+type ensureDailyResult struct {
+	date         string
+	friendlyDate string
+	relativePath string
+	filePath     string
+	created      bool
+}
+
+func ensureDaily(rt *vaultruntime.Runtime, dateArg, templateID string) (*ensureDailyResult, error) {
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
+	}
+	if rt.VaultCfg == nil {
+		return nil, svcerr.New(codes.ErrConfigInvalid, "vault config runtime is required").WithSuggestion("Fix raven.yaml and try again")
+	}
+	vaultPath := rt.VaultPath
+	vaultCfg := rt.VaultCfg
+
+	targetDate, err := vault.ParseDateArg(strings.TrimSpace(dateArg))
+	if err != nil {
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use today/yesterday/tomorrow or YYYY-MM-DD")
+	}
+
+	dateStr := vault.FormatDateISO(targetDate)
+	friendlyDate := vault.FormatDateFriendly(targetDate)
+	targetObjectPath := path.Join(vaultCfg.GetDailyDirectory(), dateStr)
+	filePath := vaultCfg.DailyNotePath(vaultPath, dateStr)
+	relPath := filepath.ToSlash(path.Join(vaultCfg.GetDailyDirectory(), dateStr+".md"))
+
+	if pages.Exists(vaultPath, targetObjectPath) {
+		return &ensureDailyResult{
+			date:         dateStr,
+			friendlyDate: friendlyDate,
+			relativePath: relPath,
+			filePath:     filePath,
+			created:      false,
+		}, nil
+	}
+
+	if rt.SchemaLoadErr != nil {
+		return nil, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to load schema", rt.SchemaLoadErr).WithSuggestion("Fix schema.yaml and try again")
+	}
+	if rt.Schema == nil {
+		return nil, svcerr.New(codes.ErrSchemaInvalid, "schema runtime is required").WithSuggestion("Fix schema.yaml and try again")
+	}
+	sch := rt.Schema
+
+	var created *pages.CreateResult
+	templateID = strings.TrimSpace(templateID)
+	if templateID != "" {
+		templateFile, err := schema.ResolveTypeTemplateFile(sch, "date", templateID)
+		if err != nil {
+			return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use `rvn schema template list --core date` to see available template IDs")
+		}
+		created, err = pages.CreateDailyNoteWithTemplate(
+			vaultPath,
+			vaultCfg.GetDailyDirectory(),
+			dateStr,
+			friendlyDate,
+			templateFile,
+			vaultCfg.GetTemplateDirectory(),
+			vaultCfg.ProtectedPrefixes,
+		)
+		if err != nil {
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create daily note", err)
+		}
+	} else {
+		created, err = pages.CreateDailyNoteWithSchema(
+			vaultPath,
+			vaultCfg.GetDailyDirectory(),
+			dateStr,
+			friendlyDate,
+			sch,
+			vaultCfg.GetTemplateDirectory(),
+			vaultCfg.ProtectedPrefixes,
+		)
+		if err != nil {
+			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create daily note", err)
+		}
+	}
+
+	result := &ensureDailyResult{
+		date:         dateStr,
+		friendlyDate: friendlyDate,
+		relativePath: relPath,
+		filePath:     filePath,
+		created:      true,
+	}
+	if created != nil {
+		result.relativePath = filepath.ToSlash(created.RelativePath)
+		result.filePath = created.FilePath
+	}
+	return result, nil
+}
+
+type dateHubResult struct {
+	date        string
+	dayOfWeek   string
+	dailyNoteID string
+	dailyPath   string
+	dailyNote   *model.Object
+	dailyExists bool
+	items       []DateAssociation
+	backlinks   []model.Reference
+}
+
+func dateHub(rt *vaultruntime.Runtime, dateArg string) (*dateHubResult, error) {
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
+	}
+	if rt.VaultCfg == nil {
+		return nil, svcerr.New(codes.ErrConfigInvalid, "vault config runtime is required").WithSuggestion("Fix raven.yaml and try again")
+	}
+	vaultCfg := rt.VaultCfg
+
+	targetDate, err := vault.ParseDateArg(strings.TrimSpace(dateArg))
+	if err != nil {
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use today/yesterday/tomorrow or YYYY-MM-DD")
+	}
+
+	dateStr := vault.FormatDateISO(targetDate)
+	result := &dateHubResult{
+		date:        dateStr,
+		dayOfWeek:   targetDate.Format("Monday"),
+		dailyNoteID: vaultCfg.DailyNoteID(dateStr),
+		dailyPath:   filepath.ToSlash(path.Join(vaultCfg.GetDailyDirectory(), dateStr+".md")),
+		items:       []DateAssociation{},
+		backlinks:   []model.Reference{},
+	}
+
+	if err := rt.OpenDB(); err != nil {
+		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to open database", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
+	}
+	db := rt.DB
+
+	dailyNote, err := db.GetObject(result.dailyNoteID)
+	if err != nil {
+		return nil, svcerr.Wrap(codes.ErrQueryFailed, "failed to query daily note", err)
+	}
+	result.dailyNote = dailyNote
+	result.dailyExists = dailyNote != nil
+
+	items, err := db.QueryDateIndex(dateStr)
+	if err != nil {
+		return nil, svcerr.Wrap(codes.ErrQueryFailed, "failed to query date index", err)
+	}
+
+	associations := make([]DateAssociation, 0, len(items))
+	for _, item := range items {
+		assoc := DateAssociation{
+			Date:       item.Date,
+			SourceType: item.SourceType,
+			SourceID:   item.SourceID,
+			FieldName:  item.FieldName,
+			FilePath:   item.FilePath,
+		}
+		switch item.SourceType {
+		case "trait":
+			trait, err := db.GetTrait(item.SourceID)
+			if err != nil {
+				return nil, svcerr.Wrap(codes.ErrQueryFailed, fmt.Sprintf("failed to query trait %s", item.SourceID), err)
+			}
+			assoc.Trait = trait
+		case "object":
+			obj, err := db.GetObject(item.SourceID)
+			if err != nil {
+				return nil, svcerr.Wrap(codes.ErrQueryFailed, fmt.Sprintf("failed to query object %s", item.SourceID), err)
+			}
+			assoc.Object = obj
+		}
+		associations = append(associations, assoc)
+	}
+	result.items = associations
+
+	backlinks, err := db.Backlinks(result.dailyNoteID)
+	if err != nil {
+		return nil, svcerr.Wrap(codes.ErrQueryFailed, "failed to query backlinks", err)
+	}
+	result.backlinks = backlinks
+	return result, nil
 }
