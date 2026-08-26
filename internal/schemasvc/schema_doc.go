@@ -4,12 +4,19 @@ import (
 	"errors"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/schemachange"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-func editSchema(vaultPath, loadSuggestion string, mutate func(*schemadoc.Document) error) error {
-	return editSchemaWithLoadError(vaultPath, loadSuggestion, codes.ErrSchemaNotFound, mutate)
+// editSchemaResult extends schemadoc.EditResult with classification info.
+type editSchemaResult struct {
+	*schemadoc.EditResult
+	Classification schemachange.Classification
+}
+
+func editSchemaWithInvalidation(vaultPath, loadSuggestion string, mutate func(*schemadoc.Document) error) (*editSchemaResult, error) {
+	return editSchemaWithInvalidationAndLoadError(vaultPath, loadSuggestion, codes.ErrSchemaNotFound, mutate)
 }
 
 func editSchemaWithLoadError(
@@ -22,6 +29,29 @@ func editSchemaWithLoadError(
 		return MapSchemaDocError(err, loadSuggestion, loadErrorCode)
 	}
 	return nil
+}
+
+func editSchemaWithInvalidationAndLoadError(
+	vaultPath string,
+	loadSuggestion string,
+	loadErrorCode codes.ErrorCode,
+	mutate func(*schemadoc.Document) error,
+) (*editSchemaResult, error) {
+	result, err := schemadoc.EditWithInvalidation(vaultPath, mutate)
+	if err != nil {
+		return nil, MapSchemaDocError(err, loadSuggestion, loadErrorCode)
+	}
+	// Extract classification from the last edit
+	classification := schemachange.Classification{Policy: schemachange.PolicyNone}
+	if raw := schemadoc.GetLastClassification(); raw != nil {
+		if c, ok := raw.(schemachange.Classification); ok {
+			classification = c
+		}
+	}
+	return &editSchemaResult{
+		EditResult:     result,
+		Classification: classification,
+	}, nil
 }
 
 // MapSchemaDocError converts schemadoc failures to schemasvc's stable error
