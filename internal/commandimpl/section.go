@@ -205,17 +205,9 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 	)
 }
 
-func sectionCommandWarnings(rt *vaultruntime.Runtime, warningMessages []string, indexWarnings []sectionsvc.IndexWarning) []commandexec.Warning {
+func sectionCommandWarnings(_ *vaultruntime.Runtime, warningMessages []string, indexWarnings []reindexsvc.ProjectionWarning) []commandexec.Warning {
 	warnings := warningMessagesToCommandWarnings(warningMessages, indexUpdateFailedWarningCode)
-	for _, indexWarning := range indexWarnings {
-		warnings = append(warnings, projectionCommandWarnings(reindexsvc.RecordProjectionFailure(
-			rt,
-			indexWarning.FilePath,
-			indexWarning.Stage,
-			indexWarning.Err,
-		))...)
-	}
-	return warnings
+	return append(warnings, projectionCommandWarnings(indexWarnings)...)
 }
 
 func sectionPlacementArg(args map[string]any) sectionsvc.Placement {

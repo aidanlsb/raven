@@ -44,14 +44,7 @@ func Add(rt *vaultruntime.Runtime, req AddRequest) (*AddResult, error) {
 	if strings.TrimSpace(req.ToReference) != "" {
 		resolved, err := refresolve.ResolveDynamic(req.ToReference, rt, true)
 		if err != nil {
-			var ambiguousErr *refresolve.AmbiguousRefError
-			if errors.As(err, &ambiguousErr) {
-				return nil, svcerr.Wrap(codes.ErrRefAmbiguous, ambiguousErr.Error(), err).
-					WithSuggestion("Use a full object ID/path to disambiguate").
-					WithDetails(map[string]interface{}{"matches": ambiguousErr.Matches})
-			}
-			return nil, svcerr.Wrap(codes.ErrRefNotFound, fmt.Sprintf("reference '%s' not found", req.ToReference), err).
-				WithSuggestion("Check the object reference and run 'rvn reindex' if needed")
+			return nil, refresolve.NormalizeServiceError(err, req.ToReference)
 		}
 		destPath = resolved.FilePath
 		targetObjectID = resolved.ObjectID

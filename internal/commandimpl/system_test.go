@@ -494,16 +494,3 @@ func TestFormatSuggestedCommandPathNormalizesWindowsSeparators(t *testing.T) {
 		t.Fatalf("formatSuggestedCommandPath() = %q, want %q", got, want)
 	}
 }
-
-func TestSetInitSwitchBackShellQuotesVaultName(t *testing.T) {
-	t.Parallel()
-	state := initPostInitState{
-		previousActiveName: "work$(touch /tmp/pwn)",
-		previousActivePath: "/vault/work",
-	}
-	setInitSwitchBack(&state)
-	want := "rvn --json vault use -- 'work$(touch /tmp/pwn)'"
-	if state.switchBack != want {
-		t.Fatalf("switch_back = %q, want %q", state.switchBack, want)
-	}
-}

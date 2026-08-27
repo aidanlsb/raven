@@ -28,6 +28,7 @@ type ProjectionWarning struct {
 	Code    codes.WarningCode
 	Message string
 	Ref     string
+	Err     error
 }
 
 // ProjectionResult contains the derived effects of projecting a ChangeSet.
@@ -198,26 +199,6 @@ func ProjectFileLocked(rt *vaultruntime.Runtime, filePath string) []ProjectionWa
 	return warnings
 }
 
-// RecordProjectionFailure classifies an index failure and records the recovery
-// scope needed by the next reindex.
-func RecordProjectionFailure(rt *vaultruntime.Runtime, filePath, stage string, projectionErr error) []ProjectionWarning {
-	if projectionErr == nil {
-		return nil
-	}
-	var warning ProjectionWarning
-	var resolutionErr *index.PostCommitReferenceResolutionError
-	if errors.As(projectionErr, &resolutionErr) {
-		warning = referenceResolutionIncompleteWarning(rt.VaultPath, filePath, resolutionErr)
-	} else {
-		warning = indexUpdateWarning(rt.VaultPath, filePath, "failed to "+stage, projectionErr)
-	}
-	warnings := []ProjectionWarning{warning}
-	if err := recordProjectionRecovery(rt.VaultPath, filePath, projectionErr); err != nil {
-		warnings = append(warnings, indexJournalWarning("failed to record pending index recovery", err))
-	}
-	return warnings
-}
-
 func uniqueProjectionPaths(groups ...[]string) []string {
 	seen := make(map[string]struct{})
 	var result []string
@@ -333,6 +314,7 @@ func indexUpdateWarning(vaultPath, filePath, prefix string, err error) Projectio
 		Code:    codes.WarnIndexUpdateFailed,
 		Message: fmt.Sprintf("auto-reindex failed for %s: %s: %v", displayPath, prefix, err),
 		Ref:     IndexUpdateFailedWarningRef,
+		Err:     err,
 	}
 }
 
@@ -346,6 +328,7 @@ func referenceResolutionIncompleteWarning(vaultPath, filePath string, err *index
 		Code:    codes.WarnRefResolutionIncomplete,
 		Message: fmt.Sprintf("auto-reindex indexed %s, but %s reference resolution did not complete: %v", displayPath, scope, err.Err),
 		Ref:     "The file was indexed successfully, but backlinks may be stale. Run 'rvn reindex' to retry reference resolution.",
+		Err:     err,
 	}
 }
 
@@ -362,6 +345,7 @@ func indexJournalWarning(message string, err error) ProjectionWarning {
 		Code:    codes.WarnIndexUpdateFailed,
 		Message: fmt.Sprintf("%s: %v", message, err),
 		Ref:     IndexUpdateFailedWarningRef,
+		Err:     err,
 	}
 }
 

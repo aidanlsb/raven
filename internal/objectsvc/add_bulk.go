@@ -55,6 +55,9 @@ type AddBulkSummary struct {
 }
 
 func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
+	if err := ValidateAddContent(req.Line); err != nil {
+		return nil, err
+	}
 	if req.VaultConfig == nil {
 		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
@@ -128,6 +131,9 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 }
 
 func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
+	if err := ValidateAddContent(req.Line); err != nil {
+		return nil, err
+	}
 	if req.VaultConfig == nil {
 		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}

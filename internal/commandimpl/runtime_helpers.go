@@ -6,13 +6,10 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 const indexUpdateFailedWarningCode = codes.WarnIndexUpdateFailed
-
-const indexUpdateFailedWarningRef = reindexsvc.IndexUpdateFailedWarningRef
 
 func newRequiredCommandVaultRuntime(vaultPath string, openDB bool) (*vaultruntime.Runtime, commandexec.Result) {
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{OpenDB: openDB, RequireSchema: true})
@@ -24,13 +21,6 @@ func newConfigCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, comm
 
 func newConfigOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{SkipSchema: true})
-}
-
-func newSchemaOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
-	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{
-		SkipConfig:    true,
-		RequireSchema: true,
-	})
 }
 
 // newSchemaMutationCommandVaultRuntime creates a runtime for schema mutation
@@ -89,13 +79,6 @@ func newCommandVaultRuntime(vaultPath string, opts vaultruntime.Options) (*vault
 		return rt, commandexec.Result{}
 	}
 	return nil, mapVaultRuntimeSetupFailure(err)
-}
-
-func openCommandRuntimeDB(rt *vaultruntime.Runtime) commandexec.Result {
-	if err := rt.OpenDB(); err != nil {
-		return mapVaultRuntimeSetupFailure(err)
-	}
-	return commandexec.Result{}
 }
 
 func mapVaultRuntimeSetupFailure(err error) commandexec.Result {

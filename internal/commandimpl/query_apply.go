@@ -35,7 +35,7 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, plan *querys
 		StatePath:      req.StatePath,
 		ExecutablePath: req.ExecutablePath,
 		Caller:         req.Caller,
-		Args:           plan.Args,
+		Args:           queryApplyCommandArgs(plan),
 		Confirm:        req.Confirm,
 	})
 	if result.Meta == nil {
@@ -43,4 +43,38 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, plan *querys
 	}
 	result.Meta.QueryTimeMs = queryTimeMs
 	return result
+}
+
+func queryApplyCommandArgs(plan *querysvc.ApplyPlan) map[string]interface{} {
+	switch plan.Command {
+	case "update":
+		return map[string]interface{}{
+			"stdin": true, "value": plan.NewValue, "trait_ids": stringsToInterfaces(plan.TraitIDs),
+		}
+	case "set":
+		return map[string]interface{}{
+			"stdin": true, "fields": plan.SetUpdates, "references": stringsToInterfaces(plan.IDs),
+		}
+	case "delete":
+		return map[string]interface{}{"stdin": true, "references": stringsToInterfaces(plan.IDs)}
+	case "add":
+		return map[string]interface{}{
+			"stdin": true, "text": plan.AddText, "object_ids": stringsToInterfaces(plan.IDs),
+		}
+	case "move":
+		return map[string]interface{}{
+			"stdin": true, "destination": plan.MoveDestination,
+			"update-refs": true, "object_ids": stringsToInterfaces(plan.IDs),
+		}
+	default:
+		return nil
+	}
+}
+
+func stringsToInterfaces(values []string) []interface{} {
+	out := make([]interface{}, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	return out
 }

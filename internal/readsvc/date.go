@@ -14,13 +14,13 @@ import (
 )
 
 type DateAssociation struct {
-	Date       string
-	SourceType string
-	SourceID   string
-	FieldName  string
-	FilePath   string
-	Trait      *model.Trait
-	Object     *model.Object
+	Date       string        `json:"date"`
+	SourceType string        `json:"source_type"`
+	SourceID   string        `json:"source_id"`
+	FieldName  string        `json:"field_name"`
+	FilePath   string        `json:"file_path"`
+	Trait      *model.Trait  `json:"trait,omitempty"`
+	Object     *model.Object `json:"object,omitempty"`
 }
 
 type DateResult struct {

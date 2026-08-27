@@ -42,6 +42,9 @@ type ExecuteResult struct {
 	Links     []model.Link
 }
 
+type ExecuteQueryRequest = ExecuteRequest
+type ExecuteQueryResult = ExecuteResult
+
 func (r *ExecuteResult) HasMore() bool {
 	return r != nil && r.Offset+r.Returned < r.Total
 }
@@ -60,9 +63,14 @@ type Warning struct {
 }
 
 type ApplyPlan struct {
-	Command string
-	Args    map[string]interface{}
-	Empty   bool
+	Command         string
+	TraitIDs        []string
+	NewValue        string
+	IDs             []string
+	SetUpdates      map[string]string
+	AddText         string
+	MoveDestination string
+	Empty           bool
 }
 
 type RunResult struct {
@@ -154,7 +162,7 @@ func Run(rt *vaultruntime.Runtime, req ExecuteRequest) (*RunResult, error) {
 		warnings = refreshWarnings(report)
 	}
 
-	result, err := execute(rt, ExecuteRequest{
+	result, err := ExecuteQuery(rt, ExecuteRequest{
 		QueryString: resolvedQuery,
 		IDsOnly:     req.IDsOnly,
 		Limit:       req.Limit,
@@ -183,30 +191,54 @@ func Run(rt *vaultruntime.Runtime, req ExecuteRequest) (*RunResult, error) {
 	return runResult, nil
 }
 
-func execute(rt *vaultruntime.Runtime, req ExecuteRequest) (*ExecuteResult, error) {
-	result, err := readsvc.ExecuteQuery(rt, readsvc.ExecuteQueryRequest{
-		QueryString: req.QueryString,
-		IDsOnly:     req.IDsOnly,
-		Limit:       req.Limit,
-		Offset:      req.Offset,
-		CountOnly:   req.CountOnly,
+// ExecuteQuery parses, validates, and executes an already-resolved query.
+func ExecuteQuery(rt *vaultruntime.Runtime, req ExecuteRequest) (*ExecuteResult, error) {
+	if rt == nil || rt.DB == nil {
+		return nil, fmt.Errorf("runtime with database is required")
+	}
+	if req.Limit < 0 {
+		return nil, fmt.Errorf("limit must be >= 0")
+	}
+	if req.Offset < 0 {
+		return nil, fmt.Errorf("offset must be >= 0")
+	}
+	parsed, err := query.Parse(req.QueryString)
+	if err != nil {
+		return nil, err
+	}
+	if err := query.NewValidator(rt.Schema).Validate(parsed); err != nil {
+		return nil, err
+	}
+	executor := query.NewExecutor(rt.DB.DB())
+	executor.SetDailyDirectory(rt.VaultCfg.GetDailyDirectory())
+	executor.SetSchema(rt.Schema)
+	runResult, err := executor.Run(parsed, query.RunRequest{
+		IDsOnly: req.IDsOnly, CountOnly: req.CountOnly,
+		Limit: req.Limit, Offset: req.Offset,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &ExecuteResult{
-		QueryKind: result.QueryKind,
-		TypeName:  result.TypeName,
-		Total:     result.Total,
-		Returned:  result.Returned,
-		Offset:    result.Offset,
-		Limit:     result.Limit,
-		IDs:       result.IDs,
-		Objects:   result.Objects,
-		Traits:    result.Traits,
-		Sections:  result.Sections,
-		Links:     result.Links,
+		QueryKind: queryKindString(parsed.Type), TypeName: parsed.TypeName,
+		Total: runResult.Total, Returned: runResult.Returned,
+		Offset: req.Offset, Limit: req.Limit, IDs: runResult.IDs,
+		Objects: runResult.Objects, Traits: runResult.Traits,
+		Sections: runResult.Sections, Links: runResult.Links,
 	}, nil
+}
+
+func queryKindString(queryType query.QueryType) string {
+	switch queryType {
+	case query.QueryTypeObject:
+		return "type"
+	case query.QueryTypeSection:
+		return "section"
+	case query.QueryTypeLink:
+		return "link"
+	default:
+		return "trait"
+	}
 }
 
 func executeError(queryString string, err error) error {
@@ -299,12 +331,9 @@ func planApply(result *ExecuteResult, applyArgs []string) (*ApplyPlan, error) {
 			return nil, bulkopsError(err)
 		}
 		return &ApplyPlan{
-			Command: "update",
-			Args: map[string]interface{}{
-				"stdin":     true,
-				"value":     plan.NewValue,
-				"trait_ids": traitIDsToInterfaces(result.Traits),
-			},
+			Command:  "update",
+			NewValue: plan.NewValue,
+			TraitIDs: traitIDs(result.Traits),
 		}, nil
 	}
 
@@ -328,21 +357,13 @@ func planApply(result *ExecuteResult, applyArgs []string) (*ApplyPlan, error) {
 	}
 	switch plan.Command {
 	case bulkops.ObjectApplySet:
-		return &ApplyPlan{Command: "set", Args: map[string]interface{}{
-			"stdin": true, "fields": plan.SetUpdates, "references": stringsToInterfaces(plan.IDs),
-		}}, nil
+		return &ApplyPlan{Command: "set", IDs: plan.IDs, SetUpdates: plan.SetUpdates}, nil
 	case bulkops.ObjectApplyDelete:
-		return &ApplyPlan{Command: "delete", Args: map[string]interface{}{
-			"stdin": true, "references": stringsToInterfaces(plan.IDs),
-		}}, nil
+		return &ApplyPlan{Command: "delete", IDs: plan.IDs}, nil
 	case bulkops.ObjectApplyAdd:
-		return &ApplyPlan{Command: "add", Args: map[string]interface{}{
-			"stdin": true, "text": plan.AddText, "object_ids": stringsToInterfaces(plan.IDs),
-		}}, nil
+		return &ApplyPlan{Command: "add", IDs: plan.IDs, AddText: plan.AddText}, nil
 	case bulkops.ObjectApplyMove:
-		return &ApplyPlan{Command: "move", Args: map[string]interface{}{
-			"stdin": true, "destination": plan.MoveDestination, "update-refs": true, "object_ids": stringsToInterfaces(plan.IDs),
-		}}, nil
+		return &ApplyPlan{Command: "move", IDs: plan.IDs, MoveDestination: plan.MoveDestination}, nil
 	default:
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("unknown apply command: %s", plan.Command)).
 			WithSuggestion("Supported commands: set, delete, add, move")
@@ -379,16 +400,8 @@ func dedupeApplyIDs(ids []string) []string {
 	return out
 }
 
-func stringsToInterfaces(values []string) []interface{} {
-	out := make([]interface{}, 0, len(values))
-	for _, value := range values {
-		out = append(out, value)
-	}
-	return out
-}
-
-func traitIDsToInterfaces(items []model.Trait) []interface{} {
-	out := make([]interface{}, 0, len(items))
+func traitIDs(items []model.Trait) []string {
+	out := make([]string, 0, len(items))
 	for _, item := range items {
 		out = append(out, item.ID)
 	}

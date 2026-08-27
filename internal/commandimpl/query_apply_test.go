@@ -21,12 +21,9 @@ func TestHandleQueryApplyPreservesNestedMutationMetadata(t *testing.T) {
 	})
 	registry.Register("query-test", func(ctx context.Context, req commandexec.Request) commandexec.Result {
 		return handleQueryApply(ctx, req, &querysvc.ApplyPlan{
-			Command: "set",
-			Args: map[string]interface{}{
-				"stdin":      true,
-				"fields":     []string{"status=done"},
-				"references": []interface{}{"projects/raven"},
-			},
+			Command:    "set",
+			SetUpdates: map[string]string{"status": "done"},
+			IDs:        []string{"projects/raven"},
 		}, 42)
 	})
 

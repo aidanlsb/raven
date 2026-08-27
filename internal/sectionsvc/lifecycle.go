@@ -51,7 +51,7 @@ type CreateResult struct {
 	Placement       string
 	AnchorID        string
 	WarningMessages []string
-	IndexWarnings   []IndexWarning
+	IndexWarnings   []reindexsvc.ProjectionWarning
 }
 
 type MoveRequest struct {
@@ -72,7 +72,7 @@ type MoveResult struct {
 	Placement       string
 	AnchorID        string
 	WarningMessages []string
-	IndexWarnings   []IndexWarning
+	IndexWarnings   []reindexsvc.ProjectionWarning
 }
 
 type placementKind string
@@ -598,7 +598,7 @@ func validateOriginalSectionSlugs(state *documentState, updatedDoc *parser.Parse
 	return nil
 }
 
-func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnIndexErr bool) ([]string, []IndexWarning, error) {
+func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnIndexErr bool) ([]string, []reindexsvc.ProjectionWarning, error) {
 	var warnings []string
 	if err := ctx.runtime.OpenDB(); err != nil {
 		if failOnIndexErr || errors.Is(err, index.ErrIndexRebuildRequired) {
@@ -615,17 +615,9 @@ func (ctx *lifecycleContext) writeAndReindex(filePath, content string, failOnInd
 	if err := atomicfile.WriteFile(filePath, []byte(content), perm); err != nil {
 		return nil, nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write section mutation", err)
 	}
-	var indexWarnings []IndexWarning
+	var indexWarnings []reindexsvc.ProjectionWarning
 	if db != nil && ctx.schema != nil {
-		req := RenameRequest{
-			VaultPath:    ctx.vaultPath,
-			VaultConfig:  ctx.vaultConfig,
-			Schema:       ctx.schema,
-			ParseOptions: ctx.parseOptions,
-		}
-		if warning := reindexRenamedFile(db, req, filePath); warning != nil {
-			indexWarnings = append(indexWarnings, *warning)
-		}
+		indexWarnings = reindexsvc.ProjectFileLocked(ctx.runtime, filePath)
 	}
 	return warnings, indexWarnings, nil
 }

@@ -38,7 +38,7 @@ type DeleteResult struct {
 	DeletedSections []string
 	Backlinks       []model.Reference
 	WarningMessages []string
-	IndexWarnings   []IndexWarning
+	IndexWarnings   []reindexsvc.ProjectionWarning
 }
 
 // Delete removes one heading and its complete subtree. References from outside

@@ -193,6 +193,67 @@ func TestProjectChangesDoesNotRemoveConcurrentlyRecreatedPath(t *testing.T) {
 	}
 }
 
+func TestProjectChangesProjectsReusedMoveDestination(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("a.md", "A\n").
+		WithFile("b.md", "B\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+	projectTestPaths(t, rt, "a.md", "b.md")
+	if err := os.Rename(filepath.Join(v.Path, "b.md"), filepath.Join(v.Path, "c.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(v.Path, "a.md"), filepath.Join(v.Path, "b.md")); err != nil {
+		t.Fatal(err)
+	}
+	changes := mutation.NewChangeSet()
+	changes.AddMoved("b.md", "c.md")
+	changes.AddMoved("a.md", "b.md")
+	if result := ProjectChanges(rt, changes, ""); len(result.Warnings) != 0 {
+		t.Fatalf("warnings = %#v", result.Warnings)
+	}
+	ids, err := rt.DB.AllObjectIDs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(ids)
+	if len(ids) != 2 || ids[0] != "b" || ids[1] != "c" {
+		t.Fatalf("ids = %#v, want [b c]", ids)
+	}
+}
+
+func TestProjectChangesProjectsRecreatedMoveSource(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("a.md", "Original A\n").
+		Build()
+	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
+	projectTestPaths(t, rt, "a.md")
+	if err := os.Rename(filepath.Join(v.Path, "a.md"), filepath.Join(v.Path, "b.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(v.Path, "a.md"), []byte("Recreated A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changes := mutation.NewChangeSet()
+	changes.AddMoved("a.md", "b.md")
+	changes.AddChanged("a.md")
+	if result := ProjectChanges(rt, changes, ""); len(result.Warnings) != 0 {
+		t.Fatalf("warnings = %#v", result.Warnings)
+	}
+	ids, err := rt.DB.AllObjectIDs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(ids)
+	if len(ids) != 2 || ids[0] != "a" || ids[1] != "b" {
+		t.Fatalf("ids = %#v, want [a b]", ids)
+	}
+}
+
 func projectTestPaths(t *testing.T, rt *vaultruntime.Runtime, paths ...string) {
 	t.Helper()
 	changes := mutation.NewChangeSet()
