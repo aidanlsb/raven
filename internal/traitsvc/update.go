@@ -14,9 +14,11 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutation"
+	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type ValueValidationError struct {
@@ -67,6 +69,51 @@ type BulkSummary struct {
 	Skipped   int                `json:"skipped"`
 	Errors    int                `json:"errors"`
 	ChangeSet mutation.ChangeSet `json:"-"`
+}
+
+type UpdateResult struct {
+	Preview *BulkPreview
+	Summary *BulkSummary
+}
+
+func Update(rt *vaultruntime.Runtime, ids []string, newValue string, confirm, bulk bool) (*UpdateResult, error) {
+	if err := vaultruntime.Require(rt); err != nil {
+		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault runtime is required", err)
+	}
+	if err := rt.OpenDB(); err != nil {
+		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to open index database", err).
+			WithSuggestion("Run 'rvn reindex' to rebuild the database")
+	}
+	traits, skipped, err := ResolveTraitIDs(rt.DB, ids)
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]model.Trait, 0, len(traits))
+	for _, trait := range traits {
+		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, trait.FilePath); err != nil {
+			if !bulk {
+				return nil, err
+			}
+			skipped = append(skipped, BulkResult{
+				ID: trait.ID, FilePath: trait.FilePath, Line: trait.Line,
+				Status: "skipped", Reason: err.Error(),
+			})
+			continue
+		}
+		filtered = append(filtered, trait)
+	}
+	if !confirm {
+		preview, err := BuildPreview(filtered, newValue, rt.Schema, skipped)
+		if err != nil {
+			return nil, err
+		}
+		return &UpdateResult{Preview: preview}, nil
+	}
+	summary, err := ApplyUpdates(rt.VaultPath, filtered, newValue, rt.Schema, skipped)
+	if err != nil {
+		return nil, err
+	}
+	return &UpdateResult{Summary: summary}, nil
 }
 
 func ResolveTraitIDs(db *index.Database, ids []string) ([]model.Trait, []BulkResult, error) {

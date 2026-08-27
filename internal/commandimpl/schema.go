@@ -3,7 +3,6 @@ package commandimpl
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -781,12 +780,6 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 			return commandexec.Failure(codes.ErrInvalidInput, "template write --edit is only available in the interactive CLI", nil, "Use --content when invoking template_write non-interactively")
 		}
 	}
-	projectionLock, lockFailure := lockCommandIndexProjection(rt, false)
-	if lockFailure.Error != nil {
-		return lockFailure
-	}
-	defer func() { _ = projectionLock.Close() }()
-
 	result, err := templatesvc.Write(rt, templatesvc.WriteRequest{
 		VaultPath:   req.VaultPath,
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
@@ -797,22 +790,11 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.FromServiceError(err)
 	}
 
-	var warnings []commandexec.Warning
-	if result.Changed && result.ChangedPath != "" {
-		changedPath := filepath.Clean(result.ChangedPath)
-		if warning, projectionErr := autoReindexWarningAndErrorLocked(rt, changedPath); projectionErr != nil {
-			warnings = append(warnings, warning)
-			if err := recordIndexProjectionRecovery(rt.VaultPath, changedPath, projectionErr); err != nil {
-				warnings = append(warnings, indexJournalWarning("failed to record pending index recovery", err))
-			}
-		}
-	}
-
 	return commandexec.SuccessWithWarnings(commandpayload.TemplateWriteResult{
 		Path:        result.Path,
 		Status:      result.Status,
 		TemplateDir: result.TemplateDir,
-	}, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	}, canonicalTemplateWarnings(result.Warnings), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleTemplateDelete executes the canonical `template_delete` command.
@@ -824,12 +806,6 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 	}
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
-	projectionLock, lockFailure := lockCommandIndexProjection(rt, false)
-	if lockFailure.Error != nil {
-		return lockFailure
-	}
-	defer func() { _ = projectionLock.Close() }()
-
 	result, err := templatesvc.Delete(rt, templatesvc.DeleteRequest{
 		VaultPath:   req.VaultPath,
 		TemplateDir: vaultCfg.GetTemplateDirectory(),

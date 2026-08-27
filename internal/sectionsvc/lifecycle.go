@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/refresolve"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -117,6 +118,13 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	if owned {
 		defer rt.Close()
 	}
+	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
+	if err != nil {
+		return nil, err
+	}
+	if projectionLock != nil {
+		defer func() { _ = projectionLock.Close() }()
+	}
 	ctx, err := newLifecycleContext(rt, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if err != nil {
 		return nil, err
@@ -216,6 +224,13 @@ func Move(req MoveRequest) (*MoveResult, error) {
 	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
+	}
+	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
+	if err != nil {
+		return nil, err
+	}
+	if projectionLock != nil {
+		defer func() { _ = projectionLock.Close() }()
 	}
 	ctx, err := newLifecycleContext(rt, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if err != nil {

@@ -1,6 +1,7 @@
 package objectsvc
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,6 +22,17 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+var ErrAddContentContainsHeading = errors.New("add content contains a Markdown heading")
+
+// ValidateAddContent enforces the body-only content accepted by `rvn add`.
+func ValidateAddContent(content string) error {
+	extracted, err := parser.ExtractFromAST([]byte(content), 1)
+	if err == nil && len(extracted.Headings) > 0 {
+		return ErrAddContentContainsHeading
+	}
+	return nil
+}
 
 // AppendResult describes an applied append and its durable file changes.
 type AppendResult struct {

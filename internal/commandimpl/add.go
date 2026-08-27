@@ -2,22 +2,11 @@ package commandimpl
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/dates"
-	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -36,7 +25,7 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 		}
 		return failure
 	}
-	if containsMarkdownHeading(text) {
+	if err := objectsvc.ValidateAddContent(text); err != nil {
 		failure := removedAddHeadingFailure()
 		if stdinMode {
 			return failure.WithAttemptedIDs("object_ids", objectIDs)
@@ -134,57 +123,14 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 }
 
 func runAddSingle(rt *vaultruntime.Runtime, text, toRef, journalOperation string) commandexec.Result {
-	vaultPath := rt.VaultPath
-	vaultCfg := rt.VaultCfg
-	captureCfg := vaultCfg.GetCaptureConfig()
-
-	var destPath string
-	var isDailyNote bool
-	var targetObjectID string
-
-	if strings.TrimSpace(toRef) != "" {
-		resolved, err := refresolve.ResolveDynamic(toRef, rt, true)
-		if err != nil {
-			return mapResolveFailure(err, toRef)
-		}
-		destPath = resolved.FilePath
-		targetObjectID = resolved.ObjectID
-		isDailyNote = isDailyNoteObjectID(resolved.FileObjectID, vaultCfg)
-	} else if captureCfg.Destination == "daily" {
-		today := time.Now()
-		dateStr := fmt.Sprintf("%04d-%02d-%02d", today.Year(), today.Month(), today.Day())
-		destPath = vaultCfg.DailyNotePath(vaultPath, dateStr)
-		isDailyNote = true
-	} else {
-		destPath = filepath.Join(vaultPath, captureCfg.Destination)
-		if _, err := os.Stat(destPath); os.IsNotExist(err) {
-			return commandexec.Failure("FILE_NOT_FOUND", fmt.Sprintf("Configured capture destination '%s' does not exist", captureCfg.Destination), nil, "Create the file first or change capture.destination in raven.yaml")
-		}
-	}
-
-	if err := paths.ValidateWithinVault(vaultPath, destPath); err != nil {
-		if errors.Is(err, paths.ErrPathOutsideVault) {
-			return commandexec.Failure("FILE_OUTSIDE_VAULT", fmt.Sprintf("cannot capture outside vault: %s", destPath), nil, "")
-		}
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-	}
-	if err := mutationguard.ValidateContentMutationFilePath(vaultPath, vaultCfg, destPath); err != nil {
-		return mapContentMutationError(err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
-	}
-	appendResult, err := objectsvc.Append(rt, destPath, text, captureCfg, isDailyNote, targetObjectID)
+	result, err := objectsvc.Add(rt, objectsvc.AddRequest{Text: text, ToReference: toRef})
 	if err != nil {
 		return mapContentMutationError(err)
 	}
-
-	relPath, _ := filepath.Rel(vaultPath, destPath)
-	missingRefs, postWarnings := applyChangeSet(rt, appendResult.ChangeSet, journalOperation)
+	missingRefs, postWarnings := applyChangeSet(rt, result.ChangeSet, journalOperation)
 	data := commandpayload.AddResult{
-		File:              filepath.ToSlash(relPath),
-		Line:              appendResult.Line,
+		File:              result.File,
+		Line:              result.Line,
 		Content:           text,
 		MissingReferences: missingRefs,
 	}
@@ -198,37 +144,4 @@ func removedAddHeadingFailure() commandexec.Result {
 		nil,
 		`Create the heading with 'rvn section create <file> "<title>" --level N', then append content with 'rvn add <text> --to <file#section>'`,
 	)
-}
-
-func containsMarkdownHeading(text string) bool {
-	extracted, err := parser.ExtractFromAST([]byte(text), 1)
-	return err == nil && len(extracted.Headings) > 0
-}
-
-func isDailyNoteObjectID(objectID string, vaultCfg *config.VaultConfig) bool {
-	if objectID == "" {
-		return false
-	}
-
-	baseID := objectID
-	if parts := strings.SplitN(objectID, "#", 2); len(parts) == 2 {
-		baseID = parts[0]
-	}
-
-	// Canonical daily-note object IDs are bare ISO dates.
-	if dates.IsValidDate(baseID) {
-		return true
-	}
-
-	// Legacy compatibility: daily-directory-prefixed object IDs.
-	dailyDir := "daily"
-	if vaultCfg != nil && vaultCfg.GetDailyDirectory() != "" {
-		dailyDir = vaultCfg.GetDailyDirectory()
-	}
-	if !strings.HasPrefix(baseID, dailyDir+"/") {
-		return false
-	}
-
-	dateStr := strings.TrimPrefix(baseID, dailyDir+"/")
-	return dates.IsValidDate(dateStr)
 }

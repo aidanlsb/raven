@@ -46,10 +46,19 @@ const (
 	StageDatabase Stage = "database"
 )
 
+// SetupFailure further classifies failures whose transport mapping differs
+// within a dependency-loading stage.
+type SetupFailure string
+
+const (
+	SetupFailureIndexRebuildRequired SetupFailure = "index_rebuild_required"
+)
+
 // SetupError wraps a runtime construction failure with its owning stage.
 type SetupError struct {
-	Stage Stage
-	Err   error
+	Stage   Stage
+	Failure SetupFailure
+	Err     error
 }
 
 func (e *SetupError) Error() string {
@@ -226,7 +235,11 @@ func (r *Runtime) OpenDB() error {
 	}
 	db, err := index.Open(r.VaultPath)
 	if err != nil {
-		return &SetupError{Stage: StageDatabase, Err: err}
+		setupErr := &SetupError{Stage: StageDatabase, Err: err}
+		if errors.Is(err, index.ErrIndexRebuildRequired) {
+			setupErr.Failure = SetupFailureIndexRebuildRequired
+		}
+		return setupErr
 	}
 	if r.VaultCfg != nil {
 		db.SetDailyDirectory(r.VaultCfg.GetDailyDirectory())

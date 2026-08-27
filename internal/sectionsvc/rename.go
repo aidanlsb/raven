@@ -18,6 +18,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/refs"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -71,6 +72,13 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 		defer rt.Close()
 	}
 	req.Runtime = rt
+	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
+	if err != nil {
+		return nil, err
+	}
+	if projectionLock != nil {
+		defer func() { _ = projectionLock.Close() }()
+	}
 
 	reference := strings.TrimSpace(req.Reference)
 	fileID, oldSlug, isSection := paths.ParseSectionID(reference)

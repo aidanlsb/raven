@@ -6,8 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/querysvc"
 )
 
 func TestHandleQueryApplyPreservesNestedMutationMetadata(t *testing.T) {
@@ -21,10 +20,14 @@ func TestHandleQueryApplyPreservesNestedMutationMetadata(t *testing.T) {
 			WithMutationPhase(commandexec.MutationPhasePreview)
 	})
 	registry.Register("query-test", func(ctx context.Context, req commandexec.Request) commandexec.Result {
-		return handleQueryApply(ctx, req, &readsvc.ExecuteQueryResult{
-			QueryKind: "type",
-			Objects:   []model.Object{{ID: "projects/raven"}},
-		}, []string{"set status=done"}, 42)
+		return handleQueryApply(ctx, req, &querysvc.ApplyPlan{
+			Command: "set",
+			Args: map[string]interface{}{
+				"stdin":      true,
+				"fields":     []string{"status=done"},
+				"references": []interface{}{"projects/raven"},
+			},
+		}, 42)
 	})
 
 	result := commandexec.NewInvoker(registry, nil).Execute(context.Background(), commandexec.Request{
@@ -73,8 +76,7 @@ func TestHandleQueryApplyEmptyResultSetsMutationPhase(t *testing.T) {
 			result := handleQueryApply(
 				context.Background(),
 				commandexec.Request{Confirm: tt.confirm},
-				&readsvc.ExecuteQueryResult{QueryKind: "type"},
-				[]string{"delete"},
+				&querysvc.ApplyPlan{Command: "delete", Empty: true},
 				42,
 			)
 

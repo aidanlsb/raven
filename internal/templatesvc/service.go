@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/template"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -66,6 +67,7 @@ type WriteResult struct {
 	TemplateDir string
 	Changed     bool
 	ChangedPath string
+	Warnings    []Warning
 }
 
 type DeleteRequest struct {
@@ -171,6 +173,11 @@ func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
 		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	req.VaultPath = rt.VaultPath
+	projectionLock, err := reindexsvc.LockProjection(rt, false)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = projectionLock.Close() }()
 
 	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
 	if err != nil {
@@ -203,13 +210,21 @@ func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
 		}
 	}
 
-	return &WriteResult{
+	result := &WriteResult{
 		Path:        fileRef,
 		Status:      status,
 		TemplateDir: req.TemplateDir,
 		Changed:     changed,
 		ChangedPath: fullPath,
-	}, nil
+	}
+	if changed {
+		for _, warning := range reindexsvc.ProjectFileLocked(rt, fullPath) {
+			result.Warnings = append(result.Warnings, Warning{
+				Code: warning.Code, Message: warning.Message, Ref: warning.Ref,
+			})
+		}
+	}
+	return result, nil
 }
 
 func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) {
@@ -217,6 +232,11 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	req.VaultPath = rt.VaultPath
+	projectionLock, err := reindexsvc.LockProjection(rt, false)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = projectionLock.Close() }()
 
 	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
 	if err != nil {

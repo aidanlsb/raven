@@ -2,28 +2,17 @@ package commandimpl
 
 import (
 	"errors"
-	"fmt"
-	"os"
-	"path"
-	"path/filepath"
-	"sort"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/indexjournal"
-	"github.com/aidanlsb/raven/internal/parser"
-	ravenpaths "github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 const indexUpdateFailedWarningCode = codes.WarnIndexUpdateFailed
 
-const indexUpdateFailedWarningRef = "The write succeeded, but the derived index may be stale. Run 'rvn reindex' to refresh it."
+const indexUpdateFailedWarningRef = reindexsvc.IndexUpdateFailedWarningRef
 
 func newRequiredCommandVaultRuntime(vaultPath string, openDB bool) (*vaultruntime.Runtime, commandexec.Result) {
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{OpenDB: openDB, RequireSchema: true})
@@ -35,23 +24,6 @@ func newConfigCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, comm
 
 func newConfigOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
 	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{SkipSchema: true})
-}
-
-func lockCommandIndexProjection(rt *vaultruntime.Runtime, skip bool) (*indexjournal.ProjectionLock, commandexec.Result) {
-	if skip {
-		return nil, commandexec.Result{}
-	}
-	if err := rt.OpenDB(); err != nil {
-		if failure, ok := mapIndexRebuildRequired(err); ok {
-			return nil, failure
-		}
-		return nil, commandexec.Failure(codes.ErrDatabase, "failed to open index database", nil, "Run 'rvn reindex' to rebuild the database")
-	}
-	projectionLock, err := indexjournal.LockProjection(rt.VaultPath)
-	if err != nil {
-		return nil, commandexec.Failure(codes.ErrDatabase, "failed to lock index projection", nil, "Wait for the active write or refresh to finish, then retry")
-	}
-	return projectionLock, commandexec.Result{}
 }
 
 func newSchemaOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
@@ -66,7 +38,6 @@ func newSchemaOnlyCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, 
 // config (best-effort), and opens the database. If config is invalid, the runtime
 // creation succeeds but ApplyInvalidation will skip auto-reindex.
 func newSchemaMutationCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
-	// First try loading everything including config
 	rt, err := vaultruntime.New(strings.TrimSpace(vaultPath), vaultruntime.Options{
 		OpenDB:        true,
 		RequireSchema: true,
@@ -75,22 +46,18 @@ func newSchemaMutationCommandVaultRuntime(vaultPath string) (*vaultruntime.Runti
 		return rt, commandexec.Result{}
 	}
 
-	// If it failed, check if it was due to invalid config
 	var setupErr *vaultruntime.SetupError
 	if errors.As(err, &setupErr) && setupErr.Stage == vaultruntime.StageConfig {
-		// Config is invalid - try again without config so schema mutations can proceed
 		rt, err = vaultruntime.New(strings.TrimSpace(vaultPath), vaultruntime.Options{
 			OpenDB:        true,
 			SkipConfig:    true,
 			RequireSchema: true,
 		})
 		if err == nil {
-			// Schema mutation can proceed, but auto-reindex will be skipped
 			return rt, commandexec.Result{}
 		}
 	}
 
-	// Some other failure (schema invalid, DB error, etc.)
 	return nil, mapVaultRuntimeSetupFailure(err)
 }
 
@@ -148,222 +115,6 @@ func mapVaultRuntimeSetupFailure(err error) commandexec.Result {
 	}
 
 	return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-}
-
-func autoReindexWarnings(rt *vaultruntime.Runtime, filePaths ...string) []commandexec.Warning {
-	if rt == nil || rt.VaultCfg == nil || !rt.VaultCfg.IsAutoReindexEnabled() {
-		return nil
-	}
-
-	seen := make(map[string]struct{}, len(filePaths))
-	warnings := make([]commandexec.Warning, 0)
-	for _, filePath := range filePaths {
-		filePath = strings.TrimSpace(filePath)
-		if filePath == "" {
-			continue
-		}
-		filePath = filepath.Clean(filePath)
-		if _, ok := seen[filePath]; ok {
-			continue
-		}
-		seen[filePath] = struct{}{}
-		if warning, ok := autoReindexWarning(rt, filePath); ok {
-			warnings = append(warnings, warning)
-		}
-	}
-	return warnings
-}
-
-func autoReindexWarning(rt *vaultruntime.Runtime, filePath string) (commandexec.Warning, bool) {
-	vaultPath := rt.VaultPath
-	if err := rt.OpenDB(); err != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to open index database", err), true
-	}
-	projectionLock, err := indexjournal.LockProjection(vaultPath)
-	if err != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to lock index projection", err), true
-	}
-	warning, err := autoReindexWarningAndErrorLocked(rt, filePath)
-	failed := err != nil
-	if err := projectionLock.Close(); err != nil && !failed {
-		return indexUpdateWarning(vaultPath, filePath, "failed to unlock index projection", err), true
-	}
-	return warning, failed
-}
-
-func autoReindexWarningAndErrorLocked(rt *vaultruntime.Runtime, filePath string) (commandexec.Warning, error) {
-	vaultPath := rt.VaultPath
-	if rt.SchemaLoadErr != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", rt.SchemaLoadErr), rt.SchemaLoadErr
-	}
-	if rt.Schema == nil {
-		err := errors.New("schema runtime is required")
-		return indexUpdateWarning(vaultPath, filePath, "failed to load schema", err), err
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to read file", err), err
-	}
-
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, rt.ParseOptions)
-	if err != nil {
-		return indexUpdateWarning(vaultPath, filePath, "failed to parse file", err), err
-	}
-
-	var mtime int64
-	if st, err := os.Stat(filePath); err == nil {
-		mtime = st.ModTime().Unix()
-	}
-
-	if err := rt.DB.IndexDocumentWithMtime(doc, rt.Schema, mtime); err != nil {
-		var resolutionErr *index.PostCommitReferenceResolutionError
-		if errors.As(err, &resolutionErr) {
-			return referenceResolutionIncompleteWarning(vaultPath, filePath, resolutionErr), err
-		}
-		return indexUpdateWarning(vaultPath, filePath, "failed to update index", err), err
-	}
-	return commandexec.Warning{}, nil
-}
-
-func indexUpdateWarning(vaultPath, filePath, prefix string, err error) commandexec.Warning {
-	displayPath := filepath.ToSlash(filepath.Clean(filePath))
-	if relPath, relErr := filepath.Rel(vaultPath, filePath); relErr == nil && !strings.HasPrefix(relPath, "..") {
-		displayPath = filepath.ToSlash(relPath)
-	}
-	return commandexec.Warning{
-		Code:    indexUpdateFailedWarningCode,
-		Message: fmt.Sprintf("auto-reindex failed for %s: %s: %v", displayPath, prefix, err),
-		Ref:     indexUpdateFailedWarningRef,
-	}
-}
-
-func referenceResolutionIncompleteWarning(vaultPath, filePath string, err *index.PostCommitReferenceResolutionError) commandexec.Warning {
-	displayPath := filepath.ToSlash(filepath.Clean(filePath))
-	if relPath, relErr := filepath.Rel(vaultPath, filePath); relErr == nil && !strings.HasPrefix(relPath, "..") {
-		displayPath = filepath.ToSlash(relPath)
-	}
-	scope := "file"
-	if err.VaultWide {
-		scope = "vault-wide"
-	}
-	return commandexec.Warning{
-		Code:    codes.WarnRefResolutionIncomplete,
-		Message: fmt.Sprintf("auto-reindex indexed %s, but %s reference resolution did not complete: %v", displayPath, scope, err.Err),
-		Ref:     "The file was indexed successfully, but backlinks may be stale. Run 'rvn reindex' to retry reference resolution.",
-	}
-}
-
-func indexProjectionFailureWarnings(rt *vaultruntime.Runtime, filePath, stage string, projectionErr error) []commandexec.Warning {
-	if projectionErr == nil {
-		return nil
-	}
-	var warning commandexec.Warning
-	var resolutionErr *index.PostCommitReferenceResolutionError
-	if errors.As(projectionErr, &resolutionErr) {
-		warning = referenceResolutionIncompleteWarning(rt.VaultPath, filePath, resolutionErr)
-	} else {
-		warning = indexUpdateWarning(rt.VaultPath, filePath, "failed to "+stage, projectionErr)
-	}
-	warnings := []commandexec.Warning{warning}
-	if err := recordIndexProjectionRecovery(rt.VaultPath, filePath, projectionErr); err != nil {
-		warnings = append(warnings, indexJournalWarning("failed to record pending index recovery", err))
-	}
-	return warnings
-}
-
-func recordIndexProjectionRecovery(vaultPath, filePath string, projectionErr error) error {
-	var resolutionErr *index.PostCommitReferenceResolutionError
-	if errors.As(projectionErr, &resolutionErr) && resolutionErr.VaultWide {
-		_, err := indexjournal.RequireFullScan(vaultPath, "")
-		return err
-	}
-
-	fullPath := filePath
-	if !filepath.IsAbs(fullPath) {
-		fullPath = filepath.Join(vaultPath, filepath.FromSlash(fullPath))
-	}
-	relPath, err := filepath.Rel(vaultPath, fullPath)
-	if err != nil {
-		return fmt.Errorf("resolve index recovery path: %w", err)
-	}
-	relPath = filepath.ToSlash(filepath.Clean(relPath))
-	if !ravenpaths.IsValidVaultRelPath(relPath) {
-		return fmt.Errorf("invalid index recovery path %q", relPath)
-	}
-	_, err = indexjournal.SetPaths(vaultPath, "", []string{relPath})
-	return err
-}
-
-// missingRefEnvelope detects references in the given files whose targets do not
-// exist yet and returns success-envelope data fields plus REF_TARGET_MISSING
-// warnings. Writes remain permissive: this only annotates a successful response
-// so callers can surface the missing target (interactively in the CLI, or via
-// the warning/data for agents). Detection failures are non-fatal and produce no
-// annotations.
-func missingRefEnvelope(rt *vaultruntime.Runtime, relPaths ...string) (commandpayload.MissingReferences, []commandexec.Warning) {
-	refs, err := checksvc.DetectMissingRefs(rt, relPaths...)
-	if err != nil || len(refs) == 0 {
-		return commandpayload.MissingReferences{}, nil
-	}
-	sort.Slice(refs, func(i, j int) bool {
-		return refs[i].TargetPath < refs[j].TargetPath
-	})
-
-	warnings := make([]commandexec.Warning, 0, len(refs))
-	for _, ref := range refs {
-		warnings = append(warnings, missingRefWarning(ref))
-	}
-	data := commandpayload.MissingReferences{
-		MissingRefs:     len(refs),
-		MissingRefItems: refs,
-	}
-	return data, warnings
-}
-
-func missingRefWarning(ref *check.MissingRef) commandexec.Warning {
-	warning := commandexec.Warning{
-		Code:    codes.WarnRefTargetMissing,
-		Message: fmt.Sprintf("Reference [[%s]] does not exist yet", ref.TargetPath),
-		Ref:     "Run 'rvn check create-missing' to create missing referenced pages",
-	}
-	if ref.InferredType != "" {
-		title := missingRefTitle(ref.TargetPath)
-		warning.SuggestedType = ref.InferredType
-		warning.CreateCommand = fmt.Sprintf("rvn new %s %q --path %q --json", ref.InferredType, title, ref.TargetPath)
-		warning.CreateInvoke = &commandexec.Invoke{
-			Command: "new",
-			Args: map[string]interface{}{
-				"type":  ref.InferredType,
-				"title": title,
-				"path":  ref.TargetPath,
-			},
-		}
-	} else {
-		warning.CreateCommand = "rvn check create-missing"
-		warning.CreateInvoke = &commandexec.Invoke{
-			Command: "check create-missing",
-			Args:    map[string]interface{}{"confirm": true},
-		}
-	}
-	return warning
-}
-
-// missingRefTitle derives a concise display title from a reference target path.
-// The missing-ref flow always creates the object at the ref's exact location via
-// the invocation's explicit --path argument, so we only need a readable display
-// title here and use the final path segment (e.g. "people/ghost" -> "ghost").
-func missingRefTitle(targetPath string) string {
-	trimmed := strings.TrimSpace(targetPath)
-	trimmed = strings.TrimRight(trimmed, "/")
-	if trimmed == "" {
-		return "new-object"
-	}
-	base := path.Base(trimmed)
-	if base == "" || base == "." || base == "/" {
-		return "new-object"
-	}
-	return base
 }
 
 func appendCommandWarnings(groups ...[]commandexec.Warning) []commandexec.Warning {
