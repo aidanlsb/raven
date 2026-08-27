@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/sectionsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -34,14 +35,6 @@ func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec
 	if !hasLevel {
 		return commandexec.Failure("MISSING_ARGUMENT", "--level is required", nil, `Usage: rvn section create <file> "<title>" --level N`)
 	}
-	projectionLock, lockFailure := lockCommandIndexProjection(rt, req.Preview)
-	if lockFailure.Error != nil {
-		return lockFailure
-	}
-	if projectionLock != nil {
-		defer func() { _ = projectionLock.Close() }()
-	}
-
 	result, err := sectionsvc.Create(sectionsvc.CreateRequest{
 		VaultPath:      vaultPath,
 		VaultConfig:    rt.VaultCfg,
@@ -82,14 +75,6 @@ func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.R
 	if sectionID == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires section ID argument", nil, "Usage: rvn section move <file#section>")
 	}
-	projectionLock, lockFailure := lockCommandIndexProjection(rt, req.Preview)
-	if lockFailure.Error != nil {
-		return lockFailure
-	}
-	if projectionLock != nil {
-		defer func() { _ = projectionLock.Close() }()
-	}
-
 	result, err := sectionsvc.Move(sectionsvc.MoveRequest{
 		VaultPath:      vaultPath,
 		VaultConfig:    rt.VaultCfg,
@@ -131,14 +116,6 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 			"Usage: rvn section delete <file#section> [--confirm]",
 		)
 	}
-	projectionLock, lockFailure := lockCommandIndexProjection(rt, req.Preview)
-	if lockFailure.Error != nil {
-		return lockFailure
-	}
-	if projectionLock != nil {
-		defer func() { _ = projectionLock.Close() }()
-	}
-
 	result, err := sectionsvc.Delete(sectionsvc.DeleteRequest{
 		VaultPath:      vaultPath,
 		VaultConfig:    rt.VaultCfg,
@@ -194,14 +171,6 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 			`Usage: rvn section rename <file#section> "<new heading text>"`,
 		)
 	}
-	projectionLock, lockFailure := lockCommandIndexProjection(rt, req.Preview)
-	if lockFailure.Error != nil {
-		return lockFailure
-	}
-	if projectionLock != nil {
-		defer func() { _ = projectionLock.Close() }()
-	}
-
 	result, err := sectionsvc.Rename(sectionsvc.RenameRequest{
 		VaultPath:      vaultPath,
 		VaultConfig:    rt.VaultCfg,
@@ -236,17 +205,9 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 	)
 }
 
-func sectionCommandWarnings(rt *vaultruntime.Runtime, warningMessages []string, indexWarnings []sectionsvc.IndexWarning) []commandexec.Warning {
+func sectionCommandWarnings(_ *vaultruntime.Runtime, warningMessages []string, indexWarnings []reindexsvc.ProjectionWarning) []commandexec.Warning {
 	warnings := warningMessagesToCommandWarnings(warningMessages, indexUpdateFailedWarningCode)
-	for _, indexWarning := range indexWarnings {
-		warnings = append(warnings, indexProjectionFailureWarnings(
-			rt,
-			indexWarning.FilePath,
-			indexWarning.Stage,
-			indexWarning.Err,
-		)...)
-	}
-	return warnings
+	return append(warnings, projectionCommandWarnings(indexWarnings)...)
 }
 
 func sectionPlacementArg(args map[string]any) sectionsvc.Placement {

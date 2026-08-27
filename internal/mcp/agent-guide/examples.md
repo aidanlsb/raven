@@ -1,4 +1,4 @@
-# Examples
+# Command Translations
 
 Use these examples as translations from user intent to compact-surface MCP usage.
 
@@ -63,7 +63,14 @@ raven_invoke(command="schema_template_bind", args={"template_id":"meeting_standa
 
 ```text
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "count-only":true})
-raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "limit":50, "offset":0})
-# Continue while has_more is true, sending the returned next_offset as offset.
-raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "limit":50, "offset":50})
+page = raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "limit":50, "offset":0})
+# While page.data.has_more is true, request the next page with
+# offset=page.data.next_offset. Never hard-code the next offset.
 ```
+
+## Related topics
+
+- `raven://guide/querying`
+- `raven://guide/query-at-scale`
+- `raven://guide/write-patterns`
+- `raven://guide/key-flows`

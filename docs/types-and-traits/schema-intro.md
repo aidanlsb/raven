@@ -5,7 +5,7 @@ This is a guide-level introduction to `schema.yaml`.
 Goal: make your first safe schema changes without getting lost in the full reference.
 
 Out of scope:
-- exhaustive field/trait rules (use `types-and-traits/schema.md`)
+- exhaustive field/trait rules (use the [Schema reference](schema.md))
 
 ## What `schema.yaml` controls
 
@@ -23,10 +23,11 @@ Raven indexes those outgoing link edges separately.
 
 ## Validation levels
 
-Raven validates your schema and data at two levels:
+Raven validates schema and data at three points:
 
 | Command | What it checks |
 |---------|---------------|
+| `rvn new` / mutation commands | Validate new values while writing |
 | `rvn schema validate` | Internal consistency of `schema.yaml` (valid types, valid enum values, ref targets exist, etc.) |
 | `rvn check` | Vault files against the schema (unknown types, missing required fields, broken references, undefined traits) |
 
@@ -111,7 +112,10 @@ This catches type/field/trait issues early and keeps the index aligned with the 
 
 ## What to read next
 
-- `types-and-traits/schema.md` for complete schema format and evolution rules
-- `types-and-traits/templates.md` for end-to-end template file + schema lifecycle
+- [Schema reference](schema.md) for the complete schema format and evolution
+  rules.
+- [Templates](templates.md) for template files, definitions, and bindings.
 - Use `rvn help <command>` for the full `rvn schema ...` command set
-- `using-your-vault/configuration.md` for `config.toml` and `raven.yaml` setup
+- [Configuration](../using-your-vault/configuration.md) for `config.toml` and
+  `raven.yaml`.
+- [Documentation map](../getting-started/documentation-map.md) for every topic.

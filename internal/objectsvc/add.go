@@ -22,6 +22,16 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
+// ValidateAddContent enforces the body-only content accepted by `rvn add`.
+func ValidateAddContent(content string) error {
+	extracted, err := parser.ExtractFromAST([]byte(content), 1)
+	if err == nil && len(extracted.Headings) > 0 {
+		return svcerr.New(codes.ErrInvalidInput, "rvn add only appends body content; it does not accept or create headings").
+			WithSuggestion(`Create the heading with 'rvn section create <file> "<title>" --level N', then append content with 'rvn add <text> --to <file#section>'`)
+	}
+	return nil
+}
+
 // AppendResult describes an applied append and its durable file changes.
 type AppendResult struct {
 	Line      int
@@ -37,6 +47,9 @@ func Append(
 	isDailyNote bool,
 	targetObjectID string,
 ) (*AppendResult, error) {
+	if err := ValidateAddContent(line); err != nil {
+		return nil, err
+	}
 	insertedLine, err := AppendToFile(rt, destPath, line, cfg, isDailyNote, targetObjectID)
 	if err != nil {
 		return nil, err

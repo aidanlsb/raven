@@ -1,5 +1,7 @@
 # Command Map
 
+Use this page as the compact CLI chooser for day-to-day Raven work.
+
 ## Creating content
 
 - Create a brand-new typed item: `rvn new <type> <title> --json`
@@ -35,3 +37,9 @@
 - Open a specific date's note: `rvn daily <date> --json`
 - View all activity for a date: `rvn date <date> --json`
 - Open a file in configured editor: `rvn open <reference> --json`
+
+## Related guidance
+
+- [Back to Raven Core](../body.md)
+- Canonical long-form command guide:
+  `rvn docs using-your-vault common-commands --json`

@@ -198,7 +198,10 @@ them as dates (`YYYY-MM-DD`) or normalizes datetimes to RFC3339-ish values (e.g.
 
 ### `alias`
 
-The `alias` reserved key lets any object define an alternative name for reference resolution (e.g., `alias: The Queen` makes `[[The Queen]]` resolve to that object). Aliases are matched case-insensitively and in slugified form. See `types-and-traits/schema.md` (Reserved Keys) for full details and examples.
+The `alias` reserved key lets any object define an alternative name for
+reference resolution (e.g., `alias: The Queen` makes `[[The Queen]]` resolve to
+that object). Aliases are matched case-insensitively and in slugified form. See
+[Schema reference](schema.md#reserved-keys) for details and examples.
 
 ---
 
@@ -276,7 +279,8 @@ path, and short-name matching. Author references with canonical object IDs
 unambiguous, but they are resolution sugar rather than the preferred authoring
 form.
 
-For the full resolution model, ambiguity handling, frontmatter ref syntax, and maintenance commands, see `types-and-traits/references.md`.
+For the full resolution model, ambiguity handling, frontmatter ref syntax, and
+maintenance commands, see [References](references.md).
 
 ---
 
@@ -408,3 +412,12 @@ And references:
 - `[[person/freya]]` (in body and frontmatter)
 - `[[project/brand-guidelines]]`
 - `[[company/acme]]`
+
+## Related docs
+
+- [Core concepts](../getting-started/core-concepts.md) for the shorter mental
+  model.
+- [Schema reference](schema.md) for field and trait definitions.
+- [References](references.md) for resolution, backlinks, and maintenance.
+- [Query language](../querying/query-language.md) for section and trait queries.
+- [Documentation map](../getting-started/documentation-map.md) for every topic.

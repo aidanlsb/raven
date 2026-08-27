@@ -14,7 +14,7 @@ The usual setup uses both:
 
 Out of scope:
 - full command/flag reference (run `rvn help <command>`)
-- full schema format reference (see `types-and-traits/schema.md`)
+- full schema format reference (see [Schema reference](schema.md))
 
 ## How templates work
 
@@ -197,5 +197,10 @@ rvn daily tomorrow
 ## Related docs
 
 - Run `rvn help schema template` for the full command flag reference
-- `types-and-traits/schema.md` for `templates`, `types.<type>.templates`, and `default_template`
-- `using-your-vault/configuration.md` for `directories.template` and practical vault setup
+- [Schema reference](schema.md) for `templates`, `types.<type>.templates`, and
+  `default_template`.
+- [Configuration](../using-your-vault/configuration.md) for
+  `directories.template`.
+- [Daily notes](../using-your-vault/daily-notes.md) for the `date` core-type
+  workflow.
+- [Documentation map](../getting-started/documentation-map.md) for every topic.

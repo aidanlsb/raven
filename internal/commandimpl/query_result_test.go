@@ -5,13 +5,13 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/querysvc"
 )
 
 func TestShapeQueryResultPreservesSavedQueryPagination(t *testing.T) {
 	t.Parallel()
 
-	result := shapeQueryResult(&readsvc.ExecuteQueryResult{
+	result := shapeQueryResult(&querysvc.ExecuteResult{
 		QueryKind: "type",
 		TypeName:  "project",
 		Total:     3,

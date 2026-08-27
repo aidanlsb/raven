@@ -109,6 +109,10 @@ mutation is blocked pending confirmation (for example a `move` into a mismatched
 type directory, or a `reclassify` that would drop fields without `force`), the
 phase is `"preview"` because nothing was written.
 
+Query `apply` plans against the complete matching set. It cannot be combined
+with `limit`, `offset`, or `count-only`; use those options to inspect results,
+then issue an unpaged preview and confirm that plan.
+
 ## Write identity: file path vs link ID
 
 Object-creating writes (`new`, `upsert`, and `daily`) surface an identity pair in

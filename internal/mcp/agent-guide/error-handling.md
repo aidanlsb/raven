@@ -98,3 +98,5 @@ Then:
 ## Related topics
 
 - `raven://guide/issue-types`
+- `raven://guide/response-contract`
+- `raven://guide/critical-rules`

@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/refresolve"
+	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -22,6 +24,41 @@ type OpenTarget struct {
 type OpenFailure struct {
 	Reference string `json:"reference"`
 	Message   string `json:"message"`
+}
+
+type OpenResult struct {
+	Targets  []OpenTarget
+	Failures []OpenFailure
+	Opened   bool
+	Editor   string
+}
+
+func OpenReferences(rt *vaultruntime.Runtime, cfg *config.Config, references []string) OpenResult {
+	targets, failures := ResolveOpenTargets(rt, references)
+	filePaths := make([]string, 0, len(targets))
+	for _, target := range targets {
+		filePaths = append(filePaths, target.FilePath)
+	}
+	editor := ""
+	if cfg != nil {
+		editor = cfg.GetEditor()
+	}
+	return OpenResult{
+		Targets: targets, Failures: failures,
+		Opened: vault.OpenFilesInEditor(cfg, filePaths), Editor: editor,
+	}
+}
+
+func OpenReference(rt *vaultruntime.Runtime, cfg *config.Config, reference string) (*OpenTarget, bool, string, error) {
+	target, err := ResolveOpenTarget(rt, reference)
+	if err != nil {
+		return nil, false, "", err
+	}
+	editor := ""
+	if cfg != nil {
+		editor = cfg.GetEditor()
+	}
+	return target, vault.OpenInEditorAtLine(cfg, target.FilePath, target.LineStart), editor, nil
 }
 
 func ResolveOpenTarget(rt *vaultruntime.Runtime, reference string) (*OpenTarget, error) {

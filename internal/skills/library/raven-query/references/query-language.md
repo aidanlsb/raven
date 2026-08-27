@@ -1,5 +1,7 @@
 # Query Language Quick Reference
 
+Use this page to check RQL syntax and root-specific predicate rules.
+
 ## Query roots
 
 - Object query: `type:<type> [predicates...]`
@@ -217,5 +219,15 @@ type:date .date>=2026-05-01 .date<=today
 
 - Object queries support `--apply "set ..."`, `add`, `delete`, and `move`.
 - Trait queries support only `--apply "update <new_value>"`.
-- Section queries support only `move`; link queries do not support `--apply`.
+- Link queries do not support `--apply`. Section queries accept only a `move`
+  plan, which is then rejected because file-level bulk `move` does not accept
+  section IDs; use `rvn section move <file#slug>` explicitly.
 - All apply flows preview first; add `--confirm` to execute.
+
+## Related guidance
+
+- [Back to Raven Query](../body.md)
+- [Query recipes](query-recipes.md)
+- [Query troubleshooting](query-troubleshooting.md)
+- Canonical long-form RQL guide:
+  `rvn docs querying query-language --json`

@@ -7,8 +7,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/traitsvc"
 )
 
@@ -61,11 +59,8 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		return failure
 	}
 	defer rt.Close()
-	sch := rt.Schema
-	vaultCfg := rt.VaultCfg
-	db := rt.DB
 
-	traits, skipped, err := traitsvc.ResolveTraitIDs(db, traitIDs)
+	result, err := traitsvc.Update(rt, traitIDs, newValue, confirm, stdinMode)
 	if err != nil {
 		failure := mapTraitMutationError(err)
 		if stdinMode {
@@ -73,34 +68,9 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		}
 		return failure
 	}
-	filteredTraits := make([]model.Trait, 0, len(traits))
-	for _, trait := range traits {
-		if err := mutationguard.ValidateContentMutationFilePath(vaultPath, vaultCfg, trait.FilePath); err != nil {
-			if !stdinMode {
-				return mapContentMutationError(err)
-			}
-			skipped = append(skipped, traitsvc.BulkResult{
-				ID:       trait.ID,
-				FilePath: trait.FilePath,
-				Line:     trait.Line,
-				Status:   "skipped",
-				Reason:   err.Error(),
-			})
-			continue
-		}
-		filteredTraits = append(filteredTraits, trait)
-	}
-	traits = filteredTraits
 
 	if !confirm {
-		preview, err := traitsvc.BuildPreview(traits, newValue, sch, skipped)
-		if err != nil {
-			failure := mapTraitMutationError(err)
-			if stdinMode {
-				return failure.WithAttemptedIDs("trait_ids", traitIDs)
-			}
-			return failure
-		}
+		preview := result.Preview
 		return commandexec.Success(commandpayload.TraitUpdatePreviewResult{
 			Preview: true,
 			Action:  preview.Action,
@@ -110,14 +80,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := traitsvc.ApplyUpdates(vaultPath, traits, newValue, sch, skipped)
-	if err != nil {
-		failure := mapTraitMutationError(err)
-		if stdinMode {
-			return failure.WithAttemptedIDs("trait_ids", traitIDs)
-		}
-		return failure
-	}
+	summary := result.Summary
 
 	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, req.IndexJournalOperation)
 	data := commandpayload.TraitUpdateResult{

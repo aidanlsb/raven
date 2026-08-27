@@ -52,7 +52,7 @@ raven_invoke(command="add", args={"text":"@todo Review the initial setup", "to":
 #### Query for the trait
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:todo"})
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
 ```
 
 **Tell the user:** This is the core loop — you write naturally in markdown, use traits to mark structured data, and Raven lets you retrieve it later by structure, not just text search. Show how the query returned the trait with its containing object and line content.
@@ -151,3 +151,10 @@ Summarize what the user learned and point them to next steps based on what they 
 - **Name the concepts.** When you create something, say "this is an object of type X." When you query, say "this is a trait query." Build vocabulary through use.
 - **Connect the dots.** After creating and querying, explicitly connect: "You wrote `@todo` in markdown, and Raven made it queryable — that's the schema-to-query loop."
 - **Keep it interactive.** Pause after each major step. Ask if the user wants to try something or explore further before moving on.
+
+## Related topics
+
+- `raven://guide/quickstart`
+- `raven://guide/getting-started`
+- `raven://guide/core-concepts`
+- `raven://guide/write-patterns`

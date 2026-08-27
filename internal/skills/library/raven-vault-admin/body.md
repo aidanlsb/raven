@@ -22,9 +22,15 @@ For commands that operate on a vault, Raven resolves the target in this order:
 
 Use explicit `--vault` or `--vault-path` when operating across multiple vaults or when the active/default selection is unclear.
 
+MCP does not use CLI `active_vault` or `default_vault`. When falling back to
+MCP, pass a per-call `vault`/`vault_path`, invoke `vault_focus`, or use a server
+launch pin.
+
 ## Unknown environment first pass
 
 1. Inspect configured vaults and the current selection: `rvn vault list --json`.
+   If it reports `active_missing: true`, repair with `rvn vault use <name>` or
+   clear the stale selection with `rvn vault clear`.
 2. If a script needs only the resolved path, use `rvn vault list --path-only --json`; use `rvn vault stats --json` for index details.
 3. If routing is still unclear, inspect machine config: `rvn config show --json`.
 
@@ -61,4 +67,6 @@ Use structured commands for both surfaces instead of editing TOML or YAML by han
 
 ## Reference
 
-- End-to-end command sequences and gotchas: `references/vault-lifecycle.md`
+- [End-to-end command sequences and gotchas](references/vault-lifecycle.md)
+- Canonical configuration guide:
+  `rvn docs using-your-vault configuration --json`

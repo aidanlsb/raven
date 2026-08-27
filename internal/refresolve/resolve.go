@@ -90,6 +90,28 @@ func IsRefNotFound(err error) bool {
 	return errors.As(err, &e)
 }
 
+// NormalizeServiceError preserves structured resolver failures and classifies a
+// stale index distinctly from an ordinary missing reference.
+func NormalizeServiceError(err error, reference string) error {
+	if err == nil {
+		return nil
+	}
+	var setupErr *vaultruntime.SetupError
+	if errors.As(err, &setupErr) && setupErr.Failure == vaultruntime.SetupFailureIndexRebuildRequired {
+		return svcerr.Wrap(codes.ErrDatabaseVersion, "index schema is stale or a rebuild was interrupted", err).
+			WithSuggestion("Run 'rvn reindex --full' to rebuild the index")
+	}
+	if serviceErr, ok := svcerr.AsError(err); ok {
+		normalized := *serviceErr
+		if normalized.Suggestion == "" {
+			normalized.Suggestion = "Check the object reference and run 'rvn reindex' if needed"
+		}
+		return &normalized
+	}
+	return svcerr.Wrap(codes.ErrRefNotFound, fmt.Sprintf("reference '%s' not found", reference), err).
+		WithSuggestion("Check the object reference and run 'rvn reindex' if needed")
+}
+
 // Operation reuses the index resolver across a related group of lookups.
 // It borrows its runtime and does not own or close the runtime's database.
 type Operation struct {

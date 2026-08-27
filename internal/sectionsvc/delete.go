@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -37,7 +38,7 @@ type DeleteResult struct {
 	DeletedSections []string
 	Backlinks       []model.Reference
 	WarningMessages []string
-	IndexWarnings   []IndexWarning
+	IndexWarnings   []reindexsvc.ProjectionWarning
 }
 
 // Delete removes one heading and its complete subtree. References from outside
@@ -47,6 +48,13 @@ func Delete(req DeleteRequest) (*DeleteResult, error) {
 	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if owned {
 		defer rt.Close()
+	}
+	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
+	if err != nil {
+		return nil, err
+	}
+	if projectionLock != nil {
+		defer func() { _ = projectionLock.Close() }()
 	}
 	ctx, err := newLifecycleContext(rt, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
 	if err != nil {

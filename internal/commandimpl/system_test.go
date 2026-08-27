@@ -2,7 +2,6 @@ package commandimpl
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/configsvc"
+	"github.com/aidanlsb/raven/internal/initsvc"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestHandleReindexPropagatesCallerCancellation(t *testing.T) {
@@ -55,7 +56,7 @@ func TestSetupInitVaultFirstVaultRegistersPinsAndActivates(t *testing.T) {
 		t.Fatalf("mkdir vault: %v", err)
 	}
 
-	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := initsvc.SetupVault(vaultPath, configPath, statePath)
 	if setupErr != nil {
 		t.Fatalf("setup init vault: %v", setupErr)
 	}
@@ -141,7 +142,7 @@ func TestSetupInitVaultWithExistingDefaultRegistersAndActivates(t *testing.T) {
 		t.Fatalf("mkdir vault: %v", err)
 	}
 
-	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := initsvc.SetupVault(vaultPath, configPath, statePath)
 	if setupErr != nil {
 		t.Fatalf("setup init vault: %v", setupErr)
 	}
@@ -224,7 +225,7 @@ func TestSetupInitVaultResolvesNameCollision(t *testing.T) {
 		t.Fatalf("mkdir vault: %v", err)
 	}
 
-	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := initsvc.SetupVault(vaultPath, configPath, statePath)
 	if setupErr != nil {
 		t.Fatalf("setup init vault: %v", setupErr)
 	}
@@ -268,7 +269,7 @@ func TestSetupInitVaultDisclosesRoutingChangeFromMissingActive(t *testing.T) {
 		t.Fatalf("save stale active state: %v", err)
 	}
 
-	data, warnings, setupErr := setupInitVault(secondPath, configPath, statePath)
+	data, warnings, setupErr := initsvc.SetupVault(secondPath, configPath, statePath)
 	if setupErr != nil {
 		t.Fatalf("setup init vault: %v", setupErr)
 	}
@@ -306,7 +307,7 @@ func TestSetupInitVaultProvidesSwitchBackWithoutPriorSelection(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	data, warnings, setupErr := setupInitVault(newPath, configPath, statePath)
+	data, warnings, setupErr := initsvc.SetupVault(newPath, configPath, statePath)
 	if setupErr != nil {
 		t.Fatalf("setup init vault: %v", setupErr)
 	}
@@ -341,7 +342,7 @@ func TestSetupInitVaultRepairsStaleDefaultWithEffectiveSwitchBack(t *testing.T) 
 		t.Fatalf("save config: %v", err)
 	}
 
-	data, warnings, setupErr := setupInitVault(newPath, configPath, statePath)
+	data, warnings, setupErr := initsvc.SetupVault(newPath, configPath, statePath)
 	if setupErr != nil {
 		t.Fatalf("setup init vault: %v", setupErr)
 	}
@@ -370,7 +371,7 @@ func TestSetupInitVaultAlreadyRegisteredSoleVaultPinsAndActivates(t *testing.T) 
 		t.Fatalf("save config: %v", err)
 	}
 
-	data, warnings, setupErr := setupInitVault(vaultPath, configPath, statePath)
+	data, warnings, setupErr := initsvc.SetupVault(vaultPath, configPath, statePath)
 	if setupErr != nil {
 		t.Fatalf("setup init vault: %v", setupErr)
 	}
@@ -415,7 +416,7 @@ func TestSetupInitVaultReportsConfiguredPathForSymlinkAlias(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	data, warnings, setupErr := setupInitVault(aliasPath, configPath, statePath)
+	data, warnings, setupErr := initsvc.SetupVault(aliasPath, configPath, statePath)
 	if setupErr != nil {
 		t.Fatalf("setup init vault: %v", setupErr)
 	}
@@ -441,16 +442,16 @@ func TestSetupInitVaultFailsWhenGlobalStateCannotLoad(t *testing.T) {
 		t.Fatalf("write invalid state: %v", err)
 	}
 
-	data, warnings, setupErr := setupInitVault(vaultPath, configPath, "")
+	data, warnings, setupErr := initsvc.SetupVault(vaultPath, configPath, "")
 	if setupErr == nil {
 		t.Fatal("expected setup failure for invalid state")
 	}
-	var typedErr *initVaultSetupError
-	if !errors.As(setupErr, &typedErr) {
-		t.Fatalf("setup error type = %T, want *initVaultSetupError", setupErr)
+	typedErr, ok := svcerr.AsError(setupErr)
+	if !ok {
+		t.Fatalf("setup error type = %T, want *svcerr.Error", setupErr)
 	}
-	if typedErr.code != codes.ErrConfigInvalid {
-		t.Fatalf("setup error code = %q, want %q", typedErr.code, codes.ErrConfigInvalid)
+	if typedErr.Code != codes.ErrConfigInvalid {
+		t.Fatalf("setup error code = %q, want %q", typedErr.Code, codes.ErrConfigInvalid)
 	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %#v, want none on fatal setup failure", warnings)
@@ -487,22 +488,9 @@ func assertPostInitVaultInfo(t *testing.T, data map[string]interface{}, key, wan
 
 func TestFormatSuggestedCommandPathNormalizesWindowsSeparators(t *testing.T) {
 	t.Parallel()
-	got := formatSuggestedCommandPath(`C:\Users\me\New Notes`)
+	got := initsvc.FormatSuggestedCommandPath(`C:\Users\me\New Notes`)
 	want := `'C:/Users/me/New Notes'`
 	if got != want {
 		t.Fatalf("formatSuggestedCommandPath() = %q, want %q", got, want)
-	}
-}
-
-func TestSetInitSwitchBackShellQuotesVaultName(t *testing.T) {
-	t.Parallel()
-	state := initPostInitState{
-		previousActiveName: "work$(touch /tmp/pwn)",
-		previousActivePath: "/vault/work",
-	}
-	setInitSwitchBack(&state)
-	want := "rvn --json vault use -- 'work$(touch /tmp/pwn)'"
-	if state.switchBack != want {
-		t.Fatalf("switch_back = %q, want %q", state.switchBack, want)
 	}
 }

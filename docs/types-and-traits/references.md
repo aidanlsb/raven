@@ -205,7 +205,7 @@ rvn query 'trait:todo refs([[person/freya]])'
 `refs()` accepts nested queries, wiki-links, or bare target shorthand. Prefer
 canonical IDs in direct targets, especially in saved queries; bare shorthand is
 resolution sugar and can become ambiguous as the vault grows. See
-`querying/query-language.md` for the full syntax.
+the [query language reference](../querying/query-language.md) for full syntax.
 
 ## Reference maintenance
 
@@ -303,8 +303,11 @@ references. The file/object `rvn move` command rejects section sources.
 
 ## Related docs
 
-- `types-and-traits/file-format.md`: full resolution model, slug generation, and ambiguity handling
-- `using-your-vault/file-links.md`: linking and moving non-Markdown files
-- `querying/query-language.md`: `refs()`, `refd()`, and other structural predicates
-- `using-your-vault/common-commands.md`: `rvn backlinks`, `rvn outlinks`, `rvn resolve`, `rvn check`
-- `types-and-traits/schema.md`: `ref` and `ref[]` field types, `alias` reserved key
+- [File format](file-format.md): object IDs, sections, and slug generation.
+- [File links](../using-your-vault/file-links.md): non-Markdown files.
+- [Query language](../querying/query-language.md): `refs()`, `refd()`, and
+  structural predicates.
+- [Common commands](../using-your-vault/common-commands.md): `rvn backlinks`,
+  `rvn outlinks`, `rvn resolve`, and `rvn check`.
+- [Schema reference](schema.md): `ref`, `ref[]`, and the `alias` reserved key.
+- [Documentation map](../getting-started/documentation-map.md): every topic.

@@ -1,5 +1,7 @@
 # Query Troubleshooting
 
+Use this page to diagnose empty, broad, ambiguous, or rejected queries.
+
 ## No matches returned
 
 - Check type and field names with `rvn schema`.
@@ -15,7 +17,9 @@
 
 ## Unexpectedly broad results
 
-- Add explicit predicates first (`.status==active`, `in(type:...)`, `within(type:...)`).
+- Narrow according to the root: use fields or `contains(trait:...)` on
+  `type:` queries, and `within(type:...)` on `trait:` queries. `in(...)` and
+  `within(...)` are not valid on every root.
 - Use `--limit` and inspect IDs before any apply command.
 
 ## Shell parsing issues
@@ -28,16 +32,27 @@
 - Confirm query type:
   - type query: `set`, `add`, `delete`, `move`
   - trait query: `update <value>`
-  - section query: only `move` is supported
+  - section query: a `move` plan parses but file-level bulk `move` rejects
+    section IDs; use `rvn section move <file#slug>`
   - link query: no `--apply` support
 - Re-run without `--confirm` first to inspect preview.
 
 ## Saved query input errors
 
-- Ensure `{{args.<name>}}` placeholders match `args:` declared in `raven.yaml`.
+- Declare each placeholder with `--arg <name>` on
+  `rvn query saved set`; Raven stores those declarations as `args:` in
+  `raven.yaml`. Every `{{args.<name>}}` must match one.
 - Pass missing inputs by position or `key=value` pairs.
 
 ## Stale index suspicion
 
 - Use `rvn query ... --refresh --json`.
 - If needed after broader file changes: `rvn reindex --json`.
+
+## Related guidance
+
+- [Back to Raven Query](../body.md)
+- [Query language](query-language.md)
+- [Query recipes](query-recipes.md)
+- Canonical long-form RQL guide:
+  `rvn docs querying query-language --json`

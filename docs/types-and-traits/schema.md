@@ -5,7 +5,8 @@
 - **Traits**: inline annotations (e.g., `@due`, `@priority`)
 
 It lives at the root of your vault.
-For first-session schema setup, start with `types-and-traits/schema-intro.md`.
+For first-session schema setup, start with
+[Schema introduction](schema-intro.md).
 This page is lookup-oriented and intentionally exhaustive.
 
 ## Schema version
@@ -233,7 +234,8 @@ Rules:
 - If `default_template` is unset, new objects are created without template content unless one is explicitly selected.
 - Templates are file-backed only and files must be under `directories.template` in `raven.yaml` (default: `templates/`).
 
-For the full lifecycle (file lifecycle, schema lifecycle, type/core bindings), see `types-and-traits/templates.md`.
+For the full lifecycle (file lifecycle, schema lifecycle, and type/core
+bindings), see [Templates](templates.md).
 
 ---
 
@@ -243,7 +245,7 @@ For the full lifecycle (file lifecycle, schema lifecycle, type/core bindings), s
 
 | Property | Type | Description | Applies to |
 |----------|------|-------------|------------|
-| `type` | string | Field type (see below) | All |
+| `type` | string | [Field type](#field-types) | All |
 | `description` | string | Optional human/agent context for the field | All |
 | `required` | boolean | Whether field must be present | All |
 | `default` | any | Default value | All |
@@ -386,7 +388,7 @@ types as object frontmatter fields.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `type` | string | Trait type (see below) |
+| `type` | string | [Trait type](#trait-types) |
 | `values` | string[] | Allowed values (for enum) |
 | `default` | any | Default value |
 
@@ -699,6 +701,16 @@ rvn schema validate
 rvn check
 ```
 
+## Related docs
+
+- [Schema introduction](schema-intro.md) for a safer first customization.
+- [File format](file-format.md) for how schema-backed fields and traits appear
+  in Markdown.
+- [Templates](templates.md) for template definitions and bindings.
+- [Query language](../querying/query-language.md) for querying schema-defined
+  fields and traits.
+- [Documentation map](../getting-started/documentation-map.md) for every topic.
+
 Run `rvn reindex` after schema changes that affect indexed types, fields, or
 traits. Use `rvn reindex --full` after rename-heavy migrations or broad
 out-of-band file changes.
@@ -739,7 +751,8 @@ Validates managed vault files against the schema. Paths matched by `raven.yaml` 
 | `stale_index` | Index may be stale | Run `rvn reindex` |
 | `check_incomplete` | An index-backed check subsystem failed | Fix the named subsystem (often `rvn reindex`) and re-run check |
 
-For reference resolution details and ambiguity behavior, see `types-and-traits/file-format.md` (References section).
+For reference resolution details and ambiguity behavior, see
+[File format: References](file-format.md#references).
 
 ---
 
@@ -754,7 +767,7 @@ These frontmatter keys are always allowed regardless of type:
 
 > **Object IDs are path-derived and cannot be overridden.** There is no `id`
 > frontmatter key. An object's ID always comes from its file path (see
-> `types-and-traits/file-format.md`). To give an object an alternate name for
+> [File format](file-format.md)). To give an object an alternate name for
 > references, use `alias` instead. A stray `id:` key in frontmatter is treated
 > as an undeclared field and reported as `unknown_frontmatter_key` by
 > `rvn check`.

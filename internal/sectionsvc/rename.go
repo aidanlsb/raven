@@ -18,6 +18,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/refs"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -43,7 +44,7 @@ type RenameResult struct {
 	DestinationRel  string
 	UpdatedRefs     []string
 	WarningMessages []string
-	IndexWarnings   []IndexWarning
+	IndexWarnings   []reindexsvc.ProjectionWarning
 }
 
 type fileRewrite struct {
@@ -71,6 +72,13 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 		defer rt.Close()
 	}
 	req.Runtime = rt
+	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
+	if err != nil {
+		return nil, err
+	}
+	if projectionLock != nil {
+		defer func() { _ = projectionLock.Close() }()
+	}
 
 	reference := strings.TrimSpace(req.Reference)
 	fileID, oldSlug, isSection := paths.ParseSectionID(reference)
@@ -296,9 +304,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 
 	if db != nil && req.Schema != nil {
 		for _, path := range writtenFiles {
-			if warning := reindexRenamedFile(db, req, path); warning != nil {
-				result.IndexWarnings = append(result.IndexWarnings, *warning)
-			}
+			result.IndexWarnings = append(result.IndexWarnings, reindexsvc.ProjectFileLocked(rt, path)...)
 		}
 	}
 
@@ -386,26 +392,4 @@ func rewriteMarkdownSectionRefAtLine(content string, line int, oldRaw, newRaw st
 		"](<"+oldRaw+">)", "](<"+newRaw+">)",
 	).Replace(lines[idx])
 	return strings.Join(lines, "\n")
-}
-
-func reindexRenamedFile(db *index.Database, req RenameRequest, filePath string) *IndexWarning {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return &IndexWarning{FilePath: filePath, Stage: "read file", Err: err}
-	}
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, req.VaultPath, req.ParseOptions)
-	if err != nil {
-		return &IndexWarning{FilePath: filePath, Stage: "parse file", Err: err}
-	}
-	if doc == nil {
-		return &IndexWarning{FilePath: filePath, Stage: "parse file", Err: errors.New("parsed document is nil")}
-	}
-	var mtime int64
-	if st, err := os.Stat(filePath); err == nil {
-		mtime = st.ModTime().Unix()
-	}
-	if err := db.IndexDocumentWithMtime(doc, req.Schema, mtime); err != nil {
-		return &IndexWarning{FilePath: filePath, Stage: "update index", Err: err}
-	}
-	return nil
 }

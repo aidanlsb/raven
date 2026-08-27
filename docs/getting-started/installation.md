@@ -21,7 +21,7 @@ Every release publishes prebuilt binaries for Linux, macOS, and Windows (amd64 a
 Download the archive for your platform, verify it against `checksums.txt` if you like, and place the `rvn` binary somewhere on your `PATH`. For example, on Linux (x86_64), substituting the current version number:
 
 ```bash
-VERSION=0.0.33   # See the releases page for the latest version
+VERSION=x.y.z    # Latest release number, without the leading "v"
 curl -LO "https://github.com/aidanlsb/raven/releases/download/v${VERSION}/raven_${VERSION}_linux_x86_64.tar.gz"
 tar -xzf "raven_${VERSION}_linux_x86_64.tar.gz" rvn
 sudo install rvn /usr/local/bin/rvn
@@ -91,7 +91,7 @@ rvn version
 rvn help
 ```
 
-If those work, continue to `getting-started/first-vault.md`. `rvn init` attempts
+If those work, continue to [First vault](first-vault.md). `rvn init` attempts
 to fetch the global docs cache; before initialization, run `rvn docs fetch`
 explicitly if you want `rvn docs` available.
 
@@ -117,15 +117,17 @@ existing global docs cache and lazily refreshes it from the installed Raven
 version tag. If the refresh cannot reach the network, Raven warns and continues
 serving the existing cache.
 
-Use `docs fetch` to force a refresh or pin another ref:
+Use `rvn docs fetch` to force a refresh or pin another ref:
 
 ```bash
 rvn docs fetch                       # Force-refresh from the default ref
-rvn docs fetch --ref v0.0.33         # Pin a specific tag
+rvn docs fetch --ref vX.Y.Z          # Pin a specific release tag
 ```
 
 A missing cache is not fetched implicitly; run `rvn docs fetch` to create it.
 
 ## Next step
 
-Continue with `getting-started/first-vault.md` to initialize your first vault and inspect the files Raven creates.
+Continue with [First vault](first-vault.md) to initialize your first vault and
+inspect the files Raven creates. Return to the
+[documentation map](documentation-map.md) to choose another path.

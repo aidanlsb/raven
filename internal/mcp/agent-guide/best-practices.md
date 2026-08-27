@@ -35,5 +35,9 @@
 9. Report both results and risk.
 - Include what changed, what was validated, and any residual uncertainty.
 
-10. Keep docs and behavior aligned.
-- If command behavior changes, update guide docs and MCP user docs in the same change.
+## Related topics
+
+- `raven://guide/critical-rules`
+- `raven://guide/write-patterns`
+- `raven://guide/querying`
+- `raven://guide/error-handling`

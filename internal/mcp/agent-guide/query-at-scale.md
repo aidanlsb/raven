@@ -44,3 +44,12 @@ raven_invoke(command="read", args={"reference":"meeting/team-sync", "raw":true})
 - Use `count-only` to size a result set, then `limit`/`offset` to page instead of pulling everything.
 - Loop on `has_more`, advancing `offset` to `next_offset` each iteration.
 - Read only the files you need after narrowing with queries.
+- Use paging to inspect results. When applying a query-driven mutation, remove
+  `limit`, `offset`, and `count-only`; `apply` always plans against the complete
+  matching set and cannot be combined with those flags.
+
+## Related topics
+
+- `raven://guide/querying`
+- `raven://guide/query-cheatsheet`
+- `raven://guide/response-contract`

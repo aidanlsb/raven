@@ -13,12 +13,9 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/configsvc"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/readsvc"
-	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/svcerr"
-	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -97,20 +94,16 @@ func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Res
 	if strings.TrimSpace(reference) == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires reference argument", nil, "Usage: rvn backlinks <reference> or rvn backlinks --stdin")
 	}
-	resolved, err := refresolve.ResolveDynamic(reference, rt, true)
-	if err != nil {
-		return mapResolveFailure(err, reference)
+	result := readsvc.BacklinksForReferences(rt, []string{reference})
+	if len(result.Failures) > 0 {
+		return mapTraversalFailure(result.Failures[0])
 	}
-
-	links, err := readsvc.Backlinks(rt, resolved.ObjectID)
-	if err != nil {
-		return commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to read backlinks: %v", err), nil, "")
-	}
+	group := result.Groups[0]
 
 	return commandexec.Success(map[string]interface{}{
-		"target": resolved.ObjectID,
-		"items":  referenceItems(links),
-	}, &commandexec.Meta{Count: len(links), QueryTimeMs: time.Since(start).Milliseconds()})
+		"target": group.Target,
+		"items":  referenceItems(group.Items),
+	}, &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleOutlinks executes the canonical `outlinks` command.
@@ -131,20 +124,16 @@ func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Resu
 	if strings.TrimSpace(reference) == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires reference argument", nil, "Usage: rvn outlinks <reference> or rvn outlinks --stdin")
 	}
-	resolved, err := refresolve.ResolveDynamic(reference, rt, true)
-	if err != nil {
-		return mapResolveFailure(err, reference)
+	result := readsvc.OutlinksForReferences(rt, []string{reference})
+	if len(result.Failures) > 0 {
+		return mapTraversalFailure(result.Failures[0])
 	}
-
-	links, err := readsvc.Outlinks(rt, resolved.ObjectID)
-	if err != nil {
-		return commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to read outlinks: %v", err), nil, "")
-	}
+	group := result.Groups[0]
 
 	return commandexec.Success(map[string]interface{}{
-		"source": resolved.ObjectID,
-		"items":  referenceItems(links),
-	}, &commandexec.Meta{Count: len(links), QueryTimeMs: time.Since(start).Milliseconds()})
+		"source": group.Source,
+		"items":  referenceItems(group.Items),
+	}, &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 func handleBacklinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
@@ -153,27 +142,11 @@ func handleBacklinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, sta
 		return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe references to stdin, one per line")
 	}
 
-	groups := make([]model.BacklinksGroup, 0, len(references))
+	serviceResult := readsvc.BacklinksForReferences(rt, references)
+	groups := serviceResult.Groups
 	errors := make([]model.ReferenceInputError, 0)
-	total := 0
-	for _, reference := range references {
-		resolved, err := refresolve.ResolveDynamic(reference, rt, true)
-		if err != nil {
-			errors = append(errors, referenceInputError(reference, mapResolveFailure(err, reference)))
-			continue
-		}
-		links, err := readsvc.Backlinks(rt, resolved.ObjectID)
-		if err != nil {
-			errors = append(errors, referenceInputError(reference, commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to read backlinks: %v", err), nil, "")))
-			continue
-		}
-		groups = append(groups, model.BacklinksGroup{
-			Input:  reference,
-			Target: resolved.ObjectID,
-			Items:  referenceItems(links),
-			Count:  len(links),
-		})
-		total += len(links)
+	for _, failure := range serviceResult.Failures {
+		errors = append(errors, referenceInputError(failure.Input, mapTraversalFailure(failure)))
 	}
 
 	return commandexec.Success(map[string]interface{}{
@@ -182,7 +155,7 @@ func handleBacklinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, sta
 		"errors":          errors,
 		"total_inputs":    len(references),
 		"resolved":        len(groups),
-	}, &commandexec.Meta{Count: total, QueryTimeMs: time.Since(start).Milliseconds()})
+	}, &commandexec.Meta{Count: serviceResult.Total, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 func backlinksStdinMode(args map[string]interface{}) bool {
@@ -195,27 +168,11 @@ func handleOutlinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, star
 		return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe references to stdin, one per line")
 	}
 
-	groups := make([]model.OutlinksGroup, 0, len(references))
+	serviceResult := readsvc.OutlinksForReferences(rt, references)
+	groups := serviceResult.Groups
 	errors := make([]model.ReferenceInputError, 0)
-	total := 0
-	for _, reference := range references {
-		resolved, err := refresolve.ResolveDynamic(reference, rt, true)
-		if err != nil {
-			errors = append(errors, referenceInputError(reference, mapResolveFailure(err, reference)))
-			continue
-		}
-		links, err := readsvc.Outlinks(rt, resolved.ObjectID)
-		if err != nil {
-			errors = append(errors, referenceInputError(reference, commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("failed to read outlinks: %v", err), nil, "")))
-			continue
-		}
-		groups = append(groups, model.OutlinksGroup{
-			Input:  reference,
-			Source: resolved.ObjectID,
-			Items:  referenceItems(links),
-			Count:  len(links),
-		})
-		total += len(links)
+	for _, failure := range serviceResult.Failures {
+		errors = append(errors, referenceInputError(failure.Input, mapTraversalFailure(failure)))
 	}
 
 	return commandexec.Success(map[string]interface{}{
@@ -224,7 +181,7 @@ func handleOutlinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, star
 		"errors":          errors,
 		"total_inputs":    len(references),
 		"resolved":        len(groups),
-	}, &commandexec.Meta{Count: total, QueryTimeMs: time.Since(start).Milliseconds()})
+	}, &commandexec.Meta{Count: serviceResult.Total, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 func outlinksStdinMode(args map[string]interface{}) bool {
@@ -258,15 +215,19 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 	}
 	defer rt.Close()
 
-	resolved, err := refresolve.ResolveDynamic(reference, rt, true)
-
-	var ambiguousErr *refresolve.AmbiguousRefError
-	if errors.As(err, &ambiguousErr) {
-		matches := make([]map[string]interface{}, 0, len(ambiguousErr.Matches))
-		for _, match := range ambiguousErr.Matches {
+	result, err := readsvc.ResolveReference(rt, reference)
+	if err != nil {
+		return commandexec.Success(map[string]interface{}{
+			"resolved":  false,
+			"reference": reference,
+		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	}
+	if result.Ambiguous {
+		matches := make([]map[string]interface{}, 0, len(result.Matches))
+		for _, match := range result.Matches {
 			entry := map[string]interface{}{"object_id": match}
-			if ambiguousErr.MatchSources != nil {
-				if source, ok := ambiguousErr.MatchSources[match]; ok {
+			if result.MatchSources != nil {
+				if source, ok := result.MatchSources[match]; ok {
 					entry["match_source"] = source
 				}
 			}
@@ -281,23 +242,10 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	}
 
-	if err != nil {
-		return commandexec.Success(map[string]interface{}{
-			"resolved":  false,
-			"reference": reference,
-		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
-	}
-
+	resolved := result.Resolved
 	relPath := resolved.FilePath
 	if rel, relErr := filepath.Rel(req.VaultPath, resolved.FilePath); relErr == nil {
 		relPath = rel
-	}
-
-	objectType := ""
-	if rt.DB != nil {
-		if obj, objErr := rt.DB.GetObject(resolved.ObjectID); objErr == nil && obj != nil {
-			objectType = obj.Type
-		}
 	}
 
 	data := map[string]interface{}{
@@ -306,8 +254,8 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 		"file_path":  relPath,
 		"is_section": resolved.IsSection,
 	}
-	if objectType != "" {
-		data["type"] = objectType
+	if result.ObjectType != "" {
+		data["type"] = result.ObjectType
 	}
 	if resolved.MatchSource != "" {
 		data["match_source"] = resolved.MatchSource
@@ -443,10 +391,6 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("CONFIG_INVALID", err.Error(), nil, "")
 	}
 	cfg := cfgCtx.Cfg
-	editor := ""
-	if cfg != nil {
-		editor = cfg.GetEditor()
-	}
 
 	references := stringSliceArg(req.Args["references"])
 	if boolArg(req.Args, "stdin") || len(references) > 0 {
@@ -454,31 +398,29 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 			return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Provide references via stdin or references")
 		}
 
-		targets, failures := readsvc.ResolveOpenTargets(rt, references)
-		if len(targets) == 0 {
-			if len(failures) > 0 {
-				return commandexec.Failure("REF_NOT_FOUND", fmt.Sprintf("no files to open: %s: %s", failures[0].Reference, failures[0].Message), nil, "Check references and run 'rvn reindex' if needed")
+		result := readsvc.OpenReferences(rt, cfg, references)
+		if len(result.Targets) == 0 {
+			if len(result.Failures) > 0 {
+				return commandexec.Failure("REF_NOT_FOUND", fmt.Sprintf("no files to open: %s: %s", result.Failures[0].Reference, result.Failures[0].Message), nil, "Check references and run 'rvn reindex' if needed")
 			}
 			return commandexec.Failure("REF_NOT_FOUND", "no files to open", nil, "Check references and run 'rvn reindex' if needed")
 		}
 
-		filePaths := make([]string, 0, len(targets))
-		relPaths := make([]string, 0, len(targets))
-		for _, target := range targets {
-			filePaths = append(filePaths, target.FilePath)
+		relPaths := make([]string, 0, len(result.Targets))
+		for _, target := range result.Targets {
 			relPaths = append(relPaths, target.RelativePath)
 		}
 
-		errs := make([]string, 0, len(failures))
-		for _, failure := range failures {
+		errs := make([]string, 0, len(result.Failures))
+		for _, failure := range result.Failures {
 			errs = append(errs, fmt.Sprintf("%s: %s", failure.Reference, failure.Message))
 		}
 
 		return commandexec.Success(map[string]interface{}{
 			"files":   relPaths,
-			"targets": targets,
-			"opened":  vault.OpenFilesInEditor(cfg, filePaths),
-			"editor":  editor,
+			"targets": result.Targets,
+			"opened":  result.Opened,
+			"editor":  result.Editor,
 			"errors":  errs,
 		}, &commandexec.Meta{Count: len(relPaths)})
 	}
@@ -488,7 +430,7 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires reference argument", nil, "Usage: rvn open <reference>")
 	}
 
-	target, err := readsvc.ResolveOpenTarget(rt, reference)
+	target, opened, editor, err := readsvc.OpenReference(rt, cfg, reference)
 	if err != nil {
 		return mapOpenFailure(err)
 	}
@@ -496,7 +438,7 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 	data := map[string]interface{}{
 		"object_id": target.ObjectID,
 		"file":      target.RelativePath,
-		"opened":    vault.OpenInEditorAtLine(cfg, target.FilePath, target.LineStart),
+		"opened":    opened,
 		"editor":    editor,
 	}
 	if target.IsSection {
@@ -519,6 +461,18 @@ func mapResolveFailure(err error, reference string) commandexec.Result {
 	}
 
 	return commandexec.Failure("REF_NOT_FOUND", fmt.Sprintf("reference '%s' not found", reference), nil, "Check the object reference and run 'rvn reindex' if needed")
+}
+
+func mapTraversalFailure(failure readsvc.ReferenceFailure) commandexec.Result {
+	if failure.Operation == "resolve" {
+		return mapResolveFailure(failure.Err, failure.Input)
+	}
+	return commandexec.Failure(
+		"DATABASE_ERROR",
+		fmt.Sprintf("failed to read %s: %v", failure.Operation, failure.Err),
+		nil,
+		"",
+	)
 }
 
 func mapReadFailure(err error) commandexec.Result {
@@ -588,7 +542,8 @@ func mapReadRuntimeSetupFailure(err error) commandexec.Result {
 }
 
 func mapIndexRebuildRequired(err error) (commandexec.Result, bool) {
-	if !errors.Is(err, index.ErrIndexRebuildRequired) {
+	var setupErr *vaultruntime.SetupError
+	if !errors.As(err, &setupErr) || setupErr.Failure != vaultruntime.SetupFailureIndexRebuildRequired {
 		return commandexec.Result{}, false
 	}
 	return commandexec.Failure(

@@ -1,5 +1,7 @@
 # Template Lifecycle
 
+Use this page to create, bind, inspect, and safely remove template files.
+
 ## Type template quick path
 
 ```bash
@@ -61,3 +63,11 @@ Safety blockers:
 
 - `rvn schema template remove` blocks while a template ID is bound to any type or core type.
 - `rvn template delete` blocks while any schema template definition references the file path.
+
+## Related guidance
+
+- [Back to Raven Templates](../body.md)
+- Canonical template guide:
+  `rvn docs types-and-traits templates --json`
+- Template directory configuration:
+  `rvn docs using-your-vault configuration --json`

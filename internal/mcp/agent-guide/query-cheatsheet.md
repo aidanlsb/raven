@@ -26,6 +26,7 @@ Quick reference for common Raven Query Language (RQL) patterns.
   - Upward scope (on `trait:`/`section`) — direct: `in([[target]])`, `in(type:...)`, `in(section ...)`
   - Upward scope (on `trait:`/`section`), plus source scope on `link` — recursive: `within([[target]])`, `within(type:...)`, `within(section ...)`
   - Downward scope (on `type:`/`section`): `has(section ...)`, `has(trait:...)`, `contains(section ...)`, `contains(trait:...)`
+  - Same-line trait match (on `trait:` only): `at(trait:priority .value==high)`
 
 **Scope is root-dependent, and traits attach to the nearest section.** Lead with the forgiving forms: `type:project contains(trait:todo ...)` (not `has`) and `trait:todo within(type:project)` (not `in`). A `@todo` under `## Tasks` is not directly on the project object, so `has`/`in` (direct-only) usually return nothing.
 
@@ -55,7 +56,9 @@ Combine predicates with boolean operators:
 Example:
 - `trait:todo (.value == todo | .value == doing) !refs([[project/legacy]])`
 
-This can be very useful to provide lots of information to the user. If a question is vague, err on the side of running a few different versions of a query that could match the description and returning all the results to the user.
+If a question is vague, clarify the intended result kind first. If two
+interpretations are both plausible, run small bounded samples and explain the
+difference instead of returning several unbounded result sets.
 
 ## Examples
 
@@ -81,3 +84,9 @@ This can be very useful to provide lots of information to the user. If a questio
   - `type:project .status == active`
 - PDF links from projects:
   - `link .ext == pdf within(type:project)`
+
+## Related topics
+
+- `raven://guide/querying`
+- `raven://guide/query-at-scale`
+- `raven://guide/examples`

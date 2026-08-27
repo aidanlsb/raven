@@ -10,6 +10,9 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Preview first when the command supports it. For `rvn import`, use `--dry-run`
   for preview and rerun without it to apply.
 - Run `rvn check` after schema migrations, bulk edits, or external file changes.
+- Treat `exclude` paths as unmanaged. `protected_prefixes` remain managed and
+  readable but block generic content mutations; use dedicated config, schema,
+  or template commands for those control-plane paths.
 
 ## Vault stats
 
@@ -48,6 +51,8 @@ The SQLite index is a derived cache. Rebuild it when queries return stale result
 - Dry run: `rvn reindex --dry-run --json`
 
 Use `--dry-run` to inspect reindex scope before applying. Use `--full` after schema renames, bulk moves, or broad file changes outside Raven.
+If a read warns `DATABASE_OUTDATED` or `rvn check` reports `stale_index`, run
+an incremental `rvn reindex` before trusting index-backed results.
 
 ## Data import
 
@@ -59,7 +64,9 @@ Use `--dry-run` to inspect reindex scope before applying. Use `--full` after sch
 - Dry run first: `rvn import person --file data.json --dry-run --json`
 - Apply: `rvn import person --file data.json --json`
 
-For complex imports, use a YAML mapping file. After applying, verify with `rvn check --type <type> --json` and a targeted `rvn query`. See `references/import-guide.md`.
+For complex imports, use a YAML mapping file. After applying, verify with
+`rvn check --type <type> --json` and a targeted `rvn query`. See the
+[Import guide](references/import-guide.md).
 
 ## External non-Markdown files
 
@@ -77,5 +84,7 @@ when the source is already inside the vault so inbound file links are rewritten.
 
 ## Load references as needed
 
-- Check → fix → verify workflow details: `references/check-workflow.md`
-- Import mapping file format and patterns: `references/import-guide.md`
+- [Check → fix → verify workflow](references/check-workflow.md)
+- [Import mapping patterns](references/import-guide.md)
+- Canonical long-form bulk/import docs:
+  `rvn docs vault-management --json`

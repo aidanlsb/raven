@@ -5,6 +5,8 @@ Use this skill when a user wants to learn Raven, set up their first vault, or ha
 A good first session produces a **small, personalized setup the user actually wants** — a handful of types that match what they are trying to track, seeded with their real content — **not** a generic tour of Raven's features. Design the model *from a conversation about their work*, propose it in plain English, and only then run commands. Prefer this wizard-style dialogue over pushing canned presets; offer example shapes only as soft suggestions when their intent is genuinely vague.
 
 This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, preserving the same JSON expectations.
+When using MCP, target the vault explicitly with `vault`/`vault_path`, session
+`vault_focus`, or a launch pin; MCP ignores CLI active/default routing.
 
 ## Operating rules
 
@@ -118,6 +120,8 @@ Teach these once, clearly, while proposing the model — not as an abstract lect
   canonical IDs: use `data.id` returned by `new`/`upsert`/`daily` (the human
   CLI's `link as <id>` value). Short forms may resolve when unambiguous, but
   they are not the preferred authoring form.
+- Daily notes use the bare `YYYY-MM-DD` canonical ID, regardless of the file's
+  configured daily directory.
 - Daily notes are a built-in capture workflow, not a replacement for typed project or meeting objects.
 
 ## Cross-references
@@ -130,4 +134,7 @@ Teach these once, clearly, while proposing the model — not as an abstract lect
 
 ## Load references as needed
 
-- Intent-discovery prompts, schema-proposal templates, the field-vs-trait cheat sheet, and seeding scripts: `references/onboarding-playbook.md`
+- [Intent-discovery prompts, schema proposals, and seeding
+  scripts](references/onboarding-playbook.md)
+- Human-readable setup path:
+  `rvn docs getting-started first-vault --json`

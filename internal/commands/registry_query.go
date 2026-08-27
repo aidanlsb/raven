@@ -125,7 +125,9 @@ handoff for the selected result.
 Use --no-links to disable clickable terminal hyperlinks in human-readable
 results.
 Use --apply to run a bulk operation directly on query results.
-Section queries return stable IDs but only support move with --apply.
+Do not combine --apply with --limit, --offset, or --count-only.
+Section queries return stable IDs, but file-level bulk move rejects section
+sources; use rvn section move for each intended section instead of --apply.
 Link queries return edge rows and do not support --apply.
 For sections, pipe IDs to add instead: query "section ..." --ids | rvn add <text> --stdin.
 

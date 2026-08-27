@@ -1,5 +1,7 @@
 # Import Guide
 
+Use this page to map external JSON into schema-valid Raven objects.
+
 ## Simple import (single type, no mapping)
 
 ```bash
@@ -31,6 +33,10 @@ rvn import --mapping contacts.yaml --file contacts.json --dry-run --json
 ```
 
 The `key` field determines how existing objects are matched for upsert behavior.
+Use the equivalent CLI override `--key <field>` for one-off imports.
+
+To move a JSON field into Markdown body content instead of frontmatter, pass
+`--content-field <field>` or set `content_field` in the mapping file.
 
 ## YAML mapping file (heterogeneous / mixed types)
 
@@ -71,3 +77,10 @@ rvn import person --file contacts.json --json
 rvn check --type person --json
 rvn query 'type:person' --limit 20 --json
 ```
+
+## Related guidance
+
+- [Back to Raven Maintenance](../body.md)
+- [Check workflow](check-workflow.md)
+- Canonical import guide:
+  `rvn docs vault-management import --json`

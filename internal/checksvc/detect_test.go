@@ -1,9 +1,10 @@
-package checksvc
+package checksvc_test
 
 import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -32,7 +33,7 @@ func TestDetectMissingRefs_CertainFromTypedField(t *testing.T) {
 	reindexForTest(t, vault.Path)
 
 	rt := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(rt, "projects/website.md")
+	refs, err := checksvc.DetectMissingRefs(rt, "projects/website.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -65,7 +66,7 @@ func TestDetectMissingRefs_ExistingTargetNotReported(t *testing.T) {
 	reindexForTest(t, vault.Path)
 
 	rt := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(rt, "projects/website.md")
+	refs, err := checksvc.DetectMissingRefs(rt, "projects/website.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestDetectMissingRefs_InferredFromPath(t *testing.T) {
 	reindexForTest(t, vault.Path)
 
 	rt := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(rt, "notes/mention.md")
+	refs, err := checksvc.DetectMissingRefs(rt, "notes/mention.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -117,7 +118,7 @@ func TestDetectMissingRefs_PrefixedDailyRefResolvesAsAlias(t *testing.T) {
 	reindexForTest(t, vault.Path)
 
 	rt := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(rt, "notes/mention.md")
+	refs, err := checksvc.DetectMissingRefs(rt, "notes/mention.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -138,7 +139,7 @@ func TestDetectMissingRefs_AmbiguousNotReported(t *testing.T) {
 	reindexForTest(t, vault.Path)
 
 	rt := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(rt, "notes/mention.md")
+	refs, err := checksvc.DetectMissingRefs(rt, "notes/mention.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}
@@ -160,7 +161,7 @@ func TestDetectMissingRefs_SkippedWhenNoIndex(t *testing.T) {
 	// than reporting false positives for unindexed targets.
 
 	rt := loadForDetect(t, vault.Path)
-	refs, err := DetectMissingRefs(rt, "projects/website.md")
+	refs, err := checksvc.DetectMissingRefs(rt, "projects/website.md")
 	if err != nil {
 		t.Fatalf("DetectMissingRefs: %v", err)
 	}

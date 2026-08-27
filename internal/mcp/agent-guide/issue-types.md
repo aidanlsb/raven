@@ -24,14 +24,14 @@ check failures.
 | `missing_required_field` | Required type field missing | Set required field value(s) |
 | `missing_required_trait` | Required trait missing | Add the required trait or change the schema requirement |
 | `invalid_field_value` | Field value violates schema | Correct value to match constraints |
-| `invalid_enum_value` | Enum trait value is not allowed | Correct value to match the trait schema; for unnecessarily quoted enum values, run `check fix --confirm` |
+| `invalid_enum_value` | Enum trait value is not allowed | Correct the value; for unnecessary enum quotes, invoke `check_fix` with `confirm=true` |
 | `invalid_date_format` | Date or datetime trait value has the wrong format | Use `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM`, or `YYYY-MM-DDTHH:MM:SS` as appropriate |
 | `wrong_target_type` | Ref points to object of wrong type | Replace with a ref targeting the correct type |
 | `parse_error` | File could not be parsed as valid Raven markdown/frontmatter | Fix the YAML frontmatter or markdown syntax |
 | `missing_target_type` | Schema ref field targets a type that does not exist | Add the target type or change the field target |
 | `duplicate_alias` | Multiple objects define the same alias | Rename one of the conflicting aliases |
 | `alias_collision` | Alias conflicts with an object ID or short name | Rename the alias or use canonical object IDs in references |
-| `non_canonical_path` | File lives outside the configured directory root for its type | Run `check fix --confirm` to move file to canonical location |
+| `non_canonical_path` | File lives outside the configured directory root for its type | Invoke `check_fix` with `confirm=true` to move it |
 | `directory_type_mismatch` | File lives in a directory that implies a different type | Reclassify the object to the expected type, usually with the issue's `fix_command` |
 
 ## Mixed-level issues
@@ -52,8 +52,8 @@ check failures.
 | `unknown_field_type` | Schema field has an unrecognized field type | Change the schema field to a supported type |
 | `self_referential_required` | Required ref field points to the same type, making the first object hard to create | Make the field optional or add a default value |
 | `id_collision` | Short name matches multiple objects and that short name is used in a reference | Use canonical object IDs in references to avoid ambiguity |
-| `short_ref_could_be_full_path` | Short ref is not the preferred canonical authoring form | Run `check fix --confirm` to rewrite it with the canonical object ID |
-| `non_canonical_ref` | Wikilink target includes the configured root prefix (e.g. `[[type/person/jane]]`) | Run `check fix --confirm` to rewrite to canonical form (`[[person/jane]]`) |
+| `short_ref_could_be_full_path` | Short ref is not the preferred canonical authoring form | Invoke `check_fix` with `confirm=true` to use the canonical ID |
+| `non_canonical_ref` | Wikilink target includes the configured root prefix (e.g. `[[type/person/jane]]`) | Invoke `check_fix` with `confirm=true` to produce `[[person/jane]]` |
 
 ## Filtering patterns
 
@@ -61,6 +61,8 @@ check failures.
 raven_invoke(command="check", args={"issues":"missing_reference,unknown_type,missing_required_field"})
 raven_invoke(command="check", args={"exclude":"unused_type,unused_trait,short_ref_could_be_full_path"})
 raven_invoke(command="check", args={"errors-only":true})
+raven_invoke(command="check_fix", args={})
+raven_invoke(command="check_fix", args={"confirm":true})
 raven_invoke(command="check create-missing", args={})
 raven_invoke(command="check create-missing", args={"confirm":true})
 ```
@@ -75,3 +77,9 @@ raven_invoke(command="check create-missing", args={"confirm":true})
 For `missing_reference` summaries, use `check create-missing` as a preview-first
 batch workflow. It creates only deterministic typed targets when confirmed; ask
 the user before creating uncertain targets or editing existing links.
+
+## Related topics
+
+- `raven://guide/error-handling`
+- `raven://guide/write-patterns`
+- `raven://guide/response-contract`

@@ -3,18 +3,12 @@ package commandimpl
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/editsvc"
-	ravenignore "github.com/aidanlsb/raven/internal/ignore"
-	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -29,7 +23,6 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return failure
 	}
 	defer rt.Close()
-	vaultCfg := rt.VaultCfg
 
 	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
 	if reference == "" {
@@ -41,102 +34,66 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.FromServiceError(err)
 	}
 
-	// Reject explicit non-content file paths before reference resolution. Files
-	// are not Raven identities, but path-oriented validation must still return
-	// the command's stable safety error for config, template, protected, and
-	// non-Markdown targets.
-	literalPath := filepath.Join(vaultPath, filepath.FromSlash(reference))
-	if info, statErr := os.Stat(literalPath); statErr == nil && !info.IsDir() {
-		if validation := validateEditableContentPath(vaultPath, vaultCfg, literalPath); validation != nil {
-			return *validation
-		}
-	}
-
-	resolved, err := refresolve.Resolve(reference, rt, false)
-	if err != nil {
-		return mapResolveFailure(err, reference)
-	}
-
-	if validation := validateEditableContentPath(vaultPath, vaultCfg, resolved.FilePath); validation != nil {
-		return *validation
-	}
-
-	content, err := os.ReadFile(resolved.FilePath)
-	if err != nil {
-		return commandexec.Failure("FILE_READ_ERROR", err.Error(), nil, "")
-	}
-
-	relPath, _ := filepath.Rel(vaultPath, resolved.FilePath)
-	var scope *editsvc.EditScope
-	if resolved.IsSection && resolved.LineStart > 0 {
-		scope = &editsvc.EditScope{StartLine: resolved.LineStart}
-		if resolved.SubtreeLineEnd != nil {
-			scope.EndLine = *resolved.SubtreeLineEnd
-		}
-	}
-	newContent, results, err := editsvc.ApplyEditsInMemoryWithScope(string(content), relPath, edits, scope)
+	result, err := editsvc.Run(rt, editsvc.RunRequest{
+		Reference: reference,
+		Edits:     edits,
+		Preview:   req.Preview,
+	})
 	if err != nil {
 		return commandexec.FromServiceError(err)
-	}
-	if len(results) == 0 {
-		return commandexec.Failure("INVALID_INPUT", "no edits provided", nil, "Provide at least one edit")
 	}
 
 	if req.Preview {
 		if batchMode {
-			editsPreview := make([]commandpayload.EditPreviewItem, 0, len(results))
-			for _, result := range results {
+			editsPreview := make([]commandpayload.EditPreviewItem, 0, len(result.Edits))
+			for _, editResult := range result.Edits {
 				editsPreview = append(editsPreview, commandpayload.EditPreviewItem{
-					Index:  result.Index,
-					Line:   result.Line,
-					OldStr: result.OldStr,
-					NewStr: result.NewStr,
+					Index:  editResult.Index,
+					Line:   editResult.Line,
+					OldStr: editResult.OldStr,
+					NewStr: editResult.NewStr,
 					Preview: commandpayload.EditPreview{
-						Before: result.Before,
-						After:  result.After,
+						Before: editResult.Before,
+						After:  editResult.After,
 					},
 				})
 			}
 			return commandexec.Success(commandpayload.EditBatchPreviewResult{
 				Status: "preview",
-				Path:   relPath,
+				Path:   result.Path,
 				Count:  len(editsPreview),
 				Edits:  editsPreview,
 			}, nil)
 		}
 
-		result := results[0]
+		editResult := result.Edits[0]
 		return commandexec.Success(commandpayload.EditSinglePreviewResult{
 			Status: "preview",
-			Path:   relPath,
-			Line:   result.Line,
+			Path:   result.Path,
+			Line:   editResult.Line,
 			Preview: commandpayload.EditPreview{
-				Before: result.Before,
-				After:  result.After,
+				Before: editResult.Before,
+				After:  editResult.After,
 			},
 		}, nil)
 	}
 
-	writeResult, err := editsvc.WriteAppliedEdits(resolved.FilePath, relPath, newContent)
-	if err != nil {
-		return commandexec.FromServiceError(err)
-	}
-	missingRefs, warnings := applyChangeSet(rt, writeResult.ChangeSet, req.IndexJournalOperation)
+	missingRefs, warnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
 
 	if batchMode {
-		applied := make([]commandpayload.EditAppliedItem, 0, len(results))
-		for _, result := range results {
+		applied := make([]commandpayload.EditAppliedItem, 0, len(result.Edits))
+		for _, editResult := range result.Edits {
 			applied = append(applied, commandpayload.EditAppliedItem{
-				Index:   result.Index,
-				Line:    result.Line,
-				OldStr:  result.OldStr,
-				NewStr:  result.NewStr,
-				Context: result.Context,
+				Index:   editResult.Index,
+				Line:    editResult.Line,
+				OldStr:  editResult.OldStr,
+				NewStr:  editResult.NewStr,
+				Context: editResult.Context,
 			})
 		}
 		data := commandpayload.EditBatchResult{
 			Status:            "applied",
-			Path:              relPath,
+			Path:              result.Path,
 			Count:             len(applied),
 			Edits:             applied,
 			MissingReferences: missingRefs,
@@ -144,14 +101,14 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.SuccessWithWarnings(data, warnings, nil)
 	}
 
-	result := results[0]
+	editResult := result.Edits[0]
 	data := commandpayload.EditSingleResult{
 		Status:            "applied",
-		Path:              relPath,
-		Line:              result.Line,
-		OldStr:            result.OldStr,
-		NewStr:            result.NewStr,
-		Context:           result.Context,
+		Path:              result.Path,
+		Line:              editResult.Line,
+		OldStr:            editResult.OldStr,
+		NewStr:            editResult.NewStr,
+		Context:           editResult.Context,
 		MissingReferences: missingRefs,
 	}
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
@@ -207,56 +164,4 @@ func toAnyString(value any) string {
 	default:
 		return ""
 	}
-}
-
-func validateEditableContentPath(vaultPath string, vaultCfg *config.VaultConfig, filePath string) *commandexec.Result {
-	relPath, err := filepath.Rel(vaultPath, filePath)
-	if err != nil {
-		result := commandexec.Failure("VALIDATION_FAILED", "edit only supports vault content files", nil, "Use edit for markdown content files inside the vault")
-		return &result
-	}
-
-	relPath = paths.NormalizeVaultRelPath(relPath)
-	templateDir := ""
-	protectedPrefixes := []string(nil)
-	if vaultCfg != nil {
-		templateDir = vaultCfg.GetTemplateDirectory()
-		protectedPrefixes = vaultCfg.ProtectedPrefixes
-	}
-
-	if paths.IsProtectedRelPath(relPath, protectedPrefixes) {
-		suggestion := "Use the dedicated Raven command for this protected path"
-		switch relPath {
-		case "raven.yaml":
-			suggestion = "Use 'rvn vault config ...' or 'rvn query saved ...' to mutate raven.yaml"
-		case "schema.yaml":
-			suggestion = "Use 'rvn schema ...' to mutate schema.yaml"
-		}
-		result := commandexec.Failure("VALIDATION_FAILED", "cannot edit protected or system-managed paths", map[string]interface{}{"path": relPath}, suggestion)
-		return &result
-	}
-
-	if vaultCfg != nil {
-		excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
-		if err != nil {
-			result := commandexec.Failure("VALIDATION_FAILED", "invalid exclude config", map[string]interface{}{"path": relPath}, "Fix raven.yaml exclude patterns and try again")
-			return &result
-		}
-		if excludeMatcher.Match(relPath, false) {
-			result := commandexec.Failure("VALIDATION_FAILED", "cannot edit excluded paths", map[string]interface{}{"path": relPath}, "Choose a managed path, or update exclusions with 'rvn vault config exclude ...'")
-			return &result
-		}
-	}
-
-	if templateDir != "" && strings.HasPrefix(relPath, templateDir) {
-		result := commandexec.Failure("VALIDATION_FAILED", "edit only supports vault content files; template files are managed separately", map[string]interface{}{"path": relPath}, "Use 'rvn template write' or 'rvn template delete' for template lifecycle changes")
-		return &result
-	}
-
-	if !paths.HasMDExtension(relPath) {
-		result := commandexec.Failure("VALIDATION_FAILED", "edit only supports markdown content files", map[string]interface{}{"path": relPath}, "Use dedicated Raven commands for vault config, schema, templates, and other non-content files")
-		return &result
-	}
-
-	return nil
 }

@@ -129,8 +129,9 @@ Single-object `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
 call them after clear user approval or an unambiguous request, and use
 `dry-run=true` when the command exposes it and you want to confirm the effect
 first. `section_delete` is always preview-first and requires `confirm=true`.
-Bulk operations (`stdin=true`) also stay preview-first and require
-`confirm=true`.
+MCP bulk operations pass the command's ID array (`references`, `object_ids`, or
+`trait_ids`) and stay preview-first until `confirm=true`; `stdin=true` is a CLI
+transport pattern, not an MCP input.
 
 For bulk reclassification, pass `references` plus `new-type`. The preview reports
 planned moves, dropped/added fields, required-field failures, and reference
@@ -174,3 +175,10 @@ vault-health concern surfaced by `check`, not a write-time error.
 - Use `move` for in-vault file relocation; non-Markdown destinations must include a file extension.
 - Copy external non-Markdown files into the vault directly, then invoke `reindex`.
 - Prefer raw reads before constructing `old_str` for `edit`.
+
+## Related topics
+
+- `raven://guide/critical-rules`
+- `raven://guide/response-contract`
+- `raven://guide/key-flows`
+- `raven://guide/error-handling`

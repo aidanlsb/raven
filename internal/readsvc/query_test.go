@@ -1,4 +1,4 @@
-package readsvc
+package readsvc_test
 
 import (
 	"errors"
@@ -7,8 +7,14 @@ import (
 
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+type ExecuteQueryRequest = querysvc.ExecuteQueryRequest
+type ExecuteQueryResult = querysvc.ExecuteQueryResult
+
+var ExecuteQuery = querysvc.ExecuteQuery
 
 func TestExecuteQuery_InvalidInput(t *testing.T) {
 	t.Parallel()

@@ -3,7 +3,7 @@ package commandimpl
 import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/querysvc"
 )
 
 // queryResultShapeOptions contains only transport-neutral response choices.
@@ -16,7 +16,7 @@ type queryResultShapeOptions struct {
 	QueryTimeMs    int64
 }
 
-func shapeQueryResult(result *readsvc.ExecuteQueryResult, options queryResultShapeOptions) commandexec.Result {
+func shapeQueryResult(result *querysvc.ExecuteResult, options queryResultShapeOptions) commandexec.Result {
 	meta := &commandexec.Meta{QueryTimeMs: options.QueryTimeMs}
 	if options.CountOnly {
 		meta.Count = result.Total
@@ -100,7 +100,7 @@ func shapeQueryResult(result *readsvc.ExecuteQueryResult, options queryResultSha
 // can loop without guessing. `next_offset` is a forward cursor included only
 // when more results remain. For unlimited queries (the default) total equals
 // returned, so has_more is false and no next_offset is emitted.
-func queryPagination(result *readsvc.ExecuteQueryResult) commandpayload.Pagination {
+func queryPagination(result *querysvc.ExecuteResult) commandpayload.Pagination {
 	paging := commandpayload.Pagination{
 		Total:    result.Total,
 		Returned: result.Returned,
@@ -115,7 +115,7 @@ func queryPagination(result *readsvc.ExecuteQueryResult) commandpayload.Paginati
 	return paging
 }
 
-func objectQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.ObjectItem {
+func objectQueryItems(result *querysvc.ExecuteResult) []commandpayload.ObjectItem {
 	items := make([]commandpayload.ObjectItem, len(result.Objects))
 	for i, row := range result.Objects {
 		items[i] = commandpayload.ObjectItem{
@@ -130,7 +130,7 @@ func objectQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.Objec
 	return items
 }
 
-func traitQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.TraitItem {
+func traitQueryItems(result *querysvc.ExecuteResult) []commandpayload.TraitItem {
 	items := make([]commandpayload.TraitItem, len(result.Traits))
 	for i, row := range result.Traits {
 		items[i] = commandpayload.TraitItem{
@@ -147,7 +147,7 @@ func traitQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.TraitI
 	return items
 }
 
-func sectionQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.SectionItem {
+func sectionQueryItems(result *querysvc.ExecuteResult) []commandpayload.SectionItem {
 	items := make([]commandpayload.SectionItem, len(result.Sections))
 	for i, row := range result.Sections {
 		items[i] = commandpayload.SectionItem{
@@ -168,7 +168,7 @@ func sectionQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.Sect
 	return items
 }
 
-func linkQueryItems(result *readsvc.ExecuteQueryResult) []commandpayload.LinkItem {
+func linkQueryItems(result *querysvc.ExecuteResult) []commandpayload.LinkItem {
 	items := make([]commandpayload.LinkItem, len(result.Links))
 	for i, row := range result.Links {
 		items[i] = commandpayload.LinkItem{

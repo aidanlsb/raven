@@ -64,7 +64,15 @@ intended vault before writing.
 ## Respect managed-content boundaries
 
 `protected_prefixes` and `exclude` are different:
-- `protected_prefixes` marks managed paths that Raven must not mutate.
+- `protected_prefixes` blocks generic content mutations on managed paths;
+  dedicated config, schema, and template commands remain the supported control
+  plane.
 - `exclude` marks unmanaged paths that Raven should not check, index, query, or mutate.
 
 If a path is excluded, do not try to work around Raven by editing it as vault content. Ask the user whether they want to remove or narrow the exclusion first.
+
+## Related topics
+
+- `raven://guide/write-patterns`
+- `raven://guide/response-contract`
+- `raven://guide/error-handling`

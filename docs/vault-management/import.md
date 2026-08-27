@@ -164,6 +164,9 @@ Review the output, add `--map` flags as needed, and then rerun without `--dry-ru
 
 ## Related docs
 
-- `vault-management/bulk-operations.md`: query-driven bulk changes with `--apply` and `--ids`
-- `using-your-vault/common-commands.md`: `rvn upsert`, `rvn set`, and other editing commands
-- `types-and-traits/schema.md`: field types and validation rules
+- [Bulk operations](bulk-operations.md): query-driven changes with `--apply`
+  and `--ids`.
+- [Common commands](../using-your-vault/common-commands.md): `rvn upsert`,
+  `rvn set`, and other editing commands.
+- [Schema reference](../types-and-traits/schema.md): field types and validation.
+- [Documentation map](../getting-started/documentation-map.md): every topic.
