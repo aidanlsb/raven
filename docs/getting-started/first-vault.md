@@ -5,7 +5,8 @@ Use this guide to:
 - understand the files Raven created
 - configure Raven globally so the CLI can find and open your vaults consistently
 
-If you want the Raven mental model after setup, continue to `getting-started/core-concepts.md`.
+If you want the Raven mental model after setup, continue to
+[Core concepts](core-concepts.md).
 
 ## Initialize a vault
 
@@ -156,7 +157,10 @@ The first `rvn init` registers `~/notes` and sets it as the default and active v
 
 ## Next steps
 
-- Read `getting-started/core-concepts.md` for the Raven mental model
-- Read `getting-started/agent-setup.md` if you want MCP and skills next
-- Read `using-your-vault/configuration.md` for the full configuration reference
-- Try `rvn daily` to create your first daily note. See `using-your-vault/daily-notes.md`
+- Read [Core concepts](core-concepts.md) for the Raven mental model.
+- Read [Agent setup](agent-setup.md) if you want MCP and skills next.
+- Read [Configuration](../using-your-vault/configuration.md) for the full
+  configuration reference.
+- Try `rvn daily` to create your first daily note, then read
+  [Daily notes](../using-your-vault/daily-notes.md).
+- Return to the [documentation map](documentation-map.md) for every topic.

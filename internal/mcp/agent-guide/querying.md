@@ -130,3 +130,10 @@ raven_invoke(command="search", args={"query":"@todo pricing"})
 ```
 
 If this returns relevant files, convert the follow-up to `query` so the result set is trait-aware and safe to mutate.
+
+## Related topics
+
+- `raven://guide/query-cheatsheet`
+- `raven://guide/query-at-scale`
+- `raven://guide/key-flows`
+- `raven://guide/response-contract`

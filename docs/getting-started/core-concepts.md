@@ -76,7 +76,9 @@ Raven has three built-in types that always exist:
 | `section` | Represents headings inside files | Automatic from markdown structure |
 | `date` | Daily notes | `rvn daily` |
 
-You cannot redefine built-in types. Custom types (`project`, `meeting`, `person`) sit on top of them. See `types-and-traits/schema.md` for the full reference.
+You cannot redefine built-in types. Custom types (`project`, `meeting`,
+`person`) sit on top of them. See the
+[Schema reference](../types-and-traits/schema.md).
 
 ## References
 
@@ -108,7 +110,7 @@ item:
 rvn backlinks person/freya
 ```
 
-See `types-and-traits/references.md` for the full reference guide.
+See [References](../types-and-traits/references.md) for the full guide.
 
 ## File links
 
@@ -116,7 +118,7 @@ Non-Markdown files such as PDFs and images are ordinary files in the vault, not
 Raven entities. Copy them into the vault directly, run `rvn reindex`, and link
 them with standard Markdown. Raven indexes the outgoing link edges, reports
 `broken_file_link`, and rewrites inbound file links when `rvn move` relocates a
-file. See `using-your-vault/file-links.md`.
+file. See [File links](../using-your-vault/file-links.md).
 
 ## Traits
 
@@ -136,7 +138,8 @@ rvn query 'trait:due .value<today'
 rvn query 'trait:todo within(type:project .status==active)'
 ```
 
-See `types-and-traits/file-format.md` for trait syntax and `types-and-traits/schema.md` for defining traits.
+See [File format](../types-and-traits/file-format.md) for trait syntax and the
+[Schema reference](../types-and-traits/schema.md) for defining traits.
 
 ## Headings and sections
 
@@ -177,7 +180,9 @@ rvn daily yesterday                    # Yesterday's
 rvn add "@todo Review PR"              # Capture to today's note
 ```
 
-Daily notes are `date`-typed items. They support templates, structured headings, and the same query/trait features as any other item. See `using-your-vault/daily-notes.md`.
+Daily notes are `date`-typed items. They support templates, structured headings,
+and the same query/trait features as any other item. See
+[Daily notes](../using-your-vault/daily-notes.md).
 
 Their canonical object ID is always the bare ISO date (`YYYY-MM-DD`), regardless
 of `directories.daily`; author links as `[[2026-03-15]]`.
@@ -200,7 +205,7 @@ rvn query 'trait:due .value<today'
 A query returns exactly one result kind: objects, sections, traits, or
 outgoing link edges. Queries can nest, and they compose with
 `AND`, `OR`, and `NOT`. See
-`querying/query-language.md` for the full syntax.
+[Query language](../querying/query-language.md) for the full syntax.
 
 ## Type and field descriptions
 
@@ -222,11 +227,12 @@ Describe intent and constraints. Repeating the field name wastes the slot.
 
 | Goal | Read |
 |------|------|
-| Set up an AI agent | `getting-started/agent-setup.md` |
-| Work with daily notes | `using-your-vault/daily-notes.md` |
-| Link files like PDFs and images | `using-your-vault/file-links.md` |
-| Learn everyday commands | `using-your-vault/common-commands.md` |
-| Design your schema | `types-and-traits/schema-intro.md` |
-| Understand file format details | `types-and-traits/file-format.md` |
-| Learn the query language | `querying/query-language.md` |
-| Configure your vault | `using-your-vault/configuration.md` |
+| Set up an AI agent | [Agent setup](agent-setup.md) |
+| Work with daily notes | [Daily notes](../using-your-vault/daily-notes.md) |
+| Link files like PDFs and images | [File links](../using-your-vault/file-links.md) |
+| Learn everyday commands | [Common commands](../using-your-vault/common-commands.md) |
+| Design your schema | [Schema introduction](../types-and-traits/schema-intro.md) |
+| Understand file format details | [File format](../types-and-traits/file-format.md) |
+| Learn the query language | [Query language](../querying/query-language.md) |
+| Configure your vault | [Configuration](../using-your-vault/configuration.md) |
+| Browse every topic | [Documentation map](documentation-map.md) |

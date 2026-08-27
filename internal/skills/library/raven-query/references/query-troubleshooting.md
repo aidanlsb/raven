@@ -1,5 +1,7 @@
 # Query Troubleshooting
 
+Use this page to diagnose empty, broad, ambiguous, or rejected queries.
+
 ## No matches returned
 
 - Check type and field names with `rvn schema`.
@@ -28,7 +30,8 @@
 - Confirm query type:
   - type query: `set`, `add`, `delete`, `move`
   - trait query: `update <value>`
-  - section query: only `move` is supported
+  - section query: a `move` plan parses but file-level bulk `move` rejects
+    section IDs; use `rvn section move <file#slug>`
   - link query: no `--apply` support
 - Re-run without `--confirm` first to inspect preview.
 
@@ -41,3 +44,11 @@
 
 - Use `rvn query ... --refresh --json`.
 - If needed after broader file changes: `rvn reindex --json`.
+
+## Related guidance
+
+- [Back to Raven Query](../body.md)
+- [Query language](query-language.md)
+- [Query recipes](query-recipes.md)
+- Canonical long-form RQL guide:
+  `rvn docs querying query-language --json`

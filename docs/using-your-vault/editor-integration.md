@@ -105,3 +105,10 @@ language-servers = ["raven"]
   of files. Diagnostics always reflect the current buffer.
 - The buffer's own file must be saved once before other files can resolve
   references to it.
+
+## Related docs
+
+- [Agent setup](../getting-started/agent-setup.md) for packaged skills and MCP.
+- [Configuration](configuration.md) for editor and vault-selection settings.
+- [References](../types-and-traits/references.md) for the IDs resolved by LSP.
+- [Documentation map](../getting-started/documentation-map.md) for every topic.

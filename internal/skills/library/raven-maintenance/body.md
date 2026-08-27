@@ -59,7 +59,9 @@ Use `--dry-run` to inspect reindex scope before applying. Use `--full` after sch
 - Dry run first: `rvn import person --file data.json --dry-run --json`
 - Apply: `rvn import person --file data.json --json`
 
-For complex imports, use a YAML mapping file. After applying, verify with `rvn check --type <type> --json` and a targeted `rvn query`. See `references/import-guide.md`.
+For complex imports, use a YAML mapping file. After applying, verify with
+`rvn check --type <type> --json` and a targeted `rvn query`. See the
+[Import guide](references/import-guide.md).
 
 ## External non-Markdown files
 
@@ -77,5 +79,7 @@ when the source is already inside the vault so inbound file links are rewritten.
 
 ## Load references as needed
 
-- Check → fix → verify workflow details: `references/check-workflow.md`
-- Import mapping file format and patterns: `references/import-guide.md`
+- [Check → fix → verify workflow](references/check-workflow.md)
+- [Import mapping patterns](references/import-guide.md)
+- Canonical long-form bulk/import docs:
+  `rvn docs vault-management --json`

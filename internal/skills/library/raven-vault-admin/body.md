@@ -61,4 +61,6 @@ Use structured commands for both surfaces instead of editing TOML or YAML by han
 
 ## Reference
 
-- End-to-end command sequences and gotchas: `references/vault-lifecycle.md`
+- [End-to-end command sequences and gotchas](references/vault-lifecycle.md)
+- Canonical configuration guide:
+  `rvn docs using-your-vault configuration --json`

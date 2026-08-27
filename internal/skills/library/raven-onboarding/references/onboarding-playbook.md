@@ -193,7 +193,8 @@ rvn schema add trait highlight --type bool --json
 
 Explain, briefly:
 - Types define files/objects; fields live in frontmatter and are validated by type.
-- Traits are defined here but *written* inline in body text, not set as frontmatter (see seeding below).
+- Traits are defined here but *written* inline in body text, not set as
+  frontmatter; see [Seed real data](#seed-real-data-from-their-world).
 - `ref` and `ref[]` fields must name a `--target` type.
 
 If a target type does not exist, stop and ask whether to create it or cut the field. Keep the set to what the user agreed — do not add "nice to have" types on your own.
@@ -297,3 +298,11 @@ Before ending onboarding, make sure the user has:
 - One `[[reference]]` plus a backlinks check against their data.
 - One query against their content and a clean (or explained) `rvn check --json`.
 - A next step for tomorrow: `rvn daily` to capture, `rvn add "@todo ..."` for tasks, `rvn query ...` to retrieve.
+
+## Related guidance
+
+- [Back to Raven Onboarding](../body.md)
+- Canonical human setup path:
+  `rvn docs getting-started first-vault --json`
+- Agent and MCP setup:
+  `rvn docs getting-started agent-setup --json`

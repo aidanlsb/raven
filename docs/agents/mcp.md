@@ -59,7 +59,7 @@ vault in this priority order:
 
 If none is present, Raven returns `VAULT_AMBIGUOUS`. MCP never guesses from the
 CLI's active or default vault. The resolved vault is always reported in
-`meta.vault_context` (see below).
+`meta.vault_context`; see [Vault context](#vault-context).
 
 ### Switch vaults within one session
 
@@ -652,7 +652,11 @@ write it delegates to.
 
 ## Related docs
 
-- `querying/query-language.md`: RQL syntax for `query` commands
-- `vault-management/bulk-operations.md`: `--apply` and `--ids` patterns for bulk changes
-- `using-your-vault/file-links.md`: file-link indexing, checks, and moves
-- `using-your-vault/common-commands.md`: full command set (read, search, edit, check, etc.)
+- [Query language](../querying/query-language.md): RQL syntax.
+- [Bulk operations](../vault-management/bulk-operations.md): `--apply` and
+  `--ids` patterns.
+- [File links](../using-your-vault/file-links.md): indexing, checks, and moves.
+- [Common commands](../using-your-vault/common-commands.md): the user-facing
+  command map.
+- [Agent setup](../getting-started/agent-setup.md): skills and client setup.
+- [Documentation map](../getting-started/documentation-map.md): every topic.

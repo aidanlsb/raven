@@ -1,5 +1,7 @@
 # Check Workflow
 
+Use this page for a scoped check → repair → verify loop.
+
 ## Common issue types
 
 | Issue | Meaning | Typical fix |
@@ -72,3 +74,10 @@ rvn reindex --json
 # After schema renames or bulk moves
 rvn reindex --full --json
 ```
+
+## Related guidance
+
+- [Back to Raven Maintenance](../body.md)
+- [Import guide](import-guide.md)
+- Canonical command guidance:
+  `rvn docs using-your-vault common-commands --json`

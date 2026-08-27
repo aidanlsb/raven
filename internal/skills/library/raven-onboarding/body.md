@@ -130,4 +130,7 @@ Teach these once, clearly, while proposing the model — not as an abstract lect
 
 ## Load references as needed
 
-- Intent-discovery prompts, schema-proposal templates, the field-vs-trait cheat sheet, and seeding scripts: `references/onboarding-playbook.md`
+- [Intent-discovery prompts, schema proposals, and seeding
+  scripts](references/onboarding-playbook.md)
+- Human-readable setup path:
+  `rvn docs getting-started first-vault --json`

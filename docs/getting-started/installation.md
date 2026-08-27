@@ -91,7 +91,7 @@ rvn version
 rvn help
 ```
 
-If those work, continue to `getting-started/first-vault.md`. `rvn init` attempts
+If those work, continue to [First vault](first-vault.md). `rvn init` attempts
 to fetch the global docs cache; before initialization, run `rvn docs fetch`
 explicitly if you want `rvn docs` available.
 
@@ -128,4 +128,6 @@ A missing cache is not fetched implicitly; run `rvn docs fetch` to create it.
 
 ## Next step
 
-Continue with `getting-started/first-vault.md` to initialize your first vault and inspect the files Raven creates.
+Continue with [First vault](first-vault.md) to initialize your first vault and
+inspect the files Raven creates. Return to the
+[documentation map](documentation-map.md) to choose another path.

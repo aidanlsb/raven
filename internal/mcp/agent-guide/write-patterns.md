@@ -174,3 +174,10 @@ vault-health concern surfaced by `check`, not a write-time error.
 - Use `move` for in-vault file relocation; non-Markdown destinations must include a file extension.
 - Copy external non-Markdown files into the vault directly, then invoke `reindex`.
 - Prefer raw reads before constructing `old_str` for `edit`.
+
+## Related topics
+
+- `raven://guide/critical-rules`
+- `raven://guide/response-contract`
+- `raven://guide/key-flows`
+- `raven://guide/error-handling`

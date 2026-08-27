@@ -44,7 +44,9 @@ Core rules:
 
 ## Predicate-by-root capability matrix
 
-Which predicates are legal depends on the query root. Predicates rejected for a root produce a validation error. Field, string, and array predicates are also subject to schema field types (see the per-root predicate sections below).
+Which predicates are legal depends on the query root. Predicates rejected for a
+root produce a validation error. Field, string, and array predicates are also
+subject to schema field types; the per-root sections on this page give details.
 
 | Predicate / family | `type:<t>` | `section` | `trait:<name>` | `link` |
 |--------------------|:----------:|:---------:|:--------------:|:------:|
@@ -430,7 +432,9 @@ Use `rvn pick` when you want Raven-native interactive selection in a pipeline. I
 
 Section query IDs are stable `file#slug` IDs. Link rows have no durable edge ID,
 so `link --ids` emits the source object ID once per edge. Link queries do not
-support `--apply`; section queries only support move.
+support `--apply`. A section query accepts only an `--apply "move ..."` plan,
+but the delegated file-level bulk `move` command rejects section sources; use
+`rvn section move <file#slug>` for each intended section instead.
 
 ### Counting and pagination
 
@@ -519,7 +523,9 @@ Flags such as `--refresh`, `--ids`, `--limit`, `--offset`, `--count-only`, `--ap
 
 - Object query `--apply` supports: `set`, `add`, `delete`, `move`.
 - Trait query `--apply` supports only: `update <new_value>`.
-- Link queries do not support `--apply`; section queries support only `move`.
+- Link queries do not support `--apply`. Section queries accept only a `move`
+  plan, which then fails safely because file-level bulk `move` rejects section
+  IDs; use `rvn section move` explicitly.
 - All `--apply` operations preview by default; use `--confirm` to apply.
 
 Examples:
@@ -534,11 +540,17 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 
 ## Related docs
 
-- RQL implementation notes: `querying/internals.md`
-- Query-driven bulk changes: `vault-management/bulk-operations.md`
-- File-link indexing and maintenance: `using-your-vault/file-links.md`
-- Queryable field/trait definitions: `types-and-traits/schema.md`
-- Object IDs and sections (`#fragment`): `types-and-traits/file-format.md`
-- Saved query configuration in `raven.yaml`: `using-your-vault/configuration.md`
-- Full-text search and other commands: `using-your-vault/common-commands.md`
-- MCP query tool usage: `agents/mcp.md`
+- [RQL internals](internals.md): maintainer-facing parser, validator, façade,
+  and executor boundaries.
+- [Bulk operations](../vault-management/bulk-operations.md): query-driven
+  changes.
+- [File links](../using-your-vault/file-links.md): link indexing and
+  maintenance.
+- [Schema reference](../types-and-traits/schema.md): queryable fields and
+  traits.
+- [File format](../types-and-traits/file-format.md): object and section IDs.
+- [Configuration](../using-your-vault/configuration.md): saved queries.
+- [Common commands](../using-your-vault/common-commands.md): search and
+  retrieval commands.
+- [MCP reference](../agents/mcp.md): compact-surface invocation.
+- [Documentation map](../getting-started/documentation-map.md): every topic.

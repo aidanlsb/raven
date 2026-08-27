@@ -75,3 +75,9 @@ raven_invoke(command="check create-missing", args={"confirm":true})
 For `missing_reference` summaries, use `check create-missing` as a preview-first
 batch workflow. It creates only deterministic typed targets when confirmed; ask
 the user before creating uncertain targets or editing existing links.
+
+## Related topics
+
+- `raven://guide/error-handling`
+- `raven://guide/write-patterns`
+- `raven://guide/response-contract`

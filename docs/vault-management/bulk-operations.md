@@ -4,7 +4,9 @@ Bulk operations let you act on many objects, sections, files, or trait
 instances selected by a query. Bulk writes preview by default. Add `--confirm`
 to apply changes.
 
-Use `querying/query-language.md` for query syntax and `using-your-vault/configuration.md` for saved query definitions.
+Use the [query language](../querying/query-language.md) for RQL syntax and
+[configuration](../using-your-vault/configuration.md) for saved query
+definitions.
 
 ## Overview
 
@@ -31,6 +33,8 @@ rvn query "<query>" --apply "<command> [args...]" [--confirm]
 |------------|--------------------|
 | `type:...` | `set field=value...`, `add <text...>`, `delete`, `move <destination/>` |
 | `trait:...` | `update <new_value>` |
+| `section` | No effective bulk mutation: only `move` parses, then file-level bulk `move` rejects section IDs |
+| `link` | None |
 
 ### Preview vs apply
 
@@ -409,6 +413,8 @@ rvn query "type:project .status==archived" --apply "move archive/" --confirm
 
 ## Related docs
 
-- `vault-management/import.md`: bulk importing from external JSON data
-- `querying/query-language.md`: full RQL syntax for queries
-- `using-your-vault/common-commands.md`: individual commands (`rvn set`, `rvn move`, `rvn delete`, etc.)
+- [Import](import.md): bulk importing from external JSON.
+- [Query language](../querying/query-language.md): full RQL syntax.
+- [Common commands](../using-your-vault/common-commands.md): individual
+  mutation commands.
+- [Documentation map](../getting-started/documentation-map.md): every topic.

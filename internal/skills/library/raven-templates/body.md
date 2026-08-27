@@ -44,4 +44,6 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 
 ## Reference
 
-- End-to-end lifecycle and command snippets: `references/template-lifecycle.md`
+- [End-to-end lifecycle and command snippets](references/template-lifecycle.md)
+- Canonical template guide:
+  `rvn docs types-and-traits templates --json`

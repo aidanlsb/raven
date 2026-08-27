@@ -94,7 +94,8 @@ rvn schema template set daily_default --file templates/daily.md
 rvn schema template bind daily_default --core date --default
 ```
 
-Now `rvn daily` uses this template when creating a new note. See `types-and-traits/templates.md` for the full template lifecycle.
+Now `rvn daily` uses this template when creating a new note. See
+[Templates](../types-and-traits/templates.md) for the full lifecycle.
 
 ## Querying daily notes
 
@@ -165,7 +166,9 @@ vault layout.
 
 ## Related docs
 
-- `using-your-vault/common-commands.md` for `rvn read`, `rvn open`, and other commands
-- `types-and-traits/templates.md` for the full template lifecycle
-- `querying/query-language.md` for RQL syntax
-- `using-your-vault/configuration.md` for `raven.yaml` reference
+- [Common commands](common-commands.md) for `rvn read`, `rvn open`, and other
+  commands.
+- [Templates](../types-and-traits/templates.md) for the full template lifecycle.
+- [Query language](../querying/query-language.md) for RQL syntax.
+- [Configuration](configuration.md) for the `raven.yaml` reference.
+- [Documentation map](../getting-started/documentation-map.md) for every topic.

@@ -71,3 +71,11 @@ rvn search 'meeting notes' --type meeting --json
 rvn backlinks project/website --json
 rvn outlinks meeting/team-sync --json
 ```
+
+## Related guidance
+
+- [Back to Raven Query](../body.md)
+- [Query language](query-language.md)
+- [Query troubleshooting](query-troubleshooting.md)
+- Canonical long-form RQL guide:
+  `rvn docs querying query-language --json`

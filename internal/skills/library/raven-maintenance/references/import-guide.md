@@ -1,5 +1,7 @@
 # Import Guide
 
+Use this page to map external JSON into schema-valid Raven objects.
+
 ## Simple import (single type, no mapping)
 
 ```bash
@@ -71,3 +73,10 @@ rvn import person --file contacts.json --json
 rvn check --type person --json
 rvn query 'type:person' --limit 20 --json
 ```
+
+## Related guidance
+
+- [Back to Raven Maintenance](../body.md)
+- [Check workflow](check-workflow.md)
+- Canonical import guide:
+  `rvn docs vault-management import --json`

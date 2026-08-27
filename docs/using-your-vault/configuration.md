@@ -5,8 +5,8 @@ This guide covers global and vault-level configuration.
 - vault-level behavior config in `raven.yaml`
 
 For schema details, see:
-- `types-and-traits/schema-intro.md`
-- `types-and-traits/schema.md`
+- [Schema introduction](../types-and-traits/schema-intro.md)
+- [Schema reference](../types-and-traits/schema.md)
 
 ## Configuration layers
 
@@ -414,5 +414,8 @@ Keep these out of `raven.yaml`:
 - template ID definitions and type template bindings
 
 Use:
-- `types-and-traits/schema-intro.md` for concepts
-- `types-and-traits/schema.md` for full reference
+- [Schema introduction](../types-and-traits/schema-intro.md) for concepts.
+- [Schema reference](../types-and-traits/schema.md) for the complete format.
+- [First vault](../getting-started/first-vault.md) for vault registration and
+  routing.
+- [Documentation map](../getting-started/documentation-map.md) for every topic.

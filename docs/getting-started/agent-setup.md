@@ -158,8 +158,8 @@ up Raven from scratch:
 
 1. Install the CLI and install the skills with `rvn skill install` (above).
 2. Open your agent.
-3. Paste the recommended first prompt below. A vault is optional. If you don't
-   have one yet, the agent will help you create it.
+3. Paste the [recommended first prompt](#recommended-first-prompt). A vault is
+   optional. If you don't have one yet, the agent will help you create it.
 
 The agent detects your vault state, creates a first vault with `rvn init` when
 none exists (asking where to put it), sets your editor with `rvn config set
@@ -167,8 +167,9 @@ editor=<cmd> editor_mode=auto` (asking first, since it is machine-wide), then
 asks what you're trying to keep track of and proposes a small, personalized
 schema in plain English before applying it. Once you agree, it seeds that schema
 with your real projects, people, and tasks and teaches create, query, and check
-against your own data. It can also point you at Raven's built-in LSP (`rvn lsp`,
-see `using-your-vault/editor-integration.md`) for in-editor diagnostics and
+against your own data. It can also point you at Raven's built-in LSP (`rvn lsp`;
+see [Editor integration](../using-your-vault/editor-integration.md)) for
+in-editor diagnostics and
 completion. MCP is optional throughout.
 
 ## Creating a new vault with an agent
@@ -224,7 +225,11 @@ If the agent can do those things, the integration is in good shape.
 
 ## Where to go deeper
 
-- Read `agents/mcp.md` for the compact MCP contract
-- Read `using-your-vault/common-commands.md` for the full command set agents can invoke
-- Read `getting-started/core-concepts.md` if the agent is using terms like object, trait, or reference before you are comfortable with them
-- Read `types-and-traits/schema-intro.md` before asking an agent to make major schema changes
+- Read the [MCP reference](../agents/mcp.md) for the compact MCP contract.
+- Read [Common commands](../using-your-vault/common-commands.md) for the
+  command set agents can invoke.
+- Read [Core concepts](core-concepts.md) if terms like object, trait, or
+  reference are unfamiliar.
+- Read [Schema introduction](../types-and-traits/schema-intro.md) before asking
+  an agent to make major schema changes.
+- Use the [documentation map](documentation-map.md) to choose another topic.

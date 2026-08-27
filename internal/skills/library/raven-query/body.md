@@ -58,6 +58,8 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 
 ## Load references as needed
 
-- RQL syntax and predicate semantics: `references/query-language.md`
-- Common high-signal patterns to copy/adapt: `references/query-recipes.md`
-- Error recovery and disambiguation: `references/query-troubleshooting.md`
+- [RQL syntax and predicate semantics](references/query-language.md)
+- [Common high-signal patterns](references/query-recipes.md)
+- [Error recovery and disambiguation](references/query-troubleshooting.md)
+- Canonical long-form RQL guide:
+  `rvn docs querying query-language --json`

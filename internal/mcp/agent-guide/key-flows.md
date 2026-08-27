@@ -162,3 +162,10 @@ raven_invoke(command="template_write", args={"path":"meeting.md", "content":"# {
 raven_invoke(command="schema_template_set", args={"template_id":"meeting_standard", "file":"templates/meeting.md"})
 raven_invoke(command="schema_template_bind", args={"template_id":"meeting_standard", "type":"meeting", "default":true})
 ```
+
+## Related topics
+
+- `raven://guide/write-patterns`
+- `raven://guide/querying`
+- `raven://guide/query-at-scale`
+- `raven://guide/issue-types`

@@ -1,6 +1,7 @@
 # RQL internals
 
-This note is for maintainers changing Raven Query Language (RQL) behavior. For user-facing syntax, see `querying/query-language.md`.
+This note is for maintainers changing Raven Query Language (RQL) behavior. For
+user-facing syntax, see the [query language reference](query-language.md).
 
 RQL runs through four main layers:
 
@@ -8,6 +9,13 @@ RQL runs through four main layers:
 2. Validate the AST against `schema.yaml` when schema information is available.
 3. Resolve references that need index context, such as shorthand object IDs and date-note aliases.
 4. Compile predicates into parameterized SQL over the SQLite index and map rows back to model objects.
+
+`internal/querysvc` is the command-facing façade around those layers. It owns
+saved-query expansion, run-option validation, index readiness and refresh,
+execution, query hints, and typed bulk-apply planning. `internal/commandimpl`
+maps the canonical request into that façade, dispatches a planned nested
+mutation when needed, and shapes the response envelope; it does not parse or
+execute RQL directly.
 
 The index is a derived cache. Query code should never treat SQLite rows as durable source data; Markdown files and schema definitions remain the source of truth.
 
@@ -36,7 +44,11 @@ The validator owns schema-aware checks. It rejects unknown object types, traits,
 
 The executor owns index-aware behavior. It resolves query-time references with the resolver, snapshots `today`/`now` for one execution, prepares SQL, and scans rows. Execution errors should be reserved for problems that require index state, such as ambiguous reference resolution.
 
-The command and service layers own ergonomics around saved queries, pagination, `--ids`, `--count-only`, `--apply`, refresh, and JSON output. Keep RQL semantics in `internal/query` unless the behavior is specifically about CLI/MCP command flow.
+`internal/querysvc` owns command-flow semantics around saved queries,
+pagination, `--ids`, `--count-only`, `--apply`, refresh, and query-specific
+errors. `internal/commandimpl` owns only transport adaptation and JSON payload
+shaping. Keep RQL language semantics in `internal/query`; keep invocation
+orchestration in `internal/querysvc`.
 
 ## Predicate implementation
 
@@ -89,3 +101,13 @@ Before changing RQL behavior, check:
 - Are reference, date, and array semantics covered by executor tests?
 - Does the public query-language doc need a syntax or example update?
 - If command behavior changed, did `internal/commands/registry.go` and MCP-facing docs stay in sync?
+
+## Related docs
+
+- [Query language](query-language.md) is the canonical user-facing RQL
+  reference.
+- [MCP reference](../agents/mcp.md) documents compact-surface query invocation.
+- [Bulk operations](../vault-management/bulk-operations.md) documents
+  query-driven mutation behavior.
+- [Documentation map](../getting-started/documentation-map.md) lists the full
+  docs tree.

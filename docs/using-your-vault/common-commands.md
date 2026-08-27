@@ -2,7 +2,10 @@
 
 Commands that don't have their own page. Each one gets a short description, key flags, and examples. Run `rvn help <command>` for the full flag list.
 
-For daily notes and quick capture (`rvn daily`, `rvn add`), see `using-your-vault/daily-notes.md`. For query syntax, see `querying/query-language.md`. For bulk operations on query results, see `vault-management/bulk-operations.md`.
+For daily notes and quick capture (`rvn daily`, `rvn add`), see
+[Daily notes](daily-notes.md). For query syntax, see
+[Query language](../querying/query-language.md). For bulk operations on query
+results, see [Bulk operations](../vault-management/bulk-operations.md).
 
 ## JSON and exit status
 
@@ -63,7 +66,10 @@ Section references (`file#slug`) limit output to that section's subtree: the sec
 
 ### `rvn open`
 
-Open a file in your configured editor (`editor` in `config.toml` or `$EDITOR`). The `editor_mode` setting controls launch behavior: `auto` (detect GUI vs terminal), `terminal` (always inline), or `gui` (always detached). See `using-your-vault/configuration.md` for details.
+Open a file in your configured editor (`editor` in `config.toml` or `$EDITOR`).
+The `editor_mode` setting controls launch behavior: `auto` (detect GUI vs
+terminal), `terminal` (always inline), or `gui` (always detached). See
+[Configuration](configuration.md) for details.
 
 ```bash
 rvn open project/website
@@ -578,9 +584,12 @@ Key flags (`docs search`):
 
 ## Related docs
 
-- `querying/query-language.md`: full RQL syntax for complex queries
-- `using-your-vault/file-links.md`: linking and moving non-Markdown files
-- `vault-management/bulk-operations.md`: `--apply` and `--ids` piping for bulk changes
-- `vault-management/import.md`: bulk importing from JSON
-- `types-and-traits/references.md`: reference syntax, resolution, and maintenance
-- `using-your-vault/configuration.md`: `raven.yaml` and `config.toml` reference
+- [Query language](../querying/query-language.md): full RQL syntax.
+- [File links](file-links.md): linking and moving non-Markdown files.
+- [Bulk operations](../vault-management/bulk-operations.md): `--apply` and
+  `--ids` piping.
+- [Import](../vault-management/import.md): bulk importing from JSON.
+- [References](../types-and-traits/references.md): reference syntax,
+  resolution, and maintenance.
+- [Configuration](configuration.md): `raven.yaml` and `config.toml`.
+- [Documentation map](../getting-started/documentation-map.md): every topic.

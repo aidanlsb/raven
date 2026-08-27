@@ -21,6 +21,16 @@ It is split into topic resources so agents can fetch only what they need.
 - Mutations and safe operations: `raven://guide/write-patterns` + `raven://guide/key-flows` + `raven://guide/response-contract`
 - Error recovery and cleanup: `raven://guide/response-contract` + `raven://guide/error-handling` + `raven://guide/issue-types`
 
+## Long-form docs and packaged skills
+
+- Use `raven_invoke(command="docs", args={"section":"getting-started","topic":"documentation-map"})`
+  for the human-readable docs map.
+- Use `raven_invoke(command="docs", args={"section":"querying","topic":"query-language"})`
+  for the canonical RQL reference; this agent guide stays task-focused.
+- Use packaged skills for reusable CLI-first workflows. Discover and install
+  them with `skill_list` and preview-first `skill_install`; the user-facing
+  setup is in the `getting-started/agent-setup` docs topic.
+
 ## Topics
 
 - `raven://guide/critical-rules` - Non-negotiable safety rules for Raven operations

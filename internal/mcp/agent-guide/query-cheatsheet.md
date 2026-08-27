@@ -55,7 +55,9 @@ Combine predicates with boolean operators:
 Example:
 - `trait:todo (.value == todo | .value == doing) !refs([[project/legacy]])`
 
-This can be very useful to provide lots of information to the user. If a question is vague, err on the side of running a few different versions of a query that could match the description and returning all the results to the user.
+If a question is vague, clarify the intended result kind first. If two
+interpretations are both plausible, run small bounded samples and explain the
+difference instead of returning several unbounded result sets.
 
 ## Examples
 
@@ -81,3 +83,9 @@ This can be very useful to provide lots of information to the user. If a questio
   - `type:project .status == active`
 - PDF links from projects:
   - `link .ext == pdf within(type:project)`
+
+## Related topics
+
+- `raven://guide/querying`
+- `raven://guide/query-at-scale`
+- `raven://guide/examples`

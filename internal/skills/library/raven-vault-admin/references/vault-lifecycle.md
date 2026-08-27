@@ -1,5 +1,7 @@
 # Vault Lifecycle
 
+Use this page to create, select, configure, and safely unregister vaults.
+
 ## Create a new vault
 
 ```bash
@@ -112,3 +114,11 @@ rvn vault stats --json
 ```
 
 Use these commands after init, add, use, pin, clear, or remove operations to confirm routing and index state.
+
+## Related guidance
+
+- [Back to Raven Vault Admin](../body.md)
+- Canonical first-vault guide:
+  `rvn docs getting-started first-vault --json`
+- Full configuration reference:
+  `rvn docs using-your-vault configuration --json`

@@ -66,3 +66,10 @@ raven_invoke(command="import", args={"type":"project", "file":"projects.json"})
 - Use `raven_describe(command="...")` before invoking unfamiliar commands. The response includes a `description` field with command-specific syntax guidance.
 - Prefer registry command IDs in docs and prompts.
 - The MCP surface is exactly `raven_discover`, `raven_describe`, and `raven_invoke`. There are no per-command MCP tools.
+
+## Related topics
+
+- `raven://guide/quickstart`
+- `raven://guide/onboarding`
+- `raven://guide/core-concepts`
+- `raven://guide/response-contract`

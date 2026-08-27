@@ -68,3 +68,9 @@ intended vault before writing.
 - `exclude` marks unmanaged paths that Raven should not check, index, query, or mutate.
 
 If a path is excluded, do not try to work around Raven by editing it as vault content. Ask the user whether they want to remove or narrow the exclusion first.
+
+## Related topics
+
+- `raven://guide/write-patterns`
+- `raven://guide/response-contract`
+- `raven://guide/error-handling`

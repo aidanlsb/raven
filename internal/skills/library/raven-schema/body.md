@@ -63,7 +63,9 @@ Examples:
 
 ## Load references as needed
 
-- Multi-step migration loop and sequencing: `references/migration-checklist.md`
+- [Multi-step migration loop and sequencing](references/migration-checklist.md)
+- Canonical schema introduction:
+  `rvn docs types-and-traits schema-intro --json`
 
 ## Cross-references
 

@@ -4,6 +4,9 @@ sections:
   getting-started:
     title: Getting started
     topics:
+      documentation-map:
+        title: Documentation map
+        path: documentation-map.md
       installation:
         title: Installation
         path: installation.md

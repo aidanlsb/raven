@@ -82,4 +82,6 @@ Raven ships its own long-form documentation. Use these when you need usage detai
 
 ## Load references as needed
 
-- Command chooser and CLI snippets: `references/command-map.md`
+- [Command chooser and CLI snippets](references/command-map.md)
+- Canonical long-form command guide:
+  `rvn docs using-your-vault common-commands --json`
