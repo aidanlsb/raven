@@ -17,7 +17,9 @@ Use this page to diagnose empty, broad, ambiguous, or rejected queries.
 
 ## Unexpectedly broad results
 
-- Add explicit predicates first (`.status==active`, `in(type:...)`, `within(type:...)`).
+- Narrow according to the root: use fields or `contains(trait:...)` on
+  `type:` queries, and `within(type:...)` on `trait:` queries. `in(...)` and
+  `within(...)` are not valid on every root.
 - Use `--limit` and inspect IDs before any apply command.
 
 ## Shell parsing issues
@@ -37,7 +39,9 @@ Use this page to diagnose empty, broad, ambiguous, or rejected queries.
 
 ## Saved query input errors
 
-- Ensure `{{args.<name>}}` placeholders match `args:` declared in `raven.yaml`.
+- Declare each placeholder with `--arg <name>` on
+  `rvn query saved set`; Raven stores those declarations as `args:` in
+  `raven.yaml`. Every `{{args.<name>}}` must match one.
 - Pass missing inputs by position or `key=value` pairs.
 
 ## Stale index suspicion

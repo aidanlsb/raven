@@ -33,6 +33,10 @@ rvn import --mapping contacts.yaml --file contacts.json --dry-run --json
 ```
 
 The `key` field determines how existing objects are matched for upsert behavior.
+Use the equivalent CLI override `--key <field>` for one-off imports.
+
+To move a JSON field into Markdown body content instead of frontmatter, pass
+`--content-field <field>` or set `content_field` in the mapping file.
 
 ## YAML mapping file (heterogeneous / mixed types)
 

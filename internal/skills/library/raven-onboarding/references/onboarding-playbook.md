@@ -60,7 +60,9 @@ rvn config show --json                                    # confirm
 ```
 
 - If `editor` is already set and the user is happy with it, skip the change.
-- Ask which editor they use before writing config (common: `cursor`, `code`, `nvim`). `--editor-mode auto` lets Raven decide terminal vs GUI launch.
+- Ask which editor they use before writing config (common: `cursor`, `code`,
+  `nvim`). Setting `editor_mode=auto` with `rvn config set` lets Raven decide
+  terminal vs GUI launch.
 - Changing the editor edits machine-wide `config.toml`, so ask first — same rule as default/active vault routing.
 
 ### LSP pointer (awareness only)

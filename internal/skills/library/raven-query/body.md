@@ -26,7 +26,11 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
   link-edge rows. Use when you know the type, field names, trait names, or link
   target/source criteria. Supports predicates and pagination; object and trait
   queries support bulk apply.
-- `rvn search`: returns file/snippet matches ranked by relevance. Use when you don't yet know the right type or structural context. Supports prefix matching, phrases, and boolean operators.
+- `rvn search`: returns file/snippet matches ranked by relevance. Use when you
+  don't yet know the right type or structural context. A search for `@todo`
+  matches literal prose too; use `rvn query 'trait:todo ...'` when you need real
+  trait instances. Search supports prefix matching, phrases, and boolean
+  operators.
 - `rvn backlinks`/`rvn outlinks`: direct Raven-reference traversal by object or
   section ID. Use when you need the reference graph around one specific target.
 
@@ -34,10 +38,16 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 
 1. Verify schema shape first: `rvn schema`, `rvn schema type <name>`, `rvn schema trait <name>`.
 2. Estimate result size with `--count-only`, or start with a small `--limit` sample.
-3. Page with `--limit` and `--offset`, and use `--ids` when the next step is another Raven command.
+3. Page with `--limit` and `--offset`; while `has_more` is true, pass the
+   returned `next_offset` as the next `--offset`. Use `--ids` when the next step
+   is another Raven command.
 4. Read only the narrowed results you actually need.
 5. If this is repeated work, save the query with `rvn query saved set`.
 6. For bulk changes, preview with `rvn query --apply ...`, inspect the results, then add `--confirm` only after approval. Follow with a verification query or `rvn check`.
+
+Section queries can feed `--ids` into `rvn add --stdin` for bulk appends.
+`query --apply move` is not a section-move primitive: file-level bulk `move`
+rejects section IDs. Use `rvn section move <file#slug>` for each section.
 
 ## Saved queries
 

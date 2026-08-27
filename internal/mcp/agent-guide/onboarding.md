@@ -52,7 +52,7 @@ raven_invoke(command="add", args={"text":"@todo Review the initial setup", "to":
 #### Query for the trait
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:todo"})
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
 ```
 
 **Tell the user:** This is the core loop — you write naturally in markdown, use traits to mark structured data, and Raven lets you retrieve it later by structure, not just text search. Show how the query returned the trait with its containing object and line content.

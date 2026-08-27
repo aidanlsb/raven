@@ -26,6 +26,7 @@ Quick reference for common Raven Query Language (RQL) patterns.
   - Upward scope (on `trait:`/`section`) — direct: `in([[target]])`, `in(type:...)`, `in(section ...)`
   - Upward scope (on `trait:`/`section`), plus source scope on `link` — recursive: `within([[target]])`, `within(type:...)`, `within(section ...)`
   - Downward scope (on `type:`/`section`): `has(section ...)`, `has(trait:...)`, `contains(section ...)`, `contains(trait:...)`
+  - Same-line trait match (on `trait:` only): `at(trait:priority .value==high)`
 
 **Scope is root-dependent, and traits attach to the nearest section.** Lead with the forgiving forms: `type:project contains(trait:todo ...)` (not `has`) and `trait:todo within(type:project)` (not `in`). A `@todo` under `## Tasks` is not directly on the project object, so `has`/`in` (direct-only) usually return nothing.
 

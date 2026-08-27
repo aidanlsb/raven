@@ -54,7 +54,7 @@ vault in this priority order:
 
 1. Per-call `vault_path` (explicit path)
 2. Per-call `vault` (configured vault name)
-3. In-memory session focus set by `vault focus`
+3. In-memory session focus set by the `vault_focus` command ID
 4. Server launch pin (`rvn serve --vault-path` / `--vault`)
 
 If none is present, Raven returns `VAULT_AMBIGUOUS`. MCP never guesses from the

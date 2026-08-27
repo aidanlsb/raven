@@ -110,6 +110,9 @@ if a restore reference is ambiguous.
 
 ## 5. Bulk mutation flow
 
+Query `apply` cannot be combined with `limit`, `offset`, or `count-only`; the
+preview and confirmed run both plan against the complete matching set.
+
 ```text
 # Preview
 raven_invoke(command="query", args={

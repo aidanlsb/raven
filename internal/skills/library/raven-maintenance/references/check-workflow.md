@@ -7,7 +7,7 @@ Use this page for a scoped check → repair → verify loop.
 | Issue | Meaning | Typical fix |
 |-------|---------|-------------|
 | `unknown_type` | File declares a type not in schema | `rvn reclassify` or `rvn schema add type` |
-| `missing_reference` | `[[ref]]` target doesn't exist | Create the target or fix the reference |
+| `missing_reference` | `[[ref]]` target doesn't exist | Preview `rvn check create-missing`, then confirm or fix/remove it |
 | `broken_file_link` | Indexed Markdown file-link target is missing on disk | Restore the file or update/remove the link; URLs are not checked |
 | `unknown_frontmatter_key` | Field not defined on the type | `rvn schema add field` or remove the key |
 | `undefined_trait` | `@trait` not in schema | `rvn schema add trait` or remove from file |
@@ -16,6 +16,12 @@ Use this page for a scoped check → repair → verify loop.
 | `short_ref_could_be_full_path` | Short ref can use its canonical object ID | `rvn check fix --confirm` |
 | `non_canonical_path` | File is outside the configured directory root for its type | `rvn check fix --confirm` |
 | `non_canonical_ref` | Wikilink includes a configured root prefix | `rvn check fix --confirm` |
+
+This is a triage subset. Use `rvn docs types-and-traits schema --json` or the
+MCP `raven://guide/issue-types` resource for the complete issue list.
+
+Paths matched by `raven.yaml` `exclude` are outside Raven's managed content and
+are intentionally absent from `rvn check`; they are not hidden check failures.
 
 ## Scoped check patterns
 

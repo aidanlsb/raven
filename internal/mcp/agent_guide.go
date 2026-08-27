@@ -101,8 +101,8 @@ var guideTopics = []GuideTopic{
 	},
 	{
 		Slug:        "examples",
-		Name:        "Example Conversations",
-		Description: "Example conversations and query translations.",
+		Name:        "Command Translations",
+		Description: "Intent-to-command translations for common Raven tasks.",
 		Path:        "agent-guide/examples.md",
 	},
 }

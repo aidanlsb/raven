@@ -37,6 +37,11 @@ Traits attach to the nearest section, so lead with the forgiving forms:
 - From the trait side use `within(type:...)` (recursive), not `in(type:...)` (direct-only).
 - `has`/`contains` look downward (on `type:`/`section`); `in`/`within` look upward (on `trait:`/`section`).
 - `in(...)` is scope containment, not set membership — for "value is one of a set" use `oneof(.field, [a,b])`.
+- `at(trait:...)` is available only on trait roots and matches a second trait on
+  the same source line.
+
+For the complete root/predicate capability matrix, invoke
+`raven_invoke(command="docs", args={"section":"querying","topic":"query-language"})`.
 
 ## Examples
 
@@ -56,6 +61,10 @@ description. They do not store runtime execution policy. When invoking one,
 pass `refresh`, `ids`, `limit`, `offset`, `count-only`, `apply`, `confirm`,
 `pipe`, or `browse` in the current `query` call as needed.
 
+`pipe` and `browse` are interactive CLI presentation choices; MCP agents should
+use structured JSON rows or `ids`. `apply` cannot be combined with `limit`,
+`offset`, or `count-only`, because it plans against the complete result set.
+
 ```text
 raven_invoke(command="query", args={"query_string":"open-projects","limit":100})
 ```
@@ -64,9 +73,14 @@ Sections use the bare `section` query root and return heading-derived rows with
 IDs like `file#slug`. Section rows include `line_start`, direct `line_end`, and
 `subtree_line_end`. Body appends with `add` use the direct range so they land
 before child headings; structural placement with `section_create` and
-`section_move` uses complete subtree boundaries. Section query IDs can be piped
-into bulk `add` (`--ids` + `stdin=true`) to append inside each matching section,
-and `read` with `sections=true` returns a file's outline directly.
+`section_move` uses complete subtree boundaries. To bulk-append through MCP,
+run the section query with `ids=true`, then pass those IDs as `object_ids` to
+`add` with `confirm=true`. `stdin=true` is CLI-only. `read` with
+`sections=true` returns a file's outline directly.
+
+Do not use query `apply` to move sections. Only a `move` plan parses for section
+results, and the delegated file-level bulk move rejects section IDs. Invoke
+`section_move` separately for each intended `file#slug`.
 
 Use `links(...)` on type, section, or trait roots to filter by outgoing non-Raven
 links, for example `type:project links(.ext==pdf)` or

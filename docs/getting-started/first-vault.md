@@ -1,4 +1,4 @@
-# Vault creation and management
+# First vault
 
 Use this guide to:
 - initialize your first vault

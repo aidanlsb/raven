@@ -16,10 +16,12 @@ It is split into topic resources so agents can fetch only what they need.
 
 ## Sitemap by Goal
 
-- New user orientation and setup: `raven://guide/quickstart` -> `raven://guide/getting-started` -> `raven://guide/onboarding`
+- Teach a new user: `raven://guide/quickstart` -> `raven://guide/onboarding`
+- Operate in a new or existing vault: `raven://guide/quickstart` -> `raven://guide/getting-started` -> `raven://guide/core-concepts`
 - Query composition and retrieval: `raven://guide/querying` + `raven://guide/query-cheatsheet` + `raven://guide/query-at-scale`
 - Mutations and safe operations: `raven://guide/write-patterns` + `raven://guide/key-flows` + `raven://guide/response-contract`
 - Error recovery and cleanup: `raven://guide/response-contract` + `raven://guide/error-handling` + `raven://guide/issue-types`
+- General operating discipline: `raven://guide/best-practices` + `raven://guide/examples`
 
 ## Long-form docs and packaged skills
 
@@ -47,4 +49,4 @@ It is split into topic resources so agents can fetch only what they need.
 - `raven://guide/error-handling` - How to respond to tool errors
 - `raven://guide/issue-types` - `check` issue reference and fixes
 - `raven://guide/best-practices` - Operating principles and safety checks
-- `raven://guide/examples` - Example conversations and query translations
+- `raven://guide/examples` - Intent-to-command translations

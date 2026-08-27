@@ -23,10 +23,11 @@ Raven indexes those outgoing link edges separately.
 
 ## Validation levels
 
-Raven validates your schema and data at two levels:
+Raven validates schema and data at three points:
 
 | Command | What it checks |
 |---------|---------------|
+| `rvn new` / mutation commands | Validate new values while writing |
 | `rvn schema validate` | Internal consistency of `schema.yaml` (valid types, valid enum values, ref targets exist, etc.) |
 | `rvn check` | Vault files against the schema (unknown types, missing required fields, broken references, undefined traits) |
 

@@ -15,7 +15,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Author `[[references]]` and `ref` fields with canonical object IDs. After
   `new`/`upsert`/`daily`, use the returned `data.id` (the human CLI's
   `link as <id>` value); do not generate bare short forms.
-- Single-object writes (`rvn set`/`add`/`update`/`edit`, `rvn section create`/`move`/`rename`, and single `rvn move`/`rvn delete`) apply immediately; pass `--dry-run` to preview without writing. `rvn section delete` is preview-first and requires `--confirm`. Bulk operations (`--stdin`), `query --apply`, `schema rename`, and `check` fixes also stay preview-first and require `--confirm`.
+- Single-object writes (`rvn set`/`add`/`update`/`edit`, `rvn section create`/`move`/`rename`, and single `rvn move`/`rvn delete`) apply immediately; pass `--dry-run` to preview without writing. `rvn section delete` is preview-first and requires `--confirm`. Bulk operations (`--stdin`), `query --apply`, `schema rename`, `rvn check fix`, and `rvn check create-missing` also stay preview-first and require `--confirm`.
 
 ## Choose the right write command
 
@@ -36,6 +36,15 @@ Key distinctions:
 - Use `--fields-json '{...}'` on `new`, `upsert`, `set`, and `reclassify` when
   exact JSON typing matters.
 - `new` vs `upsert`: use `new` only when creating a genuinely new object identity. Use `upsert` when the same agent action might run again.
+- Use `data.id` for references and follow-up commands; never derive an ID from
+  `data.file`, because configured directory roots and daily-note paths can make
+  them differ.
+
+Writes remain permissive when a new `[[reference]]` target does not exist. An
+`ok=true` response can include `REF_TARGET_MISSING`, `data.missing_refs`,
+`data.missing_ref_items`, and a structured `create_invoke`. This differs from
+fatal `REF_NOT_FOUND` on reads. Create appropriate targets with preview-first
+`rvn check create-missing --json`, then `--confirm`.
 
 ## Daily notes
 
@@ -52,6 +61,11 @@ Key distinctions:
 3. For edits, always read the file raw first, then construct the exact `old_str` match.
 4. For lifecycle changes: `rvn reclassify` to change type, `rvn move` to rename/relocate files, `rvn section create`/`move`/`rename`/`delete` for headings, and `rvn delete` to remove files.
 5. After mutations, verify with `rvn read` or `rvn check`.
+
+After a trashed delete, recover through `rvn trash list`, preview
+`rvn restore <reference>`, then repeat with `--confirm`. Bulk reclassification
+can require both `--confirm` and `--force` when the preview reports dropped
+fields.
 
 ## Look things up
 
