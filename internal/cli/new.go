@@ -20,10 +20,10 @@ import (
 )
 
 var (
-	newFieldFlags  []string
-	newFieldJSON   string
-	newObjectPath  string
-	newTemplate    string
+	newFieldFlags []string
+	newFieldJSON  string
+	newObjectPath string
+	newTemplate   string
 )
 
 var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
