@@ -21,7 +21,7 @@ func configTestRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
 func TestShowMissingConfigUsesDefaults(t *testing.T) {
 	tmp := t.TempDir()
 
-	result, err := Show(configTestRuntime(t, tmp), ShowRequest{VaultPath: tmp})
+	result, err := Show(configTestRuntime(t, tmp))
 	if err != nil {
 		t.Fatalf("Show() error = %v", err)
 	}
@@ -43,21 +43,21 @@ func TestShowMissingConfigUsesDefaults(t *testing.T) {
 func TestSetAutoReindexCreatesExplicitValue(t *testing.T) {
 	tmp := t.TempDir()
 
-	result, err := SetAutoReindex(configTestRuntime(t, tmp), SetAutoReindexRequest{
-		VaultPath: tmp,
-		Value:     false,
-	})
+	mutation, autoReindex, explicit, err := SetAutoReindex(configTestRuntime(t, tmp), false)
 	if err != nil {
 		t.Fatalf("SetAutoReindex() error = %v", err)
 	}
-	if !result.Created {
+	if !mutation.Created {
 		t.Fatalf("expected Created=true")
 	}
-	if !result.Changed {
+	if !mutation.Changed {
 		t.Fatalf("expected Changed=true")
 	}
-	if result.AutoReindex {
+	if autoReindex {
 		t.Fatalf("expected AutoReindex=false")
+	}
+	if !explicit {
+		t.Fatalf("expected explicit=true")
 	}
 
 	cfg, err := config.LoadVaultConfig(tmp)
@@ -75,18 +75,18 @@ func TestUnsetAutoReindexClearsExplicitValue(t *testing.T) {
 		t.Fatalf("write raven.yaml: %v", err)
 	}
 
-	result, err := UnsetAutoReindex(configTestRuntime(t, tmp), UnsetAutoReindexRequest{VaultPath: tmp})
+	mutation, autoReindex, explicit, err := UnsetAutoReindex(configTestRuntime(t, tmp))
 	if err != nil {
 		t.Fatalf("UnsetAutoReindex() error = %v", err)
 	}
-	if !result.Changed {
+	if !mutation.Changed {
 		t.Fatalf("expected Changed=true")
 	}
-	if !result.AutoReindex {
+	if !autoReindex {
 		t.Fatalf("expected AutoReindex=true after unset")
 	}
-	if result.AutoReindexExplicit {
-		t.Fatalf("expected AutoReindexExplicit=false")
+	if explicit {
+		t.Fatalf("expected explicit=false")
 	}
 
 	cfg, err := config.LoadVaultConfig(tmp)
@@ -104,28 +104,22 @@ func TestProtectedPrefixesAddNormalizesAndDeduplicates(t *testing.T) {
 		t.Fatalf("write raven.yaml: %v", err)
 	}
 
-	result, err := AddProtectedPrefix(configTestRuntime(t, tmp), AddProtectedPrefixRequest{
-		VaultPath: tmp,
-		Prefix:    "./notes//team",
-	})
+	mutation, prefix, _, err := AddProtectedPrefix(configTestRuntime(t, tmp), "./notes//team")
 	if err != nil {
 		t.Fatalf("AddProtectedPrefix() error = %v", err)
 	}
-	if !result.Changed {
+	if !mutation.Changed {
 		t.Fatalf("expected Changed=true")
 	}
-	if result.Prefix != "notes/team/" {
-		t.Fatalf("expected normalized prefix notes/team/, got %q", result.Prefix)
+	if prefix != "notes/team/" {
+		t.Fatalf("expected normalized prefix notes/team/, got %q", prefix)
 	}
 
-	result, err = AddProtectedPrefix(configTestRuntime(t, tmp), AddProtectedPrefixRequest{
-		VaultPath: tmp,
-		Prefix:    "private",
-	})
+	mutation, _, _, err = AddProtectedPrefix(configTestRuntime(t, tmp), "private")
 	if err != nil {
 		t.Fatalf("AddProtectedPrefix() duplicate error = %v", err)
 	}
-	if result.Changed {
+	if mutation.Changed {
 		t.Fatalf("expected duplicate add to be unchanged")
 	}
 
@@ -151,21 +145,15 @@ func TestProtectedPrefixesRemoveRequiresExistingPrefix(t *testing.T) {
 		t.Fatalf("write raven.yaml: %v", err)
 	}
 
-	result, err := RemoveProtectedPrefix(configTestRuntime(t, tmp), RemoveProtectedPrefixRequest{
-		VaultPath: tmp,
-		Prefix:    "private",
-	})
+	_, removed, _, err := RemoveProtectedPrefix(configTestRuntime(t, tmp), "private")
 	if err != nil {
 		t.Fatalf("RemoveProtectedPrefix() error = %v", err)
 	}
-	if result.Removed != "private/" {
-		t.Fatalf("expected removed private/, got %q", result.Removed)
+	if removed != "private/" {
+		t.Fatalf("expected removed private/, got %q", removed)
 	}
 
-	_, err = RemoveProtectedPrefix(configTestRuntime(t, tmp), RemoveProtectedPrefixRequest{
-		VaultPath: tmp,
-		Prefix:    "missing",
-	})
+	_, _, _, err = RemoveProtectedPrefix(configTestRuntime(t, tmp), "missing")
 	if err == nil {
 		t.Fatalf("expected missing prefix error")
 	}
@@ -181,10 +169,7 @@ func TestProtectedPrefixesRemoveRequiresExistingPrefix(t *testing.T) {
 func TestProtectedPrefixesRejectInvalidPrefix(t *testing.T) {
 	tmp := t.TempDir()
 
-	_, err := AddProtectedPrefix(configTestRuntime(t, tmp), AddProtectedPrefixRequest{
-		VaultPath: tmp,
-		Prefix:    "../outside",
-	})
+	_, _, _, err := AddProtectedPrefix(configTestRuntime(t, tmp), "../outside")
 	if err == nil {
 		t.Fatalf("expected invalid prefix error")
 	}
@@ -201,20 +186,15 @@ func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
 	tmp := t.TempDir()
 	rt := configTestRuntime(t, tmp)
 
-	setResult, err := SetDirectories(rt, SetDirectoriesRequest{
-		VaultPath: tmp,
-		Daily:     strPtr("./journal"),
-		Object:    strPtr("objects"),
-		Template:  strPtr("templates/custom"),
-	})
+	mutation, directories, err := SetDirectories(rt, strPtr("./journal"), strPtr("objects"), nil, strPtr("templates/custom"))
 	if err != nil {
 		t.Fatalf("SetDirectories() error = %v", err)
 	}
-	if !setResult.Changed {
+	if !mutation.Changed {
 		t.Fatalf("expected Changed=true")
 	}
-	if setResult.Directories.Daily != "journal/" {
-		t.Fatalf("expected daily journal/, got %q", setResult.Directories.Daily)
+	if directories.Daily != "journal/" {
+		t.Fatalf("expected daily journal/, got %q", directories.Daily)
 	}
 	if !rt.VaultConfigExists || rt.ParseOptions == nil || rt.ParseOptions.DailyRoot != "journal" {
 		t.Fatalf("runtime was not refreshed after config save: %#v", rt)
@@ -228,16 +208,11 @@ func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
 		t.Fatalf("unexpected directories config: %#v", cfg.Directories)
 	}
 
-	unsetResult, err := UnsetDirectories(rt, UnsetDirectoriesRequest{
-		VaultPath: tmp,
-		Daily:     true,
-		Object:    true,
-		Template:  true,
-	})
+	mutation, _, err = UnsetDirectories(rt, true, true, false, true)
 	if err != nil {
 		t.Fatalf("UnsetDirectories() error = %v", err)
 	}
-	if !unsetResult.Changed {
+	if !mutation.Changed {
 		t.Fatalf("expected Changed=true")
 	}
 
@@ -253,56 +228,41 @@ func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
 func TestCaptureSetAndUnsetLifecycle(t *testing.T) {
 	tmp := t.TempDir()
 
-	setResult, err := SetCapture(configTestRuntime(t, tmp), SetCaptureRequest{
-		VaultPath:   tmp,
-		Destination: strPtr("inbox.md"),
-		Heading:     strPtr("## Captured"),
-	})
+	_, configured, capture, err := SetCapture(configTestRuntime(t, tmp), strPtr("inbox.md"), strPtr("## Captured"))
 	if err != nil {
 		t.Fatalf("SetCapture() error = %v", err)
 	}
-	if !setResult.Configured {
+	if !configured {
 		t.Fatalf("expected capture configured")
 	}
-	if setResult.Capture.Destination != "inbox.md" {
-		t.Fatalf("expected inbox.md destination, got %q", setResult.Capture.Destination)
+	if capture.Destination != "inbox.md" {
+		t.Fatalf("expected inbox.md destination, got %q", capture.Destination)
 	}
 
-	unsetResult, err := UnsetCapture(configTestRuntime(t, tmp), UnsetCaptureRequest{
-		VaultPath:   tmp,
-		Destination: true,
-		Heading:     true,
-	})
+	_, configured, capture, err = UnsetCapture(configTestRuntime(t, tmp), true, true)
 	if err != nil {
 		t.Fatalf("UnsetCapture() error = %v", err)
 	}
-	if unsetResult.Configured {
+	if configured {
 		t.Fatalf("expected capture block cleared")
 	}
-	if unsetResult.Capture.Destination != "daily" {
-		t.Fatalf("expected default daily destination, got %q", unsetResult.Capture.Destination)
+	if capture.Destination != "daily" {
+		t.Fatalf("expected default daily destination, got %q", capture.Destination)
 	}
 }
 
 func TestDeletionSetNormalizesTrashDirAndRejectsInvalidBehavior(t *testing.T) {
 	tmp := t.TempDir()
 
-	setResult, err := SetDeletion(configTestRuntime(t, tmp), SetDeletionRequest{
-		VaultPath: tmp,
-		Behavior:  strPtr("trash"),
-		TrashDir:  strPtr("./archive//trash"),
-	})
+	_, _, deletion, err := SetDeletion(configTestRuntime(t, tmp), strPtr("trash"), strPtr("./archive//trash"))
 	if err != nil {
 		t.Fatalf("SetDeletion() error = %v", err)
 	}
-	if setResult.Deletion.TrashDir != "archive/trash" {
-		t.Fatalf("expected archive/trash, got %q", setResult.Deletion.TrashDir)
+	if deletion.TrashDir != "archive/trash" {
+		t.Fatalf("expected archive/trash, got %q", deletion.TrashDir)
 	}
 
-	_, err = SetDeletion(configTestRuntime(t, tmp), SetDeletionRequest{
-		VaultPath: tmp,
-		Behavior:  strPtr("invalid"),
-	})
+	_, _, _, err = SetDeletion(configTestRuntime(t, tmp), strPtr("invalid"), nil)
 	if err == nil {
 		t.Fatalf("expected invalid behavior error")
 	}
@@ -350,15 +310,15 @@ func TestExcludeList(t *testing.T) {
 				}
 			}
 
-			result, err := ListExclude(configTestRuntime(t, vaultPath), ListExcludeRequest{VaultPath: vaultPath})
+			configPath, exists, patterns, err := ListExclude(configTestRuntime(t, vaultPath))
 			if err != nil {
 				t.Fatalf("ListExclude() error = %v", err)
 			}
-			if result.Exists != tt.wantExists || !reflect.DeepEqual(result.Exclude, tt.want) {
-				t.Fatalf("ListExclude() = %#v, want Exists=%v Exclude=%#v", result, tt.wantExists, tt.want)
+			if exists != tt.wantExists || !reflect.DeepEqual(patterns, tt.want) {
+				t.Fatalf("ListExclude() = Exists=%v Exclude=%#v, want Exists=%v Exclude=%#v", exists, patterns, tt.wantExists, tt.want)
 			}
-			if result.ConfigPath != filepath.Join(vaultPath, "raven.yaml") {
-				t.Fatalf("ConfigPath = %q, want vault raven.yaml", result.ConfigPath)
+			if configPath != filepath.Join(vaultPath, "raven.yaml") {
+				t.Fatalf("ConfigPath = %q, want vault raven.yaml", configPath)
 			}
 		})
 	}
@@ -423,10 +383,7 @@ func TestExcludeAdd(t *testing.T) {
 				}
 			}
 
-			result, err := AddExclude(configTestRuntime(t, vaultPath), AddExcludeRequest{
-				VaultPath: vaultPath,
-				Pattern:   tt.pattern,
-			})
+			mutation, pattern, patterns, err := AddExclude(configTestRuntime(t, vaultPath), tt.pattern)
 			if tt.wantCode != "" {
 				requireVaultConfigCode(t, err, tt.wantCode)
 				return
@@ -434,10 +391,10 @@ func TestExcludeAdd(t *testing.T) {
 			if err != nil {
 				t.Fatalf("AddExclude() error = %v", err)
 			}
-			if result.Created != tt.wantCreated || result.Changed != tt.wantChanged ||
-				result.Pattern != tt.wantPattern || !reflect.DeepEqual(result.Exclude, tt.wantExclude) {
-				t.Fatalf("AddExclude() = %#v, want Created=%v Changed=%v Pattern=%q Exclude=%#v",
-					result, tt.wantCreated, tt.wantChanged, tt.wantPattern, tt.wantExclude)
+			if mutation.Created != tt.wantCreated || mutation.Changed != tt.wantChanged ||
+				pattern != tt.wantPattern || !reflect.DeepEqual(patterns, tt.wantExclude) {
+				t.Fatalf("AddExclude() = Created=%v Changed=%v Pattern=%q Exclude=%#v, want Created=%v Changed=%v Pattern=%q Exclude=%#v",
+					mutation.Created, mutation.Changed, pattern, patterns, tt.wantCreated, tt.wantChanged, tt.wantPattern, tt.wantExclude)
 			}
 
 			cfg, err := config.LoadVaultConfig(vaultPath)
@@ -491,10 +448,7 @@ func TestExcludeRemove(t *testing.T) {
 				t.Fatalf("write raven.yaml: %v", err)
 			}
 
-			result, err := RemoveExclude(configTestRuntime(t, vaultPath), RemoveExcludeRequest{
-				VaultPath: vaultPath,
-				Pattern:   tt.pattern,
-			})
+			mutation, removed, patterns, err := RemoveExclude(configTestRuntime(t, vaultPath), tt.pattern)
 			if tt.wantCode != "" {
 				requireVaultConfigCode(t, err, tt.wantCode)
 				return
@@ -502,8 +456,8 @@ func TestExcludeRemove(t *testing.T) {
 			if err != nil {
 				t.Fatalf("RemoveExclude() error = %v", err)
 			}
-			if !result.Changed || result.Removed != tt.wantRemoved || !reflect.DeepEqual(result.Exclude, tt.wantExclude) {
-				t.Fatalf("RemoveExclude() = %#v, want Removed=%q Exclude=%#v", result, tt.wantRemoved, tt.wantExclude)
+			if !mutation.Changed || removed != tt.wantRemoved || !reflect.DeepEqual(patterns, tt.wantExclude) {
+				t.Fatalf("RemoveExclude() = Changed=%v Removed=%q Exclude=%#v, want Removed=%q Exclude=%#v", mutation.Changed, removed, patterns, tt.wantRemoved, tt.wantExclude)
 			}
 
 			cfg, err := config.LoadVaultConfig(vaultPath)
