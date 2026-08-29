@@ -38,11 +38,11 @@ status: active
 
 	v.RunCLI("reindex").MustSucceed(t)
 
-	newResult := v.RunCLI("new", "project", "Blocked Project", "--path", "private/blocked-project")
+	newResult := v.RunCLI("new", "project", "Blocked Project", "--object-path", "private/blocked-project")
 	newResult.MustFail(t, "VALIDATION_FAILED")
 	newResult.MustFailWithMessage(t, "protected")
 
-	upsertResult := v.RunCLI("upsert", "project", "Blocked Project", "--path", "private/blocked-project", "--content", "# blocked")
+	upsertResult := v.RunCLI("upsert", "project", "Blocked Project", "--object-path", "private/blocked-project", "--content", "# blocked")
 	upsertResult.MustFail(t, "VALIDATION_FAILED")
 	upsertResult.MustFailWithMessage(t, "protected")
 

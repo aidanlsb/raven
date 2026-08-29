@@ -18,7 +18,7 @@ var (
 	upsertFieldJSON   string
 	upsertContent     string
 	upsertContentFile string
-	upsertPathFlag    string
+	upsertObjectPath  string
 )
 
 var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
@@ -30,7 +30,7 @@ var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
 		"fields-json":  &upsertFieldJSON,
 		"content":      &upsertContent,
 		"content-file": &upsertContentFile,
-		"path":         &upsertPathFlag,
+		"object-path":  &upsertObjectPath,
 	},
 })
 
@@ -42,13 +42,13 @@ func buildUpsertArgs(cmd *cobra.Command, args []string) (map[string]interface{},
 		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a non-empty title")
 	}
 
-	// Leave targetPath empty when no explicit --path is given so the service
+	// Leave targetPath empty when no explicit --object-path is given so the service
 	// derives the filename/slug from the title (which may contain "/").
 	targetPath := ""
-	if cmd.Flags().Changed("path") {
-		targetPath = strings.TrimSpace(upsertPathFlag)
-		if err := validateObjectTargetPath(targetPath); err != nil {
-			return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use --path with an explicit object path like note/raven-friction")
+	if cmd.Flags().Changed("object-path") {
+		targetPath = strings.TrimSpace(upsertObjectPath)
+		if err := validateObjectPath(targetPath); err != nil {
+			return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use --object-path with an object path like note/raven-friction (no type/ prefix, no .md suffix). Use data.id from rvn read, not data.path.")
 		}
 	}
 
@@ -128,7 +128,7 @@ func buildUpsertCommandArgs(typeName, title, targetPath string, fieldValues map[
 		args["fields-json"] = fieldJSONRaw
 	}
 	if strings.TrimSpace(targetPath) != "" {
-		args["path"] = targetPath
+		args["object-path"] = targetPath
 	}
 	if replaceBody {
 		args["content"] = content

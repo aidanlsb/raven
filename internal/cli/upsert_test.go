@@ -19,24 +19,24 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
-	prevPath := upsertPathFlag
-	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevObjectPath := upsertObjectPath
+	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
-		upsertPathFlag = prevPath
-		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
+		upsertObjectPath = prevObjectPath
+		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	upsertFieldFlags = nil
-	upsertPathFlag = ""
-	upsertCmd.Flags().Lookup("path").Changed = false
+	upsertObjectPath = ""
+	upsertCmd.Flags().Lookup("object-path").Changed = false
 
 	run := func(content string) (status string, file string) {
 		upsertContent = content
@@ -99,8 +99,8 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	prevJSON := jsonOutput
 	prevUpsertFields := upsertFieldFlags
 	prevUpsertContent := upsertContent
-	prevUpsertPath := upsertPathFlag
-	prevUpsertPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevUpsertObjectPath := upsertObjectPath
+	prevUpsertObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
 	prevUpsertContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	prevAddTo := addToFlag
 	prevAddStdin := addStdin
@@ -110,8 +110,8 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevUpsertFields
 		upsertContent = prevUpsertContent
-		upsertPathFlag = prevUpsertPath
-		upsertCmd.Flags().Lookup("path").Changed = prevUpsertPathChanged
+		upsertObjectPath = prevUpsertObjectPath
+		upsertCmd.Flags().Lookup("object-path").Changed = prevUpsertObjectPathChanged
 		upsertCmd.Flags().Lookup("content").Changed = prevUpsertContentChanged
 		addToFlag = prevAddTo
 		addStdin = prevAddStdin
@@ -121,8 +121,8 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	upsertFieldFlags = nil
-	upsertPathFlag = ""
-	upsertCmd.Flags().Lookup("path").Changed = false
+	upsertObjectPath = ""
+	upsertCmd.Flags().Lookup("object-path").Changed = false
 	upsertContent = "Canonical body"
 	upsertCmd.Flags().Lookup("content").Changed = true
 
@@ -193,24 +193,24 @@ func TestUpsertSlugifiesTitleWithPathSeparator(t *testing.T) {
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
-	prevPath := upsertPathFlag
-	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevObjectPath := upsertObjectPath
+	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
-		upsertPathFlag = prevPath
-		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
+		upsertObjectPath = prevObjectPath
+		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	upsertFieldFlags = nil
-	upsertPathFlag = ""
-	upsertCmd.Flags().Lookup("path").Changed = false
+	upsertObjectPath = ""
+	upsertCmd.Flags().Lookup("object-path").Changed = false
 	upsertContent = ""
 	upsertCmd.Flags().Lookup("content").Changed = false
 
@@ -269,24 +269,24 @@ func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
-	prevPath := upsertPathFlag
-	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevObjectPath := upsertObjectPath
+	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
-		upsertPathFlag = prevPath
-		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
+		upsertObjectPath = prevObjectPath
+		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	upsertFieldFlags = nil
-	upsertPathFlag = "custom/brief-daily"
-	upsertCmd.Flags().Lookup("path").Changed = true
+	upsertObjectPath = "custom/brief-daily"
+	upsertCmd.Flags().Lookup("object-path").Changed = true
 	upsertContent = "Body V1"
 	upsertCmd.Flags().Lookup("content").Changed = true
 
@@ -325,24 +325,24 @@ func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
-	prevPath := upsertPathFlag
-	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevObjectPath := upsertObjectPath
+	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
-		upsertPathFlag = prevPath
-		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
+		upsertObjectPath = prevObjectPath
+		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	upsertFieldFlags = nil
-	upsertPathFlag = "brief/"
-	upsertCmd.Flags().Lookup("path").Changed = true
+	upsertObjectPath = "brief/"
+	upsertCmd.Flags().Lookup("object-path").Changed = true
 	upsertContent = ""
 	upsertCmd.Flags().Lookup("content").Changed = false
 
@@ -375,8 +375,8 @@ func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
-	prevPath := upsertPathFlag
-	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevObjectPath := upsertObjectPath
+	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	prevCfg := cfg
 	t.Cleanup(func() {
@@ -384,8 +384,8 @@ func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
-		upsertPathFlag = prevPath
-		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
+		upsertObjectPath = prevObjectPath
+		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 		cfg = prevCfg
 	})
@@ -393,8 +393,8 @@ func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
 	resolvedVaultPath = vaultPath
 	jsonOutput = false
 	upsertFieldFlags = nil
-	upsertPathFlag = ""
-	upsertCmd.Flags().Lookup("path").Changed = false
+	upsertObjectPath = ""
+	upsertCmd.Flags().Lookup("object-path").Changed = false
 	upsertContent = "# Brief"
 	upsertCmd.Flags().Lookup("content").Changed = true
 	// GetEditor() falls back to $EDITOR, so clear it or this test launches a

@@ -236,21 +236,21 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil // simulate MCP/agent that didn't provide --field title=...
-	newPathFlag = ""
-	newCmd.Flags().Lookup("path").Changed = false
+	newObjectPath = ""
+	newCmd.Flags().Lookup("object-path").Changed = false
 
 	if err := newCmd.RunE(newCmd, []string{"book", "My Book"}); err != nil {
 		t.Fatalf("newCmd.RunE: %v", err)
@@ -294,21 +294,21 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = []string{"title=Override Title"}
-	newPathFlag = ""
-	newCmd.Flags().Lookup("path").Changed = false
+	newObjectPath = ""
+	newCmd.Flags().Lookup("object-path").Changed = false
 
 	if err := newCmd.RunE(newCmd, []string{"book", "My Book 2"}); err != nil {
 		t.Fatalf("newCmd.RunE: %v", err)
@@ -353,23 +353,23 @@ types:
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevFieldJSON := newFieldJSON
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newFieldJSON = prevFieldJSON
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
 	newFieldJSON = `{"email":"true"}`
-	newPathFlag = ""
-	newCmd.Flags().Lookup("path").Changed = false
+	newObjectPath = ""
+	newCmd.Flags().Lookup("object-path").Changed = false
 
 	if err := newCmd.RunE(newCmd, []string{"person", "Fields Json User"}); err != nil {
 		t.Fatalf("newCmd.RunE: %v", err)
@@ -404,21 +404,21 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
-	newPathFlag = ""
-	newCmd.Flags().Lookup("path").Changed = false
+	newObjectPath = ""
+	newCmd.Flags().Lookup("object-path").Changed = false
 
 	// First run creates the file successfully.
 	_ = captureStdout(t, func() {
@@ -471,21 +471,21 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
-	newPathFlag = ""
-	newCmd.Flags().Lookup("path").Changed = false
+	newObjectPath = ""
+	newCmd.Flags().Lookup("object-path").Changed = false
 
 	title := "config.VaultConfig duplicates internal/paths"
 	out := captureStdout(t, func() {
@@ -552,21 +552,21 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
-	newPathFlag = "custom/raven-logo-brief"
-	newCmd.Flags().Lookup("path").Changed = true
+	newObjectPath = "custom/raven-logo-brief"
+	newCmd.Flags().Lookup("object-path").Changed = true
 
 	out := captureStdout(t, func() {
 		if err := newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}); err != nil {
@@ -607,21 +607,21 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
-	newPathFlag = "note/"
-	newCmd.Flags().Lookup("path").Changed = true
+	newObjectPath = "note/"
+	newCmd.Flags().Lookup("object-path").Changed = true
 
 	out := captureStdout(t, func() {
 		requireJSONResponseFailure(t, newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}))
@@ -668,21 +668,21 @@ directories:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
-	newPathFlag = ""
-	newCmd.Flags().Lookup("path").Changed = false
+	newObjectPath = ""
+	newCmd.Flags().Lookup("object-path").Changed = false
 
 	out := captureStdout(t, func() {
 		if err := newCmd.RunE(newCmd, []string{"page", "Quick Note"}); err != nil {
@@ -737,24 +737,24 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
+	prevObjectPath := newObjectPath
 	prevTemplate := newTemplate
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
+		newObjectPath = prevObjectPath
 		newTemplate = prevTemplate
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
-	newPathFlag = ""
+	newObjectPath = ""
 	newTemplate = "interview_technical"
-	newCmd.Flags().Lookup("path").Changed = false
+	newCmd.Flags().Lookup("object-path").Changed = false
 
 	if err := newCmd.RunE(newCmd, []string{"interview", "Jane Doe"}); err != nil {
 		t.Fatalf("newCmd.RunE: %v", err)
@@ -795,21 +795,21 @@ directories:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
-	newPathFlag = ""
-	newCmd.Flags().Lookup("path").Changed = false
+	newObjectPath = ""
+	newCmd.Flags().Lookup("object-path").Changed = false
 
 	out := captureStdout(t, func() {
 		if err := newCmd.RunE(newCmd, []string{"person", "Freya"}); err != nil {
@@ -856,23 +856,23 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPath := newObjectPath
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	prevCfg := cfg
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newObjectPath = prevObjectPath
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 		cfg = prevCfg
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = false
 	newFieldFlags = nil
-	newPathFlag = ""
-	newCmd.Flags().Lookup("path").Changed = false
+	newObjectPath = ""
+	newCmd.Flags().Lookup("object-path").Changed = false
 	// No editor configured, so rendering prints the path instead of opening.
 	// GetEditor() falls back to $EDITOR, so clear it or this test launches a
 	// real editor and hangs.
@@ -919,24 +919,24 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
-	prevPath := newPathFlag
+	prevObjectPath := newObjectPath
 	prevTemplate := newTemplate
-	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	prevObjectPathChanged := newCmd.Flags().Lookup("object-path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
-		newPathFlag = prevPath
+		newObjectPath = prevObjectPath
 		newTemplate = prevTemplate
-		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+		newCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
-	newPathFlag = ""
+	newObjectPath = ""
 	newTemplate = ""
-	newCmd.Flags().Lookup("path").Changed = false
+	newCmd.Flags().Lookup("object-path").Changed = false
 
 	if err := newCmd.RunE(newCmd, []string{"interview", "No Template Interview"}); err != nil {
 		t.Fatalf("newCmd.RunE: %v", err)
