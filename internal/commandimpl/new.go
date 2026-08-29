@@ -32,9 +32,9 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	typeName := strings.TrimSpace(stringArg(req.Args, "type"))
 	title := strings.TrimSpace(stringArg(req.Args, "title"))
-	// Leave targetPath empty when no explicit --path is given so the service
+	// Leave targetPath empty when no explicit --object-path is given so the service
 	// derives the filename/slug from the title (which may contain "/").
-	targetPath := strings.TrimSpace(stringArg(req.Args, "path"))
+	targetPath := strings.TrimSpace(stringArg(req.Args, "object-path"))
 
 	fieldValues, err := parseKeyValueArgs(req.Args["field"])
 	if err != nil {
@@ -111,9 +111,9 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 
 	typeName := strings.TrimSpace(stringArg(req.Args, "type"))
 	title := strings.TrimSpace(stringArg(req.Args, "title"))
-	// Leave targetPath empty when no explicit --path is given so the service
+	// Leave targetPath empty when no explicit --object-path is given so the service
 	// derives the filename/slug from the title (which may contain "/").
-	targetPath := strings.TrimSpace(stringArg(req.Args, "path"))
+	targetPath := strings.TrimSpace(stringArg(req.Args, "object-path"))
 
 	fieldValues, err := parseKeyValueArgs(req.Args["field"])
 	if err != nil {

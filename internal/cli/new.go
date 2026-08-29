@@ -22,7 +22,7 @@ import (
 var (
 	newFieldFlags []string
 	newFieldJSON  string
-	newPathFlag   string
+	newObjectPath string
 	newTemplate   string
 )
 
@@ -35,7 +35,7 @@ var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
 	FlagBindings: map[string]interface{}{
 		"field":       &newFieldFlags,
 		"fields-json": &newFieldJSON,
-		"path":        &newPathFlag,
+		"object-path": &newObjectPath,
 		"template":    &newTemplate,
 	},
 })
@@ -80,10 +80,10 @@ func buildNewArgs(_ *cobra.Command, args []string) (map[string]interface{}, erro
 			return nil, err
 		}
 	}
-	targetPath := strings.TrimSpace(newPathFlag)
+	targetPath := strings.TrimSpace(newObjectPath)
 	if targetPath != "" {
-		if err := validateObjectTargetPath(targetPath); err != nil {
-			return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use --path with an explicit object path like note/raven-friction")
+		if err := validateObjectPath(targetPath); err != nil {
+			return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use --object-path with an object path like note/raven-friction (no type/ prefix, no .md suffix). Use data.id from rvn read, not data.path.")
 		}
 	}
 	return buildNewCommandArgs(typeName, title, targetPath, newTemplate, fieldValues, fieldJSONRaw), nil
@@ -248,7 +248,7 @@ func buildNewCommandArgs(typeName, title, targetPath, templateID string, fieldVa
 		args["fields-json"] = fieldJSONRaw
 	}
 	if strings.TrimSpace(targetPath) != "" {
-		args["path"] = targetPath
+		args["object-path"] = targetPath
 	}
 	if strings.TrimSpace(templateID) != "" {
 		args["template"] = templateID

@@ -24,11 +24,63 @@ types:
 `).
 		Build()
 
-	result := v.RunCLI("new", "note", "Raven Friction", "--path", "note/raven-logo-brief")
+	result := v.RunCLI("new", "note", "Raven Friction", "--object-path", "note/raven-logo-brief")
 	result.MustSucceed(t)
 
 	v.AssertFileExists("objects/note/raven-logo-brief.md")
 	v.AssertFileNotExists("objects/note/raven-friction.md")
+}
+
+func TestIntegration_NewRejectsVaultFilePathAsObjectPath(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  note:
+    default_path: note/
+`).
+		WithRavenYAML(`directories:
+  type: objects/
+`).
+		Build()
+
+	// Reject path starting with type/
+	result := v.RunCLI("new", "note", "Test Note", "--object-path", "type/note/test-note")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "must not start with 'type/'")
+	result.MustFailWithMessage(t, "data.id")
+
+	// Reject path ending with .md
+	result = v.RunCLI("new", "note", "Test Note", "--object-path", "note/test-note.md")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "must not end with '.md'")
+	result.MustFailWithMessage(t, "data.id")
+}
+
+func TestIntegration_UpsertRejectsVaultFilePathAsObjectPath(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  note:
+    default_path: note/
+`).
+		WithRavenYAML(`directories:
+  type: objects/
+`).
+		Build()
+
+	// Reject path starting with type/
+	result := v.RunCLI("upsert", "note", "Test Note", "--object-path", "type/note/test-note", "--content", "# Test")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "must not start with 'type/'")
+	result.MustFailWithMessage(t, "data.id")
+
+	// Reject path ending with .md
+	result = v.RunCLI("upsert", "note", "Test Note", "--object-path", "note/test-note.md", "--content", "# Test")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "must not end with '.md'")
+	result.MustFailWithMessage(t, "data.id")
 }
 
 func TestIntegration_NewSlugifiesTitleWithPathSeparator(t *testing.T) {
@@ -336,12 +388,12 @@ types:
 `).
 		Build()
 
-	result := v.RunCLI("upsert", "note", "Raven Friction", "--path", "note/raven-logo-brief", "--content", "# V1")
+	result := v.RunCLI("upsert", "note", "Raven Friction", "--object-path", "note/raven-logo-brief", "--content", "# V1")
 	result.MustSucceed(t)
 	v.AssertFileExists("objects/note/raven-logo-brief.md")
 	v.AssertFileContains("objects/note/raven-logo-brief.md", "# V1")
 
-	result = v.RunCLI("upsert", "note", "Raven Friction", "--path", "note/raven-logo-brief", "--content", "# V2")
+	result = v.RunCLI("upsert", "note", "Raven Friction", "--object-path", "note/raven-logo-brief", "--content", "# V2")
 	result.MustSucceed(t)
 	v.AssertFileContains("objects/note/raven-logo-brief.md", "# V2")
 }

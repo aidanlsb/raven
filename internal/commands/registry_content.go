@@ -16,11 +16,11 @@ control matters, such as preserving the string "true" instead of a boolean or
 providing arrays/nulls explicitly.
 
 Titles are treated as display names and are stored verbatim in frontmatter
-(populating name_field when configured). When no --path is given, the title is
+(populating name_field when configured). When no --object-path is given, the title is
 slugified into the filename/path, so titles may contain "/" or other characters
 that are unsafe in paths (e.g. "config.VaultConfig duplicates internal/paths"
 becomes config-vaultconfig-duplicates-internal-paths.md). The object ID stays
-derived from the resulting file path. Use --path to explicitly control the object
+derived from the resulting file path. Use --object-path to explicitly control the object
 path (its "/" segments map to directories).
 
 If the type has a name_field configured (e.g., name_field: name), the title
@@ -51,12 +51,12 @@ CLI offers to create the missing pages; agents can run 'rvn check create-missing
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
 			{Name: "fields-json", Description: "Set frontmatter fields via JSON object (typed values)", Type: FlagTypeJSON},
-			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"people/freya-2026", "note/raven-friction"}},
+			{Name: "object-path", Description: "Object path (no type/ prefix, no .md suffix). Matches data.id from rvn read, not data.path.", Type: FlagTypeString, Examples: []string{"people/freya-2026", "note/raven-friction"}},
 			{Name: "template", Description: "Type template ID to use for object creation", Type: FlagTypeString, Examples: []string{"interview_technical", "interview_screen"}},
 		},
 		Examples: []string{
 			"rvn new person \"Freya\" --json",
-			"rvn new note \"Raven Friction\" --path note/raven-friction --json",
+			"rvn new note \"Raven Friction\" --object-path note/raven-friction --json",
 			"rvn new project \"Website Redesign\" --json",
 			"rvn new interview \"Jane Doe @ Acme\" --template technical --json",
 			"rvn new book \"The Prose Edda\" --field author=people/snorri --json",
@@ -144,7 +144,7 @@ It creates a new object when missing, or updates the existing one in place.
 
 Semantics:
 - By default, identity is derived from <type> + <title> (same routing/slug logic as 'new')
-- Use --path to override the storage path explicitly while keeping title as display metadata
+- Use --object-path to override the storage path explicitly while keeping title as display metadata
 - Frontmatter fields provided via --field are merged/updated
 - If --content is provided, the body is fully replaced (idempotent reruns)
 - Use --content-file to read the replacement body from a file, or '-' for stdin
@@ -176,13 +176,13 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 			{Name: "fields-json", Description: "Set/update frontmatter fields as a JSON object", Type: FlagTypeJSON},
 			{Name: "content", Description: "Replace body content (idempotent full-body mode)", Type: FlagTypeString},
 			{Name: "content-file", Description: "Read replacement body content from a file, or '-' for stdin", Type: FlagTypeString, Examples: []string{"/tmp/brief.md", "-"}},
-			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"brief/daily-2026-02-14", "note/raven-friction"}},
+			{Name: "object-path", Description: "Object path (no type/ prefix, no .md suffix). Matches data.id from rvn read, not data.path.", Type: FlagTypeString, Examples: []string{"brief/daily-2026-02-14", "note/raven-friction"}},
 		},
 		Examples: []string{
 			"rvn upsert brief \"Daily Brief 2026-02-14\" --content \"# Daily Brief\" --json",
 			"rvn upsert brief \"Daily Brief 2026-02-14\" --content-file /tmp/brief.md --json",
 			"rvn upsert brief \"Daily Brief 2026-02-14\" --content-file - --json < /tmp/brief.md",
-			"rvn upsert note \"Raven Friction\" --path note/raven-friction --content \"# Notes\" --json",
+			"rvn upsert note \"Raven Friction\" --object-path note/raven-friction --content \"# Notes\" --json",
 			"rvn upsert report \"Q1 Status\" --field owner=people/freya --field status=draft --json",
 		},
 		UseCases: []string{
