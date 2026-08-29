@@ -6,10 +6,6 @@ var contentRegistry = map[string]Meta{
 		Description: "Create a new typed object",
 		LongDesc: `Creates a new note with the specified type.
 
-⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command to create new vault objects instead
-of writing files directly with 'echo', 'touch', or file writing tools. The raven_new
-command applies templates, validates against the schema, and ensures proper indexing.
-
 The type is required. If title is not provided in interactive CLI mode, you will
 be prompted for it. Interactive CLI mode prompts for schema fields; optional
 fields can be skipped with a blank response. Field values can also be provided
@@ -67,7 +63,7 @@ CLI offers to create the missing pages; agents can run 'rvn check create-missing
 			"rvn new person \"Freya\" --fields-json '{\"email\":\"freya@asgard.realm\"}' --json",
 		},
 		UseCases: []string{
-			"Create a new typed object (NEVER write vault files directly)",
+			"Create a new typed object",
 			"Create a new person entry with schema validation",
 			"Create a new project file with template applied",
 		},
@@ -200,13 +196,6 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 		Description: "Delete an object or file from the vault",
 		LongDesc: `Delete a file-backed object or an explicit non-Markdown file path from the vault.
 
-⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'rm'.
-Using 'rm' directly will NOT warn about backlinks (other files that reference this one),
-potentially creating broken links throughout the vault. The raven_delete command:
-- Reports incoming backlink warnings
-- Moves files to deletion.trash_dir for recovery (not permanent deletion)
-- Updates the index properly
-
 By default, files are moved to a trash directory (.trash/). Recover with trash
 list followed by preview-first restore; do not move entries manually.
 Warns about backlinks to Raven objects. File-link integrity is reported by
@@ -219,9 +208,7 @@ show a confirmation prompt unless --force is set. Only call delete after user in
 is clear; when unsure, inspect the object and run backlinks first.
 
 Bulk operations:
-Use --stdin to read object references or explicit file paths from stdin (one per line).
-IMPORTANT:
-- Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
+Use --stdin to read object references or explicit file paths from stdin (one per line).`,
 		Args: []ArgMeta{
 			{Name: "reference", Description: "Object reference or explicit non-Markdown file path to delete", Required: false},
 		},
@@ -239,7 +226,7 @@ IMPORTANT:
 			"rvn delete projects/old --force",
 		},
 		UseCases: []string{
-			"Delete a file safely (NEVER use 'rm' shell command)",
+			"Delete a file safely with backlink warnings",
 			"Remove objects with backlink warnings",
 			"Move files to trash with backlink warnings",
 		},
@@ -289,12 +276,6 @@ so incoming references to a restored Markdown ID resolve again when possible.`,
 		Description: "Move or rename an object or file within the vault",
 		LongDesc: `Move or rename a file or object within the vault.
 
-⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
-Using 'mv' directly will NOT update references to the file, causing broken links
-throughout the vault. The raven_move command automatically updates [[references]],
-schema-typed frontmatter ref/ref[] fields, and indexed Markdown file links/images
-that point to the moved file.
-
 SECURITY: Both source and destination must be within the vault.
 Files cannot be moved outside the vault, and external files cannot be moved in.
 
@@ -324,8 +305,7 @@ inputs.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
-Destination must be a directory (ending with /).
-IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
+Destination must be a directory (ending with /).`,
 		Args: []ArgMeta{
 			{Name: "source", Description: "Source object reference or explicit non-Markdown file path; section IDs are rejected", Required: false},
 			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/projects/)", Required: false},
@@ -346,7 +326,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"rvn move files/paper.pdf files/archive/paper.pdf --json",
 		},
 		UseCases: []string{
-			"Rename a file in place (NEVER use 'mv' shell command)",
+			"Rename a file in place with reference updates",
 			"Move file to different directory with reference updates",
 			"Reorganize vault structure while keeping links intact",
 			"Archive old content without breaking references",
@@ -597,7 +577,6 @@ field changes (including previous values) without writing.
 Bulk operations:
 Use --stdin to read references from stdin (one per line). Bulk updates accept
 both field=value literals and --fields-json typed values.
-IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.
 
 Permissive writes: if a ref field is set to a target that does not exist yet, the
 update still succeeds. The response adds data.missing_refs, data.missing_ref_items,
@@ -673,8 +652,7 @@ change without writing.
 
 Bulk operations:
 Use --stdin to read trait IDs from stdin (one per line).
-Use repeated --trait-id flags to provide an explicit trait ID list without stdin.
-IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
+Use repeated --trait-id flags to provide an explicit trait ID list without stdin.`,
 		Args: []ArgMeta{
 			{Name: "trait_id", Description: "Trait ID to update (e.g., daily/2026-01-25.md:trait:0)", Required: false},
 			{Name: "value", Description: "New trait value", Required: true},
@@ -702,9 +680,6 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		Description: "Surgical text replacement in vault content files",
 		LongDesc: `Replace a unique string in a vault content file with another string.
 
-⚠️ IMPORTANT FOR AGENTS: Use this command instead of shell tools like 'sed' or 'awk'
-to edit vault content files. This maintains file integrity within the vault.
-
 Scope:
 - Supported: markdown content files such as objects, pages, and daily notes
 - Not supported: raven.yaml, schema.yaml, template files, or protected/system-managed paths
@@ -715,9 +690,6 @@ The string to replace must appear exactly once in the target scope to prevent
 ambiguous edits. File targets use the whole file. Section targets such as
 object#section use the section subtree, so repeated text outside that section
 does not make the edit ambiguous.
-
-IMPORTANT: Applies immediately. Pass --dry-run to preview the before/after diff
-without writing.
 
 Whitespace matters—old_str must match exactly including indentation.
 For multi-line replacements, include newlines in both old_str and new_str.
@@ -746,7 +718,7 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 			`rvn edit "pages/notes.md" --edits-json '{"edits":[{"old_str":"reccommendation","new_str":"recommendation"},{"old_str":"Status: draft","new_str":"Status: active"}]}' --json`,
 		},
 		UseCases: []string{
-			"Edit markdown vault content files (use instead of 'sed', 'awk', or direct file writes)",
+			"Edit markdown vault content files",
 			"Add wiki links to existing text",
 			"Fix typos in notes",
 			"Apply multiple ordered replacements in one command",

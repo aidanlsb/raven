@@ -471,8 +471,6 @@ This command:
 4. Optionally updates the type description (--description)
 5. Optionally renames default_path directory and moves matching files with reference updates (--rename-default-path)
 
-IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
-
 For agents: After renaming, run 'rvn reindex --full --json' to update the index.`,
 		Args: []ArgMeta{
 			{Name: "old_name", Description: "Current type name", Required: true},
@@ -507,8 +505,6 @@ This command:
 3. Updates type templates that reference {{field.<old_field>}} (template files)
 4. Renames frontmatter keys in files whose type matches the target type
 5. Updates saved queries in raven.yaml that parse as type:<type> (best-effort)
-
-IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
 For agents: After renaming, run 'rvn reindex --full --json' to update the index.`,
 		Args: []ArgMeta{
