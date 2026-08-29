@@ -13,10 +13,28 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type ShowRequest struct {
-	VaultPath string
+// DirectoriesInfo is a view of the effective directories configuration.
+type DirectoriesInfo struct {
+	Configured bool
+	Daily      string
+	Object     string
+	Page       string
+	Template   string
 }
 
+// CaptureInfo is a view of the effective capture configuration.
+type CaptureInfo struct {
+	Destination string
+	Heading     string
+}
+
+// DeletionInfo is a view of the effective deletion configuration.
+type DeletionInfo struct {
+	Behavior string
+	TrashDir string
+}
+
+// ShowResult contains the full vault configuration summary.
 type ShowResult struct {
 	ConfigPath            string
 	Exists                bool
@@ -33,234 +51,15 @@ type ShowResult struct {
 	ExcludeUsed           bool
 }
 
-type DirectoriesInfo struct {
-	Configured bool
-	Daily      string
-	Object     string
-	Page       string
-	Template   string
-}
-
-type CaptureInfo struct {
-	Destination string
-	Heading     string
-}
-
-type DeletionInfo struct {
-	Behavior string
-	TrashDir string
-}
-
-type GetDirectoriesRequest struct {
-	VaultPath string
-}
-
-type GetDirectoriesResult struct {
-	ConfigPath  string
-	Exists      bool
-	Directories DirectoriesInfo
-}
-
-type SetDirectoriesRequest struct {
-	VaultPath string
-	Daily     *string
-	Object    *string
-	Page      *string
-	Template  *string
-}
-
-type SetDirectoriesResult struct {
-	ConfigPath  string
-	Created     bool
-	Changed     bool
-	Directories DirectoriesInfo
-}
-
-type UnsetDirectoriesRequest struct {
-	VaultPath string
-	Daily     bool
-	Object    bool
-	Page      bool
-	Template  bool
-}
-
-type UnsetDirectoriesResult struct {
-	ConfigPath  string
-	Changed     bool
-	Directories DirectoriesInfo
-}
-
-type GetCaptureRequest struct {
-	VaultPath string
-}
-
-type GetCaptureResult struct {
-	ConfigPath string
-	Exists     bool
-	Configured bool
-	Capture    CaptureInfo
-}
-
-type SetCaptureRequest struct {
-	VaultPath   string
-	Destination *string
-	Heading     *string
-}
-
-type SetCaptureResult struct {
+// MutationResult contains common fields for all mutation operations.
+type MutationResult struct {
 	ConfigPath string
 	Created    bool
 	Changed    bool
-	Configured bool
-	Capture    CaptureInfo
 }
 
-type UnsetCaptureRequest struct {
-	VaultPath   string
-	Destination bool
-	Heading     bool
-}
-
-type UnsetCaptureResult struct {
-	ConfigPath string
-	Changed    bool
-	Configured bool
-	Capture    CaptureInfo
-}
-
-type GetDeletionRequest struct {
-	VaultPath string
-}
-
-type GetDeletionResult struct {
-	ConfigPath string
-	Exists     bool
-	Configured bool
-	Deletion   DeletionInfo
-}
-
-type SetDeletionRequest struct {
-	VaultPath string
-	Behavior  *string
-	TrashDir  *string
-}
-
-type SetDeletionResult struct {
-	ConfigPath string
-	Created    bool
-	Changed    bool
-	Configured bool
-	Deletion   DeletionInfo
-}
-
-type UnsetDeletionRequest struct {
-	VaultPath string
-	Behavior  bool
-	TrashDir  bool
-}
-
-type UnsetDeletionResult struct {
-	ConfigPath string
-	Changed    bool
-	Configured bool
-	Deletion   DeletionInfo
-}
-
-type SetAutoReindexRequest struct {
-	VaultPath string
-	Value     bool
-}
-
-type SetAutoReindexResult struct {
-	ConfigPath          string
-	Created             bool
-	Changed             bool
-	AutoReindex         bool
-	AutoReindexExplicit bool
-}
-
-type UnsetAutoReindexRequest struct {
-	VaultPath string
-}
-
-type UnsetAutoReindexResult struct {
-	ConfigPath          string
-	Changed             bool
-	AutoReindex         bool
-	AutoReindexExplicit bool
-}
-
-type ListProtectedPrefixesRequest struct {
-	VaultPath string
-}
-
-type ListProtectedPrefixesResult struct {
-	ConfigPath        string
-	Exists            bool
-	ProtectedPrefixes []string
-}
-
-type AddProtectedPrefixRequest struct {
-	VaultPath string
-	Prefix    string
-}
-
-type AddProtectedPrefixResult struct {
-	ConfigPath        string
-	Created           bool
-	Changed           bool
-	Prefix            string
-	ProtectedPrefixes []string
-}
-
-type RemoveProtectedPrefixRequest struct {
-	VaultPath string
-	Prefix    string
-}
-
-type RemoveProtectedPrefixResult struct {
-	ConfigPath        string
-	Changed           bool
-	Removed           string
-	ProtectedPrefixes []string
-}
-
-type ListExcludeRequest struct {
-	VaultPath string
-}
-
-type ListExcludeResult struct {
-	ConfigPath string
-	Exists     bool
-	Exclude    []string
-}
-
-type AddExcludeRequest struct {
-	VaultPath string
-	Pattern   string
-}
-
-type AddExcludeResult struct {
-	ConfigPath string
-	Created    bool
-	Changed    bool
-	Pattern    string
-	Exclude    []string
-}
-
-type RemoveExcludeRequest struct {
-	VaultPath string
-	Pattern   string
-}
-
-type RemoveExcludeResult struct {
-	ConfigPath string
-	Changed    bool
-	Removed    string
-	Exclude    []string
-}
-
-func Show(rt *vaultruntime.Runtime, req ShowRequest) (*ShowResult, error) {
+// Show returns the complete vault configuration summary.
+func Show(rt *vaultruntime.Runtime) (*ShowResult, error) {
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
 		return nil, err
@@ -288,27 +87,24 @@ func Show(rt *vaultruntime.Runtime, req ShowRequest) (*ShowResult, error) {
 	}, nil
 }
 
-func GetDirectories(rt *vaultruntime.Runtime, req GetDirectoriesRequest) (*GetDirectoriesResult, error) {
+// GetDirectories returns the directories configuration view and metadata.
+func GetDirectories(rt *vaultruntime.Runtime) (configPath string, exists bool, directories DirectoriesInfo, err error) {
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return "", false, DirectoriesInfo{}, err
 	}
-
-	return &GetDirectoriesResult{
-		ConfigPath:  configPath,
-		Exists:      exists,
-		Directories: showDirectories(cfg),
-	}, nil
+	return configPath, exists, showDirectories(cfg), nil
 }
 
-func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDirectoriesResult, error) {
-	if req.Daily == nil && req.Object == nil && req.Page == nil && req.Template == nil {
-		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one directories field").WithSuggestion("Use --daily, --type, --page, or --template")
+// SetDirectories updates one or more directory fields. At least one non-nil field is required.
+func SetDirectories(rt *vaultruntime.Runtime, daily, object, page, template *string) (*MutationResult, DirectoriesInfo, error) {
+	if daily == nil && object == nil && page == nil && template == nil {
+		return nil, DirectoriesInfo{}, svcerr.New(codes.ErrInvalidInput, "specify at least one directories field").WithSuggestion("Use --daily, --type, --page, or --template")
 	}
 
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, DirectoriesInfo{}, err
 	}
 
 	before := canonicalDirectoriesConfig(cfg)
@@ -317,31 +113,31 @@ func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDi
 		next = &config.DirectoriesConfig{}
 	}
 
-	if req.Daily != nil {
-		value, err := normalizeDirValue(*req.Daily, "daily")
+	if daily != nil {
+		value, err := normalizeDirValue(*daily, "daily")
 		if err != nil {
-			return nil, err
+			return nil, DirectoriesInfo{}, err
 		}
 		next.Daily = value
 	}
-	if req.Object != nil {
-		value, err := normalizeDirValue(*req.Object, "type")
+	if object != nil {
+		value, err := normalizeDirValue(*object, "type")
 		if err != nil {
-			return nil, err
+			return nil, DirectoriesInfo{}, err
 		}
 		next.Object = value
 	}
-	if req.Page != nil {
-		value, err := normalizeDirValue(*req.Page, "page")
+	if page != nil {
+		value, err := normalizeDirValue(*page, "page")
 		if err != nil {
-			return nil, err
+			return nil, DirectoriesInfo{}, err
 		}
 		next.Page = value
 	}
-	if req.Template != nil {
-		value, err := normalizeDirValue(*req.Template, "template")
+	if template != nil {
+		value, err := normalizeDirValue(*template, "template")
 		if err != nil {
-			return nil, err
+			return nil, DirectoriesInfo{}, err
 		}
 		next.Template = value
 	}
@@ -350,26 +146,26 @@ func SetDirectories(rt *vaultruntime.Runtime, req SetDirectoriesRequest) (*SetDi
 	if changed {
 		cfg.Directories = next
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, DirectoriesInfo{}, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
-	return &SetDirectoriesResult{
-		ConfigPath:  configPath,
-		Created:     !exists && changed,
-		Changed:     changed,
-		Directories: showDirectories(cfg),
-	}, nil
+	return &MutationResult{
+		ConfigPath: configPath,
+		Created:    !exists && changed,
+		Changed:    changed,
+	}, showDirectories(cfg), nil
 }
 
-func UnsetDirectories(rt *vaultruntime.Runtime, req UnsetDirectoriesRequest) (*UnsetDirectoriesResult, error) {
-	if !req.Daily && !req.Object && !req.Page && !req.Template {
-		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one directories field to clear").WithSuggestion("Use --daily, --type, --page, or --template")
+// UnsetDirectories clears one or more directory fields. At least one true field is required.
+func UnsetDirectories(rt *vaultruntime.Runtime, daily, object, page, template bool) (*MutationResult, DirectoriesInfo, error) {
+	if !daily && !object && !page && !template {
+		return nil, DirectoriesInfo{}, svcerr.New(codes.ErrInvalidInput, "specify at least one directories field to clear").WithSuggestion("Use --daily, --type, --page, or --template")
 	}
 
 	cfg, _, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, DirectoriesInfo{}, err
 	}
 
 	before := canonicalDirectoriesConfig(cfg)
@@ -378,16 +174,16 @@ func UnsetDirectories(rt *vaultruntime.Runtime, req UnsetDirectoriesRequest) (*U
 		next = &config.DirectoriesConfig{}
 	}
 
-	if req.Daily {
+	if daily {
 		next.Daily = ""
 	}
-	if req.Object {
+	if object {
 		next.Object = ""
 	}
-	if req.Page {
+	if page {
 		next.Page = ""
 	}
-	if req.Template {
+	if template {
 		next.Template = ""
 	}
 	next = compactDirectoriesConfig(next)
@@ -395,40 +191,35 @@ func UnsetDirectories(rt *vaultruntime.Runtime, req UnsetDirectoriesRequest) (*U
 	if changed {
 		cfg.Directories = next
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, DirectoriesInfo{}, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
-	return &UnsetDirectoriesResult{
-		ConfigPath:  configPath,
-		Changed:     changed,
-		Directories: showDirectories(cfg),
-	}, nil
-}
-
-func GetCapture(rt *vaultruntime.Runtime, req GetCaptureRequest) (*GetCaptureResult, error) {
-	cfg, exists, configPath, err := load(rt)
-	if err != nil {
-		return nil, err
-	}
-
-	capture := cfg.GetCaptureConfig()
-	return &GetCaptureResult{
+	return &MutationResult{
 		ConfigPath: configPath,
-		Exists:     exists,
-		Configured: cfg.Capture != nil,
-		Capture:    CaptureInfo{Destination: capture.Destination, Heading: capture.Heading},
-	}, nil
+		Changed:    changed,
+	}, showDirectories(cfg), nil
 }
 
-func SetCapture(rt *vaultruntime.Runtime, req SetCaptureRequest) (*SetCaptureResult, error) {
-	if req.Destination == nil && req.Heading == nil {
-		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one capture field").WithSuggestion("Use --destination or --heading")
+// GetCapture returns the capture configuration view and metadata.
+func GetCapture(rt *vaultruntime.Runtime) (configPath string, exists, configured bool, capture CaptureInfo, err error) {
+	cfg, exists, configPath, err := load(rt)
+	if err != nil {
+		return "", false, false, CaptureInfo{}, err
+	}
+	captureConfig := cfg.GetCaptureConfig()
+	return configPath, exists, cfg.Capture != nil, CaptureInfo{Destination: captureConfig.Destination, Heading: captureConfig.Heading}, nil
+}
+
+// SetCapture updates one or more capture fields. At least one non-nil field is required.
+func SetCapture(rt *vaultruntime.Runtime, destination, heading *string) (*MutationResult, bool, CaptureInfo, error) {
+	if destination == nil && heading == nil {
+		return nil, false, CaptureInfo{}, svcerr.New(codes.ErrInvalidInput, "specify at least one capture field").WithSuggestion("Use --destination or --heading")
 	}
 
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, false, CaptureInfo{}, err
 	}
 
 	before := canonicalCaptureConfig(cfg)
@@ -437,17 +228,17 @@ func SetCapture(rt *vaultruntime.Runtime, req SetCaptureRequest) (*SetCaptureRes
 		next = &config.CaptureConfig{}
 	}
 
-	if req.Destination != nil {
-		value, err := normalizeCaptureDestination(*req.Destination)
+	if destination != nil {
+		value, err := normalizeCaptureDestination(*destination)
 		if err != nil {
-			return nil, err
+			return nil, false, CaptureInfo{}, err
 		}
 		next.Destination = value
 	}
-	if req.Heading != nil {
-		value, err := normalizeHeading(*req.Heading)
+	if heading != nil {
+		value, err := normalizeHeading(*heading)
 		if err != nil {
-			return nil, err
+			return nil, false, CaptureInfo{}, err
 		}
 		next.Heading = value
 	}
@@ -457,28 +248,27 @@ func SetCapture(rt *vaultruntime.Runtime, req SetCaptureRequest) (*SetCaptureRes
 	if changed {
 		cfg.Capture = next
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, false, CaptureInfo{}, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
 	capture := cfg.GetCaptureConfig()
-	return &SetCaptureResult{
+	return &MutationResult{
 		ConfigPath: configPath,
 		Created:    !exists && changed,
 		Changed:    changed,
-		Configured: cfg.Capture != nil,
-		Capture:    CaptureInfo{Destination: capture.Destination, Heading: capture.Heading},
-	}, nil
+	}, cfg.Capture != nil, CaptureInfo{Destination: capture.Destination, Heading: capture.Heading}, nil
 }
 
-func UnsetCapture(rt *vaultruntime.Runtime, req UnsetCaptureRequest) (*UnsetCaptureResult, error) {
-	if !req.Destination && !req.Heading {
-		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one capture field to clear").WithSuggestion("Use --destination or --heading")
+// UnsetCapture clears one or more capture fields. At least one true field is required.
+func UnsetCapture(rt *vaultruntime.Runtime, destination, heading bool) (*MutationResult, bool, CaptureInfo, error) {
+	if !destination && !heading {
+		return nil, false, CaptureInfo{}, svcerr.New(codes.ErrInvalidInput, "specify at least one capture field to clear").WithSuggestion("Use --destination or --heading")
 	}
 
 	cfg, _, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, false, CaptureInfo{}, err
 	}
 
 	before := canonicalCaptureConfig(cfg)
@@ -487,10 +277,10 @@ func UnsetCapture(rt *vaultruntime.Runtime, req UnsetCaptureRequest) (*UnsetCapt
 		next = &config.CaptureConfig{}
 	}
 
-	if req.Destination {
+	if destination {
 		next.Destination = ""
 	}
-	if req.Heading {
+	if heading {
 		next.Heading = ""
 	}
 
@@ -499,42 +289,36 @@ func UnsetCapture(rt *vaultruntime.Runtime, req UnsetCaptureRequest) (*UnsetCapt
 	if changed {
 		cfg.Capture = next
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, false, CaptureInfo{}, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
 	capture := cfg.GetCaptureConfig()
-	return &UnsetCaptureResult{
+	return &MutationResult{
 		ConfigPath: configPath,
 		Changed:    changed,
-		Configured: cfg.Capture != nil,
-		Capture:    CaptureInfo{Destination: capture.Destination, Heading: capture.Heading},
-	}, nil
+	}, cfg.Capture != nil, CaptureInfo{Destination: capture.Destination, Heading: capture.Heading}, nil
 }
 
-func GetDeletion(rt *vaultruntime.Runtime, req GetDeletionRequest) (*GetDeletionResult, error) {
+// GetDeletion returns the deletion configuration view and metadata.
+func GetDeletion(rt *vaultruntime.Runtime) (configPath string, exists, configured bool, deletion DeletionInfo, err error) {
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return "", false, false, DeletionInfo{}, err
 	}
-
-	deletion := cfg.GetDeletionConfig()
-	return &GetDeletionResult{
-		ConfigPath: configPath,
-		Exists:     exists,
-		Configured: cfg.Deletion != nil,
-		Deletion:   DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir},
-	}, nil
+	deletionConfig := cfg.GetDeletionConfig()
+	return configPath, exists, cfg.Deletion != nil, DeletionInfo{Behavior: deletionConfig.Behavior, TrashDir: deletionConfig.TrashDir}, nil
 }
 
-func SetDeletion(rt *vaultruntime.Runtime, req SetDeletionRequest) (*SetDeletionResult, error) {
-	if req.Behavior == nil && req.TrashDir == nil {
-		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one deletion field").WithSuggestion("Use --behavior or --trash-dir")
+// SetDeletion updates one or more deletion fields. At least one non-nil field is required.
+func SetDeletion(rt *vaultruntime.Runtime, behavior, trashDir *string) (*MutationResult, bool, DeletionInfo, error) {
+	if behavior == nil && trashDir == nil {
+		return nil, false, DeletionInfo{}, svcerr.New(codes.ErrInvalidInput, "specify at least one deletion field").WithSuggestion("Use --behavior or --trash-dir")
 	}
 
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, false, DeletionInfo{}, err
 	}
 
 	before := canonicalDeletionConfig(cfg)
@@ -543,17 +327,17 @@ func SetDeletion(rt *vaultruntime.Runtime, req SetDeletionRequest) (*SetDeletion
 		next = &config.DeletionConfig{}
 	}
 
-	if req.Behavior != nil {
-		value, err := normalizeDeletionBehavior(*req.Behavior)
+	if behavior != nil {
+		value, err := normalizeDeletionBehavior(*behavior)
 		if err != nil {
-			return nil, err
+			return nil, false, DeletionInfo{}, err
 		}
 		next.Behavior = value
 	}
-	if req.TrashDir != nil {
-		value, err := normalizeTrashDir(*req.TrashDir)
+	if trashDir != nil {
+		value, err := normalizeTrashDir(*trashDir)
 		if err != nil {
-			return nil, err
+			return nil, false, DeletionInfo{}, err
 		}
 		next.TrashDir = value
 	}
@@ -563,28 +347,27 @@ func SetDeletion(rt *vaultruntime.Runtime, req SetDeletionRequest) (*SetDeletion
 	if changed {
 		cfg.Deletion = next
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, false, DeletionInfo{}, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
 	deletion := cfg.GetDeletionConfig()
-	return &SetDeletionResult{
+	return &MutationResult{
 		ConfigPath: configPath,
 		Created:    !exists && changed,
 		Changed:    changed,
-		Configured: cfg.Deletion != nil,
-		Deletion:   DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir},
-	}, nil
+	}, cfg.Deletion != nil, DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir}, nil
 }
 
-func UnsetDeletion(rt *vaultruntime.Runtime, req UnsetDeletionRequest) (*UnsetDeletionResult, error) {
-	if !req.Behavior && !req.TrashDir {
-		return nil, svcerr.New(codes.ErrInvalidInput, "specify at least one deletion field to clear").WithSuggestion("Use --behavior or --trash-dir")
+// UnsetDeletion clears one or more deletion fields. At least one true field is required.
+func UnsetDeletion(rt *vaultruntime.Runtime, behavior, trashDir bool) (*MutationResult, bool, DeletionInfo, error) {
+	if !behavior && !trashDir {
+		return nil, false, DeletionInfo{}, svcerr.New(codes.ErrInvalidInput, "specify at least one deletion field to clear").WithSuggestion("Use --behavior or --trash-dir")
 	}
 
 	cfg, _, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, false, DeletionInfo{}, err
 	}
 
 	before := canonicalDeletionConfig(cfg)
@@ -593,10 +376,10 @@ func UnsetDeletion(rt *vaultruntime.Runtime, req UnsetDeletionRequest) (*UnsetDe
 		next = &config.DeletionConfig{}
 	}
 
-	if req.Behavior {
+	if behavior {
 		next.Behavior = ""
 	}
-	if req.TrashDir {
+	if trashDir {
 		next.TrashDir = ""
 	}
 
@@ -605,238 +388,221 @@ func UnsetDeletion(rt *vaultruntime.Runtime, req UnsetDeletionRequest) (*UnsetDe
 	if changed {
 		cfg.Deletion = next
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, false, DeletionInfo{}, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
 	deletion := cfg.GetDeletionConfig()
-	return &UnsetDeletionResult{
+	return &MutationResult{
 		ConfigPath: configPath,
 		Changed:    changed,
-		Configured: cfg.Deletion != nil,
-		Deletion:   DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir},
-	}, nil
+	}, cfg.Deletion != nil, DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir}, nil
 }
 
-func SetAutoReindex(rt *vaultruntime.Runtime, req SetAutoReindexRequest) (*SetAutoReindexResult, error) {
+// SetAutoReindex sets the auto_reindex flag explicitly.
+func SetAutoReindex(rt *vaultruntime.Runtime, value bool) (*MutationResult, bool, bool, error) {
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
 
-	changed := cfg.AutoReindex == nil || *cfg.AutoReindex != req.Value
+	changed := cfg.AutoReindex == nil || *cfg.AutoReindex != value
 	if changed {
-		value := req.Value
 		cfg.AutoReindex = &value
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, false, false, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
-	return &SetAutoReindexResult{
-		ConfigPath:          configPath,
-		Created:             !exists && changed,
-		Changed:             changed,
-		AutoReindex:         req.Value,
-		AutoReindexExplicit: true,
-	}, nil
+	return &MutationResult{
+		ConfigPath: configPath,
+		Created:    !exists && changed,
+		Changed:    changed,
+	}, value, true, nil
 }
 
-func UnsetAutoReindex(rt *vaultruntime.Runtime, req UnsetAutoReindexRequest) (*UnsetAutoReindexResult, error) {
+// UnsetAutoReindex clears the explicit auto_reindex setting, reverting to the default.
+func UnsetAutoReindex(rt *vaultruntime.Runtime) (*MutationResult, bool, bool, error) {
 	cfg, _, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
 
 	changed := cfg.AutoReindex != nil
 	if changed {
 		cfg.AutoReindex = nil
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, false, false, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
-	return &UnsetAutoReindexResult{
-		ConfigPath:          configPath,
-		Changed:             changed,
-		AutoReindex:         cfg.IsAutoReindexEnabled(),
-		AutoReindexExplicit: false,
-	}, nil
+	return &MutationResult{
+		ConfigPath: configPath,
+		Changed:    changed,
+	}, cfg.IsAutoReindexEnabled(), false, nil
 }
 
-func ListProtectedPrefixes(rt *vaultruntime.Runtime, req ListProtectedPrefixesRequest) (*ListProtectedPrefixesResult, error) {
+// ListProtectedPrefixes returns the normalized list of protected prefixes.
+func ListProtectedPrefixes(rt *vaultruntime.Runtime) (configPath string, exists bool, prefixes []string, err error) {
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return "", false, nil, err
 	}
-
-	return &ListProtectedPrefixesResult{
-		ConfigPath:        configPath,
-		Exists:            exists,
-		ProtectedPrefixes: normalizedProtectedPrefixes(cfg.ProtectedPrefixes),
-	}, nil
+	return configPath, exists, normalizedProtectedPrefixes(cfg.ProtectedPrefixes), nil
 }
 
-func AddProtectedPrefix(rt *vaultruntime.Runtime, req AddProtectedPrefixRequest) (*AddProtectedPrefixResult, error) {
+// AddProtectedPrefix adds a protected prefix to the list (deduplicated).
+func AddProtectedPrefix(rt *vaultruntime.Runtime, prefix string) (*MutationResult, string, []string, error) {
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 
-	prefix, err := normalizeProtectedPrefix(req.Prefix)
+	normalized, err := normalizeProtectedPrefix(prefix)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 
 	prefixes := normalizedProtectedPrefixes(cfg.ProtectedPrefixes)
 	changed := true
 	for _, existing := range prefixes {
-		if existing == prefix {
+		if existing == normalized {
 			changed = false
 			break
 		}
 	}
 	if changed {
-		prefixes = append(prefixes, prefix)
+		prefixes = append(prefixes, normalized)
 		sort.Strings(prefixes)
 		cfg.ProtectedPrefixes = prefixes
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, "", nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
-	return &AddProtectedPrefixResult{
-		ConfigPath:        configPath,
-		Created:           !exists && changed,
-		Changed:           changed,
-		Prefix:            prefix,
-		ProtectedPrefixes: prefixes,
-	}, nil
+	return &MutationResult{
+		ConfigPath: configPath,
+		Created:    !exists && changed,
+		Changed:    changed,
+	}, normalized, prefixes, nil
 }
 
-func RemoveProtectedPrefix(rt *vaultruntime.Runtime, req RemoveProtectedPrefixRequest) (*RemoveProtectedPrefixResult, error) {
+// RemoveProtectedPrefix removes a protected prefix from the list.
+func RemoveProtectedPrefix(rt *vaultruntime.Runtime, prefix string) (*MutationResult, string, []string, error) {
 	cfg, _, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 
-	prefix, err := normalizeProtectedPrefix(req.Prefix)
+	normalized, err := normalizeProtectedPrefix(prefix)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 
 	prefixes := normalizedProtectedPrefixes(cfg.ProtectedPrefixes)
 	next := make([]string, 0, len(prefixes))
 	found := false
 	for _, existing := range prefixes {
-		if existing == prefix {
+		if existing == normalized {
 			found = true
 			continue
 		}
 		next = append(next, existing)
 	}
 	if !found {
-		return nil, svcerr.New(codes.ErrPrefixNotFound, fmt.Sprintf("protected prefix '%s' not found", prefix)).WithSuggestion("Run 'rvn vault config protected-prefixes list' to see configured prefixes")
+		return nil, "", nil, svcerr.New(codes.ErrPrefixNotFound, fmt.Sprintf("protected prefix '%s' not found", normalized)).WithSuggestion("Run 'rvn vault config protected-prefixes list' to see configured prefixes")
 	}
 
 	cfg.ProtectedPrefixes = next
 	if err := save(rt, cfg); err != nil {
-		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+		return nil, "", nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 	}
 
-	return &RemoveProtectedPrefixResult{
-		ConfigPath:        configPath,
-		Changed:           true,
-		Removed:           prefix,
-		ProtectedPrefixes: next,
-	}, nil
-}
-
-func ListExclude(rt *vaultruntime.Runtime, req ListExcludeRequest) (*ListExcludeResult, error) {
-	cfg, exists, configPath, err := load(rt)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ListExcludeResult{
+	return &MutationResult{
 		ConfigPath: configPath,
-		Exists:     exists,
-		Exclude:    normalizedExcludePatterns(cfg.Exclude),
-	}, nil
+		Changed:    true,
+	}, normalized, next, nil
 }
 
-func AddExclude(rt *vaultruntime.Runtime, req AddExcludeRequest) (*AddExcludeResult, error) {
+// ListExclude returns the normalized list of exclude patterns.
+func ListExclude(rt *vaultruntime.Runtime) (configPath string, exists bool, patterns []string, err error) {
 	cfg, exists, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return "", false, nil, err
+	}
+	return configPath, exists, normalizedExcludePatterns(cfg.Exclude), nil
+}
+
+// AddExclude adds an exclude pattern to the list (deduplicated).
+func AddExclude(rt *vaultruntime.Runtime, pattern string) (*MutationResult, string, []string, error) {
+	cfg, exists, configPath, err := load(rt)
+	if err != nil {
+		return nil, "", nil, err
 	}
 
-	pattern, err := normalizeExcludePattern(req.Pattern)
+	normalized, err := normalizeExcludePattern(pattern)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 
 	patterns := normalizedExcludePatterns(cfg.Exclude)
 	changed := true
 	for _, existing := range patterns {
-		if existing == pattern {
+		if existing == normalized {
 			changed = false
 			break
 		}
 	}
 	if changed {
-		patterns = append(patterns, pattern)
+		patterns = append(patterns, normalized)
 		cfg.Exclude = patterns
 		if err := save(rt, cfg); err != nil {
-			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+			return nil, "", nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 		}
 	}
 
-	return &AddExcludeResult{
+	return &MutationResult{
 		ConfigPath: configPath,
 		Created:    !exists && changed,
 		Changed:    changed,
-		Pattern:    pattern,
-		Exclude:    patterns,
-	}, nil
+	}, normalized, patterns, nil
 }
 
-func RemoveExclude(rt *vaultruntime.Runtime, req RemoveExcludeRequest) (*RemoveExcludeResult, error) {
+// RemoveExclude removes an exclude pattern from the list.
+func RemoveExclude(rt *vaultruntime.Runtime, pattern string) (*MutationResult, string, []string, error) {
 	cfg, _, configPath, err := load(rt)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 
-	pattern, err := normalizeExcludePattern(req.Pattern)
+	normalized, err := normalizeExcludePattern(pattern)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 
 	patterns := normalizedExcludePatterns(cfg.Exclude)
 	next := make([]string, 0, len(patterns))
 	found := false
 	for _, existing := range patterns {
-		if existing == pattern {
+		if existing == normalized {
 			found = true
 			continue
 		}
 		next = append(next, existing)
 	}
 	if !found {
-		return nil, svcerr.New(codes.ErrPrefixNotFound, fmt.Sprintf("exclude pattern %q not found", pattern)).WithSuggestion("Run 'rvn vault config exclude list' to see configured patterns")
+		return nil, "", nil, svcerr.New(codes.ErrPrefixNotFound, fmt.Sprintf("exclude pattern %q not found", normalized)).WithSuggestion("Run 'rvn vault config exclude list' to see configured patterns")
 	}
 
 	cfg.Exclude = next
 	if err := save(rt, cfg); err != nil {
-		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
+		return nil, "", nil, svcerr.Wrap(codes.ErrFileWrite, "failed to save vault config", err)
 	}
 
-	return &RemoveExcludeResult{
+	return &MutationResult{
 		ConfigPath: configPath,
 		Changed:    true,
-		Removed:    pattern,
-		Exclude:    next,
-	}, nil
+	}, normalized, next, nil
 }
 
 func load(rt *vaultruntime.Runtime) (*config.VaultConfig, bool, string, error) {
