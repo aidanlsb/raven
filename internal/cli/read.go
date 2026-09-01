@@ -53,25 +53,6 @@ func prepareReadArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 	return nil, err == nil, err
 }
 
-func buildReadArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	raw, _ := cmd.Flags().GetBool("raw")
-	lines, _ := cmd.Flags().GetBool("lines")
-	startLine, _ := cmd.Flags().GetInt("start-line")
-	endLine, _ := cmd.Flags().GetInt("end-line")
-	sections, _ := cmd.Flags().GetBool("sections")
-	if lines || startLine > 0 || endLine > 0 {
-		raw = true
-	}
-	return map[string]interface{}{
-		"reference":  args[0],
-		"raw":        raw,
-		"lines":      lines,
-		"start-line": startLine,
-		"end-line":   endLine,
-		"sections":   sections,
-	}, nil
-}
-
 func handleCanonicalReadFailure(result commandexec.Result) error {
 	if result.Error == nil {
 		return nil

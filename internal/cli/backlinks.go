@@ -40,7 +40,6 @@ func prepareBacklinksArgs(cmd *cobra.Command, args []string) ([]string, bool, er
 	return prepareInteractiveReferenceArgs(args, "backlinks", "reference", "backlinks> ", "Select a reference for backlinks (Esc to cancel)")
 }
 
-
 func handleBacklinksFailure(cmd *cobra.Command, result commandexec.Result) error {
 	return handleAmbiguousReferenceRetry(cmd, result, ambiguousReferenceRetryOptions{
 		CommandID: "backlinks",

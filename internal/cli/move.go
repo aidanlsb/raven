@@ -147,17 +147,6 @@ func renderMoveRefFieldUpdates(updates []commandpayload.MoveRefFieldUpdate, prev
 	}
 }
 
-func sourceDestinationArgs(source, destination string) map[string]interface{} {
-	args := map[string]interface{}{}
-	if strings.TrimSpace(source) != "" {
-		args["source"] = source
-	}
-	if strings.TrimSpace(destination) != "" {
-		args["destination"] = destination
-	}
-	return args
-}
-
 func cloneArgsMap(args map[string]interface{}) map[string]interface{} {
 	out := make(map[string]interface{}, len(args))
 	for key, value := range args {

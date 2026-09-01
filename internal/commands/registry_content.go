@@ -590,6 +590,7 @@ and a REF_TARGET_MISSING warning per missing target.`,
 		},
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
+			{Name: "fields", Description: "Legacy MCP parameter (use field instead)", Type: FlagTypeKeyValue, ArgsKey: "field"},
 			{Name: "fields-json", Description: "Fields to update as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "stdin", Description: "Read references from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, bulk shows preview only)", Type: FlagTypeBool},

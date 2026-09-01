@@ -36,27 +36,6 @@ var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
 })
 
 func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	// Test compatibility: merge global flag values
-	if _, hasField := args["field"]; !hasField && len(upsertFieldFlags) > 0 {
-		parsed, _ := parseKeyValueArgs("field", upsertFieldFlags)
-		args["field"] = parsed
-	}
-	if _, hasFieldsJSON := args["fields-json"]; !hasFieldsJSON && upsertFieldJSON != "" {
-		var decoded interface{}
-		if err := json.Unmarshal([]byte(upsertFieldJSON), &decoded); err == nil {
-			args["fields-json"] = decoded
-		}
-	}
-	if _, hasContent := args["content"]; !hasContent && upsertContent != "" {
-		args["content"] = upsertContent
-	}
-	if _, hasContentFile := args["content-file"]; !hasContentFile && upsertContentFile != "" {
-		args["content-file"] = upsertContentFile
-	}
-	if _, hasObjPath := args["object-path"]; !hasObjPath && upsertObjectPath != "" {
-		args["object-path"] = upsertObjectPath
-	}
-
 	// Validate title
 	title := stringValue(args["title"])
 	if err := validateObjectTitle(title); err != nil {
@@ -112,18 +91,6 @@ func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
 		promptCreateMissingRefsFromResult(getVaultPath(), result)
 	}
 	return nil
-}
-
-func parseFieldFlags(flags []string) (map[string]string, error) {
-	fields := make(map[string]string, len(flags))
-	for _, f := range flags {
-		parts := strings.SplitN(f, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid field format: %s", f)
-		}
-		fields[parts[0]] = parts[1]
-	}
-	return fields, nil
 }
 
 func init() {

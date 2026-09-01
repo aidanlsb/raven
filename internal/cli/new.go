@@ -58,25 +58,6 @@ func prepareNewArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
 }
 
 func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	// Test compatibility: merge global flag values if args don't have them
-	// (tests set globals but bypass Cobra flag parsing)
-	if _, hasField := args["field"]; !hasField && len(newFieldFlags) > 0 {
-		parsed, _ := parseKeyValueArgs("field", newFieldFlags)
-		args["field"] = parsed
-	}
-	if _, hasFieldsJSON := args["fields-json"]; !hasFieldsJSON && newFieldJSON != "" {
-		var decoded interface{}
-		if err := json.Unmarshal([]byte(newFieldJSON), &decoded); err == nil {
-			args["fields-json"] = decoded
-		}
-	}
-	if _, hasObjPath := args["object-path"]; !hasObjPath && newObjectPath != "" {
-		args["object-path"] = newObjectPath
-	}
-	if _, hasTemplate := args["template"]; !hasTemplate && newTemplate != "" {
-		args["template"] = newTemplate
-	}
-
 	// Validate title
 	title := stringValue(args["title"])
 	if err := validateObjectTitle(title); err != nil {
@@ -274,17 +255,6 @@ func stringMapToAny(values map[string]string) map[string]interface{} {
 		out[key] = value
 	}
 	return out
-}
-
-func parseFieldJSONObject(raw string) (map[string]interface{}, error) {
-	if strings.TrimSpace(raw) == "" {
-		return nil, nil
-	}
-	var out map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 // completeTypes provides shell completion for type names

@@ -29,16 +29,7 @@ var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
 	},
 })
 
-
 func invokeAdd(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	// Test compatibility: merge global flag values
-	if _, hasTo := args["to"]; !hasTo && addToFlag != "" {
-		args["to"] = addToFlag
-	}
-	if _, hasStdin := args["stdin"]; !hasStdin {
-		args["stdin"] = addStdin
-	}
-
 	return executeCanonicalRequest(commandexec.Request{
 		CommandID: commandID,
 		VaultPath: vaultPath,
@@ -68,14 +59,6 @@ func renderAddResult(_ *cobra.Command, result commandexec.Result) error {
 	}
 	promptCreateMissingRefsFromResult(getVaultPath(), result)
 	return nil
-}
-
-func buildCreateObjectCommand(typeName, targetRaw string) string {
-	title := filepath.Base(strings.TrimSpace(targetRaw))
-	if title == "" || title == "." || title == "/" {
-		title = "new-object"
-	}
-	return fmt.Sprintf("rvn new %s %q --json", typeName, title)
 }
 
 func init() {

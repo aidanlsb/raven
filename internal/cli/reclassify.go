@@ -44,30 +44,6 @@ var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 
 
 func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	// Test compatibility: merge global flag values
-	if _, hasField := args["field"]; !hasField && len(reclassifyFieldFlags) > 0 {
-		parsed, _ := parseKeyValueArgs("field", reclassifyFieldFlags)
-		args["field"] = parsed
-	}
-	if _, hasFieldsJSON := args["fields-json"]; !hasFieldsJSON && reclassifyFieldJSON != "" {
-		var decoded interface{}
-		if err := json.Unmarshal([]byte(reclassifyFieldJSON), &decoded); err == nil {
-			args["fields-json"] = decoded
-		}
-	}
-	if _, hasNoMove := args["no-move"]; !hasNoMove {
-		args["no-move"] = reclassifyNoMove
-	}
-	if _, hasUpdateRefs := args["update-refs"]; !hasUpdateRefs {
-		args["update-refs"] = reclassifyUpdateRefs
-	}
-	if _, hasForce := args["force"]; !hasForce {
-		args["force"] = reclassifyForce
-	}
-	if _, hasStdin := args["stdin"]; !hasStdin {
-		args["stdin"] = reclassifyStdin
-	}
-
 	if boolValue(args["stdin"]) {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,

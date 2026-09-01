@@ -57,10 +57,10 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 				args = preparedArgs
 			}
 
-		argsMap, err := buildCanonicalArgsForMeta(meta, cmd, args)
-		if err != nil {
-			return err
-		}
+			argsMap, err := buildCanonicalArgsForMeta(meta, cmd, args)
+			if err != nil {
+				return err
+			}
 
 			vaultPath := ""
 			if opts.VaultPath != nil {
