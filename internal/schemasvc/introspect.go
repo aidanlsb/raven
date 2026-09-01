@@ -97,24 +97,6 @@ type CoreTypeResult struct {
 	Core CoreTypeSchema `json:"core"`
 }
 
-type CommandsResult struct {
-	Commands map[string]CommandSchema `json:"commands"`
-}
-
-type CommandSchema struct {
-	Description string                `json:"description"`
-	Args        []string              `json:"args,omitempty"`
-	Flags       map[string]FlagSchema `json:"flags,omitempty"`
-	Examples    []string              `json:"examples,omitempty"`
-	UseCases    []string              `json:"use_cases,omitempty"`
-}
-
-type FlagSchema struct {
-	Type        string   `json:"type"`
-	Description string   `json:"description"`
-	Examples    []string `json:"examples,omitempty"`
-}
-
 func FullSchema(rt *vaultruntime.Runtime) (*SchemaResult, error) {
 	sch, err := runtimeSchema(rt, "Run 'rvn init' to create a schema")
 	if err != nil {
