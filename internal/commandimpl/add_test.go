@@ -213,7 +213,9 @@ title: Example
 		Args: map[string]any{
 			"stdin":      true,
 			"references": []interface{}{"note/example", "note/example#tasks"},
-			"fields":     []string{"title=Renamed"},
+			"field": map[string]interface{}{
+				"title": "Renamed",
+			},
 		},
 	})
 	if !result.OK {

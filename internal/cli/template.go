@@ -11,7 +11,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/shellquote"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/templatesvc"
@@ -40,7 +39,7 @@ var templateListCmd = newCanonicalLeafCommand("template_list", canonicalLeafOpti
 
 var templateWriteCmd = newCanonicalLeafCommand("template_write", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	BuildArgs:   buildTemplateWriteArgs,
+	Invoke:      invokeTemplateWrite,
 	RenderHuman: renderTemplateWrite,
 })
 
@@ -56,28 +55,22 @@ func init() {
 	rootCmd.AddCommand(templateCmd)
 }
 
-func buildTemplateWriteArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+func invokeTemplateWrite(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	edit, _ := cmd.Flags().GetBool("edit")
-	hasContent := cmd.Flags().Changed("content")
-	if edit && hasContent {
-		return nil, handleErrorMsg(ErrInvalidInput, "--edit and --content cannot be used together", "Use --edit for interactive editing or --content for scripted writes")
-	}
-	if !edit && !hasContent {
-		return nil, handleErrorMsg(ErrMissingArgument, "--content or --edit is required", "Provide template markdown with --content or open an editor with --edit")
-	}
-	meta, _ := commands.EffectiveMeta("template_write")
-	argsMap, err := buildCanonicalArgsForMeta(meta, cmd, args)
-	if err != nil {
-		return nil, err
-	}
 	if edit {
-		content, err := editTemplateContent(stringValue(argsMap["path"]))
+		content, err := editTemplateContent(stringValue(args["path"]))
 		if err != nil {
-			return nil, err
+			return commandexec.Failure("FILE_READ_ERROR", "editor failed", err, "")
 		}
-		argsMap["content"] = content
+		args["content"] = content
+	} else if !cmd.Flags().Changed("content") {
+		return commandexec.Failure("MISSING_ARGUMENT", "--content or --edit is required", nil, "Provide template markdown with --content or open an editor with --edit")
 	}
-	return argsMap, nil
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+	})
 }
 
 func editTemplateContent(pathArg string) (string, error) {

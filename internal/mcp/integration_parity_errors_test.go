@@ -37,7 +37,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 				"alias": "ghost",
 			},
 		})
-		cliResult := vCLI.RunCLI("set", "people/missing", "alias=ghost")
+		cliResult := vCLI.RunCLI("set", "people/missing", "--field", "alias=ghost")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})
@@ -62,7 +62,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 				"alias": "ambiguous",
 			},
 		})
-		cliResult := vCLI.RunCLI("set", "alice", "alias=ambiguous")
+		cliResult := vCLI.RunCLI("set", "alice", "--field", "alias=ambiguous")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})

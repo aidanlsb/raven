@@ -14,7 +14,6 @@ var backlinksCmd = newCanonicalLeafCommand("backlinks", canonicalLeafOptions{
 	VaultPath:      getVaultPath,
 	Args:           validateBacklinksArgs,
 	Prepare:        prepareBacklinksArgs,
-	BuildArgs:      buildBacklinksArgs,
 	HandleErrorCmd: handleBacklinksFailure,
 	RenderHuman:    renderBacklinks,
 })
@@ -39,26 +38,6 @@ func prepareBacklinksArgs(cmd *cobra.Command, args []string) ([]string, bool, er
 		return args, false, nil
 	}
 	return prepareInteractiveReferenceArgs(args, "backlinks", "reference", "backlinks> ", "Select a reference for backlinks (Esc to cancel)")
-}
-
-func buildBacklinksArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	stdin, _ := cmd.Flags().GetBool("stdin")
-	if stdin {
-		references, err := ReadReferencesFromStdin()
-		if err != nil {
-			return nil, err
-		}
-		if len(references) == 0 {
-			return nil, fmt.Errorf("no references provided on stdin")
-		}
-		return map[string]interface{}{
-			"stdin":      true,
-			"references": references,
-		}, nil
-	}
-	return map[string]interface{}{
-		"reference": args[0],
-	}, nil
 }
 
 func handleBacklinksFailure(cmd *cobra.Command, result commandexec.Result) error {

@@ -19,20 +19,23 @@ type Meta struct {
 	Flags               []FlagMeta // Command flags
 	BulkStdinArgName    string     // Canonical args key used for bulk IDs when --stdin is available
 	BulkStdinArgAliases []string   // Backward-compatible aliases accepted for the bulk ID arg
+	VariadicJoin        bool       // When true, join variadic args with spaces (e.g., docs search)
+	MutexGroups         [][]string // Mutually exclusive flag groups (e.g., [["type", "core"], ["content", "content-file"]])
 	Examples            []string   // Usage examples
 	UseCases            []string   // Agent use cases (for MCP hints)
 }
 
 // ArgMeta defines a positional argument.
 type ArgMeta struct {
-	Name        string   // Argument name
-	Description string   // Description
-	Required    bool     // Is this argument required for canonical/MCP invocation?
-	CLIOptional bool     `json:"-"` // Can interactive CLI omit this and prompt/pick instead?
-	Variadic    bool     `json:"-"` // Is this a repeated positional CLI argument represented as a string array canonically?
-	Completions []string // Static completions (if any)
-	DynamicComp string   // Dynamic completion type: "types", "traits", "files"
-	Examples    []string `json:"-"` // Example values
+	Name             string   // Argument name
+	Description      string   // Description
+	Required         bool     // Is this argument required for canonical/MCP invocation?
+	CLIOptional      bool     `json:"-"` // Can interactive CLI omit this and prompt/pick instead?
+	Variadic         bool     `json:"-"` // Is this a repeated positional CLI argument represented as a string array canonically?
+	StdinIndependent bool     `json:"-"` // When true, this arg is still consumed from positionals even with --stdin
+	Completions      []string // Static completions (if any)
+	DynamicComp      string   // Dynamic completion type: "types", "traits", "files"
+	Examples         []string `json:"-"` // Example values
 }
 
 // FlagMeta defines a command flag.
@@ -44,6 +47,7 @@ type FlagMeta struct {
 	Default     string   // Default value
 	Required    bool     // Whether callers must provide the flag
 	Examples    []string // Example values
+	ArgsKey     string   // Override the args map key (defaults to Name if empty)
 }
 
 // FlagType represents the type of a flag.

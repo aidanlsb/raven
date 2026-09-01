@@ -138,7 +138,7 @@ Teach this once, clearly, while proposing the model. The decision rule: **Is thi
 | How many per object | usually one | many |
 | Where it lives | frontmatter (YAML) | inline in the body |
 | Written as | `status: active` | `@todo`, `@due(2026-02-01)` |
-| Set / updated with | `rvn set <reference> status=active --json` | `rvn add "@todo ..." --json` |
+| Set / updated with | `rvn set <reference> --field status=active --json` | `rvn add "@todo ..." --json` |
 | Good for | status, owner, stage, date, category | tasks, decisions, highlights, priorities |
 | Example | a project's `status`, a meeting's `date` | `- @todo(...) email the vendor` on a bullet |
 
@@ -208,7 +208,7 @@ Use the user's **real** projects, people, and tasks. Do not invent "Demo User" /
 ```bash
 rvn new project "<a real project they named>" --json
 rvn new person "<a real collaborator>" --json
-rvn set project/<their-project-id> status=active --json
+rvn set project/<their-project-id> --field status=active --json
 rvn read project/<their-project-id> --json
 ```
 
@@ -251,7 +251,7 @@ rvn outlinks YYYY-MM-DD --json
 ```
 
 Teach the two write homes concretely by contrast:
-- Update a **field**: `rvn set project/<their-project-id> status=paused --json`.
+- Update a **field**: `rvn set project/<their-project-id> --field status=paused --json`.
 - Mark a **line** with a **trait**: `rvn add "@todo review the plan" --json`.
 
 Then verify health:

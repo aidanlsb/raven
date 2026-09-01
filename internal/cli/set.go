@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -15,8 +14,6 @@ import (
 
 var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 	VaultPath: getVaultPath,
-	Args:      cobra.ArbitraryArgs,
-	BuildArgs: buildSetArgs,
 	Invoke:    invokeSet,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		switch result.Data.(type) {
@@ -27,109 +24,18 @@ var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 	},
 })
 
-func buildSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	stdin, _ := cmd.Flags().GetBool("stdin")
-	fieldsJSON, _ := cmd.Flags().GetString("fields-json")
-
-	if stdin {
-		updates, err := parseSetFieldArgs(args)
-		if err != nil {
-			return nil, err
-		}
-		typedUpdates, err := fieldmutation.ParseFieldValuesJSON(fieldsJSON)
-		if err != nil {
-			return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
-		}
-		fieldJSONRaw, err := parseFieldJSONObject(fieldsJSON)
-		if err != nil {
-			return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
-		}
-		if len(updates) == 0 && len(typedUpdates) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set --stdin field=value... or --fields-json '{...}'")
-		}
-
-		fileIDs, sectionIDs, err := ReadIDsFromStdin()
-		if err != nil {
-			return nil, handleError(ErrInternal, err, "")
-		}
-		ids := append(fileIDs, sectionIDs...)
-		if len(ids) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no references provided via stdin", "Pipe references to stdin, one per line")
-		}
-
-		argsMap := map[string]interface{}{
-			"stdin":      true,
-			"references": stringsToAny(ids),
-		}
-		if len(updates) > 0 {
-			argsMap["fields"] = stringMapToAny(updates)
-		}
-		if len(fieldJSONRaw) > 0 {
-			argsMap["fields-json"] = fieldJSONRaw
-		}
-		return argsMap, nil
-	}
-
-	if len(args) < 1 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires reference", "Usage: rvn set <reference> field=value...")
-	}
-
-	reference := args[0]
-	fieldArgs := args[1:]
-	updates, err := parseSetFieldArgs(fieldArgs)
-	if err != nil {
-		return nil, err
-	}
-
-	typedUpdates, err := fieldmutation.ParseFieldValuesJSON(fieldsJSON)
-	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
-	}
-	fieldJSONRaw, err := parseFieldJSONObject(fieldsJSON)
-	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
-	}
-
-	if len(updates) == 0 && len(typedUpdates) == 0 {
-		return nil, handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set <reference> field=value... or --fields-json '{...}'")
-	}
-
-	argsMap := map[string]interface{}{
-		"reference": reference,
-	}
-	if len(updates) > 0 {
-		argsMap["fields"] = stringMapToAny(updates)
-	}
-	if len(fieldJSONRaw) > 0 {
-		argsMap["fields-json"] = fieldJSONRaw
-	}
-	return argsMap, nil
-}
-
-func parseSetFieldArgs(args []string) (map[string]string, error) {
-	updates := make(map[string]string)
-	for _, arg := range args {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 {
-			return nil, handleErrorMsg(ErrInvalidInput,
-				fmt.Sprintf("invalid field format: %s", arg),
-				"Use format: field=value")
-		}
-		updates[parts[0]] = parts[1]
-	}
-	return updates, nil
-}
-
 func invokeSet(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	confirm, _ := cmd.Flags().GetBool("confirm")
+	preview := false
 	if dryRun, _ := cmd.Flags().GetBool("dry-run"); dryRun {
-		args["dry-run"] = true
+		preview = true
 	}
 	return executeCanonicalRequest(commandexec.Request{
 		CommandID: commandID,
 		VaultPath: vaultPath,
 		Args:      args,
 		Confirm:   confirm,
+		Preview:   preview,
 	})
 }
 

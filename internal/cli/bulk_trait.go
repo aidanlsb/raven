@@ -19,14 +19,6 @@ type TraitBulkPreview = traitsvc.BulkPreview
 
 type TraitBulkSummary = traitsvc.BulkSummary
 
-func parseTraitUpdateValueArgs(args []string, usageHint string) (string, error) {
-	value := strings.TrimSpace(strings.Join(args, " "))
-	if value == "" {
-		return "", handleErrorMsg(ErrMissingArgument, "no value specified", usageHint)
-	}
-	return value, nil
-}
-
 // printTraitBulkPreview prints a human-readable preview of trait bulk operations.
 func printTraitBulkPreview(preview *TraitBulkPreview) {
 	if len(preview.Items) == 0 {

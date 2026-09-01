@@ -51,7 +51,7 @@ status: active
 	addResult.MustFailWithMessage(t, "protected")
 	v.AssertFileNotContains("private/notes.md", "Protected note")
 
-	setResult := v.RunCLI("set", "private/task.md", "status=done")
+	setResult := v.RunCLI("set", "private/task.md", "--field", "status=done")
 	setResult.MustFail(t, "VALIDATION_FAILED")
 	setResult.MustFailWithMessage(t, "protected")
 	v.AssertFileContains("private/task.md", "status: active")

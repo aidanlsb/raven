@@ -32,7 +32,7 @@ var querySavedGetCmd = newCanonicalLeafCommand("query_saved_get", canonicalLeafO
 
 var querySavedSetCmd = newCanonicalLeafCommand("query_saved_set", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	BuildArgs:   buildQuerySavedSetArgs,
+	Invoke:      invokeQuerySavedSet,
 	RenderHuman: renderQuerySavedSet,
 })
 
@@ -41,19 +41,17 @@ var querySavedRemoveCmd = newCanonicalLeafCommand("query_saved_remove", canonica
 	RenderHuman: renderQuerySavedRemove,
 })
 
-func buildQuerySavedSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+func invokeQuerySavedSet(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	declaredArgs, err := normalizeSavedQueryArgsForCommand(cmd)
 	if err != nil {
-		return nil, err
+		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "")
 	}
-	description, _ := cmd.Flags().GetString("description")
-	argsMap := map[string]interface{}{
-		"name":         args[0],
-		"query_string": args[1],
-		"arg":          declaredArgs,
-		"description":  description,
-	}
-	return argsMap, nil
+	args["arg"] = stringsToAny(declaredArgs)
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+	})
 }
 
 func renderQuerySavedList(_ *cobra.Command, result commandexec.Result) error {

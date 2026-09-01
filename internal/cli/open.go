@@ -14,7 +14,6 @@ var openCmd = newCanonicalLeafCommand("open", canonicalLeafOptions{
 	VaultPath:      getVaultPath,
 	Args:           validateOpenArgs,
 	Prepare:        prepareOpenArgs,
-	BuildArgs:      buildOpenArgs,
 	HandleErrorCmd: handleCanonicalOpenFailure,
 	HandleResult:   handleOpenResult,
 })
@@ -64,31 +63,6 @@ func prepareOpenArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 		interactivePickerMissingArgSuggestion("open", "rvn open <reference>"),
 	)
 	return nil, err == nil, err
-}
-
-func buildOpenArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	stdin, _ := cmd.Flags().GetBool("stdin")
-	if stdin {
-		ids, sectionIDs, err := ReadIDsFromStdin()
-		if err != nil {
-			return nil, err
-		}
-		if len(ids) == 0 && len(sectionIDs) == 0 {
-			return nil, fmt.Errorf("no references provided on stdin")
-		}
-
-		allRefs := make([]string, 0, len(ids)+len(sectionIDs))
-		allRefs = append(allRefs, ids...)
-		allRefs = append(allRefs, sectionIDs...)
-		return map[string]interface{}{
-			"stdin":      true,
-			"references": allRefs,
-		}, nil
-	}
-
-	return map[string]interface{}{
-		"reference": args[0],
-	}, nil
 }
 
 func handleCanonicalOpenFailure(cmd *cobra.Command, result commandexec.Result) error {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -54,7 +55,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return prepareBacklinksArgs(backlinksCmd, args)
 			},
 			build: func(args []string) (map[string]interface{}, error) {
-				return buildBacklinksArgs(backlinksCmd, args)
+				meta, _ := commands.EffectiveMeta("backlinks")
+				return buildCanonicalArgsForMeta(meta, backlinksCmd, args)
 			},
 			prompt:   "backlinks> ",
 			argKey:   "reference",
@@ -66,7 +68,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return prepareOutlinksArgs(outlinksCmd, args)
 			},
 			build: func(args []string) (map[string]interface{}, error) {
-				return buildOutlinksArgs(outlinksCmd, args)
+				meta, _ := commands.EffectiveMeta("outlinks")
+				return buildCanonicalArgsForMeta(meta, outlinksCmd, args)
 			},
 			prompt:   "outlinks> ",
 			argKey:   "reference",
@@ -78,7 +81,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return prepareOpenArgs(openCmd, args)
 			},
 			build: func(args []string) (map[string]interface{}, error) {
-				return buildOpenArgs(openCmd, args)
+				meta, _ := commands.EffectiveMeta("open")
+				return buildCanonicalArgsForMeta(meta, openCmd, args)
 			},
 			prompt:   "open> ",
 			argKey:   "reference",
@@ -90,7 +94,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return prepareResolveArgs(resolveCmd, args)
 			},
 			build: func(args []string) (map[string]interface{}, error) {
-				return buildResolveArgs(resolveCmd, args)
+				meta, _ := commands.EffectiveMeta("resolve")
+				return buildCanonicalArgsForMeta(meta, resolveCmd, args)
 			},
 			prompt:   "resolve> ",
 			argKey:   "reference",

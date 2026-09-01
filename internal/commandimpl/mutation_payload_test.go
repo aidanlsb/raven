@@ -45,7 +45,9 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 		VaultPath: v.Path,
 		Args: map[string]any{
 			"reference": "projects/typed-payload",
-			"fields":    []string{"status=active"},
+			"field": map[string]interface{}{
+				"status": "active",
+			},
 		},
 	})
 	requirePayloadType[commandpayload.SetResult](t, result)

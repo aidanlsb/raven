@@ -14,9 +14,8 @@ import (
 
 var readCmd = newCanonicalLeafCommand("read", canonicalLeafOptions{
 	VaultPath:      getVaultPath,
-	Args:           cobra.MaximumNArgs(1),
 	Prepare:        prepareReadArgs,
-	BuildArgs:      buildReadArgs,
+	Invoke:         invokeRead,
 	HandleErrorCmd: handleCanonicalReadFailureCmd,
 	RenderHuman:    renderRead,
 })
@@ -54,30 +53,26 @@ func prepareReadArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 	return nil, err == nil, err
 }
 
-func buildReadArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	raw, _ := cmd.Flags().GetBool("raw")
-	lines, _ := cmd.Flags().GetBool("lines")
-	startLine, _ := cmd.Flags().GetInt("start-line")
-	endLine, _ := cmd.Flags().GetInt("end-line")
-	sections, _ := cmd.Flags().GetBool("sections")
-	if lines || startLine > 0 || endLine > 0 {
-		raw = true
-	}
-	return map[string]interface{}{
-		"reference":  args[0],
-		"raw":        raw,
-		"lines":      lines,
-		"start-line": startLine,
-		"end-line":   endLine,
-		"sections":   sections,
-	}, nil
-}
-
 func handleCanonicalReadFailure(result commandexec.Result) error {
 	if result.Error == nil {
 		return nil
 	}
 	return handleErrorWithDetails(mapReadCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+}
+
+func invokeRead(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Derive raw=true when lines/start-line/end-line are set
+	lines, _ := cmd.Flags().GetBool("lines")
+	startLine, _ := cmd.Flags().GetInt("start-line")
+	endLine, _ := cmd.Flags().GetInt("end-line")
+	if lines || startLine > 0 || endLine > 0 {
+		args["raw"] = true
+	}
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+	})
 }
 
 func handleCanonicalReadFailureCmd(cmd *cobra.Command, result commandexec.Result) error {
@@ -86,7 +81,8 @@ func handleCanonicalReadFailureCmd(cmd *cobra.Command, result commandexec.Result
 		Prompt:    "read/ref> ",
 		Fallback:  handleCanonicalReadFailure,
 		BuildArgs: func(cmd *cobra.Command, selected string) (map[string]interface{}, error) {
-			return buildReadArgs(cmd, []string{selected})
+			// Picker path - just return the selected reference; invokeRead will handle raw logic
+			return map[string]interface{}{"reference": selected}, nil
 		},
 		Render: renderRead,
 	})

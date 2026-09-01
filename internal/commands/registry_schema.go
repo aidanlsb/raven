@@ -37,6 +37,7 @@ Use this command group for template file lifecycle operations:
 	"template_write": {
 		Name:        "template write",
 		Description: "Create or update a template file",
+		MutexGroups: [][]string{{"edit", "content"}},
 		LongDesc: `Create or update a template file under directories.template.
 
 This command replaces the full file body with --content.
@@ -590,6 +591,7 @@ Raven writes object frontmatter separately when applying templates.`,
 		Name:        "schema template bind",
 		CLIPath:     []string{"schema", "template", "bind"},
 		Description: "Bind a schema template ID to a type or core type, optionally as its default",
+		MutexGroups: [][]string{{"type", "core"}},
 		LongDesc: `Bind a schema template ID to a type or core type.
 
 Use --default to also make the template the target's default. This also changes
@@ -612,6 +614,7 @@ the default when the template is already bound.`,
 		Name:        "schema template unbind",
 		CLIPath:     []string{"schema", "template", "unbind"},
 		Description: "Unbind a schema template ID from a type or core type, clearing its default if requested",
+		MutexGroups: [][]string{{"type", "core"}},
 		LongDesc: `Unbind a schema template ID from a type or core type.
 
 Unbinding the target's current default is blocked unless --clear-default is

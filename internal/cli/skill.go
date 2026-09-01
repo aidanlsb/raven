@@ -27,8 +27,6 @@ var (
 )
 
 var skillInstallCmd = newCanonicalLeafCommand("skill_install", canonicalLeafOptions{
-	Args:        cobra.ArbitraryArgs,
-	BuildArgs:   buildSkillInstallArgs,
 	Invoke:      invokeSkillInstall,
 	RenderHuman: renderSkillInstall,
 	FlagBindings: map[string]interface{}{
@@ -52,20 +50,6 @@ func init() {
 	skillCmd.AddCommand(skillRemoveCmd)
 	skillCmd.AddCommand(skillDoctorCmd)
 	rootCmd.AddCommand(skillCmd)
-}
-
-func buildSkillInstallArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
-	built := map[string]interface{}{}
-	if len(args) > 0 {
-		built["names"] = stringsToAny(args)
-	}
-	if skillInstallScope != "" {
-		built["scope"] = skillInstallScope
-	}
-	if skillInstallDest != "" {
-		built["dest"] = skillInstallDest
-	}
-	return built, nil
 }
 
 func invokeSkillInstall(_ *cobra.Command, commandID, _ string, args map[string]interface{}) commandexec.Result {

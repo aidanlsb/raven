@@ -33,7 +33,7 @@ func TestIntegration_ObjectLifecycle(t *testing.T) {
 	result.AssertResultCount(t, "items", 1)
 
 	// Update the person's email (set uses positional field=value args)
-	result = v.RunCLI("set", "people/alice", "email=alice@newdomain.com")
+	result = v.RunCLI("set", "people/alice", "--field", "email=alice@newdomain.com")
 	result.MustSucceed(t)
 	v.AssertFileContains("people/alice.md", "email: alice@newdomain.com")
 
@@ -303,7 +303,7 @@ func TestIntegration_TemplateWriteRejectsContentAndEditTogether(t *testing.T) {
 
 	result := v.RunCLI("template", "write", "meeting.md", "--content", "# Meeting", "--edit")
 	result.MustFail(t, "INVALID_INPUT")
-	result.MustFailWithMessage(t, "--edit and --content cannot be used together")
+	result.MustFailWithMessage(t, "--edit and --content are mutually exclusive")
 }
 
 func TestIntegration_EditRejectsProtectedPrefixAndNonMarkdownFiles(t *testing.T) {

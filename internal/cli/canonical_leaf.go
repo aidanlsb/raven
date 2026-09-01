@@ -21,7 +21,6 @@ type canonicalLeafOptions struct {
 	VaultPath      func() string
 	Args           cobra.PositionalArgs
 	Prepare        func(cmd *cobra.Command, args []string) (preparedArgs []string, handled bool, err error)
-	BuildArgs      func(cmd *cobra.Command, args []string) (map[string]interface{}, error)
 	Invoke         func(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result
 	HandleError    func(result commandexec.Result) error
 	HandleErrorCmd func(cmd *cobra.Command, result commandexec.Result) error
@@ -58,23 +57,9 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 				args = preparedArgs
 			}
 
-			var (
-				argsMap map[string]interface{}
-				err     error
-			)
-			if opts.BuildArgs != nil {
-				argsMap, err = opts.BuildArgs(cmd, args)
-				if err != nil {
-					return err
-				}
-				if argsMap == nil {
-					return nil
-				}
-			} else {
-				argsMap, err = buildCanonicalArgsForMeta(meta, cmd, args)
-				if err != nil {
-					return err
-				}
+			argsMap, err := buildCanonicalArgsForMeta(meta, cmd, args)
+			if err != nil {
+				return err
 			}
 
 			vaultPath := ""
@@ -274,57 +259,175 @@ func metaFlagBinding[T any](bindings map[string]interface{}, name string) (*T, b
 
 func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	argsMap := make(map[string]interface{}, len(meta.Args)+len(meta.Flags))
-	for i, arg := range meta.Args {
-		if arg.Variadic {
-			if i < len(args) {
-				argsMap[arg.Name] = append([]string{}, args[i:]...)
+
+	// Check mutex constraints first
+	if err := validateMutexConstraints(meta, cmd); err != nil {
+		return nil, err
+	}
+
+	// Handle --stdin bulk operations
+	stdinMode := false
+	if cmd.Flags().Changed("stdin") {
+		stdinValue, _ := cmd.Flags().GetBool("stdin")
+		if stdinValue {
+			stdinMode = true
+			argsMap["stdin"] = true
+
+			// Read IDs from stdin
+			if meta.BulkStdinArgName != "" {
+				fileIDs, sectionIDs, err := ReadIDsFromStdin()
+				if err != nil {
+					return nil, handleError("INTERNAL", err, "")
+				}
+				ids := append(fileIDs, sectionIDs...)
+				if len(ids) == 0 {
+					return nil, handleErrorMsg("MISSING_ARGUMENT",
+						fmt.Sprintf("no %s provided via stdin", meta.BulkStdinArgName),
+						fmt.Sprintf("Pipe %s to stdin, one per line", meta.BulkStdinArgName))
+				}
+				argsMap[meta.BulkStdinArgName] = stringsToAny(ids)
 			}
-			break
-		}
-		if i < len(args) {
-			argsMap[arg.Name] = args[i]
 		}
 	}
 
+	// Check if we're in bulk mode:
+	// - via stdin flag, OR
+	// - via explicit bulk flags (e.g., --trait-id populating trait_ids)
+	bulkMode := stdinMode
+	if !bulkMode && meta.BulkStdinArgName != "" {
+		// Check if any flag uses ArgsKey matching BulkStdinArgName
+		for _, flag := range meta.Flags {
+			if flag.ArgsKey == meta.BulkStdinArgName && cmd.Flags().Changed(flag.Name) {
+				bulkMode = true
+				break
+			}
+		}
+	}
+
+	// Process positional arguments
+	argIndex := 0
+	hasConsumedNonIndependentRef := false
+	for _, arg := range meta.Args {
+		// Skip stdin-dependent args when in bulk mode unless marked independent
+		if bulkMode && !arg.StdinIndependent && meta.BulkStdinArgName != "" {
+			continue
+		}
+
+		if arg.Variadic {
+			if argIndex < len(args) {
+				remaining := args[argIndex:]
+				if meta.VariadicJoin {
+					argsMap[arg.Name] = strings.Join(remaining, " ")
+				} else {
+					argsMap[arg.Name] = append([]string{}, remaining...)
+				}
+			}
+			break
+		}
+		if argIndex < len(args) {
+			argsMap[arg.Name] = args[argIndex]
+			argIndex++
+			// Track if we consumed a non-independent reference arg
+			if (arg.Name == "reference" || arg.Name == "object_id") && !arg.StdinIndependent {
+				hasConsumedNonIndependentRef = true
+			}
+		} else if arg.Required && !arg.CLIOptional {
+			return nil, handleErrorMsg("MISSING_ARGUMENT",
+				fmt.Sprintf("missing required argument: %s", arg.Name),
+				fmt.Sprintf("Usage: %s", meta.Use))
+		}
+	}
+
+	// Check for conflicting stdin + reference in same command
+	if bulkMode && meta.BulkStdinArgName != "" && hasConsumedNonIndependentRef {
+		return nil, handleErrorMsg("INVALID_INPUT",
+			"cannot specify positional reference with --stdin",
+			"Use either --stdin or a positional reference, not both")
+	}
+
+	// Process flags
 	for _, flag := range meta.Flags {
 		if flag.Type == commands.FlagTypePosKeyValue {
-			return nil, fmt.Errorf("command %q requires custom CLI arg wiring for positional key=value arguments", meta.Name)
+			return nil, handleErrorMsg("INTERNAL",
+				fmt.Sprintf("command %q uses deprecated FlagTypePosKeyValue", meta.Name),
+				"Contact support")
 		}
 		if !cmd.Flags().Changed(flag.Name) {
 			continue
 		}
 
+		// Determine the args map key (use ArgsKey if set, otherwise flag.Name)
+		argsKey := flag.Name
+		if flag.ArgsKey != "" {
+			argsKey = flag.ArgsKey
+		}
+
 		switch flag.Type {
 		case commands.FlagTypeBool:
 			value, _ := cmd.Flags().GetBool(flag.Name)
-			argsMap[flag.Name] = value
+			argsMap[argsKey] = value
 		case commands.FlagTypeInt:
 			value, _ := cmd.Flags().GetInt(flag.Name)
-			argsMap[flag.Name] = value
+			argsMap[argsKey] = value
 		case commands.FlagTypeStringSlice:
 			value, _ := cmd.Flags().GetStringArray(flag.Name)
-			argsMap[flag.Name] = value
+			// If there's already a variadic positional arg with same name, merge them
+			if existing, ok := argsMap[argsKey].([]string); ok {
+				value = append(existing, value...)
+			}
+			argsMap[argsKey] = value
 		case commands.FlagTypeKeyValue:
 			value, _ := cmd.Flags().GetStringArray(flag.Name)
 			parsed, err := parseKeyValueArgs(flag.Name, value)
 			if err != nil {
 				return nil, err
 			}
-			argsMap[flag.Name] = parsed
+			argsMap[argsKey] = parsed
 		case commands.FlagTypeJSON:
 			raw, _ := cmd.Flags().GetString(flag.Name)
-			var decoded interface{}
-			if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
-				return nil, fmt.Errorf("invalid --%s JSON: %w", flag.Name, err)
+			if strings.TrimSpace(raw) != "" {
+				var decoded interface{}
+				if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+					return nil, handleErrorMsg("INVALID_INPUT",
+						fmt.Sprintf("invalid --%s JSON: %s", flag.Name, err.Error()),
+						"Ensure the JSON is well-formed")
+				}
+				argsMap[argsKey] = decoded
 			}
-			argsMap[flag.Name] = decoded
 		default:
 			value, _ := cmd.Flags().GetString(flag.Name)
-			argsMap[flag.Name] = value
+			if value != "" || cmd.Flags().Changed(flag.Name) {
+				argsMap[argsKey] = value
+			}
 		}
 	}
 
 	return argsMap, nil
+}
+
+func validateMutexConstraints(meta commands.Meta, cmd *cobra.Command) error {
+	for _, group := range meta.MutexGroups {
+		setFlags := []string{}
+		for _, flagName := range group {
+			if cmd.Flags().Changed(flagName) {
+				setFlags = append(setFlags, flagName)
+			}
+		}
+		if len(setFlags) > 1 {
+			return handleErrorMsg("INVALID_INPUT",
+				fmt.Sprintf("--%s and --%s are mutually exclusive", setFlags[0], setFlags[1]),
+				fmt.Sprintf("Use only one of: %s", strings.Join(formatFlagList(group), ", ")))
+		}
+	}
+	return nil
+}
+
+func formatFlagList(flags []string) []string {
+	out := make([]string, len(flags))
+	for i, flag := range flags {
+		out[i] = "--" + flag
+	}
+	return out
 }
 
 func parseKeyValueArgs(flagName string, values []string) (map[string]interface{}, error) {
@@ -332,7 +435,9 @@ func parseKeyValueArgs(flagName string, values []string) (map[string]interface{}
 	for _, value := range values {
 		key, item, ok := strings.Cut(value, "=")
 		if !ok || strings.TrimSpace(key) == "" {
-			return nil, fmt.Errorf("invalid --%s value %q: expected key=value", flagName, value)
+			return nil, handleErrorMsg("INVALID_INPUT",
+				fmt.Sprintf("invalid --%s value %q: expected key=value", flagName, value),
+				fmt.Sprintf("Use --%s key=value format", flagName))
 		}
 		out[key] = item
 	}

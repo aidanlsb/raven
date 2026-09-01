@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -15,9 +14,7 @@ import (
 
 var searchCmd = newCanonicalLeafCommand("search", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Args:        cobra.ArbitraryArgs,
 	Prepare:     prepareSearchArgs,
-	BuildArgs:   buildSearchArgs,
 	HandleError: handleCanonicalSearchFailure,
 	RenderHuman: renderSearch,
 })
@@ -54,16 +51,6 @@ func prepareSearchArgs(_ *cobra.Command, args []string) ([]string, bool, error) 
 		interactivePickerMissingArgSuggestion("search", "rvn search <query>"),
 	)
 	return nil, err == nil, err
-}
-
-func buildSearchArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	meta, _ := cmd.Flags().GetString("type")
-	limit, _ := cmd.Flags().GetInt("limit")
-	return map[string]interface{}{
-		"query": strings.Join(args, " "),
-		"limit": limit,
-		"type":  meta,
-	}, nil
 }
 
 func handleCanonicalSearchFailure(result commandexec.Result) error {

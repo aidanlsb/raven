@@ -28,8 +28,6 @@ type ReclassifyResult = commandpayload.ReclassifyResult
 
 var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Args:        cobra.MaximumNArgs(2),
-	BuildArgs:   buildReclassifyArgs,
 	Invoke:      invokeReclassify,
 	RenderHuman: renderReclassifyResult,
 	FlagBindings: map[string]interface{}{
@@ -42,57 +40,6 @@ var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 		"confirm":     &reclassifyConfirm,
 	},
 })
-
-func buildReclassifyArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
-	fieldJSONRaw, err := parseFieldJSONObject(reclassifyFieldJSON)
-	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
-	}
-	parsedFieldFlags, err := parseKeyValueArgs("field", reclassifyFieldFlags)
-	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
-	}
-	fieldFlags := make(map[string]string, len(parsedFieldFlags))
-	for key, value := range parsedFieldFlags {
-		text, _ := value.(string)
-		fieldFlags[key] = text
-	}
-
-	argsMap := map[string]interface{}{
-		"field":       fieldFlags,
-		"no-move":     reclassifyNoMove,
-		"update-refs": reclassifyUpdateRefs,
-		"force":       reclassifyForce,
-	}
-	if len(fieldJSONRaw) > 0 {
-		argsMap["fields-json"] = fieldJSONRaw
-	}
-
-	if reclassifyStdin {
-		if len(args) != 1 {
-			return nil, handleErrorMsg(ErrMissingArgument, "requires one target type with --stdin", "Usage: rvn reclassify <new-type> --stdin")
-		}
-		ids, sectionIDs, err := ReadIDsFromStdin()
-		if err != nil {
-			return nil, handleError(ErrInternal, err, "")
-		}
-		ids = append(ids, sectionIDs...)
-		if len(ids) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no references provided via stdin", "Pipe references to stdin, one per line")
-		}
-		argsMap["stdin"] = true
-		argsMap["references"] = stringsToAny(ids)
-		argsMap["new-type"] = args[0]
-		return argsMap, nil
-	}
-
-	if len(args) != 2 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires reference and target type arguments", "Usage: rvn reclassify <reference> <new-type>")
-	}
-	argsMap["reference"] = args[0]
-	argsMap["new-type"] = args[1]
-	return argsMap, nil
-}
 
 func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	if boolValue(args["stdin"]) {

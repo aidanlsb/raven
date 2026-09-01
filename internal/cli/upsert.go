@@ -23,7 +23,7 @@ var (
 
 var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	BuildArgs:   buildUpsertArgs,
+	Invoke:      invokeUpsert,
 	RenderHuman: renderUpsertResult,
 	FlagBindings: map[string]interface{}{
 		"field":        &upsertFieldFlags,
@@ -34,61 +34,37 @@ var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
 	},
 })
 
-func buildUpsertArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	typeName := args[0]
-	title := args[1]
-
+func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Validate title
+	title := stringValue(args["title"])
 	if err := validateObjectTitle(title); err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a non-empty title")
+		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Provide a non-empty title")
 	}
 
-	// Leave targetPath empty when no explicit --object-path is given so the service
-	// derives the filename/slug from the title (which may contain "/").
-	targetPath := ""
-	if cmd.Flags().Changed("object-path") {
-		targetPath = strings.TrimSpace(upsertObjectPath)
+	// Validate object-path if explicitly provided
+	if cmd.Flags().Changed("object-path") || upsertObjectPath != "" {
+		targetPath := stringValue(args["object-path"])
 		if err := validateObjectPath(targetPath); err != nil {
-			return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use --object-path with an object path like note/raven-friction (no type/ prefix, no .md suffix). Use data.id from rvn read, not data.path.")
+			return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Use --object-path with an object path like note/raven-friction (no type/ prefix, no .md suffix)")
 		}
 	}
 
-	fieldValues, err := parseFieldFlags(upsertFieldFlags)
-	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
-	}
-
-	fieldJSONRaw, err := parseFieldJSONObject(upsertFieldJSON)
-	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
-	}
-
-	content := upsertContent
-	replaceBody := cmd.Flags().Changed("content")
-	contentFileChanged := cmd.Flags().Changed("content-file")
-	if replaceBody && contentFileChanged {
-		return nil, handleErrorMsg(ErrInvalidInput, "--content and --content-file are mutually exclusive", "Use only one body input mode")
-	}
-	if contentFileChanged && strings.TrimSpace(upsertContentFile) == "-" {
+	// Handle stdin content-file
+	contentFileChanged := cmd.Flags().Changed("content-file") || upsertContentFile != ""
+	if contentFileChanged && strings.TrimSpace(stringValue(args["content-file"])) == "-" {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return nil, handleErrorMsg(ErrFileRead, "failed to read content from stdin", err.Error())
+			return commandexec.Failure("FILE_READ_ERROR", "failed to read content from stdin", err, "")
 		}
-		content = string(data)
-		replaceBody = true
-		contentFileChanged = false
+		args["content"] = string(data)
+		delete(args, "content-file")
 	}
 
-	return buildUpsertCommandArgs(
-		typeName,
-		title,
-		targetPath,
-		fieldValues,
-		fieldJSONRaw,
-		content,
-		replaceBody,
-		upsertContentFile,
-		contentFileChanged,
-	), nil
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+	})
 }
 
 func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
@@ -114,41 +90,6 @@ func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
 		promptCreateMissingRefsFromResult(getVaultPath(), result)
 	}
 	return nil
-}
-
-func buildUpsertCommandArgs(typeName, title, targetPath string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}, content string, replaceBody bool, contentFile string, contentFileChanged bool) map[string]interface{} {
-	args := map[string]interface{}{
-		"type":  typeName,
-		"title": title,
-	}
-	if len(fieldValues) > 0 {
-		args["field"] = stringMapToAny(fieldValues)
-	}
-	if len(fieldJSONRaw) > 0 {
-		args["fields-json"] = fieldJSONRaw
-	}
-	if strings.TrimSpace(targetPath) != "" {
-		args["object-path"] = targetPath
-	}
-	if replaceBody {
-		args["content"] = content
-	}
-	if contentFileChanged {
-		args["content-file"] = strings.TrimSpace(contentFile)
-	}
-	return args
-}
-
-func parseFieldFlags(flags []string) (map[string]string, error) {
-	fields := make(map[string]string, len(flags))
-	for _, f := range flags {
-		parts := strings.SplitN(f, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid field format: %s", f)
-		}
-		fields[parts[0]] = parts[1]
-	}
-	return fields, nil
 }
 
 func init() {

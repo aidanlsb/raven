@@ -15,14 +15,12 @@ import (
 // prompts, and renders.
 var checkCmd = newCanonicalLeafCommand("check", canonicalLeafOptions{
 	VaultPath:    getVaultPath,
-	BuildArgs:    buildCheckValidateArgs,
 	HandleError:  handleCheckLeafFailure,
 	HandleResult: handleCheckValidateResult,
 })
 
 var checkFixCmd = newCanonicalLeafCommand("check_fix", canonicalLeafOptions{
 	VaultPath:    getVaultPath,
-	BuildArgs:    buildCheckFixArgs,
 	Invoke:       invokeCheckMutation,
 	HandleError:  handleCheckLeafFailure,
 	HandleResult: handleCheckFixResult,
@@ -30,49 +28,10 @@ var checkFixCmd = newCanonicalLeafCommand("check_fix", canonicalLeafOptions{
 
 var checkCreateMissingCmd = newCanonicalLeafCommand("check create-missing", canonicalLeafOptions{
 	VaultPath:    getVaultPath,
-	BuildArgs:    buildCheckCreateMissingArgs,
 	Invoke:       invokeCheckMutation,
 	HandleError:  handleCheckLeafFailure,
 	HandleResult: handleCheckCreateMissingResult,
 })
-
-// checkScopeArgs collects the canonical scope arguments shared by `check` and
-// `check fix` from a command's own flag set, so no state is shared between the
-// parent and its subcommands.
-func checkScopeArgs(cmd *cobra.Command, args []string) map[string]interface{} {
-	argsMap := map[string]interface{}{}
-	if len(args) > 0 {
-		argsMap["reference"] = args[0]
-	}
-	if value, _ := cmd.Flags().GetString("type"); value != "" {
-		argsMap["type"] = value
-	}
-	if value, _ := cmd.Flags().GetString("trait"); value != "" {
-		argsMap["trait"] = value
-	}
-	if value, _ := cmd.Flags().GetString("issues"); value != "" {
-		argsMap["issues"] = value
-	}
-	if value, _ := cmd.Flags().GetString("exclude"); value != "" {
-		argsMap["exclude"] = value
-	}
-	if value, _ := cmd.Flags().GetBool("errors-only"); value {
-		argsMap["errors-only"] = true
-	}
-	return argsMap
-}
-
-func buildCheckValidateArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	return checkScopeArgs(cmd, args), nil
-}
-
-func buildCheckFixArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	return checkScopeArgs(cmd, args), nil
-}
-
-func buildCheckCreateMissingArgs(_ *cobra.Command, _ []string) (map[string]interface{}, error) {
-	return map[string]interface{}{}, nil
-}
 
 // invokeCheckMutation drives the mutating check subcommands. `check fix` honors
 // --confirm directly. `check create-missing` in interactive (non-JSON) mode

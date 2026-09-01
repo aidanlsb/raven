@@ -42,9 +42,9 @@ func buildSchemaTemplateCommand() *cobra.Command {
 			"schema_template_unbind": renderSchemaTemplateUnbind,
 		},
 		Leaves: map[string]canonicalLeafOptions{
-			"schema_template_list":   {BuildArgs: buildSchemaTemplateListArgs},
-			"schema_template_bind":   {BuildArgs: buildSchemaTemplateBindArgs},
-			"schema_template_unbind": {BuildArgs: buildSchemaTemplateUnbindArgs},
+			"schema_template_list":   {Invoke: invokeSchemaTemplateList},
+			"schema_template_bind":   {Invoke: invokeSchemaTemplateBind},
+			"schema_template_unbind": {Invoke: invokeSchemaTemplateUnbind},
 		},
 	})
 }
@@ -69,15 +69,19 @@ func resolveSchemaTemplateTarget(cmd *cobra.Command, required bool) (*schemaTemp
 	}
 }
 
-func buildSchemaTemplateListArgs(cmd *cobra.Command, _ []string) (map[string]interface{}, error) {
+func invokeSchemaTemplateList(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	target, err := resolveSchemaTemplateTarget(cmd, false)
 	if err != nil {
-		return nil, err
+		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "")
 	}
-	if target == nil {
-		return nil, nil
+	if target != nil {
+		args[target.kind] = target.name
 	}
-	return map[string]interface{}{target.kind: target.name}, nil
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+	})
 }
 
 func renderSchemaTemplateList(_ *cobra.Command, result commandexec.Result) error {
@@ -173,17 +177,17 @@ func renderSchemaTemplateRemove(_ *cobra.Command, result commandexec.Result) err
 	return nil
 }
 
-func buildSchemaTemplateBindArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+func invokeSchemaTemplateBind(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	target, err := resolveSchemaTemplateTarget(cmd, true)
 	if err != nil {
-		return nil, err
+		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "")
 	}
-	argsMap := map[string]interface{}{"template_id": args[0], target.kind: target.name}
-	if cmd.Flags().Changed("default") {
-		value, _ := cmd.Flags().GetBool("default")
-		argsMap["default"] = value
-	}
-	return argsMap, nil
+	args[target.kind] = target.name
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+	})
 }
 
 func renderSchemaTemplateBind(_ *cobra.Command, result commandexec.Result) error {
@@ -209,17 +213,17 @@ func renderSchemaTemplateBind(_ *cobra.Command, result commandexec.Result) error
 	return nil
 }
 
-func buildSchemaTemplateUnbindArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+func invokeSchemaTemplateUnbind(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	target, err := resolveSchemaTemplateTarget(cmd, true)
 	if err != nil {
-		return nil, err
+		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "")
 	}
-	argsMap := map[string]interface{}{"template_id": args[0], target.kind: target.name}
-	if cmd.Flags().Changed("clear-default") {
-		value, _ := cmd.Flags().GetBool("clear-default")
-		argsMap["clear-default"] = value
-	}
-	return argsMap, nil
+	args[target.kind] = target.name
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+	})
 }
 
 func renderSchemaTemplateUnbind(_ *cobra.Command, result commandexec.Result) error {

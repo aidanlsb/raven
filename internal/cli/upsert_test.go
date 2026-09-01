@@ -7,9 +7,31 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
+
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/ui"
 )
+
+// resetCommandFlags resets all flags on a command to their default values and clears the changed state.
+func resetUpsertFlags() {
+	upsertCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		f.Changed = false
+		if f.Value.Type() == "stringArray" || f.Value.Type() == "stringSlice" {
+			return
+		}
+		_ = f.Value.Set(f.DefValue)
+	})
+}
+
+// setupJSONMode sets up JSON mode for tests by setting both the global and the persistent flag.
+func setupUpsertJSONMode() error {
+	jsonOutput = true
+	if upsertCmd.Parent() != nil {
+		return upsertCmd.Parent().PersistentFlags().Set("json", "true")
+	}
+	return nil
+}
 
 func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 	vaultPath := t.TempDir()
@@ -17,30 +39,22 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
-	prevFields := upsertFieldFlags
-	prevContent := upsertContent
-	prevObjectPath := upsertObjectPath
-	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
-	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		upsertFieldFlags = prevFields
-		upsertContent = prevContent
-		upsertObjectPath = prevObjectPath
-		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
-		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
+		resetUpsertFlags()
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
-	upsertFieldFlags = nil
-	upsertObjectPath = ""
-	upsertCmd.Flags().Lookup("object-path").Changed = false
 
 	run := func(content string) (status string, file string) {
-		upsertContent = content
-		upsertCmd.Flags().Lookup("content").Changed = true
+		resetUpsertFlags()
+		if err := setupUpsertJSONMode(); err != nil {
+			t.Fatalf("setupJSONMode: %v", err)
+		}
+		if err := upsertCmd.ParseFlags([]string{"--content", content}); err != nil {
+			t.Fatalf("ParseFlags: %v", err)
+		}
 		out := captureStdout(t, func() {
 			if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief 2026-02-14"}); err != nil {
 				t.Fatalf("upsertCmd.RunE: %v", err)
@@ -97,34 +111,26 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
-	prevUpsertFields := upsertFieldFlags
-	prevUpsertContent := upsertContent
-	prevUpsertObjectPath := upsertObjectPath
-	prevUpsertObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
-	prevUpsertContentChanged := upsertCmd.Flags().Lookup("content").Changed
-	prevAddTo := addToFlag
-	prevAddStdin := addStdin
-	prevAddConfirm := addConfirm
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		upsertFieldFlags = prevUpsertFields
-		upsertContent = prevUpsertContent
-		upsertObjectPath = prevUpsertObjectPath
-		upsertCmd.Flags().Lookup("object-path").Changed = prevUpsertObjectPathChanged
-		upsertCmd.Flags().Lookup("content").Changed = prevUpsertContentChanged
-		addToFlag = prevAddTo
-		addStdin = prevAddStdin
-		addConfirm = prevAddConfirm
+		resetUpsertFlags()
+		// Also reset add command flags
+		addCmd.Flags().VisitAll(func(f *pflag.Flag) {
+			f.Changed = false
+			_ = f.Value.Set(f.DefValue)
+		})
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
-	upsertFieldFlags = nil
-	upsertObjectPath = ""
-	upsertCmd.Flags().Lookup("object-path").Changed = false
-	upsertContent = "Canonical body"
-	upsertCmd.Flags().Lookup("content").Changed = true
+
+	resetUpsertFlags()
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
+	if err := upsertCmd.ParseFlags([]string{"--content", "Canonical body"}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
 
 	var objectID string
 	var relFile string
@@ -146,9 +152,14 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	objectID = createResp.Data.ID
 	relFile = createResp.Data.File
 
-	addToFlag = objectID
-	addStdin = false
-	addConfirm = false
+	// Reset and parse flags for add command
+	addCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		f.Changed = false
+		_ = f.Value.Set(f.DefValue)
+	})
+	if err := addCmd.ParseFlags([]string{"--to", objectID}); err != nil {
+		t.Fatalf("ParseFlags for add: %v", err)
+	}
 	_ = captureStdout(t, func() {
 		if err := addCmd.RunE(addCmd, []string{"appended line"}); err != nil {
 			t.Fatalf("addCmd.RunE failed: %v", err)
@@ -164,8 +175,10 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 		t.Fatalf("expected add to append content, got:\n%s", withAppend)
 	}
 
-	upsertContent = "Canonical replacement"
-	upsertCmd.Flags().Lookup("content").Changed = true
+	resetUpsertFlags()
+	if err := upsertCmd.ParseFlags([]string{"--content", "Canonical replacement"}); err != nil {
+		t.Fatalf("ParseFlags for upsert: %v", err)
+	}
 	_ = captureStdout(t, func() {
 		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief Boundary"}); err != nil {
 			t.Fatalf("upsert update failed: %v", err)
@@ -191,30 +204,22 @@ func TestUpsertSlugifiesTitleWithPathSeparator(t *testing.T) {
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
-	prevFields := upsertFieldFlags
-	prevContent := upsertContent
-	prevObjectPath := upsertObjectPath
-	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
-	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		upsertFieldFlags = prevFields
-		upsertContent = prevContent
-		upsertObjectPath = prevObjectPath
-		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
-		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
+		resetUpsertFlags()
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
-	upsertFieldFlags = nil
-	upsertObjectPath = ""
-	upsertCmd.Flags().Lookup("object-path").Changed = false
-	upsertContent = ""
-	upsertCmd.Flags().Lookup("content").Changed = false
 
 	title := "config.VaultConfig duplicates internal/paths"
+	resetUpsertFlags()
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
+	if err := upsertCmd.ParseFlags([]string{}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
 	out := captureStdout(t, func() {
 		if err := upsertCmd.RunE(upsertCmd, []string{"brief", title}); err != nil {
 			t.Fatalf("upsertCmd.RunE: %v", err)
@@ -267,28 +272,21 @@ func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
-	prevFields := upsertFieldFlags
-	prevContent := upsertContent
-	prevObjectPath := upsertObjectPath
-	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
-	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		upsertFieldFlags = prevFields
-		upsertContent = prevContent
-		upsertObjectPath = prevObjectPath
-		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
-		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
+		resetUpsertFlags()
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
-	upsertFieldFlags = nil
-	upsertObjectPath = "custom/brief-daily"
-	upsertCmd.Flags().Lookup("object-path").Changed = true
-	upsertContent = "Body V1"
-	upsertCmd.Flags().Lookup("content").Changed = true
+
+	resetUpsertFlags()
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
+	if err := upsertCmd.ParseFlags([]string{"--object-path", "custom/brief-daily", "--content", "Body V1"}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
 
 	out := captureStdout(t, func() {
 		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief"}); err != nil {
@@ -323,28 +321,21 @@ func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
-	prevFields := upsertFieldFlags
-	prevContent := upsertContent
-	prevObjectPath := upsertObjectPath
-	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
-	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		upsertFieldFlags = prevFields
-		upsertContent = prevContent
-		upsertObjectPath = prevObjectPath
-		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
-		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
+		resetUpsertFlags()
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
-	upsertFieldFlags = nil
-	upsertObjectPath = "brief/"
-	upsertCmd.Flags().Lookup("object-path").Changed = true
-	upsertContent = ""
-	upsertCmd.Flags().Lookup("content").Changed = false
+
+	resetUpsertFlags()
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
+	if err := upsertCmd.ParseFlags([]string{"--object-path", "brief/"}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
 
 	out := captureStdout(t, func() {
 		requireJSONResponseFailure(t, upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief"}))
@@ -373,34 +364,25 @@ func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
-	prevFields := upsertFieldFlags
-	prevContent := upsertContent
-	prevObjectPath := upsertObjectPath
-	prevObjectPathChanged := upsertCmd.Flags().Lookup("object-path").Changed
-	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	prevCfg := cfg
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		upsertFieldFlags = prevFields
-		upsertContent = prevContent
-		upsertObjectPath = prevObjectPath
-		upsertCmd.Flags().Lookup("object-path").Changed = prevObjectPathChanged
-		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 		cfg = prevCfg
+		resetUpsertFlags()
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = false
-	upsertFieldFlags = nil
-	upsertObjectPath = ""
-	upsertCmd.Flags().Lookup("object-path").Changed = false
-	upsertContent = "# Brief"
-	upsertCmd.Flags().Lookup("content").Changed = true
 	// GetEditor() falls back to $EDITOR, so clear it or this test launches a
 	// real editor and hangs.
 	t.Setenv("EDITOR", "")
 	cfg = &config.Config{}
+
+	resetUpsertFlags()
+	if err := upsertCmd.ParseFlags([]string{"--content", "# Brief"}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
 
 	out := captureStdout(t, func() {
 		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief 2026-02-14"}); err != nil {

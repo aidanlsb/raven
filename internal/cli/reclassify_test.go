@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
+
 	"github.com/aidanlsb/raven/internal/parser"
 )
 
@@ -36,43 +38,53 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 	t.Helper()
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
-	prevFields := reclassifyFieldFlags
-	prevFieldJSON := reclassifyFieldJSON
-	prevNoMove := reclassifyNoMove
-	prevUpdateRefs := reclassifyUpdateRefs
-	prevForce := reclassifyForce
-	prevStdin := reclassifyStdin
-	prevConfirm := reclassifyConfirm
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		reclassifyFieldFlags = prevFields
-		reclassifyFieldJSON = prevFieldJSON
-		reclassifyNoMove = prevNoMove
-		reclassifyUpdateRefs = prevUpdateRefs
-		reclassifyForce = prevForce
-		reclassifyStdin = prevStdin
-		reclassifyConfirm = prevConfirm
+		// Reset flags
+		reclassifyCmd.Flags().VisitAll(func(f *pflag.Flag) {
+			f.Changed = false
+			if f.Value.Type() == "stringArray" || f.Value.Type() == "stringSlice" {
+				return
+			}
+			_ = f.Value.Set(f.DefValue)
+		})
 	})
 
 	resolvedVaultPath = vaultPath
+	// Set JSON mode properly
 	jsonOutput = true
-	reclassifyFieldFlags = nil
-	reclassifyFieldJSON = ""
-	reclassifyNoMove = false
-	reclassifyUpdateRefs = true
-	reclassifyForce = false
-	reclassifyStdin = false
-	reclassifyConfirm = false
+	if reclassifyCmd.Parent() != nil {
+		if err := reclassifyCmd.Parent().PersistentFlags().Set("json", "true"); err != nil {
+			t.Fatalf("Set json flag: %v", err)
+		}
+	}
+	// Reset flags to defaults
+	reclassifyCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		f.Changed = false
+		if f.Value.Type() == "stringArray" || f.Value.Type() == "stringSlice" {
+			return
+		}
+		_ = f.Value.Set(f.DefValue)
+	})
 }
 
 func runReclassifyCommand(t *testing.T, args ...string) string {
 	t.Helper()
 	return captureStdout(t, func() {
-		if err := reclassifyCmd.Args(reclassifyCmd, args); err != nil {
+		// Let Cobra's ParseFlags handle all the complexity of bool vs value flags
+		// Just pass everything to ParseFlags, it will figure out what's what
+		if err := reclassifyCmd.ParseFlags(args); err != nil {
+			t.Fatalf("ParseFlags: %v", err)
+		}
+
+		// After parsing, get the remaining args (non-flags)
+		positional := reclassifyCmd.Flags().Args()
+
+		if err := reclassifyCmd.Args(reclassifyCmd, positional); err != nil {
 			t.Fatalf("reclassifyCmd.Args: %v", err)
 		}
-		if err := reclassifyCmd.RunE(reclassifyCmd, args); err != nil {
+		if err := reclassifyCmd.RunE(reclassifyCmd, positional); err != nil {
 			requireJSONResponseFailure(t, err)
 		}
 	})
@@ -94,10 +106,8 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nSome content.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyNoMove = true // don't move for this test
-	reclassifyForce = true  // skip dropped fields confirmation
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--no-move", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -143,9 +153,8 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyForce = true
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -188,10 +197,8 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyNoMove = true
-	reclassifyForce = true
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--no-move", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -231,7 +238,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -271,11 +278,8 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyFieldFlags = []string{"author=Tolkien"}
-	reclassifyNoMove = true
-	reclassifyForce = true
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--no-move", "--force", "--field", "author=Tolkien", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -316,11 +320,8 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyFieldJSON = `{"status":"false"}`
-	reclassifyNoMove = true
-	reclassifyForce = true
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "--fields-json", `{"status":"false"}`, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -333,7 +334,7 @@ types:
 		t.Fatalf("expected ok=true; out=%s", out)
 	}
 
-	content, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	content, err := os.ReadFile(filepath.Join(vaultPath, "books/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -375,10 +376,8 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyNoMove = true
-	reclassifyForce = true
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -392,7 +391,7 @@ types:
 	}
 
 	// Verify default was applied
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(vaultPath, "books/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -433,7 +432,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -469,10 +468,8 @@ types:
 		"---\ntype: note\ntitle: My Note\ncategory: tech\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyForce = true
-	reclassifyNoMove = true
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -489,7 +486,7 @@ types:
 	}
 
 	// Verify the dropped field was removed
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(vaultPath, "books/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -511,7 +508,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "books/my-book", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "books/my-book", "book")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -542,7 +539,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "books/my-book", "page")
+	out := runReclassifyCommand(t, "--json", "--force", "books/my-book", "page")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -573,7 +570,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "books/my-book", "unicorn")
+	out := runReclassifyCommand(t, "--json", "--force", "books/my-book", "unicorn")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -611,10 +608,8 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyNoMove = true
-	reclassifyForce = true
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -628,7 +623,7 @@ types:
 	}
 
 	// Title should be preserved (exists on both types)
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(vaultPath, "books/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
