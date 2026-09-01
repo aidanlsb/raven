@@ -1,6 +1,10 @@
 package commandimpl
 
-import "github.com/aidanlsb/raven/internal/commandexec"
+import (
+	"context"
+
+	"github.com/aidanlsb/raven/internal/commandexec"
+)
 
 // RegisterAll registers canonical command handlers.
 func RegisterAll(registry *commandexec.HandlerRegistry) {
@@ -47,23 +51,12 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("vault_pin", HandleVaultPin)
 	registry.Register("vault_clear", HandleVaultClear)
 	registry.Register("vault_config_show", HandleVaultConfigShow)
-	registry.Register("vault_config_auto_reindex_set", HandleVaultConfigAutoReindexSet)
-	registry.Register("vault_config_auto_reindex_unset", HandleVaultConfigAutoReindexUnset)
-	registry.Register("vault_config_protected_prefixes_list", HandleVaultConfigProtectedPrefixesList)
-	registry.Register("vault_config_protected_prefixes_add", HandleVaultConfigProtectedPrefixesAdd)
-	registry.Register("vault_config_protected_prefixes_remove", HandleVaultConfigProtectedPrefixesRemove)
-	registry.Register("vault_config_exclude_list", HandleVaultConfigExcludeList)
-	registry.Register("vault_config_exclude_add", HandleVaultConfigExcludeAdd)
-	registry.Register("vault_config_exclude_remove", HandleVaultConfigExcludeRemove)
-	registry.Register("vault_config_directories_get", HandleVaultConfigDirectoriesGet)
-	registry.Register("vault_config_directories_set", HandleVaultConfigDirectoriesSet)
-	registry.Register("vault_config_directories_unset", HandleVaultConfigDirectoriesUnset)
-	registry.Register("vault_config_capture_get", HandleVaultConfigCaptureGet)
-	registry.Register("vault_config_capture_set", HandleVaultConfigCaptureSet)
-	registry.Register("vault_config_capture_unset", HandleVaultConfigCaptureUnset)
-	registry.Register("vault_config_deletion_get", HandleVaultConfigDeletionGet)
-	registry.Register("vault_config_deletion_set", HandleVaultConfigDeletionSet)
-	registry.Register("vault_config_deletion_unset", HandleVaultConfigDeletionUnset)
+	for commandID := range vaultConfigOperationTable {
+		id := commandID
+		registry.Register(id, func(ctx context.Context, req commandexec.Request) commandexec.Result {
+			return handleVaultConfigOperation(ctx, req, id)
+		})
+	}
 	registry.Register("vault_stats", HandleVaultStats)
 	registry.Register("search", HandleSearch)
 	registry.Register("read", HandleRead)
