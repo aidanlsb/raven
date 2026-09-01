@@ -43,9 +43,6 @@ func TestRegistryBackedCanonicalCommandFlagsMatchRegistry(t *testing.T) {
 
 			registryFlags := make(map[string]commands.FlagMeta, len(meta.Flags))
 			for _, flag := range meta.Flags {
-				if flag.Type == commands.FlagTypePosKeyValue {
-					continue
-				}
 				registryFlags[flag.Name] = flag
 			}
 

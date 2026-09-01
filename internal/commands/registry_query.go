@@ -154,7 +154,7 @@ For trait queries (trait:...):
 			{Name: "no-pipe", Description: "Force human-readable output format", Type: FlagTypeBool},
 			{Name: "browse", Description: "Interactively browse results in Raven's picker and open the selected result in the configured editor", Type: FlagTypeBool},
 			{Name: "no-links", Description: "Disable clickable hyperlinks in terminal output", Type: FlagTypeBool},
-			{Name: "inputs", Description: "Saved query inputs as key=value pairs", Type: FlagTypePosKeyValue, Examples: []string{`{"project": "projects/raven"}`}},
+			{Name: "inputs", Description: "Saved query inputs as JSON object", Type: FlagTypeJSON, Examples: []string{`{"project": "projects/raven"}`}},
 		},
 		Examples: []string{
 			"rvn query 'type:project .status==active' --json",
