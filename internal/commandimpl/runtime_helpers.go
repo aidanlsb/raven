@@ -82,6 +82,17 @@ func newCommandVaultRuntime(vaultPath string, opts vaultruntime.Options) (*vault
 }
 
 func mapVaultRuntimeSetupFailure(err error) commandexec.Result {
+	if err == nil {
+		return commandexec.Failure("INTERNAL_ERROR", "failed to initialize runtime", nil, "")
+	}
+	if failure, ok := mapIndexRebuildRequired(err); ok {
+		return failure
+	}
+
+	if errors.Is(err, vaultruntime.ErrVaultPathRequired) {
+		return commandexec.Failure("VAULT_NOT_SPECIFIED", "no vault path resolved", nil, "Use --vault-path, --vault, active_vault, or default_vault")
+	}
+
 	var setupErr *vaultruntime.SetupError
 	if errors.As(err, &setupErr) {
 		switch setupErr.Stage {
@@ -90,9 +101,6 @@ func mapVaultRuntimeSetupFailure(err error) commandexec.Result {
 		case vaultruntime.StageSchema:
 			return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
 		case vaultruntime.StageDatabase:
-			if failure, ok := mapIndexRebuildRequired(err); ok {
-				return failure
-			}
 			return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
 		}
 	}

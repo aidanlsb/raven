@@ -36,3 +36,24 @@ const (
 )
 
 const WarnSectionSkipped = codes.WarnSectionSkipped
+
+// mapCodeOrInternal returns code unchanged for known translations, or
+// codes.ErrInternal for unrecognized codes. Preserves INVALID_ARGS →
+// INVALID_INPUT; all other known codes pass through.
+func mapCodeOrInternal(code codes.ErrorCode) codes.ErrorCode {
+	switch code {
+	case codes.ErrInvalidArgs:
+		return codes.ErrInvalidInput
+	case codes.ErrConfigInvalid,
+		codes.ErrRefAmbiguous,
+		codes.ErrRefNotFound,
+		codes.ErrInvalidInput,
+		codes.ErrDatabase,
+		codes.ErrFileNotFound,
+		codes.ErrFileRead,
+		codes.ErrMissingArgument:
+		return code
+	default:
+		return codes.ErrInternal
+	}
+}

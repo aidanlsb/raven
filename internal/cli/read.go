@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -57,7 +56,7 @@ func handleCanonicalReadFailure(result commandexec.Result) error {
 	if result.Error == nil {
 		return nil
 	}
-	return handleErrorWithDetails(mapReadCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+	return handleErrorWithDetails(mapCodeOrInternal(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
 }
 
 func invokeRead(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
@@ -144,27 +143,6 @@ func init() {
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	})
 	rootCmd.AddCommand(readCmd)
-}
-
-func mapReadCode(code codes.ErrorCode) codes.ErrorCode {
-	switch code {
-	case codes.ErrConfigInvalid:
-		return ErrConfigInvalid
-	case codes.ErrRefAmbiguous:
-		return ErrRefAmbiguous
-	case codes.ErrRefNotFound:
-		return ErrRefNotFound
-	case codes.ErrInvalidArgs, codes.ErrInvalidInput:
-		return ErrInvalidInput
-	case codes.ErrDatabase:
-		return ErrDatabase
-	case codes.ErrFileNotFound:
-		return ErrFileNotFound
-	case codes.ErrFileRead:
-		return ErrFileRead
-	default:
-		return ErrInternal
-	}
 }
 
 func stringFromMap(data map[string]interface{}, key string) string {
