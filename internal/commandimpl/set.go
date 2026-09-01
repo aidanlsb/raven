@@ -65,9 +65,9 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultCfg := rt.VaultCfg
 	sch := rt.Schema
 
-	updates, err := parseKeyValueArgs(req.Args["fields"])
+	updates, err := parseKeyValueArgs(req.Args["field"])
 	if err != nil {
-		failure := commandexec.Failure("INVALID_INPUT", "invalid fields payload", nil, err.Error())
+		failure := commandexec.Failure("INVALID_INPUT", "invalid field payload", nil, err.Error())
 		if stdinMode {
 			return failure.WithAttemptedIDs("references", references)
 		}

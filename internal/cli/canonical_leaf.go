@@ -274,21 +274,87 @@ func metaFlagBinding[T any](bindings map[string]interface{}, name string) (*T, b
 
 func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	argsMap := make(map[string]interface{}, len(meta.Args)+len(meta.Flags))
-	for i, arg := range meta.Args {
-		if arg.Variadic {
-			if i < len(args) {
-				argsMap[arg.Name] = append([]string{}, args[i:]...)
+
+	// Check mutex constraints first
+	if err := validateMutexConstraints(meta, cmd); err != nil {
+		return nil, err
+	}
+
+	// Handle --stdin bulk operations
+	stdinMode := false
+	if cmd.Flags().Changed("stdin") {
+		stdinValue, _ := cmd.Flags().GetBool("stdin")
+		if stdinValue {
+			stdinMode = true
+			argsMap["stdin"] = true
+
+			// Read IDs from stdin
+			if meta.BulkStdinArgName != "" {
+				fileIDs, sectionIDs, err := ReadIDsFromStdin()
+				if err != nil {
+					return nil, handleError("INTERNAL", err, "")
+				}
+				ids := append(fileIDs, sectionIDs...)
+				if len(ids) == 0 {
+					return nil, handleErrorMsg("MISSING_ARGUMENT",
+						fmt.Sprintf("no %s provided via stdin", meta.BulkStdinArgName),
+						fmt.Sprintf("Pipe %s to stdin, one per line", meta.BulkStdinArgName))
+				}
+				argsMap[meta.BulkStdinArgName] = stringsToAny(ids)
 			}
-			break
-		}
-		if i < len(args) {
-			argsMap[arg.Name] = args[i]
 		}
 	}
 
+	// Process positional arguments
+	argIndex := 0
+	for i, arg := range meta.Args {
+		// Skip stdin-dependent args when in stdin mode unless marked independent
+		if stdinMode && !arg.StdinIndependent && meta.BulkStdinArgName != "" {
+			continue
+		}
+
+		if arg.Variadic {
+			if argIndex < len(args) {
+				remaining := args[argIndex:]
+				if meta.VariadicJoin {
+					argsMap[arg.Name] = strings.Join(remaining, " ")
+				} else {
+					argsMap[arg.Name] = append([]string{}, remaining...)
+				}
+			}
+			break
+		}
+		if argIndex < len(args) {
+			argsMap[arg.Name] = args[argIndex]
+			argIndex++
+		} else if arg.Required && !arg.CLIOptional {
+			return nil, handleErrorMsg("MISSING_ARGUMENT",
+				fmt.Sprintf("missing required argument: %s", arg.Name),
+				fmt.Sprintf("Usage: %s", meta.Use))
+		}
+	}
+
+	// Check for conflicting stdin + reference in same command
+	if stdinMode && meta.BulkStdinArgName != "" {
+		// For commands with bulk stdin, reject positional reference unless explicitly allowed
+		hasReferenceArg := false
+		for _, arg := range meta.Args {
+			if (arg.Name == "reference" || arg.Name == "object_id") && !arg.StdinIndependent {
+				hasReferenceArg = true
+				break
+			}
+		}
+		if hasReferenceArg && argIndex > 0 {
+			return nil, handleErrorMsg("INVALID_INPUT",
+				"cannot specify positional reference with --stdin",
+				"Use either --stdin or a positional reference, not both")
+		}
+	}
+
+	// Process flags
 	for _, flag := range meta.Flags {
 		if flag.Type == commands.FlagTypePosKeyValue {
-			return nil, fmt.Errorf("command %q requires custom CLI arg wiring for positional key=value arguments", meta.Name)
+			return nil, fmt.Errorf("command %q uses deprecated FlagTypePosKeyValue", meta.Name)
 		}
 		if !cmd.Flags().Changed(flag.Name) {
 			continue
@@ -313,18 +379,47 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 			argsMap[flag.Name] = parsed
 		case commands.FlagTypeJSON:
 			raw, _ := cmd.Flags().GetString(flag.Name)
-			var decoded interface{}
-			if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
-				return nil, fmt.Errorf("invalid --%s JSON: %w", flag.Name, err)
+			if strings.TrimSpace(raw) != "" {
+				var decoded interface{}
+				if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+					return nil, fmt.Errorf("invalid --%s JSON: %w", flag.Name, err)
+				}
+				argsMap[flag.Name] = decoded
 			}
-			argsMap[flag.Name] = decoded
 		default:
 			value, _ := cmd.Flags().GetString(flag.Name)
-			argsMap[flag.Name] = value
+			if value != "" || cmd.Flags().Changed(flag.Name) {
+				argsMap[flag.Name] = value
+			}
 		}
 	}
 
 	return argsMap, nil
+}
+
+func validateMutexConstraints(meta commands.Meta, cmd *cobra.Command) error {
+	for _, group := range meta.MutexGroups {
+		setFlags := []string{}
+		for _, flagName := range group {
+			if cmd.Flags().Changed(flagName) {
+				setFlags = append(setFlags, flagName)
+			}
+		}
+		if len(setFlags) > 1 {
+			return handleErrorMsg("INVALID_INPUT",
+				fmt.Sprintf("--%s and --%s are mutually exclusive", setFlags[0], setFlags[1]),
+				fmt.Sprintf("Use only one of: %s", strings.Join(formatFlagList(group), ", ")))
+		}
+	}
+	return nil
+}
+
+func formatFlagList(flags []string) []string {
+	out := make([]string, len(flags))
+	for i, flag := range flags {
+		out[i] = "--" + flag
+	}
+	return out
 }
 
 func parseKeyValueArgs(flagName string, values []string) (map[string]interface{}, error) {

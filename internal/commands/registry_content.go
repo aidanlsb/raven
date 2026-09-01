@@ -69,9 +69,10 @@ CLI offers to create the missing pages; agents can run 'rvn check create-missing
 		},
 	},
 	"add": {
-		Name:        "add",
-		Use:         "add <text>",
-		Description: "Quick capture - append text to daily note or inbox",
+		Name:         "add",
+		Use:          "add <text>",
+		Description:  "Quick capture - append text to daily note or inbox",
+		VariadicJoin: true,
 		LongDesc: `Quickly capture a thought, task, or note.
 
 By default, appends to today's daily note. Configure destination in raven.yaml.
@@ -112,13 +113,14 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.
 If text starts with a dash, put it after -- so it is not parsed as a flag:
   rvn add --to today -- "- Review the rollout"`,
 		Args: []ArgMeta{
-			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
+			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true, Variadic: true, StdinIndependent: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "to", Description: "Target file (path or reference like 'cursor')", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md", "tomorrow"}},
 			{Name: "stdin", Description: "Read object IDs from stdin (one per line)", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 		},
+		BulkStdinArgName: "object_ids",
 		Examples: []string{
 			"rvn add \"Quick thought\" --json",
 			"rvn add \"@priority(high) Urgent task\" --json",
@@ -137,6 +139,7 @@ If text starts with a dash, put it after -- so it is not parsed as a flag:
 	"upsert": {
 		Name:        "upsert",
 		Description: "Create or update a typed object idempotently",
+		MutexGroups: [][]string{{"content", "content-file"}},
 		LongDesc: `Create or update a typed object deterministically.
 
 This command is the canonical idempotent write primitive for generated artifacts.
@@ -556,7 +559,7 @@ changes, required-field failures, and reference updates by default. Use
 	},
 	"set": {
 		Name:        "set",
-		Use:         "set <reference> <field=value>...",
+		Use:         "set <reference>",
 		Description: "Set frontmatter fields on an object",
 		LongDesc: `Set one or more frontmatter fields on an existing object.
 
@@ -567,16 +570,16 @@ known type. Unknown fields are rejected.
 
 Use this to update existing objects' metadata without manually editing files.
 
-Use positional field=value arguments for shell-friendly literal updates.
-Use --fields-json when you need exact type control (for example, preserving the
-string "true" instead of coercing it to a boolean).
+Use --field for shell-friendly literal values (can be repeated). Use --fields-json
+when exact type control matters, such as preserving the string "true" instead of a
+boolean or providing arrays/nulls explicitly.
 
 Single-object set applies immediately. Pass --dry-run to preview the resulting
 field changes (including previous values) without writing.
 
 Bulk operations:
 Use --stdin to read references from stdin (one per line). Bulk updates accept
-both field=value literals and --fields-json typed values.
+both --field flags and --fields-json typed values.
 
 Permissive writes: if a ref field is set to a target that does not exist yet, the
 update still succeeds. The response adds data.missing_refs, data.missing_ref_items,
@@ -585,7 +588,7 @@ and a REF_TARGET_MISSING warning per missing target.`,
 			{Name: "reference", Description: "Object reference to update (e.g., people/freya)", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "fields", Description: "Fields to update using Raven field literals (key=value semantics)", Type: FlagTypePosKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
+			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
 			{Name: "fields-json", Description: "Fields to update as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "stdin", Description: "Read references from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, bulk shows preview only)", Type: FlagTypeBool},
@@ -593,10 +596,10 @@ and a REF_TARGET_MISSING warning per missing target.`,
 		},
 		BulkStdinArgName: "references",
 		Examples: []string{
-			"rvn set people/freya email=freya@asgard.realm --json",
+			"rvn set people/freya --field email=freya@asgard.realm --json",
 			`rvn set people/freya --fields-json '{"email":"true"}' --json`,
-			"rvn set people/freya name=\"Freya\" status=active --json",
-			"rvn set projects/website priority=high --dry-run --json",
+			"rvn set people/freya --field name=\"Freya\" --field status=active --json",
+			"rvn set projects/website --field priority=high --dry-run --json",
 		},
 		UseCases: []string{
 			"Update a person's email or status",
@@ -639,9 +642,11 @@ The reserved type field cannot be unset; use reclassify to change object type.`,
 		},
 	},
 	"update": {
-		Name:        "update",
-		Use:         "update <trait_id> <new_value>",
-		Description: "Update a trait's value",
+		Name:         "update",
+		Use:          "update <trait_id> <new_value>",
+		Description:  "Update a trait's value",
+		MutexGroups:  [][]string{{"stdin", "trait-id"}},
+		VariadicJoin: true,
 		LongDesc: `Update the value of a trait annotation.
 
 Trait IDs look like "path/file.md:trait:N" and can be obtained via:
@@ -655,7 +660,7 @@ Use --stdin to read trait IDs from stdin (one per line).
 Use repeated --trait-id flags to provide an explicit trait ID list without stdin.`,
 		Args: []ArgMeta{
 			{Name: "trait_id", Description: "Trait ID to update (e.g., daily/2026-01-25.md:trait:0)", Required: false},
-			{Name: "value", Description: "New trait value", Required: true},
+			{Name: "value", Description: "New trait value", Required: true, Variadic: true, StdinIndependent: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "stdin", Description: "Read trait IDs from stdin for bulk operations", Type: FlagTypeBool},

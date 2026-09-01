@@ -200,11 +200,12 @@ By default, docs are fetched from the "main" ref.`,
 		},
 	},
 	"docs_search": {
-		Name:        "docs search",
-		Description: "Search long-form Markdown documentation",
-		VaultScope:  VaultScopeNone,
+		Name:         "docs search",
+		Description:  "Search long-form Markdown documentation",
+		VaultScope:   VaultScopeNone,
+		VariadicJoin: true,
 		Args: []ArgMeta{
-			{Name: "query", Description: "Search query text", Required: true},
+			{Name: "query", Description: "Search query text", Required: true, Variadic: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "limit", Short: "n", Description: "Maximum number of matches (default: 20)", Type: FlagTypeInt, Default: "20"},
