@@ -27,7 +27,6 @@ var (
 
 var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	BuildArgs:   buildImportArgs,
 	Invoke:      invokeImport,
 	RenderHuman: renderImportResult,
 	FlagBindings: map[string]interface{}{
@@ -44,22 +43,6 @@ var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
 
 type importResult = importsvc.ResultItem
 
-func buildImportArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
-	argsMap := map[string]interface{}{
-		"file":          importFile,
-		"mapping":       importMapping,
-		"map":           append([]string{}, importMapFlags...),
-		"key":           importKey,
-		"content-field": importContentField,
-		"dry-run":       importDryRun,
-		"create-only":   importCreateOnly,
-		"update-only":   importUpdateOnly,
-	}
-	if len(args) > 0 {
-		argsMap["type"] = args[0]
-	}
-	return argsMap, nil
-}
 
 func invokeImport(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	var stdinData []byte

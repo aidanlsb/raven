@@ -305,9 +305,10 @@ Non-interactive use requires either a reference or --stdin input.` + barePickerI
 		},
 	},
 	"search": {
-		Name:        "search",
-		Use:         "search [query]",
-		Description: "Full-text search across all vault content",
+		Name:         "search",
+		Use:          "search [query]",
+		Description:  "Full-text search across all vault content",
+		VariadicJoin: true,
 		LongDesc: `Search for content across all files in the vault.
 
 Use search for open-ended text discovery when you do NOT yet know the type,
@@ -338,7 +339,7 @@ Use --type to filter results to specific object types.
 In an interactive terminal, bare 'rvn search' launches Raven's picker over
 indexed files. Non-interactive use still requires a query string.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
-			{Name: "query", Description: "Search query (words, phrases, or boolean expressions)", Required: true, CLIOptional: true},
+			{Name: "query", Description: "Search query (words, phrases, or boolean expressions)", Required: true, CLIOptional: true, Variadic: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "limit", Short: "n", Description: "Maximum number of results (default: 20)", Type: FlagTypeInt, Default: "20"},
