@@ -25,28 +25,16 @@ type AddBulkRequest struct {
 	Runtime      *vaultruntime.Runtime
 }
 
-type AddBulkPreviewItem struct {
-	ID      string
-	Action  string
-	Details string
-}
-
-type AddBulkResult struct {
-	ID     string
-	Status string
-	Reason string
-}
-
 type AddBulkPreview struct {
 	Action  string
-	Items   []AddBulkPreviewItem
-	Skipped []AddBulkResult
+	Items   []BulkPreviewItem
+	Skipped []BulkResult
 	Total   int
 }
 
 type AddBulkSummary struct {
 	Action    string
-	Results   []AddBulkResult
+	Results   []BulkResult
 	Total     int
 	Skipped   int
 	Errors    int
@@ -62,8 +50,8 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 
-	items := make([]AddBulkPreviewItem, 0, len(req.ObjectIDs))
-	skipped := make([]AddBulkResult, 0)
+	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
+	skipped := make([]BulkResult, 0)
 
 	for _, id := range req.ObjectIDs {
 		fileID := id
@@ -75,27 +63,27 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 
 		filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, fileID, req.VaultConfig)
 		if err != nil {
-			skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
+			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
 		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
-			skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: "file not found"})
+			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "file not found"})
 			continue
 		}
 
 		if strings.Contains(id, "#") {
 			content, err := os.ReadFile(filePath)
 			if err != nil {
-				skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)})
+				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)})
 				continue
 			}
 			doc, err := parser.ParseDocumentWithOptions(string(content), filePath, req.VaultPath, req.ParseOptions)
 			if err != nil {
-				skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)})
+				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)})
 				continue
 			}
 			found := false
@@ -106,7 +94,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 				}
 			}
 			if !found {
-				skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: "section not found"})
+				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "section not found"})
 				continue
 			}
 		}
@@ -115,7 +103,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 		if targetObjectID != "" {
 			details = fmt.Sprintf("append within %s: %s", targetObjectID, req.Line)
 		}
-		items = append(items, AddBulkPreviewItem{
+		items = append(items, BulkPreviewItem{
 			ID:      id,
 			Action:  "add",
 			Details: details,
@@ -138,7 +126,7 @@ func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
 		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 
-	results := make([]AddBulkResult, 0, len(req.ObjectIDs))
+	results := make([]BulkResult, 0, len(req.ObjectIDs))
 	addedCount := 0
 	skippedCount := 0
 	errorCount := 0
@@ -150,7 +138,7 @@ func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
 	}
 
 	for _, id := range req.ObjectIDs {
-		result := AddBulkResult{ID: id}
+		result := BulkResult{ID: id}
 		fileID := id
 		targetObjectID := ""
 		if baseID, _, isSection := paths.ParseSectionID(id); isSection {

@@ -22,30 +22,17 @@ type DeleteBulkRequest struct {
 	Runtime     *vaultruntime.Runtime
 }
 
-type DeleteBulkPreviewItem struct {
-	ID      string
-	Action  string
-	Details string
-	Changes map[string]string
-}
-
-type DeleteBulkResult struct {
-	ID     string
-	Status string
-	Reason string
-}
-
 type DeleteBulkPreview struct {
 	Action   string
-	Items    []DeleteBulkPreviewItem
-	Skipped  []DeleteBulkResult
+	Items    []BulkPreviewItem
+	Skipped  []BulkResult
 	Total    int
 	Behavior string
 }
 
 type DeleteBulkSummary struct {
 	Action    string
-	Results   []DeleteBulkResult
+	Results   []BulkResult
 	Total     int
 	Skipped   int
 	Errors    int
@@ -68,8 +55,8 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 	}
 	db := rt.DB
 
-	items := make([]DeleteBulkPreviewItem, 0, len(req.ObjectIDs))
-	skipped := make([]DeleteBulkResult, 0)
+	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
+	skipped := make([]BulkResult, 0)
 	behavior := req.Behavior
 	if behavior == "" {
 		behavior = "trash"
@@ -82,11 +69,11 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 	for _, id := range req.ObjectIDs {
 		target, err := resolveBulkDeleteTarget(req.VaultPath, req.VaultConfig, id)
 		if err != nil {
-			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: "object or file not found"})
+			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object or file not found"})
 			continue
 		}
 		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
-			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
 
@@ -104,11 +91,11 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 		}
 
 		if _, err := os.Stat(target.FilePath); os.IsNotExist(err) {
-			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: "file not found"})
+			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "file not found"})
 			continue
 		}
 
-		items = append(items, DeleteBulkPreviewItem{
+		items = append(items, BulkPreviewItem{
 			ID:      id,
 			Action:  "delete",
 			Details: details,
@@ -134,7 +121,7 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 	if owned {
 		defer rt.Close()
 	}
-	results := make([]DeleteBulkResult, 0, len(req.ObjectIDs))
+	results := make([]BulkResult, 0, len(req.ObjectIDs))
 	deletedCount := 0
 	skippedCount := 0
 	errorCount := 0
@@ -149,7 +136,7 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 	}
 
 	for _, id := range req.ObjectIDs {
-		result := DeleteBulkResult{ID: id}
+		result := BulkResult{ID: id}
 
 		target, err := resolveBulkDeleteTarget(req.VaultPath, req.VaultConfig, id)
 		if err != nil {
