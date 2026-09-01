@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -33,7 +32,6 @@ var moveCmd = newCanonicalLeafCommand("move", canonicalLeafOptions{
 		"dry-run":         &moveDryRun,
 	},
 })
-
 
 func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	// Bulk move stays preview-first: changes apply only with --confirm.

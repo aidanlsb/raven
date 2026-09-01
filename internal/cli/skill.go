@@ -52,7 +52,6 @@ func init() {
 	rootCmd.AddCommand(skillCmd)
 }
 
-
 func invokeSkillInstall(_ *cobra.Command, commandID, _ string, args map[string]interface{}) commandexec.Result {
 	// Non-interactive or --json: never prompt. Apply only with --confirm;
 	// otherwise return a preview that flags confirmation as required.

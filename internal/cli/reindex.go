@@ -31,7 +31,6 @@ func prepareReindexArgs(cmd *cobra.Command, args []string) ([]string, bool, erro
 	return args, false, nil
 }
 
-
 func invokeReindex(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	return app.CommandInvoker().Execute(cmd.Context(), commandexec.Request{
 		CommandID: commandID,

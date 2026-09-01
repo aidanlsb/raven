@@ -43,7 +43,6 @@ var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
 
 type importResult = importsvc.ResultItem
 
-
 func invokeImport(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	var stdinData []byte
 	if strings.TrimSpace(importFile) == "" {

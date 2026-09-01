@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -82,18 +81,18 @@ func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]in
 				fieldValues[k] = s
 			}
 		}
-		
+
 		fieldJSONRaw, _ := args["fields-json"].(map[string]interface{})
 		if fieldJSONRaw == nil {
 			fieldJSONRaw = make(map[string]interface{})
 		}
-		
+
 		reader := bufio.NewReader(os.Stdin)
 		typeName := stringValue(args["type"])
 		if err := promptNewSchemaFields(reader, os.Stderr, vaultPath, typeName, title, fieldValues, fieldJSONRaw); err != nil {
 			return commandexec.Failure("SCHEMA_INVALID", err.Error(), nil, "")
 		}
-		
+
 		// Update args with prompted values
 		if len(fieldValues) > 0 {
 			args["field"] = stringMapToAny(fieldValues)

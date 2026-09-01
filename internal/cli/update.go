@@ -13,7 +13,6 @@ var updateCmd = newCanonicalLeafCommand("update", canonicalLeafOptions{
 	RenderHuman: renderUpdateResult,
 })
 
-
 func invokeUpdate(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	confirm, _ := cmd.Flags().GetBool("confirm")
 	if dryRun, _ := cmd.Flags().GetBool("dry-run"); dryRun {

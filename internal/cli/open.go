@@ -65,7 +65,6 @@ func prepareOpenArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 	return nil, err == nil, err
 }
 
-
 func handleCanonicalOpenFailure(cmd *cobra.Command, result commandexec.Result) error {
 	return handleAmbiguousReferenceRetry(cmd, result, ambiguousReferenceRetryOptions{
 		CommandID: "open",

@@ -18,7 +18,6 @@ var unsetCmd = newCanonicalLeafCommand("unset", canonicalLeafOptions{
 	},
 })
 
-
 func renderCanonicalUnsetResult(result commandexec.Result) error {
 	data, ok := result.Data.(commandpayload.UnsetResult)
 	if !ok {

@@ -24,7 +24,6 @@ var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 	},
 })
 
-
 func invokeSet(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	confirm, _ := cmd.Flags().GetBool("confirm")
 	preview := false

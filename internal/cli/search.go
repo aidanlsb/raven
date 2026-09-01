@@ -53,7 +53,6 @@ func prepareSearchArgs(_ *cobra.Command, args []string) ([]string, bool, error) 
 	return nil, err == nil, err
 }
 
-
 func handleCanonicalSearchFailure(result commandexec.Result) error {
 	if result.Error == nil {
 		return nil

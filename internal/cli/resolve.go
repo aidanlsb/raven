@@ -25,7 +25,6 @@ func prepareResolveArgs(_ *cobra.Command, args []string) ([]string, bool, error)
 	return prepareInteractiveReferenceArgs(args, "resolve", "reference", "resolve> ", "Select a reference to resolve (Esc to cancel)")
 }
 
-
 func renderResolve(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	reference := stringValue(data["reference"])

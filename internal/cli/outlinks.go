@@ -40,7 +40,6 @@ func prepareOutlinksArgs(cmd *cobra.Command, args []string) ([]string, bool, err
 	return prepareInteractiveReferenceArgs(args, "outlinks", "reference", "outlinks> ", "Select a reference for outlinks (Esc to cancel)")
 }
 
-
 func handleOutlinksFailure(cmd *cobra.Command, result commandexec.Result) error {
 	return handleAmbiguousReferenceRetry(cmd, result, ambiguousReferenceRetryOptions{
 		CommandID: "outlinks",
