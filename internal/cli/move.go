@@ -22,8 +22,6 @@ var (
 
 var moveCmd = newCanonicalLeafCommand("move", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Args:        cobra.MaximumNArgs(2),
-	BuildArgs:   buildMoveArgs,
 	Invoke:      invokeMove,
 	RenderHuman: renderMoveResult,
 	FlagBindings: map[string]interface{}{
@@ -36,42 +34,6 @@ var moveCmd = newCanonicalLeafCommand("move", canonicalLeafOptions{
 	},
 })
 
-func buildMoveArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
-	if moveStdin {
-		if len(args) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no destination provided", "Usage: rvn move --stdin <destination-directory/>")
-		}
-		destination := args[0]
-		if !strings.HasSuffix(destination, "/") {
-			return nil, handleErrorMsg(ErrInvalidInput,
-				"destination must be a directory (end with /)",
-				"Example: rvn move --stdin archive/projects/")
-		}
-		ids, sectionIDs, err := ReadIDsFromStdin()
-		if err != nil {
-			return nil, handleError(ErrInternal, err, "")
-		}
-		if len(ids) == 0 && len(sectionIDs) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
-		}
-		return map[string]interface{}{
-			"stdin":       true,
-			"object_ids":  stringsToAny(append(ids, sectionIDs...)),
-			"destination": destination,
-			"update-refs": moveUpdateRefs,
-		}, nil
-	}
-
-	if len(args) < 2 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires source and destination arguments", "Usage: rvn move <source> <destination>")
-	}
-	argsMap := sourceDestinationArgs(args[0], args[1])
-	argsMap["update-refs"] = moveUpdateRefs
-	if moveSkipTypeCheck {
-		argsMap["skip-type-check"] = true
-	}
-	return argsMap, nil
-}
 
 func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	// Bulk move stays preview-first: changes apply only with --confirm.

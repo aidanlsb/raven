@@ -311,8 +311,9 @@ Use --stdin to read object IDs from stdin (one per line).
 Destination must be a directory (ending with /).`,
 		Args: []ArgMeta{
 			{Name: "source", Description: "Source object reference or explicit non-Markdown file path; section IDs are rejected", Required: false},
-			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/projects/)", Required: false},
+			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/projects/)", Required: false, StdinIndependent: true},
 		},
+		BulkStdinArgName: "object_ids",
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
 			{Name: "update-refs", Description: "Update body, frontmatter ref-field, and file-link references to moved file", Type: FlagTypeBool, Default: "true"},
