@@ -157,8 +157,8 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 			BulkPreviewResult: commandpayload.BulkPreviewResult{
 				Preview: true,
 				Action:  preview.Action,
-				Items:   canonicalMovePreviewItems(preview.Items),
-				Skipped: canonicalMoveResults(preview.Skipped),
+				Items:   canonicalBulkPreviewItems(preview.Items),
+				Skipped: canonicalBulkResults(preview.Skipped),
 				Total:   preview.Total,
 			},
 			Destination: preview.Destination,
@@ -175,7 +175,7 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 		BulkSummaryResult: commandpayload.BulkSummaryResult{
 			OK:                summary.Errors == 0,
 			Action:            summary.Action,
-			Items:             canonicalMoveResults(summary.Results),
+			Items:             canonicalBulkResults(summary.Results),
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,

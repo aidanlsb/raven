@@ -30,30 +30,17 @@ type MoveBulkRequest struct {
 	Runtime        *vaultruntime.Runtime
 }
 
-type MoveBulkPreviewItem struct {
-	ID      string
-	Action  string
-	Details string
-}
-
-type MoveBulkResult struct {
-	ID      string
-	Status  string
-	Reason  string
-	Details string
-}
-
 type MoveBulkPreview struct {
 	Action      string
-	Items       []MoveBulkPreviewItem
-	Skipped     []MoveBulkResult
+	Items       []BulkPreviewItem
+	Skipped     []BulkResult
 	Total       int
 	Destination string
 }
 
 type MoveBulkSummary struct {
 	Action          string
-	Results         []MoveBulkResult
+	Results         []BulkResult
 	Total           int
 	Skipped         int
 	Errors          int
@@ -74,28 +61,28 @@ func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 		return nil, svcerr.New(codes.ErrInvalidInput, "rvn move does not accept section sources").WithSuggestion(`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`).WithDetails(map[string]interface{}{"section_ids": sectionIDs})
 	}
 
-	items := make([]MoveBulkPreviewItem, 0, len(req.ObjectIDs))
-	skipped := make([]MoveBulkResult, 0)
+	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
+	skipped := make([]BulkResult, 0)
 	for _, id := range req.ObjectIDs {
 		sourceFile, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
 		if err != nil {
-			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
+			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
 		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
-			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
 
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(req.DestinationDir, filename)
 		if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
-			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
 		fullDestPath := filepath.Join(req.VaultPath, destPath)
 		if _, err := os.Stat(fullDestPath); err == nil {
-			skipped = append(skipped, MoveBulkResult{
+			skipped = append(skipped, BulkResult{
 				ID:     id,
 				Status: "skipped",
 				Reason: fmt.Sprintf("destination already exists: %s", destPath),
@@ -103,7 +90,7 @@ func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 			continue
 		}
 
-		items = append(items, MoveBulkPreviewItem{
+		items = append(items, BulkPreviewItem{
 			ID:      id,
 			Action:  "move",
 			Details: fmt.Sprintf("→ %s", destPath),
@@ -130,7 +117,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 		return nil, svcerr.New(codes.ErrInvalidInput, "rvn move does not accept section sources").WithSuggestion(`Use 'rvn section move <file#section>' to reorder/reparent, or 'rvn section rename <file#section> "<new heading text>"' to change heading identity`).WithDetails(map[string]interface{}{"section_ids": sectionIDs})
 	}
 
-	results := make([]MoveBulkResult, 0, len(req.ObjectIDs))
+	results := make([]BulkResult, 0, len(req.ObjectIDs))
 	movedCount := 0
 	skippedCount := 0
 	errorCount := 0
@@ -138,7 +125,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 	changes := mutation.NewChangeSet()
 
 	for _, id := range req.ObjectIDs {
-		result := MoveBulkResult{ID: id}
+		result := BulkResult{ID: id}
 
 		sourceFile, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
 		if err != nil {

@@ -234,8 +234,8 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 			BulkPreviewResult: commandpayload.BulkPreviewResult{
 				Preview: true,
 				Action:  preview.Action,
-				Items:   canonicalSetPreviewItems(preview.Items),
-				Skipped: canonicalSetResults(preview.Skipped),
+				Items:   canonicalBulkPreviewItems(preview.Items),
+				Skipped: canonicalBulkResults(preview.Skipped),
 				Total:   preview.Total,
 			},
 			Warnings: warnings,
@@ -253,7 +253,7 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 		BulkSummaryResult: commandpayload.BulkSummaryResult{
 			OK:                summary.Errors == 0,
 			Action:            summary.Action,
-			Items:             canonicalSetResults(summary.Results),
+			Items:             canonicalBulkResults(summary.Results),
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,

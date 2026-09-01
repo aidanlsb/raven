@@ -90,8 +90,8 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 			BulkPreviewResult: commandpayload.BulkPreviewResult{
 				Preview: true,
 				Action:  "add",
-				Items:   canonicalAddPreviewItems(preview.Items),
-				Skipped: canonicalAddResults(preview.Skipped),
+				Items:   canonicalBulkPreviewItems(preview.Items),
+				Skipped: canonicalBulkResults(preview.Skipped),
 				Total:   preview.Total,
 			},
 			Warnings: warnings,
@@ -109,7 +109,7 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 		BulkSummaryResult: commandpayload.BulkSummaryResult{
 			OK:                summary.Errors == 0,
 			Action:            summary.Action,
-			Items:             canonicalAddResults(summary.Results),
+			Items:             canonicalBulkResults(summary.Results),
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,

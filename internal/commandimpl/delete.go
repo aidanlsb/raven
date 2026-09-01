@@ -132,8 +132,8 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 			BulkPreviewResult: commandpayload.BulkPreviewResult{
 				Preview: true,
 				Action:  preview.Action,
-				Items:   canonicalDeletePreviewItems(preview.Items),
-				Skipped: canonicalDeleteResults(preview.Skipped),
+				Items:   canonicalBulkPreviewItems(preview.Items),
+				Skipped: canonicalBulkResults(preview.Skipped),
 				Total:   preview.Total,
 			},
 			Warnings: warnings,
@@ -151,7 +151,7 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 		BulkSummaryResult: commandpayload.BulkSummaryResult{
 			OK:                summary.Errors == 0,
 			Action:            summary.Action,
-			Items:             canonicalDeleteResults(summary.Results),
+			Items:             canonicalBulkResults(summary.Results),
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,
