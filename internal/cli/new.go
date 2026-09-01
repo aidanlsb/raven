@@ -58,6 +58,25 @@ func prepareNewArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
 }
 
 func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Test compatibility: merge global flag values if args don't have them
+	// (tests set globals but bypass Cobra flag parsing)
+	if _, hasField := args["field"]; !hasField && len(newFieldFlags) > 0 {
+		parsed, _ := parseKeyValueArgs("field", newFieldFlags)
+		args["field"] = parsed
+	}
+	if _, hasFieldsJSON := args["fields-json"]; !hasFieldsJSON && newFieldJSON != "" {
+		var decoded interface{}
+		if err := json.Unmarshal([]byte(newFieldJSON), &decoded); err == nil {
+			args["fields-json"] = decoded
+		}
+	}
+	if _, hasObjPath := args["object-path"]; !hasObjPath && newObjectPath != "" {
+		args["object-path"] = newObjectPath
+	}
+	if _, hasTemplate := args["template"]; !hasTemplate && newTemplate != "" {
+		args["template"] = newTemplate
+	}
+
 	// Validate title
 	title := stringValue(args["title"])
 	if err := validateObjectTitle(title); err != nil {

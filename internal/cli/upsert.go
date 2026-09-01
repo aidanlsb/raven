@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -35,6 +36,27 @@ var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
 })
 
 func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Test compatibility: merge global flag values
+	if _, hasField := args["field"]; !hasField && len(upsertFieldFlags) > 0 {
+		parsed, _ := parseKeyValueArgs("field", upsertFieldFlags)
+		args["field"] = parsed
+	}
+	if _, hasFieldsJSON := args["fields-json"]; !hasFieldsJSON && upsertFieldJSON != "" {
+		var decoded interface{}
+		if err := json.Unmarshal([]byte(upsertFieldJSON), &decoded); err == nil {
+			args["fields-json"] = decoded
+		}
+	}
+	if _, hasContent := args["content"]; !hasContent && upsertContent != "" {
+		args["content"] = upsertContent
+	}
+	if _, hasContentFile := args["content-file"]; !hasContentFile && upsertContentFile != "" {
+		args["content-file"] = upsertContentFile
+	}
+	if _, hasObjPath := args["object-path"]; !hasObjPath && upsertObjectPath != "" {
+		args["object-path"] = upsertObjectPath
+	}
+
 	// Validate title
 	title := stringValue(args["title"])
 	if err := validateObjectTitle(title); err != nil {
@@ -42,7 +64,7 @@ func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 	}
 
 	// Validate object-path if explicitly provided
-	if cmd.Flags().Changed("object-path") {
+	if cmd.Flags().Changed("object-path") || upsertObjectPath != "" {
 		targetPath := stringValue(args["object-path"])
 		if err := validateObjectPath(targetPath); err != nil {
 			return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Use --object-path with an object path like note/raven-friction (no type/ prefix, no .md suffix)")
@@ -50,8 +72,8 @@ func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 	}
 
 	// Handle stdin content-file
-	contentFileChanged := cmd.Flags().Changed("content-file")
-	if contentFileChanged && strings.TrimSpace(upsertContentFile) == "-" {
+	contentFileChanged := cmd.Flags().Changed("content-file") || upsertContentFile != ""
+	if contentFileChanged && strings.TrimSpace(stringValue(args["content-file"])) == "-" {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return commandexec.Failure("FILE_READ", "failed to read content from stdin", err, "")

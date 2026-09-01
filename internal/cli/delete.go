@@ -30,7 +30,6 @@ var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
 	},
 })
 
-
 func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	// Bulk delete stays preview-first: changes apply only with --confirm.
 	if boolValue(args["stdin"]) {

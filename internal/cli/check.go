@@ -33,7 +33,6 @@ var checkCreateMissingCmd = newCanonicalLeafCommand("check create-missing", cano
 	HandleResult: handleCheckCreateMissingResult,
 })
 
-
 // invokeCheckMutation drives the mutating check subcommands. `check fix` honors
 // --confirm directly. `check create-missing` in interactive (non-JSON) mode
 // always runs a preview and then applies via the prompt flow, so --confirm is

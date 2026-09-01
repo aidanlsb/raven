@@ -60,7 +60,7 @@ func invokeTemplateWrite(cmd *cobra.Command, commandID, vaultPath string, args m
 	if edit {
 		content, err := editTemplateContent(stringValue(args["path"]))
 		if err != nil {
-			return commandexec.Failure("INTERNAL", "editor failed", err, "")
+			return commandexec.Failure("FILE_READ", "editor failed", err, "")
 		}
 		args["content"] = content
 	} else if !cmd.Flags().Changed("content") {

@@ -50,7 +50,6 @@ func handleCanonicalDocsLeafFailure(result commandexec.Result) error {
 	return handleCanonicalDocsFailure(result, nil)
 }
 
-
 func handleCanonicalDocsFailure(result commandexec.Result, args []string) error {
 	result = rewriteCanonicalDocsFailure(result, args)
 	if result.Error == nil {

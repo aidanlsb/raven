@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -43,6 +44,18 @@ var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 
 
 func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Test compatibility: merge global flag values
+	if _, hasField := args["field"]; !hasField && len(reclassifyFieldFlags) > 0 {
+		parsed, _ := parseKeyValueArgs("field", reclassifyFieldFlags)
+		args["field"] = parsed
+	}
+	if _, hasFieldsJSON := args["fields-json"]; !hasFieldsJSON && reclassifyFieldJSON != "" {
+		var decoded interface{}
+		if err := json.Unmarshal([]byte(reclassifyFieldJSON), &decoded); err == nil {
+			args["fields-json"] = decoded
+		}
+	}
+
 	if boolValue(args["stdin"]) {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
