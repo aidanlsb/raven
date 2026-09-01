@@ -209,7 +209,7 @@ rvn query "trait:due .value<today" --ids
 
 ```bash
 # Set fields via pipe
-rvn query "type:project .status==active" --ids | rvn set --stdin priority=high --confirm
+rvn query "type:project .status==active" --ids | rvn set --stdin --field priority=high --confirm
 
 # Update trait values via pipe
 rvn query "trait:todo .value==todo" --ids | rvn update --stdin done --confirm
@@ -232,10 +232,10 @@ rvn query "type:page" --ids | rvn reclassify note --stdin --confirm
 
 ```bash
 # Process first 10 results
-rvn query "type:project" --ids | head -10 | rvn set --stdin reviewed=true --confirm
+rvn query "type:project" --ids | head -10 | rvn set --stdin --field reviewed=true --confirm
 
 # Filter with grep
-rvn query "type:person" --ids | grep "team-" | rvn set --stdin department=engineering --confirm
+rvn query "type:person" --ids | grep "team-" | rvn set --stdin --field department=engineering --confirm
 ```
 
 ---
@@ -372,7 +372,7 @@ rvn query "type:person !exists(.status)" --apply "set status=active" --confirm
 
 ```bash
 # After adding "critical" to priority enum, update old "urgent" values
-rvn query "type:project .priority==urgent" --ids | rvn set --stdin priority=critical --confirm
+rvn query "type:project .priority==urgent" --ids | rvn set --stdin --field priority=critical --confirm
 ```
 
 ### Clean up overdue items

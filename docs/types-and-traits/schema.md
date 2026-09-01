@@ -483,7 +483,7 @@ types:
         target: date
 ```
 
-For example, `rvn set brief/today date=today` stores `date: 2026-01-15`
+For example, `rvn set brief/today --field date=today` stores `date: 2026-01-15`
 and `rvn query 'type:brief .date==today'` matches that daily-note reference.
 
 #### `datetime`
@@ -612,7 +612,7 @@ rvn schema update field person email --required=true
 
 ```bash
 # First, add the field to all objects
-rvn query "type:person !exists(.email)" --ids | rvn set --stdin email="" --confirm
+rvn query "type:person !exists(.email)" --ids | rvn set --stdin --field email="" --confirm
 
 # Then make it required
 rvn schema update field person email --required=true

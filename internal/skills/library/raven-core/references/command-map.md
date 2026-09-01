@@ -16,7 +16,7 @@ Use this page as the compact CLI chooser for day-to-day Raven work.
 
 ## Updating content
 
-- Update frontmatter fields: `rvn set <reference> key=value --json` (applies immediately; add `--dry-run` to preview)
+- Update frontmatter fields: `rvn set <reference> --field key=value --json` (applies immediately; add `--dry-run` to preview)
 - Surgical body replacement: `rvn edit <reference> <old> <new> --json` (applies immediately; add `--dry-run` to preview)
 - Update a trait value by trait ID: `rvn update <trait_id> <new_value> --json` (applies immediately; add `--dry-run` to preview)
 
