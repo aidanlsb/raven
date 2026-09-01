@@ -449,7 +449,12 @@ types:
 	})
 
 	// Second run should emit a structured JSON error and signal process failure.
+	// Reset everything again including JSON mode
 	resetCommandFlags(newCmd)
+	jsonOutput = false
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := newCmd.ParseFlags([]string{}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -502,12 +507,12 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	if err := setupJSONMode(newCmd); err != nil {
-		t.Fatalf("setupJSONMode: %v", err)
-	}
 
 	title := "config.VaultConfig duplicates internal/paths"
 	resetCommandFlags(newCmd)
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := newCmd.ParseFlags([]string{}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -581,11 +586,11 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
+
+	resetCommandFlags(newCmd)
 	if err := setupJSONMode(newCmd); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-
-	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{"--object-path", "custom/raven-logo-brief"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -635,11 +640,11 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
+
+	resetCommandFlags(newCmd)
 	if err := setupJSONMode(newCmd); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-
-	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{"--object-path", "note/"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -695,11 +700,11 @@ directories:
 	})
 
 	resolvedVaultPath = vaultPath
+
+	resetCommandFlags(newCmd)
 	if err := setupJSONMode(newCmd); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-
-	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -763,11 +768,11 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
+
+	resetCommandFlags(newCmd)
 	if err := setupJSONMode(newCmd); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-
-	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{"--template", "interview_technical"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -817,11 +822,11 @@ directories:
 	})
 
 	resolvedVaultPath = vaultPath
+
+	resetCommandFlags(newCmd)
 	if err := setupJSONMode(newCmd); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-
-	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -937,11 +942,11 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
+
+	resetCommandFlags(newCmd)
 	if err := setupJSONMode(newCmd); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-
-	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}

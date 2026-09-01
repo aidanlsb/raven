@@ -135,7 +135,7 @@ func TestIntegration_SchemaValidationErrors(t *testing.T) {
 	v.RunCLI("new", "person", "TestPerson").MustSucceed(t)
 
 	// Unknown fields should fail fast.
-	result := v.RunCLI("set", "people/testperson", "status=invalid_value")
+	result := v.RunCLI("set", "people/testperson", "--field", "status=invalid_value")
 	result.MustFail(t, "UNKNOWN_FIELD")
 	if result.Error == nil || result.Error.Details == nil {
 		t.Fatalf("expected unknown field details in error, got: %#v", result.Error)
@@ -163,7 +163,7 @@ func TestIntegration_SetBulkFailsOnSchemaLoadError(t *testing.T) {
 		t.Fatalf("failed to corrupt schema for test: %v", err)
 	}
 
-	result := v.RunCLIWithStdin("people/schema-broken\n", "set", "--stdin", "email=broken@example.com", "--confirm")
+	result := v.RunCLIWithStdin("people/schema-broken\n", "set", "--stdin", "--field", "email=broken@example.com", "--confirm")
 	result.MustFail(t, "SCHEMA_INVALID")
 	result.MustFailWithMessage(t, "Fix schema.yaml and try again")
 }
@@ -179,8 +179,8 @@ func TestIntegration_SetResolvesObjectIDsAndWikiLinks(t *testing.T) {
 
 	v.RunCLI("new", "person", "Dana").MustSucceed(t)
 
-	v.RunCLI("set", "people/dana", "email=dana@example.com").MustSucceed(t)
-	v.RunCLI("set", "[[people/dana]]", "email=dana+wiki@example.com").MustSucceed(t)
+	v.RunCLI("set", "people/dana", "--field", "email=dana@example.com").MustSucceed(t)
+	v.RunCLI("set", "[[people/dana]]", "--field", "email=dana+wiki@example.com").MustSucceed(t)
 
 	v.AssertFileContains("objects/people/dana.md", "email: dana+wiki@example.com")
 }
@@ -194,7 +194,7 @@ func TestIntegration_SetValidatesTypedValuesAtWriteTime(t *testing.T) {
 	v.RunCLI("new", "person", "Dana").MustSucceed(t)
 
 	// email is a string field; unquoted true should fail type validation.
-	result := v.RunCLI("set", "people/dana", "email=true")
+	result := v.RunCLI("set", "people/dana", "--field", "email=true")
 	result.MustFail(t, "VALIDATION_FAILED")
 
 	// Confirm no invalid bool value was written into frontmatter.

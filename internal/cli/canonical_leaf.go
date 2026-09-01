@@ -290,11 +290,26 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 		}
 	}
 
+	// Check if we're in bulk mode:
+	// - via stdin flag, OR
+	// - via explicit bulk flags (e.g., --trait-id populating trait_ids)
+	bulkMode := stdinMode
+	if !bulkMode && meta.BulkStdinArgName != "" {
+		// Check if any flag uses ArgsKey matching BulkStdinArgName
+		for _, flag := range meta.Flags {
+			if flag.ArgsKey == meta.BulkStdinArgName && cmd.Flags().Changed(flag.Name) {
+				bulkMode = true
+				break
+			}
+		}
+	}
+
 	// Process positional arguments
 	argIndex := 0
+	hasConsumedNonIndependentRef := false
 	for _, arg := range meta.Args {
-		// Skip stdin-dependent args when in stdin mode unless marked independent
-		if stdinMode && !arg.StdinIndependent && meta.BulkStdinArgName != "" {
+		// Skip stdin-dependent args when in bulk mode unless marked independent
+		if bulkMode && !arg.StdinIndependent && meta.BulkStdinArgName != "" {
 			continue
 		}
 
@@ -312,6 +327,10 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 		if argIndex < len(args) {
 			argsMap[arg.Name] = args[argIndex]
 			argIndex++
+			// Track if we consumed a non-independent reference arg
+			if (arg.Name == "reference" || arg.Name == "object_id") && !arg.StdinIndependent {
+				hasConsumedNonIndependentRef = true
+			}
 		} else if arg.Required && !arg.CLIOptional {
 			return nil, handleErrorMsg("MISSING_ARGUMENT",
 				fmt.Sprintf("missing required argument: %s", arg.Name),
@@ -320,26 +339,18 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 	}
 
 	// Check for conflicting stdin + reference in same command
-	if stdinMode && meta.BulkStdinArgName != "" {
-		// For commands with bulk stdin, reject positional reference unless explicitly allowed
-		hasReferenceArg := false
-		for _, arg := range meta.Args {
-			if (arg.Name == "reference" || arg.Name == "object_id") && !arg.StdinIndependent {
-				hasReferenceArg = true
-				break
-			}
-		}
-		if hasReferenceArg && argIndex > 0 {
-			return nil, handleErrorMsg("INVALID_INPUT",
-				"cannot specify positional reference with --stdin",
-				"Use either --stdin or a positional reference, not both")
-		}
+	if bulkMode && meta.BulkStdinArgName != "" && hasConsumedNonIndependentRef {
+		return nil, handleErrorMsg("INVALID_INPUT",
+			"cannot specify positional reference with --stdin",
+			"Use either --stdin or a positional reference, not both")
 	}
 
 	// Process flags
 	for _, flag := range meta.Flags {
 		if flag.Type == commands.FlagTypePosKeyValue {
-			return nil, fmt.Errorf("command %q uses deprecated FlagTypePosKeyValue", meta.Name)
+			return nil, handleErrorMsg("INTERNAL",
+				fmt.Sprintf("command %q uses deprecated FlagTypePosKeyValue", meta.Name),
+				"Contact support")
 		}
 		if !cmd.Flags().Changed(flag.Name) {
 			continue
@@ -377,7 +388,9 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 			if strings.TrimSpace(raw) != "" {
 				var decoded interface{}
 				if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
-					return nil, fmt.Errorf("invalid --%s JSON: %w", flag.Name, err)
+					return nil, handleErrorMsg("INVALID_INPUT",
+						fmt.Sprintf("invalid --%s JSON: %s", flag.Name, err.Error()),
+						"Ensure the JSON is well-formed")
 				}
 				argsMap[argsKey] = decoded
 			}
@@ -422,7 +435,9 @@ func parseKeyValueArgs(flagName string, values []string) (map[string]interface{}
 	for _, value := range values {
 		key, item, ok := strings.Cut(value, "=")
 		if !ok || strings.TrimSpace(key) == "" {
-			return nil, fmt.Errorf("invalid --%s value %q: expected key=value", flagName, value)
+			return nil, handleErrorMsg("INVALID_INPUT",
+				fmt.Sprintf("invalid --%s value %q: expected key=value", flagName, value),
+				fmt.Sprintf("Use --%s key=value format", flagName))
 		}
 		out[key] = item
 	}

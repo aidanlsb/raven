@@ -123,7 +123,7 @@ func TestIntegration_SetSurfacesMissingRefTarget(t *testing.T) {
 
 	v.RunCLI("new", "project", "Website").MustSucceed(t)
 
-	result := v.RunCLI("set", "projects/website", "owner=people/ghost")
+	result := v.RunCLI("set", "projects/website", "--field", "owner=people/ghost")
 	result.MustSucceed(t)
 
 	if !hasWarningCode(result, "REF_TARGET_MISSING") {

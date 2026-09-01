@@ -212,7 +212,7 @@ old task
 				"email": "set@example.com",
 			},
 		})
-		cliResult := vCLI.RunCLI("set", "people/parity-set", "email=set@example.com")
+		cliResult := vCLI.RunCLI("set", "people/parity-set", "--field", "email=set@example.com")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file", "object_id", "type", "updated_fields"})
 	})
@@ -234,7 +234,7 @@ old task
 				"email": "bulk@example.com",
 			},
 		})
-		cliResult := vCLI.RunCLIWithStdin("people/set-bulk-one\npeople/set-bulk-two\n", "set", "--stdin", "email=bulk@example.com")
+		cliResult := vCLI.RunCLIWithStdin("people/set-bulk-one\npeople/set-bulk-two\n", "set", "--stdin", "--field", "email=bulk@example.com")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "warnings", "fields"})
 		vMCP.AssertFileNotContains("people/set-bulk-one.md", "bulk@example.com")
@@ -261,7 +261,7 @@ old task
 				"email": "apply@example.com",
 			},
 		})
-		cliResult := vCLI.RunCLIWithStdin("people/set-apply-one\npeople/set-apply-two\n", "set", "--stdin", "--confirm", "email=apply@example.com")
+		cliResult := vCLI.RunCLIWithStdin("people/set-apply-one\npeople/set-apply-two\n", "set", "--stdin", "--confirm", "--field", "email=apply@example.com")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "items", "total", "skipped", "errors", "modified", "fields"})
 	})

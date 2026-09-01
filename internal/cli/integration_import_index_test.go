@@ -205,7 +205,7 @@ func TestIntegration_IndexJournalGuardFailuresBlockWrites(t *testing.T) {
 		{
 			name: "set",
 			run: func(v *testutil.TestVault) *testutil.CLIResult {
-				return v.RunCLI("set", "people/alice", "email=alice@newdomain.com")
+				return v.RunCLI("set", "people/alice", "--field", "email=alice@newdomain.com")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
 				v.AssertFileNotContains("people/alice.md", "email: alice@newdomain.com")

@@ -44,6 +44,9 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 		// Reset flags
 		reclassifyCmd.Flags().VisitAll(func(f *pflag.Flag) {
 			f.Changed = false
+			if f.Value.Type() == "stringArray" || f.Value.Type() == "stringSlice" {
+				return
+			}
 			_ = f.Value.Set(f.DefValue)
 		})
 	})
@@ -69,36 +72,15 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 func runReclassifyCommand(t *testing.T, args ...string) string {
 	t.Helper()
 	return captureStdout(t, func() {
-		// Split args into flags and positional args
-		var flags []string
-		var positional []string
-		i := 0
-		for i < len(args) {
-			if strings.HasPrefix(args[i], "--") {
-				flagName := strings.TrimPrefix(args[i], "--")
-				// Check if this is a known flag that takes a value
-				if flagName == "field" || flagName == "fields-json" || strings.Contains(flagName, "=") {
-					flags = append(flags, args[i])
-					// If it's --field without =, next arg is the value
-					if !strings.Contains(args[i], "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-						i++
-						flags = append(flags, args[i])
-					}
-				} else {
-					// Bool flag or flag with =
-					flags = append(flags, args[i])
-				}
-				i++
-			} else {
-				// Rest are positional
-				positional = append(positional, args[i:]...)
-				break
-			}
-		}
-
-		if err := reclassifyCmd.ParseFlags(flags); err != nil {
+		// Let Cobra's ParseFlags handle all the complexity of bool vs value flags
+		// Just pass everything to ParseFlags, it will figure out what's what
+		if err := reclassifyCmd.ParseFlags(args); err != nil {
 			t.Fatalf("ParseFlags: %v", err)
 		}
+
+		// After parsing, get the remaining args (non-flags)
+		positional := reclassifyCmd.Flags().Args()
+
 		if err := reclassifyCmd.Args(reclassifyCmd, positional); err != nil {
 			t.Fatalf("reclassifyCmd.Args: %v", err)
 		}
@@ -338,9 +320,8 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyFieldJSON = `{"status":"false"}`
 
-	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "--fields-json", `{"status":"false"}`, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -353,7 +334,7 @@ types:
 		t.Fatalf("expected ok=true; out=%s", out)
 	}
 
-	content, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	content, err := os.ReadFile(filepath.Join(vaultPath, "books/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -410,7 +391,7 @@ types:
 	}
 
 	// Verify default was applied
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(vaultPath, "books/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -451,7 +432,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -505,7 +486,7 @@ types:
 	}
 
 	// Verify the dropped field was removed
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(vaultPath, "books/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -642,7 +623,7 @@ types:
 	}
 
 	// Title should be preserved (exists on both types)
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(vaultPath, "books/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}

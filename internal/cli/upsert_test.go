@@ -46,9 +46,6 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 	})
 
 	resolvedVaultPath = vaultPath
-	if err := setupUpsertJSONMode(); err != nil {
-		t.Fatalf("setupJSONMode: %v", err)
-	}
 
 	run := func(content string) (status string, file string) {
 		resetUpsertFlags()
@@ -214,12 +211,12 @@ func TestUpsertSlugifiesTitleWithPathSeparator(t *testing.T) {
 	})
 
 	resolvedVaultPath = vaultPath
-	if err := setupUpsertJSONMode(); err != nil {
-		t.Fatalf("setupJSONMode: %v", err)
-	}
 
 	title := "config.VaultConfig duplicates internal/paths"
 	resetUpsertFlags()
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := upsertCmd.ParseFlags([]string{}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}

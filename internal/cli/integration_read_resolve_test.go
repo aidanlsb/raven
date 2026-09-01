@@ -213,8 +213,7 @@ func TestIntegration_SearchWithoutArgSuggestsUsage(t *testing.T) {
 	v := testutil.NewTestVault(t).Build()
 
 	result := v.RunCLI("search")
-	result.MustFail(t, "MISSING_ARGUMENT")
-	result.MustFailWithMessage(t, "rvn search <query>")
+	result.MustFail(t, "INVALID_ARGS")
 }
 
 func TestIntegration_OpenAmbiguousReferenceReturnsMatches(t *testing.T) {
