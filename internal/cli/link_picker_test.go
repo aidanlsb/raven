@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -90,7 +91,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return prepareResolveArgs(resolveCmd, args)
 			},
 			build: func(args []string) (map[string]interface{}, error) {
-				return buildResolveArgs(resolveCmd, args)
+				meta, _ := commands.EffectiveMeta("resolve")
+				return buildCanonicalArgsForMeta(meta, resolveCmd, args)
 			},
 			prompt:   "resolve> ",
 			argKey:   "reference",

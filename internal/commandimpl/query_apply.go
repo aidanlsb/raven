@@ -53,7 +53,7 @@ func queryApplyCommandArgs(plan *querysvc.ApplyPlan) map[string]interface{} {
 		}
 	case "set":
 		return map[string]interface{}{
-			"stdin": true, "fields": plan.SetUpdates, "references": stringsToInterfaces(plan.IDs),
+			"stdin": true, "field": plan.SetUpdates, "references": stringsToInterfaces(plan.IDs),
 		}
 	case "delete":
 		return map[string]interface{}{"stdin": true, "references": stringsToInterfaces(plan.IDs)}
