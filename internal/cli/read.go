@@ -14,9 +14,7 @@ import (
 
 var readCmd = newCanonicalLeafCommand("read", canonicalLeafOptions{
 	VaultPath:      getVaultPath,
-	Args:           cobra.MaximumNArgs(1),
 	Prepare:        prepareReadArgs,
-	BuildArgs:      buildReadArgs,
 	HandleErrorCmd: handleCanonicalReadFailureCmd,
 	RenderHuman:    renderRead,
 })

@@ -14,7 +14,6 @@ var outlinksCmd = newCanonicalLeafCommand("outlinks", canonicalLeafOptions{
 	VaultPath:      getVaultPath,
 	Args:           validateOutlinksArgs,
 	Prepare:        prepareOutlinksArgs,
-	BuildArgs:      buildOutlinksArgs,
 	HandleErrorCmd: handleOutlinksFailure,
 	RenderHuman:    renderOutlinks,
 })
@@ -41,25 +40,6 @@ func prepareOutlinksArgs(cmd *cobra.Command, args []string) ([]string, bool, err
 	return prepareInteractiveReferenceArgs(args, "outlinks", "reference", "outlinks> ", "Select a reference for outlinks (Esc to cancel)")
 }
 
-func buildOutlinksArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	stdin, _ := cmd.Flags().GetBool("stdin")
-	if stdin {
-		references, err := ReadReferencesFromStdin()
-		if err != nil {
-			return nil, err
-		}
-		if len(references) == 0 {
-			return nil, fmt.Errorf("no references provided on stdin")
-		}
-		return map[string]interface{}{
-			"stdin":      true,
-			"references": references,
-		}, nil
-	}
-	return map[string]interface{}{
-		"reference": args[0],
-	}, nil
-}
 
 func handleOutlinksFailure(cmd *cobra.Command, result commandexec.Result) error {
 	return handleAmbiguousReferenceRetry(cmd, result, ambiguousReferenceRetryOptions{
