@@ -37,8 +37,6 @@ func docsArgsFromCanonical(args map[string]interface{}) []string {
 }
 
 var docsSearchCmd = newCanonicalLeafCommand("docs_search", canonicalLeafOptions{
-	Args:        cobra.MinimumNArgs(1),
-	BuildArgs:   buildDocsSearchArgs,
 	HandleError: handleCanonicalDocsLeafFailure,
 	RenderHuman: renderDocsSearch,
 })
@@ -52,18 +50,6 @@ func handleCanonicalDocsLeafFailure(result commandexec.Result) error {
 	return handleCanonicalDocsFailure(result, nil)
 }
 
-func buildDocsSearchArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	query := strings.TrimSpace(strings.Join(args, " "))
-	limit, _ := cmd.Flags().GetInt("limit")
-	offset, _ := cmd.Flags().GetInt("offset")
-	section, _ := cmd.Flags().GetString("section")
-	return map[string]interface{}{
-		"query":   query,
-		"section": section,
-		"limit":   limit,
-		"offset":  offset,
-	}, nil
-}
 
 func handleCanonicalDocsFailure(result commandexec.Result, args []string) error {
 	result = rewriteCanonicalDocsFailure(result, args)

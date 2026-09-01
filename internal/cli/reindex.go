@@ -14,7 +14,6 @@ import (
 var reindexCmd = newCanonicalLeafCommand("reindex", canonicalLeafOptions{
 	VaultPath:    getVaultPath,
 	Prepare:      prepareReindexArgs,
-	BuildArgs:    buildReindexArgs,
 	Invoke:       invokeReindex,
 	HandleResult: handleReindexResult,
 })
@@ -32,14 +31,6 @@ func prepareReindexArgs(cmd *cobra.Command, args []string) ([]string, bool, erro
 	return args, false, nil
 }
 
-func buildReindexArgs(cmd *cobra.Command, _ []string) (map[string]interface{}, error) {
-	fullReindex, _ := cmd.Flags().GetBool("full")
-	dryRun, _ := cmd.Flags().GetBool("dry-run")
-	return map[string]interface{}{
-		"full":    fullReindex,
-		"dry-run": dryRun,
-	}, nil
-}
 
 func invokeReindex(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	return app.CommandInvoker().Execute(cmd.Context(), commandexec.Request{

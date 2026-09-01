@@ -17,9 +17,7 @@ import (
 
 var resolveCmd = newCanonicalLeafCommand("resolve", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Args:        cobra.MaximumNArgs(1),
 	Prepare:     prepareResolveArgs,
-	BuildArgs:   buildResolveArgs,
 	RenderHuman: renderResolve,
 })
 
@@ -27,11 +25,6 @@ func prepareResolveArgs(_ *cobra.Command, args []string) ([]string, bool, error)
 	return prepareInteractiveReferenceArgs(args, "resolve", "reference", "resolve> ", "Select a reference to resolve (Esc to cancel)")
 }
 
-func buildResolveArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"reference": args[0],
-	}, nil
-}
 
 func renderResolve(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)

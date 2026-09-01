@@ -20,8 +20,6 @@ var (
 
 var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Args:        cobra.MaximumNArgs(1),
-	BuildArgs:   buildDeleteArgs,
 	Invoke:      invokeDelete,
 	RenderHuman: renderDeleteResult,
 	FlagBindings: map[string]interface{}{
@@ -32,28 +30,6 @@ var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
 	},
 })
 
-func buildDeleteArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
-	if deleteStdin {
-		ids, sectionIDs, err := ReadIDsFromStdin()
-		if err != nil {
-			return nil, handleError(ErrInternal, err, "")
-		}
-		if len(ids) == 0 && len(sectionIDs) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no references provided via stdin", "Pipe object references or file paths to stdin, one per line")
-		}
-		return map[string]interface{}{
-			"stdin":      true,
-			"references": stringsToAny(append(ids, sectionIDs...)),
-		}, nil
-	}
-
-	if len(args) == 0 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires reference argument", "Usage: rvn delete <reference>")
-	}
-	return map[string]interface{}{
-		"reference": args[0],
-	}, nil
-}
 
 func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	// Bulk delete stays preview-first: changes apply only with --confirm.
