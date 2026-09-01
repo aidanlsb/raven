@@ -20,8 +20,6 @@ var (
 
 var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Args:        cobra.ArbitraryArgs,
-	BuildArgs:   buildAddArgs,
 	Invoke:      invokeAdd,
 	RenderHuman: renderAddResult,
 	FlagBindings: map[string]interface{}{
@@ -31,43 +29,6 @@ var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
 	},
 })
 
-func buildAddArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	if addStdin {
-		if len(args) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no text to add", "Usage: rvn add --stdin <text>")
-		}
-		text := strings.Join(args, " ")
-
-		fileIDs, sectionIDs, err := ReadIDsFromStdin()
-		if err != nil {
-			return nil, handleError(ErrInternal, err, "")
-		}
-		ids := append(fileIDs, sectionIDs...)
-		if len(ids) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
-		}
-
-		argsMap := map[string]interface{}{
-			"text":       formatCaptureLine(text),
-			"stdin":      true,
-			"object_ids": stringsToAny(ids),
-		}
-		return argsMap, nil
-	}
-
-	if len(args) == 0 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires text argument", "Usage: rvn add <text>")
-	}
-
-	text := strings.Join(args, " ")
-	argsMap := map[string]interface{}{
-		"text": formatCaptureLine(text),
-	}
-	if to := strings.TrimSpace(addToFlag); to != "" {
-		argsMap["to"] = to
-	}
-	return argsMap, nil
-}
 
 func invokeAdd(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	return executeCanonicalRequest(commandexec.Request{
@@ -99,10 +60,6 @@ func renderAddResult(_ *cobra.Command, result commandexec.Result) error {
 	}
 	promptCreateMissingRefsFromResult(getVaultPath(), result)
 	return nil
-}
-
-func formatCaptureLine(text string) string {
-	return text
 }
 
 func buildCreateObjectCommand(typeName, targetRaw string) string {

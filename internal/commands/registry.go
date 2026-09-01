@@ -47,6 +47,7 @@ type FlagMeta struct {
 	Default     string   // Default value
 	Required    bool     // Whether callers must provide the flag
 	Examples    []string // Example values
+	ArgsKey     string   // Override the args map key (defaults to Name if empty)
 }
 
 // FlagType represents the type of a flag.

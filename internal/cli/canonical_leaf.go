@@ -360,27 +360,33 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 			continue
 		}
 
+		// Determine the args map key (use ArgsKey if set, otherwise flag.Name)
+		argsKey := flag.Name
+		if flag.ArgsKey != "" {
+			argsKey = flag.ArgsKey
+		}
+
 		switch flag.Type {
 		case commands.FlagTypeBool:
 			value, _ := cmd.Flags().GetBool(flag.Name)
-			argsMap[flag.Name] = value
+			argsMap[argsKey] = value
 		case commands.FlagTypeInt:
 			value, _ := cmd.Flags().GetInt(flag.Name)
-			argsMap[flag.Name] = value
+			argsMap[argsKey] = value
 		case commands.FlagTypeStringSlice:
 			value, _ := cmd.Flags().GetStringArray(flag.Name)
 			// If there's already a variadic positional arg with same name, merge them
-			if existing, ok := argsMap[flag.Name].([]string); ok {
+			if existing, ok := argsMap[argsKey].([]string); ok {
 				value = append(existing, value...)
 			}
-			argsMap[flag.Name] = value
+			argsMap[argsKey] = value
 		case commands.FlagTypeKeyValue:
 			value, _ := cmd.Flags().GetStringArray(flag.Name)
 			parsed, err := parseKeyValueArgs(flag.Name, value)
 			if err != nil {
 				return nil, err
 			}
-			argsMap[flag.Name] = parsed
+			argsMap[argsKey] = parsed
 		case commands.FlagTypeJSON:
 			raw, _ := cmd.Flags().GetString(flag.Name)
 			if strings.TrimSpace(raw) != "" {
@@ -388,12 +394,12 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 				if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
 					return nil, fmt.Errorf("invalid --%s JSON: %w", flag.Name, err)
 				}
-				argsMap[flag.Name] = decoded
+				argsMap[argsKey] = decoded
 			}
 		default:
 			value, _ := cmd.Flags().GetString(flag.Name)
 			if value != "" || cmd.Flags().Changed(flag.Name) {
-				argsMap[flag.Name] = value
+				argsMap[argsKey] = value
 			}
 		}
 	}

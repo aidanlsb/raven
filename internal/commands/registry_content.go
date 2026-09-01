@@ -665,7 +665,7 @@ Use repeated --trait-id flags to provide an explicit trait ID list without stdin
 		},
 		Flags: []FlagMeta{
 			{Name: "stdin", Description: "Read trait IDs from stdin for bulk operations", Type: FlagTypeBool},
-			{Name: "trait-id", Description: "Trait ID for explicit-list bulk update (repeatable)", Type: FlagTypeStringSlice, Examples: []string{"daily/2026-01-25.md:trait:0"}},
+			{Name: "trait-id", ArgsKey: "trait_ids", Description: "Trait ID for explicit-list bulk update (repeatable)", Type: FlagTypeStringSlice, Examples: []string{"daily/2026-01-25.md:trait:0"}},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 			{Name: "dry-run", Description: "Preview a single-object update without applying it", Type: FlagTypeBool},
 		},
