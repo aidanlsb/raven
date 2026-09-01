@@ -76,7 +76,7 @@ func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 	if contentFileChanged && strings.TrimSpace(stringValue(args["content-file"])) == "-" {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return commandexec.Failure("FILE_READ", "failed to read content from stdin", err, "")
+			return commandexec.Failure("FILE_READ_ERROR", "failed to read content from stdin", err, "")
 		}
 		args["content"] = string(data)
 		delete(args, "content-file")

@@ -55,6 +55,18 @@ func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[st
 			args["fields-json"] = decoded
 		}
 	}
+	if _, hasNoMove := args["no-move"]; !hasNoMove {
+		args["no-move"] = reclassifyNoMove
+	}
+	if _, hasUpdateRefs := args["update-refs"]; !hasUpdateRefs {
+		args["update-refs"] = reclassifyUpdateRefs
+	}
+	if _, hasForce := args["force"]; !hasForce {
+		args["force"] = reclassifyForce
+	}
+	if _, hasStdin := args["stdin"]; !hasStdin {
+		args["stdin"] = reclassifyStdin
+	}
 
 	if boolValue(args["stdin"]) {
 		return executeCanonicalRequest(commandexec.Request{

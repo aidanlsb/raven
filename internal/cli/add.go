@@ -31,6 +31,14 @@ var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
 
 
 func invokeAdd(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Test compatibility: merge global flag values
+	if _, hasTo := args["to"]; !hasTo && addToFlag != "" {
+		args["to"] = addToFlag
+	}
+	if _, hasStdin := args["stdin"]; !hasStdin {
+		args["stdin"] = addStdin
+	}
+
 	return executeCanonicalRequest(commandexec.Request{
 		CommandID: commandID,
 		VaultPath: vaultPath,
