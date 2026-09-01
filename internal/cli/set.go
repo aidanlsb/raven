@@ -14,7 +14,6 @@ import (
 
 var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 	VaultPath: getVaultPath,
-	Invoke:    invokeSet,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		switch result.Data.(type) {
 		case commandpayload.SetBulkPreviewResult, commandpayload.SetBulkResult:
@@ -23,21 +22,6 @@ var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 		return renderCanonicalSetSingleResult(result)
 	},
 })
-
-func invokeSet(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	confirm, _ := cmd.Flags().GetBool("confirm")
-	preview := false
-	if dryRun, _ := cmd.Flags().GetBool("dry-run"); dryRun {
-		preview = true
-	}
-	return executeCanonicalRequest(commandexec.Request{
-		CommandID: commandID,
-		VaultPath: vaultPath,
-		Args:      args,
-		Confirm:   confirm,
-		Preview:   preview,
-	})
-}
 
 func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	data, ok := result.Data.(commandpayload.SetResult)

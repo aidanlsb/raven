@@ -14,8 +14,9 @@ import (
 var editCmd = newCanonicalLeafCommand("edit", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	HandleError: handleCanonicalEditFailure,
-	Invoke:      invokeEdit,
-	RenderHuman: renderEditResult,
+	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
+		return renderCanonicalEditResult(result)
+	},
 })
 
 func handleCanonicalEditFailure(result commandexec.Result) error {
@@ -26,18 +27,6 @@ func handleCanonicalEditFailure(result commandexec.Result) error {
 		return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
 	}
 	return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
-}
-
-func invokeEdit(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	return executeCanonicalRequest(commandexec.Request{
-		CommandID: commandID,
-		VaultPath: vaultPath,
-		Args:      args,
-	})
-}
-
-func renderEditResult(_ *cobra.Command, result commandexec.Result) error {
-	return renderCanonicalEditResult(result)
 }
 
 func renderCanonicalEditResult(result commandexec.Result) error {

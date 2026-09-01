@@ -11,31 +11,10 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var (
-	addToFlag  string
-	addStdin   bool
-	addConfirm bool
-)
-
 var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Invoke:      invokeAdd,
 	RenderHuman: renderAddResult,
-	FlagBindings: map[string]interface{}{
-		"to":      &addToFlag,
-		"stdin":   &addStdin,
-		"confirm": &addConfirm,
-	},
 })
-
-func invokeAdd(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	return executeCanonicalRequest(commandexec.Request{
-		CommandID: commandID,
-		VaultPath: vaultPath,
-		Args:      args,
-		Confirm:   addConfirm,
-	})
-}
 
 func renderAddResult(_ *cobra.Command, result commandexec.Result) error {
 	data, ok := result.Data.(commandpayload.AddResult)
