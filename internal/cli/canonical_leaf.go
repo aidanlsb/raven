@@ -307,7 +307,7 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 
 	// Process positional arguments
 	argIndex := 0
-	for i, arg := range meta.Args {
+	for _, arg := range meta.Args {
 		// Skip stdin-dependent args when in stdin mode unless marked independent
 		if stdinMode && !arg.StdinIndependent && meta.BulkStdinArgName != "" {
 			continue
