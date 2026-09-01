@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -14,7 +13,6 @@ import (
 var reindexCmd = newCanonicalLeafCommand("reindex", canonicalLeafOptions{
 	VaultPath:    getVaultPath,
 	Prepare:      prepareReindexArgs,
-	Invoke:       invokeReindex,
 	HandleResult: handleReindexResult,
 })
 
@@ -29,15 +27,6 @@ func prepareReindexArgs(cmd *cobra.Command, args []string) ([]string, bool, erro
 		}
 	}
 	return args, false, nil
-}
-
-func invokeReindex(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	return app.CommandInvoker().Execute(cmd.Context(), commandexec.Request{
-		CommandID: commandID,
-		VaultPath: vaultPath,
-		Caller:    commandexec.CallerCLI,
-		Args:      args,
-	})
 }
 
 func handleReindexResult(cmd *cobra.Command, result commandexec.Result) error {

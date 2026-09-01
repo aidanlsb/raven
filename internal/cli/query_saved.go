@@ -32,7 +32,7 @@ var querySavedGetCmd = newCanonicalLeafCommand("query_saved_get", canonicalLeafO
 
 var querySavedSetCmd = newCanonicalLeafCommand("query_saved_set", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Invoke:      invokeQuerySavedSet,
+	Prepare:     prepareQuerySavedSet,
 	RenderHuman: renderQuerySavedSet,
 })
 
@@ -41,17 +41,26 @@ var querySavedRemoveCmd = newCanonicalLeafCommand("query_saved_remove", canonica
 	RenderHuman: renderQuerySavedRemove,
 })
 
-func invokeQuerySavedSet(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	declaredArgs, err := normalizeSavedQueryArgsForCommand(cmd)
+func prepareQuerySavedSet(cmd *cobra.Command, args []string) ([]string, bool, error) {
+	// Normalize --arg values via querysvc before building canonical args
+	rawArgs, err := cmd.Flags().GetStringArray("arg")
 	if err != nil {
-		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "")
+		return nil, false, handleError(ErrInternal, err, "")
 	}
-	args["arg"] = stringsToAny(declaredArgs)
-	return executeCanonicalRequest(commandexec.Request{
-		CommandID: commandID,
-		VaultPath: vaultPath,
-		Args:      args,
-	})
+	normalized, err := querysvc.NormalizeArgs(rawArgs)
+	if err != nil {
+		return nil, false, handleCanonicalFailure(commandexec.FromServiceError(err))
+	}
+	// Replace --arg flag values with normalized versions
+	if err := cmd.Flags().Set("arg", ""); err != nil {
+		return nil, false, handleError(ErrInternal, err, "")
+	}
+	for _, arg := range normalized {
+		if err := cmd.Flags().Set("arg", arg); err != nil {
+			return nil, false, handleError(ErrInternal, err, "")
+		}
+	}
+	return args, false, nil
 }
 
 func renderQuerySavedList(_ *cobra.Command, result commandexec.Result) error {
@@ -92,16 +101,4 @@ func renderQuerySavedSet(_ *cobra.Command, result commandexec.Result) error {
 func renderQuerySavedRemove(_ *cobra.Command, result commandexec.Result) error {
 	fmt.Println(ui.Checkf("Removed query '%s'", stringValue(canonicalDataMap(result)["name"])))
 	return nil
-}
-
-func normalizeSavedQueryArgsForCommand(cmd *cobra.Command) ([]string, error) {
-	rawArgs, err := cmd.Flags().GetStringArray("arg")
-	if err != nil {
-		return nil, handleError(ErrInternal, err, "")
-	}
-	normalized, err := querysvc.NormalizeArgs(rawArgs)
-	if err != nil {
-		return nil, handleCanonicalFailure(commandexec.FromServiceError(err))
-	}
-	return normalized, nil
 }

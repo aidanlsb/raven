@@ -56,6 +56,7 @@ func init() {
 }
 
 func invokeTemplateWrite(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Handle --edit: read template, open editor, replace content in args
 	edit, _ := cmd.Flags().GetBool("edit")
 	if edit {
 		content, err := editTemplateContent(stringValue(args["path"]))
@@ -66,11 +67,8 @@ func invokeTemplateWrite(cmd *cobra.Command, commandID, vaultPath string, args m
 	} else if !cmd.Flags().Changed("content") {
 		return commandexec.Failure("MISSING_ARGUMENT", "--content or --edit is required", nil, "Provide template markdown with --content or open an editor with --edit")
 	}
-	return executeCanonicalRequest(commandexec.Request{
-		CommandID: commandID,
-		VaultPath: vaultPath,
-		Args:      args,
-	})
+
+	return executeCanonicalCommand(commandID, vaultPath, args)
 }
 
 func editTemplateContent(pathArg string) (string, error) {

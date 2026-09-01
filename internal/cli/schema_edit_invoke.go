@@ -12,27 +12,30 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-func invokeSchemaAddType(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	nameField, _ := cmd.Flags().GetString("name-field")
-	if strings.TrimSpace(nameField) == "" && !isJSONOutput() {
+func prepareSchemaAddType(cmd *cobra.Command, args []string) ([]string, bool, error) {
+	// Prompt for name-field if not provided and in interactive mode
+	if !cmd.Flags().Changed("name-field") && !isJSONOutput() {
 		fmt.Print("Which field should be the display name? (common: name, title; leave blank for none): ")
 		var input string
 		fmt.Scanln(&input)
-		nameField = strings.TrimSpace(input)
-		args["name-field"] = nameField
+		nameField := strings.TrimSpace(input)
+		if nameField != "" {
+			if err := cmd.Flags().Set("name-field", nameField); err != nil {
+				return nil, false, handleError(ErrInternal, err, "")
+			}
+		}
 	}
 
-	defaultPath, _ := cmd.Flags().GetString("default-path")
-	if strings.TrimSpace(defaultPath) == "" {
-		typeName := stringValue(args["name"])
-		args["default-path"] = paths.NormalizeDirRoot(typeName)
+	// Set default-path if not provided
+	if !cmd.Flags().Changed("default-path") && len(args) > 0 {
+		typeName := args[0]
+		defaultPath := paths.NormalizeDirRoot(typeName)
+		if err := cmd.Flags().Set("default-path", defaultPath); err != nil {
+			return nil, false, handleError(ErrInternal, err, "")
+		}
 	}
 
-	return executeCanonicalRequest(commandexec.Request{
-		CommandID: commandID,
-		VaultPath: vaultPath,
-		Args:      args,
-	})
+	return args, false, nil
 }
 
 func invokeSchemaRemoveType(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
