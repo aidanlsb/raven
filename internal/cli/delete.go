@@ -20,7 +20,7 @@ var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
 func invokeDelete(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	force, _ := cmd.Flags().GetBool("force")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
-	
+
 	// Bulk delete stays preview-first: changes apply only with --confirm.
 	// (confirm already in args from buildCanonicalArgsForMeta)
 	if boolValue(args["stdin"]) {
@@ -60,7 +60,7 @@ func invokeDelete(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 	}
 	delete(previewArgs, "confirm")
 	delete(previewArgs, "dry-run")
-	
+
 	preview := executeCanonicalRequest(commandexec.Request{
 		CommandID: commandID,
 		VaultPath: vaultPath,

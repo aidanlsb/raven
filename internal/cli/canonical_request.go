@@ -17,7 +17,7 @@ func executeCanonicalCommand(commandID, vaultPath string, args map[string]interf
 		Caller:     commandexec.CallerCLI,
 		Args:       args,
 	}
-	
+
 	// Honor confirm/dry-run from args map (populated by buildCanonicalArgsForMeta)
 	if confirm, ok := args["confirm"].(bool); ok && confirm {
 		req.Confirm = true
@@ -25,7 +25,7 @@ func executeCanonicalCommand(commandID, vaultPath string, args map[string]interf
 	if dryRun, ok := args["dry-run"].(bool); ok && dryRun {
 		req.Preview = true
 	}
-	
+
 	return executeCanonicalRequest(req)
 }
 
