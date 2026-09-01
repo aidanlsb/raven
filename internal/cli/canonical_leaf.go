@@ -196,8 +196,6 @@ func bindMetaFlags(cmd *cobra.Command, flags []commands.FlagMeta) {
 			cmd.Flags().StringArray(flag.Name, nil, flag.Description)
 		case commands.FlagTypeJSON:
 			cmd.Flags().String(flag.Name, flag.Default, flag.Description)
-		case commands.FlagTypePosKeyValue:
-			continue
 		default:
 			cmd.Flags().String(flag.Name, flag.Default, flag.Description)
 		}
@@ -300,11 +298,6 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 
 	// Process flags
 	for _, flag := range meta.Flags {
-		if flag.Type == commands.FlagTypePosKeyValue {
-			return nil, handleErrorMsg("INTERNAL",
-				fmt.Sprintf("command %q uses deprecated FlagTypePosKeyValue", meta.Name),
-				"Contact support")
-		}
 		if !cmd.Flags().Changed(flag.Name) {
 			continue
 		}

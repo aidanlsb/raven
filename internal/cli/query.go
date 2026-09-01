@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -118,6 +120,11 @@ Examples:
 
 		rawQuery := joinQueryArgs(args)
 
+		inputs, err := parseInputsFlag(cmd)
+		if err != nil {
+			return err
+		}
+
 		// Saved-query resolution lives in querysvc so the CLI never reimplements
 		// it. Runtime behavior comes only from flags on this invocation.
 		rt, err := vaultruntime.New(getVaultPath(), vaultruntime.Options{SkipSchema: true})
@@ -132,7 +139,28 @@ Examples:
 		defer rt.Close()
 		runOpts, err := querysvc.ResolveRunOptions(rt, rawQuery, savedQueryOptionsFromFlags(cmd))
 		if err != nil {
-			return handleCanonicalFailure(commandexec.FromServiceError(err))
+			// If resolution fails (e.g., saved query with required inputs but only
+			// --inputs flag provided, no positional), defer to canonical handler.
+			if inputs != nil {
+				runOpts = &querysvc.RunOptions{
+					ResolvedQuery: rawQuery,
+					IsSaved:       false,
+				}
+				overrides := savedQueryOptionsFromFlags(cmd)
+				if overrides != nil {
+					runOpts.Refresh = overrides.Refresh != nil && *overrides.Refresh
+					runOpts.IDs = overrides.IDs != nil && *overrides.IDs
+					runOpts.Limit = derefInt(overrides.Limit)
+					runOpts.Offset = derefInt(overrides.Offset)
+					runOpts.CountOnly = overrides.CountOnly != nil && *overrides.CountOnly
+					runOpts.Apply = overrides.Apply
+					runOpts.Confirm = overrides.Confirm != nil && *overrides.Confirm
+					runOpts.Browse = overrides.Browse != nil && *overrides.Browse
+					runOpts.Pipe = overrides.Pipe
+				}
+			} else {
+				return handleCanonicalFailure(commandexec.FromServiceError(err))
+			}
 		}
 
 		browse := runOpts.Browse
@@ -149,17 +177,25 @@ Examples:
 			}
 		}
 
+		// Use rawQuery for display (runOpts.ResolvedQuery would fail if inputs
+		// are only in --inputs flag). The canonical handler does the real resolution.
+		displayQuery := rawQuery
+		if runOpts.IsSaved {
+			displayQuery = runOpts.SavedName
+		}
+
 		// --apply routes through the canonical bulk apply flow (preview + confirm).
 		if len(runOpts.Apply) > 0 {
-			return runCanonicalQuery(runOpts.ResolvedQuery, map[string]interface{}{
+			return runCanonicalQuery(displayQuery, map[string]interface{}{
 				"query_string": rawQuery,
 				"refresh":      runOpts.Refresh,
 				"apply":        runOpts.Apply,
 				"confirm":      runOpts.Confirm,
+				"inputs":       inputs,
 			})
 		}
 
-		return runCanonicalQuery(runOpts.ResolvedQuery, map[string]interface{}{
+		return runCanonicalQuery(displayQuery, map[string]interface{}{
 			"query_string": rawQuery,
 			"refresh":      runOpts.Refresh,
 			"ids":          runOpts.IDs,
@@ -167,6 +203,7 @@ Examples:
 			"offset":       runOpts.Offset,
 			"count-only":   runOpts.CountOnly,
 			"browse":       browse,
+			"inputs":       inputs,
 		})
 	},
 }
@@ -265,6 +302,30 @@ func joinQueryArgs(args []string) string {
 	return strings.Join(args, " ")
 }
 
+func derefInt(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+// parseInputsFlag parses the --inputs JSON flag into a map suitable for
+// passing to the canonical query handler.
+func parseInputsFlag(cmd *cobra.Command) (map[string]interface{}, error) {
+	raw, _ := cmd.Flags().GetString("inputs")
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		return nil, handleErrorMsg(ErrInvalidInput,
+			fmt.Sprintf("invalid --inputs JSON: %s", err.Error()),
+			"Ensure the JSON is a valid object")
+	}
+	return decoded, nil
+}
+
 // savedQueryOptionsFromFlags builds invocation-scoped query options from only
 // the flags the user explicitly set on cmd.
 func savedQueryOptionsFromFlags(cmd *cobra.Command) *querysvc.RunOptionOverrides {
@@ -329,6 +390,7 @@ func init() {
 	queryCmd.Flags().Bool("no-pipe", false, "Force human-readable output format")
 	queryCmd.Flags().Bool("browse", false, "Interactively browse query results in Raven's picker and open the selected result")
 	queryCmd.Flags().Bool("no-links", false, "Disable clickable hyperlinks in terminal output")
+	queryCmd.Flags().String("inputs", "", "Saved query inputs as JSON object")
 
 	querySavedCmd.AddCommand(querySavedListCmd)
 	querySavedCmd.AddCommand(querySavedGetCmd)

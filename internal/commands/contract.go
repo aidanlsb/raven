@@ -543,7 +543,7 @@ func flagTypeToParameterType(flagType FlagType) ParameterType {
 		return ParameterTypeInteger
 	case FlagTypeStringSlice:
 		return ParameterTypeStringArray
-	case FlagTypeJSON, FlagTypeKeyValue, FlagTypePosKeyValue:
+	case FlagTypeJSON, FlagTypeKeyValue:
 		return ParameterTypeObject
 	default:
 		return ParameterTypeString

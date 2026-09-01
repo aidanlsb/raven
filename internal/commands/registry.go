@@ -90,10 +90,9 @@ const (
 	FlagTypeString      FlagType = "string"
 	FlagTypeBool        FlagType = "bool"
 	FlagTypeInt         FlagType = "int"
-	FlagTypeKeyValue    FlagType = "key=value"     // For repeatable flags: --field name=value, --input name=value
-	FlagTypePosKeyValue FlagType = "pos-key=value" // For positional key=value args (e.g., `set <reference> field=value...`)
-	FlagTypeStringSlice FlagType = "stringSlice"   // For repeatable string flags
-	FlagTypeJSON        FlagType = "json"          // JSON object payloads
+	FlagTypeKeyValue    FlagType = "key=value"   // For repeatable flags: --field name=value, --input name=value
+	FlagTypeStringSlice FlagType = "stringSlice" // For repeatable string flags
+	FlagTypeJSON        FlagType = "json"        // JSON object payloads
 )
 
 const barePickerInsertModeHelp = "\n\nThe bare-command picker starts in insert mode: type immediately to filter, or press Esc for normal-mode shortcuts."
