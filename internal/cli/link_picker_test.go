@@ -55,7 +55,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return prepareBacklinksArgs(backlinksCmd, args)
 			},
 			build: func(args []string) (map[string]interface{}, error) {
-				return buildBacklinksArgs(backlinksCmd, args)
+				meta, _ := commands.EffectiveMeta("backlinks")
+				return buildCanonicalArgsForMeta(meta, backlinksCmd, args)
 			},
 			prompt:   "backlinks> ",
 			argKey:   "reference",
@@ -67,7 +68,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return prepareOutlinksArgs(outlinksCmd, args)
 			},
 			build: func(args []string) (map[string]interface{}, error) {
-				return buildOutlinksArgs(outlinksCmd, args)
+				meta, _ := commands.EffectiveMeta("outlinks")
+				return buildCanonicalArgsForMeta(meta, outlinksCmd, args)
 			},
 			prompt:   "outlinks> ",
 			argKey:   "reference",
@@ -79,7 +81,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 				return prepareOpenArgs(openCmd, args)
 			},
 			build: func(args []string) (map[string]interface{}, error) {
-				return buildOpenArgs(openCmd, args)
+				meta, _ := commands.EffectiveMeta("open")
+				return buildCanonicalArgsForMeta(meta, openCmd, args)
 			},
 			prompt:   "open> ",
 			argKey:   "reference",

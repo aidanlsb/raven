@@ -91,7 +91,7 @@ func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]in
 		reader := bufio.NewReader(os.Stdin)
 		typeName := stringValue(args["type"])
 		if err := promptNewSchemaFields(reader, os.Stderr, vaultPath, typeName, title, fieldValues, fieldJSONRaw); err != nil {
-			return commandexec.Failure("INTERNAL", err.Error(), nil, "")
+			return commandexec.Failure("SCHEMA_INVALID", err.Error(), nil, "")
 		}
 		
 		// Update args with prompted values
