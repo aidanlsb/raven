@@ -101,7 +101,7 @@ func TestMutationPhaseSingleObjectWrites(t *testing.T) {
 		t.Parallel()
 		v := buildPhaseVault(t)
 		res := runInvoked(t, v.Path, "set", map[string]any{
-			"reference": "projects/roadmap", "fields": map[string]any{"status": "paused"},
+			"reference": "projects/roadmap", "field": map[string]any{"status": "paused"},
 		}, nil)
 		requirePhase(t, res, commandexec.MutationPhaseApplied)
 	})
@@ -110,7 +110,7 @@ func TestMutationPhaseSingleObjectWrites(t *testing.T) {
 		t.Parallel()
 		v := buildPhaseVault(t)
 		res := runInvoked(t, v.Path, "set", map[string]any{
-			"reference": "projects/roadmap", "fields": map[string]any{"status": "paused"},
+			"reference": "projects/roadmap", "field": map[string]any{"status": "paused"},
 		}, withDryRun)
 		requirePhase(t, res, commandexec.MutationPhasePreview)
 	})
@@ -171,7 +171,7 @@ func TestMutationPhaseBulkWrites(t *testing.T) {
 		args      map[string]any
 	}{
 		{"delete", "delete", map[string]any{"stdin": true, "references": []any{"projects/scratch"}}},
-		{"set", "set", map[string]any{"stdin": true, "references": []any{"projects/roadmap"}, "fields": map[string]any{"status": "done"}}},
+		{"set", "set", map[string]any{"stdin": true, "references": []any{"projects/roadmap"}, "field": map[string]any{"status": "done"}}},
 		{"add", "add", map[string]any{"stdin": true, "object_ids": []any{"projects/roadmap"}, "text": "- bulk line"}},
 		{"move", "move", map[string]any{"stdin": true, "object_ids": []any{"projects/scratch"}, "destination": "archive/"}},
 		{"reclassify", "reclassify", map[string]any{"stdin": true, "references": []any{"projects/scratch"}, "new-type": "person", "field": map[string]any{"name": "Scratch"}, "no-move": true, "force": true}},

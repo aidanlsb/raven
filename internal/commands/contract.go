@@ -94,7 +94,9 @@ func BuildCommandContract(commandID string) (CommandContract, bool) {
 
 	for _, arg := range meta.Args {
 		paramType := ParameterTypeString
-		if arg.Variadic {
+		// Variadic args become arrays in MCP only when NOT using VariadicJoin
+		// (VariadicJoin is a CLI-only concern for joining multiple words)
+		if arg.Variadic && !meta.VariadicJoin {
 			paramType = ParameterTypeStringArray
 		}
 		spec := ParameterSpec{
