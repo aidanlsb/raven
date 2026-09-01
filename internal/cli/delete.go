@@ -95,10 +95,10 @@ func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
 		return nil
 	case commandpayload.DeleteResult:
 		if data.Behavior == "trash" && strings.TrimSpace(data.TrashPath) != "" {
-			fmt.Println(ui.Checkf("Moved to %s", ui.FilePath(data.TrashPath)))
+			renderObjectMoved(data.TrashPath)
 			return nil
 		}
-		fmt.Println(ui.Checkf("Deleted %s", ui.FilePath(data.Deleted)))
+		renderObjectDeleted(data.Deleted)
 		return nil
 	default:
 		return handleErrorMsg(ErrInternal, "command execution failed", "")

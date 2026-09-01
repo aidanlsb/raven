@@ -78,6 +78,11 @@ var vaultRemoveCmd = newCanonicalLeafCommand("vault_remove", canonicalLeafOption
 	RenderHuman: renderVaultRemove,
 })
 
+var vaultPathCmd = newCanonicalLeafCommand("vault_path", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultList,
+})
+
 func init() {
 	vaultCmd.AddCommand(vaultListCmd)
 	vaultCmd.AddCommand(vaultCurrentCmd)

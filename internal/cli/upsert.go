@@ -14,9 +14,6 @@ import (
 )
 
 var (
-	upsertFieldFlags  []string
-	upsertFieldJSON   string
-	upsertContent     string
 	upsertContentFile string
 	upsertObjectPath  string
 )
@@ -69,10 +66,7 @@ func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
 	case "created":
 		renderObjectCreated(data.File, data.ID)
 	case "updated":
-		renderObjectUpdated(data.File)
-		if data.ID != "" {
-			fmt.Println(ui.LinkAs(data.ID))
-		}
+		renderObjectUpdatedWithID(data.File, data.ID)
 	default:
 		fmt.Println(ui.Checkf("Unchanged %s", ui.FilePath(data.File)))
 		if data.ID != "" {

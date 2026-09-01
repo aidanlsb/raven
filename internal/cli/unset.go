@@ -25,7 +25,7 @@ func renderCanonicalUnsetResult(result commandexec.Result) error {
 	}
 
 	if data.Modified {
-		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(data.File)))
+		renderObjectUpdated(data.File)
 	} else {
 		fmt.Println(ui.Hint(fmt.Sprintf("No fields removed from %s", data.File)))
 	}

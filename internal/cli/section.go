@@ -56,7 +56,7 @@ func renderSectionCreateResult(_ *cobra.Command, result commandexec.Result) erro
 		return nil
 	}
 
-	fmt.Println(ui.Checkf("Created section %s", ui.FilePath(data.Section)))
+	renderSectionCreated(data.Section)
 	return nil
 }
 
@@ -108,13 +108,7 @@ func renderSectionDeleteResult(_ *cobra.Command, result commandexec.Result) erro
 		return nil
 	}
 
-	fmt.Println(ui.Checkf(
-		"Deleted section %s from %s (lines %d-%d)",
-		ui.FilePath(data.Section),
-		ui.FilePath(data.File),
-		data.LineStart,
-		data.LineEnd,
-	))
+	renderSectionDeleted(data.Section, data.File, data.LineStart, data.LineEnd)
 	if backlinkCount > 0 {
 		fmt.Printf("  %s\n", ui.Warning(fmt.Sprintf(
 			"Left %d inbound reference(s) unchanged; repair or remove them explicitly",

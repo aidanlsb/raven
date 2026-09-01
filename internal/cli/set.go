@@ -32,7 +32,7 @@ func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	if data.Preview {
 		fmt.Println(ui.Star(fmt.Sprintf("Would update %s", ui.FilePath(data.File))))
 	} else {
-		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(data.File)))
+		renderObjectUpdated(data.File)
 	}
 
 	fieldNames := make([]string, 0, len(data.UpdatedFields))
@@ -80,6 +80,13 @@ func stringMapFromAny(raw interface{}) map[string]string {
 	}
 }
 
+var updateCmd = newCanonicalLeafCommand("update", canonicalLeafOptions{
+	VaultPath: getVaultPath,
+	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
+		return renderCanonicalBulkResult(result)
+	},
+})
+
 func init() {
 	setCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
 		IncludeDynamicDates: false,
@@ -87,4 +94,5 @@ func init() {
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	})
 	rootCmd.AddCommand(setCmd)
+	rootCmd.AddCommand(updateCmd)
 }

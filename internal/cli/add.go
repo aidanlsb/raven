@@ -1,14 +1,12 @@
 package cli
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
@@ -28,14 +26,8 @@ func renderAddResult(_ *cobra.Command, result commandexec.Result) error {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 
-	fmt.Println(ui.Checkf("Added to %s", ui.FilePath(data.File)))
-	for _, warning := range result.Warnings {
-		fmt.Printf("  %s\n", ui.Warningf("%s: %s", warning.Code, warning.Message))
-		if warning.CreateCommand != "" {
-			fmt.Printf("    %s\n", ui.Hint("→ "+warning.CreateCommand))
-		}
-	}
-	promptCreateMissingRefsFromResult(getVaultPath(), result)
+	renderObjectAdded(data.File)
+	renderWithWarningsAndPrompt(getVaultPath(), result)
 	return nil
 }
 
