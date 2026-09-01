@@ -28,8 +28,7 @@ var (
 
 var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Args:        cobra.RangeArgs(1, 2),
-	BuildArgs:   buildNewArgs,
+	Prepare:     prepareNewArgs,
 	Invoke:      invokeNew,
 	RenderHuman: renderNewResult,
 	FlagBindings: map[string]interface{}{
@@ -40,56 +39,65 @@ var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
 	},
 })
 
-func buildNewArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
-	typeName := args[0]
-	title := ""
-	var reader *bufio.Reader
-	if len(args) >= 2 {
-		title = args[1]
-	} else if isJSONOutput() {
-		return nil, handleErrorMsg(ErrMissingArgument, "title is required", "Usage: rvn new <type> <title> --json")
-	} else {
-		reader = bufio.NewReader(os.Stdin)
+func prepareNewArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
+	// If title is missing and not JSON mode, prompt for it
+	if len(args) < 2 && !isJSONOutput() {
+		reader := bufio.NewReader(os.Stdin)
 		fmt.Fprintf(os.Stderr, "Title: ")
 		value, err := reader.ReadString('\n')
 		if err != nil {
-			return nil, fmt.Errorf("failed to read input: %w", err)
+			return nil, false, fmt.Errorf("failed to read input: %w", err)
 		}
-		title = strings.TrimSpace(value)
+		title := strings.TrimSpace(value)
 		if title == "" {
-			return nil, handleErrorMsg(ErrMissingArgument, "title cannot be empty", "")
+			return nil, false, handleErrorMsg(ErrMissingArgument, "title cannot be empty", "")
 		}
+		args = append(args, title)
 	}
-
-	if err := validateObjectTitle(title); err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a non-empty title")
-	}
-	fieldValues, err := parseFieldFlags(newFieldFlags)
-	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
-	}
-	fieldJSONRaw, err := parseFieldJSONObject(newFieldJSON)
-	if err != nil {
-		return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
-	}
-	if !isJSONOutput() {
-		if reader == nil {
-			reader = bufio.NewReader(os.Stdin)
-		}
-		if err := promptNewSchemaFields(reader, os.Stderr, getVaultPath(), typeName, title, fieldValues, fieldJSONRaw); err != nil {
-			return nil, err
-		}
-	}
-	targetPath := strings.TrimSpace(newObjectPath)
-	if targetPath != "" {
-		if err := validateObjectPath(targetPath); err != nil {
-			return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use --object-path with an object path like note/raven-friction (no type/ prefix, no .md suffix). Use data.id from rvn read, not data.path.")
-		}
-	}
-	return buildNewCommandArgs(typeName, title, targetPath, newTemplate, fieldValues, fieldJSONRaw), nil
+	return args, false, nil
 }
 
 func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Validate title
+	title := stringValue(args["title"])
+	if err := validateObjectTitle(title); err != nil {
+		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Provide a non-empty title")
+	}
+
+	// Validate object path if provided
+	targetPath := stringValue(args["object-path"])
+	if targetPath != "" {
+		if err := validateObjectPath(targetPath); err != nil {
+			return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Use --object-path with an object path like note/raven-friction (no type/ prefix, no .md suffix)")
+		}
+	}
+
+	// Interactive field prompts in non-JSON mode
+	if !isJSONOutput() {
+		fieldValues, _ := args["field"].(map[string]interface{})
+		if fieldValues == nil {
+			fieldValues = make(map[string]interface{})
+		}
+		fieldJSONRaw, _ := args["fields-json"].(map[string]interface{})
+		if fieldJSONRaw == nil {
+			fieldJSONRaw = make(map[string]interface{})
+		}
+		
+		reader := bufio.NewReader(os.Stdin)
+		typeName := stringValue(args["type"])
+		if err := promptNewSchemaFields(reader, os.Stderr, vaultPath, typeName, title, fieldValues, fieldJSONRaw); err != nil {
+			return commandexec.Failure("INTERNAL", err.Error(), nil, "")
+		}
+		
+		// Update args with prompted values
+		if len(fieldValues) > 0 {
+			args["field"] = fieldValues
+		}
+		if len(fieldJSONRaw) > 0 {
+			args["fields-json"] = fieldJSONRaw
+		}
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		result := executeCanonicalRequest(commandexec.Request{

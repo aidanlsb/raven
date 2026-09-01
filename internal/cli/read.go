@@ -15,6 +15,7 @@ import (
 var readCmd = newCanonicalLeafCommand("read", canonicalLeafOptions{
 	VaultPath:      getVaultPath,
 	Prepare:        prepareReadArgs,
+	Invoke:         invokeRead,
 	HandleErrorCmd: handleCanonicalReadFailureCmd,
 	RenderHuman:    renderRead,
 })
@@ -78,13 +79,29 @@ func handleCanonicalReadFailure(result commandexec.Result) error {
 	return handleErrorWithDetails(mapReadCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
 }
 
+func invokeRead(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	// Derive raw=true when lines/start-line/end-line are set
+	lines, _ := cmd.Flags().GetBool("lines")
+	startLine, _ := cmd.Flags().GetInt("start-line")
+	endLine, _ := cmd.Flags().GetInt("end-line")
+	if lines || startLine > 0 || endLine > 0 {
+		args["raw"] = true
+	}
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+	})
+}
+
 func handleCanonicalReadFailureCmd(cmd *cobra.Command, result commandexec.Result) error {
 	return handleAmbiguousReferenceRetry(cmd, result, ambiguousReferenceRetryOptions{
 		CommandID: "read",
 		Prompt:    "read/ref> ",
 		Fallback:  handleCanonicalReadFailure,
 		BuildArgs: func(cmd *cobra.Command, selected string) (map[string]interface{}, error) {
-			return buildReadArgs(cmd, []string{selected})
+			// Picker path - just return the selected reference; invokeRead will handle raw logic
+			return map[string]interface{}{"reference": selected}, nil
 		},
 		Render: renderRead,
 	})
