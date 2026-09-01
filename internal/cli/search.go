@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
@@ -57,7 +56,7 @@ func handleCanonicalSearchFailure(result commandexec.Result) error {
 	if result.Error == nil {
 		return nil
 	}
-	return handleErrorWithDetails(mapSearchCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+	return handleErrorWithDetails(mapCodeOrInternal(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
 }
 
 func renderSearch(_ *cobra.Command, result commandexec.Result) error {
@@ -90,19 +89,6 @@ func searchMatchesFromItems(items []commandpayload.SearchMatchItem) []model.Sear
 		})
 	}
 	return matches
-}
-
-func mapSearchCode(code codes.ErrorCode) codes.ErrorCode {
-	switch code {
-	case codes.ErrMissingArgument:
-		return ErrMissingArgument
-	case codes.ErrDatabase:
-		return ErrDatabase
-	case codes.ErrInvalidArgs, codes.ErrInvalidInput:
-		return ErrInvalidInput
-	default:
-		return ErrInternal
-	}
 }
 
 func init() {

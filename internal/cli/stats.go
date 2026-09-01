@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -20,7 +19,7 @@ func handleCanonicalMaintSvcFailure(result commandexec.Result) error {
 	if result.Error == nil {
 		return nil
 	}
-	return handleErrorWithDetails(mapMaintSvcCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+	return handleErrorWithDetails(mapCodeOrInternal(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
 }
 
 func renderVaultStats(_ *cobra.Command, result commandexec.Result) error {
@@ -31,15 +30,4 @@ func renderVaultStats(_ *cobra.Command, result commandexec.Result) error {
 	fmt.Println(ui.Bullet(ui.Muted.Render("Traits: ") + ui.Bold.Render(fmt.Sprintf("%v", data["trait_count"]))))
 	fmt.Println(ui.Bullet(ui.Muted.Render("References: ") + ui.Bold.Render(fmt.Sprintf("%v", data["ref_count"]))))
 	return nil
-}
-
-func mapMaintSvcCode(code codes.ErrorCode) codes.ErrorCode {
-	switch code {
-	case codes.ErrInvalidInput:
-		return ErrInvalidInput
-	case codes.ErrDatabase:
-		return ErrDatabase
-	default:
-		return ErrInternal
-	}
 }
