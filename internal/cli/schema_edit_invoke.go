@@ -21,27 +21,27 @@ func buildSchemaArgs(commandID string, cmd *cobra.Command, args []string) (map[s
 	return buildCanonicalArgsForMeta(meta, cmd, args)
 }
 
-func buildSchemaAddTypeArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	argsMap, err := buildSchemaArgs("schema_add_type", cmd, args)
-	if err != nil {
-		return nil, err
-	}
-
+func invokeSchemaAddType(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	nameField, _ := cmd.Flags().GetString("name-field")
 	if strings.TrimSpace(nameField) == "" && !isJSONOutput() {
 		fmt.Print("Which field should be the display name? (common: name, title; leave blank for none): ")
 		var input string
 		fmt.Scanln(&input)
 		nameField = strings.TrimSpace(input)
-		argsMap["name-field"] = nameField
+		args["name-field"] = nameField
 	}
 
 	defaultPath, _ := cmd.Flags().GetString("default-path")
 	if strings.TrimSpace(defaultPath) == "" {
-		argsMap["default-path"] = paths.NormalizeDirRoot(args[0])
+		typeName := stringValue(args["name"])
+		args["default-path"] = paths.NormalizeDirRoot(typeName)
 	}
 
-	return argsMap, nil
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+	})
 }
 
 func invokeSchemaRemoveType(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
