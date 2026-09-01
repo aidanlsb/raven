@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
+
 	"github.com/aidanlsb/raven/internal/parser"
 )
 
@@ -36,43 +38,52 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 	t.Helper()
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
-	prevFields := reclassifyFieldFlags
-	prevFieldJSON := reclassifyFieldJSON
-	prevNoMove := reclassifyNoMove
-	prevUpdateRefs := reclassifyUpdateRefs
-	prevForce := reclassifyForce
-	prevStdin := reclassifyStdin
-	prevConfirm := reclassifyConfirm
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		reclassifyFieldFlags = prevFields
-		reclassifyFieldJSON = prevFieldJSON
-		reclassifyNoMove = prevNoMove
-		reclassifyUpdateRefs = prevUpdateRefs
-		reclassifyForce = prevForce
-		reclassifyStdin = prevStdin
-		reclassifyConfirm = prevConfirm
+		// Reset flags
+		reclassifyCmd.Flags().VisitAll(func(f *pflag.Flag) {
+			f.Changed = false
+			_ = f.Value.Set(f.DefValue)
+		})
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
-	reclassifyFieldFlags = nil
-	reclassifyFieldJSON = ""
-	reclassifyNoMove = false
-	reclassifyUpdateRefs = true
-	reclassifyForce = false
-	reclassifyStdin = false
-	reclassifyConfirm = false
+	// Reset flags to defaults
+	reclassifyCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		f.Changed = false
+		_ = f.Value.Set(f.DefValue)
+	})
 }
 
 func runReclassifyCommand(t *testing.T, args ...string) string {
 	t.Helper()
 	return captureStdout(t, func() {
-		if err := reclassifyCmd.Args(reclassifyCmd, args); err != nil {
+		// Split args into flags and positional args
+		var flags []string
+		var positional []string
+		for i := 0; i < len(args); i++ {
+			if strings.HasPrefix(args[i], "--") {
+				flags = append(flags, args[i])
+				// Check if next arg is a value for this flag
+				if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+					i++
+					flags = append(flags, args[i])
+				}
+			} else {
+				positional = append(positional, args[i:]...)
+				break
+			}
+		}
+
+		if err := reclassifyCmd.ParseFlags(flags); err != nil {
+			t.Fatalf("ParseFlags: %v", err)
+		}
+		if err := reclassifyCmd.Args(reclassifyCmd, positional); err != nil {
 			t.Fatalf("reclassifyCmd.Args: %v", err)
 		}
-		if err := reclassifyCmd.RunE(reclassifyCmd, args); err != nil {
+		if err := reclassifyCmd.RunE(reclassifyCmd, positional); err != nil {
 			requireJSONResponseFailure(t, err)
 		}
 	})
@@ -94,10 +105,8 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nSome content.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyNoMove = true // don't move for this test
-	reclassifyForce = true  // skip dropped fields confirmation
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--no-move", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -143,7 +152,6 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyForce = true
 
 	out := runReclassifyCommand(t, "notes/my-note", "book")
 
@@ -188,8 +196,6 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyNoMove = true
-	reclassifyForce = true
 
 	out := runReclassifyCommand(t, "notes/my-note", "book")
 
@@ -271,9 +277,6 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyFieldFlags = []string{"author=Tolkien"}
-	reclassifyNoMove = true
-	reclassifyForce = true
 
 	out := runReclassifyCommand(t, "notes/my-note", "book")
 
@@ -317,8 +320,6 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 	reclassifyFieldJSON = `{"status":"false"}`
-	reclassifyNoMove = true
-	reclassifyForce = true
 
 	out := runReclassifyCommand(t, "notes/my-note", "book")
 
@@ -375,8 +376,6 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyNoMove = true
-	reclassifyForce = true
 
 	out := runReclassifyCommand(t, "notes/my-note", "book")
 
@@ -469,8 +468,6 @@ types:
 		"---\ntype: note\ntitle: My Note\ncategory: tech\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyForce = true
-	reclassifyNoMove = true
 
 	out := runReclassifyCommand(t, "notes/my-note", "book")
 
@@ -611,8 +608,6 @@ types:
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
 	setupReclassifyGlobals(t, vaultPath)
-	reclassifyNoMove = true
-	reclassifyForce = true
 
 	out := runReclassifyCommand(t, "notes/my-note", "book")
 
