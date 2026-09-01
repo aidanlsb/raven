@@ -627,6 +627,7 @@ objects and appear as unknown_frontmatter_key issues in rvn check.
 The reserved type field cannot be unset; use reclassify to change object type.`,
 		Args: []ArgMeta{
 			{Name: "reference", Description: "Object reference to update (e.g., people/freya)", Required: true},
+			{Name: "fields", Description: "Field names to remove", Required: false, Variadic: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "fields", Description: "Frontmatter field names to remove (repeatable; MCP should pass an array)", Type: FlagTypeStringSlice, Examples: []string{`["date", "link"]`}},

@@ -14,48 +14,11 @@ import (
 
 var unsetCmd = newCanonicalLeafCommand("unset", canonicalLeafOptions{
 	VaultPath: getVaultPath,
-	Args:      cobra.ArbitraryArgs,
-	BuildArgs: buildUnsetArgs,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		return renderCanonicalUnsetResult(result)
 	},
 })
 
-func buildUnsetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	if len(args) < 1 {
-		return nil, handleErrorMsg(ErrMissingArgument, "requires reference", "Usage: rvn unset <reference> <field>...")
-	}
-
-	fields := append([]string{}, args[1:]...)
-	flagFields, _ := cmd.Flags().GetStringArray("fields")
-	fields = append(fields, flagFields...)
-	fields = normalizedUnsetCLIFields(fields)
-	if len(fields) == 0 {
-		return nil, handleErrorMsg(ErrMissingArgument, "no fields to unset", "Usage: rvn unset <reference> <field>...")
-	}
-
-	return map[string]interface{}{
-		"reference": args[0],
-		"fields":    stringsToAny(fields),
-	}, nil
-}
-
-func normalizedUnsetCLIFields(fields []string) []string {
-	seen := make(map[string]struct{}, len(fields))
-	out := make([]string, 0, len(fields))
-	for _, field := range fields {
-		field = strings.TrimSpace(field)
-		if field == "" {
-			continue
-		}
-		if _, ok := seen[field]; ok {
-			continue
-		}
-		seen[field] = struct{}{}
-		out = append(out, field)
-	}
-	return out
-}
 
 func renderCanonicalUnsetResult(result commandexec.Result) error {
 	data, ok := result.Data.(commandpayload.UnsetResult)

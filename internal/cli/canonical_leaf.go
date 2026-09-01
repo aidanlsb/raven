@@ -369,6 +369,10 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 			argsMap[flag.Name] = value
 		case commands.FlagTypeStringSlice:
 			value, _ := cmd.Flags().GetStringArray(flag.Name)
+			// If there's already a variadic positional arg with same name, merge them
+			if existing, ok := argsMap[flag.Name].([]string); ok {
+				value = append(existing, value...)
+			}
 			argsMap[flag.Name] = value
 		case commands.FlagTypeKeyValue:
 			value, _ := cmd.Flags().GetStringArray(flag.Name)
