@@ -11,7 +11,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/shellquote"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/templatesvc"

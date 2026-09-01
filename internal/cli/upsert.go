@@ -92,29 +92,6 @@ func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
 	return nil
 }
 
-func buildUpsertCommandArgs(typeName, title, targetPath string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}, content string, replaceBody bool, contentFile string, contentFileChanged bool) map[string]interface{} {
-	args := map[string]interface{}{
-		"type":  typeName,
-		"title": title,
-	}
-	if len(fieldValues) > 0 {
-		args["field"] = stringMapToAny(fieldValues)
-	}
-	if len(fieldJSONRaw) > 0 {
-		args["fields-json"] = fieldJSONRaw
-	}
-	if strings.TrimSpace(targetPath) != "" {
-		args["object-path"] = targetPath
-	}
-	if replaceBody {
-		args["content"] = content
-	}
-	if contentFileChanged {
-		args["content-file"] = strings.TrimSpace(contentFile)
-	}
-	return args
-}
-
 func parseFieldFlags(flags []string) (map[string]string, error) {
 	fields := make(map[string]string, len(flags))
 	for _, f := range flags {

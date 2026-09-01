@@ -21,7 +21,6 @@ type canonicalLeafOptions struct {
 	VaultPath      func() string
 	Args           cobra.PositionalArgs
 	Prepare        func(cmd *cobra.Command, args []string) (preparedArgs []string, handled bool, err error)
-	BuildArgs      func(cmd *cobra.Command, args []string) (map[string]interface{}, error)
 	Invoke         func(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result
 	HandleError    func(result commandexec.Result) error
 	HandleErrorCmd func(cmd *cobra.Command, result commandexec.Result) error
@@ -58,24 +57,10 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 				args = preparedArgs
 			}
 
-			var (
-				argsMap map[string]interface{}
-				err     error
-			)
-			if opts.BuildArgs != nil {
-				argsMap, err = opts.BuildArgs(cmd, args)
-				if err != nil {
-					return err
-				}
-				if argsMap == nil {
-					return nil
-				}
-			} else {
-				argsMap, err = buildCanonicalArgsForMeta(meta, cmd, args)
-				if err != nil {
-					return err
-				}
-			}
+		argsMap, err := buildCanonicalArgsForMeta(meta, cmd, args)
+		if err != nil {
+			return err
+		}
 
 			vaultPath := ""
 			if opts.VaultPath != nil {

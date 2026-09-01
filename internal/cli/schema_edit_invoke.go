@@ -8,18 +8,9 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/ui"
 )
-
-func buildSchemaArgs(commandID string, cmd *cobra.Command, args []string) (map[string]interface{}, error) {
-	meta, ok := commands.EffectiveMeta(commandID)
-	if !ok {
-		return nil, fmt.Errorf("registry metadata missing for %q", commandID)
-	}
-	return buildCanonicalArgsForMeta(meta, cmd, args)
-}
 
 func invokeSchemaAddType(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	nameField, _ := cmd.Flags().GetString("name-field")

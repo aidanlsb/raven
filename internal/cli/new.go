@@ -74,10 +74,15 @@ func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]in
 
 	// Interactive field prompts in non-JSON mode
 	if !isJSONOutput() {
-		fieldValues, _ := args["field"].(map[string]interface{})
-		if fieldValues == nil {
-			fieldValues = make(map[string]interface{})
+		// Convert field map[string]interface{} to map[string]string for prompting
+		fieldValuesRaw, _ := args["field"].(map[string]interface{})
+		fieldValues := make(map[string]string)
+		for k, v := range fieldValuesRaw {
+			if s, ok := v.(string); ok {
+				fieldValues[k] = s
+			}
 		}
+		
 		fieldJSONRaw, _ := args["fields-json"].(map[string]interface{})
 		if fieldJSONRaw == nil {
 			fieldJSONRaw = make(map[string]interface{})
@@ -91,7 +96,7 @@ func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]in
 		
 		// Update args with prompted values
 		if len(fieldValues) > 0 {
-			args["field"] = fieldValues
+			args["field"] = stringMapToAny(fieldValues)
 		}
 		if len(fieldJSONRaw) > 0 {
 			args["fields-json"] = fieldJSONRaw
@@ -242,26 +247,6 @@ func missingFieldNamesFromDetails(details interface{}) []string {
 		}
 	}
 	return names
-}
-
-func buildNewCommandArgs(typeName, title, targetPath, templateID string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}) map[string]interface{} {
-	args := map[string]interface{}{
-		"type":  typeName,
-		"title": title,
-	}
-	if len(fieldValues) > 0 {
-		args["field"] = stringMapToAny(fieldValues)
-	}
-	if len(fieldJSONRaw) > 0 {
-		args["fields-json"] = fieldJSONRaw
-	}
-	if strings.TrimSpace(targetPath) != "" {
-		args["object-path"] = targetPath
-	}
-	if strings.TrimSpace(templateID) != "" {
-		args["template"] = templateID
-	}
-	return args
 }
 
 func stringMapToAny(values map[string]string) map[string]interface{} {
