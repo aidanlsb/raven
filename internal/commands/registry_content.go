@@ -529,8 +529,9 @@ changes, required-field failures, and reference updates by default. Use
 --confirm to apply. Items that would drop fields still require --force.`,
 		Args: []ArgMeta{
 			{Name: "reference", Description: "Object reference (prefer canonical ID; other resolvable forms are accepted)", Required: false},
-			{Name: "new-type", Description: "Target type name", Required: true, DynamicComp: "types"},
+			{Name: "new-type", Description: "Target type name", Required: true, DynamicComp: "types", StdinIndependent: true},
 		},
+		BulkStdinArgName: "references",
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, Examples: []string{`{"author": "[[people/snorri]]", "genre": "mythology"}`}},
 			{Name: "fields-json", Description: "Set/update frontmatter fields as a JSON object", Type: FlagTypeJSON},
