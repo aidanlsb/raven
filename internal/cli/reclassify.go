@@ -30,15 +30,6 @@ var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	Invoke:      invokeReclassify,
 	RenderHuman: renderReclassifyResult,
-	FlagBindings: map[string]interface{}{
-		"field":       &reclassifyFieldFlags,
-		"fields-json": &reclassifyFieldJSON,
-		"no-move":     &reclassifyNoMove,
-		"update-refs": &reclassifyUpdateRefs,
-		"force":       &reclassifyForce,
-		"stdin":       &reclassifyStdin,
-		"confirm":     &reclassifyConfirm,
-	},
 })
 
 func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {

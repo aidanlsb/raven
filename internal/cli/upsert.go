@@ -25,13 +25,6 @@ var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	Invoke:      invokeUpsert,
 	RenderHuman: renderUpsertResult,
-	FlagBindings: map[string]interface{}{
-		"field":        &upsertFieldFlags,
-		"fields-json":  &upsertFieldJSON,
-		"content":      &upsertContent,
-		"content-file": &upsertContentFile,
-		"object-path":  &upsertObjectPath,
-	},
 })
 
 func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {

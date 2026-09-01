@@ -29,16 +29,6 @@ var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	Invoke:      invokeImport,
 	RenderHuman: renderImportResult,
-	FlagBindings: map[string]interface{}{
-		"file":          &importFile,
-		"mapping":       &importMapping,
-		"map":           &importMapFlags,
-		"key":           &importKey,
-		"content-field": &importContentField,
-		"dry-run":       &importDryRun,
-		"create-only":   &importCreateOnly,
-		"update-only":   &importUpdateOnly,
-	},
 })
 
 type importResult = importsvc.ResultItem

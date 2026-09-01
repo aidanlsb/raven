@@ -23,14 +23,6 @@ var moveCmd = newCanonicalLeafCommand("move", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	Invoke:      invokeMove,
 	RenderHuman: renderMoveResult,
-	FlagBindings: map[string]interface{}{
-		"force":           &moveForce,
-		"update-refs":     &moveUpdateRefs,
-		"skip-type-check": &moveSkipTypeCheck,
-		"stdin":           &moveStdin,
-		"confirm":         &moveConfirm,
-		"dry-run":         &moveDryRun,
-	},
 })
 
 func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {

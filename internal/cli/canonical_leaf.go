@@ -26,7 +26,6 @@ type canonicalLeafOptions struct {
 	HandleErrorCmd func(cmd *cobra.Command, result commandexec.Result) error
 	HandleResult   func(cmd *cobra.Command, result commandexec.Result) error
 	RenderHuman    func(cmd *cobra.Command, result commandexec.Result) error
-	FlagBindings   map[string]interface{}
 }
 
 func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra.Command {
@@ -109,7 +108,7 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 		cmd.Args = opts.Args
 	}
 
-	bindMetaFlags(cmd, meta.Flags, opts.FlagBindings)
+	bindMetaFlags(cmd, meta.Flags)
 	return cmd
 }
 
@@ -177,18 +176,12 @@ func cobraArgsForMeta(meta commands.Meta) cobra.PositionalArgs {
 	return cobra.RangeArgs(minArgs, maxArgs)
 }
 
-func bindMetaFlags(cmd *cobra.Command, flags []commands.FlagMeta, bindings map[string]interface{}) {
-	bound := make(map[string]struct{}, len(bindings))
+func bindMetaFlags(cmd *cobra.Command, flags []commands.FlagMeta) {
 	for _, flag := range flags {
 		switch flag.Type {
 		case commands.FlagTypeBool:
 			defaultValue := flag.Default == "true"
-			if target, ok := metaFlagBinding[bool](bindings, flag.Name); ok {
-				cmd.Flags().BoolVar(target, flag.Name, defaultValue, flag.Description)
-				bound[flag.Name] = struct{}{}
-			} else {
-				cmd.Flags().Bool(flag.Name, defaultValue, flag.Description)
-			}
+			cmd.Flags().Bool(flag.Name, defaultValue, flag.Description)
 		case commands.FlagTypeInt:
 			defaultValue := 0
 			if strings.TrimSpace(flag.Default) != "" {
@@ -198,38 +191,15 @@ func bindMetaFlags(cmd *cobra.Command, flags []commands.FlagMeta, bindings map[s
 				}
 				defaultValue = parsed
 			}
-			if target, ok := metaFlagBinding[int](bindings, flag.Name); ok {
-				cmd.Flags().IntVar(target, flag.Name, defaultValue, flag.Description)
-				bound[flag.Name] = struct{}{}
-			} else {
-				cmd.Flags().Int(flag.Name, defaultValue, flag.Description)
-			}
+			cmd.Flags().Int(flag.Name, defaultValue, flag.Description)
 		case commands.FlagTypeKeyValue, commands.FlagTypeStringSlice:
-			if target, ok := metaFlagBinding[[]string](bindings, flag.Name); ok {
-				cmd.Flags().StringArrayVar(target, flag.Name, nil, flag.Description)
-				bound[flag.Name] = struct{}{}
-			} else {
-				cmd.Flags().StringArray(flag.Name, nil, flag.Description)
-			}
+			cmd.Flags().StringArray(flag.Name, nil, flag.Description)
 		case commands.FlagTypeJSON:
-			if target, ok := metaFlagBinding[string](bindings, flag.Name); ok {
-				cmd.Flags().StringVar(target, flag.Name, flag.Default, flag.Description)
-				bound[flag.Name] = struct{}{}
-			} else {
-				cmd.Flags().String(flag.Name, flag.Default, flag.Description)
-			}
+			cmd.Flags().String(flag.Name, flag.Default, flag.Description)
 		case commands.FlagTypePosKeyValue:
-			if _, ok := bindings[flag.Name]; ok {
-				panic(fmt.Sprintf("cannot bind positional key=value metadata %q as a flag", flag.Name))
-			}
 			continue
 		default:
-			if target, ok := metaFlagBinding[string](bindings, flag.Name); ok {
-				cmd.Flags().StringVar(target, flag.Name, flag.Default, flag.Description)
-				bound[flag.Name] = struct{}{}
-			} else {
-				cmd.Flags().String(flag.Name, flag.Default, flag.Description)
-			}
+			cmd.Flags().String(flag.Name, flag.Default, flag.Description)
 		}
 		if flag.Short != "" {
 			cmd.Flags().Lookup(flag.Name).Shorthand = flag.Short
@@ -238,23 +208,6 @@ func bindMetaFlags(cmd *cobra.Command, flags []commands.FlagMeta, bindings map[s
 			_ = cmd.MarkFlagRequired(flag.Name)
 		}
 	}
-	for name := range bindings {
-		if _, ok := bound[name]; !ok {
-			panic(fmt.Sprintf("flag binding %q is missing from registry metadata", name))
-		}
-	}
-}
-
-func metaFlagBinding[T any](bindings map[string]interface{}, name string) (*T, bool) {
-	raw, ok := bindings[name]
-	if !ok {
-		return nil, false
-	}
-	target, ok := raw.(*T)
-	if !ok {
-		panic(fmt.Sprintf("flag binding %q has type %T, want %T", name, raw, (*T)(nil)))
-	}
-	return target, true
 }
 
 func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []string) (map[string]interface{}, error) {

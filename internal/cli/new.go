@@ -30,12 +30,6 @@ var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
 	Prepare:     prepareNewArgs,
 	Invoke:      invokeNew,
 	RenderHuman: renderNewResult,
-	FlagBindings: map[string]interface{}{
-		"field":       &newFieldFlags,
-		"fields-json": &newFieldJSON,
-		"object-path": &newObjectPath,
-		"template":    &newTemplate,
-	},
 })
 
 func prepareNewArgs(_ *cobra.Command, args []string) ([]string, bool, error) {

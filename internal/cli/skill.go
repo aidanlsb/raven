@@ -29,11 +29,6 @@ var (
 var skillInstallCmd = newCanonicalLeafCommand("skill_install", canonicalLeafOptions{
 	Invoke:      invokeSkillInstall,
 	RenderHuman: renderSkillInstall,
-	FlagBindings: map[string]interface{}{
-		"confirm": &skillInstallConfirm,
-		"scope":   &skillInstallScope,
-		"dest":    &skillInstallDest,
-	},
 })
 
 var skillRemoveCmd = newCanonicalLeafCommand("skill_remove", canonicalLeafOptions{
