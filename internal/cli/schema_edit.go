@@ -36,7 +36,7 @@ var schemaAddCmd = buildRegistrySubtree(registrySubtreeSpec{
 		"schema_add_field": renderSchemaAddField,
 	},
 	Leaves: map[string]canonicalLeafOptions{
-		"schema_add_type": {Invoke: invokeSchemaAddType},
+		"schema_add_type": {Prepare: prepareSchemaAddType},
 	},
 })
 

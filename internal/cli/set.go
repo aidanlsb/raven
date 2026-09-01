@@ -14,7 +14,6 @@ import (
 
 var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 	VaultPath: getVaultPath,
-	Invoke:    invokeSet,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		switch result.Data.(type) {
 		case commandpayload.SetBulkPreviewResult, commandpayload.SetBulkResult:
@@ -23,21 +22,6 @@ var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 		return renderCanonicalSetSingleResult(result)
 	},
 })
-
-func invokeSet(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	confirm, _ := cmd.Flags().GetBool("confirm")
-	preview := false
-	if dryRun, _ := cmd.Flags().GetBool("dry-run"); dryRun {
-		preview = true
-	}
-	return executeCanonicalRequest(commandexec.Request{
-		CommandID: commandID,
-		VaultPath: vaultPath,
-		Args:      args,
-		Confirm:   confirm,
-		Preview:   preview,
-	})
-}
 
 func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	data, ok := result.Data.(commandpayload.SetResult)
@@ -48,7 +32,7 @@ func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	if data.Preview {
 		fmt.Println(ui.Star(fmt.Sprintf("Would update %s", ui.FilePath(data.File))))
 	} else {
-		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(data.File)))
+		renderObjectUpdated(data.File)
 	}
 
 	fieldNames := make([]string, 0, len(data.UpdatedFields))
@@ -96,6 +80,13 @@ func stringMapFromAny(raw interface{}) map[string]string {
 	}
 }
 
+var updateCmd = newCanonicalLeafCommand("update", canonicalLeafOptions{
+	VaultPath: getVaultPath,
+	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
+		return renderCanonicalBulkResult(result)
+	},
+})
+
 func init() {
 	setCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
 		IncludeDynamicDates: false,
@@ -103,4 +94,5 @@ func init() {
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	})
 	rootCmd.AddCommand(setCmd)
+	rootCmd.AddCommand(updateCmd)
 }

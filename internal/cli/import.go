@@ -14,38 +14,25 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var (
-	importFile         string
-	importMapping      string
-	importMapFlags     []string
-	importKey          string
-	importContentField string
-	importDryRun       bool
-	importCreateOnly   bool
-	importUpdateOnly   bool
-)
-
 var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	Invoke:      invokeImport,
-	RenderHuman: renderImportResult,
-	FlagBindings: map[string]interface{}{
-		"file":          &importFile,
-		"mapping":       &importMapping,
-		"map":           &importMapFlags,
-		"key":           &importKey,
-		"content-field": &importContentField,
-		"dry-run":       &importDryRun,
-		"create-only":   &importCreateOnly,
-		"update-only":   &importUpdateOnly,
+	VaultPath: getVaultPath,
+	Prepare:   prepareImportStdin,
+	Invoke:    invokeImportWithStdin,
+	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
+		return renderCanonicalImportResult(result)
 	},
 })
 
 type importResult = importsvc.ResultItem
 
-func invokeImport(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+func prepareImportStdin(cmd *cobra.Command, args []string) ([]string, bool, error) {
+	return args, false, nil
+}
+
+func invokeImportWithStdin(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	file, _ := cmd.Flags().GetString("file")
 	var stdinData []byte
-	if strings.TrimSpace(importFile) == "" {
+	if strings.TrimSpace(file) == "" {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return commandexec.Failure(ErrInvalidInput, err.Error(), nil, "Expected a JSON array of objects or a single JSON object")
@@ -59,10 +46,6 @@ func invokeImport(_ *cobra.Command, commandID, vaultPath string, args map[string
 		Args:      args,
 		Stdin:     stdinData,
 	})
-}
-
-func renderImportResult(_ *cobra.Command, result commandexec.Result) error {
-	return renderCanonicalImportResult(result)
 }
 
 // outputImportResults outputs the import results in human-readable or JSON format.
@@ -98,7 +81,16 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 	}
 
 	// Human-readable output
-	if importDryRun {
+	// Detect preview mode by checking if any action is "create" or "update" (future tense)
+	isDryRun := false
+	for _, r := range results {
+		if r.Action == "create" || r.Action == "update" {
+			isDryRun = true
+			break
+		}
+	}
+
+	if isDryRun {
 		fmt.Println(ui.Bold.Render("Dry run — no changes made:"))
 	}
 

@@ -14,40 +14,23 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var (
-	reclassifyFieldFlags []string
-	reclassifyFieldJSON  string
-	reclassifyNoMove     bool
-	reclassifyUpdateRefs bool
-	reclassifyForce      bool
-	reclassifyStdin      bool
-	reclassifyConfirm    bool
-)
-
 type ReclassifyResult = commandpayload.ReclassifyResult
 
 var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	Invoke:      invokeReclassify,
 	RenderHuman: renderReclassifyResult,
-	FlagBindings: map[string]interface{}{
-		"field":       &reclassifyFieldFlags,
-		"fields-json": &reclassifyFieldJSON,
-		"no-move":     &reclassifyNoMove,
-		"update-refs": &reclassifyUpdateRefs,
-		"force":       &reclassifyForce,
-		"stdin":       &reclassifyStdin,
-		"confirm":     &reclassifyConfirm,
-	},
 })
 
-func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+func invokeReclassify(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	confirm, _ := cmd.Flags().GetBool("confirm")
+
 	if boolValue(args["stdin"]) {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
 			VaultPath: vaultPath,
 			Args:      args,
-			Confirm:   reclassifyConfirm,
+			Confirm:   confirm,
 		})
 	}
 

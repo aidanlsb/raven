@@ -9,14 +9,24 @@ import (
 )
 
 func executeCanonicalCommand(commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	return executeCanonicalRequest(commandexec.Request{
+	req := commandexec.Request{
 		CommandID:  commandID,
 		VaultPath:  vaultPath,
 		ConfigPath: configPath,
 		StatePath:  statePathFlag,
 		Caller:     commandexec.CallerCLI,
 		Args:       args,
-	})
+	}
+
+	// Honor confirm/dry-run from args map (populated by buildCanonicalArgsForMeta)
+	if confirm, ok := args["confirm"].(bool); ok && confirm {
+		req.Confirm = true
+	}
+	if dryRun, ok := args["dry-run"].(bool); ok && dryRun {
+		req.Preview = true
+	}
+
+	return executeCanonicalRequest(req)
 }
 
 func executeCanonicalRequest(req commandexec.Request) commandexec.Result {

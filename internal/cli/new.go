@@ -14,15 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
-)
-
-var (
-	newFieldFlags []string
-	newFieldJSON  string
-	newObjectPath string
-	newTemplate   string
 )
 
 var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
@@ -30,12 +22,6 @@ var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
 	Prepare:     prepareNewArgs,
 	Invoke:      invokeNew,
 	RenderHuman: renderNewResult,
-	FlagBindings: map[string]interface{}{
-		"field":       &newFieldFlags,
-		"fields-json": &newFieldJSON,
-		"object-path": &newObjectPath,
-		"template":    &newTemplate,
-	},
 })
 
 func prepareNewArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
@@ -200,11 +186,8 @@ func renderNewResult(_ *cobra.Command, result commandexec.Result) error {
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
-	fmt.Println(ui.Checkf("Created %s", ui.FilePath(data.File)))
-	if data.ID != "" {
-		fmt.Println(ui.LinkAs(data.ID))
-	}
-	promptCreateMissingRefsFromResult(getVaultPath(), result)
+	renderObjectCreated(data.File, data.ID)
+	renderWithWarningsAndPrompt(getVaultPath(), result)
 	vault.OpenInEditorOrPrintPath(getConfig(), filepath.Join(getVaultPath(), filepath.FromSlash(data.File)))
 	return nil
 }

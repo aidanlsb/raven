@@ -46,7 +46,7 @@ type registrySubtreeSpec struct {
 	Renders   map[string]func(*cobra.Command, commandexec.Result) error
 
 	// Leaves supplies optional per-leaf canonical adapter overrides
-	// (e.g. BuildArgs, Invoke, HandleError) keyed by registry command ID. The
+	// (e.g. Invoke, HandleError) keyed by registry command ID. The
 	// shared VaultPath is always applied, and RenderHuman falls back to the
 	// Renders map when the override does not set it, so simple leaves need no
 	// entry here.

@@ -10,42 +10,29 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var (
-	moveForce         bool
-	moveUpdateRefs    bool
-	moveSkipTypeCheck bool
-	moveStdin         bool
-	moveConfirm       bool
-	moveDryRun        bool
-)
-
 var moveCmd = newCanonicalLeafCommand("move", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	Invoke:      invokeMove,
 	RenderHuman: renderMoveResult,
-	FlagBindings: map[string]interface{}{
-		"force":           &moveForce,
-		"update-refs":     &moveUpdateRefs,
-		"skip-type-check": &moveSkipTypeCheck,
-		"stdin":           &moveStdin,
-		"confirm":         &moveConfirm,
-		"dry-run":         &moveDryRun,
-	},
 })
 
-func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+func invokeMove(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	confirm, _ := cmd.Flags().GetBool("confirm")
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	skipTypeCheck, _ := cmd.Flags().GetBool("skip-type-check")
+
 	// Bulk move stays preview-first: changes apply only with --confirm.
 	if boolValue(args["stdin"]) {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
 			VaultPath: vaultPath,
 			Args:      args,
-			Confirm:   moveConfirm,
+			Confirm:   confirm,
 		})
 	}
 
 	// Single-object move applies immediately; --dry-run previews instead.
-	if moveDryRun {
+	if dryRun {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
 			VaultPath: vaultPath,
@@ -71,7 +58,7 @@ func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]i
 	if isJSONOutput() {
 		return result
 	}
-	if !moveForce {
+	if !skipTypeCheck {
 		for _, warning := range result.Warnings {
 			fmt.Println(ui.Warningf("Warning: %s", warning.Message))
 			if warning.Ref != "" {

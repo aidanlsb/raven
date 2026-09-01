@@ -11,61 +11,60 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var (
-	deleteForce   bool
-	deleteStdin   bool
-	deleteConfirm bool
-	deleteDryRun  bool
-)
-
 var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	Invoke:      invokeDelete,
 	RenderHuman: renderDeleteResult,
-	FlagBindings: map[string]interface{}{
-		"force":   &deleteForce,
-		"stdin":   &deleteStdin,
-		"confirm": &deleteConfirm,
-		"dry-run": &deleteDryRun,
-	},
 })
 
-func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+func invokeDelete(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	force, _ := cmd.Flags().GetBool("force")
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+
 	// Bulk delete stays preview-first: changes apply only with --confirm.
+	// (confirm already in args from buildCanonicalArgsForMeta)
 	if boolValue(args["stdin"]) {
-		return executeCanonicalRequest(commandexec.Request{
-			CommandID: commandID,
-			VaultPath: vaultPath,
-			Args:      args,
-			Confirm:   deleteConfirm,
-		})
+		return executeCanonicalCommand(commandID, vaultPath, args)
 	}
 
 	// Single-object delete applies immediately; --dry-run previews instead.
-	if deleteDryRun {
+	if dryRun {
+		previewArgs := make(map[string]interface{}, len(args))
+		for k, v := range args {
+			previewArgs[k] = v
+		}
+		delete(previewArgs, "confirm")
+		delete(previewArgs, "dry-run")
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
 			VaultPath: vaultPath,
-			Args:      args,
+			Args:      previewArgs,
 			Preview:   true,
 		})
 	}
 
 	// Non-interactive (JSON) or forced runs apply without prompting.
-	if isJSONOutput() || deleteForce {
-		return executeCanonicalRequest(commandexec.Request{
-			CommandID: commandID,
-			VaultPath: vaultPath,
-			Args:      args,
-			Confirm:   true,
-		})
+	if isJSONOutput() || force {
+		confirmArgs := make(map[string]interface{}, len(args))
+		for k, v := range args {
+			confirmArgs[k] = v
+		}
+		confirmArgs["confirm"] = true
+		return executeCanonicalCommand(commandID, vaultPath, confirmArgs)
 	}
 
 	// Interactive terminals still preview and prompt before deleting.
+	previewArgs := make(map[string]interface{}, len(args))
+	for k, v := range args {
+		previewArgs[k] = v
+	}
+	delete(previewArgs, "confirm")
+	delete(previewArgs, "dry-run")
+
 	preview := executeCanonicalRequest(commandexec.Request{
 		CommandID: commandID,
 		VaultPath: vaultPath,
-		Args:      args,
+		Args:      previewArgs,
 		Preview:   true,
 	})
 	if !preview.OK {
@@ -75,12 +74,12 @@ func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string
 		return commandexec.Success(commandpayload.CancelledResult{Cancelled: true}, nil)
 	}
 
-	return executeCanonicalRequest(commandexec.Request{
-		CommandID: commandID,
-		VaultPath: vaultPath,
-		Args:      args,
-		Confirm:   true,
-	})
+	confirmArgs := make(map[string]interface{}, len(args))
+	for k, v := range args {
+		confirmArgs[k] = v
+	}
+	confirmArgs["confirm"] = true
+	return executeCanonicalCommand(commandID, vaultPath, confirmArgs)
 }
 
 func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
@@ -96,10 +95,10 @@ func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
 		return nil
 	case commandpayload.DeleteResult:
 		if data.Behavior == "trash" && strings.TrimSpace(data.TrashPath) != "" {
-			fmt.Println(ui.Checkf("Moved to %s", ui.FilePath(data.TrashPath)))
+			renderObjectMoved(data.TrashPath)
 			return nil
 		}
-		fmt.Println(ui.Checkf("Deleted %s", ui.FilePath(data.Deleted)))
+		renderObjectDeleted(data.Deleted)
 		return nil
 	default:
 		return handleErrorMsg(ErrInternal, "command execution failed", "")

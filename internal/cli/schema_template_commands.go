@@ -21,8 +21,7 @@ type schemaTemplateTarget struct {
 // schemaTemplateCmd is the "schema template" subtree. Its command hierarchy is
 // generated from registry metadata (CLIPath) via buildRegistrySubtree, so
 // adding a new schema_template_* registry entry only requires registering its
-// human RenderHuman hook (and any custom BuildArgs) below — no new hand-written
-// Cobra vars or AddCommand wiring.
+// human RenderHuman hook below — no new hand-written Cobra vars or AddCommand wiring.
 var schemaTemplateCmd = buildSchemaTemplateCommand()
 
 func buildSchemaTemplateCommand() *cobra.Command {
