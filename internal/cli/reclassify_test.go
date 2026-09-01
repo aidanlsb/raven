@@ -49,10 +49,19 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 	})
 
 	resolvedVaultPath = vaultPath
+	// Set JSON mode properly
 	jsonOutput = true
+	if reclassifyCmd.Parent() != nil {
+		if err := reclassifyCmd.Parent().PersistentFlags().Set("json", "true"); err != nil {
+			t.Fatalf("Set json flag: %v", err)
+		}
+	}
 	// Reset flags to defaults
 	reclassifyCmd.Flags().VisitAll(func(f *pflag.Flag) {
 		f.Changed = false
+		if f.Value.Type() == "stringArray" || f.Value.Type() == "stringSlice" {
+			return
+		}
 		_ = f.Value.Set(f.DefValue)
 	})
 }
@@ -63,15 +72,25 @@ func runReclassifyCommand(t *testing.T, args ...string) string {
 		// Split args into flags and positional args
 		var flags []string
 		var positional []string
-		for i := 0; i < len(args); i++ {
+		i := 0
+		for i < len(args) {
 			if strings.HasPrefix(args[i], "--") {
-				flags = append(flags, args[i])
-				// Check if next arg is a value for this flag
-				if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-					i++
+				flagName := strings.TrimPrefix(args[i], "--")
+				// Check if this is a known flag that takes a value
+				if flagName == "field" || flagName == "fields-json" || strings.Contains(flagName, "=") {
+					flags = append(flags, args[i])
+					// If it's --field without =, next arg is the value
+					if !strings.Contains(args[i], "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+						i++
+						flags = append(flags, args[i])
+					}
+				} else {
+					// Bool flag or flag with =
 					flags = append(flags, args[i])
 				}
+				i++
 			} else {
+				// Rest are positional
 				positional = append(positional, args[i:]...)
 				break
 			}
@@ -106,7 +125,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "--no-move", "--force", "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--no-move", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -153,7 +172,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -197,7 +216,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--no-move", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -237,7 +256,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -278,7 +297,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--no-move", "--force", "--field", "author=Tolkien", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -321,7 +340,7 @@ types:
 	setupReclassifyGlobals(t, vaultPath)
 	reclassifyFieldJSON = `{"status":"false"}`
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -377,7 +396,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -432,7 +451,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -469,7 +488,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -508,7 +527,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "books/my-book", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "books/my-book", "book")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -539,7 +558,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "books/my-book", "page")
+	out := runReclassifyCommand(t, "--json", "--force", "books/my-book", "page")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -570,7 +589,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "books/my-book", "unicorn")
+	out := runReclassifyCommand(t, "--json", "--force", "books/my-book", "unicorn")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -609,7 +628,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := runReclassifyCommand(t, "notes/my-note", "book")
+	out := runReclassifyCommand(t, "--json", "--force", "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`

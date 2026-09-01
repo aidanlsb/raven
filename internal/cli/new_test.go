@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,17 +24,23 @@ var captureStdoutMu sync.Mutex
 func resetCommandFlags(cmd *cobra.Command) {
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
 		f.Changed = false
+		// For StringArray/StringSlice flags, we can't use DefValue because it's literally "[]".
+		// For now, just skip resetting them - ParseFlags will set them fresh.
+		if f.Value.Type() == "stringArray" || f.Value.Type() == "stringSlice" {
+			// Don't reset - let ParseFlags handle it
+			return
+		}
 		_ = f.Value.Set(f.DefValue)
 	})
-	// Also reset persistent flags to ensure --json is handled correctly
+}
+
+// setupJSONMode sets up JSON mode for tests by setting both the global and the persistent flag.
+func setupJSONMode(cmd *cobra.Command) error {
+	jsonOutput = true
 	if cmd.Parent() != nil {
-		cmd.Parent().PersistentFlags().VisitAll(func(f *pflag.Flag) {
-			if f.Name == "json" {
-				// Keep json flag as-is (controlled by test's jsonOutput global)
-				_ = f.Value.Set(fmt.Sprintf("%v", jsonOutput))
-			}
-		})
+		return cmd.Parent().PersistentFlags().Set("json", "true")
 	}
+	return nil
 }
 
 func captureStdout(t *testing.T, fn func()) string {
@@ -263,10 +268,12 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
 
 	// Parse flags through Cobra
 	resetCommandFlags(newCmd)
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := newCmd.ParseFlags([]string{}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -319,10 +326,12 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
 
-	// Parse flags including --field
+	// Parse flags including --field (pass as repeated args, not stringified slice)
 	resetCommandFlags(newCmd)
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := newCmd.ParseFlags([]string{"--field", "title=Override Title"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -375,10 +384,12 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
 
 	// Parse flags including --fields-json
 	resetCommandFlags(newCmd)
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := newCmd.ParseFlags([]string{"--fields-json", `{"email":"true"}`}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -422,10 +433,12 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
 
 	// First run creates the file successfully.
 	resetCommandFlags(newCmd)
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := newCmd.ParseFlags([]string{}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -489,7 +502,9 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 
 	title := "config.VaultConfig duplicates internal/paths"
 	resetCommandFlags(newCmd)
@@ -566,7 +581,9 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 
 	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{"--object-path", "custom/raven-logo-brief"}); err != nil {
@@ -618,7 +635,9 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 
 	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{"--object-path", "note/"}); err != nil {
@@ -676,7 +695,9 @@ directories:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 
 	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{}); err != nil {
@@ -742,7 +763,9 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 
 	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{"--template", "interview_technical"}); err != nil {
@@ -794,7 +817,9 @@ directories:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 
 	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{}); err != nil {
@@ -912,7 +937,9 @@ types:
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
+	if err := setupJSONMode(newCmd); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 
 	resetCommandFlags(newCmd)
 	if err := newCmd.ParseFlags([]string{}); err != nil {

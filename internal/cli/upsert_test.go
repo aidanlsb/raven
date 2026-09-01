@@ -17,8 +17,20 @@ import (
 func resetUpsertFlags() {
 	upsertCmd.Flags().VisitAll(func(f *pflag.Flag) {
 		f.Changed = false
+		if f.Value.Type() == "stringArray" || f.Value.Type() == "stringSlice" {
+			return
+		}
 		_ = f.Value.Set(f.DefValue)
 	})
+}
+
+// setupJSONMode sets up JSON mode for tests by setting both the global and the persistent flag.
+func setupUpsertJSONMode() error {
+	jsonOutput = true
+	if upsertCmd.Parent() != nil {
+		return upsertCmd.Parent().PersistentFlags().Set("json", "true")
+	}
+	return nil
 }
 
 func TestUpsertCreateUpdateUnchanged(t *testing.T) {
@@ -34,10 +46,15 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 
 	run := func(content string) (status string, file string) {
 		resetUpsertFlags()
+		if err := setupUpsertJSONMode(); err != nil {
+			t.Fatalf("setupJSONMode: %v", err)
+		}
 		if err := upsertCmd.ParseFlags([]string{"--content", content}); err != nil {
 			t.Fatalf("ParseFlags: %v", err)
 		}
@@ -109,9 +126,11 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
 
 	resetUpsertFlags()
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := upsertCmd.ParseFlags([]string{"--content", "Canonical body"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -195,7 +214,9 @@ func TestUpsertSlugifiesTitleWithPathSeparator(t *testing.T) {
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 
 	title := "config.VaultConfig duplicates internal/paths"
 	resetUpsertFlags()
@@ -261,9 +282,11 @@ func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
 
 	resetUpsertFlags()
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := upsertCmd.ParseFlags([]string{"--object-path", "custom/brief-daily", "--content", "Body V1"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
@@ -308,9 +331,11 @@ func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
 	})
 
 	resolvedVaultPath = vaultPath
-	jsonOutput = true
 
 	resetUpsertFlags()
+	if err := setupUpsertJSONMode(); err != nil {
+		t.Fatalf("setupJSONMode: %v", err)
+	}
 	if err := upsertCmd.ParseFlags([]string{"--object-path", "brief/"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
