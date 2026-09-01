@@ -402,6 +402,16 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 		}
 	}
 
+	// Include confirm and dry-run flags if present
+	if cmd.Flags().Changed("confirm") {
+		value, _ := cmd.Flags().GetBool("confirm")
+		argsMap["confirm"] = value
+	}
+	if cmd.Flags().Changed("dry-run") {
+		value, _ := cmd.Flags().GetBool("dry-run")
+		argsMap["dry-run"] = value
+	}
+
 	return argsMap, nil
 }
 
