@@ -20,12 +20,6 @@ var skillListCmd = newCanonicalLeafCommand("skill_list", canonicalLeafOptions{
 	RenderHuman: renderSkillList,
 })
 
-var (
-	skillInstallConfirm bool
-	skillInstallScope   string
-	skillInstallDest    string
-)
-
 var skillInstallCmd = newCanonicalLeafCommand("skill_install", canonicalLeafOptions{
 	Invoke:      invokeSkillInstall,
 	RenderHuman: renderSkillInstall,
@@ -47,19 +41,21 @@ func init() {
 	rootCmd.AddCommand(skillCmd)
 }
 
-func invokeSkillInstall(_ *cobra.Command, commandID, _ string, args map[string]interface{}) commandexec.Result {
+func invokeSkillInstall(cmd *cobra.Command, commandID, _ string, args map[string]interface{}) commandexec.Result {
+	confirm, _ := cmd.Flags().GetBool("confirm")
+
 	// Non-interactive or --json: never prompt. Apply only with --confirm;
 	// otherwise return a preview that flags confirmation as required.
 	if !shouldPromptForConfirm() {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
 			Args:      args,
-			Confirm:   skillInstallConfirm,
+			Confirm:   confirm,
 		})
 	}
 
 	// Interactive terminal with explicit confirmation applies without prompting.
-	if skillInstallConfirm {
+	if confirm {
 		return executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
 			Args:      args,

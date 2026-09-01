@@ -14,17 +14,6 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var (
-	importFile         string
-	importMapping      string
-	importMapFlags     []string
-	importKey          string
-	importContentField string
-	importDryRun       bool
-	importCreateOnly   bool
-	importUpdateOnly   bool
-)
-
 var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
 	VaultPath: getVaultPath,
 	Prepare:   prepareImportStdin,
@@ -92,7 +81,16 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 	}
 
 	// Human-readable output
-	if importDryRun {
+	// Detect preview mode by checking if any action is "create" or "update" (future tense)
+	isDryRun := false
+	for _, r := range results {
+		if r.Action == "create" || r.Action == "update" {
+			isDryRun = true
+			break
+		}
+	}
+
+	if isDryRun {
 		fmt.Println(ui.Bold.Render("Dry run — no changes made:"))
 	}
 
