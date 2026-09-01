@@ -541,7 +541,6 @@ changes, required-field failures, and reference updates by default. Use
 			{Name: "stdin", Description: "Read references from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk reclassification (without this flag, bulk shows preview only)", Type: FlagTypeBool},
 		},
-		BulkStdinArgName: "references",
 		Examples: []string{
 			"rvn reclassify inbox/note book --json",
 			"rvn reclassify people/freya company --field industry=tech --json",
