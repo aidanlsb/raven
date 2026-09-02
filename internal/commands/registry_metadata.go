@@ -82,24 +82,24 @@ func RequiresVaultForInvocation(commandID string, args map[string]interface{}) b
 
 func defaultCategoryForCommandID(commandID string) Category {
 	commandID = strings.ReplaceAll(commandID, " ", "_")
-	switch {
-	case commandID == "query" || commandID == "query_saved_list" || commandID == "query_saved_get" ||
-		commandID == "query_saved_set" || commandID == "query_saved_remove" ||
-		commandID == "search" || commandID == "backlinks" || commandID == "outlinks" || commandID == "resolve":
+	switch commandID {
+	case "query", "query_saved_list", "query_saved_get", "query_saved_set", "query_saved_remove",
+		"search", "backlinks", "outlinks", "resolve":
 		return CategoryQuery
-	case commandID == "new" || commandID == "add" || commandID == "upsert" || commandID == "set" || commandID == "unset" ||
-		commandID == "delete" || commandID == "move" || commandID == "reclassify" || commandID == "import" ||
-		commandID == "edit" || commandID == "update":
+	case "new", "add", "upsert", "set", "unset",
+		"delete", "move", "reclassify", "import",
+		"edit", "update":
 		return CategoryContent
-	case commandID == "schema" || strings.HasPrefix(commandID, "schema_") || commandID == "template" || strings.HasPrefix(commandID, "template_"):
-		return CategorySchema
-	case commandID == "read" || commandID == "open" || commandID == "daily" || commandID == "date":
+	case "read", "open", "daily", "date":
 		return CategoryNavigation
-	case commandID == "check" || commandID == "reindex" || commandID == "version":
+	case "check", "reindex", "version":
 		return CategoryMaintenance
-	default:
-		return CategoryVault
 	}
+	if commandID == "schema" || strings.HasPrefix(commandID, "schema_") ||
+		commandID == "template" || strings.HasPrefix(commandID, "template_") {
+		return CategorySchema
+	}
+	return CategoryVault
 }
 
 func defaultAccessForCommandID(commandID string) AccessMode {
