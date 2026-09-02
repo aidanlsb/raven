@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
@@ -17,123 +16,145 @@ func ValidateTraitValue(def *TraitDefinition, value fieldvalue.FieldValue) error
 	}
 
 	traitType := normalizedTraitType(def.Type, def.IsBoolean())
+
+	// Handle array types by extracting scalar type and validating elements
+	scalarType := traitType
+	isArray := false
 	switch traitType {
-	case FieldTypeBool:
-		if _, ok := value.AsBool(); ok {
-			return nil
-		}
-		if s, ok := value.AsString(); ok && (s == "true" || s == "false") {
-			return nil
-		}
-		return fmt.Errorf("invalid boolean value %q (expected true or false)", traitValueDisplay(value))
-	case FieldTypeString:
-		if _, ok := value.AsString(); ok {
-			return nil
-		}
-		return fmt.Errorf("expected string value")
-	case FieldTypeNumber:
-		if _, ok := value.AsNumber(); ok {
-			return nil
-		}
-		if s, ok := value.AsString(); ok {
-			if _, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
-				return nil
-			}
-		}
-		return fmt.Errorf("invalid number value %q", traitValueDisplay(value))
-	case FieldTypeURL:
-		s, ok := value.AsString()
-		if !ok {
-			return fmt.Errorf("expected URL value")
-		}
-		if err := validateURLString(s); err != nil {
-			return err
-		}
-		return nil
-	case FieldTypeDate:
-		s, ok := value.AsString()
-		if !ok || !dates.IsValidDate(s) {
-			return fmt.Errorf("invalid date format %q (expected YYYY-MM-DD)", traitValueDisplay(value))
-		}
-		return nil
-	case FieldTypeDatetime:
-		s, ok := value.AsString()
-		if !ok || !dates.IsValidDatetime(s) {
-			return fmt.Errorf("invalid datetime format %q (expected YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS)", traitValueDisplay(value))
-		}
-		return nil
-	case FieldTypeEnum:
-		s, ok := value.AsString()
-		if !ok {
-			return fmt.Errorf("expected enum value")
-		}
-		if len(def.Values) == 0 {
-			return fmt.Errorf("enum trait has no allowed values defined")
-		}
-		for _, allowed := range def.Values {
-			if s == allowed {
-				return nil
-			}
-		}
-		return fmt.Errorf("invalid enum value %q (allowed: %v)", s, def.Values)
-	case FieldTypeRef:
-		if target, ok := refTargetFromFieldValue(value); ok && target != "" {
-			return nil
-		}
-		return fmt.Errorf("expected reference value")
-	case FieldTypeStringArray,
-		FieldTypeNumberArray,
-		FieldTypeURLArray,
-		FieldTypeDateArray,
-		FieldTypeDatetimeArray,
-		FieldTypeEnumArray,
-		FieldTypeBoolArray,
-		FieldTypeRefArray:
-		return validateTraitArrayValue(def, value, traitType)
-	default:
+	case FieldTypeStringArray:
+		scalarType = FieldTypeString
+		isArray = true
+	case FieldTypeNumberArray:
+		scalarType = FieldTypeNumber
+		isArray = true
+	case FieldTypeURLArray:
+		scalarType = FieldTypeURL
+		isArray = true
+	case FieldTypeDateArray:
+		scalarType = FieldTypeDate
+		isArray = true
+	case FieldTypeDatetimeArray:
+		scalarType = FieldTypeDatetime
+		isArray = true
+	case FieldTypeEnumArray:
+		scalarType = FieldTypeEnum
+		isArray = true
+	case FieldTypeBoolArray:
+		scalarType = FieldTypeBool
+		isArray = true
+	case FieldTypeRefArray:
+		scalarType = FieldTypeRef
+		isArray = true
+	}
+
+	// Get validator from table
+	validator, ok := validatorTable[scalarType]
+	if !ok {
 		return fmt.Errorf("unknown trait type %q", def.Type)
 	}
-}
 
-func validateTraitArrayValue(def *TraitDefinition, value fieldvalue.FieldValue, traitType FieldType) error {
-	items, ok := value.AsArray()
-	if !ok {
-		return fmt.Errorf("expected array value")
+	// Build a temporary FieldDefinition for extraCheck calls
+	tempDef := &FieldDefinition{
+		Type:   scalarType,
+		Values: def.Values,
 	}
-	elementType, ok := traitArrayElementType(traitType)
-	if !ok {
-		return fmt.Errorf("unknown trait array type %q", traitType)
+
+	if isArray {
+		items, ok := value.AsArray()
+		if !ok {
+			return fmt.Errorf("expected array value")
+		}
+		for _, item := range items {
+			// Special handling for bool: allow string "true"/"false"
+			if scalarType == FieldTypeBool {
+				if err := validateTraitBoolValue(item); err != nil {
+					return err
+				}
+				continue
+			}
+			// Special handling for number: allow parseable strings
+			if scalarType == FieldTypeNumber {
+				if err := validateTraitNumberValue(item); err != nil {
+					return err
+				}
+				continue
+			}
+			// Standard validation for other types
+			if !validator.scalarChecker(item) {
+				return traitValidationError(scalarType, item, validator.scalarError, false)
+			}
+			if validator.extraCheck != nil {
+				msg := validator.extraCheck(item, tempDef)
+				if msg != "" {
+					return fmt.Errorf("%s", msg)
+				}
+			}
+		}
+		return nil
 	}
-	elementDef := *def
-	elementDef.Type = elementType
-	for _, item := range items {
-		if err := ValidateTraitValue(&elementDef, item); err != nil {
-			return err
+
+	// Scalar validation with trait-specific handling
+	if scalarType == FieldTypeBool {
+		return validateTraitBoolValue(value)
+	}
+	if scalarType == FieldTypeNumber {
+		return validateTraitNumberValue(value)
+	}
+	if !validator.scalarChecker(value) {
+		return traitValidationError(scalarType, value, validator.scalarError, true)
+	}
+	if validator.extraCheck != nil {
+		msg := validator.extraCheck(value, tempDef)
+		if msg != "" {
+			return fmt.Errorf("%s", msg)
 		}
 	}
 	return nil
 }
 
-func traitArrayElementType(fieldType FieldType) (FieldType, bool) {
+// validateTraitBoolValue validates a boolean trait value, allowing string "true"/"false".
+func validateTraitBoolValue(value fieldvalue.FieldValue) error {
+	if _, ok := value.AsBool(); ok {
+		return nil
+	}
+	if s, ok := value.AsString(); ok && (s == "true" || s == "false") {
+		return nil
+	}
+	return fmt.Errorf("invalid boolean value %q (expected true or false)", traitValueDisplay(value))
+}
+
+// validateTraitNumberValue validates a number trait value, allowing parseable strings.
+func validateTraitNumberValue(value fieldvalue.FieldValue) error {
+	if _, ok := value.AsNumber(); ok {
+		return nil
+	}
+	if s, ok := value.AsString(); ok {
+		if _, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid number value %q", traitValueDisplay(value))
+}
+
+// traitValidationError returns trait-specific error messages with better formatting.
+func traitValidationError(fieldType FieldType, value fieldvalue.FieldValue, defaultMsg string, isScalar bool) error {
 	switch fieldType {
-	case FieldTypeStringArray:
-		return FieldTypeString, true
-	case FieldTypeNumberArray:
-		return FieldTypeNumber, true
-	case FieldTypeURLArray:
-		return FieldTypeURL, true
-	case FieldTypeDateArray:
-		return FieldTypeDate, true
-	case FieldTypeDatetimeArray:
-		return FieldTypeDatetime, true
-	case FieldTypeEnumArray:
-		return FieldTypeEnum, true
-	case FieldTypeBoolArray:
-		return FieldTypeBool, true
-	case FieldTypeRefArray:
-		return FieldTypeRef, true
+	case FieldTypeDate:
+		return fmt.Errorf("invalid date format %q (expected YYYY-MM-DD)", traitValueDisplay(value))
+	case FieldTypeDatetime:
+		return fmt.Errorf("invalid datetime format %q (expected YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS)", traitValueDisplay(value))
+	case FieldTypeEnum:
+		if isScalar {
+			return fmt.Errorf("expected enum value")
+		}
+		return fmt.Errorf("%s", defaultMsg)
+	case FieldTypeRef:
+		if isScalar {
+			return fmt.Errorf("expected reference value")
+		}
+		return fmt.Errorf("%s", defaultMsg)
 	default:
-		return "", false
+		return fmt.Errorf("%s", defaultMsg)
 	}
 }
 
