@@ -56,39 +56,31 @@ That is the full install: a single `rvn` binary. You can create a vault by hand 
 
 ## Get started with an agent
 
-An agent can set up your vault and teach you Raven. Starting from a clean machine with no vault at all, the agent creates and registers one, then shapes a schema around what you track. Raven ships reusable [Agent Skills](https://agentskills.io/) that give coding agents everything they need to drive your vault.
+Open your agent in the directory where you want your notes and paste this prompt:
 
-### 1. Install the skills
+```
+Install Raven and let it onboard me:
 
-```bash
-rvn skill install
+1. Check if `rvn` is on PATH with `rvn version`. If missing:
+   - Prefer Homebrew: `brew tap aidanlsb/tap && brew install aidanlsb/tap/rvn`
+   - If brew is unavailable: `go install github.com/aidanlsb/raven/cmd/rvn@latest`
+   - If neither brew nor go is available, point me at https://github.com/aidanlsb/raven/releases/latest
+   - Confirm with `rvn version` after install
+
+2. Install shipped skills with `rvn skill install --confirm --json` (agents cannot answer the interactive y/N prompt; without --confirm the command only previews)
+
+3. Use the `raven-onboarding` skill to set up my vault and walk me through how Raven works
 ```
 
-This installs the shipped skills to `~/.agents/skills`. Use `--scope project` for `.agents/skills` in the current project, or `--dest` for another location.
-
-| Skill | Use it for |
-|---|---|
-| `raven-onboarding` | Guided first-session setup and Raven concepts |
-| `raven-core` | Creating, reading, editing, and organizing content |
-| `raven-query` | RQL, saved queries, search, and link traversal |
-| `raven-schema` | Schema design and migration |
-| `raven-maintenance` | Vault checks, reindexing, and import |
-| `raven-templates` | Template files and schema-template bindings |
-| `raven-vault-admin` | Vault setup, selection, and configuration |
-
-### 2. Let the agent onboard you
-
-Open your agent wherever you want your notes to live and give it this prompt:
-
-> Use the `raven-onboarding` skill to set up my vault and walk me through how Raven works.
-
-The onboarding skill detects that you have no vault yet, creates and registers one, then introduces Raven's concepts, helps you shape a schema for what you track, and gets you creating and querying notes in the context of your own vault. From there you can ask for work, like:
+The onboarding skill detects that you have no vault yet, creates and registers one, then introduces Raven's concepts. It helps you shape a schema around what you track and gets you creating and querying notes in the context of your own vault. From there you can ask for work, like:
 
 > Add a meeting note for today's kickoff with Freya on the Midgard security review, capture any decisions and follow-ups, and link it to the project and to Freya.
 
+See [Agent Setup](docs/getting-started/agent-setup.md) for the skill catalog and other setup paths.
+
 ### Optional: MCP
 
-Skills teach CLI workflows and don't require MCP. To additionally give MCP-native agents direct tool access to Raven's commands, install Raven into a supported client:
+Skills teach CLI workflows and do not require MCP. To additionally give MCP-native agents direct tool access to Raven's commands, install Raven into a supported client:
 
 ```bash
 rvn mcp install --client claude-code
@@ -104,11 +96,6 @@ Or print a manual config snippet:
 rvn mcp show
 rvn mcp show --client cursor
 ```
-
-Run `rvn skill install` again to install newly shipped skills, align existing
-Raven-managed skills, and remove receipt-managed skills no longer shipped by
-the current `rvn` version. For non-interactive use, apply the preview with
-`rvn skill install --confirm --json`.
 
 See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 
