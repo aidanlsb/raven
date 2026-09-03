@@ -308,43 +308,12 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 			argsKey = flag.ArgsKey
 		}
 
-		switch flag.Type {
-		case commands.FlagTypeBool:
-			value, _ := cmd.Flags().GetBool(flag.Name)
-			argsMap[argsKey] = value
-		case commands.FlagTypeInt:
-			value, _ := cmd.Flags().GetInt(flag.Name)
-			argsMap[argsKey] = value
-		case commands.FlagTypeStringSlice:
-			value, _ := cmd.Flags().GetStringArray(flag.Name)
-			// If there's already a variadic positional arg with same name, merge them
-			if existing, ok := argsMap[argsKey].([]string); ok {
-				value = append(existing, value...)
-			}
-			argsMap[argsKey] = value
-		case commands.FlagTypeKeyValue:
-			value, _ := cmd.Flags().GetStringArray(flag.Name)
-			parsed, err := parseKeyValueArgs(flag.Name, value)
-			if err != nil {
-				return nil, err
-			}
-			argsMap[argsKey] = parsed
-		case commands.FlagTypeJSON:
-			raw, _ := cmd.Flags().GetString(flag.Name)
-			if strings.TrimSpace(raw) != "" {
-				var decoded interface{}
-				if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
-					return nil, handleErrorMsg("INVALID_INPUT",
-						fmt.Sprintf("invalid --%s JSON: %s", flag.Name, err.Error()),
-						"Ensure the JSON is well-formed")
-				}
-				argsMap[argsKey] = decoded
-			}
-		default:
-			value, _ := cmd.Flags().GetString(flag.Name)
-			if value != "" || cmd.Flags().Changed(flag.Name) {
-				argsMap[argsKey] = value
-			}
+		parser, ok := flagParsers[flag.Type]
+		if !ok {
+			parser = flagParsers[commands.FlagTypeString]
+		}
+		if err := parser(cmd, flag.Name, argsKey, argsMap); err != nil {
+			return nil, err
 		}
 	}
 
@@ -359,6 +328,70 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 	}
 
 	return argsMap, nil
+}
+
+type flagParser func(cmd *cobra.Command, flagName, argsKey string, argsMap map[string]interface{}) error
+
+var flagParsers = map[commands.FlagType]flagParser{
+	commands.FlagTypeBool:        parseBoolFlag,
+	commands.FlagTypeInt:         parseIntFlag,
+	commands.FlagTypeStringSlice: parseStringSliceFlag,
+	commands.FlagTypeKeyValue:    parseKeyValueFlag,
+	commands.FlagTypeJSON:        parseJSONFlag,
+	commands.FlagTypeString:      parseStringFlag,
+}
+
+func parseBoolFlag(cmd *cobra.Command, flagName, argsKey string, argsMap map[string]interface{}) error {
+	value, _ := cmd.Flags().GetBool(flagName)
+	argsMap[argsKey] = value
+	return nil
+}
+
+func parseIntFlag(cmd *cobra.Command, flagName, argsKey string, argsMap map[string]interface{}) error {
+	value, _ := cmd.Flags().GetInt(flagName)
+	argsMap[argsKey] = value
+	return nil
+}
+
+func parseStringSliceFlag(cmd *cobra.Command, flagName, argsKey string, argsMap map[string]interface{}) error {
+	value, _ := cmd.Flags().GetStringArray(flagName)
+	if existing, ok := argsMap[argsKey].([]string); ok {
+		value = append(existing, value...)
+	}
+	argsMap[argsKey] = value
+	return nil
+}
+
+func parseKeyValueFlag(cmd *cobra.Command, flagName, argsKey string, argsMap map[string]interface{}) error {
+	value, _ := cmd.Flags().GetStringArray(flagName)
+	parsed, err := parseKeyValueArgs(flagName, value)
+	if err != nil {
+		return err
+	}
+	argsMap[argsKey] = parsed
+	return nil
+}
+
+func parseJSONFlag(cmd *cobra.Command, flagName, argsKey string, argsMap map[string]interface{}) error {
+	raw, _ := cmd.Flags().GetString(flagName)
+	if strings.TrimSpace(raw) != "" {
+		var decoded interface{}
+		if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+			return handleErrorMsg("INVALID_INPUT",
+				fmt.Sprintf("invalid --%s JSON: %s", flagName, err.Error()),
+				"Ensure the JSON is well-formed")
+		}
+		argsMap[argsKey] = decoded
+	}
+	return nil
+}
+
+func parseStringFlag(cmd *cobra.Command, flagName, argsKey string, argsMap map[string]interface{}) error {
+	value, _ := cmd.Flags().GetString(flagName)
+	if value != "" || cmd.Flags().Changed(flagName) {
+		argsMap[argsKey] = value
+	}
+	return nil
 }
 
 func validateMutexConstraints(meta commands.Meta, cmd *cobra.Command) error {
