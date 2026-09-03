@@ -161,6 +161,8 @@ up Raven from scratch:
 3. Paste the [recommended first prompt](#recommended-first-prompt). A vault is
    optional. If you don't have one yet, the agent will help you create it.
 
+For a single copy-paste prompt that installs Raven and the skills in one go, see the [Get started with an agent](../../README.md#get-started-with-an-agent) section of the README.
+
 The agent detects your vault state, creates a first vault with `rvn init` when
 none exists (asking where to put it), sets your editor with `rvn config set
 editor=<cmd> editor_mode=auto` (asking first, since it is machine-wide), then
