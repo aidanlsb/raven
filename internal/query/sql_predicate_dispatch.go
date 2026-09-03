@@ -67,9 +67,6 @@ func init() {
 		{reflect.TypeOf((*ContainsPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
 			return e.buildContainsPredicateSQL(p.(*ContainsPredicate), alias)
 		},
-		{reflect.TypeOf((*InPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
-			return e.buildInPredicateSQL(p.(*InPredicate), alias, QueryTypeObject)
-		},
 		{reflect.TypeOf((*InPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
 			return e.buildInPredicateSQL(p.(*InPredicate), alias, QueryTypeTrait)
 		},
@@ -97,20 +94,11 @@ func init() {
 		{reflect.TypeOf((*RefdPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
 			return e.buildRefdPredicateSQL(p.(*RefdPredicate), alias, false)
 		},
-		{reflect.TypeOf((*RefdPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
-			return e.buildRefdPredicateSQL(p.(*RefdPredicate), alias, false)
-		},
 		{reflect.TypeOf((*RefdPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
 			return e.buildRefdPredicateSQL(p.(*RefdPredicate), alias, false)
 		},
-		{reflect.TypeOf((*ValuePredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+		{reflect.TypeOf((*ValuePredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
 			return e.buildValuePredicateSQL(p.(*ValuePredicate), alias)
-		},
-		{reflect.TypeOf((*AtPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
-			return e.buildAtPredicateSQL(p.(*AtPredicate), alias)
-		},
-		{reflect.TypeOf((*AtPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
-			return e.buildAtPredicateSQL(p.(*AtPredicate), alias)
 		},
 		{reflect.TypeOf((*AtPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
 			return e.buildAtPredicateSQL(p.(*AtPredicate), alias)
@@ -120,6 +108,12 @@ func init() {
 		},
 		{reflect.TypeOf((*ContainsPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
 			return e.buildContainsPredicateSQL(p.(*ContainsPredicate), alias)
+		},
+		{reflect.TypeOf((*ContentPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildContentPredicateSQL(p.(*ContentPredicate), alias)
+		},
+		{reflect.TypeOf((*ContentPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildContentPredicateSQL(p.(*ContentPredicate), alias)
 		},
 	}
 }
