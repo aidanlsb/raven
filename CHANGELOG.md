@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.35] - 2026-09-02
+
+### Added
+- Agent onboarding now starts with a single copy-paste prompt that installs `rvn`, installs shipped skills, and launches the `raven-onboarding` skill to set up your first vault.
+
+### Changed
+- **Breaking:** `rvn new` and `rvn upsert` now use `--object-path` instead of `--path`, with no alias. The flag explicitly expects an object ID (matches `data.id` from `rvn read`), not a file path.
+- **Breaking:** `rvn set` now takes `--field key=value` for field arguments instead of accepting positional `key=value`. MCP `fields` object argument is unchanged.
+- Query `--inputs` now accepts JSON objects for saved query input arguments. Positional `key=value` arguments still work.
+- Schema mutations now trigger automatic index refresh when auto-reindex is enabled, keeping indexed data consistent with schema changes without manual reindex.
+- Consolidated internal service boundaries, schema mutation handling, vault config management, and CLI identity remapping for clearer code organization.
+
+### Fixed
+- Date, datetime, and URL field validation errors now clearly distinguish type mismatches from format failures, matching pre-refactor error messages.
+
 ## [v0.0.34] - 2026-08-23
 
 ### Added
@@ -453,7 +468,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.32...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.35...HEAD
+[v0.0.35]: https://github.com/aidanlsb/raven/compare/v0.0.34...v0.0.35
+[v0.0.34]: https://github.com/aidanlsb/raven/compare/v0.0.33...v0.0.34
+[v0.0.33]: https://github.com/aidanlsb/raven/compare/v0.0.32...v0.0.33
 [v0.0.32]: https://github.com/aidanlsb/raven/compare/v0.0.31...v0.0.32
 [v0.0.31]: https://github.com/aidanlsb/raven/compare/v0.0.30...v0.0.31
 [v0.0.30]: https://github.com/aidanlsb/raven/compare/v0.0.29...v0.0.30
