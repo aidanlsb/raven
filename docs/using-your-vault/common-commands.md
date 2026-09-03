@@ -164,12 +164,12 @@ Set frontmatter fields on an existing object. Values are validated against the s
 
 ```bash
 rvn set project/website --field status=published
-rvn set person/freya --field email=freya@example.com role=lead
+rvn set person/freya --field email=freya@example.com --field role=lead
 rvn set person/freya --fields-json '{"email":"true"}'
 rvn set project/website --field status=published --dry-run   # Preview without writing
 ```
 
-Single-object updates apply immediately; pass `--dry-run` to preview the result without writing. Use positional `field=value` arguments for shell-friendly literal updates. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
+Single-object updates apply immediately; pass `--dry-run` to preview the result without writing. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
 
 For bulk field updates, pipe IDs from a query:
 
@@ -223,7 +223,7 @@ Key flags:
 - `--field`: set field values
 - `--fields-json`: set fields as a JSON object
 - `--content`: set the markdown body
-- `--path`: explicit file path (defaults to slugified title)
+- `--object-path`: explicit object path (defaults to slugified title)
 
 ---
 
