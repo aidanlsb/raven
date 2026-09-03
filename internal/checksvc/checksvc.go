@@ -86,6 +86,139 @@ type CheckResultJSON struct {
 	Summary    []CheckSummaryJSON `json:"summary"`
 }
 
+type issueCollector struct {
+	issues       *[]check.Issue
+	schemaIssues *[]check.SchemaIssue
+	result       *RunResult
+	include      map[check.IssueType]bool
+	exclude      map[check.IssueType]bool
+	errorsOnly   bool
+}
+
+func (c *issueCollector) appendFiltered(issue check.Issue) {
+	if !shouldIncludeIssue(issue, c.include, c.exclude, c.errorsOnly) {
+		return
+	}
+	*c.issues = append(*c.issues, issue)
+	if issue.Level == check.LevelWarning {
+		c.result.WarningCount++
+	} else {
+		c.result.ErrorCount++
+	}
+}
+
+func (c *issueCollector) appendSchemaFiltered(issue check.SchemaIssue) {
+	if !shouldIncludeSchemaIssue(issue, c.include, c.exclude, c.errorsOnly) {
+		return
+	}
+	*c.schemaIssues = append(*c.schemaIssues, issue)
+	if issue.Level == check.LevelWarning {
+		c.result.WarningCount++
+	} else {
+		c.result.ErrorCount++
+	}
+}
+
+func (c *issueCollector) recordIncomplete(subsystem string, cause error) {
+	c.appendFiltered(check.Issue{
+		Level:      check.LevelWarning,
+		Type:       check.IssueCheckIncomplete,
+		FilePath:   "",
+		Line:       0,
+		Message:    fmt.Sprintf("Check incomplete: %s unavailable: %v", subsystem, cause),
+		Value:      subsystem,
+		FixCommand: "rvn reindex",
+		FixHint:    "Fix the named index subsystem and re-run check",
+	})
+}
+
+type indexResources struct {
+	db                *index.Database
+	aliases           map[string]string
+	duplicateAliases  []resolver.AliasCollision
+	canonicalResolver *resolver.Resolver
+}
+
+func loadIndexResources(
+	rt *vaultruntime.Runtime,
+	scope *Scope,
+	excludeMatcher *ravenignore.Matcher,
+	collector *issueCollector,
+	result *RunResult,
+) *indexResources {
+	resources := &indexResources{}
+
+	if err := rt.OpenDB(); err != nil {
+		collector.recordIncomplete("index", err)
+		return resources
+	}
+
+	resources.db = rt.DB
+	stalenessInfo, stalenessErr := rt.DB.CheckStaleness(rt.VaultPath)
+	if stalenessErr != nil {
+		collector.recordIncomplete("index staleness", stalenessErr)
+	} else if stalenessInfo.IsStale {
+		staleFiles := filterIncludedPaths(stalenessInfo.StaleFiles, excludeMatcher)
+		staleCount := len(staleFiles)
+		if staleCount > 0 && scope.Type == "full" {
+			collector.appendFiltered(check.Issue{
+				Level:      check.LevelWarning,
+				Type:       check.IssueStaleIndex,
+				FilePath:   "",
+				Line:       0,
+				Message:    fmt.Sprintf("Index may be stale (%d file(s) modified since last reindex)", staleCount),
+				FixCommand: "rvn reindex",
+				FixHint:    "Run 'rvn reindex' to update the index",
+			})
+		}
+		result.StaleWarningShown = staleCount > 0
+	}
+
+	var aliasesErr error
+	resources.aliases, aliasesErr = rt.DB.AllAliases()
+	if aliasesErr != nil {
+		collector.recordIncomplete("aliases", aliasesErr)
+	}
+
+	var duplicateAliasesErr error
+	resources.duplicateAliases, duplicateAliasesErr = rt.DB.FindDuplicateAliases()
+	if duplicateAliasesErr != nil {
+		collector.recordIncomplete("duplicate aliases", duplicateAliasesErr)
+	}
+
+	var resolverErr error
+	resources.canonicalResolver, resolverErr = rt.DB.Resolver(indexschema.ResolverOptions{
+		DailyDirectory: rt.VaultCfg.GetDailyDirectory(),
+		Schema:         rt.Schema,
+	})
+	if resolverErr != nil {
+		collector.recordIncomplete("resolver", resolverErr)
+	}
+
+	return resources
+}
+
+type scopeWalkSetup struct {
+	walkPath      string
+	targetFileSet map[string]bool
+}
+
+func prepareScopeWalkSetup(vaultPath string, scope *Scope) scopeWalkSetup {
+	setup := scopeWalkSetup{
+		walkPath:      vaultPath,
+		targetFileSet: make(map[string]bool),
+	}
+	switch scope.Type {
+	case "file":
+		for _, f := range scope.targetFiles {
+			setup.targetFileSet[f] = true
+		}
+	case "directory":
+		setup.walkPath = filepath.Join(vaultPath, scope.Value)
+	}
+	return setup
+}
+
 func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 	if rt == nil || rt.VaultCfg == nil || rt.Schema == nil {
 		return nil, fmt.Errorf("vault runtime with config and schema is required")
@@ -117,85 +250,25 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 	var parseErrors []check.Issue
 	var schemaIssues []check.SchemaIssue
 
+	collector := &issueCollector{
+		issues:       &allIssues,
+		schemaIssues: &schemaIssues,
+		result:       result,
+		include:      includeIssues,
+		exclude:      excludeIssues,
+		errorsOnly:   opts.ErrorsOnly,
+	}
+
 	// Check staleness + pull aliases from index when available.
-	var aliases map[string]string
-	var duplicateAliases []resolver.AliasCollision
-	var canonicalResolver *resolver.Resolver
-	recordIncomplete := func(subsystem string, cause error) {
-		issue := check.Issue{
-			Level:      check.LevelWarning,
-			Type:       check.IssueCheckIncomplete,
-			FilePath:   "",
-			Line:       0,
-			Message:    fmt.Sprintf("Check incomplete: %s unavailable: %v", subsystem, cause),
-			Value:      subsystem,
-			FixCommand: "rvn reindex",
-			FixHint:    "Fix the named index subsystem and re-run check",
-		}
-		if shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
-			allIssues = append(allIssues, issue)
-			result.WarningCount++
-		}
-	}
-	var db *index.Database
-	if err := rt.OpenDB(); err != nil {
-		recordIncomplete("index", err)
-	} else {
-		db = rt.DB
-		stalenessInfo, stalenessErr := db.CheckStaleness(vaultPath)
-		if stalenessErr != nil {
-			recordIncomplete("index staleness", stalenessErr)
-		} else if stalenessInfo.IsStale {
-			staleFiles := filterIncludedPaths(stalenessInfo.StaleFiles, excludeMatcher)
-			staleCount := len(staleFiles)
-			if staleCount > 0 && scope.Type == "full" {
-				staleIssue := check.Issue{
-					Level:      check.LevelWarning,
-					Type:       check.IssueStaleIndex,
-					FilePath:   "",
-					Line:       0,
-					Message:    fmt.Sprintf("Index may be stale (%d file(s) modified since last reindex)", staleCount),
-					FixCommand: "rvn reindex",
-					FixHint:    "Run 'rvn reindex' to update the index",
-				}
-				if shouldIncludeIssue(staleIssue, includeIssues, excludeIssues, opts.ErrorsOnly) {
-					allIssues = append(allIssues, staleIssue)
-					result.WarningCount++
-				}
-			}
-			result.StaleWarningShown = staleCount > 0
-		}
+	indexRes := loadIndexResources(rt, scope, excludeMatcher, collector, result)
+	db := indexRes.db
+	aliases := indexRes.aliases
+	duplicateAliases := indexRes.duplicateAliases
+	canonicalResolver := indexRes.canonicalResolver
 
-		var aliasesErr error
-		aliases, aliasesErr = db.AllAliases()
-		if aliasesErr != nil {
-			recordIncomplete("aliases", aliasesErr)
-		}
-		var duplicateAliasesErr error
-		duplicateAliases, duplicateAliasesErr = db.FindDuplicateAliases()
-		if duplicateAliasesErr != nil {
-			recordIncomplete("duplicate aliases", duplicateAliasesErr)
-		}
-		var resolverErr error
-		canonicalResolver, resolverErr = db.Resolver(indexschema.ResolverOptions{
-			DailyDirectory: vaultCfg.GetDailyDirectory(),
-			Schema:         sch,
-		})
-		if resolverErr != nil {
-			recordIncomplete("resolver", resolverErr)
-		}
-	}
-
-	walkPath := vaultPath
-	targetFileSet := map[string]bool{}
-	switch scope.Type {
-	case "file":
-		for _, f := range scope.targetFiles {
-			targetFileSet[f] = true
-		}
-	case "directory":
-		walkPath = filepath.Join(vaultPath, scope.Value)
-	}
+	scopeSetup := prepareScopeWalkSetup(vaultPath, scope)
+	walkPath := scopeSetup.walkPath
+	targetFileSet := scopeSetup.targetFileSet
 
 	walkOpts := &vault.WalkOptions{
 		ParseOptions:   parseopts.FromVaultConfig(vaultCfg),
@@ -257,16 +330,7 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 			if !isIssueInScope(issue, doc, scope) {
 				continue
 			}
-			if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
-				continue
-			}
-
-			allIssues = append(allIssues, issue)
-			if issue.Level == check.LevelWarning {
-				result.WarningCount++
-			} else {
-				result.ErrorCount++
-			}
+			collector.appendFiltered(issue)
 		}
 	}
 
@@ -275,11 +339,7 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 		if doc != nil && !isIssueInScope(issue, doc, scope) {
 			continue
 		}
-		if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
-			continue
-		}
-		allIssues = append(allIssues, issue)
-		result.ErrorCount++
+		collector.appendFiltered(issue)
 	}
 
 	for _, issue := range detectNonCanonicalIssues(allDocs, sch, vaultCfg) {
@@ -287,28 +347,16 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 		if doc != nil && !isIssueInScope(issue, doc, scope) {
 			continue
 		}
-		if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
-			continue
-		}
-		allIssues = append(allIssues, issue)
-		if issue.Level == check.LevelWarning {
-			result.WarningCount++
-		} else {
-			result.ErrorCount++
-		}
+		collector.appendFiltered(issue)
 	}
 
 	if db != nil {
 		fileLinks, linksErr := db.FileLinks()
 		if linksErr != nil {
-			recordIncomplete("file links", linksErr)
+			collector.recordIncomplete("file links", linksErr)
 		} else {
 			for _, issue := range detectBrokenFileLinkIssues(fileLinks, vaultPath, excludeMatcher, scope, walkPath, targetFileSet, allDocs) {
-				if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
-					continue
-				}
-				allIssues = append(allIssues, issue)
-				result.ErrorCount++
+				collector.appendFiltered(issue)
 			}
 		}
 	}
@@ -316,7 +364,11 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 	for _, pe := range parseErrors {
 		if shouldIncludeIssue(pe, includeIssues, excludeIssues, opts.ErrorsOnly) {
 			allIssues = append([]check.Issue{pe}, allIssues...)
-			result.ErrorCount++
+			if pe.Level == check.LevelWarning {
+				result.WarningCount++
+			} else {
+				result.ErrorCount++
+			}
 		}
 	}
 
@@ -331,16 +383,7 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 			if scope.Type == "trait_filter" && issue.Value != scope.Value {
 				continue
 			}
-			if !shouldIncludeSchemaIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
-				continue
-			}
-
-			schemaIssues = append(schemaIssues, issue)
-			if issue.Level == check.LevelWarning {
-				result.WarningCount++
-			} else {
-				result.ErrorCount++
-			}
+			collector.appendSchemaFiltered(issue)
 		}
 	}
 
