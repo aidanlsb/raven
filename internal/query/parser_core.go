@@ -271,91 +271,73 @@ func (p *Parser) parseUnaryPredicate(qt QueryType) (Predicate, error) {
 	return p.parseAtomicPredicate(qt, negated)
 }
 
+// predicateFuncParser is the signature for predicate function parsers.
+type predicateFuncParser func(*Parser, bool) (Predicate, error)
+
+// predicateFuncRegistry maps keyword names to their parser functions.
+var predicateFuncRegistry map[string]predicateFuncParser
+
+func init() {
+	predicateFuncRegistry = map[string]predicateFuncParser{
+		"includes": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseStringFuncPredicate(neg, StringFuncIncludes)
+		},
+		"startswith": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseStringFuncPredicate(neg, StringFuncStartsWith)
+		},
+		"endswith": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseStringFuncPredicate(neg, StringFuncEndsWith)
+		},
+		"matches": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseStringFuncPredicate(neg, StringFuncMatches)
+		},
+		"exists":  (*Parser).parseExistsPredicate,
+		"content": (*Parser).parseContentFuncPredicate,
+		"oneof":   (*Parser).parseInPredicate,
+		"any": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseArrayQuantifierPredicate(neg, ArrayQuantifierAny)
+		},
+		"all": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseArrayQuantifierPredicate(neg, ArrayQuantifierAll)
+		},
+		"none": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseArrayQuantifierPredicate(neg, ArrayQuantifierNone)
+		},
+		"in":       func(p *Parser, neg bool) (Predicate, error) { return p.parseScopeNavFuncPredicate(neg, "in") },
+		"within":   func(p *Parser, neg bool) (Predicate, error) { return p.parseScopeNavFuncPredicate(neg, "within") },
+		"contains": (*Parser).parseContainsFuncPredicate,
+		"has":      (*Parser).parseHasFuncPredicate,
+		"refs":     (*Parser).parseRefsFuncPredicate,
+		"links":    (*Parser).parseLinksFuncPredicate,
+		"refd":     (*Parser).parseRefdFuncPredicate,
+		"at":       (*Parser).parseAtFuncPredicate,
+	}
+}
+
 // parseAtomicPredicate parses a single predicate without boolean composition.
 func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, error) {
-	// Brace subqueries were removed from the core syntax (v3).
-	// Braces are not valid predicate tokens anymore.
 	if p.curr.Type == TokenLBrace {
 		return nil, fmt.Errorf("brace subqueries are no longer supported; write nested queries directly (e.g., has(trait:due .value<today))")
 	}
 
-	// Field predicate (starts with .)
 	if p.curr.Type == TokenDot {
 		p.advance()
 		return p.parseFieldPredicate(negated)
 	}
 
-	// Keyword predicate or function call
 	if p.curr.Type == TokenIdent {
 		keyword := strings.ToLower(p.curr.Value)
 
-		// Function-style predicates: func(...)
-		// v3: all structural predicates are functions (no keyword: forms).
 		if p.peek.Type == TokenLParen {
-			switch keyword {
-			// String functions
-			case "includes":
-				p.advance() // consume function name
-				return p.parseStringFuncPredicate(negated, StringFuncIncludes)
-			case "contains":
-				p.advance()
-				return p.parseContainsFuncPredicate(negated)
-			case "startswith":
-				p.advance()
-				return p.parseStringFuncPredicate(negated, StringFuncStartsWith)
-			case "endswith":
-				p.advance()
-				return p.parseStringFuncPredicate(negated, StringFuncEndsWith)
-			case "matches":
-				p.advance()
-				return p.parseStringFuncPredicate(negated, StringFuncMatches)
-			// Existence (v3: prefer exists() + !exists())
-			case "exists":
-				p.advance()
-				return p.parseExistsPredicate(negated)
-			case "notnull":
+			if keyword == "notnull" {
 				return nil, fmt.Errorf("notnull() is no longer supported; use exists(.field)")
-			case "isnull":
+			}
+			if keyword == "isnull" {
 				return nil, fmt.Errorf("isnull() is no longer supported; use !exists(.field)")
-			// Content search (v3: function form only)
-			case "content":
+			}
+			if parseFn, ok := predicateFuncRegistry[keyword]; ok {
 				p.advance()
-				return p.parseContentFuncPredicate(negated)
-			// Scalar membership + array quantifiers
-			case "oneof":
-				p.advance()
-				return p.parseInPredicate(negated)
-			case "any":
-				p.advance()
-				return p.parseArrayQuantifierPredicate(negated, ArrayQuantifierAny)
-			case "all":
-				p.advance()
-				return p.parseArrayQuantifierPredicate(negated, ArrayQuantifierAll)
-			case "none":
-				p.advance()
-				return p.parseArrayQuantifierPredicate(negated, ArrayQuantifierNone)
-			// Structural predicates (v3)
-			case "in":
-				p.advance()
-				return p.parseScopeNavFuncPredicate(negated, "in")
-			case "has":
-				p.advance()
-				return p.parseHasFuncPredicate(negated)
-			case "within":
-				p.advance()
-				return p.parseScopeNavFuncPredicate(negated, "within")
-			case "refs":
-				p.advance()
-				return p.parseRefsFuncPredicate(negated)
-			case "links":
-				p.advance()
-				return p.parseLinksFuncPredicate(negated)
-			case "refd":
-				p.advance()
-				return p.parseRefdFuncPredicate(negated)
-			case "at":
-				p.advance()
-				return p.parseAtFuncPredicate(negated)
+				return parseFn(p, negated)
 			}
 		}
 
