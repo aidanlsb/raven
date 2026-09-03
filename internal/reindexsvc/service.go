@@ -76,6 +76,87 @@ func (r *RunResult) Data() map[string]interface{} {
 	return data
 }
 
+func wrapDB(err error, msg string) *svcerr.Error {
+	return svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("%s: %v", msg, err), err)
+}
+
+func recoverIncrementalIndex(
+	db *index.Database,
+	vaultPath string,
+	pending indexjournal.Snapshot,
+	excludeMatcher *ravenignore.Matcher,
+	dryRun bool,
+	result *RunResult,
+) (recoveryComplete bool) {
+	recoveryComplete = true
+
+	excludedFiles, excludedErr := indexedExcludedFiles(db, excludeMatcher)
+	if excludedErr != nil {
+		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to check for excluded files: %v", excludedErr))
+		recoveryComplete = false
+	} else {
+		result.ExcludedFiles = excludedFiles
+		result.FilesExcluded = len(excludedFiles)
+		if !dryRun {
+			if removeErr := db.RemoveFiles(excludedFiles); removeErr != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clean up excluded files: %v", removeErr))
+				recoveryComplete = false
+			}
+		}
+	}
+
+	if dryRun {
+		indexedPaths, indexedErr := db.AllIndexedFilePaths()
+		if indexedErr != nil {
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to check for deleted files: %v", indexedErr))
+		} else {
+			for _, relPath := range indexedPaths {
+				fullPath := filepath.Join(vaultPath, relPath)
+				if _, statErr := os.Stat(fullPath); os.IsNotExist(statErr) {
+					result.DeletedFiles = append(result.DeletedFiles, relPath)
+				}
+			}
+			result.FilesDeleted = len(result.DeletedFiles)
+		}
+	} else {
+		deletedFiles, delErr := db.RemoveDeletedFiles(vaultPath)
+		if delErr != nil {
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clean up deleted files: %v", delErr))
+			recoveryComplete = false
+		}
+		result.DeletedFiles = deletedFiles
+		result.FilesDeleted = len(deletedFiles)
+	}
+
+	if !dryRun {
+		for _, relPath := range pending.Paths() {
+			fullPath := filepath.Join(vaultPath, filepath.FromSlash(relPath))
+			_, statErr := os.Stat(fullPath)
+			missing := os.IsNotExist(statErr)
+			excluded := excludeMatcher.Match(relPath, false)
+			if !missing && !excluded {
+				continue
+			}
+			if statErr != nil && !missing {
+				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", relPath, statErr))
+				recoveryComplete = false
+				continue
+			}
+			if removeErr := db.RemoveFile(relPath); removeErr != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", relPath, removeErr))
+				recoveryComplete = false
+				continue
+			}
+			if clearErr := indexjournal.ClearRecoveredPath(vaultPath, pending, relPath); clearErr != nil {
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index path %s: %v", relPath, clearErr))
+				recoveryComplete = false
+			}
+		}
+	}
+
+	return recoveryComplete
+}
+
 func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	if err := vaultruntime.Require(rt); err != nil {
 		message := "vault path is required"
@@ -109,7 +190,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 		if errors.Is(err, index.ErrIndexLocked) {
 			suggestion = "Another process (such as rvn lsp) is holding the index; stop the LSP or wait for the other process to finish, then try again"
 		}
-		return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to open database: %v", err), err).WithSuggestion(suggestion)
+		return nil, wrapDB(err, "failed to open database").WithSuggestion(suggestion)
 	}
 	if rebuildSession != nil {
 		defer rebuildSession.Close()
@@ -128,10 +209,10 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 			return nil, svcerr.Wrap(codes.ErrInternal, err.Error(), err)
 		}
 		if err := rebuildSession.BeginFullRebuild(); err != nil {
-			return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to mark index for full reindex: %v", err), err)
+			return nil, wrapDB(err, "failed to mark index for full reindex")
 		}
 		if err := db.ClearAllData(); err != nil {
-			return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to clear database for full reindex: %v", err), err)
+			return nil, wrapDB(err, "failed to clear database for full reindex")
 		}
 	}
 
@@ -154,13 +235,13 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	if !req.DryRun {
 		projectionLock, err = indexjournal.LockProjection(vaultPath)
 		if err != nil {
-			return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to lock index projection: %v", err), err).WithSuggestion("Wait for the active write or refresh to finish, then retry")
+			return nil, wrapDB(err, "failed to lock index projection").WithSuggestion("Wait for the active write or refresh to finish, then retry")
 		}
 		defer func() { _ = projectionLock.Close() }()
 	}
 	pending, err := indexjournal.Load(vaultPath)
 	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to load index dirty journal: %v", err), err).WithSuggestion("Run 'rvn reindex --full' after repairing or removing disposable .raven metadata")
+		return nil, wrapDB(err, "failed to load index dirty journal").WithSuggestion("Run 'rvn reindex --full' after repairing or removing disposable .raven metadata")
 	}
 	dirtyPaths := make(map[string]struct{})
 	for _, relPath := range pending.Paths() {
@@ -204,69 +285,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 	}
 
 	if incremental {
-		excludedFiles, excludedErr := indexedExcludedFiles(db, excludeMatcher)
-		if excludedErr != nil {
-			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to check for excluded files: %v", excludedErr))
-			recoveryComplete = false
-		} else {
-			result.ExcludedFiles = excludedFiles
-			result.FilesExcluded = len(excludedFiles)
-			if !req.DryRun {
-				if removeErr := db.RemoveFiles(excludedFiles); removeErr != nil {
-					result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clean up excluded files: %v", removeErr))
-					recoveryComplete = false
-				}
-			}
-		}
-
-		if req.DryRun {
-			indexedPaths, indexedErr := db.AllIndexedFilePaths()
-			if indexedErr != nil {
-				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to check for deleted files: %v", indexedErr))
-			} else {
-				for _, relPath := range indexedPaths {
-					fullPath := filepath.Join(vaultPath, relPath)
-					if _, statErr := os.Stat(fullPath); os.IsNotExist(statErr) {
-						result.DeletedFiles = append(result.DeletedFiles, relPath)
-					}
-				}
-				result.FilesDeleted = len(result.DeletedFiles)
-			}
-		} else {
-			deletedFiles, delErr := db.RemoveDeletedFiles(vaultPath)
-			if delErr != nil {
-				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clean up deleted files: %v", delErr))
-				recoveryComplete = false
-			}
-			result.DeletedFiles = deletedFiles
-			result.FilesDeleted = len(deletedFiles)
-		}
-
-		if !req.DryRun {
-			for _, relPath := range pending.Paths() {
-				fullPath := filepath.Join(vaultPath, filepath.FromSlash(relPath))
-				_, statErr := os.Stat(fullPath)
-				missing := os.IsNotExist(statErr)
-				excluded := excludeMatcher.Match(relPath, false)
-				if !missing && !excluded {
-					continue
-				}
-				if statErr != nil && !missing {
-					result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", relPath, statErr))
-					recoveryComplete = false
-					continue
-				}
-				if removeErr := db.RemoveFile(relPath); removeErr != nil {
-					result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", relPath, removeErr))
-					recoveryComplete = false
-					continue
-				}
-				if clearErr := indexjournal.ClearRecoveredPath(vaultPath, pending, relPath); clearErr != nil {
-					result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index path %s: %v", relPath, clearErr))
-					recoveryComplete = false
-				}
-			}
-		}
+		recoveryComplete = recoverIncrementalIndex(db, vaultPath, pending, excludeMatcher, req.DryRun, result)
 	}
 
 	var indexedMtimes map[string]int64
@@ -367,7 +386,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 			removedFiles := uniqueStrings(result.DeletedFiles, result.ExcludedFiles)
 			projected, err := projectedDryRunStats(db, removedFiles, dryRunFileStats)
 			if err != nil {
-				return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to project dry-run stats: %v", err), err)
+				return nil, wrapDB(err, "failed to project dry-run stats")
 			}
 			result.Objects = projected.ObjectCount
 			result.Traits = projected.TraitCount
@@ -403,7 +422,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 
 	stats, err := db.Stats()
 	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to get stats: %v", err), err)
+		return nil, wrapDB(err, "failed to get stats")
 	}
 	result.Objects = stats.ObjectCount
 	result.Traits = stats.TraitCount
@@ -411,7 +430,7 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 
 	if rebuildSession != nil {
 		if err := rebuildSession.Complete(); err != nil {
-			return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to complete index rebuild: %v", err), err).WithSuggestion("Run 'rvn reindex --full' to rebuild the database")
+			return nil, wrapDB(err, "failed to complete index rebuild").WithSuggestion("Run 'rvn reindex --full' to rebuild the database")
 		}
 	}
 	if !req.DryRun {
