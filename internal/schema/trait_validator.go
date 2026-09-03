@@ -20,30 +20,8 @@ func ValidateTraitValue(def *TraitDefinition, value fieldvalue.FieldValue) error
 	// Handle array types by extracting scalar type and validating elements
 	scalarType := traitType
 	isArray := false
-	switch traitType {
-	case FieldTypeStringArray:
-		scalarType = FieldTypeString
-		isArray = true
-	case FieldTypeNumberArray:
-		scalarType = FieldTypeNumber
-		isArray = true
-	case FieldTypeURLArray:
-		scalarType = FieldTypeURL
-		isArray = true
-	case FieldTypeDateArray:
-		scalarType = FieldTypeDate
-		isArray = true
-	case FieldTypeDatetimeArray:
-		scalarType = FieldTypeDatetime
-		isArray = true
-	case FieldTypeEnumArray:
-		scalarType = FieldTypeEnum
-		isArray = true
-	case FieldTypeBoolArray:
-		scalarType = FieldTypeBool
-		isArray = true
-	case FieldTypeRefArray:
-		scalarType = FieldTypeRef
+	if elementType, ok := arrayTypeToScalar[traitType]; ok {
+		scalarType = elementType
 		isArray = true
 	}
 

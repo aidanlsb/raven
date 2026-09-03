@@ -150,8 +150,6 @@ func ValidateFields(fields map[string]fieldvalue.FieldValue, fieldDefs map[strin
 	return errors
 }
 
-// validateFieldValue is defined in validator_table.go
-
 // refTargetFromFieldValue extracts a reference target string from various value formats.
 func refTargetFromFieldValue(value fieldvalue.FieldValue) (string, bool) {
 	if r, ok := value.AsRef(); ok && r != "" {

@@ -1124,3 +1124,86 @@ func containsIssueSubstring(issues []string, want string) bool {
 	}
 	return false
 }
+
+func TestValidateFieldValueFormatErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("date type mismatch vs format failure", func(t *testing.T) {
+		defs := map[string]*FieldDefinition{
+			"due": {Type: FieldTypeDate},
+		}
+
+		// Type mismatch: non-string value
+		fields := map[string]fieldvalue.FieldValue{"due": fieldvalue.Number(42)}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error, got %d", len(errors))
+		}
+		if errors[0].Message != "expected date" {
+			t.Errorf("type mismatch: got %q, want %q", errors[0].Message, "expected date")
+		}
+
+		// Format failure: string with invalid date format
+		fields = map[string]fieldvalue.FieldValue{"due": fieldvalue.String("01-15-2025")}
+		errors = ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error, got %d", len(errors))
+		}
+		if errors[0].Message != "invalid date format, expected YYYY-MM-DD" {
+			t.Errorf("format failure: got %q, want %q", errors[0].Message, "invalid date format, expected YYYY-MM-DD")
+		}
+	})
+
+	t.Run("datetime type mismatch vs format failure", func(t *testing.T) {
+		defs := map[string]*FieldDefinition{
+			"created_at": {Type: FieldTypeDatetime},
+		}
+
+		// Type mismatch: non-string value
+		fields := map[string]fieldvalue.FieldValue{"created_at": fieldvalue.Bool(true)}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error, got %d", len(errors))
+		}
+		if errors[0].Message != "expected datetime" {
+			t.Errorf("type mismatch: got %q, want %q", errors[0].Message, "expected datetime")
+		}
+
+		// Format failure: string with invalid datetime format
+		fields = map[string]fieldvalue.FieldValue{"created_at": fieldvalue.String("2025-01-15")}
+		errors = ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error, got %d", len(errors))
+		}
+		if errors[0].Message != "invalid datetime format" {
+			t.Errorf("format failure: got %q, want %q", errors[0].Message, "invalid datetime format")
+		}
+	})
+
+	t.Run("URL type mismatch vs format failure", func(t *testing.T) {
+		defs := map[string]*FieldDefinition{
+			"homepage": {Type: FieldTypeURL},
+		}
+
+		// Type mismatch: non-string value
+		fields := map[string]fieldvalue.FieldValue{"homepage": fieldvalue.Number(404)}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error, got %d", len(errors))
+		}
+		if errors[0].Message != "expected URL" {
+			t.Errorf("type mismatch: got %q, want %q", errors[0].Message, "expected URL")
+		}
+
+		// Format failure: string with invalid URL (missing scheme)
+		fields = map[string]fieldvalue.FieldValue{"homepage": fieldvalue.String("example.com")}
+		errors = ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error, got %d", len(errors))
+		}
+		// validateURLString returns "URL must include a scheme (e.g., https://)"
+		if !strings.Contains(errors[0].Message, "URL must include a scheme") {
+			t.Errorf("format failure: got %q, want message containing %q", errors[0].Message, "URL must include a scheme")
+		}
+	})
+}

@@ -50,8 +50,8 @@ var validatorTable = map[FieldType]fieldValidator{
 	},
 	FieldTypeURL: {
 		scalarChecker: func(v fieldvalue.FieldValue) bool {
-			s, ok := v.AsString()
-			return ok && validateURLString(s) == nil
+			_, ok := v.AsString()
+			return ok
 		},
 		scalarError: "expected URL",
 		arrayError:  "expected array of URLs",
@@ -65,14 +65,14 @@ var validatorTable = map[FieldType]fieldValidator{
 	},
 	FieldTypeDate: {
 		scalarChecker: func(v fieldvalue.FieldValue) bool {
-			s, ok := v.AsString()
-			return ok && dates.IsValidDate(s)
+			_, ok := v.AsString()
+			return ok
 		},
 		scalarError: "expected date",
 		arrayError:  "expected array of dates",
 		extraCheck: func(v fieldvalue.FieldValue, def *FieldDefinition) string {
-			s, ok := v.AsString()
-			if !ok || !dates.IsValidDate(s) {
+			s, _ := v.AsString()
+			if !dates.IsValidDate(s) {
 				return "invalid date format, expected YYYY-MM-DD"
 			}
 			return ""
@@ -80,14 +80,14 @@ var validatorTable = map[FieldType]fieldValidator{
 	},
 	FieldTypeDatetime: {
 		scalarChecker: func(v fieldvalue.FieldValue) bool {
-			s, ok := v.AsString()
-			return ok && dates.IsValidDatetime(s)
+			_, ok := v.AsString()
+			return ok
 		},
 		scalarError: "expected datetime",
 		arrayError:  "expected array of datetimes",
 		extraCheck: func(v fieldvalue.FieldValue, def *FieldDefinition) string {
-			s, ok := v.AsString()
-			if !ok || !dates.IsValidDatetime(s) {
+			s, _ := v.AsString()
+			if !dates.IsValidDatetime(s) {
 				return "invalid datetime format"
 			}
 			return ""
@@ -131,6 +131,18 @@ var validatorTable = map[FieldType]fieldValidator{
 	},
 }
 
+// arrayTypeToScalar maps array FieldTypes to their scalar element types.
+var arrayTypeToScalar = map[FieldType]FieldType{
+	FieldTypeStringArray:   FieldTypeString,
+	FieldTypeNumberArray:   FieldTypeNumber,
+	FieldTypeURLArray:      FieldTypeURL,
+	FieldTypeDateArray:     FieldTypeDate,
+	FieldTypeDatetimeArray: FieldTypeDatetime,
+	FieldTypeEnumArray:     FieldTypeEnum,
+	FieldTypeBoolArray:     FieldTypeBool,
+	FieldTypeRefArray:      FieldTypeRef,
+}
+
 // validateFieldValue validates a field value against its definition using the validator table.
 func validateFieldValue(name string, value fieldvalue.FieldValue, def *FieldDefinition) error {
 	if value.IsNull() {
@@ -140,30 +152,8 @@ func validateFieldValue(name string, value fieldvalue.FieldValue, def *FieldDefi
 	// Handle array types by extracting scalar type and validating elements
 	scalarType := def.Type
 	isArray := false
-	switch def.Type {
-	case FieldTypeStringArray:
-		scalarType = FieldTypeString
-		isArray = true
-	case FieldTypeNumberArray:
-		scalarType = FieldTypeNumber
-		isArray = true
-	case FieldTypeURLArray:
-		scalarType = FieldTypeURL
-		isArray = true
-	case FieldTypeDateArray:
-		scalarType = FieldTypeDate
-		isArray = true
-	case FieldTypeDatetimeArray:
-		scalarType = FieldTypeDatetime
-		isArray = true
-	case FieldTypeEnumArray:
-		scalarType = FieldTypeEnum
-		isArray = true
-	case FieldTypeBoolArray:
-		scalarType = FieldTypeBool
-		isArray = true
-	case FieldTypeRefArray:
-		scalarType = FieldTypeRef
+	if elementType, ok := arrayTypeToScalar[def.Type]; ok {
+		scalarType = elementType
 		isArray = true
 	}
 
