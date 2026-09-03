@@ -1,58 +1,126 @@
 package query
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 // predicateBuilderFunc is the signature for predicate SQL builders.
 type predicateBuilderFunc func(*Executor, Predicate, string, string) (string, []interface{}, error)
 
-// simpleBuildFunc is for predicates that don't vary by root.
-type simpleBuildFunc func(*Executor, Predicate, string, QueryType, string) (string, []interface{}, error)
-
 // predicateBuilderKey identifies a (predicate type, root) combination.
 type predicateBuilderKey struct {
-	predType string
+	predType interface{}
 	root     QueryType
 }
 
 // predicateBuilderRegistry maps (predicate type, root) to builder functions.
 var predicateBuilderRegistry map[predicateBuilderKey]predicateBuilderFunc
 
-// simplePredicateRegistry maps predicate types to root-independent builders.
-var simplePredicateRegistry map[string]simpleBuildFunc
-
 func init() {
 	predicateBuilderRegistry = map[predicateBuilderKey]predicateBuilderFunc{
-		{"FieldPredicate", QueryTypeLink}:    (*Executor).buildFieldPredicateForLink,
-		{"FieldPredicate", QueryTypeSection}: (*Executor).buildFieldPredicateForSection,
-		{"FieldPredicate", QueryTypeTrait}:   (*Executor).buildFieldPredicateForTrait,
-		{"FieldPredicate", QueryTypeObject}:  (*Executor).buildFieldPredicateForObject,
+		{reflect.TypeOf((*FieldPredicate)(nil)), QueryTypeLink}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildLinkPredicateSQL(p.(*FieldPredicate), alias)
+		},
+		{reflect.TypeOf((*FieldPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildSectionFieldPredicateSQL(p.(*FieldPredicate), alias)
+		},
+		{reflect.TypeOf((*FieldPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			fp := p.(*FieldPredicate)
+			if fp.Field == "value" {
+				return e.buildTraitValueFieldPredicateSQL(fp, alias)
+			}
+			return "", nil, fmt.Errorf("unsupported trait field predicate: .%s (only .value is allowed for traits)", fp.Field)
+		},
+		{reflect.TypeOf((*FieldPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildFieldPredicateSQL(p.(*FieldPredicate), alias, typeName)
+		},
 
-		{"StringFuncPredicate", QueryTypeLink}:    (*Executor).buildStringFuncPredicateForLink,
-		{"StringFuncPredicate", QueryTypeTrait}:   (*Executor).buildStringFuncPredicateForTrait,
-		{"StringFuncPredicate", QueryTypeSection}: (*Executor).buildStringFuncPredicateForSection,
-		{"StringFuncPredicate", QueryTypeObject}:  (*Executor).buildStringFuncPredicateForObject,
+		{reflect.TypeOf((*StringFuncPredicate)(nil)), QueryTypeLink}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildLinkPredicateSQL(p.(*StringFuncPredicate), alias)
+		},
+		{reflect.TypeOf((*StringFuncPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildTraitStringFuncPredicateSQL(p.(*StringFuncPredicate), alias)
+		},
+		{reflect.TypeOf((*StringFuncPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildSectionStringFuncPredicateSQL(p.(*StringFuncPredicate), alias)
+		},
+		{reflect.TypeOf((*StringFuncPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildStringFuncPredicateSQL(p.(*StringFuncPredicate), alias)
+		},
 
-		{"ArrayQuantifierPredicate", QueryTypeTrait}:  (*Executor).buildArrayQuantifierPredicateForTrait,
-		{"ArrayQuantifierPredicate", QueryTypeObject}: (*Executor).buildArrayQuantifierPredicateForObject,
+		{reflect.TypeOf((*ArrayQuantifierPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildTraitArrayQuantifierPredicateSQL(p.(*ArrayQuantifierPredicate), alias)
+		},
 
-		{"WithinPredicate", QueryTypeLink}:    (*Executor).buildWithinPredicateForLink,
-		{"WithinPredicate", QueryTypeObject}:  (*Executor).buildWithinPredicateForObject,
-		{"WithinPredicate", QueryTypeSection}: (*Executor).buildWithinPredicateForSection,
-		{"WithinPredicate", QueryTypeTrait}:   (*Executor).buildWithinPredicateForTrait,
+		{reflect.TypeOf((*WithinPredicate)(nil)), QueryTypeLink}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildLinkWithinPredicateSQL(p.(*WithinPredicate), alias)
+		},
 
-		{"ContentPredicate", QueryTypeTrait}:  (*Executor).buildContentPredicateForTrait,
-		{"ContentPredicate", QueryTypeObject}: (*Executor).buildContentPredicateForObject,
-	}
+		{reflect.TypeOf((*ContentPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildTraitContentPredicateSQL(p.(*ContentPredicate), alias)
+		},
 
-	simplePredicateRegistry = map[string]simpleBuildFunc{
-		"HasPredicate":      (*Executor).buildHasPredicateSimple,
-		"ContainsPredicate": (*Executor).buildContainsPredicateSimple,
-		"InPredicate":       (*Executor).buildInPredicateSimple,
-		"RefsPredicate":     (*Executor).buildRefsPredicateSimple,
-		"LinksPredicate":    (*Executor).buildLinksPredicateSimple,
-		"RefdPredicate":     (*Executor).buildRefdPredicateSimple,
-		"ValuePredicate":    (*Executor).buildValuePredicateSimple,
-		"AtPredicate":       (*Executor).buildAtPredicateSimple,
+		{reflect.TypeOf((*HasPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildHasPredicateSQL(p.(*HasPredicate), alias)
+		},
+		{reflect.TypeOf((*ContainsPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildContainsPredicateSQL(p.(*ContainsPredicate), alias)
+		},
+		{reflect.TypeOf((*InPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildInPredicateSQL(p.(*InPredicate), alias, QueryTypeObject)
+		},
+		{reflect.TypeOf((*InPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildInPredicateSQL(p.(*InPredicate), alias, QueryTypeTrait)
+		},
+		{reflect.TypeOf((*InPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildInPredicateSQL(p.(*InPredicate), alias, QueryTypeSection)
+		},
+		{reflect.TypeOf((*RefsPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildRefsPredicateSQL(p.(*RefsPredicate), alias, QueryTypeObject)
+		},
+		{reflect.TypeOf((*RefsPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildRefsPredicateSQL(p.(*RefsPredicate), alias, QueryTypeTrait)
+		},
+		{reflect.TypeOf((*RefsPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildRefsPredicateSQL(p.(*RefsPredicate), alias, QueryTypeSection)
+		},
+		{reflect.TypeOf((*LinksPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildLinksPredicateSQL(p.(*LinksPredicate), alias, QueryTypeObject)
+		},
+		{reflect.TypeOf((*LinksPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildLinksPredicateSQL(p.(*LinksPredicate), alias, QueryTypeTrait)
+		},
+		{reflect.TypeOf((*LinksPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildLinksPredicateSQL(p.(*LinksPredicate), alias, QueryTypeSection)
+		},
+		{reflect.TypeOf((*RefdPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildRefdPredicateSQL(p.(*RefdPredicate), alias, false)
+		},
+		{reflect.TypeOf((*RefdPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildRefdPredicateSQL(p.(*RefdPredicate), alias, false)
+		},
+		{reflect.TypeOf((*RefdPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildRefdPredicateSQL(p.(*RefdPredicate), alias, false)
+		},
+		{reflect.TypeOf((*ValuePredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildValuePredicateSQL(p.(*ValuePredicate), alias)
+		},
+		{reflect.TypeOf((*AtPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildAtPredicateSQL(p.(*AtPredicate), alias)
+		},
+		{reflect.TypeOf((*AtPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildAtPredicateSQL(p.(*AtPredicate), alias)
+		},
+		{reflect.TypeOf((*AtPredicate)(nil)), QueryTypeTrait}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildAtPredicateSQL(p.(*AtPredicate), alias)
+		},
+		{reflect.TypeOf((*HasPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildHasPredicateSQL(p.(*HasPredicate), alias)
+		},
+		{reflect.TypeOf((*ContainsPredicate)(nil)), QueryTypeSection}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
+			return e.buildContainsPredicateSQL(p.(*ContainsPredicate), alias)
+		},
 	}
 }
 
@@ -80,18 +148,21 @@ func (e *Executor) buildPredicateSQL(root QueryType, pred Predicate, alias, type
 		return "", nil, verr
 	}
 
-	predType := fmt.Sprintf("%T", pred)[7:]
-
-	key := predicateBuilderKey{predType: predType, root: root}
+	key := predicateBuilderKey{predType: reflect.TypeOf(pred), root: root}
 	if builderFn, ok := predicateBuilderRegistry[key]; ok {
 		return builderFn(e, pred, alias, typeName)
 	}
 
-	if simpleFn, ok := simplePredicateRegistry[predType]; ok {
-		return simpleFn(e, pred, alias, root, typeName)
+	switch p := pred.(type) {
+	case *ArrayQuantifierPredicate:
+		return e.buildArrayQuantifierPredicateSQL(p, alias, typeName)
+	case *WithinPredicate:
+		return e.buildWithinPredicateSQL(p, alias, root)
+	case *ContentPredicate:
+		return e.buildContentPredicateSQL(p, alias)
+	default:
+		return "", nil, fmt.Errorf("unsupported predicate type: %T", pred)
 	}
-
-	return "", nil, fmt.Errorf("unsupported predicate type: %T", pred)
 }
 
 // buildObjectPredicateSQL builds SQL for an object predicate.
@@ -108,109 +179,3 @@ func (e *Executor) buildTraitPredicateSQL(pred Predicate, alias string) (string,
 func (e *Executor) buildSectionPredicateSQL(pred Predicate, alias string) (string, []interface{}, error) {
 	return e.buildPredicateSQL(QueryTypeSection, pred, alias, "")
 }
-
-// Registry adapter functions for (predicate type × root) dispatch.
-
-func (e *Executor) buildFieldPredicateForLink(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildLinkPredicateSQL(pred.(*FieldPredicate), alias)
-}
-
-func (e *Executor) buildFieldPredicateForSection(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildSectionFieldPredicateSQL(pred.(*FieldPredicate), alias)
-}
-
-func (e *Executor) buildFieldPredicateForTrait(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	p := pred.(*FieldPredicate)
-	if p.Field == "value" {
-		return e.buildTraitValueFieldPredicateSQL(p, alias)
-	}
-	return "", nil, fmt.Errorf("unsupported trait field predicate: .%s (only .value is allowed for traits)", p.Field)
-}
-
-func (e *Executor) buildFieldPredicateForObject(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildFieldPredicateSQL(pred.(*FieldPredicate), alias, typeName)
-}
-
-func (e *Executor) buildStringFuncPredicateForLink(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildLinkPredicateSQL(pred.(*StringFuncPredicate), alias)
-}
-
-func (e *Executor) buildStringFuncPredicateForTrait(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildTraitStringFuncPredicateSQL(pred.(*StringFuncPredicate), alias)
-}
-
-func (e *Executor) buildStringFuncPredicateForSection(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildSectionStringFuncPredicateSQL(pred.(*StringFuncPredicate), alias)
-}
-
-func (e *Executor) buildStringFuncPredicateForObject(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildStringFuncPredicateSQL(pred.(*StringFuncPredicate), alias)
-}
-
-func (e *Executor) buildArrayQuantifierPredicateForTrait(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildTraitArrayQuantifierPredicateSQL(pred.(*ArrayQuantifierPredicate), alias)
-}
-
-func (e *Executor) buildArrayQuantifierPredicateForObject(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildArrayQuantifierPredicateSQL(pred.(*ArrayQuantifierPredicate), alias, typeName)
-}
-
-func (e *Executor) buildWithinPredicateForLink(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildLinkWithinPredicateSQL(pred.(*WithinPredicate), alias)
-}
-
-func (e *Executor) buildWithinPredicateForObject(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildWithinPredicateSQL(pred.(*WithinPredicate), alias, QueryTypeObject)
-}
-
-func (e *Executor) buildContentPredicateForTrait(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildTraitContentPredicateSQL(pred.(*ContentPredicate), alias)
-}
-
-func (e *Executor) buildContentPredicateForObject(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildContentPredicateSQL(pred.(*ContentPredicate), alias)
-}
-
-// Simple predicate adapters (root-independent).
-
-func (e *Executor) buildHasPredicateSimple(pred Predicate, alias string, root QueryType, typeName string) (string, []interface{}, error) {
-	return e.buildHasPredicateSQL(pred.(*HasPredicate), alias)
-}
-
-func (e *Executor) buildContainsPredicateSimple(pred Predicate, alias string, root QueryType, typeName string) (string, []interface{}, error) {
-	return e.buildContainsPredicateSQL(pred.(*ContainsPredicate), alias)
-}
-
-func (e *Executor) buildInPredicateSimple(pred Predicate, alias string, root QueryType, typeName string) (string, []interface{}, error) {
-	return e.buildInPredicateSQL(pred.(*InPredicate), alias, root)
-}
-
-func (e *Executor) buildRefsPredicateSimple(pred Predicate, alias string, root QueryType, typeName string) (string, []interface{}, error) {
-	return e.buildRefsPredicateSQL(pred.(*RefsPredicate), alias, root)
-}
-
-func (e *Executor) buildLinksPredicateSimple(pred Predicate, alias string, root QueryType, typeName string) (string, []interface{}, error) {
-	return e.buildLinksPredicateSQL(pred.(*LinksPredicate), alias, root)
-}
-
-func (e *Executor) buildRefdPredicateSimple(pred Predicate, alias string, root QueryType, typeName string) (string, []interface{}, error) {
-	return e.buildRefdPredicateSQL(pred.(*RefdPredicate), alias, false)
-}
-
-func (e *Executor) buildValuePredicateSimple(pred Predicate, alias string, root QueryType, typeName string) (string, []interface{}, error) {
-	return e.buildValuePredicateSQL(pred.(*ValuePredicate), alias)
-}
-
-func (e *Executor) buildAtPredicateSimple(pred Predicate, alias string, root QueryType, typeName string) (string, []interface{}, error) {
-	return e.buildAtPredicateSQL(pred.(*AtPredicate), alias)
-}
-
-func (e *Executor) buildWithinPredicateForSection(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildWithinPredicateSQL(pred.(*WithinPredicate), alias, QueryTypeSection)
-}
-
-func (e *Executor) buildWithinPredicateForTrait(pred Predicate, alias, typeName string) (string, []interface{}, error) {
-	return e.buildWithinPredicateSQL(pred.(*WithinPredicate), alias, QueryTypeTrait)
-}
-
-

@@ -279,24 +279,38 @@ var predicateFuncRegistry map[string]predicateFuncParser
 
 func init() {
 	predicateFuncRegistry = map[string]predicateFuncParser{
-		"includes":   (*Parser).parseIncludesFuncPredicate,
-		"contains":   (*Parser).parseContainsFuncPredicate,
-		"startswith": (*Parser).parseStartsWithFuncPredicate,
-		"endswith":   (*Parser).parseEndsWithFuncPredicate,
-		"matches":    (*Parser).parseMatchesFuncPredicate,
-		"exists":     (*Parser).parseExistsPredicate,
-		"content":    (*Parser).parseContentFuncPredicate,
-		"oneof":      (*Parser).parseInPredicate,
-		"any":        (*Parser).parseAnyFuncPredicate,
-		"all":        (*Parser).parseAllFuncPredicate,
-		"none":       (*Parser).parseNoneFuncPredicate,
-		"in":         (*Parser).parseInNavFuncPredicate,
-		"has":        (*Parser).parseHasFuncPredicate,
-		"within":     (*Parser).parseWithinNavFuncPredicate,
-		"refs":       (*Parser).parseRefsFuncPredicate,
-		"links":      (*Parser).parseLinksFuncPredicate,
-		"refd":       (*Parser).parseRefdFuncPredicate,
-		"at":         (*Parser).parseAtFuncPredicate,
+		"includes": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseStringFuncPredicate(neg, StringFuncIncludes)
+		},
+		"startswith": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseStringFuncPredicate(neg, StringFuncStartsWith)
+		},
+		"endswith": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseStringFuncPredicate(neg, StringFuncEndsWith)
+		},
+		"matches": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseStringFuncPredicate(neg, StringFuncMatches)
+		},
+		"exists":  (*Parser).parseExistsPredicate,
+		"content": (*Parser).parseContentFuncPredicate,
+		"oneof":   (*Parser).parseInPredicate,
+		"any": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseArrayQuantifierPredicate(neg, ArrayQuantifierAny)
+		},
+		"all": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseArrayQuantifierPredicate(neg, ArrayQuantifierAll)
+		},
+		"none": func(p *Parser, neg bool) (Predicate, error) {
+			return p.parseArrayQuantifierPredicate(neg, ArrayQuantifierNone)
+		},
+		"in":       func(p *Parser, neg bool) (Predicate, error) { return p.parseScopeNavFuncPredicate(neg, "in") },
+		"within":   func(p *Parser, neg bool) (Predicate, error) { return p.parseScopeNavFuncPredicate(neg, "within") },
+		"contains": (*Parser).parseContainsFuncPredicate,
+		"has":      (*Parser).parseHasFuncPredicate,
+		"refs":     (*Parser).parseRefsFuncPredicate,
+		"links":    (*Parser).parseLinksFuncPredicate,
+		"refd":     (*Parser).parseRefdFuncPredicate,
+		"at":       (*Parser).parseAtFuncPredicate,
 	}
 }
 
@@ -335,43 +349,6 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 	}
 
 	return nil, nil
-}
-
-// Wrapper functions for predicateFuncRegistry dispatch.
-func (p *Parser) parseIncludesFuncPredicate(negated bool) (Predicate, error) {
-	return p.parseStringFuncPredicate(negated, StringFuncIncludes)
-}
-
-func (p *Parser) parseStartsWithFuncPredicate(negated bool) (Predicate, error) {
-	return p.parseStringFuncPredicate(negated, StringFuncStartsWith)
-}
-
-func (p *Parser) parseEndsWithFuncPredicate(negated bool) (Predicate, error) {
-	return p.parseStringFuncPredicate(negated, StringFuncEndsWith)
-}
-
-func (p *Parser) parseMatchesFuncPredicate(negated bool) (Predicate, error) {
-	return p.parseStringFuncPredicate(negated, StringFuncMatches)
-}
-
-func (p *Parser) parseAnyFuncPredicate(negated bool) (Predicate, error) {
-	return p.parseArrayQuantifierPredicate(negated, ArrayQuantifierAny)
-}
-
-func (p *Parser) parseAllFuncPredicate(negated bool) (Predicate, error) {
-	return p.parseArrayQuantifierPredicate(negated, ArrayQuantifierAll)
-}
-
-func (p *Parser) parseNoneFuncPredicate(negated bool) (Predicate, error) {
-	return p.parseArrayQuantifierPredicate(negated, ArrayQuantifierNone)
-}
-
-func (p *Parser) parseInNavFuncPredicate(negated bool) (Predicate, error) {
-	return p.parseScopeNavFuncPredicate(negated, "in")
-}
-
-func (p *Parser) parseWithinNavFuncPredicate(negated bool) (Predicate, error) {
-	return p.parseScopeNavFuncPredicate(negated, "within")
 }
 
 func (p *Parser) parseExistsPredicate(negated bool) (Predicate, error) {
