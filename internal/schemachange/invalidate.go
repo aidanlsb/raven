@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/aidanlsb/raven/internal/indexjournal"
-	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -65,12 +64,20 @@ func RecordInvalidation(vaultPath string, beforeSchema, afterSchema *schema.Sche
 	}
 }
 
+// ReindexFunc is the function signature for running a smart reindex operation.
+// The service layer should provide this to avoid schemachange depending on readsvc.
+type ReindexFunc func(rt *vaultruntime.Runtime) error
+
 // ApplyInvalidation performs the index refresh required by a schema mutation.
 // This runs after the schema write commits when auto-reindex is enabled.
 //
 // If auto-reindex is disabled, this is a no-op and the journal entry persists
 // until a manual reindex.
-func ApplyInvalidation(rt *vaultruntime.Runtime, operationID string, classification Classification) error {
+//
+// The reindex parameter is optional but must be provided when auto-reindex is
+// enabled. The caller (typically a service) should pass a function that calls
+// readsvc.SmartReindex.
+func ApplyInvalidation(rt *vaultruntime.Runtime, operationID string, classification Classification, reindex ReindexFunc) error {
 	if rt == nil || rt.VaultCfg == nil {
 		return nil
 	}
@@ -86,6 +93,12 @@ func ApplyInvalidation(rt *vaultruntime.Runtime, operationID string, classificat
 		return nil
 	}
 
+	if reindex == nil {
+		// Auto-reindex is enabled but no reindex function provided.
+		// This is a programming error in the service layer.
+		return fmt.Errorf("auto-reindex enabled but no reindex function provided")
+	}
+
 	// Auto-reindex is enabled: run incremental refresh
 	switch classification.Policy {
 	case PolicyNone:
@@ -94,16 +107,14 @@ func ApplyInvalidation(rt *vaultruntime.Runtime, operationID string, classificat
 
 	case PolicyResolverRefresh, PolicyFullScan, PolicyFullRebuild:
 		// Run smart reindex to recover the invalidated state
-		_, err := readsvc.SmartReindex(rt)
-		if err != nil {
+		if err := reindex(rt); err != nil {
 			return fmt.Errorf("apply schema invalidation refresh: %w", err)
 		}
 		return nil
 
 	default:
 		// Unknown policy: attempt refresh
-		_, err := readsvc.SmartReindex(rt)
-		if err != nil {
+		if err := reindex(rt); err != nil {
 			return fmt.Errorf("apply unknown policy refresh: %w", err)
 		}
 		return nil

@@ -1,8 +1,8 @@
-// Package schemamigrate orchestrates vault-wide migrations that follow schema
+// Package schemamigratesvc orchestrates vault-wide migrations that follow schema
 // changes. Schema document transformations remain in schemasvc; this package
 // stages and applies the corresponding config, template, Markdown, reference,
 // and path updates.
-package schemamigrate
+package schemamigratesvc
 
 import (
 	"errors"
@@ -22,6 +22,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemachange"
 	"github.com/aidanlsb/raven/internal/schemadoc"
@@ -610,7 +611,7 @@ func applyFieldRenamePlan(rt *vaultruntime.Runtime, plan *fieldRenamePlan) (int,
 		}
 		// Attempt to apply invalidation. If it fails, the schema write still succeeded
 		// and the journal entry persists, so a manual reindex will recover.
-		_ = schemachange.ApplyInvalidation(rt, operationID, classification)
+		_ = schemachange.ApplyInvalidation(rt, operationID, classification, smartReindex)
 	}
 
 	return appliedChanges, nil
@@ -664,7 +665,7 @@ func applyTypeRenamePlan(rt *vaultruntime.Runtime, plan *typeRenamePlan, applyDe
 		}
 		// Attempt to apply invalidation. If it fails, the schema write still succeeded
 		// and the journal entry persists, so a manual reindex will recover.
-		_ = schemachange.ApplyInvalidation(rt, operationID, classification)
+		_ = schemachange.ApplyInvalidation(rt, operationID, classification, smartReindex)
 	}
 
 	return appliedChanges, movedFiles, referenceFilesUpdated, nil
@@ -901,4 +902,11 @@ func decodeYAMLMap(data []byte) (map[string]interface{}, bool) {
 func marshalYAMLMap(values map[string]interface{}) ([]byte, bool) {
 	data, err := yaml.Marshal(values)
 	return data, err == nil
+}
+
+// smartReindex wraps readsvc.SmartReindex for schemachange.ApplyInvalidation.
+// This adapter allows schemachange to remain independent of readsvc.
+func smartReindex(rt *vaultruntime.Runtime) error {
+	_, err := readsvc.SmartReindex(rt)
+	return err
 }

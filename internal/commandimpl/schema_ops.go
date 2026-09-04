@@ -7,7 +7,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/schemamigrate"
+	"github.com/aidanlsb/raven/internal/schemamigratesvc"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -51,7 +51,7 @@ func schemaConversionMapping(raw interface{}) (map[string]interface{}, bool) {
 }
 
 // schemaConvertCommandResult builds the command result for convert operations.
-func schemaConvertCommandResult(result *schemamigrate.ConvertResult, start time.Time) commandexec.Result {
+func schemaConvertCommandResult(result *schemamigratesvc.ConvertResult, start time.Time) commandexec.Result {
 	meta := &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}
 	if result.Preview {
 		return commandexec.Success(commandpayload.SchemaConvertPreviewResult{
@@ -316,7 +316,7 @@ var schemaOperationTable = map[string]schemaOperation{
 		Kind:   opKindRename,
 		Target: opTargetType,
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
-			result, err := schemamigrate.RenameType(rt, schemamigrate.RenameTypeRequest{
+			result, err := schemamigratesvc.RenameType(rt, schemamigratesvc.RenameTypeRequest{
 				VaultPath:         req.VaultPath,
 				OldName:           stringArg(req.Args, "old_name"),
 				NewName:           stringArg(req.Args, "new_name"),
@@ -369,7 +369,7 @@ var schemaOperationTable = map[string]schemaOperation{
 		Kind:   opKindRename,
 		Target: opTargetField,
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
-			result, err := schemamigrate.RenameField(rt, schemamigrate.RenameFieldRequest{
+			result, err := schemamigratesvc.RenameField(rt, schemamigratesvc.RenameFieldRequest{
 				VaultPath: req.VaultPath,
 				TypeName:  stringArg(req.Args, "type_name"),
 				OldField:  stringArg(req.Args, "old_field"),
@@ -409,7 +409,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if !ok {
 				return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"high":true,"low":false}`)
 			}
-			result, err := schemamigrate.ConvertTrait(rt, schemamigrate.ConvertTraitRequest{
+			result, err := schemamigratesvc.ConvertTrait(rt, schemamigratesvc.ConvertTraitRequest{
 				VaultPath:  req.VaultPath,
 				TraitName:  stringArg(req.Args, "name"),
 				TargetType: stringArg(req.Args, "type"),
@@ -431,7 +431,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if !ok {
 				return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"true":"done","false":"todo"}`)
 			}
-			result, err := schemamigrate.ConvertField(rt, schemamigrate.ConvertFieldRequest{
+			result, err := schemamigratesvc.ConvertField(rt, schemamigratesvc.ConvertFieldRequest{
 				VaultPath:  req.VaultPath,
 				TypeName:   stringArg(req.Args, "type_name"),
 				FieldName:  stringArg(req.Args, "field_name"),
