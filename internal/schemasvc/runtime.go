@@ -2,6 +2,7 @@ package schemasvc
 
 import (
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemachange"
 	"github.com/aidanlsb/raven/internal/schemadoc"
@@ -42,7 +43,7 @@ func editRuntimeSchema(rt *vaultruntime.Runtime, suggestion string, edit func(*s
 	if result != nil && result.OperationID != "" {
 		// Attempt to apply invalidation. If it fails, the schema write still succeeded
 		// and the journal entry persists, so a manual reindex will recover.
-		_ = schemachange.ApplyInvalidation(rt, result.OperationID, result.Classification)
+		_ = schemachange.ApplyInvalidation(rt, result.OperationID, result.Classification, smartReindex)
 	}
 	return nil
 }
@@ -64,4 +65,11 @@ func reloadRuntimeSchema(rt *vaultruntime.Runtime) error {
 		return svcerr.Wrap(codes.ErrSchemaInvalid, "failed to reload schema after update", err).WithSuggestion("Fix schema.yaml and try again")
 	}
 	return nil
+}
+
+// smartReindex wraps readsvc.SmartReindex for schemachange.ApplyInvalidation.
+// This adapter allows schemachange to remain independent of readsvc.
+func smartReindex(rt *vaultruntime.Runtime) error {
+	_, err := readsvc.SmartReindex(rt)
+	return err
 }

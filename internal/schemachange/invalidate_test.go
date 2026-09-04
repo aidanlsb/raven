@@ -9,6 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestRecordInvalidation_PolicyNone(t *testing.T) {
@@ -153,7 +154,8 @@ func TestApplyInvalidation_AutoReindexDisabled(t *testing.T) {
 	rt := testutil.NewRuntimeForTest(t, vault.Path)
 	defer rt.Close()
 
-	applyErr := ApplyInvalidation(rt, operationID, classification)
+	// No reindex function needed since auto-reindex is disabled
+	applyErr := ApplyInvalidation(rt, operationID, classification, nil)
 	if applyErr != nil {
 		t.Fatalf("ApplyInvalidation error: %v", applyErr)
 	}
@@ -205,18 +207,23 @@ func TestApplyInvalidation_AutoReindexEnabled(t *testing.T) {
 		t.Fatalf("open db for apply: %v", err)
 	}
 
-	applyErr := ApplyInvalidation(rt, operationID, classification)
+	// Mock reindex function that tracks whether it was called
+	reindexCalled := false
+	mockReindex := func(rt *vaultruntime.Runtime) error {
+		reindexCalled = true
+		// In a real scenario, SmartReindex would rebuild the index and clear
+		// the journal. For this test, we just verify it was invoked.
+		return nil
+	}
+
+	applyErr := ApplyInvalidation(rt, operationID, classification, mockReindex)
 	if applyErr != nil {
 		t.Fatalf("ApplyInvalidation error: %v", applyErr)
 	}
 
-	// Verify journal entry was cleared (recovered by auto-reindex)
-	journal, loadErr := indexjournal.Load(vault.Path)
-	if loadErr != nil {
-		t.Fatalf("load journal: %v", loadErr)
-	}
-	if journal.Dirty() {
-		t.Error("expected journal to be clean after auto-reindex")
+	// Verify that reindex was called when auto-reindex is enabled
+	if !reindexCalled {
+		t.Error("expected reindex to be called when auto-reindex is enabled")
 	}
 }
 

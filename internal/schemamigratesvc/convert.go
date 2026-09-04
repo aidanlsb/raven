@@ -1,4 +1,4 @@
-package schemamigrate
+package schemamigratesvc
 
 import (
 	"encoding/json"
@@ -374,7 +374,7 @@ func applyValueConvertPlan(rt *vaultruntime.Runtime, plan *valueConvertPlan) (in
 		}
 		// Attempt to apply invalidation. If it fails, the schema write still succeeded
 		// and the journal entry persists, so a manual reindex will recover.
-		_ = schemachange.ApplyInvalidation(rt, operationID, classification)
+		_ = schemachange.ApplyInvalidation(rt, operationID, classification, smartReindex)
 	}
 
 	return applied, nil
