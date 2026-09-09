@@ -297,4 +297,52 @@ func TestMCPIntegration_TrashListAndRestore(t *testing.T) {
 	v.AssertFileExists("people/freya.md")
 }
 
+func TestMCPIntegration_TrashEmpty(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		WithFile("people/loki.md", "---\ntype: person\nname: Loki\n---\n").
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	deleted := server.callTool("delete", map[string]interface{}{
+		"reference": "people/freya",
+	})
+	if deleted.IsError {
+		t.Fatalf("delete failed: %s", deleted.Text)
+	}
+
+	preview := server.callTool("trash_empty", map[string]interface{}{})
+	if preview.IsError {
+		t.Fatalf("trash empty preview failed: %s", preview.Text)
+	}
+	if !strings.Contains(preview.Text, `"phase":"preview"`) {
+		t.Fatalf("trash empty did not preview by default: %s", preview.Text)
+	}
+	if !strings.Contains(preview.Text, `"trash_path":".trash/people/freya.md"`) ||
+		!strings.Contains(preview.Text, `"total":1`) {
+		t.Fatalf("unexpected trash empty preview: %s", preview.Text)
+	}
+	v.AssertFileExists(".trash/people/freya.md")
+	v.AssertFileExists("people/loki.md")
+
+	emptied := server.callTool("trash_empty", map[string]interface{}{
+		"confirm": true,
+	})
+	if emptied.IsError {
+		t.Fatalf("trash empty failed: %s", emptied.Text)
+	}
+	if !strings.Contains(emptied.Text, `"phase":"applied"`) {
+		t.Fatalf("trash empty did not report applied phase: %s", emptied.Text)
+	}
+	if !strings.Contains(emptied.Text, `"removed":1`) {
+		t.Fatalf("unexpected trash empty apply result: %s", emptied.Text)
+	}
+	v.AssertFileNotExists(".trash/people/freya.md")
+	v.AssertFileExists("people/loki.md")
+}
+
 // TestMCPIntegration_Search tests full-text search via MCP tool call.

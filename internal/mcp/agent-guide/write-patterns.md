@@ -21,6 +21,7 @@ Use this guide to choose the right mutation primitive.
 | Update trait value | `update` | Targeted trait mutation by trait ID |
 | Delete one object or file | `delete` | Safe deletion behavior with backlink warnings for objects and trash support |
 | Recover a deleted object or file | `trash_list`, then `restore` | Exact recovery paths, overwrite protection, and index/reference healing |
+| Permanently empty trash | `trash_empty` | Preview-first permanent removal of trash entries only |
 
 Rules:
 - Use `upsert` when reruns should produce one current canonical output.
@@ -115,6 +116,16 @@ raven_invoke(command="restore", args={"reference":trash.data.items[0].trash_path
 Use an exact `trash_path` when a reference is ambiguous. Restore never
 overwrites its `restore_path`; resolve the collision before retrying.
 
+Permanent trash removal is also preview-first:
+
+```text
+preview = raven_invoke(command="trash_empty", args={"older-than":"30d"})
+raven_invoke(command="trash_empty", args={"older-than":"30d", "confirm":true})
+```
+
+`trash_empty` never touches live vault objects. Omit `older-than` to include
+every trash entry.
+
 For a non-Markdown file, pass its explicit vault-relative path:
 
 ```text
@@ -128,7 +139,7 @@ Single-object `set`, `add`, `update`, `edit`, `section_create`, `section_move`,
 `section_rename`, `delete`, `move`, and `reclassify` all apply immediately. Only
 call them after clear user approval or an unambiguous request, and use
 `dry-run=true` when the command exposes it and you want to confirm the effect
-first. `section_delete` is always preview-first and requires `confirm=true`.
+first. `section_delete`, `restore`, and `trash_empty` are always preview-first and require `confirm=true`.
 MCP bulk operations pass the command's ID array (`references`, `object_ids`, or
 `trait_ids`) and stay preview-first until `confirm=true`; `stdin=true` is a CLI
 transport pattern, not an MCP input.

@@ -277,6 +277,7 @@ func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
 		"section_delete",
 		"skill_install",
 		"skill_remove",
+		"trash_empty",
 	} {
 		t.Run(commandID, func(t *testing.T) {
 			t.Parallel()

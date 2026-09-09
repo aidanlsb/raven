@@ -200,7 +200,8 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 		LongDesc: `Delete a file-backed object or an explicit non-Markdown file path from the vault.
 
 By default, files are moved to a trash directory (.trash/). Recover with trash
-list followed by preview-first restore; do not move entries manually.
+list followed by preview-first restore, or permanently remove trash with
+preview-first trash empty; do not move or delete trash entries manually.
 Warns about backlinks to Raven objects. File-link integrity is reported by
 broken_file_link in 'rvn check'.
 
@@ -252,7 +253,10 @@ file before retrying.
 
 Preview is default. Pass --confirm to move the file back into the vault. A
 successful restore updates the derived index and re-runs reference resolution,
-so incoming references to a restored Markdown ID resolve again when possible.`,
+so incoming references to a restored Markdown ID resolve again when possible.
+
+To permanently remove trash instead of restoring it, use preview-first
+trash empty.`,
 		Category:   CategoryContent,
 		Access:     AccessWrite,
 		Risk:       RiskMutating,

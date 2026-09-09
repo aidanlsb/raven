@@ -92,6 +92,10 @@ raven_invoke(command="section_delete", args={"reference":"project/website#old-pl
 raven_invoke(command="trash_list", args={"reference":"project/old-project"})
 raven_invoke(command="restore", args={"reference":"project/old-project"})
 raven_invoke(command="restore", args={"reference":"project/old-project", "confirm":true})
+
+# Permanent cleanup of trash entries only:
+raven_invoke(command="trash_empty", args={})
+raven_invoke(command="trash_empty", args={"confirm":true})
 ```
 
 Copy external non-Markdown files into the vault directly, then invoke
@@ -102,7 +106,7 @@ Single-object `delete`, `move`, `section_create`, `section_move`,
 `section_rename`, and `reclassify` apply immediately. Run the backlinks check
 first for delete when impact is not already clear, or use `dry-run=true` on
 commands that expose it to
-preview. `section_delete`, `restore`, and bulk delete/move remain preview-first
+preview. `section_delete`, `restore`, `trash_empty`, and bulk delete/move remain preview-first
 and require `confirm=true`; bulk object move rejects section IDs. Bulk
 reclassify follows the same preview/apply flow and reports required-field or
 dropped-field blockers per object. Use an exact `trash_path` from `trash_list`

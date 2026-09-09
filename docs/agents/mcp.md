@@ -239,6 +239,7 @@ This tool list is generated from the command registry and should stay in sync wi
 - `set`
 - `trash_list`
 - `restore`
+- `trash_empty`
 - `schema`
 - `schema_add_type`
 
@@ -586,7 +587,8 @@ user's intent is clear. For `delete`/`move`, check backlinks or read the object
 first, or pass `dry-run`, when the impact is not already obvious.
 
 Deletion recovery is a separate preview-first flow. List exact entries, preview
-the restore, then confirm it:
+the restore, then confirm it. To permanently remove trash instead, preview
+`trash_empty` and apply with `confirm=true`:
 
 ```json
 {
@@ -610,6 +612,28 @@ the restore, then confirm it:
 Omit `confirm` for the restore preview. If a reference is ambiguous, retry with
 an exact `trash_path` returned by `trash_list`. Restore refuses to overwrite an
 occupied `restore_path`.
+
+```json
+{
+  "command": "trash_empty",
+  "args": {
+    "older-than": "30d"
+  }
+}
+```
+
+```json
+{
+  "command": "trash_empty",
+  "args": {
+    "confirm": true
+  }
+}
+```
+
+`trash_empty` never touches live vault objects. Omit `older-than` to include
+every trash entry. JSON results list matching `trash_path` values and `total`
+for both preview and apply.
 
 ### Confirming a write happened
 

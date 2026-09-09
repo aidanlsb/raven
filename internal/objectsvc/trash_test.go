@@ -388,6 +388,195 @@ func requireTrashTestPath(t *testing.T, vaultPath, relativePath string, exists b
 	}
 }
 
+func TestPreviewEmptyTrashDoesNotDelete(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "trashed")
+	writeTrashTestFile(t, vaultPath, "people/live.md", "live")
+
+	preview, err := PreviewEmptyTrash(EmptyTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+	})
+	if err != nil {
+		t.Fatalf("PreviewEmptyTrash() error = %v", err)
+	}
+	if len(preview.Entries) != 1 || preview.Entries[0].TrashPath != ".trash/people/freya.md" {
+		t.Fatalf("preview entries = %#v", preview.Entries)
+	}
+	requireTrashTestPath(t, vaultPath, ".trash/people/freya.md", true)
+	requireTrashTestPath(t, vaultPath, "people/live.md", true)
+}
+
+func TestEmptyTrashRemovesMatchingEntriesAndLeavesLiveObjects(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "trashed")
+	writeTrashTestFile(t, vaultPath, ".trash/files/paper.pdf", "pdf")
+	writeTrashTestFile(t, vaultPath, "people/freya.md", "live")
+
+	result, err := EmptyTrash(EmptyTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+	})
+	if err != nil {
+		t.Fatalf("EmptyTrash() error = %v", err)
+	}
+	if len(result.Entries) != 2 {
+		t.Fatalf("emptied entries = %#v, want 2", result.Entries)
+	}
+	requireTrashTestPath(t, vaultPath, ".trash/people/freya.md", false)
+	requireTrashTestPath(t, vaultPath, ".trash/files/paper.pdf", false)
+	requireTrashTestPath(t, vaultPath, ".trash/people", false)
+	requireTrashTestPath(t, vaultPath, ".trash/files", false)
+	requireTrashTestPath(t, vaultPath, "people/freya.md", true)
+
+	content, readErr := os.ReadFile(filepath.Join(vaultPath, "people/freya.md"))
+	if readErr != nil {
+		t.Fatalf("read live object: %v", readErr)
+	}
+	if string(content) != "live" {
+		t.Fatalf("live object content = %q, want live", content)
+	}
+}
+
+func TestEmptyTrashOlderThanFiltersByModificationTime(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTrashTestFile(t, vaultPath, ".trash/old.md", "old")
+	writeTrashTestFile(t, vaultPath, ".trash/recent.md", "recent")
+	writeTrashTestFile(t, vaultPath, "notes/keep.md", "keep")
+
+	now := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
+	setTrashTestModTime(t, vaultPath, ".trash/old.md", now.Add(-10*24*time.Hour))
+	setTrashTestModTime(t, vaultPath, ".trash/recent.md", now.Add(-2*time.Hour))
+
+	preview, err := PreviewEmptyTrash(EmptyTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+		OlderThan:   "7d",
+		Now:         func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("PreviewEmptyTrash(older-than) error = %v", err)
+	}
+	if len(preview.Entries) != 1 || preview.Entries[0].TrashPath != ".trash/old.md" {
+		t.Fatalf("preview entries = %#v, want only old.md", preview.Entries)
+	}
+	requireTrashTestPath(t, vaultPath, ".trash/old.md", true)
+	requireTrashTestPath(t, vaultPath, ".trash/recent.md", true)
+
+	result, err := EmptyTrash(EmptyTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+		OlderThan:   "7d",
+		Now:         func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("EmptyTrash(older-than) error = %v", err)
+	}
+	if len(result.Entries) != 1 || result.Entries[0].TrashPath != ".trash/old.md" {
+		t.Fatalf("emptied entries = %#v, want only old.md", result.Entries)
+	}
+	requireTrashTestPath(t, vaultPath, ".trash/old.md", false)
+	requireTrashTestPath(t, vaultPath, ".trash/recent.md", true)
+	requireTrashTestPath(t, vaultPath, "notes/keep.md", true)
+}
+
+func TestEmptyTrashRemovesCollisionMetadataSidecar(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "oldest")
+	writeTrashTestFile(t, vaultPath, "people/freya.md", "newest")
+	now := time.Date(2026, 3, 10, 11, 22, 33, 0, time.UTC)
+	deleted, err := DeleteFile(DeleteFileRequest{
+		VaultPath: vaultPath,
+		FilePath:  filepath.Join(vaultPath, "people/freya.md"),
+		Behavior:  "trash",
+		TrashDir:  ".trash",
+		Now:       func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("DeleteFile() error = %v", err)
+	}
+	versionPath, err := filepath.Rel(vaultPath, deleted.TrashPath)
+	if err != nil {
+		t.Fatalf("resolve version path: %v", err)
+	}
+	versionPath = filepath.ToSlash(versionPath)
+
+	if _, err := EmptyTrash(EmptyTrashRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: config.DefaultVaultConfig(),
+	}); err != nil {
+		t.Fatalf("EmptyTrash() error = %v", err)
+	}
+	requireTrashTestPath(t, vaultPath, ".trash/people/freya.md", false)
+	requireTrashTestPath(t, vaultPath, versionPath, false)
+	requireTrashTestPath(t, vaultPath, versionPath+trashMetadataSuffix, false)
+}
+
+func TestEmptyTrashRejectsInvalidOlderThan(t *testing.T) {
+	t.Parallel()
+
+	_, err := PreviewEmptyTrash(EmptyTrashRequest{
+		VaultPath:   t.TempDir(),
+		VaultConfig: config.DefaultVaultConfig(),
+		OlderThan:   "last week",
+	})
+	requireTrashServiceErrorCode(t, err, codes.ErrInvalidInput)
+}
+
+func TestParseAgeDuration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input   string
+		want    time.Duration
+		wantErr bool
+	}{
+		{input: "24h", want: 24 * time.Hour},
+		{input: "7d", want: 7 * 24 * time.Hour},
+		{input: "30d", want: 30 * 24 * time.Hour},
+		{input: "1d12h", want: 36 * time.Hour},
+		{input: "1h30m", want: time.Hour + 30*time.Minute},
+		{input: "0s", wantErr: true},
+		{input: "-7d", wantErr: true},
+		{input: "last week", wantErr: true},
+		{input: "", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseAgeDuration(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseAgeDuration(%q) = %v, want error", tt.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseAgeDuration(%q) error = %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Fatalf("parseAgeDuration(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func setTrashTestModTime(t *testing.T, vaultPath, relativePath string, modTime time.Time) {
+	t.Helper()
+	path := filepath.Join(vaultPath, filepath.FromSlash(relativePath))
+	if err := os.Chtimes(path, modTime, modTime); err != nil {
+		t.Fatalf("chtimes %s: %v", relativePath, err)
+	}
+}
+
 func requireTrashServiceErrorCode(t *testing.T, err error, code codes.ErrorCode) {
 	t.Helper()
 	if err == nil {

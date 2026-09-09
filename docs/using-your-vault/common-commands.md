@@ -378,9 +378,11 @@ items; objects that would drop fields also require `--force`.
 ### `rvn delete`
 
 Remove an object or an explicit non-Markdown file path. Files are moved to
-`.trash/` by default. Raven objects report backlink warnings. Use `rvn trash
-list` and `rvn restore` for recovery; delete and restore are the supported pair
-instead of manual filesystem moves.
+`.trash/` by default. Raven objects report backlink warnings. Deletion is a
+four-step lifecycle: `rvn delete` moves a file into trash, `rvn trash list`
+shows what is there, `rvn restore` puts a file back, and `rvn trash empty`
+permanently removes trash entries. Use those commands instead of moving or
+deleting vault files by hand.
 
 ```bash
 rvn delete project/old-project                 # Interactive: preview, then confirm prompt
@@ -391,6 +393,9 @@ rvn delete files/old-paper.pdf --dry-run --json
 rvn trash list --json
 rvn restore project/old-project                # Preview only
 rvn restore project/old-project --confirm      # Restore and heal the index
+rvn trash empty --json                         # Preview a full wipe
+rvn trash empty --confirm --json               # Permanently delete trash entries
+rvn trash empty --older-than 30d --confirm --json
 ```
 
 Bulk deletion previews by default and only applies with `--confirm`. Section IDs
@@ -404,7 +409,7 @@ Check backlinks before deleting to avoid broken references:
 rvn backlinks project/old-project
 ```
 
-### `rvn trash list` and `rvn restore`
+### `rvn trash list`, `rvn restore`, and `rvn trash empty`
 
 `rvn trash list` reads the configured `deletion.trash_dir` and returns each
 entry's canonical `reference`, current `trash_path`, destination `restore_path`,
@@ -418,11 +423,20 @@ collision and retry. On success, Raven updates the index and re-runs reference
 resolution, making the restored object queryable and healing incoming
 references when possible.
 
+`rvn trash empty` permanently deletes matching trash entries. Preview is the
+default; `--confirm` applies. It never touches live vault objects. JSON output
+lists the matching `trash_path` values and the total count for both preview and
+apply. `--older-than` limits the operation to trash files whose modification
+time is at least the given duration in the past. Durations use Go's syntax
+(`24h`, `1h30m`) plus `d` for days (`7d`, `30d`). Omit the flag to include
+every trash entry.
+
 If the same path is deleted more than once, `trash list` returns multiple rows
 with the same `reference`; restore one by its exact `trash_path`. Raven keeps a
 small hidden metadata sidecar next to versioned collision entries so every row
 retains its original restore path. These sidecars are internal to the existing
-configured trash layout and are omitted from list results.
+configured trash layout and are omitted from list results. Emptying trash
+removes the matching files and their sidecars.
 
 ```bash
 rvn trash list
@@ -430,6 +444,9 @@ rvn trash list people/freya --json
 rvn trash list --kind file --json
 rvn restore people/freya --json
 rvn restore .trash/people/freya.md --confirm --json
+rvn trash empty --json
+rvn trash empty --older-than 30d --json
+rvn trash empty --confirm --json
 ```
 
 ---

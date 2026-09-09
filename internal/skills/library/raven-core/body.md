@@ -15,7 +15,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Author `[[references]]` and `ref` fields with canonical object IDs. After
   `new`/`upsert`/`daily`, use the returned `data.id` (the human CLI's
   `link as <id>` value); do not generate bare short forms.
-- Single-object writes (`rvn set`/`add`/`update`/`edit`, `rvn section create`/`move`/`rename`, and single `rvn move`/`rvn delete`) apply immediately; pass `--dry-run` to preview without writing. `rvn section delete` is preview-first and requires `--confirm`. Bulk operations (`--stdin`), `query --apply`, `schema rename`, `rvn check fix`, and `rvn check create-missing` also stay preview-first and require `--confirm`.
+- Single-object writes (`rvn set`/`add`/`update`/`edit`, `rvn section create`/`move`/`rename`, and single `rvn move`/`rvn delete`) apply immediately; pass `--dry-run` to preview without writing. `rvn section delete`, `rvn restore`, and `rvn trash empty` are preview-first and require `--confirm`. Bulk operations (`--stdin`), `query --apply`, `schema rename`, `rvn check fix`, and `rvn check create-missing` also stay preview-first and require `--confirm`.
 
 ## Choose the right write command
 
@@ -63,7 +63,9 @@ fatal `REF_NOT_FOUND` on reads. Create appropriate targets with preview-first
 5. After mutations, verify with `rvn read` or `rvn check`.
 
 After a trashed delete, recover through `rvn trash list`, preview
-`rvn restore <reference>`, then repeat with `--confirm`. Bulk reclassification
+`rvn restore <reference>`, then repeat with `--confirm`. Permanently remove
+trash with preview-first `rvn trash empty`; add `--older-than 30d` to limit
+the wipe, then `--confirm` to apply. Bulk reclassification
 can require both `--confirm` and `--force` when the preview reports dropped
 fields.
 
