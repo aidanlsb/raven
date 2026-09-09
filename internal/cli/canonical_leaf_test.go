@@ -45,7 +45,7 @@ func TestFinishCanonicalLeafFailureUsesErrorHandler(t *testing.T) {
 	}, func(_ *cobra.Command, _ commandexec.Result) error {
 		return want
 	})
-	if err != want {
+	if !errors.Is(err, want) {
 		t.Fatalf("finishCanonicalLeaf() error = %v, want %v", err, want)
 	}
 }
