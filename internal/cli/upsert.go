@@ -13,34 +13,24 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	Prepare:     prepareUpsertValidation,
-	Invoke:      invokeUpsertStdin,
+var upsertCmd = newExceptionLeafCommand("upsert", exceptionLeafOptions{
+	Invoke:      invokeUpsert,
 	RenderHuman: renderUpsertResult,
 })
 
-func prepareUpsertValidation(cmd *cobra.Command, args []string) ([]string, bool, error) {
-	// Validate title
-	if len(args) > 0 {
-		if err := validateObjectTitle(args[0]); err != nil {
-			return nil, false, handleErrorMsg("INVALID_INPUT", err.Error(), "Provide a non-empty title")
+func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	title := stringValue(args["title"])
+	if title != "" {
+		if err := validateObjectTitle(title); err != nil {
+			return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Provide a non-empty title")
 		}
 	}
-
-	// Validate object-path if explicitly provided
 	if cmd.Flags().Changed("object-path") {
 		objectPath, _ := cmd.Flags().GetString("object-path")
 		if err := validateObjectPath(objectPath); err != nil {
-			return nil, false, handleErrorMsg("INVALID_INPUT", err.Error(), "Use --object-path with an object path like note/raven-friction (no type/ prefix, no .md suffix)")
+			return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Use --object-path with an object path like note/raven-friction (no type/ prefix, no .md suffix)")
 		}
 	}
-
-	return args, false, nil
-}
-
-func invokeUpsertStdin(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	// Handle stdin content-file special case: read from stdin and replace content-file with content
 	if cmd.Flags().Changed("content-file") {
 		contentFile := stringValue(args["content-file"])
 		if strings.TrimSpace(contentFile) == "-" {
@@ -52,7 +42,6 @@ func invokeUpsertStdin(cmd *cobra.Command, commandID, vaultPath string, args map
 			delete(args, "content-file")
 		}
 	}
-
 	return executeCanonicalCommand(commandID, vaultPath, args)
 }
 

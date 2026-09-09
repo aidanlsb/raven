@@ -42,11 +42,10 @@ The default vault is stored in config.toml and used when no active vault is set.
 If the active vault name is not configured, CLI vault resolution fails until it
 is switched or cleared.`,
 	Args: cobra.NoArgs,
-	RunE: canonicalGroupDefaultRunE("vault_list", nil, renderVaultList),
+	RunE: canonicalGroupDefaultRunE("vault_list", renderVaultList),
 }
 
 var vaultListCmd = newCanonicalLeafCommand("vault_list", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderVaultList,
 })
 
@@ -79,7 +78,6 @@ var vaultRemoveCmd = newCanonicalLeafCommand("vault_remove", canonicalLeafOption
 })
 
 var vaultPathCmd = newCanonicalLeafCommand("vault_path", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderVaultList,
 })
 

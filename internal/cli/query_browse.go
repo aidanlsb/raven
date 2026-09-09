@@ -21,11 +21,11 @@ func browseQueryResults(items []picker.Item, headers []string, columns []ui.Colu
 }
 
 func browseItemsForObjectResults(results []model.Object, sch *schema.Schema) []picker.Item {
-	nameField, fieldColumns := objectTableColumns(results, sch)
+	nameField, fieldColumns := ui.ObjectTableColumns(results, sch)
 	items := make([]picker.Item, 0, len(results))
 	for _, result := range results {
 		location := fmt.Sprintf("%s:%d", result.FilePath, result.LineStart)
-		label := objectTableName(result, nameField)
+		label := ui.ObjectTableName(result, nameField)
 		detail := objectBrowseDetail(result, fieldColumns)
 		columns := objectBrowseColumns(result, nameField, fieldColumns, location)
 		items = append(items, picker.Item{
@@ -51,20 +51,20 @@ func browseItemsForObjectResults(results []model.Object, sch *schema.Schema) []p
 }
 
 func objectBrowseHeaders(results []model.Object, sch *schema.Schema) []string {
-	nameField, fieldColumns := objectTableColumns(results, sch)
-	return objectTableHeaders(nameField, fieldColumns)
+	nameField, fieldColumns := ui.ObjectTableColumns(results, sch)
+	return ui.ObjectTableHeaders(nameField, fieldColumns)
 }
 
 func objectBrowseLayout(results []model.Object, sch *schema.Schema) []ui.ColumnDef {
-	_, fieldColumns := objectTableColumns(results, sch)
+	_, fieldColumns := ui.ObjectTableColumns(results, sch)
 	return ui.ObjectLayout(fieldColumns)
 }
 
 func objectBrowseColumns(obj model.Object, nameField string, fieldColumns []string, location string) []string {
 	columns := make([]string, 0, len(fieldColumns)+2)
-	columns = append(columns, objectTableName(obj, nameField))
+	columns = append(columns, ui.ObjectTableName(obj, nameField))
 	for _, fieldName := range fieldColumns {
-		value := formatFieldValueSimple(obj.Fields[fieldName])
+		value := ui.FormatFieldValue(obj.Fields[fieldName])
 		if value == "" {
 			value = "-"
 		}
@@ -110,7 +110,7 @@ func browseItemsForTraitResults(results []model.Trait) []picker.Item {
 }
 
 func traitBrowseHeaders() []string {
-	return []string{"#", "content", "trait", "location"}
+	return ui.TraitTableHeaders()
 }
 
 func browseItemsForSectionResults(results []model.Section) []picker.Item {
@@ -146,7 +146,7 @@ func browseItemsForSectionResults(results []model.Section) []picker.Item {
 }
 
 func sectionBrowseHeaders() []string {
-	return []string{"#", "title", "heading", "location"}
+	return ui.SectionTableHeaders()
 }
 
 func browseItemsForLinkResults(results []model.Link) []picker.Item {
@@ -185,13 +185,13 @@ func browseItemsForLinkResults(results []model.Link) []picker.Item {
 }
 
 func linkBrowseHeaders() []string {
-	return []string{"#", "target", "kind", "location"}
+	return ui.LinkTableHeaders()
 }
 
 func objectBrowseDetail(obj model.Object, fieldColumns []string) string {
 	parts := make([]string, 0, len(fieldColumns))
 	for _, fieldName := range fieldColumns {
-		value := formatFieldValueSimple(obj.Fields[fieldName])
+		value := ui.FormatFieldValue(obj.Fields[fieldName])
 		if value == "" {
 			continue
 		}

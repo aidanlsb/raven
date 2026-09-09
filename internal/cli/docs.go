@@ -13,7 +13,7 @@ const (
 	docsCommandHint = "For command docs, use: rvn help <command>"
 )
 
-var docsCmd = newCanonicalLeafCommand("docs", canonicalLeafOptions{
+var docsCmd = newExceptionLeafCommand("docs", exceptionLeafOptions{
 	Prepare:     prepareDocsCommand,
 	Invoke:      invokeDocsCommand,
 	HandleError: handleCanonicalDocsLeafFailure,
@@ -36,17 +36,17 @@ func docsArgsFromCanonical(args map[string]interface{}) []string {
 	return out
 }
 
-var docsSearchCmd = newCanonicalLeafCommand("docs_search", canonicalLeafOptions{
+var docsSearchCmd = newExceptionLeafCommand("docs_search", exceptionLeafOptions{
 	HandleError: handleCanonicalDocsLeafFailure,
 	RenderHuman: renderDocsSearch,
 })
 
-var docsFetchCmd = newCanonicalLeafCommand("docs_fetch", canonicalLeafOptions{
+var docsFetchCmd = newExceptionLeafCommand("docs_fetch", exceptionLeafOptions{
 	HandleError: handleCanonicalDocsLeafFailure,
 	RenderHuman: renderDocsFetch,
 })
 
-func handleCanonicalDocsLeafFailure(result commandexec.Result) error {
+func handleCanonicalDocsLeafFailure(_ *cobra.Command, result commandexec.Result) error {
 	return handleCanonicalDocsFailure(result, nil)
 }
 

@@ -33,18 +33,15 @@ Use this command group for template file lifecycle operations:
 }
 
 var templateListCmd = newCanonicalLeafCommand("template_list", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderTemplateList,
 })
 
-var templateWriteCmd = newCanonicalLeafCommand("template_write", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
+var templateWriteCmd = newExceptionLeafCommand("template_write", exceptionLeafOptions{
 	Invoke:      invokeTemplateWrite,
 	RenderHuman: renderTemplateWrite,
 })
 
 var templateDeleteCmd = newCanonicalLeafCommand("template_delete", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderTemplateDelete,
 })
 
@@ -56,7 +53,6 @@ func init() {
 }
 
 func invokeTemplateWrite(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-	// Handle --edit: read template, open editor, replace content in args
 	edit, _ := cmd.Flags().GetBool("edit")
 	if edit {
 		content, err := editTemplateContent(stringValue(args["path"]))

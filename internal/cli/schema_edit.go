@@ -1,11 +1,5 @@
 package cli
 
-import (
-	"github.com/spf13/cobra"
-
-	"github.com/aidanlsb/raven/internal/commandexec"
-)
-
 const schemaAddLong = `Add new definitions to schema.yaml.
 
 Subcommands:
@@ -22,26 +16,24 @@ Examples:
 // (CLIPath) via buildRegistrySubtree. Leaf render/build hooks are wired through
 // the spec below; adding a new schema_add_* entry needs no new Cobra vars.
 var schemaAddCmd = buildRegistrySubtree(registrySubtreeSpec{
-	Prefix:    []string{"schema", "add"},
-	VaultPath: getVaultPath,
+	Prefix: []string{"schema", "add"},
 	Root: registryGroup{
 		Use:        "add",
 		Short:      "Add a type, trait, or field to the schema",
 		Long:       schemaAddLong,
 		ParentOnly: true,
 	},
-	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+	Renders: map[string]humanRenderer{
 		"schema_add_type":  renderSchemaAddType,
 		"schema_add_trait": renderSchemaAddTrait,
 		"schema_add_field": renderSchemaAddField,
 	},
 	Leaves: map[string]canonicalLeafOptions{
-		"schema_add_type": {Prepare: prepareSchemaAddType},
+		"schema_add_type": {BuildArgs: buildSchemaAddTypeArgs},
 	},
 })
 
 var schemaValidateCmd = newCanonicalLeafCommand("schema_validate", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderSchemaValidate,
 })
 
@@ -70,15 +62,14 @@ Examples:
 // schemaUpdateCmd is the "schema update" subtree, generated from registry
 // metadata via buildRegistrySubtree.
 var schemaUpdateCmd = buildRegistrySubtree(registrySubtreeSpec{
-	Prefix:    []string{"schema", "update"},
-	VaultPath: getVaultPath,
+	Prefix: []string{"schema", "update"},
 	Root: registryGroup{
 		Use:        "update",
 		Short:      "Update a type, trait, or field in the schema",
 		Long:       schemaUpdateLong,
 		ParentOnly: true,
 	},
-	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+	Renders: map[string]humanRenderer{
 		"schema_update_type":  renderSchemaUpdateType,
 		"schema_update_trait": renderSchemaUpdateTrait,
 		"schema_update_field": renderSchemaUpdateField,
@@ -105,22 +96,21 @@ Examples:
 
 // schemaRemoveCmd is the "schema remove" subtree, generated from registry
 // metadata via buildRegistrySubtree. The type/trait leaves keep their
-// interactive confirm flows via per-leaf Invoke hooks.
+// interactive confirm flows as explicit exceptions.
 var schemaRemoveCmd = buildRegistrySubtree(registrySubtreeSpec{
-	Prefix:    []string{"schema", "remove"},
-	VaultPath: getVaultPath,
+	Prefix: []string{"schema", "remove"},
 	Root: registryGroup{
 		Use:        "remove",
 		Short:      "Remove a type, trait, or field from the schema",
 		Long:       schemaRemoveLong,
 		ParentOnly: true,
 	},
-	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+	Renders: map[string]humanRenderer{
 		"schema_remove_type":  renderSchemaRemoveType,
 		"schema_remove_trait": renderSchemaRemoveTrait,
 		"schema_remove_field": renderSchemaRemoveField,
 	},
-	Leaves: map[string]canonicalLeafOptions{
+	Exceptions: map[string]exceptionLeafOptions{
 		"schema_remove_type":  {Invoke: invokeSchemaRemoveType},
 		"schema_remove_trait": {Invoke: invokeSchemaRemoveTrait},
 	},
@@ -150,15 +140,14 @@ Examples:
   rvn schema convert trait priority --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"}'`
 
 var schemaConvertCmd = buildRegistrySubtree(registrySubtreeSpec{
-	Prefix:    []string{"schema", "convert"},
-	VaultPath: getVaultPath,
+	Prefix: []string{"schema", "convert"},
 	Root: registryGroup{
 		Use:        "convert",
 		Short:      "Convert schema values and migrate vault data",
 		Long:       schemaConvertLong,
 		ParentOnly: true,
 	},
-	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+	Renders: map[string]humanRenderer{
 		"schema_convert_trait": renderSchemaConvert,
 		"schema_convert_field": renderSchemaConvert,
 	},
@@ -199,21 +188,20 @@ Examples:
 
 // schemaRenameCmd is the "schema rename" subtree, generated from registry
 // metadata via buildRegistrySubtree. The type leaf keeps its interactive
-// default-path confirm flow via a per-leaf Invoke hook.
+// default-path confirm flow as an explicit exception.
 var schemaRenameCmd = buildRegistrySubtree(registrySubtreeSpec{
-	Prefix:    []string{"schema", "rename"},
-	VaultPath: getVaultPath,
+	Prefix: []string{"schema", "rename"},
 	Root: registryGroup{
 		Use:        "rename",
 		Short:      "Rename a type or field and update references",
 		Long:       schemaRenameLong,
 		ParentOnly: true,
 	},
-	Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+	Renders: map[string]humanRenderer{
 		"schema_rename_type":  renderSchemaRenameType,
 		"schema_rename_field": renderSchemaRenameField,
 	},
-	Leaves: map[string]canonicalLeafOptions{
+	Exceptions: map[string]exceptionLeafOptions{
 		"schema_rename_type": {Invoke: invokeSchemaRenameType},
 	},
 })

@@ -13,7 +13,6 @@ import (
 )
 
 var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
-	VaultPath: getVaultPath,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		switch result.Data.(type) {
 		case commandpayload.SetBulkPreviewResult, commandpayload.SetBulkResult:
@@ -81,7 +80,6 @@ func stringMapFromAny(raw interface{}) map[string]string {
 }
 
 var updateCmd = newCanonicalLeafCommand("update", canonicalLeafOptions{
-	VaultPath: getVaultPath,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		return renderCanonicalBulkResult(result)
 	},

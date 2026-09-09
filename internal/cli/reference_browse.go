@@ -34,7 +34,10 @@ func validateInteractiveBrowse(enabled bool) (bool, error) {
 func browseItemsForReferenceResults(links []model.Reference, displayText func(model.Reference) string) []picker.Item {
 	items := make([]picker.Item, 0, len(links))
 	for i, link := range links {
-		line := referenceLine(link)
+		line := 0
+		if link.Line != nil {
+			line = *link.Line
+		}
 		location := referenceLocation(link.FilePath, line)
 		content := displayText(link)
 		items = append(items, picker.Item{

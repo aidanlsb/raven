@@ -14,20 +14,14 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
-	VaultPath: getVaultPath,
-	Prepare:   prepareImportStdin,
-	Invoke:    invokeImportWithStdin,
+var importCmd = newExceptionLeafCommand("import", exceptionLeafOptions{
+	Invoke: invokeImportWithStdin,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		return renderCanonicalImportResult(result)
 	},
 })
 
 type importResult = importsvc.ResultItem
-
-func prepareImportStdin(cmd *cobra.Command, args []string) ([]string, bool, error) {
-	return args, false, nil
-}
 
 func invokeImportWithStdin(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	file, _ := cmd.Flags().GetString("file")

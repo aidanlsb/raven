@@ -24,8 +24,7 @@ raven.yaml directly.`
 
 func buildVaultConfigCommand() *cobra.Command {
 	return buildRegistrySubtree(registrySubtreeSpec{
-		Prefix:    []string{"vault", "config"},
-		VaultPath: getVaultPath,
+		Prefix: []string{"vault", "config"},
 		Root: registryGroup{
 			Use:           "config",
 			Short:         "Manage vault-level raven.yaml settings",

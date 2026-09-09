@@ -21,46 +21,39 @@ var querySavedCmd = &cobra.Command{
 }
 
 var querySavedListCmd = newCanonicalLeafCommand("query_saved_list", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderQuerySavedList,
 })
 
 var querySavedGetCmd = newCanonicalLeafCommand("query_saved_get", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderQuerySavedGet,
 })
 
 var querySavedSetCmd = newCanonicalLeafCommand("query_saved_set", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	Prepare:     prepareQuerySavedSet,
+	BuildArgs:   buildQuerySavedSetArgs,
 	RenderHuman: renderQuerySavedSet,
 })
 
 var querySavedRemoveCmd = newCanonicalLeafCommand("query_saved_remove", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderQuerySavedRemove,
 })
 
-func prepareQuerySavedSet(cmd *cobra.Command, args []string) ([]string, bool, error) {
-	// Normalize --arg values via querysvc before building canonical args
+func buildQuerySavedSetArgs(cmd *cobra.Command, _ []string, argsMap map[string]interface{}) error {
 	rawArgs, err := cmd.Flags().GetStringArray("arg")
 	if err != nil {
-		return nil, false, handleError(ErrInternal, err, "")
+		return handleError(ErrInternal, err, "")
 	}
 	normalized, err := querysvc.NormalizeArgs(rawArgs)
 	if err != nil {
-		return nil, false, handleCanonicalFailure(commandexec.FromServiceError(err))
-	}
-	// Replace --arg flag values with normalized versions
-	if err := cmd.Flags().Set("arg", ""); err != nil {
-		return nil, false, handleError(ErrInternal, err, "")
-	}
-	for _, arg := range normalized {
-		if err := cmd.Flags().Set("arg", arg); err != nil {
-			return nil, false, handleError(ErrInternal, err, "")
+		result := commandexec.FromServiceError(err)
+		if isJSONOutput() {
+			return outputCanonicalResultJSON(result)
 		}
+		return handleCanonicalFailure(result)
 	}
-	return args, false, nil
+	if len(normalized) > 0 {
+		argsMap["arg"] = normalized
+	}
+	return nil
 }
 
 func renderQuerySavedList(_ *cobra.Command, result commandexec.Result) error {

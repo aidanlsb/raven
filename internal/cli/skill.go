@@ -20,7 +20,7 @@ var skillListCmd = newCanonicalLeafCommand("skill_list", canonicalLeafOptions{
 	RenderHuman: renderSkillList,
 })
 
-var skillInstallCmd = newCanonicalLeafCommand("skill_install", canonicalLeafOptions{
+var skillInstallCmd = newExceptionLeafCommand("skill_install", exceptionLeafOptions{
 	Invoke:      invokeSkillInstall,
 	RenderHuman: renderSkillInstall,
 })

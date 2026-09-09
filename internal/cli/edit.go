@@ -12,22 +12,10 @@ import (
 )
 
 var editCmd = newCanonicalLeafCommand("edit", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	HandleError: handleCanonicalEditFailure,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		return renderCanonicalEditResult(result)
 	},
 })
-
-func handleCanonicalEditFailure(result commandexec.Result) error {
-	if result.Error == nil {
-		return handleErrorMsg(ErrInternal, "edit failed", "")
-	}
-	if result.Error.Details != nil {
-		return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-	}
-	return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
-}
 
 func renderCanonicalEditResult(result commandexec.Result) error {
 	switch data := result.Data.(type) {

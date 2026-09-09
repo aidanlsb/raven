@@ -10,17 +10,8 @@ import (
 )
 
 var vaultStatsCmd = newCanonicalLeafCommand("vault_stats", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	HandleError: handleCanonicalMaintSvcFailure,
 	RenderHuman: renderVaultStats,
 })
-
-func handleCanonicalMaintSvcFailure(result commandexec.Result) error {
-	if result.Error == nil {
-		return nil
-	}
-	return handleErrorWithDetails(mapCodeOrInternal(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
-}
 
 func renderVaultStats(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)

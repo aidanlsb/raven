@@ -12,7 +12,6 @@ import (
 )
 
 var unsetCmd = newCanonicalLeafCommand("unset", canonicalLeafOptions{
-	VaultPath: getVaultPath,
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		return renderCanonicalUnsetResult(result)
 	},

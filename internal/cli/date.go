@@ -13,7 +13,6 @@ import (
 )
 
 var dateCmd = newCanonicalLeafCommand("date", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderDate,
 })
 

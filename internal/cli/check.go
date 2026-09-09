@@ -13,23 +13,17 @@ import (
 // `create-missing` subcommands (see #91). All three are thin canonical leaves
 // that delegate execution to commandimpl/checksvc; the CLI only builds args,
 // prompts, and renders.
-var checkCmd = newCanonicalLeafCommand("check", canonicalLeafOptions{
-	VaultPath:    getVaultPath,
-	HandleError:  handleCheckLeafFailure,
+var checkCmd = newExceptionLeafCommand("check", exceptionLeafOptions{
 	HandleResult: handleCheckValidateResult,
 })
 
-var checkFixCmd = newCanonicalLeafCommand("check_fix", canonicalLeafOptions{
-	VaultPath:    getVaultPath,
+var checkFixCmd = newExceptionLeafCommand("check_fix", exceptionLeafOptions{
 	Invoke:       invokeCheckMutation,
-	HandleError:  handleCheckLeafFailure,
 	HandleResult: handleCheckFixResult,
 })
 
-var checkCreateMissingCmd = newCanonicalLeafCommand("check create-missing", canonicalLeafOptions{
-	VaultPath:    getVaultPath,
+var checkCreateMissingCmd = newExceptionLeafCommand("check create-missing", exceptionLeafOptions{
 	Invoke:       invokeCheckMutation,
-	HandleError:  handleCheckLeafFailure,
 	HandleResult: handleCheckCreateMissingResult,
 })
 
@@ -48,16 +42,6 @@ func invokeCheckMutation(cmd *cobra.Command, commandID, vaultPath string, args m
 		Args:      args,
 		Confirm:   confirm,
 	})
-}
-
-func handleCheckLeafFailure(result commandexec.Result) error {
-	if result.Error == nil {
-		return handleErrorMsg(ErrInternal, "check failed", "")
-	}
-	if result.Error.Details != nil {
-		return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-	}
-	return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
 }
 
 func handleCheckValidateResult(cmd *cobra.Command, result commandexec.Result) error {

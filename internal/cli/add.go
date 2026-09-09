@@ -10,7 +10,6 @@ import (
 )
 
 var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderAddResult,
 })
 

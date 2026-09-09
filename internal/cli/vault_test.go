@@ -133,7 +133,7 @@ func TestVaultListHumanOutputShowsConfiguredVaults(t *testing.T) {
 	}
 	os.Stdout = w
 
-	runErr := canonicalGroupDefaultRunE("vault_list", nil, renderVaultList)(vaultCmd, nil)
+	runErr := canonicalGroupDefaultRunE("vault_list", renderVaultList)(vaultCmd, nil)
 
 	if err := w.Close(); err != nil {
 		t.Fatalf("close writer: %v", err)
