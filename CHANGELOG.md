@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added preview-first `rvn trash empty` / `trash_empty` to permanently remove matching trash entries. `--confirm` applies; `--older-than` limits the wipe to files whose modification time is at least the given duration in the past (`24h`, `7d`, `30d`). Live vault objects are never touched.
 
+### Fixed
+- `--json` now prints a standard error envelope when flag parsing fails, instead of exiting 1 with empty stdout and stderr.
+
 ## [v0.0.35] - 2026-09-02
 
 ### Added

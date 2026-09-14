@@ -4,8 +4,10 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -98,4 +100,29 @@ func handleErrorWithDetails(code codes.ErrorCode, message, suggestion string, de
 		return nil
 	}
 	return fmt.Errorf("%s", message)
+}
+
+// emitJSONErrorEnvelope writes a JSON failure envelope when --json was requested
+// and Cobra failed before RunE could write one. Flag-parse errors are the usual
+// case: Cobra never reaches the command, and SilenceErrors has already turned
+// off the human printer, so a bare exit 1 used to look like a successful no-op.
+func emitJSONErrorEnvelope(jsonRequested bool, err error) error {
+	if err == nil || !jsonRequested {
+		return err
+	}
+	if errors.Is(err, errJSONResponseFailure) || errors.Is(err, ErrPickCancelled) || errors.Is(err, flag.ErrHelp) {
+		return err
+	}
+	return outputError(codes.ErrInvalidInput, err.Error(), nil, flagParseSuggestion(err))
+}
+
+func flagParseSuggestion(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "unknown shorthand flag") || strings.Contains(msg, "unknown flag:") {
+		return `If an argument starts with a dash, put it after -- so it is not parsed as a flag. Keep flags such as --to and --json before --. Example: rvn add --to today --json -- "- Review the rollout"`
+	}
+	return ""
 }

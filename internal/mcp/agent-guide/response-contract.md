@@ -68,7 +68,10 @@ retried even when failure occurs before preview or apply.
 
 When invoking the `rvn` binary with `--json`, a response with `ok=false` exits
 with status 1, including startup and load failures such as invalid config,
-unresolved vaults, and fatal schema errors. Successful commands exit 0.
+unresolved vaults, and fatal schema errors. Flag-parse failures also emit this
+envelope with `INVALID_INPUT` (for example a markdown bullet that starts with
+`-` and is parsed as a flag). They must not exit 1 with empty stdout. Successful
+commands exit 0.
 
 `rvn check` is a lint-style exception: it can return `ok=true` and exit 1 when
 issues are found (or warnings are found with `--strict`). Cancelling `rvn pick`

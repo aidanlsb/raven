@@ -125,9 +125,10 @@ who gathered knowledge from across the world.`,
 // Execute runs the CLI.
 func Execute() error {
 	syncRegistryMetadata(rootCmd)
+	jsonRequested := argsRequestJSON(os.Args[1:])
 	prevSilenceErrors := rootCmd.SilenceErrors
 	prevSilenceUsage := rootCmd.SilenceUsage
-	if argsRequestJSON(os.Args[1:]) {
+	if jsonRequested {
 		rootCmd.SilenceErrors = true
 		rootCmd.SilenceUsage = true
 	}
@@ -136,7 +137,7 @@ func Execute() error {
 		rootCmd.SilenceUsage = prevSilenceUsage
 	}()
 
-	return rootCmd.Execute()
+	return emitJSONErrorEnvelope(jsonRequested, rootCmd.Execute())
 }
 
 // ExitCode maps an error returned by Execute to the process exit code.
