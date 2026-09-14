@@ -972,7 +972,7 @@ func TestFieldJSONFlagsUseCanonicalPluralName(t *testing.T) {
 		hasRemoved   bool
 	}{
 		"new":        {newCmd.Flags().Lookup("fields-json") != nil, newCmd.Flags().Lookup("field-json") != nil},
-		"upsert":     {upsertCmd.Flags().Lookup("fields-json") != nil, upsertCmd.Flags().Lookup("field-json") != nil},
+		"write":      {writeCmd.Flags().Lookup("fields-json") != nil, writeCmd.Flags().Lookup("field-json") != nil},
 		"reclassify": {reclassifyCmd.Flags().Lookup("fields-json") != nil, reclassifyCmd.Flags().Lookup("field-json") != nil},
 		"set":        {setCmd.Flags().Lookup("fields-json") != nil, setCmd.Flags().Lookup("field-json") != nil},
 	}

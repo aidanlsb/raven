@@ -40,7 +40,7 @@ raven_invoke(command="set", args={"reference":create.data.id, "fields":{"status"
 If the output should converge on reruns, prefer:
 
 ```text
-raven_invoke(command="upsert", args={
+raven_invoke(command="write", args={
   "type":"report",
   "title":"Weekly Status",
   "content":"# Weekly Status\n..."

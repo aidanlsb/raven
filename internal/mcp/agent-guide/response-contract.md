@@ -97,7 +97,7 @@ field:
 Read this field to decide whether a write happened. Do **not** infer it from
 heterogeneous `data` fields (`data.status`, `data.preview`, `data.needs_confirm`,
 etc.), which vary by command and remain only for backward compatibility. The
-phase is consistent across every mutating command (`new`, `upsert`, `add`, `set`,
+phase is consistent across every mutating command (`new`, `write`, `add`, `set`,
 `unset`, `delete`, `restore`, `trash_empty`, `move`, `section_create`, `section_delete`,
 `section_move`, `section_rename`, `reclassify`, `update`, `edit`, `import`, `check fix`,
 `check create-missing`, `schema` writes/renames, `template` writes, saved-query
@@ -118,7 +118,7 @@ then issue an unpaged preview and confirm that plan.
 
 ## Write identity: file path vs link ID
 
-Object-creating writes (`new`, `upsert`, and `daily`) surface an identity pair in
+Object-creating writes (`new`, `write`, and `daily`) surface an identity pair in
 `data` so you never have to guess a reference from a file path:
 
 - `data.file` — where the file lives (vault-relative path, includes `.md`).

@@ -22,7 +22,7 @@ steps:
           steps:
             - id: create_incident
               type: tool
-              tool: raven_upsert
+              tool: raven_write
               arguments:
                 type: incident
                 title: "Escalated incident"

@@ -439,13 +439,13 @@ type applyObjectRequest struct {
 }
 
 // applyObject creates or updates a single imported object by routing through
-// objectsvc.Upsert. Sharing that primitive keeps import aligned with the rest of
+// objectsvc.Write. Sharing that primitive keeps import aligned with the rest of
 // Raven on protected/excluded-path safeguards, field validation, and write
 // semantics, instead of reimplementing them here.
 //
-// Import keeps one body nuance that upsert does not model: on create it appends
+// Import keeps one body nuance that write does not model: on create it appends
 // the content field after any template body, while on update it replaces the
-// body. So the body is only handed to upsert for replacement on update; on
+// body. So the body is only handed to write for replacement on update; on
 // create the object is written without body content and the content is appended
 // afterwards.
 func applyObject(req applyObjectRequest) (ResultItem, []string, mutation.ChangeSet) {
@@ -454,7 +454,7 @@ func applyObject(req applyObjectRequest) (ResultItem, []string, mutation.ChangeS
 
 	replaceBody := req.Exists && req.Content != ""
 
-	result, err := objectsvc.Upsert(objectsvc.UpsertRequest{
+	result, err := objectsvc.Write(objectsvc.WriteRequest{
 		VaultPath:   req.VaultPath,
 		TypeName:    req.TypeName,
 		TargetPath:  req.TargetName,
@@ -484,15 +484,15 @@ func applyObject(req applyObjectRequest) (ResultItem, []string, mutation.ChangeS
 
 	return ResultItem{
 		ID:     req.VaultConfig.FilePathToObjectID(result.RelativePath),
-		Action: importActionForUpsertStatus(result.Status),
+		Action: importActionForWriteStatus(result.Status),
 		File:   result.RelativePath,
 	}, result.WarningMessages, result.ChangeSet
 }
 
-// importActionForUpsertStatus maps an upsert status onto the action vocabulary
+// importActionForWriteStatus maps a write status onto the action vocabulary
 // used in import results. Import historically reports every existing-object
-// write as "updated", so an unchanged upsert is reported the same way.
-func importActionForUpsertStatus(status string) string {
+// write as "updated", so an unchanged write is reported the same way.
+func importActionForWriteStatus(status string) string {
 	if status == "created" {
 		return "created"
 	}

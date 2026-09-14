@@ -13,7 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-func TestUpsertCreateUpdateUnchanged(t *testing.T) {
+func TestWriteCreateUpdateUnchanged(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
@@ -29,7 +29,7 @@ traits: {}
 `)
 	sch := loadTestSchema(t, vaultPath)
 
-	req := UpsertRequest{
+	req := WriteRequest{
 		VaultPath:   vaultPath,
 		TypeName:    "brief",
 		Title:       "Daily Brief 2026-02-14",
@@ -39,26 +39,26 @@ traits: {}
 		Schema:      sch,
 	}
 
-	created, err := Upsert(req)
+	created, err := Write(req)
 	if err != nil {
-		t.Fatalf("Upsert(create): %v", err)
+		t.Fatalf("Write(create): %v", err)
 	}
 	if created.Status != "created" {
 		t.Fatalf("expected created status, got %q", created.Status)
 	}
 
-	unchanged, err := Upsert(req)
+	unchanged, err := Write(req)
 	if err != nil {
-		t.Fatalf("Upsert(unchanged): %v", err)
+		t.Fatalf("Write(unchanged): %v", err)
 	}
 	if unchanged.Status != "unchanged" {
 		t.Fatalf("expected unchanged status, got %q", unchanged.Status)
 	}
 
 	req.Content = "# Brief V2"
-	updated, err := Upsert(req)
+	updated, err := Write(req)
 	if err != nil {
-		t.Fatalf("Upsert(update): %v", err)
+		t.Fatalf("Write(update): %v", err)
 	}
 	if updated.Status != "updated" {
 		t.Fatalf("expected updated status, got %q", updated.Status)
@@ -77,7 +77,7 @@ traits: {}
 	}
 }
 
-func TestUpsertMissingRequiredField(t *testing.T) {
+func TestWriteMissingRequiredField(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
@@ -96,7 +96,7 @@ traits: {}
 `)
 	sch := loadTestSchema(t, vaultPath)
 
-	_, err := Upsert(UpsertRequest{
+	_, err := Write(WriteRequest{
 		VaultPath:  vaultPath,
 		TypeName:   "task",
 		Title:      "Write tests",
@@ -119,7 +119,7 @@ traits: {}
 	}
 }
 
-func TestUpsertTypeMismatchExistingObject(t *testing.T) {
+func TestWriteTypeMismatchExistingObject(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
@@ -143,7 +143,7 @@ traits: {}
 	sch := loadTestSchema(t, vaultPath)
 
 	path := "shared/object"
-	_, err := Upsert(UpsertRequest{
+	_, err := Write(WriteRequest{
 		VaultPath:  vaultPath,
 		TypeName:   "brief",
 		Title:      "Shared Object",
@@ -151,10 +151,10 @@ traits: {}
 		Schema:     sch,
 	})
 	if err != nil {
-		t.Fatalf("setup upsert: %v", err)
+		t.Fatalf("setup write: %v", err)
 	}
 
-	_, err = Upsert(UpsertRequest{
+	_, err = Write(WriteRequest{
 		VaultPath:  vaultPath,
 		TypeName:   "note",
 		Title:      "Shared Object",
@@ -172,12 +172,12 @@ traits: {}
 	if svcErr.Code != codes.ErrValidationFailed {
 		t.Fatalf("expected ErrorValidationFailed, got %s", svcErr.Code)
 	}
-	if !strings.Contains(svcErr.Message, "cannot upsert as") {
+	if !strings.Contains(svcErr.Message, "cannot write as") {
 		t.Fatalf("unexpected error message: %q", svcErr.Message)
 	}
 }
 
-func TestUpsertPreservesStringTypeFromTypedFieldValues(t *testing.T) {
+func TestWritePreservesStringTypeFromTypedFieldValues(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
@@ -195,18 +195,18 @@ traits: {}
 `)
 	sch := loadTestSchema(t, vaultPath)
 
-	result, err := Upsert(UpsertRequest{
+	result, err := Write(WriteRequest{
 		VaultPath:  vaultPath,
 		TypeName:   "person",
-		Title:      "Typed Upsert Freya",
-		TargetPath: "Typed Upsert Freya",
+		Title:      "Typed Write Freya",
+		TargetPath: "Typed Write Freya",
 		FieldValues: map[string]fieldvalue.FieldValue{
 			"email": fieldvalue.String("true"),
 		},
 		Schema: sch,
 	})
 	if err != nil {
-		t.Fatalf("Upsert: %v", err)
+		t.Fatalf("Write: %v", err)
 	}
 	if result.Status != "created" {
 		t.Fatalf("expected created status, got %q", result.Status)
@@ -221,7 +221,7 @@ traits: {}
 	}
 }
 
-func TestUpsertCreateAppliesDefaultTemplate(t *testing.T) {
+func TestWriteCreateAppliesDefaultTemplate(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
@@ -249,7 +249,7 @@ traits: {}
 	}
 	sch := loadTestSchema(t, vaultPath)
 
-	result, err := Upsert(UpsertRequest{
+	result, err := Write(WriteRequest{
 		VaultPath:  vaultPath,
 		TypeName:   "interview",
 		Title:      "Jane Doe",
@@ -257,7 +257,7 @@ traits: {}
 		Schema:     sch,
 	})
 	if err != nil {
-		t.Fatalf("Upsert: %v", err)
+		t.Fatalf("Write: %v", err)
 	}
 	if result.Status != "created" {
 		t.Fatalf("expected created status, got %q", result.Status)
@@ -269,6 +269,70 @@ traits: {}
 	}
 	if !strings.Contains(string(created), "## Interview Template") {
 		t.Fatalf("expected default template content, got:\n%s", string(created))
+	}
+}
+
+func TestWriteCreateOnlyDoesNotReplaceExisting(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	created, err := Write(WriteRequest{
+		VaultPath:  vaultPath,
+		TypeName:   "person",
+		Title:      "Freya",
+		TargetPath: "Freya",
+		Schema:     sch,
+	})
+	if err != nil {
+		t.Fatalf("Write(create): %v", err)
+	}
+	if created.Status != "created" {
+		t.Fatalf("expected created status, got %q", created.Status)
+	}
+	original := "---\ntype: person\nname: Freya\n---\n\nKeep me.\n"
+	if err := os.WriteFile(created.FilePath, []byte(original), 0o644); err != nil {
+		t.Fatalf("seed existing body: %v", err)
+	}
+
+	_, err = Write(WriteRequest{
+		VaultPath:   vaultPath,
+		TypeName:    "person",
+		Title:       "Freya",
+		TargetPath:  "Freya",
+		ReplaceBody: true,
+		Content:     "# replaced",
+		CreateOnly:  true,
+		Schema:      sch,
+	})
+	if err == nil {
+		t.Fatal("expected create-only write to fail when the object exists")
+	}
+	var svcErr *svcerr.Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+	if svcErr.Code != codes.ErrFileExists {
+		t.Fatalf("expected FILE_EXISTS, got %s", svcErr.Code)
+	}
+
+	got, err := os.ReadFile(created.FilePath)
+	if err != nil {
+		t.Fatalf("read existing file: %v", err)
+	}
+	if string(got) != original {
+		t.Fatalf("create-only write clobbered existing object, got:\n%s", got)
 	}
 }
 

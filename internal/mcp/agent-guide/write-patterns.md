@@ -6,9 +6,9 @@ Use this guide to choose the right mutation primitive.
 
 | Goal | Command ID | Why |
 |------|------------|-----|
-| Create a typed item | `new` | Applies schema, templates, and required-field checks |
+| Create a typed item | `new` | Interactive/create-only. Applies schema, templates, and required-field checks; fails if the object exists |
 | Append a note/log entry | `add` | Intentional append-only capture |
-| Deterministic create-or-update | `upsert` | Idempotent convergence for generated artifacts |
+| Deterministic create-or-replace | `write` | Idempotent convergence for generated artifacts |
 | Update frontmatter fields | `set` | Schema-validated metadata updates |
 | Change object types | `reclassify` | Applies target-type fields/defaults and safely moves files |
 | Replace body text safely | `edit` | Unique-string replacement in content markdown (applies immediately; `dry-run` to preview) |
@@ -24,9 +24,9 @@ Use this guide to choose the right mutation primitive.
 | Permanently empty trash | `trash_empty` | Preview-first permanent removal of trash entries only |
 
 Rules:
-- Use `upsert` when reruns should produce one current canonical output.
+- Use `write` when reruns should produce one current canonical output.
 - Use `add` when history should accumulate.
-- Use `new` only when you intend to create a new object identity.
+- Use `new` only when you intend to create a new object identity and must not replace an existing one.
 
 ## Section-targeted writes
 
@@ -52,7 +52,7 @@ notes = raven_invoke(command="section_create", args={"file":create.data.id, "tit
 raven_invoke(command="add", args={"text":"- Kickoff next week", "to":notes.data.section})
 ```
 
-`new`, `upsert`, and `daily` return an identity pair: `data.file` (vault-relative
+`new`, `write`, and `daily` return an identity pair: `data.file` (vault-relative
 path) and `data.id` (the canonical object ID). Use `data.id` for `[[refs]]` and for
 follow-up commands like `set`/`edit`/`delete`; never derive an ID from `data.file`,
 since the two often differ (`type/person/freya.md` links as `person/freya`; a daily
@@ -61,7 +61,7 @@ note links as the bare date). See `raven://guide/response-contract`.
 Idempotent generated artifact:
 
 ```text
-raven_invoke(command="upsert", args={
+raven_invoke(command="write", args={
   "type":"report",
   "title":"Weekly Status",
   "content":"# Weekly Status\n..."
@@ -155,7 +155,7 @@ written yet. See `raven://guide/response-contract` for the full contract.
 
 ## Missing reference targets
 
-Writes are permissive: `new`, `upsert`, `set`, `add`, and `edit` succeed even when a
+Writes are permissive: `new`, `write`, `set`, `add`, and `edit` succeed even when a
 reference (a typed `ref`/`ref-array` field value or a body `[[wikilink]]`) points at a
 target that does not exist yet. The write is not blocked.
 
@@ -180,8 +180,8 @@ vault-health concern surfaced by `check`, not a write-time error.
 
 ## Practical rules
 
-- If data should be queryable/filterable, prefer frontmatter (`set`, `new`, `upsert`).
-- If data is narrative, prefer body content (`add`, `edit`, `upsert content=...`).
+- If data should be queryable/filterable, prefer frontmatter (`set`, `new`, `write`).
+- If data is narrative, prefer body content (`add`, `edit`, `write content=...`).
 - Use `edit` only for vault content files, not `raven.yaml`, `schema.yaml`, or template files.
 - Use `move` for in-vault file relocation; non-Markdown destinations must include a file extension.
 - Copy external non-Markdown files into the vault directly, then invoke `reindex`.

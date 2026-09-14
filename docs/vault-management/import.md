@@ -166,7 +166,7 @@ Review the output, add `--map` flags as needed, and then rerun without `--dry-ru
 
 - [Bulk operations](bulk-operations.md): query-driven changes with `--apply`
   and `--ids`.
-- [Common commands](../using-your-vault/common-commands.md): `rvn upsert`,
+- [Common commands](../using-your-vault/common-commands.md): `rvn write`,
   `rvn set`, and other editing commands.
 - [Schema reference](../types-and-traits/schema.md): field types and validation.
 - [Documentation map](../getting-started/documentation-map.md): every topic.

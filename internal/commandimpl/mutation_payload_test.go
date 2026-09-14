@@ -23,14 +23,14 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 	})
 	requirePayloadType[commandpayload.NewResult](t, result)
 
-	result = HandleUpsert(context.Background(), commandexec.Request{
+	result = HandleWrite(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
 		Args: map[string]any{
 			"type":  "project",
 			"title": "Typed Payload",
 		},
 	})
-	requirePayloadType[commandpayload.UpsertResult](t, result)
+	requirePayloadType[commandpayload.WriteResult](t, result)
 
 	result = HandleAdd(context.Background(), commandexec.Request{
 		VaultPath: v.Path,

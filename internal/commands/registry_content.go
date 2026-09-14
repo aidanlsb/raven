@@ -6,6 +6,11 @@ var contentRegistry = map[string]Meta{
 		Description: "Create a new typed object",
 		LongDesc: `Creates a new note with the specified type.
 
+new is the interactive create path. It uses the same create mutation as write,
+but it never replaces an existing object: if the target already exists, it fails
+with FILE_EXISTS. Agents doing create-or-replace on reruns should call write
+instead.
+
 The type is required. If title is not provided in interactive CLI mode, you will
 be prompted for it. Interactive CLI mode prompts for schema fields; optional
 fields can be skipped with a blank response. Field values can also be provided
@@ -66,6 +71,7 @@ CLI offers to create the missing pages; agents can run 'rvn check create-missing
 			"Create a new typed object",
 			"Create a new person entry with schema validation",
 			"Create a new project file with template applied",
+			"Fail clearly when the target object already exists",
 		},
 	},
 	"add": {
@@ -139,14 +145,17 @@ as ordinary text and can be appended by accident:
 			"Append notes to existing documents",
 		},
 	},
-	"upsert": {
-		Name:        "upsert",
-		Description: "Create or update a typed object idempotently",
+	"write": {
+		Name:        "write",
+		Description: "Create or replace a typed object idempotently",
 		MutexGroups: [][]string{{"content", "content-file"}},
-		LongDesc: `Create or update a typed object deterministically.
+		LongDesc: `Create or replace a typed object deterministically.
 
-This command is the canonical idempotent write primitive for generated artifacts.
-It creates a new object when missing, or updates the existing one in place.
+This command is the canonical idempotent write primitive. It creates a new object
+when missing, or updates the existing one in place. There is no upsert alias.
+
+new is the interactive create-only path on top of the same create mutation. new
+fails if the object already exists; write replaces it.
 
 Semantics:
 - By default, identity is derived from <type> + <title> (same routing/slug logic as 'new')
@@ -161,7 +170,7 @@ Semantics:
 
 Boundary with add:
 - add: append-only capture/logging, intentionally non-idempotent
-- upsert: canonical state write, idempotent convergence target
+- write: canonical state write, idempotent convergence target
 
 Use this for generated outputs like briefs/reports/summaries where reruns should
 converge to one current state rather than append history.
@@ -185,15 +194,15 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 			{Name: "object-path", Description: "Object path (no type/ prefix, no .md suffix). Matches data.id from rvn read, not data.path.", Type: FlagTypeString, Examples: []string{"brief/daily-2026-02-14", "note/raven-friction"}},
 		},
 		Examples: []string{
-			"rvn upsert brief \"Daily Brief 2026-02-14\" --content \"# Daily Brief\" --json",
-			"rvn upsert brief \"Daily Brief 2026-02-14\" --content-file /tmp/brief.md --json",
-			"rvn upsert brief \"Daily Brief 2026-02-14\" --content-file - --json < /tmp/brief.md",
-			"rvn upsert note \"Raven Friction\" --object-path note/raven-friction --content \"# Notes\" --json",
-			"rvn upsert report \"Q1 Status\" --field owner=people/freya --field status=draft --json",
+			"rvn write brief \"Daily Brief 2026-02-14\" --content \"# Daily Brief\" --json",
+			"rvn write brief \"Daily Brief 2026-02-14\" --content-file /tmp/brief.md --json",
+			"rvn write brief \"Daily Brief 2026-02-14\" --content-file - --json < /tmp/brief.md",
+			"rvn write note \"Raven Friction\" --object-path note/raven-friction --content \"# Notes\" --json",
+			"rvn write report \"Q1 Status\" --field owner=people/freya --field status=draft --json",
 		},
 		UseCases: []string{
 			"Idempotently persist generated outputs",
-			"Create-or-update canonical report/brief objects",
+			"Create-or-replace canonical report/brief objects",
 			"Replace an object's body deterministically on reruns",
 		},
 	},

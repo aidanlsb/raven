@@ -42,9 +42,9 @@ status: active
 	newResult.MustFail(t, "VALIDATION_FAILED")
 	newResult.MustFailWithMessage(t, "protected")
 
-	upsertResult := v.RunCLI("upsert", "project", "Blocked Project", "--object-path", "private/blocked-project", "--content", "# blocked")
-	upsertResult.MustFail(t, "VALIDATION_FAILED")
-	upsertResult.MustFailWithMessage(t, "protected")
+	writeResult := v.RunCLI("write", "project", "Blocked Project", "--object-path", "private/blocked-project", "--content", "# blocked")
+	writeResult.MustFail(t, "VALIDATION_FAILED")
+	writeResult.MustFailWithMessage(t, "protected")
 
 	addResult := v.RunCLI("add", "Protected note", "--to", "private/notes.md")
 	addResult.MustFail(t, "VALIDATION_FAILED")

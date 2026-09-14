@@ -13,7 +13,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Choose the smallest mutation primitive that matches the user's intent.
 - Read with `rvn read --raw` before constructing `rvn edit` replacements.
 - Author `[[references]]` and `ref` fields with canonical object IDs. After
-  `new`/`upsert`/`daily`, use the returned `data.id` (the human CLI's
+  `new`/`write`/`daily`, use the returned `data.id` (the human CLI's
   `link as <id>` value); do not generate bare short forms.
 - Single-object writes (`rvn set`/`add`/`update`/`edit`, `rvn section create`/`move`/`rename`, and single `rvn move`/`rvn delete`) apply immediately; pass `--dry-run` to preview without writing. `rvn section delete`, `rvn restore`, and `rvn trash empty` are preview-first and require `--confirm`. Bulk operations (`--stdin`), `query --apply`, `schema rename`, `rvn check fix`, and `rvn check create-missing` also stay preview-first and require `--confirm`.
 
@@ -21,7 +21,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 
 - Create a brand-new object identity: `rvn new`
 - Append a log entry or capture text: `rvn add`
-- Idempotent generated output (briefs, reports): `rvn upsert`
+- Idempotent generated output (briefs, reports): `rvn write`
 - Update frontmatter fields only: `rvn set <reference> --field field=value --json`
 - Exact body text replacement: `rvn edit`
 - Update a trait value by trait ID: `rvn update`
@@ -30,12 +30,12 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Create/reorder/rename/delete headings: `rvn section create` / `rvn section move` / `rvn section rename` / `rvn section delete`
 
 Key distinctions:
-- `upsert` vs `add`: use `upsert` when reruns should converge to one canonical state. Use `add` when history should accumulate.
+- `write` vs `add`: use `write` when reruns should converge to one canonical state. Use `add` when history should accumulate.
 - `set` vs `edit`: use `set` for structured metadata (frontmatter). Use `edit` for body content changes.
 - `set` arguments use `field=value` pairs, for example `rvn set project/raven --field status=active --json`.
-- Use `--fields-json '{...}'` on `new`, `upsert`, `set`, and `reclassify` when
+- Use `--fields-json '{...}'` on `new`, `write`, `set`, and `reclassify` when
   exact JSON typing matters.
-- `new` vs `upsert`: use `new` only when creating a genuinely new object identity. Use `upsert` when the same agent action might run again.
+- `new` vs `write`: use `new` only when creating a genuinely new object identity (it fails if the target exists). Use `write` when the same agent action might run again.
 - Use `data.id` for references and follow-up commands; never derive an ID from
   `data.file`, because configured directory roots and daily-note paths can make
   them differ.

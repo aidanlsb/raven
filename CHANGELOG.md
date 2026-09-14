@@ -10,8 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added preview-first `rvn trash empty` / `trash_empty` to permanently remove matching trash entries. `--confirm` applies; `--older-than` limits the wipe to files whose modification time is at least the given duration in the past (`24h`, `7d`, `30d`). Live vault objects are never touched.
 
+### Changed
+- **Breaking:** renamed `rvn upsert` and the MCP command `upsert` to `rvn write` / `write`. There is no alias. `write` is create-or-replace: the canonical idempotent write. `new` is the interactive create-only path on the same create mutation; it still fails with `FILE_EXISTS` rather than replacing an existing object. Agents should call `write` for reruns. Humans creating one-offs should call `new`.
+
 ### Fixed
 - `--json` now prints a standard error envelope when flag parsing fails, instead of exiting 1 with empty stdout and stderr.
+
+### Removed
+- **Breaking:** removed the `upsert` CLI command, registry ID, and MCP command name. Use `write`.
 
 ## [v0.0.35] - 2026-09-02
 

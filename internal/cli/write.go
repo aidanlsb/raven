@@ -13,12 +13,12 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var upsertCmd = newExceptionLeafCommand("upsert", exceptionLeafOptions{
-	Invoke:      invokeUpsert,
-	RenderHuman: renderUpsertResult,
+var writeCmd = newExceptionLeafCommand("write", exceptionLeafOptions{
+	Invoke:      invokeWrite,
+	RenderHuman: renderWriteResult,
 })
 
-func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+func invokeWrite(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	title := stringValue(args["title"])
 	if title != "" {
 		if err := validateObjectTitle(title); err != nil {
@@ -45,8 +45,8 @@ func invokeUpsert(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 	return executeCanonicalCommand(commandID, vaultPath, args)
 }
 
-func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.UpsertResult)
+func renderWriteResult(_ *cobra.Command, result commandexec.Result) error {
+	data, ok := result.Data.(commandpayload.WriteResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
@@ -71,5 +71,5 @@ func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func init() {
-	rootCmd.AddCommand(upsertCmd)
+	rootCmd.AddCommand(writeCmd)
 }

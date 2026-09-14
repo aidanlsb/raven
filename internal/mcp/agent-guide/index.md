@@ -41,7 +41,7 @@ It is split into topic resources so agents can fetch only what they need.
 - `raven://guide/getting-started` - First steps for orienting in a new vault
 - `raven://guide/core-concepts` - Types, traits, references, and file formats
 - `raven://guide/response-contract` - Standard tool envelope, error codes, warnings, and preview/apply semantics
-- `raven://guide/write-patterns` - Choosing `new` vs `add` vs `upsert` and safe write flows
+- `raven://guide/write-patterns` - Choosing `new` vs `add` vs `write` and safe write flows
 - `raven://guide/querying` - Raven Query Language (RQL) and query strategy
 - `raven://guide/query-cheatsheet` - Common query patterns and shortcuts
 - `raven://guide/query-at-scale` - Pagination and narrowing strategies for large result sets

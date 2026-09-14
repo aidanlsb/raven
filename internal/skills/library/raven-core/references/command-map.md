@@ -6,7 +6,7 @@ Use this page as the compact CLI chooser for day-to-day Raven work.
 
 - Create a brand-new typed item: `rvn new <type> <title> --json`
 - Append notes or capture text: `rvn add <text> --json` or `rvn add <text> --to <path> --json`
-- Write idempotent canonical output: `rvn upsert <type> <title> --json`
+- Write idempotent canonical output: `rvn write <type> <title> --json`
 
 ## Reading content
 

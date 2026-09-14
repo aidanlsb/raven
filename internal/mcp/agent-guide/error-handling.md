@@ -29,7 +29,7 @@ An empty stdout on a non-zero exit is a bug, not a successful no-op.
 
 ## 4. Schema validation failures
 
-When `new`, `upsert`, `set`, `import`, or schema commands fail because a value does not match the schema:
+When `new`, `write`, `set`, `import`, or schema commands fail because a value does not match the schema:
 1. Inspect `error.details`, especially `retry_with`, `field`, `expected`, and `actual` when present.
 2. Read the live schema before retrying:
    ```text

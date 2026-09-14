@@ -86,7 +86,7 @@ func defaultCategoryForCommandID(commandID string) Category {
 	case "query", "query_saved_list", "query_saved_get", "query_saved_set", "query_saved_remove",
 		"search", "backlinks", "outlinks", "resolve":
 		return CategoryQuery
-	case "new", "add", "upsert", "set", "unset",
+	case "new", "add", "write", "set", "unset",
 		"delete", "move", "reclassify", "import",
 		"edit", "update":
 		return CategoryContent

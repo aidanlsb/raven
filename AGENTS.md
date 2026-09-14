@@ -188,7 +188,7 @@ When adding or modifying a command:
 | `getting-started.md` | First steps in a new vault |
 | `core-concepts.md` | Types, traits, references explained |
 | `response-contract.md` | JSON envelope, error codes, warnings, and preview/apply semantics |
-| `write-patterns.md` | Choosing safe write primitives (`new`, `add`, `upsert`, `set`, `edit`) |
+| `write-patterns.md` | Choosing safe write primitives (`new`, `add`, `write`, `set`, `edit`) |
 | `querying.md` | RQL reference and query strategy |
 | `query-cheatsheet.md` | Common query patterns |
 | `query-at-scale.md` | Pagination and narrowing strategy for large result sets |
