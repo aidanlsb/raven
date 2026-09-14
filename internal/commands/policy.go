@@ -136,7 +136,7 @@ var previewModeByCommandID = map[string]PreviewMode{
 var mutationPhaseCommandIDs = map[string]struct{}{
 	// Content writes.
 	"new":            {},
-	"upsert":         {},
+	"write":          {},
 	"add":            {},
 	"set":            {},
 	"unset":          {},
@@ -195,7 +195,7 @@ var mutationPhaseCommandIDs = map[string]struct{}{
 // before dispatch.
 var postMutationIndexCommandIDs = map[string]struct{}{
 	"new":        {},
-	"upsert":     {},
+	"write":      {},
 	"add":        {},
 	"set":        {},
 	"unset":      {},

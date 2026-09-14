@@ -8,7 +8,7 @@ references:
 coverage:
   commands:
     - new
-    - upsert
+    - write
     - add
     - read
     - resolve

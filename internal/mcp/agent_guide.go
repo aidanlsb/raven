@@ -54,7 +54,7 @@ var guideTopics = []GuideTopic{
 	{
 		Slug:        "write-patterns",
 		Name:        "Write Patterns",
-		Description: "How to choose new/add/upsert/set/edit/update for safe, predictable writes.",
+		Description: "How to choose new/add/write/set/edit/update for safe, predictable writes.",
 		Path:        "agent-guide/write-patterns.md",
 	},
 	{

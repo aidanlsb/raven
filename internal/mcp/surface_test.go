@@ -292,6 +292,33 @@ func TestCompactInvokeRejectsLegacyCommandAlias(t *testing.T) {
 	}
 }
 
+func TestCompactInvokeRejectsRemovedUpsertCommand(t *testing.T) {
+	t.Parallel()
+	server := NewServer("")
+	out, isErr := server.callCompactInvoke(map[string]interface{}{
+		"command": "upsert",
+		"args": map[string]interface{}{
+			"type":  "note",
+			"title": "Gone",
+		},
+	})
+	if !isErr {
+		t.Fatalf("expected invoke error for removed upsert, got: %s", out)
+	}
+
+	var envelope struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal invoke error response: %v", err)
+	}
+	if envelope.Error.Code != "COMMAND_NOT_FOUND" {
+		t.Fatalf("error.code=%q, want COMMAND_NOT_FOUND; response=%s", envelope.Error.Code, out)
+	}
+}
+
 func TestCompactInvokeSuccess(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

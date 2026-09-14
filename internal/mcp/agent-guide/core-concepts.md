@@ -29,7 +29,7 @@ raven_invoke(command="schema", args={"subcommand":"type", "name":"project"})
 Type and field descriptions in `schema.yaml` are part of the user's terminology. Read them before making assumptions.
 
 Author wikilinks and `ref` fields with canonical object IDs. After `new`,
-`upsert`, or `daily`, take the ID from `data.id`; the human CLI presents the
+`write`, or `daily`, take the ID from `data.id`; the human CLI presents the
 same value as `link as <id>`. Short forms may resolve when unambiguous, but they
 are resolution sugar and agents should not generate them.
 

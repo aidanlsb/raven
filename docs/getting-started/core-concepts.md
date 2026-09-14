@@ -54,7 +54,8 @@ Raven validates at three levels:
 
 | Command | What it checks |
 |---------|---------------|
-| `rvn new` | Validates while creating the object |
+| `rvn new` | Validates while creating the object; fails if it already exists |
+| `rvn write` | Validates while creating or replacing the object |
 | `rvn schema validate` | Checks `schema.yaml` for internal consistency |
 | `rvn check` | Validates existing vault content against the schema |
 
@@ -99,7 +100,7 @@ Read [the paper](../files/paper.pdf).
 ![Diagram](../files/system.png)
 ```
 
-Author references with canonical object IDs. After `rvn new`, `rvn upsert`, or
+Author references with canonical object IDs. After `rvn new`, `rvn write`, or
 `rvn daily`, use the returned
 `data.id` in JSON output (or the human CLI's `link as <id>` hint). Bare short
 forms still resolve when unambiguous, but they are resolution sugar and can

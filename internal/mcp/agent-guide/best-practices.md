@@ -8,7 +8,7 @@
 - Index is rebuildable; use `raven_invoke(command="reindex")` when state looks stale.
 
 3. Prefer explicit, schema-safe writes.
-- Use `raven_invoke` with commands like `new`, `set`, `edit`, `move`, `section_create`, `section_move`, `section_rename`, `section_delete`, `delete`, and `upsert`.
+- Use `raven_invoke` with commands like `new`, `write`, `set`, `edit`, `move`, `section_create`, `section_move`, `section_rename`, `section_delete`, and `delete`.
 - Use `move` for in-vault relocation so references and file links are rewritten.
 - See `raven://guide/critical-rules` and `raven://guide/write-patterns`.
 
@@ -30,7 +30,7 @@
 
 8. Keep agent sessions state-aware.
 - Check for existing objects or notes before creating duplicates.
-- Prefer `upsert` when reruns should converge on one canonical object.
+- Prefer `write` when reruns should converge on one canonical object.
 
 9. Report both results and risk.
 - Include what changed, what was validated, and any residual uncertainty.

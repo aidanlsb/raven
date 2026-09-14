@@ -32,7 +32,7 @@ type MissingReferencePayload interface {
 	MissingReferenceItems() []*check.MissingRef
 }
 
-// ObjectMutation identifies a file-backed object created or upserted by a
+// ObjectMutation identifies a file-backed object created or written by a
 // mutation command.
 type ObjectMutation struct {
 	ID    string `json:"id"`
@@ -47,8 +47,8 @@ type NewResult struct {
 	MissingReferences
 }
 
-// UpsertResult is the success payload for `upsert`.
-type UpsertResult struct {
+// WriteResult is the success payload for `write`.
+type WriteResult struct {
 	Status string `json:"status"`
 	ObjectMutation
 	MissingReferences

@@ -62,7 +62,7 @@ func TestBuildCommandContractStrictTypes(t *testing.T) {
 	if got := newContract.Parameters["field"].Type; got != paramTypeObject {
 		t.Fatalf("new.field type=%q, want %q", got, paramTypeObject)
 	}
-	for _, commandID := range []string{"new", "upsert", "reclassify", "set"} {
+	for _, commandID := range []string{"new", "write", "reclassify", "set"} {
 		contract, found := buildCommandContract(commandID)
 		if !found {
 			t.Fatalf("expected %s contract", commandID)
@@ -73,6 +73,9 @@ func TestBuildCommandContractStrictTypes(t *testing.T) {
 		if _, exists := contract.Parameters["field-json"]; exists {
 			t.Fatalf("did not expect removed %s.field-json parameter", commandID)
 		}
+	}
+	if _, found := buildCommandContract("upsert"); found {
+		t.Fatal("did not expect removed upsert command contract")
 	}
 
 	importContract, ok := buildCommandContract("import")

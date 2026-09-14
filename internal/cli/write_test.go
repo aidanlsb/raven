@@ -14,8 +14,8 @@ import (
 )
 
 // resetCommandFlags resets all flags on a command to their default values and clears the changed state.
-func resetUpsertFlags() {
-	upsertCmd.Flags().VisitAll(func(f *pflag.Flag) {
+func resetWriteFlags() {
+	writeCmd.Flags().VisitAll(func(f *pflag.Flag) {
 		f.Changed = false
 		if f.Value.Type() == "stringArray" || f.Value.Type() == "stringSlice" {
 			return
@@ -25,39 +25,39 @@ func resetUpsertFlags() {
 }
 
 // setupJSONMode sets up JSON mode for tests by setting both the global and the persistent flag.
-func setupUpsertJSONMode() error {
+func setupWriteJSONMode() error {
 	jsonOutput = true
-	if upsertCmd.Parent() != nil {
-		return upsertCmd.Parent().PersistentFlags().Set("json", "true")
+	if writeCmd.Parent() != nil {
+		return writeCmd.Parent().PersistentFlags().Set("json", "true")
 	}
 	return nil
 }
 
-func TestUpsertCreateUpdateUnchanged(t *testing.T) {
+func TestWriteCreateUpdateUnchanged(t *testing.T) {
 	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	writeCommandTestSchema(t, vaultPath)
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		resetUpsertFlags()
+		resetWriteFlags()
 	})
 
 	resolvedVaultPath = vaultPath
 
 	run := func(content string) (status string, file string) {
-		resetUpsertFlags()
-		if err := setupUpsertJSONMode(); err != nil {
+		resetWriteFlags()
+		if err := setupWriteJSONMode(); err != nil {
 			t.Fatalf("setupJSONMode: %v", err)
 		}
-		if err := upsertCmd.ParseFlags([]string{"--content", content}); err != nil {
+		if err := writeCmd.ParseFlags([]string{"--content", content}); err != nil {
 			t.Fatalf("ParseFlags: %v", err)
 		}
 		out := captureStdout(t, func() {
-			if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief 2026-02-14"}); err != nil {
-				t.Fatalf("upsertCmd.RunE: %v", err)
+			if err := writeCmd.RunE(writeCmd, []string{"brief", "Daily Brief 2026-02-14"}); err != nil {
+				t.Fatalf("writeCmd.RunE: %v", err)
 			}
 		})
 
@@ -105,16 +105,16 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 	}
 }
 
-func TestUpsertVsAddBoundary(t *testing.T) {
+func TestWriteVsAddBoundary(t *testing.T) {
 	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	writeCommandTestSchema(t, vaultPath)
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		resetUpsertFlags()
+		resetWriteFlags()
 		// Also reset add command flags
 		addCmd.Flags().VisitAll(func(f *pflag.Flag) {
 			f.Changed = false
@@ -124,19 +124,19 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 
 	resolvedVaultPath = vaultPath
 
-	resetUpsertFlags()
-	if err := setupUpsertJSONMode(); err != nil {
+	resetWriteFlags()
+	if err := setupWriteJSONMode(); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-	if err := upsertCmd.ParseFlags([]string{"--content", "Canonical body"}); err != nil {
+	if err := writeCmd.ParseFlags([]string{"--content", "Canonical body"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
 
 	var objectID string
 	var relFile string
 	out := captureStdout(t, func() {
-		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief Boundary"}); err != nil {
-			t.Fatalf("upsert create failed: %v", err)
+		if err := writeCmd.RunE(writeCmd, []string{"brief", "Daily Brief Boundary"}); err != nil {
+			t.Fatalf("write create failed: %v", err)
 		}
 	})
 	var createResp struct {
@@ -175,54 +175,54 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 		t.Fatalf("expected add to append content, got:\n%s", withAppend)
 	}
 
-	resetUpsertFlags()
-	if err := upsertCmd.ParseFlags([]string{"--content", "Canonical replacement"}); err != nil {
-		t.Fatalf("ParseFlags for upsert: %v", err)
+	resetWriteFlags()
+	if err := writeCmd.ParseFlags([]string{"--content", "Canonical replacement"}); err != nil {
+		t.Fatalf("ParseFlags for write: %v", err)
 	}
 	_ = captureStdout(t, func() {
-		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief Boundary"}); err != nil {
-			t.Fatalf("upsert update failed: %v", err)
+		if err := writeCmd.RunE(writeCmd, []string{"brief", "Daily Brief Boundary"}); err != nil {
+			t.Fatalf("write update failed: %v", err)
 		}
 	})
 
 	finalBytes, err := os.ReadFile(filepath.Join(vaultPath, relFile))
 	if err != nil {
-		t.Fatalf("read file after upsert replace: %v", err)
+		t.Fatalf("read file after write replace: %v", err)
 	}
 	final := string(finalBytes)
 	if !strings.Contains(final, "Canonical replacement") {
 		t.Fatalf("expected replacement body, got:\n%s", final)
 	}
 	if strings.Contains(final, "appended line") {
-		t.Fatalf("expected upsert to replace body (remove appended line), got:\n%s", final)
+		t.Fatalf("expected write to replace body (remove appended line), got:\n%s", final)
 	}
 }
 
-func TestUpsertSlugifiesTitleWithPathSeparator(t *testing.T) {
+func TestWriteSlugifiesTitleWithPathSeparator(t *testing.T) {
 	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	writeCommandTestSchema(t, vaultPath)
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		resetUpsertFlags()
+		resetWriteFlags()
 	})
 
 	resolvedVaultPath = vaultPath
 
 	title := "config.VaultConfig duplicates internal/paths"
-	resetUpsertFlags()
-	if err := setupUpsertJSONMode(); err != nil {
+	resetWriteFlags()
+	if err := setupWriteJSONMode(); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-	if err := upsertCmd.ParseFlags([]string{}); err != nil {
+	if err := writeCmd.ParseFlags([]string{}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
 	out := captureStdout(t, func() {
-		if err := upsertCmd.RunE(upsertCmd, []string{"brief", title}); err != nil {
-			t.Fatalf("upsertCmd.RunE: %v", err)
+		if err := writeCmd.RunE(writeCmd, []string{"brief", title}); err != nil {
+			t.Fatalf("writeCmd.RunE: %v", err)
 		}
 	})
 
@@ -266,31 +266,31 @@ func TestUpsertSlugifiesTitleWithPathSeparator(t *testing.T) {
 	}
 }
 
-func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
+func TestWriteUsesExplicitPathWhenProvided(t *testing.T) {
 	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	writeCommandTestSchema(t, vaultPath)
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		resetUpsertFlags()
+		resetWriteFlags()
 	})
 
 	resolvedVaultPath = vaultPath
 
-	resetUpsertFlags()
-	if err := setupUpsertJSONMode(); err != nil {
+	resetWriteFlags()
+	if err := setupWriteJSONMode(); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-	if err := upsertCmd.ParseFlags([]string{"--object-path", "custom/brief-daily", "--content", "Body V1"}); err != nil {
+	if err := writeCmd.ParseFlags([]string{"--object-path", "custom/brief-daily", "--content", "Body V1"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
 
 	out := captureStdout(t, func() {
-		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief"}); err != nil {
-			t.Fatalf("upsertCmd.RunE: %v", err)
+		if err := writeCmd.RunE(writeCmd, []string{"brief", "Daily Brief"}); err != nil {
+			t.Fatalf("writeCmd.RunE: %v", err)
 		}
 	})
 
@@ -315,30 +315,30 @@ func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
 	}
 }
 
-func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
+func TestWriteRejectsDirectoryOnlyPath(t *testing.T) {
 	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	writeCommandTestSchema(t, vaultPath)
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
-		resetUpsertFlags()
+		resetWriteFlags()
 	})
 
 	resolvedVaultPath = vaultPath
 
-	resetUpsertFlags()
-	if err := setupUpsertJSONMode(); err != nil {
+	resetWriteFlags()
+	if err := setupWriteJSONMode(); err != nil {
 		t.Fatalf("setupJSONMode: %v", err)
 	}
-	if err := upsertCmd.ParseFlags([]string{"--object-path", "brief/"}); err != nil {
+	if err := writeCmd.ParseFlags([]string{"--object-path", "brief/"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
 
 	out := captureStdout(t, func() {
-		requireJSONResponseFailure(t, upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief"}))
+		requireJSONResponseFailure(t, writeCmd.RunE(writeCmd, []string{"brief", "Daily Brief"}))
 	})
 
 	var resp struct {
@@ -358,9 +358,9 @@ func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
 	}
 }
 
-func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
+func TestWriteHumanOutputShowsLinkAs(t *testing.T) {
 	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	writeCommandTestSchema(t, vaultPath)
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
@@ -369,7 +369,7 @@ func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		cfg = prevCfg
-		resetUpsertFlags()
+		resetWriteFlags()
 	})
 
 	resolvedVaultPath = vaultPath
@@ -379,14 +379,14 @@ func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
 	t.Setenv("EDITOR", "")
 	cfg = &config.Config{}
 
-	resetUpsertFlags()
-	if err := upsertCmd.ParseFlags([]string{"--content", "# Brief"}); err != nil {
+	resetWriteFlags()
+	if err := writeCmd.ParseFlags([]string{"--content", "# Brief"}); err != nil {
 		t.Fatalf("ParseFlags: %v", err)
 	}
 
 	out := captureStdout(t, func() {
-		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief 2026-02-14"}); err != nil {
-			t.Fatalf("upsertCmd.RunE: %v", err)
+		if err := writeCmd.RunE(writeCmd, []string{"brief", "Daily Brief 2026-02-14"}); err != nil {
+			t.Fatalf("writeCmd.RunE: %v", err)
 		}
 	})
 
@@ -398,7 +398,7 @@ func TestUpsertHumanOutputShowsLinkAs(t *testing.T) {
 	}
 }
 
-func writeUpsertTestSchema(t *testing.T, vaultPath string) {
+func writeCommandTestSchema(t *testing.T, vaultPath string) {
 	t.Helper()
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -413,5 +413,23 @@ types:
 `) + "\n"
 	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
+	}
+}
+
+func TestUpsertCommandRemoved(t *testing.T) {
+	for _, cmd := range rootCmd.Commands() {
+		if cmd.Name() == "upsert" {
+			t.Fatal("upsert command must not exist after the hard rename to write")
+		}
+	}
+	found := false
+	for _, cmd := range rootCmd.Commands() {
+		if cmd.Name() == "write" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("write command is missing")
 	}
 }

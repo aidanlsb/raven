@@ -9,7 +9,7 @@ import (
 func TestRegistryHasRequiredCommands(t *testing.T) {
 	t.Parallel()
 	requiredCommands := []string{
-		"new", "add", "delete", "trash_list", "trash_empty", "restore", "read", "move", "section_create", "section_delete", "section_move", "section_rename",
+		"new", "write", "add", "delete", "trash_list", "trash_empty", "restore", "read", "move", "section_create", "section_delete", "section_move", "section_rename",
 		"query", "backlinks", "vault_stats", "check", "date",
 		"schema",
 	}
@@ -18,6 +18,10 @@ func TestRegistryHasRequiredCommands(t *testing.T) {
 		if _, ok := Registry[cmd]; !ok {
 			t.Errorf("Registry missing required command %q", cmd)
 		}
+	}
+
+	if _, ok := Registry["upsert"]; ok {
+		t.Error("Registry still has removed command \"upsert\"; use \"write\"")
 	}
 }
 

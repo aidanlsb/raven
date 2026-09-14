@@ -151,7 +151,7 @@ Before adding any `ref` field, say in one sentence what points at what. For exam
 - Use `ref` / `ref[]` fields for **structural** relationships you will query (meeting → project, project → owner).
 - Use plain `[[wikilinks]]` in prose for **incidental** mentions.
 - Author both structural fields and prose wikilinks with canonical object IDs. Use `data.id` returned by
-  `new`/`upsert`/`daily`; in human output, copy the `link as <id>` value. Do not
+  `new`/`write`/`daily`; in human output, copy the `link as <id>` value. Do not
   generate bare short forms, even though they may resolve when unambiguous.
 - Prefer a few meaningful links over wiring everything to everything — ref spaghetti is hard to reason about and query later.
 - `ref` and `ref[]` fields must specify a `--target` type.

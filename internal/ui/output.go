@@ -93,7 +93,7 @@ func FilePath(path string) string {
 
 // LinkAs returns an indented hint pairing a created file path with the canonical
 // object ID to use in references (wikilinks). It makes the path-vs-link-ID
-// distinction explicit after a create/upsert so the reader does not guess a ref
+// distinction explicit after a create/write so the reader does not guess a ref
 // from the file path and hit non_canonical_ref / non_canonical_path.
 func LinkAs(id string) string {
 	return Indent(2, Hint("link as ")+Bold.Render(id))

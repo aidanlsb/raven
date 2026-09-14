@@ -117,7 +117,7 @@ Teach these once, clearly, while proposing the model — not as an abstract lect
 - Types describe whole objects/files (projects, people, meetings, notes, books, issues). Fields are their frontmatter properties.
 - Traits are inline annotations in body text — tasks, decisions, priorities, highlights — one line at a time.
 - References are `[[id]]` links to objects or sections. Author them with
-  canonical IDs: use `data.id` returned by `new`/`upsert`/`daily` (the human
+  canonical IDs: use `data.id` returned by `new`/`write`/`daily` (the human
   CLI's `link as <id>` value). Short forms may resolve when unambiguous, but
   they are not the preferred authoring form.
 - Daily notes use the bare `YYYY-MM-DD` canonical ID, regardless of the file's

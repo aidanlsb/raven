@@ -128,38 +128,38 @@ types:
 	server := newTestServer(t, v.Path, binary)
 
 	// JSON-typed flag provided as JSON string is rejected.
-	upsertInvalid := server.callTool("upsert", map[string]interface{}{
+	writeInvalid := server.callTool("write", map[string]interface{}{
 		"type":        "project",
 		"title":       "MCP Compat Project",
 		"fields-json": `{"status":"active"}`,
 	})
-	upsertInvalidEnv := parseMCPEnvelope(t, upsertInvalid.Text)
-	if !upsertInvalid.IsError || upsertInvalidEnv.OK {
-		t.Fatalf("expected upsert fields-json string to fail, got: %s", upsertInvalid.Text)
+	writeInvalidEnv := parseMCPEnvelope(t, writeInvalid.Text)
+	if !writeInvalid.IsError || writeInvalidEnv.OK {
+		t.Fatalf("expected write fields-json string to fail, got: %s", writeInvalid.Text)
 	}
-	if upsertInvalidEnv.Error == nil || upsertInvalidEnv.Error.Code != "INVALID_ARGS" {
-		t.Fatalf("expected INVALID_ARGS for upsert fields-json string, got: %s", upsertInvalid.Text)
+	if writeInvalidEnv.Error == nil || writeInvalidEnv.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("expected INVALID_ARGS for write fields-json string, got: %s", writeInvalid.Text)
 	}
 
 	// The removed singular flag name is not accepted as an MCP argument alias.
-	upsertRemoved := server.callTool("upsert", map[string]interface{}{
+	writeRemoved := server.callTool("write", map[string]interface{}{
 		"type":       "project",
 		"title":      "MCP Compat Project",
 		"field-json": map[string]interface{}{"status": "active"},
 	})
-	upsertRemovedEnv := parseMCPEnvelope(t, upsertRemoved.Text)
-	if !upsertRemoved.IsError || upsertRemovedEnv.OK || upsertRemovedEnv.Error == nil || upsertRemovedEnv.Error.Code != "INVALID_ARGS" {
-		t.Fatalf("expected removed upsert field-json argument to fail with INVALID_ARGS, got: %s", upsertRemoved.Text)
+	writeRemovedEnv := parseMCPEnvelope(t, writeRemoved.Text)
+	if !writeRemoved.IsError || writeRemovedEnv.OK || writeRemovedEnv.Error == nil || writeRemovedEnv.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("expected removed write field-json argument to fail with INVALID_ARGS, got: %s", writeRemoved.Text)
 	}
 
 	// JSON-typed flag provided as an object succeeds.
-	upsertValid := server.callTool("upsert", map[string]interface{}{
+	writeValid := server.callTool("write", map[string]interface{}{
 		"type":        "project",
 		"title":       "MCP Compat Project",
 		"fields-json": map[string]interface{}{"status": "active"},
 	})
-	if upsertValid.IsError {
-		t.Fatalf("upsert with fields-json object failed: %s", upsertValid.Text)
+	if writeValid.IsError {
+		t.Fatalf("write with fields-json object failed: %s", writeValid.Text)
 	}
 	v.AssertFileContains("projects/mcp-compat-project.md", "status: active")
 

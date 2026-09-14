@@ -28,23 +28,23 @@ func runMCPParityMutationTests(t *testing.T, binary string) {
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file", "id", "title", "type"})
 	})
 
-	t.Run("upsert", func(t *testing.T) {
+	t.Run("write", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("upsert", map[string]interface{}{
+		mcpResult := server.callTool("write", map[string]interface{}{
 			"type":    "project",
 			"title":   "Parity Project",
 			"field":   map[string]interface{}{"status": "active"},
 			"content": "# Parity Body",
 		})
-		cliResult := vCLI.RunCLI("upsert", "project", "Parity Project", "--field", "status=active", "--content", "# Parity Body")
+		cliResult := vCLI.RunCLI("write", "project", "Parity Project", "--field", "status=active", "--content", "# Parity Body")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "id", "file", "type", "title"})
 	})
 
-	t.Run("upsert_content_file", func(t *testing.T) {
+	t.Run("write_content_file", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
@@ -54,13 +54,13 @@ func runMCPParityMutationTests(t *testing.T, binary string) {
 			t.Fatalf("write content file: %v", err)
 		}
 
-		mcpResult := server.callTool("upsert", map[string]interface{}{
+		mcpResult := server.callTool("write", map[string]interface{}{
 			"type":         "project",
 			"title":        "File Body Project",
 			"field":        map[string]interface{}{"status": "active"},
 			"content-file": contentFile,
 		})
-		cliResult := vCLI.RunCLI("upsert", "project", "File Body Project", "--field", "status=active", "--content-file", contentFile)
+		cliResult := vCLI.RunCLI("write", "project", "File Body Project", "--field", "status=active", "--content-file", contentFile)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "id", "file", "type", "title"})
 		vMCP.AssertFileContains("projects/file-body-project.md", "# File Body")

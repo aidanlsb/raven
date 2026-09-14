@@ -163,7 +163,7 @@ func TestIntegration_EditSurfacesMissingRefTarget(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
-	v.RunCLI("upsert", "project", "Edit Target", "--content", "Status line").MustSucceed(t)
+	v.RunCLI("write", "project", "Edit Target", "--content", "Status line").MustSucceed(t)
 
 	result := v.RunCLI("edit", "projects/edit-target", "Status line", "Status [[projects/ghost-project]]")
 	result.MustSucceed(t)

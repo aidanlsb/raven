@@ -18,6 +18,17 @@ func TestExecuteToolDirectUnknownTool(t *testing.T) {
 	}
 }
 
+func TestExecuteToolDirectUpsertRemoved(t *testing.T) {
+	t.Parallel()
+	_, err := ExecuteToolDirect("", "upsert", nil)
+	if err == nil {
+		t.Fatal("expected unknown command error for removed upsert")
+	}
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("expected unknown command error for upsert, got: %v", err)
+	}
+}
+
 func TestExecuteToolDirectSuccess(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

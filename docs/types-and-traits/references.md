@@ -97,7 +97,7 @@ Prefer canonical object IDs when authoring references:
 [[project/website]]
 ```
 
-Object-creating commands (`rvn new`, `rvn upsert`, and `rvn daily`) return the
+Object-creating commands (`rvn new`, `rvn write`, and `rvn daily`) return the
 canonical ID as `data.id` in JSON output. Use that value in `[[...]]` links and
 `ref` fields. The human CLI prints the same value as `link as <id>`. Do not
 derive an ID from the file path: configured directory roots can make the two
@@ -239,7 +239,7 @@ still succeeds. Link integrity is a vault-health concern, not a write-time error
 
 When this happens, Raven surfaces the missing target instead of silently leaving it:
 
-- In the interactive CLI (`rvn new`, `rvn upsert`, `rvn set`, `rvn add`, `rvn edit`),
+- In the interactive CLI (`rvn new`, `rvn write`, `rvn set`, `rvn add`, `rvn edit`),
   it prompts to create the missing page(s) right after the write.
 - With `--json` (and over MCP), the successful response adds `missing_refs`,
   `missing_ref_items`, and a `REF_TARGET_MISSING` warning per missing target. Each

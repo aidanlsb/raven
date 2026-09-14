@@ -194,9 +194,9 @@ func TestIntegration_IndexJournalGuardFailuresBlockWrites(t *testing.T) {
 			},
 		},
 		{
-			name: "upsert",
+			name: "write",
 			run: func(v *testutil.TestVault) *testutil.CLIResult {
-				return v.RunCLI("upsert", "person", "Frigg", "--field", "email=frigg@example.com")
+				return v.RunCLI("write", "person", "Frigg", "--field", "email=frigg@example.com")
 			},
 			assert: func(t *testing.T, v *testutil.TestVault) {
 				v.AssertFileNotExists("people/frigg.md")

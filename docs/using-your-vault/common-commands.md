@@ -207,14 +207,17 @@ rvn query 'trait:todo .value==todo' --ids | rvn update --stdin done --confirm
 rvn update --trait-id daily/2026-03-15.md:trait:0 --trait-id daily/2026-03-16.md:trait:0 done --confirm
 ```
 
-### `rvn upsert`
+### `rvn write`
 
-Create an object if it does not exist, or update it if it does. Useful for idempotent operations.
+Create an object if it does not exist, or replace it if it does. This is the
+canonical idempotent write. `rvn new` is the interactive create-only path: it
+fails if the object already exists instead of replacing it. There is no `upsert`
+command.
 
 ```bash
-rvn upsert project "Website Redesign" --field status=active
-rvn upsert person "Freya" --field email=freya@example.com --content "# Freya\n\nProject lead."
-rvn upsert person "Freya" --fields-json '{"email":"true"}'
+rvn write project "Website Redesign" --field status=active
+rvn write person "Freya" --field email=freya@example.com --content "# Freya\n\nProject lead."
+rvn write person "Freya" --fields-json '{"email":"true"}'
 ```
 
 Use `--field` for shell-friendly literal values. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.

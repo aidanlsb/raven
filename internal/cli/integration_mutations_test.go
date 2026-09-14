@@ -5,6 +5,7 @@ package cli_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,7 +58,7 @@ types:
 	result.MustFailWithMessage(t, "data.id")
 }
 
-func TestIntegration_UpsertRejectsVaultFilePathAsObjectPath(t *testing.T) {
+func TestIntegration_WriteRejectsVaultFilePathAsObjectPath(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
@@ -71,13 +72,13 @@ types:
 		Build()
 
 	// Reject path starting with type/
-	result := v.RunCLI("upsert", "note", "Test Note", "--object-path", "type/note/test-note", "--content", "# Test")
+	result := v.RunCLI("write", "note", "Test Note", "--object-path", "type/note/test-note", "--content", "# Test")
 	result.MustFail(t, "INVALID_INPUT")
 	result.MustFailWithMessage(t, "must not start with 'type/'")
 	result.MustFailWithMessage(t, "data.id")
 
 	// Reject path ending with .md
-	result = v.RunCLI("upsert", "note", "Test Note", "--object-path", "note/test-note.md", "--content", "# Test")
+	result = v.RunCLI("write", "note", "Test Note", "--object-path", "note/test-note.md", "--content", "# Test")
 	result.MustFail(t, "INVALID_INPUT")
 	result.MustFailWithMessage(t, "must not end with '.md'")
 	result.MustFailWithMessage(t, "data.id")
@@ -238,7 +239,7 @@ type: date
 	result.AssertResultCount(t, "items", 1)
 }
 
-func TestIntegration_UpsertValidatesTypedValuesAtWriteTime(t *testing.T) {
+func TestIntegration_WriteValidatesTypedValuesAtWriteTime(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -247,20 +248,20 @@ func TestIntegration_UpsertValidatesTypedValuesAtWriteTime(t *testing.T) {
 	v.RunCLI("new", "project", "Website", "--field", "status=active").MustSucceed(t)
 
 	// status is enum(active|paused|done); invalid enum should fail.
-	result := v.RunCLI("upsert", "project", "Website", "--field", "status=not-a-valid-status")
+	result := v.RunCLI("write", "project", "Website", "--field", "status=not-a-valid-status")
 	result.MustFail(t, "VALIDATION_FAILED")
 
 	// Existing value should remain unchanged.
 	v.AssertFileContains("projects/website.md", "status: active")
 }
 
-func TestIntegration_UpsertUnknownFieldFailsFast(t *testing.T) {
+func TestIntegration_WriteUnknownFieldFailsFast(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
-	result := v.RunCLI("upsert", "person", "Unknown Field User", "--field", "favorite_color=blue")
+	result := v.RunCLI("write", "person", "Unknown Field User", "--field", "favorite_color=blue")
 	result.MustFail(t, "UNKNOWN_FIELD")
 	result.MustFailWithMessage(t, "schema type person")
 
@@ -353,13 +354,13 @@ func TestIntegration_SetBulkFieldsJSONPreservesStringType(t *testing.T) {
 	v.AssertFileContains("people/bulk-erin-two.md", `email: "true"`)
 }
 
-func TestIntegration_UpsertFieldsJSONPreservesStringType(t *testing.T) {
+func TestIntegration_WriteFieldsJSONPreservesStringType(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
-	result := v.RunCLI("upsert", "person", "Fields Json User", "--fields-json", `{"email":"true"}`)
+	result := v.RunCLI("write", "person", "Fields Json User", "--fields-json", `{"email":"true"}`)
 	result.MustSucceed(t)
 	v.AssertFileContains("people/fields-json-user.md", `email: "true"`)
 }
@@ -375,7 +376,7 @@ func TestIntegration_NewFieldsJSONPreservesStringType(t *testing.T) {
 	v.AssertFileContains("people/new-fields-json-user.md", `email: "true"`)
 }
 
-func TestIntegration_UpsertWithExplicitPath(t *testing.T) {
+func TestIntegration_WriteWithExplicitPath(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
@@ -388,17 +389,17 @@ types:
 `).
 		Build()
 
-	result := v.RunCLI("upsert", "note", "Raven Friction", "--object-path", "note/raven-logo-brief", "--content", "# V1")
+	result := v.RunCLI("write", "note", "Raven Friction", "--object-path", "note/raven-logo-brief", "--content", "# V1")
 	result.MustSucceed(t)
 	v.AssertFileExists("objects/note/raven-logo-brief.md")
 	v.AssertFileContains("objects/note/raven-logo-brief.md", "# V1")
 
-	result = v.RunCLI("upsert", "note", "Raven Friction", "--object-path", "note/raven-logo-brief", "--content", "# V2")
+	result = v.RunCLI("write", "note", "Raven Friction", "--object-path", "note/raven-logo-brief", "--content", "# V2")
 	result.MustSucceed(t)
 	v.AssertFileContains("objects/note/raven-logo-brief.md", "# V2")
 }
 
-func TestIntegration_UpsertWithContentFile(t *testing.T) {
+func TestIntegration_WriteWithContentFile(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
@@ -416,14 +417,14 @@ types:
 		t.Fatalf("write content file: %v", err)
 	}
 
-	result := v.RunCLI("upsert", "note", "File Body", "--content-file", contentFile)
+	result := v.RunCLI("write", "note", "File Body", "--content-file", contentFile)
 	result.MustSucceed(t)
 	v.AssertFileExists("objects/note/file-body.md")
 	v.AssertFileContains("objects/note/file-body.md", "# From File")
 	v.AssertFileContains("objects/note/file-body.md", "[[note/ref]]")
 }
 
-func TestIntegration_UpsertWithContentFileStdin(t *testing.T) {
+func TestIntegration_WriteWithContentFileStdin(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
@@ -436,14 +437,14 @@ types:
 `).
 		Build()
 
-	result := v.RunCLIWithStdin("# From Stdin\n\nBody\n", "upsert", "note", "Stdin Body", "--content-file", "-")
+	result := v.RunCLIWithStdin("# From Stdin\n\nBody\n", "write", "note", "Stdin Body", "--content-file", "-")
 	result.MustSucceed(t)
 	v.AssertFileExists("objects/note/stdin-body.md")
 	v.AssertFileContains("objects/note/stdin-body.md", "# From Stdin")
 	v.AssertFileContains("objects/note/stdin-body.md", "Body")
 }
 
-func TestIntegration_UpsertRejectsContentAndContentFileTogether(t *testing.T) {
+func TestIntegration_WriteRejectsContentAndContentFileTogether(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -454,8 +455,56 @@ func TestIntegration_UpsertRejectsContentAndContentFileTogether(t *testing.T) {
 		t.Fatalf("write content file: %v", err)
 	}
 
-	result := v.RunCLI("upsert", "project", "Conflict Body", "--content", "# Inline", "--content-file", contentFile)
+	result := v.RunCLI("write", "project", "Conflict Body", "--content", "# Inline", "--content-file", contentFile)
 	result.MustFail(t, "INVALID_INPUT")
 	result.MustFailWithMessage(t, "mutually exclusive")
 	v.AssertFileNotExists("projects/conflict-body.md")
+}
+
+func TestIntegration_UpsertCommandRemoved(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	result := v.RunCLI("upsert", "note", "Gone")
+	if result.OK {
+		t.Fatal("expected rvn upsert to fail after the hard rename to write")
+	}
+	if result.ExitCode == 0 {
+		t.Fatalf("expected non-zero exit for unknown upsert command, got 0; out=%s", result.RawJSON)
+	}
+	raw := strings.ToLower(result.RawJSON)
+	if result.Error != nil && result.Error.Code == "COMMAND_NOT_FOUND" {
+		return
+	}
+	if strings.Contains(raw, "unknown command") {
+		return
+	}
+	t.Fatalf("expected unknown command / COMMAND_NOT_FOUND for upsert, got: %s", result.RawJSON)
+}
+
+func TestIntegration_NewDoesNotReplaceExisting(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  note:
+    default_path: note/
+`).
+		Build()
+
+	v.RunCLI("new", "note", "Keep Me").MustSucceed(t)
+	original := v.ReadFile("note/keep-me.md")
+	if original == "" {
+		t.Fatal("expected created note content")
+	}
+
+	result := v.RunCLI("new", "note", "Keep Me")
+	result.MustFail(t, "FILE_EXISTS")
+
+	got := v.ReadFile("note/keep-me.md")
+	if got != original {
+		t.Fatalf("new clobbered existing object\noriginal:\n%s\ngot:\n%s", original, got)
+	}
 }

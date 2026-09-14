@@ -23,9 +23,9 @@ steps:
       index_as: slot
       on_error: continue
       steps:
-        - id: upsert_watch_task
+        - id: write_watch_task
           type: tool
-          tool: raven_upsert
+          tool: raven_write
           arguments:
             type: task
             title: "Bifrost watch {{slot}} - {{entry.guardian}}"
