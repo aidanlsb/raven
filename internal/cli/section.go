@@ -11,8 +11,7 @@ import (
 )
 
 var sectionCmd = buildRegistrySubtree(registrySubtreeSpec{
-	Prefix:    []string{"section"},
-	VaultPath: getVaultPath,
+	Prefix: []string{"section"},
 	Root: registryGroup{
 		Short:      "Manage Markdown sections",
 		Long:       "Manage Markdown-derived sections without editing headings or references by hand.",

@@ -11,10 +11,8 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var searchCmd = newCanonicalLeafCommand("search", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
+var searchCmd = newExceptionLeafCommand("search", exceptionLeafOptions{
 	Prepare:     prepareSearchArgs,
-	HandleError: handleCanonicalSearchFailure,
 	RenderHuman: renderSearch,
 })
 
@@ -50,13 +48,6 @@ func prepareSearchArgs(_ *cobra.Command, args []string) ([]string, bool, error) 
 		interactivePickerMissingArgSuggestion("search", "rvn search <query>"),
 	)
 	return nil, err == nil, err
-}
-
-func handleCanonicalSearchFailure(result commandexec.Result) error {
-	if result.Error == nil {
-		return nil
-	}
-	return handleErrorWithDetails(mapCodeOrInternal(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
 }
 
 func renderSearch(_ *cobra.Command, result commandexec.Result) error {

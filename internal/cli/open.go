@@ -10,12 +10,11 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-var openCmd = newCanonicalLeafCommand("open", canonicalLeafOptions{
-	VaultPath:      getVaultPath,
-	Args:           validateOpenArgs,
-	Prepare:        prepareOpenArgs,
-	HandleErrorCmd: handleCanonicalOpenFailure,
-	HandleResult:   handleOpenResult,
+var openCmd = newExceptionLeafCommand("open", exceptionLeafOptions{
+	Args:        validateOpenArgs,
+	Prepare:     prepareOpenArgs,
+	HandleError: handleCanonicalOpenFailure,
+	RenderHuman: handleOpenResult,
 })
 
 func validateOpenArgs(cmd *cobra.Command, args []string) error {
@@ -106,10 +105,6 @@ func openFileInEditorAtLine(filePath, relPath string, line int, skipOpenMessage 
 }
 
 func handleOpenResult(cmd *cobra.Command, result commandexec.Result) error {
-	if isJSONOutput() {
-		return outputJSON(result)
-	}
-
 	bulk, _ := cmd.Flags().GetBool("stdin")
 	data := canonicalDataMap(result)
 	if bulk {

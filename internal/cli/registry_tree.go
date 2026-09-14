@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
@@ -24,7 +23,7 @@ type registryGroup struct {
 	// DefaultRender. When empty, the group's bare invocation prints help
 	// (unless ParentOnly is set).
 	DefaultLeafID string
-	DefaultRender func(*cobra.Command, commandexec.Result) error
+	DefaultRender humanRenderer
 
 	// ParentOnly, when true, leaves the group non-runnable (no RunE) so it acts
 	// as a pure container. Cobra still prints help for a bare invocation, but the
@@ -36,28 +35,31 @@ type registryGroup struct {
 
 // registrySubtreeSpec configures generation of a Cobra subtree from registry
 // hierarchy metadata. Leaf commands are discovered from the registry by CLI
-// path prefix and built via newCanonicalLeafCommand; grouping commands are
-// created on demand from Groups (keyed by their full CLI path joined by " ").
+// path prefix and built via newCanonicalLeafCommand, or newExceptionLeafCommand
+// when listed in Exceptions. Grouping commands are created on demand from
+// Groups (keyed by their full CLI path joined by " ").
 type registrySubtreeSpec struct {
-	Prefix    []string      // CLI path of the subtree root (e.g. ["vault", "config"])
-	VaultPath func() string // Vault path resolver shared by leaves and group defaults
-	Root      registryGroup // Metadata/behavior for the subtree root command
-	Groups    map[string]registryGroup
-	Renders   map[string]func(*cobra.Command, commandexec.Result) error
+	Prefix  []string      // CLI path of the subtree root (e.g. ["vault", "config"])
+	Root    registryGroup // Metadata/behavior for the subtree root command
+	Groups  map[string]registryGroup
+	Renders map[string]humanRenderer
 
-	// Leaves supplies optional per-leaf canonical adapter overrides
-	// (e.g. Invoke, HandleError) keyed by registry command ID. The
-	// shared VaultPath is always applied, and RenderHuman falls back to the
-	// Renders map when the override does not set it, so simple leaves need no
-	// entry here.
+	// Leaves supplies optional default-path adapter overrides (BuildArgs,
+	// RenderHuman) keyed by registry command ID. RenderHuman falls back to
+	// the Renders map when the override does not set it, so simple leaves
+	// need no entry here.
 	Leaves map[string]canonicalLeafOptions
+
+	// Exceptions supplies per-leaf interactive adapter overrides. These are
+	// for confirm-and-retry or prompt flows that cannot use the default path.
+	Exceptions map[string]exceptionLeafOptions
 }
 
 // buildRegistrySubtree constructs and returns the root Cobra command for a
 // generated subtree. Intermediate grouping commands are created as needed and
 // leaves are attached under their registry-declared CLI path.
 func buildRegistrySubtree(spec registrySubtreeSpec) *cobra.Command {
-	root := newRegistryGroupCommand(spec.Prefix, spec.Root, spec.VaultPath)
+	root := newRegistryGroupCommand(spec.Prefix, spec.Root)
 	nodes := map[string]*cobra.Command{strings.Join(spec.Prefix, " "): root}
 
 	for _, id := range registrySubtreeLeafIDs(spec.Prefix) {
@@ -76,32 +78,34 @@ func buildRegistrySubtree(spec registrySubtreeSpec) *cobra.Command {
 				if !ok {
 					panic(fmt.Sprintf("registry subtree %q missing group spec for %q", strings.Join(spec.Prefix, " "), key))
 				}
-				node = newRegistryGroupCommand(segs[:depth], groupSpec, spec.VaultPath)
+				node = newRegistryGroupCommand(segs[:depth], groupSpec)
 				parent.AddCommand(node)
 				nodes[key] = node
 			}
 			parent = node
 		}
 
-		parent.AddCommand(newCanonicalLeafCommand(id, spec.leafOptions(id)))
+		parent.AddCommand(spec.leafCommand(id))
 	}
 
 	return root
 }
 
-// leafOptions resolves the canonical adapter options for the given leaf,
-// applying the shared VaultPath and falling back to the Renders map for
-// RenderHuman when a per-leaf override does not supply one.
-func (spec registrySubtreeSpec) leafOptions(id string) canonicalLeafOptions {
+func (spec registrySubtreeSpec) leafCommand(id string) *cobra.Command {
+	if opts, ok := spec.Exceptions[id]; ok {
+		if opts.RenderHuman == nil {
+			opts.RenderHuman = spec.Renders[id]
+		}
+		return newExceptionLeafCommand(id, opts)
+	}
 	opts := spec.Leaves[id]
-	opts.VaultPath = spec.VaultPath
 	if opts.RenderHuman == nil {
 		opts.RenderHuman = spec.Renders[id]
 	}
-	return opts
+	return newCanonicalLeafCommand(id, opts)
 }
 
-func newRegistryGroupCommand(path []string, group registryGroup, vaultPath func() string) *cobra.Command {
+func newRegistryGroupCommand(path []string, group registryGroup) *cobra.Command {
 	use := group.Use
 	if use == "" && len(path) > 0 {
 		use = path[len(path)-1]
@@ -116,7 +120,7 @@ func newRegistryGroupCommand(path []string, group registryGroup, vaultPath func(
 	switch {
 	case group.DefaultLeafID != "":
 		cmd.Args = cobra.NoArgs
-		cmd.RunE = canonicalGroupDefaultRunE(group.DefaultLeafID, vaultPath, group.DefaultRender)
+		cmd.RunE = canonicalGroupDefaultRunE(group.DefaultLeafID, group.DefaultRender)
 	case group.ParentOnly:
 		// Leave RunE unset so the group stays a non-runnable pure container,
 		// matching hand-wired parent commands that never declared a RunE.

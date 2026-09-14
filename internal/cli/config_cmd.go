@@ -18,7 +18,7 @@ var configCmd = &cobra.Command{
 
 Use this to initialize, inspect, and edit machine-level configuration.`,
 	Args: cobra.NoArgs,
-	RunE: canonicalGroupDefaultRunE("config_show", nil, renderConfigShow),
+	RunE: canonicalGroupDefaultRunE("config_show", renderConfigShow),
 }
 
 var configInitCmd = newCanonicalLeafCommand("config_init", canonicalLeafOptions{

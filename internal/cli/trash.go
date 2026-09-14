@@ -11,8 +11,7 @@ import (
 )
 
 var trashCmd = buildRegistrySubtree(registrySubtreeSpec{
-	Prefix:    []string{"trash"},
-	VaultPath: getVaultPath,
+	Prefix: []string{"trash"},
 	Root: registryGroup{
 		Short: "Inspect and empty the vault trash",
 	},
@@ -23,7 +22,6 @@ var trashCmd = buildRegistrySubtree(registrySubtreeSpec{
 })
 
 var restoreCmd = newCanonicalLeafCommand("restore", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	RenderHuman: renderRestore,
 })
 

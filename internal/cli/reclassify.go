@@ -16,8 +16,7 @@ import (
 
 type ReclassifyResult = commandpayload.ReclassifyResult
 
-var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
+var reclassifyCmd = newExceptionLeafCommand("reclassify", exceptionLeafOptions{
 	Invoke:      invokeReclassify,
 	RenderHuman: renderReclassifyResult,
 })

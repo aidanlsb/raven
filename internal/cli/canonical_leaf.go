@@ -14,21 +14,69 @@ import (
 
 const (
 	canonicalLeafAnnotationKey = "raven.dev/canonical-leaf"
+	exceptionLeafAnnotationKey = "raven.dev/exception-leaf"
 	localLeafAnnotationKey     = "raven.dev/local-leaf"
 )
 
+type humanRenderer = func(*cobra.Command, commandexec.Result) error
+type argsBuilder = func(cmd *cobra.Command, positional []string, argsMap map[string]interface{}) error
+
+// canonicalLeafOptions is the default leaf adapter. The path is: bind flags
+// from command metadata, build the args map, invoke the shared executor, then
+// print JSON or RenderHuman.
 type canonicalLeafOptions struct {
-	VaultPath      func() string
-	Args           cobra.PositionalArgs
-	Prepare        func(cmd *cobra.Command, args []string) (preparedArgs []string, handled bool, err error)
-	Invoke         func(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result
-	HandleError    func(result commandexec.Result) error
-	HandleErrorCmd func(cmd *cobra.Command, result commandexec.Result) error
-	HandleResult   func(cmd *cobra.Command, result commandexec.Result) error
-	RenderHuman    func(cmd *cobra.Command, result commandexec.Result) error
+	// BuildArgs optionally adjusts the args map after metadata binding.
+	BuildArgs argsBuilder
+	// RenderHuman prints human output after a successful invoke. JSON mode
+	// never calls this. Commands with nothing useful to print may leave it nil.
+	RenderHuman humanRenderer
+}
+
+// exceptionLeafOptions is for interactive or multi-step CLI flows that cannot
+// use the default path: pickers, confirm-and-retry, browse, and check prompts.
+// New commands should not start here.
+type exceptionLeafOptions struct {
+	BuildArgs    argsBuilder
+	RenderHuman  humanRenderer
+	Args         cobra.PositionalArgs
+	Prepare      func(cmd *cobra.Command, args []string) (preparedArgs []string, handled bool, err error)
+	Invoke       func(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result
+	HandleError  func(cmd *cobra.Command, result commandexec.Result) error
+	HandleResult func(cmd *cobra.Command, result commandexec.Result) error
 }
 
 func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra.Command {
+	return newLeafCommand(commandID, leafRuntime{
+		BuildArgs:   opts.BuildArgs,
+		RenderHuman: opts.RenderHuman,
+	})
+}
+
+func newExceptionLeafCommand(commandID string, opts exceptionLeafOptions) *cobra.Command {
+	cmd := newLeafCommand(commandID, leafRuntime{
+		Args:         opts.Args,
+		Prepare:      opts.Prepare,
+		BuildArgs:    opts.BuildArgs,
+		Invoke:       opts.Invoke,
+		HandleError:  opts.HandleError,
+		HandleResult: opts.HandleResult,
+		RenderHuman:  opts.RenderHuman,
+	})
+	cmd.Annotations[exceptionLeafAnnotationKey] = "true"
+	return cmd
+}
+
+type leafRuntime struct {
+	Args         cobra.PositionalArgs
+	Prepare      func(cmd *cobra.Command, args []string) (preparedArgs []string, handled bool, err error)
+	BuildArgs    argsBuilder
+	Invoke       func(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result
+	HandleError  func(cmd *cobra.Command, result commandexec.Result) error
+	HandleResult func(cmd *cobra.Command, result commandexec.Result) error
+	RenderHuman  humanRenderer
+}
+
+func newLeafCommand(commandID string, rt leafRuntime) *cobra.Command {
 	meta, ok := commands.EffectiveMeta(commandID)
 	if !ok {
 		panic(fmt.Sprintf("registry metadata missing for %q", commandID))
@@ -45,71 +93,77 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 			canonicalLeafAnnotationKey: "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if opts.Prepare != nil {
-				preparedArgs, handled, err := opts.Prepare(cmd, args)
-				if err != nil {
-					return err
-				}
-				if handled {
-					return nil
-				}
-				args = preparedArgs
-			}
-
-			argsMap, err := buildCanonicalArgsForMeta(meta, cmd, args)
-			if err != nil {
-				return err
-			}
-
-			vaultPath := ""
-			if opts.VaultPath != nil {
-				vaultPath = opts.VaultPath()
-			}
-
-			invoke := executeCanonicalCommand
-			if opts.Invoke != nil {
-				invoke = func(commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
-					return opts.Invoke(cmd, commandID, vaultPath, args)
-				}
-			}
-			result := invoke(commandID, vaultPath, argsMap)
-			handleFailure := handleCanonicalFailure
-			if opts.HandleError != nil {
-				handleFailure = opts.HandleError
-			}
-			if opts.HandleErrorCmd != nil {
-				handleFailure = func(result commandexec.Result) error {
-					return opts.HandleErrorCmd(cmd, result)
-				}
-			}
-			if !result.OK {
-				if isJSONOutput() {
-					return outputCanonicalResultJSON(result)
-				}
-				if err := handleFailure(result); err != nil {
-					return err
-				}
-				return nil
-			}
-			if opts.HandleResult != nil {
-				return opts.HandleResult(cmd, result)
-			}
-			if isJSONOutput() {
-				return outputCanonicalResultJSON(result)
-			}
-			if opts.RenderHuman != nil {
-				return opts.RenderHuman(cmd, result)
-			}
-			return nil
+			return runLeaf(cmd, commandID, meta, args, rt)
 		},
 	}
 
-	if opts.Args != nil {
-		cmd.Args = opts.Args
+	if rt.Args != nil {
+		cmd.Args = rt.Args
 	}
 
 	bindMetaFlags(cmd, meta.Flags)
 	return cmd
+}
+
+func runLeaf(cmd *cobra.Command, commandID string, meta commands.Meta, args []string, rt leafRuntime) error {
+	if rt.Prepare != nil {
+		preparedArgs, handled, err := rt.Prepare(cmd, args)
+		if err != nil {
+			return err
+		}
+		if handled {
+			return nil
+		}
+		args = preparedArgs
+	}
+
+	argsMap, err := buildCanonicalArgsForMeta(meta, cmd, args)
+	if err != nil {
+		return err
+	}
+	if rt.BuildArgs != nil {
+		if err := rt.BuildArgs(cmd, args, argsMap); err != nil {
+			return err
+		}
+	}
+
+	vaultPath := canonicalVaultPath(commandID, argsMap)
+	var result commandexec.Result
+	if rt.Invoke != nil {
+		result = rt.Invoke(cmd, commandID, vaultPath, argsMap)
+	} else {
+		result = executeCanonicalCommand(commandID, vaultPath, argsMap)
+	}
+
+	if rt.HandleResult != nil {
+		return rt.HandleResult(cmd, result)
+	}
+	return finishCanonicalLeaf(cmd, result, rt.RenderHuman, rt.HandleError)
+}
+
+// finishCanonicalLeaf is the shared success/failure renderer: JSON when
+// requested, otherwise the default error printer or RenderHuman.
+func finishCanonicalLeaf(cmd *cobra.Command, result commandexec.Result, render humanRenderer, handleError func(*cobra.Command, commandexec.Result) error) error {
+	if isJSONOutput() {
+		return outputCanonicalResultJSON(result)
+	}
+	if !result.OK {
+		if handleError != nil {
+			return handleError(cmd, result)
+		}
+		return handleCanonicalFailure(result)
+	}
+	if render != nil {
+		return render(cmd, result)
+	}
+	return nil
+}
+
+func canonicalVaultPath(commandID string, args map[string]interface{}) string {
+	if commands.RequiresVaultForInvocation(commandID, args) {
+		return getVaultPath()
+	}
+	return ""
 }
 
 func markLocalLeaf(cmd *cobra.Command) {

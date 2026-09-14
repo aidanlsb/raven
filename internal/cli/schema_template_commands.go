@@ -26,13 +26,12 @@ var schemaTemplateCmd = buildSchemaTemplateCommand()
 
 func buildSchemaTemplateCommand() *cobra.Command {
 	return buildRegistrySubtree(registrySubtreeSpec{
-		Prefix:    []string{"schema", "template"},
-		VaultPath: getVaultPath,
+		Prefix: []string{"schema", "template"},
 		Root: registryGroup{
 			Use:   "template",
 			Short: "Manage schema templates and bindings",
 		},
-		Renders: map[string]func(*cobra.Command, commandexec.Result) error{
+		Renders: map[string]humanRenderer{
 			"schema_template_list":   renderSchemaTemplateList,
 			"schema_template_get":    renderSchemaTemplateGet,
 			"schema_template_set":    renderSchemaTemplateSet,
@@ -40,7 +39,7 @@ func buildSchemaTemplateCommand() *cobra.Command {
 			"schema_template_bind":   renderSchemaTemplateBind,
 			"schema_template_unbind": renderSchemaTemplateUnbind,
 		},
-		Leaves: map[string]canonicalLeafOptions{
+		Exceptions: map[string]exceptionLeafOptions{
 			"schema_template_list":   {Invoke: invokeSchemaTemplateList},
 			"schema_template_bind":   {Invoke: invokeSchemaTemplateBind},
 			"schema_template_unbind": {Invoke: invokeSchemaTemplateUnbind},

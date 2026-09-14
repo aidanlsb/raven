@@ -15,8 +15,7 @@ import (
 // RESOLVE COMMAND
 // =============================================================================
 
-var resolveCmd = newCanonicalLeafCommand("resolve", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
+var resolveCmd = newExceptionLeafCommand("resolve", exceptionLeafOptions{
 	Prepare:     prepareResolveArgs,
 	RenderHuman: renderResolve,
 })

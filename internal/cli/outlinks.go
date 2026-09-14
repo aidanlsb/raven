@@ -10,12 +10,11 @@ import (
 	"github.com/aidanlsb/raven/internal/picker"
 )
 
-var outlinksCmd = newCanonicalLeafCommand("outlinks", canonicalLeafOptions{
-	VaultPath:      getVaultPath,
-	Args:           validateOutlinksArgs,
-	Prepare:        prepareOutlinksArgs,
-	HandleErrorCmd: handleOutlinksFailure,
-	RenderHuman:    renderOutlinks,
+var outlinksCmd = newExceptionLeafCommand("outlinks", exceptionLeafOptions{
+	Args:        validateOutlinksArgs,
+	Prepare:     prepareOutlinksArgs,
+	HandleError: handleOutlinksFailure,
+	RenderHuman: renderOutlinks,
 })
 
 func validateOutlinksArgs(cmd *cobra.Command, args []string) error {

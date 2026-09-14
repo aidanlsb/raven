@@ -11,8 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-var dailyCmd = newCanonicalLeafCommand("daily", canonicalLeafOptions{
-	VaultPath:    getVaultPath,
+var dailyCmd = newExceptionLeafCommand("daily", exceptionLeafOptions{
 	HandleResult: handleDailyResult,
 })
 

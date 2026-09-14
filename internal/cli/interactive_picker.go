@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -162,7 +163,7 @@ func objectReferenceFieldSearchText(obj model.Object) string {
 	}
 	parts := make([]string, 0, len(obj.Fields))
 	for fieldName, value := range obj.Fields {
-		valueText := formatFieldValueSimple(value)
+		valueText := ui.FormatFieldValue(value)
 		if valueText == "" {
 			continue
 		}

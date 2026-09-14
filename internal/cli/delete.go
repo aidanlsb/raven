@@ -11,8 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
+var deleteCmd = newExceptionLeafCommand("delete", exceptionLeafOptions{
 	Invoke:      invokeDelete,
 	RenderHuman: renderDeleteResult,
 })

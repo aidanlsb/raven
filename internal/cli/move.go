@@ -10,8 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var moveCmd = newCanonicalLeafCommand("move", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
+var moveCmd = newExceptionLeafCommand("move", exceptionLeafOptions{
 	Invoke:      invokeMove,
 	RenderHuman: renderMoveResult,
 })

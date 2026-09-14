@@ -17,8 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
+var newCmd = newExceptionLeafCommand("new", exceptionLeafOptions{
 	Prepare:     prepareNewArgs,
 	Invoke:      invokeNew,
 	RenderHuman: renderNewResult,

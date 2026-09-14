@@ -10,12 +10,11 @@ import (
 	"github.com/aidanlsb/raven/internal/picker"
 )
 
-var backlinksCmd = newCanonicalLeafCommand("backlinks", canonicalLeafOptions{
-	VaultPath:      getVaultPath,
-	Args:           validateBacklinksArgs,
-	Prepare:        prepareBacklinksArgs,
-	HandleErrorCmd: handleBacklinksFailure,
-	RenderHuman:    renderBacklinks,
+var backlinksCmd = newExceptionLeafCommand("backlinks", exceptionLeafOptions{
+	Args:        validateBacklinksArgs,
+	Prepare:     prepareBacklinksArgs,
+	HandleError: handleBacklinksFailure,
+	RenderHuman: renderBacklinks,
 })
 
 func validateBacklinksArgs(cmd *cobra.Command, args []string) error {

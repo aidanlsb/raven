@@ -10,10 +10,9 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var reindexCmd = newCanonicalLeafCommand("reindex", canonicalLeafOptions{
-	VaultPath:    getVaultPath,
-	Prepare:      prepareReindexArgs,
-	HandleResult: handleReindexResult,
+var reindexCmd = newExceptionLeafCommand("reindex", exceptionLeafOptions{
+	Prepare:     prepareReindexArgs,
+	RenderHuman: handleReindexResult,
 })
 
 func prepareReindexArgs(cmd *cobra.Command, args []string) ([]string, bool, error) {
@@ -30,10 +29,6 @@ func prepareReindexArgs(cmd *cobra.Command, args []string) ([]string, bool, erro
 }
 
 func handleReindexResult(cmd *cobra.Command, result commandexec.Result) error {
-	if jsonOutput {
-		return outputJSON(result)
-	}
-
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	data := canonicalDataMap(result)
 	for _, warning := range result.Warnings {

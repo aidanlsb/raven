@@ -14,10 +14,9 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var initCmd = newCanonicalLeafCommand("init", canonicalLeafOptions{
-	Args:         cobra.ExactArgs(1),
-	Prepare:      prepareInitArgs,
-	HandleResult: handleInitResult,
+var initCmd = newExceptionLeafCommand("init", exceptionLeafOptions{
+	Prepare:     prepareInitArgs,
+	RenderHuman: handleInitResult,
 })
 
 var (
@@ -63,10 +62,6 @@ func prepareInitArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
 }
 
 func handleInitResult(_ *cobra.Command, result commandexec.Result) error {
-	if isJSONOutput() {
-		return outputJSON(result)
-	}
-
 	data := canonicalDataMap(result)
 	createdConfig, _ := data["created_config"].(bool)
 	createdSchema, _ := data["created_schema"].(bool)

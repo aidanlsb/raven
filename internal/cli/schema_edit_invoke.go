@@ -12,30 +12,22 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-func prepareSchemaAddType(cmd *cobra.Command, args []string) ([]string, bool, error) {
-	// Prompt for name-field if not provided and in interactive mode
+func buildSchemaAddTypeArgs(cmd *cobra.Command, positional []string, argsMap map[string]interface{}) error {
 	if !cmd.Flags().Changed("name-field") && !isJSONOutput() {
 		fmt.Print("Which field should be the display name? (common: name, title; leave blank for none): ")
 		var input string
 		fmt.Scanln(&input)
 		nameField := strings.TrimSpace(input)
 		if nameField != "" {
-			if err := cmd.Flags().Set("name-field", nameField); err != nil {
-				return nil, false, handleError(ErrInternal, err, "")
-			}
+			argsMap["name-field"] = nameField
 		}
 	}
 
-	// Set default-path if not provided
-	if !cmd.Flags().Changed("default-path") && len(args) > 0 {
-		typeName := args[0]
-		defaultPath := paths.NormalizeDirRoot(typeName)
-		if err := cmd.Flags().Set("default-path", defaultPath); err != nil {
-			return nil, false, handleError(ErrInternal, err, "")
-		}
+	if !cmd.Flags().Changed("default-path") && len(positional) > 0 {
+		argsMap["default-path"] = paths.NormalizeDirRoot(positional[0])
 	}
 
-	return args, false, nil
+	return nil
 }
 
 func invokeSchemaRemoveType(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
