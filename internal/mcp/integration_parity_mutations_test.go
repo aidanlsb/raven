@@ -619,4 +619,40 @@ Beta body
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "items", "total", "skipped", "errors", "moved", "destination"})
 	})
+
+	t.Run("trash_empty_preview", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("delete", map[string]interface{}{"reference": "people/freya"})
+		vCLI.RunCLI("delete", "people/freya").MustSucceed(t)
+
+		mcpResult := server.callTool("trash_empty", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("trash", "empty")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "items", "total", "trash_dir"})
+		vMCP.AssertFileExists(".trash/people/freya.md")
+		vCLI.AssertFileExists(".trash/people/freya.md")
+	})
+
+	t.Run("trash_empty_apply", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("delete", map[string]interface{}{"reference": "people/freya"})
+		vCLI.RunCLI("delete", "people/freya").MustSucceed(t)
+
+		mcpResult := server.callTool("trash_empty", map[string]interface{}{"confirm": true})
+		cliResult := vCLI.RunCLI("trash", "empty", "--confirm")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "items", "total", "removed", "trash_dir"})
+		vMCP.AssertFileNotExists(".trash/people/freya.md")
+		vCLI.AssertFileNotExists(".trash/people/freya.md")
+	})
 }

@@ -3,7 +3,10 @@
 package cli_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/testutil"
 )
@@ -117,4 +120,103 @@ func TestIntegration_TrashRejectsUnsafeConfiguredDirectory(t *testing.T) {
 	v.RunCLI("delete", "notes/keep").MustFail(t, "CONFIG_INVALID")
 	v.AssertFileExists("notes/keep.md")
 	v.RunCLI("trash", "list").MustFail(t, "CONFIG_INVALID")
+}
+
+func TestIntegration_TrashEmptyPreviewConfirmAndLiveBoundary(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		WithFile("people/loki.md", "---\ntype: person\nname: Loki\n---\n").
+		Build()
+
+	v.RunCLI("delete", "people/freya").MustSucceed(t)
+	v.AssertFileNotExists("people/freya.md")
+	v.AssertFileExists(".trash/people/freya.md")
+	v.AssertFileExists("people/loki.md")
+
+	preview := v.RunCLI("trash", "empty").MustSucceed(t)
+	if preview.Data["preview"] != true {
+		t.Fatalf("empty preview = %s", preview.RawJSON)
+	}
+	items := preview.DataList("items")
+	if len(items) != 1 {
+		t.Fatalf("empty preview items = %#v, want one", items)
+	}
+	item := items[0].(map[string]interface{})
+	if item["trash_path"] != ".trash/people/freya.md" {
+		t.Fatalf("empty preview item = %#v", item)
+	}
+	if preview.Data["total"] != float64(1) {
+		t.Fatalf("empty preview total = %#v, want 1", preview.Data["total"])
+	}
+	v.AssertFileExists(".trash/people/freya.md")
+	v.AssertFileExists("people/loki.md")
+
+	applied := v.RunCLI("trash", "empty", "--confirm").MustSucceed(t)
+	if applied.Data["preview"] != false {
+		t.Fatalf("empty apply preview flag = %s", applied.RawJSON)
+	}
+	if applied.Data["removed"] != float64(1) || applied.Data["total"] != float64(1) {
+		t.Fatalf("empty apply counts = %s", applied.RawJSON)
+	}
+	v.AssertFileNotExists(".trash/people/freya.md")
+	v.AssertFileExists("people/loki.md")
+}
+
+func TestIntegration_TrashEmptyOlderThan(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/old.md", "---\ntype: person\nname: Old\n---\n").
+		WithFile("people/recent.md", "---\ntype: person\nname: Recent\n---\n").
+		WithFile("people/live.md", "---\ntype: person\nname: Live\n---\n").
+		Build()
+
+	v.RunCLI("delete", "people/old").MustSucceed(t)
+	v.RunCLI("delete", "people/recent").MustSucceed(t)
+
+	now := time.Now()
+	if err := os.Chtimes(filepath.Join(v.Path, ".trash/people/old.md"), now.Add(-10*24*time.Hour), now.Add(-10*24*time.Hour)); err != nil {
+		t.Fatalf("chtimes old: %v", err)
+	}
+	if err := os.Chtimes(filepath.Join(v.Path, ".trash/people/recent.md"), now.Add(-2*time.Hour), now.Add(-2*time.Hour)); err != nil {
+		t.Fatalf("chtimes recent: %v", err)
+	}
+
+	preview := v.RunCLI("trash", "empty", "--older-than", "7d").MustSucceed(t)
+	if preview.Data["preview"] != true || preview.Data["older_than"] != "7d" {
+		t.Fatalf("older-than preview = %s", preview.RawJSON)
+	}
+	items := preview.DataList("items")
+	if len(items) != 1 {
+		t.Fatalf("older-than preview items = %#v, want one", items)
+	}
+	item := items[0].(map[string]interface{})
+	if item["trash_path"] != ".trash/people/old.md" {
+		t.Fatalf("older-than preview item = %#v", item)
+	}
+	v.AssertFileExists(".trash/people/old.md")
+	v.AssertFileExists(".trash/people/recent.md")
+	v.AssertFileExists("people/live.md")
+
+	applied := v.RunCLI("trash", "empty", "--older-than", "7d", "--confirm").MustSucceed(t)
+	if applied.Data["removed"] != float64(1) {
+		t.Fatalf("older-than apply = %s", applied.RawJSON)
+	}
+	v.AssertFileNotExists(".trash/people/old.md")
+	v.AssertFileExists(".trash/people/recent.md")
+	v.AssertFileExists("people/live.md")
+}
+
+func TestIntegration_TrashEmptyRejectsInvalidOlderThan(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	v.RunCLI("trash", "empty", "--older-than", "last week").MustFail(t, "INVALID_INPUT")
 }

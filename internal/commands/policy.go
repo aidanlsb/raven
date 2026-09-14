@@ -94,17 +94,18 @@ var compatibilityAliasCommandIDs = map[string]struct{}{
 // apply immediately and only preview when the caller passes `dry-run`; these
 // are either absent (PreviewModeNone) or use PreviewModeBulkPreviewDefault,
 // which previews only when a bulk input (stdin/references/object_ids/trait_ids) is
-// present. High-blast-radius operations (section deletion, restore, bulk writes,
-// query --apply, schema rename, check fixes, and skill install/remove) preview
-// by default and require `confirm` to apply.
+// present. High-blast-radius operations (section deletion, restore, trash empty,
+// bulk writes, query --apply, schema rename, check fixes, and skill
+// install/remove) preview by default and require `confirm` to apply.
 var previewModeByCommandID = map[string]PreviewMode{
-	"add":        PreviewModeBulkPreviewDefault,
-	"delete":     PreviewModeBulkPreviewDefault,
-	"move":       PreviewModeBulkPreviewDefault,
-	"reclassify": PreviewModeBulkPreviewDefault,
-	"restore":    PreviewModePreviewDefault,
-	"set":        PreviewModeBulkPreviewDefault,
-	"update":     PreviewModeBulkPreviewDefault,
+	"add":         PreviewModeBulkPreviewDefault,
+	"delete":      PreviewModeBulkPreviewDefault,
+	"move":        PreviewModeBulkPreviewDefault,
+	"reclassify":  PreviewModeBulkPreviewDefault,
+	"restore":     PreviewModePreviewDefault,
+	"trash_empty": PreviewModePreviewDefault,
+	"set":         PreviewModeBulkPreviewDefault,
+	"update":      PreviewModeBulkPreviewDefault,
 
 	"check create-missing": PreviewModePreviewDefault,
 	"check_fix":            PreviewModePreviewDefault,
@@ -141,6 +142,7 @@ var mutationPhaseCommandIDs = map[string]struct{}{
 	"unset":          {},
 	"delete":         {},
 	"restore":        {},
+	"trash_empty":    {},
 	"move":           {},
 	"section_create": {},
 	"section_delete": {},

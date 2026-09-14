@@ -142,6 +142,7 @@ rvn query "type:date" --ids | head -100 | rvn delete --stdin --confirm
 - Works on file-level objects and explicit non-Markdown file paths (section IDs are skipped)
 - Does NOT automatically update backlinks
 - Recover deleted files with `rvn trash list` and preview-first `rvn restore`
+- Permanently remove trash with preview-first `rvn trash empty`
 
 **Warning:** Always check backlinks before deleting:
 
@@ -159,6 +160,14 @@ To recover one of the deleted references:
 rvn trash list --json
 rvn restore project/old-project --json             # Preview
 rvn restore project/old-project --confirm --json   # Apply and heal the index
+```
+
+To permanently remove trash instead of restoring it:
+
+```bash
+rvn trash empty --json
+rvn trash empty --confirm --json
+rvn trash empty --older-than 30d --confirm --json
 ```
 
 If multiple deleted versions share a reference, select one by the exact
@@ -326,6 +335,14 @@ through the configured trash directory and heals the index and references:
 rvn trash list --json
 rvn restore person/freya --json
 rvn restore person/freya --confirm --json
+```
+
+When recovery is not wanted, permanently remove trash entries with
+preview-first `rvn trash empty`:
+
+```bash
+rvn trash empty --json
+rvn trash empty --confirm --json
 ```
 
 Other bulk mutations do not have built-in rollback. Use git when the affected

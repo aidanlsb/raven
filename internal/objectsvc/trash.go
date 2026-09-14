@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
@@ -36,6 +37,7 @@ type TrashEntry struct {
 	RestorePath  string `json:"restore_path"`
 	Kind         string `json:"kind"`
 	MetadataPath string `json:"-"`
+	modifiedAt   time.Time
 }
 
 type trashEntryMetadata struct {
@@ -143,6 +145,7 @@ func ListTrash(req ListTrashRequest) (*ListTrashResult, error) {
 			RestorePath:  restorePath,
 			Kind:         entryKind,
 			MetadataPath: metadataPath,
+			modifiedAt:   info.ModTime(),
 		})
 		return nil
 	})

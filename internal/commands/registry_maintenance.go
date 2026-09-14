@@ -38,6 +38,48 @@ currently permanent, so older trash entries remain recoverable.`,
 			"List deleted Markdown objects or non-Markdown files",
 		},
 	},
+	"trash_empty": {
+		Name:        "trash empty",
+		Description: "Permanently delete matching files from the configured vault trash",
+		LongDesc: `Permanently removes files from deletion.trash_dir.
+
+Deletion is a four-step lifecycle:
+- delete moves a live file into trash
+- trash list shows recoverable entries
+- restore puts an entry back into the vault
+- trash empty permanently removes matching trash entries
+
+Preview is the default. Pass --confirm to delete. Emptying trash never
+touches live vault objects; only files already inside the configured trash
+directory are removed.
+
+Use --older-than to limit the operation to trash files whose modification
+time is at least the given duration in the past. Durations use Go's syntax
+(24h, 1h30m) plus d for days (7d, 30d). Omit the flag to include every
+trash entry.
+
+JSON output lists each matching trash_path and the total count, for both
+preview and apply.`,
+		Category:   CategoryMaintenance,
+		Access:     AccessWrite,
+		Risk:       RiskDestructive,
+		VaultScope: VaultScopeRequired,
+		Flags: []FlagMeta{
+			{Name: "older-than", Description: "Delete only trash files whose modification time is at least this duration in the past (24h, 7d, 30d)", Type: FlagTypeString, Examples: []string{"24h", "7d", "30d"}},
+			{Name: "confirm", Description: "Permanently delete matching trash entries (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn trash empty --json",
+			"rvn trash empty --confirm --json",
+			"rvn trash empty --older-than 30d --json",
+			"rvn trash empty --older-than 30d --confirm --json",
+		},
+		UseCases: []string{
+			"Preview a full trash wipe",
+			"Permanently empty the vault trash",
+			"Remove trash entries older than a given duration",
+		},
+	},
 	"reindex": {
 		Name:        "reindex",
 		Description: "Rebuild the SQLite index from managed vault files",

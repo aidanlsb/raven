@@ -69,6 +69,50 @@ func HandleRestore(_ context.Context, req commandexec.Request) commandexec.Resul
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
+// HandleTrashEmpty executes the canonical `trash empty` command.
+func HandleTrashEmpty(_ context.Context, req commandexec.Request) commandexec.Result {
+	rt, failure := newConfigOnlyCommandVaultRuntime(strings.TrimSpace(req.VaultPath))
+	if failure.Error != nil {
+		return failure
+	}
+	defer rt.Close()
+
+	emptyReq := objectsvc.EmptyTrashRequest{
+		VaultPath:   rt.VaultPath,
+		VaultConfig: rt.VaultCfg,
+		OlderThan:   strings.TrimSpace(stringArg(req.Args, "older-than")),
+	}
+	if req.Preview {
+		result, err := objectsvc.PreviewEmptyTrash(emptyReq)
+		if err != nil {
+			return mapContentMutationError(err)
+		}
+		return commandexec.Success(emptyTrashResultData(result, true), &commandexec.Meta{Count: len(result.Entries)})
+	}
+
+	result, err := objectsvc.EmptyTrash(emptyReq)
+	if err != nil {
+		return mapContentMutationError(err)
+	}
+	return commandexec.Success(emptyTrashResultData(result, false), &commandexec.Meta{Count: len(result.Entries)})
+}
+
+func emptyTrashResultData(result *objectsvc.EmptyTrashResult, preview bool) map[string]interface{} {
+	data := map[string]interface{}{
+		"preview":   preview,
+		"items":     result.Entries,
+		"total":     len(result.Entries),
+		"trash_dir": result.TrashDir,
+	}
+	if result.OlderThan != "" {
+		data["older_than"] = result.OlderThan
+	}
+	if !preview {
+		data["removed"] = len(result.Entries)
+	}
+	return data
+}
+
 func restoreResultData(result *objectsvc.RestoreByReferenceResult, preview bool) map[string]interface{} {
 	data := map[string]interface{}{
 		"preview":      preview,

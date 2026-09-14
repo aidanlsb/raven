@@ -14,6 +14,7 @@ These rules are non-negotiable.
 | Delete section subtrees | `section_delete` | manual heading/body deletion |
 | Delete files | `delete` | `rm`, manual trash moves |
 | Recover deleted files | `trash_list`, then `restore` | manual filesystem moves |
+| Permanently empty trash | `trash_empty` | `rm` inside trash |
 | Create typed items | `new` | `touch`, `echo >` |
 | Read vault files | `read` | `cat`, `head`, `tail` |
 | Edit content files | `edit` | ad hoc shell text replacement |
@@ -29,6 +30,8 @@ Why:
 - `delete` checks impact and uses safe deletion behavior.
 - `trash_list` exposes exact recovery references/paths; `restore` previews,
   refuses overwrites, and heals the index after confirmation.
+- `trash_empty` permanently removes matching trash entries only; it previews
+  by default, requires `confirm=true`, and never touches live vault objects.
 - `new` applies schema and templates.
 - `edit` is for content markdown only; use `vault config`, `schema`, and `template` for control-plane files.
 
@@ -37,7 +40,8 @@ use it after clear user intent; if deletion impact is uncertain, inspect the
 object, run `backlinks`, or call with `dry-run=true` first. Bulk delete still
 previews unless `confirm=true`. To recover, invoke `trash_list`, preview
 `restore` with its returned `reference` or `trash_path`, then repeat with
-`confirm=true`.
+`confirm=true`. To permanently remove trash, preview `trash_empty` and apply
+with `confirm=true`; pass `older-than` (for example `30d`) to limit the wipe.
 
 Copying a new non-Markdown file into the vault is intentionally a normal
 filesystem operation; run `reindex` afterward. Use `move` for files already in
