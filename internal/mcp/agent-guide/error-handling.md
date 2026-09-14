@@ -23,6 +23,10 @@ If there is no Raven JSON payload at all:
 2. Re-check required args and command ID.
 3. Do not assume data/schema corruption without a Raven envelope.
 
+CLI `--json` is not a silent transport: flag-parse failures (including a
+markdown bullet that starts with `-`) return `ok=false` with `INVALID_INPUT`.
+An empty stdout on a non-zero exit is a bug, not a successful no-op.
+
 ## 4. Schema validation failures
 
 When `new`, `upsert`, `set`, `import`, or schema commands fail because a value does not match the schema:

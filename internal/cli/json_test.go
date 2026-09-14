@@ -3,8 +3,10 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -74,5 +76,96 @@ func TestOutputJSONReturnsErrorAfterWritingFailureEnvelope(t *testing.T) {
 	}
 	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
 		t.Fatalf("error = %#v, want code %s\noutput=%s", resp.Error, ErrInvalidInput, out)
+	}
+}
+
+func TestEmitJSONErrorEnvelopeWritesFlagParseFailure(t *testing.T) {
+	parseErr := errors.New("unknown shorthand flag: ' ' in - probe a")
+	var got error
+	out := captureStdout(t, func() {
+		got = emitJSONErrorEnvelope(true, parseErr)
+	})
+	requireJSONResponseFailure(t, got)
+
+	var resp Response
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("unmarshal failure envelope: %v\noutput=%s", err, out)
+	}
+	if resp.OK || resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+		t.Fatalf("error = %#v, want INVALID_INPUT\noutput=%s", resp.Error, out)
+	}
+	if !strings.Contains(resp.Error.Message, "unknown shorthand flag") {
+		t.Fatalf("message = %q, want cobra flag-parse text", resp.Error.Message)
+	}
+	if !strings.Contains(resp.Error.Suggestion, `--json -- "- Review the rollout"`) {
+		t.Fatalf("suggestion = %q, want dash-terminator example", resp.Error.Suggestion)
+	}
+}
+
+func TestEmitJSONErrorEnvelopeLeavesHumanErrorsAlone(t *testing.T) {
+	parseErr := errors.New("unknown shorthand flag: ' ' in - probe a")
+	var got error
+	out := captureStdout(t, func() {
+		got = emitJSONErrorEnvelope(false, parseErr)
+	})
+	if !errors.Is(got, parseErr) {
+		t.Fatalf("error = %v, want original cobra error", got)
+	}
+	if out != "" {
+		t.Fatalf("expected no JSON stdout in human mode, got %q", out)
+	}
+}
+
+func TestEmitJSONErrorEnvelopeSkipsSentinels(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "already written", err: errJSONResponseFailure},
+		{name: "pick cancelled", err: ErrPickCancelled},
+		{name: "help", err: flag.ErrHelp},
+		{name: "nil", err: nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got error
+			out := captureStdout(t, func() {
+				got = emitJSONErrorEnvelope(true, tc.err)
+			})
+			if tc.err == nil {
+				if got != nil {
+					t.Fatalf("error = %v, want nil", got)
+				}
+			} else if !errors.Is(got, tc.err) {
+				t.Fatalf("error = %v, want %v", got, tc.err)
+			}
+			if out != "" {
+				t.Fatalf("expected no extra stdout, got %q", out)
+			}
+		})
+	}
+}
+
+func TestArgsRequestJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "bare flag", args: []string{"add", "--json"}, want: true},
+		{name: "after other flags", args: []string{"add", "- probe a", "--to", "today", "--json"}, want: true},
+		{name: "equals true", args: []string{"--json=true"}, want: true},
+		{name: "equals false", args: []string{"--json=false"}, want: false},
+		{name: "absent", args: []string{"add", "note"}, want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := argsRequestJSON(tc.args); got != tc.want {
+				t.Fatalf("argsRequestJSON(%q) = %v, want %v", tc.args, got, tc.want)
+			}
+		})
 	}
 }

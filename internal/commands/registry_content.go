@@ -110,8 +110,11 @@ Permissive writes: if appended text contains a [[ref]] whose target does not exi
 yet, the write still succeeds. The response adds data.missing_refs,
 data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.
 
-If text starts with a dash, put it after -- so it is not parsed as a flag:
-  rvn add --to today -- "- Review the rollout"`,
+If text starts with a dash, put it after -- so it is not parsed as a flag.
+Keep flags such as --to and --json before --. Flags written after -- are treated
+as ordinary text and can be appended by accident:
+
+  rvn add --to today --json -- "- Review the rollout"`,
 		Args: []ArgMeta{
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true, Variadic: true, StdinIndependent: true},
 		},
@@ -126,7 +129,7 @@ If text starts with a dash, put it after -- so it is not parsed as a flag:
 			"rvn add \"@priority(high) Urgent task\" --json",
 			"rvn add \"Note\" --to projects/website.md --json",
 			"rvn add \"Plan\" --to tomorrow --json",
-			"rvn add --to today -- \"- Review the rollout\"",
+			"rvn add --to today --json -- \"- Review the rollout\"",
 			"rvn add \"Bug report\" --to project/raven#bugs-fixes --json",
 			"rvn query \"section .title==Tasks\" --ids | rvn add \"Review backlog\" --stdin --confirm --json",
 		},
@@ -712,7 +715,12 @@ Supports two input modes:
 
 Permissive writes: if an applied edit introduces a [[ref]] whose target does not
 exist yet, the edit still succeeds. The response adds data.missing_refs,
-data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
+data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.
+
+If old_str or new_str starts with a dash, put those strings after -- so they are
+not parsed as flags. Keep flags such as --json and --dry-run before --:
+
+  rvn edit --json daily/2025-12-27.md -- "- Churn analysis" "- [[project/churn-analysis|Churn analysis]]"`,
 		Args: []ArgMeta{
 			{Name: "reference", Description: "File path, object reference, or section reference relative to vault root", Required: true},
 			{Name: "old_str", Description: "String to replace (must be unique in target scope, single-edit mode)", Required: false},
@@ -723,10 +731,10 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target.`,
 			{Name: "edits-json", Description: "JSON object with ordered edits, e.g. '{\"edits\":[{\"old_str\":\"from\",\"new_str\":\"to\"}]}'", Type: FlagTypeJSON},
 		},
 		Examples: []string{
-			`rvn edit "daily/2025-12-27.md" "- Churn analysis" "- [[project/churn-analysis|Churn analysis]]" --json`,
+			`rvn edit --json "daily/2025-12-27.md" -- "- Churn analysis" "- [[project/churn-analysis|Churn analysis]]"`,
 			`rvn edit "pages/notes.md" "reccommendation" "recommendation" --dry-run --json`,
 			`rvn edit "project/raven#working-docs" "old link" "new link" --json`,
-			`rvn edit "daily/2026-01-02.md" "- old task" "" --json`,
+			`rvn edit --json "daily/2026-01-02.md" -- "- old task" ""`,
 			`rvn edit "pages/notes.md" --edits-json '{"edits":[{"old_str":"reccommendation","new_str":"recommendation"},{"old_str":"Status: draft","new_str":"Status: active"}]}' --json`,
 		},
 		UseCases: []string{
