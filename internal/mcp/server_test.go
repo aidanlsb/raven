@@ -29,7 +29,7 @@ func newTestServerWithVault(t *testing.T) *Server {
 		t.Fatalf("write schema: %v", err)
 	}
 
-	return &Server{vaultPath: tmp}
+	return NewServer(ServerOptions{PinnedVaultPath: tmp})
 }
 
 func callResourcesList(t *testing.T, s *Server) []Resource {
@@ -216,7 +216,7 @@ func TestResourcesListOmitsAgentInstructionsWhenMissing(t *testing.T) {
 func TestResourcesListIncludesAgentInstructionsWhenPresent(t *testing.T) {
 	t.Parallel()
 	s := newTestServerWithVault(t)
-	agentPath := filepath.Join(s.vaultPath, "AGENTS.md")
+	agentPath := filepath.Join(s.pinnedVaultPath, "AGENTS.md")
 	if err := os.WriteFile(agentPath, []byte("# Agent Rules\n"), 0644); err != nil {
 		t.Fatalf("write AGENTS.md: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestResourcesReadAgentInstructions(t *testing.T) {
 	t.Parallel()
 	s := newTestServerWithVault(t)
 	expected := "# Agent Rules\nAlways run checks.\n"
-	agentPath := filepath.Join(s.vaultPath, "AGENTS.md")
+	agentPath := filepath.Join(s.pinnedVaultPath, "AGENTS.md")
 	if err := os.WriteFile(agentPath, []byte(expected), 0644); err != nil {
 		t.Fatalf("write AGENTS.md: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestResourcesReadSchemaUsesVaultPathOverrideAgainstPinnedVault(t *testing.T
 		t.Fatalf("write override schema: %v", err)
 	}
 
-	s := &Server{vaultPath: pinnedVault}
+	s := NewServer(ServerOptions{PinnedVaultPath: pinnedVault})
 	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
 		"uri":        "raven://schema/current",
 		"vault_path": overrideVault,
@@ -355,10 +355,10 @@ func TestResourcesReadSavedQueriesUsesNamedVaultOverrideAgainstPinnedVault(t *te
 		t.Fatalf("write config.toml: %v", err)
 	}
 
-	s := &Server{
-		vaultPath: pinnedVault,
-		baseArgs:  []string{"--config", configPath},
-	}
+	s := NewServer(ServerOptions{
+		PinnedVaultPath: pinnedVault,
+		ConfigPath:      configPath,
+	})
 	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
 		"uri":   "raven://queries/saved",
 		"vault": "work",
@@ -394,7 +394,7 @@ func TestResourcesReadAgentInstructionsUsesVaultPathOverride(t *testing.T) {
 		t.Fatalf("write override AGENTS.md: %v", err)
 	}
 
-	s := &Server{vaultPath: pinnedVault}
+	s := NewServer(ServerOptions{PinnedVaultPath: pinnedVault})
 	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
 		"uri":        vaultAgentInstructionsResourceURI,
 		"vault_path": overrideVault,
@@ -417,7 +417,7 @@ func TestResourcesReadRejectsVaultAndVaultPathTogether(t *testing.T) {
 	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
 		"uri":        "raven://schema/current",
 		"vault":      "work",
-		"vault_path": s.vaultPath,
+		"vault_path": s.pinnedVaultPath,
 	})
 	if resp.Error == nil {
 		t.Fatal("expected invalid params error")
@@ -443,8 +443,8 @@ func TestResourcesListIncludesVaultContext(t *testing.T) {
 	if resp.Result.VaultContext == nil {
 		t.Fatal("expected vault_context in resources/list result")
 	}
-	if resp.Result.VaultContext.Path != s.vaultPath {
-		t.Fatalf("vault_context.path = %q, want %q", resp.Result.VaultContext.Path, s.vaultPath)
+	if resp.Result.VaultContext.Path != s.pinnedVaultPath {
+		t.Fatalf("vault_context.path = %q, want %q", resp.Result.VaultContext.Path, s.pinnedVaultPath)
 	}
 	if resp.Result.VaultContext.Source != "pinned" {
 		t.Fatalf("vault_context.source = %q, want %q", resp.Result.VaultContext.Source, "pinned")
@@ -466,7 +466,7 @@ func TestResourcesListAcceptsVaultPathOverride(t *testing.T) {
 		t.Fatalf("write override AGENTS.md: %v", err)
 	}
 
-	s := &Server{vaultPath: pinnedVault}
+	s := NewServer(ServerOptions{PinnedVaultPath: pinnedVault})
 	resp := callResourcesListResponse(t, s, map[string]interface{}{"vault_path": overrideVault})
 	if resp.Error != nil {
 		t.Fatalf("resources/list error: %s", resp.Error.Message)
@@ -484,7 +484,7 @@ func TestResourcesListRejectsVaultAndVaultPathTogether(t *testing.T) {
 	s := newTestServerWithVault(t)
 	resp := callResourcesListResponse(t, s, map[string]interface{}{
 		"vault":      "work",
-		"vault_path": s.vaultPath,
+		"vault_path": s.pinnedVaultPath,
 	})
 	if resp.Error == nil {
 		t.Fatal("expected invalid params error")
@@ -519,8 +519,8 @@ func TestResourcesReadSchemaIncludesVaultContext(t *testing.T) {
 	if full.Result.VaultContext == nil {
 		t.Fatal("expected vault_context in schema resources/read result")
 	}
-	if full.Result.VaultContext.Path != s.vaultPath {
-		t.Fatalf("vault_context.path = %q, want %q", full.Result.VaultContext.Path, s.vaultPath)
+	if full.Result.VaultContext.Path != s.pinnedVaultPath {
+		t.Fatalf("vault_context.path = %q, want %q", full.Result.VaultContext.Path, s.pinnedVaultPath)
 	}
 }
 
@@ -539,9 +539,7 @@ func TestResourcesReadRejectsAmbientFallback(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	s := &Server{
-		baseArgs: []string{"--config", configPath},
-	}
+	s := NewServer(ServerOptions{ConfigPath: configPath})
 	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
 		"uri": "raven://schema/current",
 	})
@@ -674,8 +672,8 @@ func firstNonEmptyLine(content string) string {
 
 func TestStartupModeMessage(t *testing.T) {
 	t.Parallel()
-	t.Run("uses explicit vaultPath field", func(t *testing.T) {
-		s := &Server{vaultPath: "/tmp/explicit"}
+	t.Run("reports typed path pin", func(t *testing.T) {
+		s := NewServer(ServerOptions{PinnedVaultPath: "/tmp/explicit"})
 		msg := s.startupVaultModeMessage()
 		want := "[raven-mcp] Server starting with pinned vault: /tmp/explicit"
 		if msg != want {
@@ -683,26 +681,8 @@ func TestStartupModeMessage(t *testing.T) {
 		}
 	})
 
-	t.Run("detects --vault-path value in base args", func(t *testing.T) {
-		s := &Server{baseArgs: []string{"--vault-path", "/tmp/base"}}
-		msg := s.startupVaultModeMessage()
-		want := "[raven-mcp] Server starting with pinned vault: /tmp/base"
-		if msg != want {
-			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
-		}
-	})
-
-	t.Run("detects --vault-path=value in base args", func(t *testing.T) {
-		s := &Server{baseArgs: []string{"--vault-path=/tmp/inline"}}
-		msg := s.startupVaultModeMessage()
-		want := "[raven-mcp] Server starting with pinned vault: /tmp/inline"
-		if msg != want {
-			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
-		}
-	})
-
-	t.Run("detects --vault name in base args", func(t *testing.T) {
-		s := &Server{baseArgs: []string{"--vault", "work"}}
+	t.Run("reports typed named pin", func(t *testing.T) {
+		s := NewServer(ServerOptions{PinnedVaultName: "work"})
 		msg := s.startupVaultModeMessage()
 		want := "[raven-mcp] Server starting with pinned named vault: work"
 		if msg != want {
@@ -710,8 +690,20 @@ func TestStartupModeMessage(t *testing.T) {
 		}
 	})
 
+	t.Run("prefers path pin when both pins are set", func(t *testing.T) {
+		s := NewServer(ServerOptions{
+			PinnedVaultPath: "/tmp/path",
+			PinnedVaultName: "work",
+		})
+		msg := s.startupVaultModeMessage()
+		want := "[raven-mcp] Server starting with pinned vault: /tmp/path"
+		if msg != want {
+			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
+		}
+	})
+
 	t.Run("describes explicit-vault requirement when unpinned", func(t *testing.T) {
-		s := &Server{}
+		s := NewServer(ServerOptions{})
 		msg := s.startupVaultModeMessage()
 		want := "[raven-mcp] Server starting without a pinned vault; vault-scoped calls require vault or vault_path"
 		if msg != want {
@@ -720,10 +712,58 @@ func TestStartupModeMessage(t *testing.T) {
 	})
 }
 
+func TestNewServerStoresTypedOptions(t *testing.T) {
+	t.Parallel()
+
+	in := strings.NewReader("")
+	out := &bytes.Buffer{}
+	s := NewServer(ServerOptions{
+		ConfigPath:      "/tmp/config.toml",
+		PinnedVaultName: "work",
+		PinnedVaultPath: "/tmp/vault",
+		ExecutablePath:  "/tmp/rvn",
+		Input:           in,
+		Output:          out,
+	})
+	if s.configPath != "/tmp/config.toml" {
+		t.Fatalf("configPath = %q, want /tmp/config.toml", s.configPath)
+	}
+	if s.pinnedVaultName != "work" {
+		t.Fatalf("pinnedVaultName = %q, want work", s.pinnedVaultName)
+	}
+	if s.pinnedVaultPath != "/tmp/vault" {
+		t.Fatalf("pinnedVaultPath = %q, want /tmp/vault", s.pinnedVaultPath)
+	}
+	if s.executable != "/tmp/rvn" {
+		t.Fatalf("executable = %q, want /tmp/rvn", s.executable)
+	}
+	if s.in != in {
+		t.Fatal("Input option was not stored")
+	}
+	if s.out != out {
+		t.Fatal("Output option was not stored")
+	}
+}
+
+func TestNewServerDoesNotParseCLIArgumentStrings(t *testing.T) {
+	t.Parallel()
+	s := NewServer(ServerOptions{
+		ConfigPath: "--vault-path /tmp/not-a-pin",
+	})
+	if s.pinnedVaultPath != "" || s.pinnedVaultName != "" {
+		t.Fatalf("CLI-looking config path was treated as a vault pin: path=%q name=%q", s.pinnedVaultPath, s.pinnedVaultName)
+	}
+	msg := s.startupVaultModeMessage()
+	want := "[raven-mcp] Server starting without a pinned vault; vault-scoped calls require vault or vault_path"
+	if msg != want {
+		t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
+	}
+}
+
 func TestResolveVaultPathUsesExplicitVaultPathDirectly(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
-	s := &Server{baseArgs: []string{"--vault-path", tmp}}
+	s := NewServer(ServerOptions{PinnedVaultPath: tmp})
 
 	got, err := s.resolveVaultPath()
 	if err != nil {
@@ -749,9 +789,10 @@ work = %q
 		t.Fatalf("write config: %v", err)
 	}
 
-	s := &Server{
-		baseArgs: []string{"--config", configPath, "--vault", "work"},
-	}
+	s := NewServer(ServerOptions{
+		ConfigPath:      configPath,
+		PinnedVaultName: "work",
+	})
 
 	got, err := s.resolveVaultPath()
 	if err != nil {
@@ -794,9 +835,7 @@ work = %q
 		t.Fatalf("write config: %v", err)
 	}
 
-	s := &Server{
-		baseArgs: []string{"--config", configPath},
-	}
+	s := NewServer(ServerOptions{ConfigPath: configPath})
 
 	res, err := s.resolveVaultForInvocation("work", "")
 	if err != nil {
@@ -819,7 +858,7 @@ func TestResolveVaultForInvocationSessionFocusOrderAndSource(t *testing.T) {
 	launchVault := t.TempDir()
 	focusVault := t.TempDir()
 	overrideVault := t.TempDir()
-	s := &Server{vaultPath: launchVault}
+	s := NewServer(ServerOptions{PinnedVaultPath: launchVault})
 	s.setSessionVaultFocus("focused", focusVault)
 
 	res, err := s.resolveVaultForInvocation("", "")
@@ -851,7 +890,7 @@ func TestResolveVaultForInvocationSessionFocusOrderAndSource(t *testing.T) {
 func TestResolveVaultForInvocationPinnedSource(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
-	s := &Server{vaultPath: tmp}
+	s := NewServer(ServerOptions{PinnedVaultPath: tmp})
 
 	res, err := s.resolveVaultForInvocation("", "")
 	if err != nil {
@@ -865,20 +904,37 @@ func TestResolveVaultForInvocationPinnedSource(t *testing.T) {
 	}
 }
 
-func TestResolveVaultForInvocationBaseArgsVaultPathSource(t *testing.T) {
+func TestResolveVaultForInvocationNamedPinSource(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
-	s := &Server{baseArgs: []string{"--vault-path", tmp}}
+	vaultPath := filepath.Join(tmp, "work-vault")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	configPath := filepath.Join(tmp, "config.toml")
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`[vaults]
+work = %q
+`, vaultPath)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	s := NewServer(ServerOptions{
+		ConfigPath:      configPath,
+		PinnedVaultName: "work",
+	})
 
 	res, err := s.resolveVaultForInvocation("", "")
 	if err != nil {
 		t.Fatalf("resolveVaultForInvocation error: %v", err)
 	}
-	if res.path != tmp {
-		t.Fatalf("path = %q, want %q", res.path, tmp)
+	if res.path != vaultPath {
+		t.Fatalf("path = %q, want %q", res.path, vaultPath)
 	}
-	if res.source != "base_args" {
-		t.Fatalf("source = %q, want %q", res.source, "base_args")
+	if res.source != "pinned" {
+		t.Fatalf("source = %q, want %q", res.source, "pinned")
+	}
+	if res.name != "work" {
+		t.Fatalf("name = %q, want %q", res.name, "work")
 	}
 }
 
@@ -894,9 +950,7 @@ func TestResolveVaultForInvocationRejectsAmbientFallback(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	s := &Server{
-		baseArgs: []string{"--config", configPath},
-	}
+	s := NewServer(ServerOptions{ConfigPath: configPath})
 
 	_, err := s.resolveVaultForInvocation("", "")
 	if err == nil {
@@ -931,7 +985,7 @@ func TestResolveVaultForInvocationAllowsExplicitVaultPath(t *testing.T) {
 func TestResolveVaultForInvocationAllowsPinnedVault(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
-	s := &Server{vaultPath: tmp}
+	s := NewServer(ServerOptions{PinnedVaultPath: tmp})
 
 	res, err := s.resolveVaultForInvocation("", "")
 	if err != nil {
@@ -962,12 +1016,12 @@ func TestRunCancelsInFlightToolCallAndHandlesPing(t *testing.T) {
 
 	inReader, inWriter := io.Pipe()
 	outReader, outWriter := io.Pipe()
-	server := &Server{
-		vaultPath: t.TempDir(),
-		in:        inReader,
-		out:       outWriter,
-		invoker:   commandexec.NewInvoker(registry, nil),
-	}
+	server := NewServer(ServerOptions{
+		PinnedVaultPath: t.TempDir(),
+		Input:           inReader,
+		Output:          outWriter,
+	})
+	server.invoker = commandexec.NewInvoker(registry, nil)
 
 	responses := make(chan rpcTestResponse, 8)
 	readDone := make(chan error, 1)

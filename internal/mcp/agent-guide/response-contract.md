@@ -220,7 +220,7 @@ confirm which vault was used on every vault-scoped call:
 
 Fields:
 - `path` — resolved absolute vault path (always present).
-- `source` — how the vault was selected: `vault_path` (explicit path override), `vault` (named vault from invocation), `focus` (in-memory MCP session focus), `pinned` (constructor launch pin), or `base_args` (from serve flags).
+- `source` — how the vault was selected: `vault_path` (explicit path override), `vault` (named vault from invocation), `focus` (in-memory MCP session focus), or `pinned` (server launch pin from `--vault-path` / `--vault`).
 - `name` — configured vault name (omitted when no name could be resolved).
 
 Vault-scoped `resources/list` and `resources/read` responses also return a

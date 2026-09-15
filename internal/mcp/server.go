@@ -22,14 +22,26 @@ import (
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
+// ServerOptions configures an MCP server from typed launch settings.
+// Construct the server once with NewServer; do not re-parse CLI argument strings.
+type ServerOptions struct {
+	ConfigPath      string
+	PinnedVaultName string
+	PinnedVaultPath string
+	ExecutablePath  string
+	Input           io.Reader
+	Output          io.Writer
+}
+
 // Server is an MCP server that wraps Raven CLI commands.
 type Server struct {
-	vaultPath  string   // Immutable launch-time path pin.
-	baseArgs   []string // Immutable launch-time serve arguments.
-	in         io.Reader
-	out        io.Writer
-	executable string // Path to the rvn executable
-	invoker    *commandexec.Invoker
+	configPath      string // Immutable launch-time config override.
+	pinnedVaultName string // Immutable launch-time named vault pin.
+	pinnedVaultPath string // Immutable launch-time path pin.
+	in              io.Reader
+	out             io.Writer
+	executable      string // Path to the rvn executable
+	invoker         *commandexec.Invoker
 
 	sessionVaultMu   sync.RWMutex
 	sessionVaultPath string
@@ -125,62 +137,40 @@ func resolveExecutablePath() string {
 	return executable
 }
 
-// NewServer creates a new MCP server.
-// If vaultPath is non-empty, it is pinned via --vault-path for all command execution.
-func NewServer(vaultPath string) *Server {
-	baseArgs := []string{}
-	if strings.TrimSpace(vaultPath) != "" {
-		baseArgs = append(baseArgs, "--vault-path", vaultPath)
+// NewServer creates an MCP server from typed options.
+// Empty ExecutablePath, Input, or Output fall back to the current process binary,
+// stdin, and stdout. A non-empty PinnedVaultPath takes precedence over PinnedVaultName.
+func NewServer(opts ServerOptions) *Server {
+	in := opts.Input
+	if in == nil {
+		in = os.Stdin
+	}
+	out := opts.Output
+	if out == nil {
+		out = os.Stdout
+	}
+	executable := strings.TrimSpace(opts.ExecutablePath)
+	if executable == "" {
+		executable = resolveExecutablePath()
 	}
 
 	return &Server{
-		vaultPath:  vaultPath,
-		baseArgs:   baseArgs,
-		in:         os.Stdin,
-		out:        os.Stdout,
-		executable: resolveExecutablePath(),
+		configPath:      strings.TrimSpace(opts.ConfigPath),
+		pinnedVaultName: strings.TrimSpace(opts.PinnedVaultName),
+		pinnedVaultPath: strings.TrimSpace(opts.PinnedVaultPath),
+		in:              in,
+		out:             out,
+		executable:      executable,
 	}
 }
 
-// NewServerWithBaseArgs creates a new MCP server using a set of base CLI flags.
-// This is used by `rvn serve` for optional config/state context and vault pins.
-func NewServerWithBaseArgs(baseArgs []string) *Server {
-	normalized := append([]string{}, baseArgs...)
-	return &Server{
-		baseArgs:   normalized,
-		in:         os.Stdin,
-		out:        os.Stdout,
-		executable: resolveExecutablePath(),
-	}
-}
-
-// NewServerWithExecutable creates a new MCP server with a custom executable path.
-// This is primarily used for testing with a built binary.
+// NewServerWithExecutable creates an MCP server pinned to vaultPath with a custom
+// executable path. Tests use this to supply a built rvn binary for version metadata.
 func NewServerWithExecutable(vaultPath, executable string) *Server {
-	baseArgs := []string{}
-	if strings.TrimSpace(vaultPath) != "" {
-		baseArgs = append(baseArgs, "--vault-path", vaultPath)
-	}
-
-	return &Server{
-		vaultPath:  vaultPath,
-		baseArgs:   baseArgs,
-		in:         os.Stdin,
-		out:        os.Stdout,
-		executable: executable,
-	}
-}
-
-// NewServerWithBaseArgsAndExecutable creates a new MCP server using base CLI flags and a custom executable path.
-// This is primarily used for integration tests that need both config context and built-binary version metadata.
-func NewServerWithBaseArgsAndExecutable(baseArgs []string, executable string) *Server {
-	normalized := append([]string{}, baseArgs...)
-	return &Server{
-		baseArgs:   normalized,
-		in:         os.Stdin,
-		out:        os.Stdout,
-		executable: executable,
-	}
+	return NewServer(ServerOptions{
+		PinnedVaultPath: vaultPath,
+		ExecutablePath:  executable,
+	})
 }
 
 // SetIO sets the input and output streams for the server.
@@ -240,44 +230,13 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) startupVaultModeMessage() string {
-	if vaultPath := strings.TrimSpace(s.vaultPath); vaultPath != "" {
+	if vaultPath := strings.TrimSpace(s.pinnedVaultPath); vaultPath != "" {
 		return fmt.Sprintf("[raven-mcp] Server starting with pinned vault: %s", vaultPath)
 	}
-	if vaultPath, ok := baseArgValue(s.baseArgs, "--vault-path"); ok {
-		return fmt.Sprintf("[raven-mcp] Server starting with pinned vault: %s", vaultPath)
-	}
-	if vaultName, ok := baseArgValue(s.baseArgs, "--vault"); ok {
+	if vaultName := strings.TrimSpace(s.pinnedVaultName); vaultName != "" {
 		return fmt.Sprintf("[raven-mcp] Server starting with pinned named vault: %s", vaultName)
 	}
 	return "[raven-mcp] Server starting without a pinned vault; vault-scoped calls require vault or vault_path"
-}
-
-func baseArgValue(args []string, flag string) (string, bool) {
-	prefix := flag + "="
-	var value string
-	found := false
-
-	for i := 0; i < len(args); i++ {
-		arg := strings.TrimSpace(args[i])
-		if arg == flag {
-			if i+1 < len(args) {
-				if next := strings.TrimSpace(args[i+1]); next != "" {
-					value = next
-					found = true
-				}
-				i++
-			}
-			continue
-		}
-		if strings.HasPrefix(arg, prefix) {
-			if inline := strings.TrimSpace(strings.TrimPrefix(arg, prefix)); inline != "" {
-				value = inline
-				found = true
-			}
-		}
-	}
-
-	return value, found
 }
 
 func (s *Server) handleRequest(req *Request) {
@@ -753,7 +712,7 @@ func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultRe
 		}
 		return vaultResolution{path: p, source: "focus", name: sessionName}, nil
 	}
-	if pinned := strings.TrimSpace(s.vaultPath); pinned != "" {
+	if pinned := strings.TrimSpace(s.pinnedVaultPath); pinned != "" {
 		p, err := s.validateResolvedVaultPath(pinned)
 		if err != nil {
 			return vaultResolution{}, err
@@ -761,20 +720,12 @@ func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultRe
 		name := s.lookupVaultName(p)
 		return vaultResolution{path: p, source: "pinned", name: name}, nil
 	}
-	if vp, ok := baseArgValue(s.baseArgs, "--vault-path"); ok {
-		p, err := s.validateResolvedVaultPath(vp)
-		if err != nil {
-			return vaultResolution{}, err
-		}
-		name := s.lookupVaultName(p)
-		return vaultResolution{path: p, source: "base_args", name: name}, nil
-	}
-	if vn, ok := baseArgValue(s.baseArgs, "--vault"); ok {
+	if vn := strings.TrimSpace(s.pinnedVaultName); vn != "" {
 		p, err := s.namedVaultPath(vn)
 		if err != nil {
 			return vaultResolution{}, err
 		}
-		return vaultResolution{path: p, source: "base_args", name: vn}, nil
+		return vaultResolution{path: p, source: "pinned", name: vn}, nil
 	}
 	return vaultResolution{}, &vaultResolutionError{
 		code:       string(codes.ErrVaultAmbiguous),
@@ -820,7 +771,7 @@ func (s *Server) applyVaultFocusResult(result commandexec.Result) error {
 
 // lookupVaultName attempts a best-effort reverse lookup of vault name from path.
 func (s *Server) lookupVaultName(path string) string {
-	ctx, err := configsvc.LoadVaultContext(s.directConfigContextOptions())
+	ctx, err := configsvc.LoadVaultContext(s.configContextOptions())
 	if err != nil {
 		return ""
 	}
@@ -833,7 +784,7 @@ func (s *Server) lookupVaultName(path string) string {
 }
 
 func (s *Server) namedVaultPath(name string) (string, error) {
-	ctx, err := configsvc.LoadVaultContext(s.directConfigContextOptions())
+	ctx, err := configsvc.LoadVaultContext(s.configContextOptions())
 	if err != nil {
 		return "", err
 	}

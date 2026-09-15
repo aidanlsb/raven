@@ -37,13 +37,10 @@ func (s *Server) callCanonicalCommandWithContext(ctx context.Context, commandID 
 		}
 	}
 
-	configOpts := s.directConfigContextOptions()
-
 	result := invoker.Execute(ctx, commandexec.Request{
 		CommandID:      commandID,
 		VaultPath:      vaultPath,
-		ConfigPath:     configOpts.ConfigPathOverride,
-		StatePath:      configOpts.StatePathOverride,
+		ConfigPath:     s.configPath,
 		ExecutablePath: s.executable,
 		Caller:         commandexec.CallerMCP,
 		Args:           args,

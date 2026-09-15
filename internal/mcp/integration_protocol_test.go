@@ -5,7 +5,10 @@ package mcp_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -143,4 +146,103 @@ func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
 	}
 }
 
-// TestMCPIntegration_CreateObject tests creating an object via MCP tool call.
+func TestMCPIntegration_ServeTypedLaunchPins(t *testing.T) {
+	t.Parallel()
+	binary := testutil.BuildCLI(t)
+	wantVersion := versioninfo.CurrentVersionInfoFromExecutable(binary).Version
+
+	t.Run("path pin", func(t *testing.T) {
+		t.Parallel()
+		v := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			Build()
+
+		stdout, stderr := runServeInitialize(t, binary, "--vault-path", v.Path)
+		wantStartup := "[raven-mcp] Server starting with pinned vault: " + v.Path
+		if !strings.Contains(stderr, wantStartup) {
+			t.Fatalf("stderr missing path pin message %q\nstderr: %s", wantStartup, stderr)
+		}
+		assertInitializeVersion(t, stdout, wantVersion)
+	})
+
+	t.Run("named pin", func(t *testing.T) {
+		t.Parallel()
+		v := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			Build()
+		configPath := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(configPath, []byte(fmt.Sprintf("[vaults]\nwork = %q\n", v.Path)), 0o644); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+
+		stdout, stderr := runServeInitialize(t, binary, "--config", configPath, "--vault", "work")
+		wantStartup := "[raven-mcp] Server starting with pinned named vault: work"
+		if !strings.Contains(stderr, wantStartup) {
+			t.Fatalf("stderr missing named pin message %q\nstderr: %s", wantStartup, stderr)
+		}
+		assertInitializeVersion(t, stdout, wantVersion)
+	})
+
+	t.Run("no pin", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr := runServeInitialize(t, binary)
+		wantStartup := "[raven-mcp] Server starting without a pinned vault; vault-scoped calls require vault or vault_path"
+		if !strings.Contains(stderr, wantStartup) {
+			t.Fatalf("stderr missing unpinned message %q\nstderr: %s", wantStartup, stderr)
+		}
+		assertInitializeVersion(t, stdout, wantVersion)
+	})
+
+	t.Run("custom executable metadata", func(t *testing.T) {
+		t.Parallel()
+		v := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			Build()
+
+		var output bytes.Buffer
+		server := mcp.NewServer(mcp.ServerOptions{
+			PinnedVaultPath: v.Path,
+			ExecutablePath:  binary,
+		})
+		server.SetIO(strings.NewReader(""), &output)
+		server.HandleRequest(&mcp.Request{JSONRPC: "2.0", ID: 1, Method: "initialize"})
+		assertInitializeVersion(t, output.String(), wantVersion)
+	})
+}
+
+func runServeInitialize(t *testing.T, binary string, extraArgs ...string) (stdout, stderr string) {
+	t.Helper()
+	args := append(append([]string{}, extraArgs...), "serve")
+	cmd := exec.Command(binary, args...)
+	cmd.Stdin = strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}` + "\n")
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("serve command failed: %v\nstderr: %s\nstdout: %s", err, stderrBuf.String(), stdoutBuf.String())
+	}
+	return stdoutBuf.String(), stderrBuf.String()
+}
+
+func assertInitializeVersion(t *testing.T, stdout, wantVersion string) {
+	t.Helper()
+	line := strings.Split(strings.TrimSpace(stdout), "\n")[0]
+	var initResp struct {
+		Result map[string]interface{} `json:"result"`
+		Error  *mcp.RPCError          `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(line), &initResp); err != nil {
+		t.Fatalf("failed to parse initialize response: %v\nraw: %s", err, line)
+	}
+	if initResp.Error != nil {
+		t.Fatalf("initialize returned rpc error: %+v", initResp.Error)
+	}
+	serverInfo, ok := initResp.Result["serverInfo"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("initialize missing serverInfo: %#v", initResp.Result)
+	}
+	version, _ := serverInfo["version"].(string)
+	if version != wantVersion {
+		t.Fatalf("initialize serverInfo.version=%q, want %q", version, wantVersion)
+	}
+}

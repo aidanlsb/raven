@@ -19,7 +19,7 @@ import (
 
 func TestCompactDescribeReturnsContract(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactDescribe(map[string]interface{}{"command": "query"})
 	if isErr {
 		t.Fatalf("describe returned error: %s", out)
@@ -108,7 +108,7 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 func TestCompactDescribeUpdateUsesTraitIDsForBulkArgs(t *testing.T) {
 	t.Parallel()
 
-	server := NewServer("")
+	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactDescribe(map[string]interface{}{"command": "update"})
 	if isErr {
 		t.Fatalf("describe returned error: %s", out)
@@ -146,7 +146,7 @@ func TestCompactInvokeListsSavedQueriesWithDedicatedCommand(t *testing.T) {
     description: "Active projects"
 `).
 		Build()
-	server := NewServer(v.Path)
+	server := NewServer(ServerOptions{PinnedVaultPath: v.Path})
 
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "query_saved_list",
@@ -224,7 +224,7 @@ func TestCompactInvokeRejectsInvalidArgumentTypes(t *testing.T) {
 
 func TestCompactInvokeRejectsNonInvokableCommand(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "serve",
 	})
@@ -247,7 +247,7 @@ func TestCompactInvokeRejectsNonInvokableCommand(t *testing.T) {
 
 func TestCompactDescribeRejectsLegacyCommandAlias(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactDescribe(map[string]interface{}{"command": "raven_query"})
 	if !isErr {
 		t.Fatalf("expected describe error, got: %s", out)
@@ -268,7 +268,7 @@ func TestCompactDescribeRejectsLegacyCommandAlias(t *testing.T) {
 
 func TestCompactInvokeRejectsLegacyCommandAlias(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "raven_query",
 		"args": map[string]interface{}{
@@ -294,7 +294,7 @@ func TestCompactInvokeRejectsLegacyCommandAlias(t *testing.T) {
 
 func TestCompactInvokeRejectsRemovedUpsertCommand(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "upsert",
 		"args": map[string]interface{}{
@@ -324,7 +324,7 @@ func TestCompactInvokeSuccess(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
-	server := NewServer(v.Path)
+	server := NewServer(ServerOptions{PinnedVaultPath: v.Path})
 
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "new",
@@ -348,7 +348,7 @@ func TestCompactInvokeUsesWrapperVaultPathOverride(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
-	server := NewServer("")
+	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command":    "new",
 		"vault_path": v.Path,
@@ -383,7 +383,7 @@ func TestCompactInvokeUsesWrapperVaultNameOverride(t *testing.T) {
 		t.Fatalf("write state: %v", err)
 	}
 
-	server := NewServerWithBaseArgs([]string{"--config", configPath})
+	server := NewServer(ServerOptions{ConfigPath: configPath})
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "new",
 		"vault":   "work",
@@ -416,9 +416,9 @@ func TestCompactInvokeVaultInspectAliasesRemainCompatible(t *testing.T) {
 	)), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	server := NewServerWithBaseArgs([]string{
-		"--config", configPath,
-		"--vault-path", vaultPath,
+	server := NewServer(ServerOptions{
+		ConfigPath:      configPath,
+		PinnedVaultPath: vaultPath,
 	})
 
 	parseData := func(raw string) map[string]interface{} {
@@ -464,7 +464,7 @@ func TestCompactInvokeVaultInspectAliasesRemainCompatible(t *testing.T) {
 
 func TestCompactInvokeRejectsConflictingVaultOverrides(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command":    "query",
 		"vault":      "work",
@@ -504,7 +504,7 @@ func TestCompactInvokeRejectsConflictingVaultOverrides(t *testing.T) {
 
 func TestCompactInvokeHintsForTopLevelCommandArgs(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command":   "read",
 		"reference": "daily/2026-03-17.md",
@@ -728,5 +728,5 @@ func newServerWithoutDefaultVault(t *testing.T) *Server {
 		t.Fatalf("write state: %v", err)
 	}
 
-	return NewServerWithBaseArgs([]string{"--config", configPath})
+	return NewServer(ServerOptions{ConfigPath: configPath})
 }

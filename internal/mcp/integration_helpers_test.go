@@ -243,7 +243,6 @@ func runCLIWithConfig(t *testing.T, binary, configPath string, args ...string) *
 type testServer struct {
 	t          *testing.T
 	vaultPath  string
-	baseArgs   []string
 	executable string
 	server     *mcp.Server
 }
@@ -256,21 +255,19 @@ type toolResult struct {
 
 // newTestServer creates a test server with a custom executable path.
 func newTestServer(t *testing.T, vaultPath, executable string) *testServer {
-	server := mcp.NewServerWithExecutable(vaultPath, executable)
-	return &testServer{
-		t:          t,
-		vaultPath:  vaultPath,
-		executable: executable,
-		server:     server,
-	}
+	return newTestServerWithOptions(t, mcp.ServerOptions{
+		PinnedVaultPath: vaultPath,
+		ExecutablePath:  executable,
+	})
 }
 
-func newTestServerWithBaseArgs(t *testing.T, baseArgs []string, executable string) *testServer {
-	server := mcp.NewServerWithBaseArgsAndExecutable(baseArgs, executable)
+func newTestServerWithOptions(t *testing.T, opts mcp.ServerOptions) *testServer {
+	t.Helper()
+	server := mcp.NewServer(opts)
 	return &testServer{
 		t:          t,
-		baseArgs:   append([]string{}, baseArgs...),
-		executable: executable,
+		vaultPath:  opts.PinnedVaultPath,
+		executable: opts.ExecutablePath,
 		server:     server,
 	}
 }
