@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -28,7 +29,10 @@ func runMCPParityMetaTests(t *testing.T, binary string) {
 			"getting-started/installation.md": "# Installation\n\nWelcome.\n",
 			"querying/query-language.md":      "# Query Language\n\nquery predicate examples.\n",
 		})
-		server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
+		server := newTestServerWithOptions(t, mcp.ServerOptions{
+			ConfigPath:     configPath,
+			ExecutablePath: binary,
+		})
 
 		mcpResult := server.callTool("docs", map[string]interface{}{})
 		cliResult := runCLIWithConfig(t, binary, configPath, "docs")
@@ -47,7 +51,10 @@ func runMCPParityMetaTests(t *testing.T, binary string) {
 			"index.yaml":                 docsIndex,
 			"querying/query-language.md": "# Query Language\n\nquery predicate examples.\nquery trait examples.\nquery refs examples.\n",
 		})
-		server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
+		server := newTestServerWithOptions(t, mcp.ServerOptions{
+			ConfigPath:     configPath,
+			ExecutablePath: binary,
+		})
 
 		mcpResult := server.callTool("docs_search", map[string]interface{}{
 			"query":   "query",
@@ -85,7 +92,10 @@ func runMCPParityMetaTests(t *testing.T, binary string) {
 		defer httpServer.Close()
 
 		configPath := seedGlobalDocsConfig(t, nil)
-		server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
+		server := newTestServerWithOptions(t, mcp.ServerOptions{
+			ConfigPath:     configPath,
+			ExecutablePath: binary,
+		})
 
 		source := httpServer.URL + "/archive"
 		mcpResult := server.callTool("docs_fetch", map[string]interface{}{
@@ -130,7 +140,10 @@ func runMCPParityMetaTests(t *testing.T, binary string) {
 		// throwaway config instead of the host's. Share one config dir so the
 		// derived docs path (and thus the docs envelope) stays identical.
 		sharedConfig := filepath.Join(t.TempDir(), "config.toml")
-		server := newTestServerWithBaseArgs(t, baseArgsForConfig(sharedConfig), binary)
+		server := newTestServerWithOptions(t, mcp.ServerOptions{
+			ConfigPath:     sharedConfig,
+			ExecutablePath: binary,
+		})
 
 		mcpInitPath := filepath.Join(vMCP.Path, "new-vault")
 		cliInitPath := filepath.Join(vCLI.Path, "new-vault")

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -33,20 +32,14 @@ For use with Claude Desktop, add to your config:
     }
   }`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		baseArgs := make([]string, 0, 8)
-		if strings.TrimSpace(configPath) != "" {
-			baseArgs = append(baseArgs, "--config", configPath)
-		}
-		if strings.TrimSpace(vaultPathFlag) != "" {
-			baseArgs = append(baseArgs, "--vault-path", vaultPathFlag)
-		} else if strings.TrimSpace(vaultName) != "" {
-			baseArgs = append(baseArgs, "--vault", vaultName)
-		}
-
 		// Don't output anything to stdout except MCP protocol
 		// (but we can log to stderr if needed)
 
-		server := mcp.NewServerWithBaseArgs(baseArgs)
+		server := mcp.NewServer(mcp.ServerOptions{
+			ConfigPath:      configPath,
+			PinnedVaultName: vaultName,
+			PinnedVaultPath: vaultPathFlag,
+		})
 		if err := server.Run(); err != nil {
 			return fmt.Errorf("MCP server error: %w", err)
 		}

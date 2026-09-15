@@ -247,10 +247,8 @@ func TestCallCanonicalCommandWithContextPropagatesCancellation(t *testing.T) {
 		return commandexec.Failure("CANCELLED", ctx.Err().Error(), nil, "")
 	})
 
-	server := &Server{
-		vaultPath: vaultPath,
-		invoker:   commandexec.NewInvoker(registry, nil),
-	}
+	server := NewServer(ServerOptions{PinnedVaultPath: vaultPath})
+	server.invoker = commandexec.NewInvoker(registry, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

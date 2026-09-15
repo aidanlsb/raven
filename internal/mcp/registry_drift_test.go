@@ -105,7 +105,7 @@ func TestCompactToolsShareSingleEnvelopeShape(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
-	server := NewServer(v.Path)
+	server := NewServer(ServerOptions{PinnedVaultPath: v.Path})
 
 	discoverOut, discoverErr := server.callCompactDiscover(nil)
 	describeOut, describeErr := server.callCompactDescribe(map[string]interface{}{"command": "query"})
@@ -172,7 +172,7 @@ func TestCompactInvokePreservesMutationPhase(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
-	server := NewServer(v.Path)
+	server := NewServer(ServerOptions{PinnedVaultPath: v.Path})
 
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "new",
@@ -224,7 +224,7 @@ func TestSavedQueriesResourceMatchesCommand(t *testing.T) {
       ids: true
 `).
 		Build()
-	server := NewServer(v.Path)
+	server := NewServer(ServerOptions{PinnedVaultPath: v.Path})
 
 	resource := callResourcesRead(t, server, "raven://queries/saved")
 	var resourcePayload map[string]interface{}
@@ -274,7 +274,7 @@ func TestSchemaResourceMatchesSharedReader(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
-	server := NewServer(v.Path)
+	server := NewServer(ServerOptions{PinnedVaultPath: v.Path})
 
 	resource := callResourcesRead(t, server, "raven://schema/current")
 

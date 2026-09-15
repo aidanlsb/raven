@@ -12,19 +12,8 @@ import (
 	"github.com/aidanlsb/raven/internal/configsvc"
 )
 
-func (s *Server) directConfigContextOptions() configsvc.ContextOptions {
-	opts := configsvc.ContextOptions{}
-	for i := 0; i < len(s.baseArgs); i++ {
-		arg := strings.TrimSpace(s.baseArgs[i])
-		switch {
-		case arg == "--config" && i+1 < len(s.baseArgs):
-			opts.ConfigPathOverride = strings.TrimSpace(s.baseArgs[i+1])
-			i++
-		case strings.HasPrefix(arg, "--config="):
-			opts.ConfigPathOverride = strings.TrimSpace(strings.TrimPrefix(arg, "--config="))
-		}
-	}
-	return opts
+func (s *Server) configContextOptions() configsvc.ContextOptions {
+	return configsvc.ContextOptions{ConfigPathOverride: s.configPath}
 }
 
 // marshalResultEnvelope is the single adapter that turns a commandexec.Result

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -58,7 +59,10 @@ func TestMCPIntegration_RejectsAmbientVaultFallback(t *testing.T) {
 	}
 
 	binary := testutil.BuildCLI(t)
-	server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
+	server := newTestServerWithOptions(t, mcp.ServerOptions{
+		ConfigPath:     configPath,
+		ExecutablePath: binary,
+	})
 
 	// Without an explicit vault, MCP must refuse to fall back.
 	result := server.callTool("raven_invoke", map[string]interface{}{
@@ -117,8 +121,11 @@ func TestMCPIntegration_VaultFocusOverridesAndRestoresLaunchPin(t *testing.T) {
 	}
 
 	binary := testutil.BuildCLI(t)
-	baseArgs := append(baseArgsForConfig(configPath), "--vault-path", a.Path)
-	server := newTestServerWithBaseArgs(t, baseArgs, binary)
+	server := newTestServerWithOptions(t, mcp.ServerOptions{
+		ConfigPath:      configPath,
+		PinnedVaultPath: a.Path,
+		ExecutablePath:  binary,
+	})
 
 	focus := server.callTool("raven_invoke", map[string]interface{}{
 		"command": "vault_focus",
@@ -181,7 +188,7 @@ func TestMCPIntegration_VaultFocusOverridesAndRestoresLaunchPin(t *testing.T) {
 	if restored.IsError {
 		t.Fatalf("launch-pin call after clear failed: %s", restored.Text)
 	}
-	assertMCPVaultContext(t, restored.Text, a.Path, "a", "base_args")
+	assertMCPVaultContext(t, restored.Text, a.Path, "a", "pinned")
 	if !a.FileExists("people/restored-launch.md") || b.FileExists("people/restored-launch.md") {
 		t.Fatal("clear did not restore launch pin A")
 	}
@@ -197,7 +204,10 @@ func TestMCPIntegration_VaultFocusOnUnpinnedServer(t *testing.T) {
 	}
 
 	binary := testutil.BuildCLI(t)
-	server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
+	server := newTestServerWithOptions(t, mcp.ServerOptions{
+		ConfigPath:     configPath,
+		ExecutablePath: binary,
+	})
 
 	before := server.callTool("raven_invoke", map[string]interface{}{
 		"command": "new",
@@ -279,7 +289,10 @@ func TestMCPIntegration_InitFirstRunVaultPolicy(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 
 	configPath := filepath.Join(t.TempDir(), "config.toml")
-	server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
+	server := newTestServerWithOptions(t, mcp.ServerOptions{
+		ConfigPath:     configPath,
+		ExecutablePath: binary,
+	})
 
 	vaultRoot := t.TempDir()
 	firstPath := filepath.Join(vaultRoot, "first")

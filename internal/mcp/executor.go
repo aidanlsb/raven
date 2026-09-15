@@ -10,13 +10,7 @@ import (
 // invoke path using the in-process command runtime only and a pinned vault path
 // when one is provided. The returned map is the standard Raven JSON envelope.
 func ExecuteToolDirect(vaultPath, commandRef string, args map[string]interface{}) (map[string]interface{}, error) {
-	server := &Server{
-		vaultPath:  vaultPath,
-		executable: resolveExecutablePath(),
-	}
-	if strings.TrimSpace(vaultPath) != "" {
-		server.baseArgs = []string{"--vault-path", vaultPath}
-	}
+	server := NewServer(ServerOptions{PinnedVaultPath: vaultPath})
 
 	invokeArgs := map[string]interface{}{
 		"command": strings.TrimSpace(commandRef),
