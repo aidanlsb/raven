@@ -9,7 +9,6 @@ import (
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // buildFieldPredicateSQL builds SQL for .field==value predicates.
@@ -227,7 +226,7 @@ func (e *Executor) isRefField(typeName, fieldName string) bool {
 	if fieldDef == nil {
 		return false
 	}
-	return fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray
+	return fieldDef.Type.IsRef()
 }
 
 func (e *Executor) isDateTargetRefField(typeName, fieldName string) bool {
@@ -242,7 +241,7 @@ func (e *Executor) isDateTargetRefField(typeName, fieldName string) bool {
 	if fieldDef == nil {
 		return false
 	}
-	return (fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray) && fieldDef.Target == "date"
+	return fieldDef.Type.IsRef() && fieldDef.Target == "date"
 }
 
 func (e *Executor) isRefArrayField(typeName, fieldName string) bool {
@@ -257,7 +256,7 @@ func (e *Executor) isRefArrayField(typeName, fieldName string) bool {
 	if fieldDef == nil {
 		return false
 	}
-	return fieldDef.Type == schema.FieldTypeRefArray
+	return fieldDef.Type.IsRef() && fieldDef.Type.IsArray()
 }
 
 func (e *Executor) normalizeBoolFieldComparisonValue(typeName, fieldName, value string, op CompareOp) string {
@@ -275,7 +274,7 @@ func (e *Executor) normalizeBoolFieldComparisonValue(typeName, fieldName, value 
 	if fieldDef == nil {
 		return value
 	}
-	if fieldDef.Type != schema.FieldTypeBool && fieldDef.Type != schema.FieldTypeBoolArray {
+	if !fieldDef.Type.IsBool() {
 		return value
 	}
 
@@ -301,7 +300,7 @@ func (e *Executor) fieldEqualityMode(typeName, fieldName string) fieldEqualityMo
 	if fieldDef == nil {
 		return fieldEqualityModeFallback
 	}
-	if strings.HasSuffix(string(fieldDef.Type), "[]") {
+	if fieldDef.Type.IsArray() {
 		return fieldEqualityModeArray
 	}
 	return fieldEqualityModeScalar

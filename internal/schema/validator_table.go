@@ -131,18 +131,6 @@ var validatorTable = map[FieldType]fieldValidator{
 	},
 }
 
-// arrayTypeToScalar maps array FieldTypes to their scalar element types.
-var arrayTypeToScalar = map[FieldType]FieldType{
-	FieldTypeStringArray:   FieldTypeString,
-	FieldTypeNumberArray:   FieldTypeNumber,
-	FieldTypeURLArray:      FieldTypeURL,
-	FieldTypeDateArray:     FieldTypeDate,
-	FieldTypeDatetimeArray: FieldTypeDatetime,
-	FieldTypeEnumArray:     FieldTypeEnum,
-	FieldTypeBoolArray:     FieldTypeBool,
-	FieldTypeRefArray:      FieldTypeRef,
-}
-
 // validateFieldValue validates a field value against its definition using the validator table.
 func validateFieldValue(name string, value fieldvalue.FieldValue, def *FieldDefinition) error {
 	if value.IsNull() {
@@ -152,7 +140,7 @@ func validateFieldValue(name string, value fieldvalue.FieldValue, def *FieldDefi
 	// Handle array types by extracting scalar type and validating elements
 	scalarType := def.Type
 	isArray := false
-	if elementType, ok := arrayTypeToScalar[def.Type]; ok {
+	if elementType, ok := def.Type.ElementType(); ok {
 		scalarType = elementType
 		isArray = true
 	}

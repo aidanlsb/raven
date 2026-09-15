@@ -402,7 +402,7 @@ func (v *Validator) validateTraitArrayQuantifierPredicate(p *ArrayQuantifierPred
 			Suggestion: fmt.Sprintf("Available traits: %s", strings.Join(v.availableTraits(), ", ")),
 		}
 	}
-	elemType, ok := arrayElementType(traitDef.Type)
+	elemType, ok := traitDef.Type.ElementType()
 	if !ok {
 		return &ValidationError{
 			Message:    fmt.Sprintf("array predicates any()/all()/none() require an array-valued trait, but trait '%s' is %s", traitName, traitDef.Type),
@@ -437,7 +437,7 @@ func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, ty
 			return err
 		}
 
-		if isArrayFieldType(fieldDef.Type) {
+		if fieldDef.Type.IsArray() {
 			return &ValidationError{
 				Message:    fmt.Sprintf("string function predicates require a scalar field, but '.%s' is %s", p.Field, fieldDef.Type),
 				Suggestion: fmt.Sprintf(`Use any(.%s, includes(_, "...")) for array fields`, p.Field),
@@ -464,7 +464,7 @@ func (v *Validator) validateArrayQuantifierPredicate(p *ArrayQuantifierPredicate
 		return err
 	}
 
-	elemType, ok := arrayElementType(fieldDef.Type)
+	elemType, ok := fieldDef.Type.ElementType()
 	if !ok {
 		return &ValidationError{
 			Message:    fmt.Sprintf("array predicates any()/all()/none() require an array field, but '.%s' is %s", p.Field, fieldDef.Type),
@@ -478,7 +478,7 @@ func (v *Validator) validateArrayQuantifierPredicate(p *ArrayQuantifierPredicate
 func (v *Validator) validateArrayElementPredicate(pred Predicate, elemType schema.FieldType) error {
 	switch p := pred.(type) {
 	case *ElementEqualityPredicate:
-		if p.IsRefValue && elemType != schema.FieldTypeRef {
+		if p.IsRefValue && !elemType.IsRef() {
 			return &ValidationError{
 				Message:    fmt.Sprintf("reference element comparison is only valid for ref[] fields, not %s[]", elemType),
 				Suggestion: "Use [[target]] comparisons only for ref[] fields",
@@ -570,34 +570,6 @@ func isStringLikeFieldType(fieldType schema.FieldType) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-func isArrayFieldType(fieldType schema.FieldType) bool {
-	_, ok := arrayElementType(fieldType)
-	return ok
-}
-
-func arrayElementType(fieldType schema.FieldType) (schema.FieldType, bool) {
-	switch fieldType {
-	case schema.FieldTypeStringArray:
-		return schema.FieldTypeString, true
-	case schema.FieldTypeNumberArray:
-		return schema.FieldTypeNumber, true
-	case schema.FieldTypeURLArray:
-		return schema.FieldTypeURL, true
-	case schema.FieldTypeDateArray:
-		return schema.FieldTypeDate, true
-	case schema.FieldTypeDatetimeArray:
-		return schema.FieldTypeDatetime, true
-	case schema.FieldTypeEnumArray:
-		return schema.FieldTypeEnum, true
-	case schema.FieldTypeBoolArray:
-		return schema.FieldTypeBool, true
-	case schema.FieldTypeRefArray:
-		return schema.FieldTypeRef, true
-	default:
-		return "", false
 	}
 }
 

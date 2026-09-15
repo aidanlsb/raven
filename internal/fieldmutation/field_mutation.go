@@ -566,7 +566,7 @@ func validateRefTargets(
 		if fieldDef == nil || fieldDef.Target == "" {
 			continue
 		}
-		if fieldDef.Type != schema.FieldTypeRef && fieldDef.Type != schema.FieldTypeRefArray {
+		if !fieldDef.Type.IsRef() {
 			continue
 		}
 

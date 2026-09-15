@@ -99,7 +99,9 @@ func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertRe
 		targetDef.Type = targetType
 		targetDef.Values = enumValues
 		if element {
-			targetDef.Type = arrayElementType(targetType)
+			if elem, ok := targetType.ElementType(); ok {
+				targetDef.Type = elem
+			}
 		}
 		if err := validateTraitLiteralValue(value); err != nil {
 			return err
@@ -213,7 +215,7 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 	if err := validateCollectionConversion(sourceType, targetType); err != nil {
 		return nil, err
 	}
-	if isRefConversionType(targetType) && !isRefConversionType(sourceType) {
+	if targetType.IsRef() && !sourceType.IsRef() {
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot convert non-reference field '%s.%s' to '%s' without a reference target", typeName, fieldName, targetType)).WithSuggestion("The schema convert command does not infer ref targets; convert an existing ref/ref[] field so its target can be preserved")
 	}
 	walkOptions, err := conversionWalkOptions(rt)
@@ -226,11 +228,13 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 		targetDef := *fieldDef
 		targetDef.Type = targetType
 		targetDef.Values = enumValues
-		if !isRefConversionType(targetType) {
+		if !targetType.IsRef() {
 			targetDef.Target = ""
 		}
 		if element {
-			targetDef.Type = arrayElementType(targetType)
+			if elem, ok := targetType.ElementType(); ok {
+				targetDef.Type = elem
+			}
 		}
 		errors := schema.ValidateFields(
 			map[string]fieldvalue.FieldValue{fieldName: value},
@@ -399,7 +403,7 @@ func buildConversionMapper(
 		values:     make(map[string]fieldvalue.FieldValue, len(rawMapping)),
 	}
 	orderedKeys := orderedMappingKeys(rawMapping, order)
-	elementMapping := isArrayConversionType(sourceType) && isArrayConversionType(targetType)
+	elementMapping := sourceType.IsArray() && targetType.IsArray()
 	for _, key := range orderedKeys {
 		raw := rawMapping[key]
 		if containsMappingObject(raw) {
@@ -413,7 +417,7 @@ func buildConversionMapper(
 	}
 
 	newValues := newEnumValues(mapper.values, orderedKeys, sourceType, targetType)
-	if isEnumConversionType(targetType) && len(newValues) == 0 {
+	if targetType.IsEnum() && len(newValues) == 0 {
 		return nil, nil, svcerr.New(codes.ErrInvalidInput, "enum conversion must produce at least one string value")
 	}
 	for _, key := range orderedKeys {
@@ -429,7 +433,7 @@ func invalidMappingValueError(key string, targetType schema.FieldType, cause err
 }
 
 func (m *conversionMapper) convert(value fieldvalue.FieldValue, missing map[string]struct{}) (fieldvalue.FieldValue, bool) {
-	if isArrayConversionType(m.sourceType) && isArrayConversionType(m.targetType) {
+	if m.sourceType.IsArray() && m.targetType.IsArray() {
 		items, ok := value.AsArray()
 		if !ok {
 			items = []fieldvalue.FieldValue{value}
@@ -602,7 +606,7 @@ func resolveConversionTarget(sourceType schema.FieldType, requested string, trai
 }
 
 func validateCollectionConversion(sourceType, targetType schema.FieldType) error {
-	if isArrayConversionType(sourceType) && !isArrayConversionType(targetType) {
+	if sourceType.IsArray() && !targetType.IsArray() {
 		return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot convert collection type '%s' to scalar type '%s'", sourceType, targetType)).WithSuggestion("Collection-to-scalar conversion has no unambiguous reduction rule; convert to another [] type")
 	}
 	return nil
@@ -633,12 +637,12 @@ func addFiniteRequiredValues(
 			missing[value] = struct{}{}
 		}
 	}
-	switch sourceType {
-	case schema.FieldTypeEnum, schema.FieldTypeEnumArray:
+	switch {
+	case sourceType.IsEnum():
 		for _, value := range enumValues {
 			addIfMissing(value)
 		}
-	case schema.FieldTypeBool, schema.FieldTypeBoolArray:
+	case sourceType.IsBool():
 		addIfMissing("true")
 		addIfMissing("false")
 	}
@@ -763,10 +767,10 @@ func traitMappingOrder(def *schema.TraitDefinition, sourceType schema.FieldType)
 }
 
 func finiteMappingOrder(sourceType schema.FieldType, enumValues []string) []string {
-	switch sourceType {
-	case schema.FieldTypeEnum, schema.FieldTypeEnumArray:
+	switch {
+	case sourceType.IsEnum():
 		return append([]string(nil), enumValues...)
-	case schema.FieldTypeBool, schema.FieldTypeBoolArray:
+	case sourceType.IsBool():
 		return []string{"true", "false"}
 	default:
 		return nil
@@ -801,7 +805,7 @@ func newEnumValues(
 	order []string,
 	sourceType, targetType schema.FieldType,
 ) []string {
-	if !isEnumConversionType(targetType) {
+	if !targetType.IsEnum() {
 		return nil
 	}
 	seen := make(map[string]struct{})
@@ -822,7 +826,7 @@ func newEnumValues(
 	}
 	for _, key := range order {
 		value := mapping[key]
-		if isArrayConversionType(targetType) && !isArrayConversionType(sourceType) {
+		if targetType.IsArray() && !sourceType.IsArray() {
 			if items, ok := value.AsArray(); ok {
 				for _, item := range items {
 					appendValue(item)
@@ -838,10 +842,11 @@ func newEnumValues(
 func mappingValueForTarget(raw interface{}, targetType schema.FieldType, elementMapping bool) (fieldvalue.FieldValue, error) {
 	effectiveType := targetType
 	if elementMapping {
-		effectiveType = arrayElementType(targetType)
+		if elem, ok := targetType.ElementType(); ok {
+			effectiveType = elem
+		}
 	}
-	if isArrayConversionType(effectiveType) {
-		elementType := arrayElementType(effectiveType)
+	if elementType, ok := effectiveType.ElementType(); ok {
 		switch values := raw.(type) {
 		case []interface{}:
 			items := make([]fieldvalue.FieldValue, 0, len(values))
@@ -965,22 +970,6 @@ func containsMappingObject(value interface{}) bool {
 		}
 	}
 	return false
-}
-
-func isArrayConversionType(fieldType schema.FieldType) bool {
-	return strings.HasSuffix(string(fieldType), "[]")
-}
-
-func isEnumConversionType(fieldType schema.FieldType) bool {
-	return fieldType == schema.FieldTypeEnum || fieldType == schema.FieldTypeEnumArray
-}
-
-func isRefConversionType(fieldType schema.FieldType) bool {
-	return fieldType == schema.FieldTypeRef || fieldType == schema.FieldTypeRefArray
-}
-
-func arrayElementType(fieldType schema.FieldType) schema.FieldType {
-	return schema.FieldType(strings.TrimSuffix(string(fieldType), "[]"))
 }
 
 func conversionWalkOptions(rt *vaultruntime.Runtime) (*vault.WalkOptions, error) {
