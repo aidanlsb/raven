@@ -5,6 +5,7 @@ package mcp_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -372,6 +373,51 @@ type: page
 		vMCP.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
 		vCLI.AssertFileContains("tasks/task1.md", "@priority(low) First task")
 		vCLI.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
+	})
+
+	t.Run("section_create_blank_line_before_heading", func(t *testing.T) {
+		const content = `---
+type: project
+title: Site
+status: active
+---
+
+## Alpha
+Alpha body
+## Beta
+Beta body
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/site.md", content).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/site.md", content).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+		server.callTool("reindex", nil)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("section_create", map[string]interface{}{
+			"file":  "projects/site",
+			"title": "Inserted",
+			"level": 2,
+		})
+		cliResult := vCLI.RunCLI("section", "create", "projects/site", "Inserted", "--level", "2")
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"section", "file", "placement", "level"})
+
+		mcpFile := vMCP.ReadFile("projects/site.md")
+		cliFile := vCLI.ReadFile("projects/site.md")
+		if mcpFile != cliFile {
+			t.Fatalf("MCP and CLI wrote different files\nmcp:\n%s\ncli:\n%s", mcpFile, cliFile)
+		}
+		if !strings.Contains(mcpFile, "Beta body\n\n## Inserted\n") {
+			t.Fatalf("missing blank line before heading:\n%s", mcpFile)
+		}
+		if strings.Contains(mcpFile, "## Inserted\n\n") {
+			t.Fatalf("inserted a blank line after the heading:\n%s", mcpFile)
+		}
 	})
 
 	t.Run("section_delete_preview_and_apply", func(t *testing.T) {

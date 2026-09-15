@@ -397,6 +397,9 @@ would shift another section's slug. It applies immediately by default; pass
 
 The title is plain text and --level is required; do not include Markdown '#'
 prefixes in the title. With no anchor, the heading is appended at end of file.
+If the line immediately before the insertion point is non-empty, Raven inserts
+one blank line before the new heading. It does not insert a blank line after
+the heading; add body content later with 'rvn add --to file#section'.
 
 Structural anchors are mutually exclusive:
 - --after inserts after the anchor's complete subtree, including all descendants.
