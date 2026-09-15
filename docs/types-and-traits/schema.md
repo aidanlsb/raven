@@ -380,7 +380,7 @@ collaborators:
 ## Trait definitions
 
 Traits are inline annotations in content, written as `@name` or `@name(value)`.
-Traits inside inline code spans (`` `like this` ``) are ignored.
+Traits inside inline code spans (`` `like this` ``) and fenced code blocks are ignored.
 Traits have one value slot, but that value can use the same scalar or array
 types as object frontmatter fields.
 

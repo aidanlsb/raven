@@ -95,6 +95,11 @@ Raven ships its own long-form documentation. Use these when you need usage detai
 - Keep path operations vault-relative where possible.
 - If `reclassify` reports dropped fields or missing required values, stop and resolve explicitly.
 - Check `rvn backlinks` before deleting objects to avoid orphaned references.
+- Wrap trait names in backticks when you are naming them rather than creating
+  them. `` `@todo` `` documents the token and does not create a todo. Bare
+  names (`todo`, `due`, `priority`) remain fine in comments, footers, and
+  prose. The parser skips inline code and fenced code blocks; a slash prefix
+  or italics still parse as traits.
 
 ## Load references as needed
 

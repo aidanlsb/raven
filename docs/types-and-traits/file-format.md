@@ -312,7 +312,7 @@ Traits can appear anywhere on a line:
 - Task @priority(high) with @due(tomorrow) multiple traits
 ```
 
-Traits inside inline code spans (`` `like this` ``) are ignored.
+Traits inside inline code spans (`` `like this` ``) and fenced code blocks are ignored.
 
 ### Trait values
 

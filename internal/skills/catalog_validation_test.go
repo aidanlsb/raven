@@ -107,6 +107,57 @@ func TestSkillMarkdownDoesNotUseLegacySyntax(t *testing.T) {
 	}
 }
 
+func TestRavenCoreSkillDocumentsTraitCodeEscape(t *testing.T) {
+	t.Parallel()
+	catalog, err := LoadCatalog()
+	if err != nil {
+		t.Fatalf("LoadCatalog() error = %v", err)
+	}
+	skill := catalog["raven-core"]
+	if skill == nil {
+		t.Fatal("raven-core missing from catalog")
+	}
+
+	safety := skillSafetySection(skill.EntryMarkdown)
+	if safety == "" {
+		t.Fatal("raven-core body.md missing ## Safety")
+	}
+
+	for _, needle := range []string{"inline code", "fenced code", "`@todo`"} {
+		if !strings.Contains(safety, needle) {
+			t.Errorf("Safety section missing %q", needle)
+		}
+	}
+
+	lower := strings.ToLower(safety)
+	for _, banned := range []string{
+		"escape with a slash",
+		"slash prefix to escape",
+		"use a slash prefix",
+		"wrap in italics",
+		"use italics",
+		"italicize",
+	} {
+		if strings.Contains(lower, banned) {
+			t.Errorf("Safety section recommends banned escape %q", banned)
+		}
+	}
+}
+
+func skillSafetySection(body string) string {
+	const heading = "## Safety"
+	start := strings.Index(body, heading)
+	if start < 0 {
+		return ""
+	}
+	safety := body[start:]
+	rest := safety[len(heading):]
+	if i := strings.Index(rest, "\n## "); i >= 0 {
+		return safety[:len(heading)+i]
+	}
+	return safety
+}
+
 func sortedSkillIDs(catalog map[string]*Skill) []string {
 	ids := make([]string, 0, len(catalog))
 	for id := range catalog {

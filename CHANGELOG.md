@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `--json` now prints a standard error envelope when flag parsing fails, instead of exiting 1 with empty stdout and stderr.
+- raven-core Safety now tells agents to mention trait tokens in backticks or fences. A slash prefix or italics still parse as traits.
 
 ### Removed
 - **Breaking:** removed the `upsert` CLI command, registry ID, and MCP command name. Use `write`.
