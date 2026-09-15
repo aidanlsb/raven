@@ -168,14 +168,15 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	}
 
 	heading := strings.Repeat("#", req.Level) + " " + title
-	updatedLines := insertTrackedLines(state.lines, insertIndex, []trackedLine{{text: heading}})
+	inserted := headingInsertLines(state.lines, insertIndex, heading)
+	updatedLines := insertTrackedLines(state.lines, insertIndex, inserted)
 	updatedContent := joinTrackedLines(updatedLines, state.trailingNewline)
 	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, state.filePath, ctx.vaultPath, ctx.parseOptions)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse created section", err).WithSuggestion("Check the heading title and level")
 	}
 
-	createdLine := insertIndex + 1
+	createdLine := insertIndex + len(inserted)
 	created := sectionAtLine(updatedDoc.Sections, createdLine)
 	if created == nil || created.Title != title || created.Level != req.Level {
 		return nil, svcerr.New(codes.ErrValidationFailed, "new heading does not parse as the requested section").WithSuggestion("Use plain, single-line title text")
@@ -521,6 +522,30 @@ func splitTrackedLines(content string) ([]trackedLine, bool) {
 		lines[i] = trackedLine{text: line, originalLine: i + 1}
 	}
 	return lines, trailingNewline
+}
+
+func headingInsertLines(lines []trackedLine, insertIndex int, heading string) []trackedLine {
+	inserted := make([]trackedLine, 0, 2)
+	if shouldInsertBlankLineBeforeHeading(lines, insertIndex) {
+		inserted = append(inserted, trackedLine{text: ""})
+	}
+	return append(inserted, trackedLine{text: heading})
+}
+
+// shouldInsertBlankLineBeforeHeading reports whether the line immediately
+// before insertIndex is non-empty. A blank previous line, or no previous
+// line, is left unchanged.
+func shouldInsertBlankLineBeforeHeading(lines []trackedLine, insertIndex int) bool {
+	if insertIndex < 0 {
+		insertIndex = 0
+	}
+	if insertIndex > len(lines) {
+		insertIndex = len(lines)
+	}
+	if insertIndex == 0 {
+		return false
+	}
+	return strings.TrimSpace(lines[insertIndex-1].text) != ""
 }
 
 func insertTrackedLines(lines []trackedLine, index int, inserted []trackedLine) []trackedLine {

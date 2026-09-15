@@ -289,7 +289,9 @@ The title is plain text. Pass `"Notes"` with `--level 2`, not `"## Notes"`.
 `--after`, `--before`, and `--under` are mutually exclusive. `--after` inserts
 after the anchor's complete subtree, `--before` inserts before its heading, and
 `--under` inserts as its last direct child. With no anchor, creation appends at
-end of file.
+end of file. If the previous line is non-empty body text, Raven inserts one
+blank line before the new heading. It does not insert a blank line after the
+heading; body still lands with `rvn add --to file#section`.
 
 Sibling placement requires the same level as the anchor; child placement
 requires exactly the anchor level plus one. Raven never silently changes the

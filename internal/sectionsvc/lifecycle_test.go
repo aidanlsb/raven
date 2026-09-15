@@ -110,6 +110,164 @@ func TestCreatePlacements(t *testing.T) {
 	}
 }
 
+const flushLifecycleOutline = `---
+type: project
+title: Site
+status: active
+---
+
+# Project
+Intro
+## Alpha
+Alpha body
+### Alpha Child
+Child body
+## Beta
+Beta body
+`
+
+func TestShouldInsertBlankLineBeforeHeading(t *testing.T) {
+	t.Parallel()
+
+	bodyDoc := []trackedLine{
+		{text: "## Alpha"},
+		{text: "Alpha body"},
+		{text: ""},
+		{text: "   "},
+		{text: "## Beta"},
+		{text: "Beta body"},
+	}
+
+	tests := []struct {
+		name        string
+		lines       []trackedLine
+		insertIndex int
+		want        bool
+	}{
+		{name: "no previous line", lines: bodyDoc, insertIndex: 0, want: false},
+		{name: "empty document", insertIndex: 0, want: false},
+		{name: "previous body text", lines: bodyDoc, insertIndex: 2, want: true},
+		{name: "eof after last-section body", lines: bodyDoc, insertIndex: 6, want: true},
+		{name: "previous already blank", lines: bodyDoc, insertIndex: 3, want: false},
+		{name: "previous whitespace only", lines: bodyDoc, insertIndex: 4, want: false},
+		{name: "previous heading", lines: bodyDoc, insertIndex: 1, want: true},
+		{name: "clamped past end uses last line", lines: bodyDoc, insertIndex: 99, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := shouldInsertBlankLineBeforeHeading(tt.lines, tt.insertIndex); got != tt.want {
+				t.Fatalf("shouldInsertBlankLineBeforeHeading(%d) = %v, want %v", tt.insertIndex, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCreateInsertsBlankLineBeforeHeadingWhenPreviousIsBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		level     int
+		placement Placement
+		want      string
+	}{
+		{
+			name:  "eof after last-section body",
+			level: 2,
+			want:  "Beta body\n\n## Inserted\n",
+		},
+		{
+			name:      "after subtree ending in body",
+			level:     2,
+			placement: Placement{After: "projects/site#alpha"},
+			want:      "Child body\n\n## Inserted\n## Beta\n",
+		},
+		{
+			name:      "before heading after body",
+			level:     2,
+			placement: Placement{Before: "projects/site#beta"},
+			want:      "Child body\n\n## Inserted\n## Beta\n",
+		},
+		{
+			name:      "under last child ending in body",
+			level:     3,
+			placement: Placement{Under: "projects/site#alpha"},
+			want:      "Child body\n\n### Inserted\n## Beta\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			v := testutil.NewTestVault(t).
+				WithSchema(testutil.PersonProjectSchema()).
+				WithFile("projects/site.md", flushLifecycleOutline).
+				Build()
+			sch := loadTestSchema(t, v.Path)
+			indexVaultFiles(t, v.Path, sch, "projects/site.md")
+
+			result, err := Create(CreateRequest{
+				VaultPath:      v.Path,
+				VaultConfig:    config.DefaultVaultConfig(),
+				Schema:         sch,
+				FileReference:  "projects/site",
+				Title:          "Inserted",
+				Level:          tt.level,
+				Placement:      tt.placement,
+				FailOnIndexErr: true,
+			})
+			if err != nil {
+				t.Fatalf("Create() error = %v", err)
+			}
+			if result.SectionID != "projects/site#inserted" {
+				t.Fatalf("SectionID = %q, want projects/site#inserted", result.SectionID)
+			}
+
+			content := v.ReadFile("projects/site.md")
+			if !strings.Contains(content, tt.want) {
+				t.Fatalf("missing blank line before heading %q:\n%s", tt.want, content)
+			}
+			heading := strings.Repeat("#", tt.level) + " Inserted"
+			if strings.Contains(content, heading+"\n\n") {
+				t.Fatalf("inserted a blank line after the heading:\n%s", content)
+			}
+		})
+	}
+}
+
+func TestCreateLeavesExistingBlankLineBeforeHeading(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", lifecycleOutline).
+		Build()
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+
+	_, err := Create(CreateRequest{
+		VaultPath:      v.Path,
+		VaultConfig:    config.DefaultVaultConfig(),
+		Schema:         sch,
+		FileReference:  "projects/site",
+		Title:          "Inserted",
+		Level:          2,
+		Placement:      Placement{Before: "projects/site#beta"},
+		FailOnIndexErr: true,
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	content := v.ReadFile("projects/site.md")
+	if !strings.Contains(content, "Child body\n\n## Inserted\n## Beta\n") {
+		t.Fatalf("expected one existing blank line before heading, not an extra blank:\n%s", content)
+	}
+}
+
 func TestCreateDryRunDoesNotWrite(t *testing.T) {
 	t.Parallel()
 

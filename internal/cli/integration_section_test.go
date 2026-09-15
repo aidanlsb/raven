@@ -75,6 +75,70 @@ func TestIntegration_SectionCreatePlacements(t *testing.T) {
 	}
 }
 
+func TestIntegration_SectionCreateInsertsBlankLineBeforeHeading(t *testing.T) {
+	t.Parallel()
+
+	const fixture = `---
+type: project
+title: Site
+status: active
+---
+
+# Project
+Intro
+## Alpha
+Alpha body
+### Alpha Child
+Child body
+## Beta
+Beta body
+`
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "eof after last-section body",
+			args: []string{"section", "create", "projects/site", "Inserted", "--level", "2"},
+			want: "Beta body\n\n## Inserted\n",
+		},
+		{
+			name: "after subtree ending in body",
+			args: []string{"section", "create", "projects/site", "Inserted", "--level", "2", "--after", "projects/site#alpha"},
+			want: "Child body\n\n## Inserted\n## Beta\n",
+		},
+		{
+			name: "before heading after body",
+			args: []string{"section", "create", "projects/site", "Inserted", "--level", "2", "--before", "projects/site#beta"},
+			want: "Child body\n\n## Inserted\n## Beta\n",
+		},
+		{
+			name: "under last child ending in body",
+			args: []string{"section", "create", "projects/site", "Inserted", "--level", "3", "--under", "projects/site#alpha"},
+			want: "Child body\n\n### Inserted\n## Beta\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			v := newSectionLifecycleVault(t, fixture)
+
+			result := v.RunCLI(tt.args...)
+			result.MustSucceed(t)
+			content := v.ReadFile("projects/site.md")
+			if !strings.Contains(content, tt.want) {
+				t.Fatalf("missing blank line before heading %q:\n%s", tt.want, content)
+			}
+			if strings.Contains(content, "Inserted\n\n") {
+				t.Fatalf("inserted a blank line after the heading:\n%s", content)
+			}
+		})
+	}
+}
+
 func TestIntegration_SectionCreateDryRunAndErrors(t *testing.T) {
 	t.Parallel()
 

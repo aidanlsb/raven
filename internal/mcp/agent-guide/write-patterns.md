@@ -30,7 +30,7 @@ Rules:
 
 ## Section-targeted writes
 
-- Create a heading: `section_create` with `file`, plain `title`, and required integer `level`. Optionally pass exactly one of `after`, `before`, or `under`; no anchor appends at EOF.
+- Create a heading: `section_create` with `file`, plain `title`, and required integer `level`. Optionally pass exactly one of `after`, `before`, or `under`; no anchor appends at EOF. If the previous line is non-empty body text, Raven inserts one blank line before the heading and none after it.
 - Reorder/reparent without renaming: `section_move` with `section_id` and optionally one of `after`, `before`, or `under`. The source's complete subtree moves.
 - Delete a heading and every descendant: `section_delete` with `reference="file#section"`. It previews by default and reports `line_start`, `line_end`, exact `removed_content`, `deleted_sections`, and affected `backlinks`. Apply with `confirm=true`. Reported backlinks are left unchanged because Raven cannot infer a safe replacement.
 - `after` uses the anchor's complete subtree boundary; `before` uses its heading line; `under` inserts as its last direct child. Sibling levels must match, and a direct child must be exactly one level deeper. Depth mismatches are hard errors—never retry with an inferred level.
