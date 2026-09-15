@@ -136,7 +136,7 @@ func BuildFieldConvertPlan(req ConvertFieldPlanRequest) (*ValueConvertPlan, erro
 		req.HasDefault,
 	)
 
-	if !isRefType(req.TargetType) {
+	if !req.TargetType.IsRef() {
 		if _, exists := fieldNode["target"]; exists {
 			delete(fieldNode, "target")
 			plan.addSchemaChange("schema_target", fmt.Sprintf("remove reference target from field '%s.%s'", req.TypeName, req.FieldName))
@@ -169,7 +169,7 @@ func applyDefinitionConversion(
 		}
 	}
 
-	if isEnumType(targetType) {
+	if targetType.IsEnum() {
 		if !stringSliceEqual(node["values"], newValues) {
 			node["values"] = append([]string(nil), newValues...)
 			plan.addSchemaChange("schema_values", fmt.Sprintf("replace allowed values for %s with [%s]", label, strings.Join(newValues, ", ")))
@@ -192,14 +192,6 @@ func (p *ValueConvertPlan) addSchemaChange(changeType, description string) {
 		Description: description,
 	})
 	p.SchemaMutations++
-}
-
-func isEnumType(fieldType schema.FieldType) bool {
-	return fieldType == schema.FieldTypeEnum || fieldType == schema.FieldTypeEnumArray
-}
-
-func isRefType(fieldType schema.FieldType) bool {
-	return fieldType == schema.FieldTypeRef || fieldType == schema.FieldTypeRefArray
 }
 
 func stringSliceEqual(raw interface{}, expected []string) bool {

@@ -97,7 +97,7 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 					FixHint: fmt.Sprintf("Use one of: %s", schema.ValidFieldTypes()),
 				})
 			}
-			if (fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray) && fieldDef.Target != "" {
+			if fieldDef.Type.IsRef() && fieldDef.Target != "" {
 				if _, exists := v.schema.Types[fieldDef.Target]; !exists {
 					if !schema.IsBuiltinType(fieldDef.Target) {
 						issues = append(issues, SchemaIssue{
@@ -124,7 +124,7 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 				continue
 			}
 			if fieldDef.Required && fieldDef.Default == nil {
-				if (fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray) && fieldDef.Target == typeName {
+				if fieldDef.Type.IsRef() && fieldDef.Target == typeName {
 					issues = append(issues, SchemaIssue{
 						Level:   LevelWarning,
 						Type:    IssueSelfReferentialRequired,

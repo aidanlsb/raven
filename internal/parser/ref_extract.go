@@ -94,22 +94,13 @@ func ExtractSchemaFieldRefs(objects []*model.Object, sch *schema.Schema) []Schem
 				continue
 			}
 
-			switch fieldDef.Type {
-			case schema.FieldTypeRef:
-				if targets := ExtractRefsFromFieldValue(fieldValue, opts); len(targets) > 0 {
-					if targets[0].TargetRaw == "" {
-						continue
-					}
-					refs = append(refs, SchemaFieldRef{
-						SourceID:  obj.ID,
-						FieldName: fieldName,
-						TargetRaw: targets[0].TargetRaw,
-						Line:      obj.LineStart,
-					})
-				}
+			if !fieldDef.Type.IsRef() {
+				continue
+			}
 
-			case schema.FieldTypeRefArray:
-				for _, target := range ExtractRefsFromFieldValue(fieldValue, opts) {
+			targets := ExtractRefsFromFieldValue(fieldValue, opts)
+			if fieldDef.Type.IsArray() {
+				for _, target := range targets {
 					if target.TargetRaw == "" {
 						continue
 					}
@@ -120,7 +111,17 @@ func ExtractSchemaFieldRefs(objects []*model.Object, sch *schema.Schema) []Schem
 						Line:      obj.LineStart,
 					})
 				}
+				continue
 			}
+			if len(targets) == 0 || targets[0].TargetRaw == "" {
+				continue
+			}
+			refs = append(refs, SchemaFieldRef{
+				SourceID:  obj.ID,
+				FieldName: fieldName,
+				TargetRaw: targets[0].TargetRaw,
+				Line:      obj.LineStart,
+			})
 		}
 	}
 

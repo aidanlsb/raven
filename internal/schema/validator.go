@@ -304,10 +304,10 @@ func validateSchemaFieldDefinition(typeName, fieldName string, fieldDef *FieldDe
 	if !IsValidFieldType(fieldDef.Type) {
 		return append(issues, fmt.Sprintf("Type '%s' field '%s' has unknown field type '%s' (expected one of: %s)", typeName, fieldName, fieldDef.Type, validTypes))
 	}
-	if (fieldDef.Type == FieldTypeEnum || fieldDef.Type == FieldTypeEnumArray) && len(fieldDef.Values) == 0 {
+	if fieldDef.Type.IsEnum() && len(fieldDef.Values) == 0 {
 		issues = append(issues, fmt.Sprintf("Type '%s' field '%s' of type '%s' must define at least one allowed value", typeName, fieldName, fieldDef.Type))
 	}
-	if (fieldDef.Type == FieldTypeRef || fieldDef.Type == FieldTypeRefArray) && fieldDef.Target != "" {
+	if fieldDef.Type.IsRef() && fieldDef.Target != "" {
 		if _, exists := sch.Types[fieldDef.Target]; !exists {
 			issues = append(issues, fmt.Sprintf("Type '%s' field '%s' references unknown type '%s'", typeName, fieldName, fieldDef.Target))
 		}

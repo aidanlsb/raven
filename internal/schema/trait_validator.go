@@ -20,7 +20,7 @@ func ValidateTraitValue(def *TraitDefinition, value fieldvalue.FieldValue) error
 	// Handle array types by extracting scalar type and validating elements
 	scalarType := traitType
 	isArray := false
-	if elementType, ok := arrayTypeToScalar[traitType]; ok {
+	if elementType, ok := traitType.ElementType(); ok {
 		scalarType = elementType
 		isArray = true
 	}

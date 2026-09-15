@@ -513,19 +513,19 @@ func extractDateStringsForField(fv fieldvalue.FieldValue, def *schema.FieldDefin
 		return nil
 	}
 
-	switch def.Type {
-	case schema.FieldTypeDate, schema.FieldTypeDatetime:
+	switch {
+	case def.Type == schema.FieldTypeDate || def.Type == schema.FieldTypeDatetime:
 		return oneDateString(extractDateString(fv))
-	case schema.FieldTypeDateArray, schema.FieldTypeDatetimeArray:
-		return extractDateStringsFromArray(fv, extractDateString)
-	case schema.FieldTypeRef:
-		if def.Target == "date" {
-			return oneDateString(extractDateRefString(fv))
+	case def.Type.IsArray():
+		elem, _ := def.Type.ElementType()
+		if elem == schema.FieldTypeDate || elem == schema.FieldTypeDatetime {
+			return extractDateStringsFromArray(fv, extractDateString)
 		}
-	case schema.FieldTypeRefArray:
-		if def.Target == "date" {
+		if def.Type.IsRef() && def.Target == "date" {
 			return extractDateStringsFromArray(fv, extractDateRefString)
 		}
+	case def.Type.IsRef() && def.Target == "date":
+		return oneDateString(extractDateRefString(fv))
 	}
 	return nil
 }
@@ -537,11 +537,14 @@ func extractDateStringsForTrait(fv fieldvalue.FieldValue, def *schema.TraitDefin
 		}
 		return nil
 	}
-	switch def.Type {
-	case schema.FieldTypeDate, schema.FieldTypeDatetime:
+	switch {
+	case def.Type == schema.FieldTypeDate || def.Type == schema.FieldTypeDatetime:
 		return oneDateString(extractDateString(fv))
-	case schema.FieldTypeDateArray, schema.FieldTypeDatetimeArray:
-		return extractDateStringsFromArray(fv, extractDateString)
+	case def.Type.IsArray():
+		elem, _ := def.Type.ElementType()
+		if elem == schema.FieldTypeDate || elem == schema.FieldTypeDatetime {
+			return extractDateStringsFromArray(fv, extractDateString)
+		}
 	}
 	return nil
 }
