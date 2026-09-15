@@ -8,26 +8,18 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
-	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type MoveBulkRequest struct {
-	VaultPath      string
-	VaultConfig    *config.VaultConfig
-	Schema         *schema.Schema
 	ObjectIDs      []string
 	DestinationDir string
 	UpdateRefs     bool
-	ParseOptions   *parser.ParseOptions
-	Runtime        *vaultruntime.Runtime
 }
 
 type MoveBulkPreview struct {
@@ -50,9 +42,9 @@ type MoveBulkSummary struct {
 	ChangeSet       mutation.ChangeSet
 }
 
-func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+func PreviewMoveBulk(rt *vaultruntime.Runtime, req MoveBulkRequest) (*MoveBulkPreview, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
 	if !strings.HasSuffix(req.DestinationDir, "/") {
 		return nil, svcerr.New(codes.ErrInvalidInput, "destination must be a directory (end with /)").WithSuggestion("Example: rvn move --stdin archive/projects/")
@@ -64,23 +56,23 @@ func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
 	skipped := make([]BulkResult, 0)
 	for _, id := range req.ObjectIDs {
-		sourceFile, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
+		sourceFile, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, id, rt.VaultCfg)
 		if err != nil {
 			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
-		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, sourceFile); err != nil {
 			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
 
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(req.DestinationDir, filename)
-		if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
+		if err := mutationguard.ValidateContentMutationRelPath(rt.VaultCfg, destPath); err != nil {
 			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
-		fullDestPath := filepath.Join(req.VaultPath, destPath)
+		fullDestPath := filepath.Join(rt.VaultPath, destPath)
 		if _, err := os.Stat(fullDestPath); err == nil {
 			skipped = append(skipped, BulkResult{
 				ID:     id,
@@ -106,9 +98,9 @@ func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 	}, nil
 }
 
-func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+func ApplyMoveBulk(rt *vaultruntime.Runtime, req MoveBulkRequest) (*MoveBulkSummary, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
 	if !strings.HasSuffix(req.DestinationDir, "/") {
 		return nil, svcerr.New(codes.ErrInvalidInput, "destination must be a directory (end with /)").WithSuggestion("Example: rvn move --stdin archive/projects/")
@@ -127,7 +119,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 	for _, id := range req.ObjectIDs {
 		result := BulkResult{ID: id}
 
-		sourceFile, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
+		sourceFile, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, id, rt.VaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -135,7 +127,7 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 			results = append(results, result)
 			continue
 		}
-		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, sourceFile); err != nil {
 			result.Status = "error"
 			result.Reason = err.Error()
 			errorCount++
@@ -145,14 +137,14 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(req.DestinationDir, filename)
-		if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
+		if err := mutationguard.ValidateContentMutationRelPath(rt.VaultCfg, destPath); err != nil {
 			result.Status = "error"
 			result.Reason = err.Error()
 			errorCount++
 			results = append(results, result)
 			continue
 		}
-		fullDestPath := filepath.Join(req.VaultPath, destPath)
+		fullDestPath := filepath.Join(rt.VaultPath, destPath)
 		if _, err := os.Stat(fullDestPath); err == nil {
 			result.Status = "skipped"
 			result.Reason = fmt.Sprintf("destination already exists: %s", destPath)
@@ -161,22 +153,17 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 			continue
 		}
 
-		relSource, _ := filepath.Rel(req.VaultPath, sourceFile)
-		sourceID := req.VaultConfig.FilePathToObjectID(relSource)
-		destID := req.VaultConfig.FilePathToObjectID(destPath)
+		relSource, _ := filepath.Rel(rt.VaultPath, sourceFile)
+		sourceID := rt.VaultCfg.FilePathToObjectID(relSource)
+		destID := rt.VaultCfg.FilePathToObjectID(destPath)
 
-		serviceResult, err := MoveFile(MoveFileRequest{
-			VaultPath:         req.VaultPath,
+		serviceResult, err := MoveFile(rt, MoveFileRequest{
 			SourceFile:        sourceFile,
 			DestinationFile:   fullDestPath,
 			SourceObjectID:    sourceID,
 			DestinationObject: destID,
 			UpdateRefs:        req.UpdateRefs,
 			PriorMoves:        append([]mutation.Move(nil), changes.Moved...),
-			VaultConfig:       req.VaultConfig,
-			Schema:            req.Schema,
-			ParseOptions:      req.ParseOptions,
-			Runtime:           req.Runtime,
 		})
 		if err != nil {
 			result.Status = "error"

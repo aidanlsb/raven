@@ -18,7 +18,7 @@ func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexe
 	}
 	defer rt.Close()
 
-	result, err := querysvc.List(rt, querysvc.ListRequest{VaultPath: vaultPath})
+	result, err := querysvc.List(rt)
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
@@ -43,8 +43,7 @@ func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec
 	defer rt.Close()
 
 	result, err := querysvc.Get(rt, querysvc.GetRequest{
-		VaultPath: vaultPath,
-		Name:      strings.TrimSpace(stringArg(req.Args, "name")),
+		Name: strings.TrimSpace(stringArg(req.Args, "name")),
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -64,7 +63,6 @@ func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec
 	defer rt.Close()
 
 	result, err := querysvc.Set(rt, querysvc.SetRequest{
-		VaultPath:   vaultPath,
 		Name:        strings.TrimSpace(stringArg(req.Args, "name")),
 		QueryString: strings.TrimSpace(stringArg(req.Args, "query_string")),
 		Args:        stringSliceArg(req.Args["arg"]),
@@ -90,8 +88,7 @@ func HandleQuerySavedRemove(_ context.Context, req commandexec.Request) commande
 	defer rt.Close()
 
 	result, err := querysvc.Remove(rt, querysvc.RemoveRequest{
-		VaultPath: vaultPath,
-		Name:      strings.TrimSpace(stringArg(req.Args, "name")),
+		Name: strings.TrimSpace(stringArg(req.Args, "name")),
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)

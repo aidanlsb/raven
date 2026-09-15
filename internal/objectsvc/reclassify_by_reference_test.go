@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -30,8 +29,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "notes/my-note.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -40,10 +38,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := ReclassifyByReference(ReclassifyByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
+	result, err := ReclassifyByReference(rt, ReclassifyByReferenceRequest{
 		Reference:   "notes/my-note",
 		NewTypeName: "book",
 		FieldValues: map[string]fieldvalue.FieldValue{"author": fieldvalue.String("Tolkien")},
@@ -83,12 +78,8 @@ types:
     fields: {}
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	_, err := ReclassifyByReference(ReclassifyByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
+	rt := testRuntime(t, vaultPath)
+	_, err := ReclassifyByReference(rt, ReclassifyByReferenceRequest{
 		Reference:   "notes/missing",
 		NewTypeName: "book",
 	})
@@ -121,8 +112,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "notes/my-note.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -131,10 +121,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := ReclassifyByReference(ReclassifyByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
+	_, err := ReclassifyByReference(rt, ReclassifyByReferenceRequest{
 		Reference:   "notes/my-note",
 		NewTypeName: "book",
 		FieldValues: map[string]fieldvalue.FieldValue{"status": fieldvalue.String("false")},

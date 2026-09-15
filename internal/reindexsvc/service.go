@@ -20,10 +20,9 @@ import (
 )
 
 type RunRequest struct {
-	VaultPath string
-	Full      bool
-	DryRun    bool
-	Context   context.Context
+	Full    bool
+	DryRun  bool
+	Context context.Context
 }
 
 type RunResult struct {

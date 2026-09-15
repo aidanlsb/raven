@@ -42,7 +42,6 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 	defer rt.Close()
 
 	serviceResult, err := importsvc.Run(rt, importsvc.RunRequest{
-		VaultPath:     vaultPath,
 		MappingConfig: mappingCfg,
 		Items:         items,
 		DryRun:        boolArg(req.Args, "dry-run"),

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 const renameSectionProjectContent = `---
@@ -38,13 +38,10 @@ func TestRenameRewritesInboundReferences(t *testing.T) {
 		WithFile("notes/ref.md", "See [[projects/site#tasks]] and [[projects/site#tasks|the tasks]].\n").
 		Build()
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md", "notes/ref.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md", "notes/ref.md")
 
-	result, err := Rename(RenameRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	result, err := Rename(rt, RenameRequest{
 		Reference:      "projects/site#tasks",
 		NewHeadingText: "Completed Tasks",
 		FailOnIndexErr: true,
@@ -130,13 +127,10 @@ related: projects/site#tasks
 `).
 		Build()
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md", "notes/ref.md", "projects/consumer.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md", "notes/ref.md", "projects/consumer.md")
 
-	result, err := Rename(RenameRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	result, err := Rename(rt, RenameRequest{
 		Reference:      "projects/site#tasks",
 		NewHeadingText: "Completed Tasks",
 		FailOnIndexErr: true,
@@ -177,8 +171,8 @@ func TestRenamePreservesPostCommitResolutionErrors(t *testing.T) {
 		WithFile("projects/site.md", renameSectionProjectContent).
 		WithFile("notes/ref.md", "See [[projects/site#tasks]].\n").
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md", "notes/ref.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md", "notes/ref.md")
 
 	db, err := index.Open(v.Path)
 	if err != nil {
@@ -198,10 +192,7 @@ func TestRenamePreservesPostCommitResolutionErrors(t *testing.T) {
 		t.Fatalf("close index: %v", err)
 	}
 
-	result, err := Rename(RenameRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	result, err := Rename(rt, RenameRequest{
 		Reference:      "projects/site#tasks",
 		NewHeadingText: "Completed Tasks",
 		FailOnIndexErr: true,
@@ -244,13 +235,10 @@ func TestRenamePreviewDoesNotWrite(t *testing.T) {
 		WithFile("notes/ref.md", "See [[projects/site#tasks]].\n").
 		Build()
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md", "notes/ref.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md", "notes/ref.md")
 
-	result, err := Rename(RenameRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	result, err := Rename(rt, RenameRequest{
 		Reference:      "projects/site#tasks",
 		NewHeadingText: "Completed Tasks",
 		Preview:        true,
@@ -304,13 +292,10 @@ func TestRenameRejectsSectionSlugCollisions(t *testing.T) {
 				WithSchema(testutil.PersonProjectSchema()).
 				WithFile("projects/site.md", tt.content).
 				Build()
-			sch := loadTestSchema(t, v.Path)
-			indexVaultFiles(t, v.Path, sch, "projects/site.md")
+			rt := testRuntime(t, v.Path)
+			indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-			_, err := Rename(RenameRequest{
-				VaultPath:      v.Path,
-				VaultConfig:    config.DefaultVaultConfig(),
-				Schema:         sch,
+			_, err := Rename(rt, RenameRequest{
 				Reference:      tt.reference,
 				NewHeadingText: "Notes",
 				FailOnIndexErr: true,
@@ -336,14 +321,11 @@ func TestRenameRejectsNonTitleDestinations(t *testing.T) {
 		WithFile("projects/site.md", "---\ntype: project\ntitle: Site\nstatus: active\n---\n\n## Tasks\n").
 		Build()
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
 	for _, destination := range []string{"## Completed", "#done", "projects/site#done", "projects/other#done"} {
-		_, err := Rename(RenameRequest{
-			VaultPath:      v.Path,
-			VaultConfig:    config.DefaultVaultConfig(),
-			Schema:         sch,
+		_, err := Rename(rt, RenameRequest{
 			Reference:      "projects/site#tasks",
 			NewHeadingText: destination,
 			FailOnIndexErr: true,
@@ -366,13 +348,10 @@ func TestRenameSameSlugUpdatesTitleOnly(t *testing.T) {
 		WithFile("notes/ref.md", "See [[projects/site#tasks]].\n").
 		Build()
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md", "notes/ref.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md", "notes/ref.md")
 
-	result, err := Rename(RenameRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	result, err := Rename(rt, RenameRequest{
 		Reference:      "projects/site#tasks",
 		NewHeadingText: "TASKS",
 		FailOnIndexErr: true,
@@ -394,13 +373,9 @@ func TestRenameSameSlugUpdatesTitleOnly(t *testing.T) {
 	}
 }
 
-func loadTestSchema(t *testing.T, vaultPath string) *schema.Schema {
+func testRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
 	t.Helper()
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		t.Fatalf("load schema: %v", err)
-	}
-	return sch
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{RequireSchema: true})
 }
 
 func indexVaultFiles(t *testing.T, vaultPath string, sch *schema.Schema, relPaths ...string) {

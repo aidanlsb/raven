@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -25,8 +24,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -35,10 +33,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := MoveByReference(MoveByReferenceRequest{
-		VaultPath:     vaultPath,
-		VaultConfig:   &config.VaultConfig{},
-		Schema:        sch,
+	result, err := MoveByReference(rt, MoveByReferenceRequest{
 		Reference:     "people/freya",
 		Destination:   "archive/freya-archived",
 		UpdateRefs:    true,
@@ -75,8 +70,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -85,10 +79,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := MoveByReference(MoveByReferenceRequest{
-		VaultPath:     vaultPath,
-		VaultConfig:   &config.VaultConfig{},
-		Schema:        sch,
+	result, err := MoveByReference(rt, MoveByReferenceRequest{
 		Reference:     "people/freya",
 		Destination:   "archive/freya-archived",
 		UpdateRefs:    true,
@@ -136,8 +127,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -146,10 +136,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := MoveByReference(MoveByReferenceRequest{
-		VaultPath:     vaultPath,
-		VaultConfig:   &config.VaultConfig{},
-		Schema:        sch,
+	result, err := MoveByReference(rt, MoveByReferenceRequest{
 		Reference:     "people/freya",
 		Destination:   "projects/freya",
 		UpdateRefs:    true,
@@ -175,9 +162,8 @@ traits: {}
 func TestMoveByReferenceRejectsSectionSource(t *testing.T) {
 	t.Parallel()
 
-	_, err := MoveByReference(MoveByReferenceRequest{
-		VaultPath:   t.TempDir(),
-		VaultConfig: config.DefaultVaultConfig(),
+	rt := testRuntime(t, t.TempDir())
+	_, err := MoveByReference(rt, MoveByReferenceRequest{
 		Reference:   "projects/site#tasks",
 		Destination: "Completed Tasks",
 	})

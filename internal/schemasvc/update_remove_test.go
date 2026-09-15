@@ -16,7 +16,6 @@ func TestUpdateField_RejectsInvalidFieldSpecs(t *testing.T) {
 	vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 
 	_, err := UpdateField(schemaTestRuntime(t, vault.Path), UpdateFieldRequest{
-		VaultPath: vault.Path,
 		TypeName:  "project",
 		FieldName: "title",
 		Target:    "person",
@@ -43,7 +42,6 @@ func TestUpdateField_UpdatesNonTypeMetadata(t *testing.T) {
 	vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 
 	_, err := UpdateField(schemaTestRuntime(t, vault.Path), UpdateFieldRequest{
-		VaultPath:   vault.Path,
 		TypeName:    "project",
 		FieldName:   "status",
 		Default:     "active",
@@ -110,7 +108,6 @@ func TestUpdateField_RejectsTypeAndValueRemaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 			before := vault.ReadFile("schema.yaml")
-			tt.request.VaultPath = vault.Path
 
 			_, err := UpdateField(schemaTestRuntime(t, vault.Path), tt.request)
 			assertUpdateRemapRejected(t, err, tt.flag, "schema convert field")
@@ -135,7 +132,6 @@ traits:
 `).Build()
 
 	_, err := UpdateTrait(schemaTestRuntime(t, vault.Path), UpdateTraitRequest{
-		VaultPath: vault.Path,
 		TraitName: "priority",
 		Default:   "low",
 	})
@@ -143,7 +139,6 @@ traits:
 		t.Fatalf("UpdateTrait enum default returned error: %v", err)
 	}
 	_, err = UpdateTrait(schemaTestRuntime(t, vault.Path), UpdateTraitRequest{
-		VaultPath: vault.Path,
 		TraitName: "done",
 		Default:   "true",
 	})
@@ -197,7 +192,6 @@ func TestUpdateTrait_RejectsTypeAndValueRemaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 			before := vault.ReadFile("schema.yaml")
-			tt.request.VaultPath = vault.Path
 
 			_, err := UpdateTrait(schemaTestRuntime(t, vault.Path), tt.request)
 			assertUpdateRemapRejected(t, err, tt.flag, "schema convert trait")

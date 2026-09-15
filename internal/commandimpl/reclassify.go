@@ -28,7 +28,6 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		return failure
 	}
 	defer rt.Close()
-	vaultCfg := rt.VaultCfg
 	if rt.SchemaLoadErr != nil {
 		failure := commandexec.Failure("SCHEMA_NOT_FOUND", "failed to load schema", nil, "Run 'rvn init' to create a schema")
 		if stdinMode {
@@ -36,7 +35,6 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		}
 		return failure
 	}
-	sch := rt.Schema
 
 	fieldValues, err := parseKeyValueArgs(req.Args["field"])
 	if err != nil {
@@ -68,18 +66,13 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		return runReclassifyBulk(rt, references, newTypeName, allFieldValues, req)
 	}
 
-	result, err := objectsvc.ReclassifyByReference(objectsvc.ReclassifyByReferenceRequest{
-		VaultPath:    vaultPath,
-		VaultConfig:  vaultCfg,
-		Schema:       sch,
-		Reference:    strings.TrimSpace(stringArg(req.Args, "reference")),
-		NewTypeName:  newTypeName,
-		FieldValues:  allFieldValues,
-		NoMove:       boolArg(req.Args, "no-move"),
-		UpdateRefs:   boolArgDefault(req.Args, "update-refs", true),
-		Force:        boolArg(req.Args, "force"),
-		ParseOptions: rt.ParseOptions,
-		Runtime:      rt,
+	result, err := objectsvc.ReclassifyByReference(rt, objectsvc.ReclassifyByReferenceRequest{
+		Reference:   strings.TrimSpace(stringArg(req.Args, "reference")),
+		NewTypeName: newTypeName,
+		FieldValues: allFieldValues,
+		NoMove:      boolArg(req.Args, "no-move"),
+		UpdateRefs:  boolArgDefault(req.Args, "update-refs", true),
+		Force:       boolArg(req.Args, "force"),
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -127,21 +120,16 @@ func runReclassifyBulk(
 	req commandexec.Request,
 ) commandexec.Result {
 	request := objectsvc.ReclassifyBulkRequest{
-		VaultPath:    rt.VaultPath,
-		VaultConfig:  rt.VaultCfg,
-		Schema:       rt.Schema,
-		ObjectIDs:    ids,
-		NewTypeName:  newTypeName,
-		FieldValues:  fieldValues,
-		NoMove:       boolArg(req.Args, "no-move"),
-		UpdateRefs:   boolArgDefault(req.Args, "update-refs", true),
-		Force:        boolArg(req.Args, "force"),
-		ParseOptions: rt.ParseOptions,
-		Runtime:      rt,
+		ObjectIDs:   ids,
+		NewTypeName: newTypeName,
+		FieldValues: fieldValues,
+		NoMove:      boolArg(req.Args, "no-move"),
+		UpdateRefs:  boolArgDefault(req.Args, "update-refs", true),
+		Force:       boolArg(req.Args, "force"),
 	}
 
 	if !req.Confirm {
-		preview, err := objectsvc.PreviewReclassifyBulk(request)
+		preview, err := objectsvc.PreviewReclassifyBulk(rt, request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
@@ -156,7 +144,7 @@ func runReclassifyBulk(
 		}, warnings, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplyReclassifyBulk(request, nil)
+	summary, err := objectsvc.ApplyReclassifyBulk(rt, request, nil)
 	if err != nil {
 		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 	}

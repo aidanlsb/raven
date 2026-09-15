@@ -45,17 +45,11 @@ type requiredFieldGap struct {
 }
 
 type createPageRequest struct {
-	VaultPath        string
 	TypeName         string
 	Title            string
 	TargetPath       string
 	Fields           map[string]fieldvalue.FieldValue
-	Schema           *schema.Schema
 	TemplateOverride string
-	TemplateDir      string
-	VaultConfig      *config.VaultConfig
-	ObjectsRoot      string
-	PagesRoot        string
 }
 
 func lookupTypeDefinitionForCreate(sch *schema.Schema, typeName string) (*schema.TypeDefinition, error) {
@@ -141,16 +135,11 @@ func requiredFieldGapDetails(gaps []requiredFieldGap) []map[string]interface{} {
 	return details
 }
 
-func createRefValidationContext(
-	rt *vaultruntime.Runtime,
-	parseOptions *parser.ParseOptions,
-) *fieldmutation.RefValidationContext {
+func createRefValidationContext(rt *vaultruntime.Runtime) *fieldmutation.RefValidationContext {
 	if rt == nil {
 		return nil
 	}
-	if parseOptions == nil {
-		parseOptions = rt.ParseOptions
-	}
+	parseOptions := rt.ParseOptions
 	if parseOptions == nil {
 		parseOptions = parseopts.FromVaultConfig(rt.VaultCfg)
 	}
@@ -203,19 +192,19 @@ func validateCreateFieldValues(
 	return fieldmutation.PrepareValidatedFieldMutationValues(typeName, nil, fields, sch, allowedUnknown, refCtx)
 }
 
-func createObjectPage(req createPageRequest) (*pages.CreateResult, error) {
+func createObjectPage(rt *vaultruntime.Runtime, req createPageRequest) (*pages.CreateResult, error) {
 	result, err := pages.Create(pages.CreateOptions{
-		VaultPath:         req.VaultPath,
+		VaultPath:         rt.VaultPath,
 		TypeName:          req.TypeName,
 		Title:             req.Title,
 		TargetPath:        req.TargetPath,
 		Fields:            req.Fields,
-		Schema:            req.Schema,
+		Schema:            rt.Schema,
 		TemplateOverride:  req.TemplateOverride,
-		TemplateDir:       req.TemplateDir,
-		ProtectedPrefixes: protectedPrefixes(req.VaultConfig),
-		ObjectsRoot:       req.ObjectsRoot,
-		PagesRoot:         req.PagesRoot,
+		TemplateDir:       templateDir(rt),
+		ProtectedPrefixes: protectedPrefixes(rt.VaultCfg),
+		ObjectsRoot:       objectsRoot(rt),
+		PagesRoot:         pagesRoot(rt),
 	})
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create object", err)

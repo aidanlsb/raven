@@ -191,7 +191,6 @@ func HandleSchemaTemplateSet(_ context.Context, req commandexec.Request) command
 	}
 	defer rt.Close()
 	item, err := schemasvc.SetTemplate(rt, schemasvc.SetTemplateRequest{
-		VaultPath:   req.VaultPath,
 		TemplateID:  stringArg(req.Args, "template_id"),
 		File:        stringArg(req.Args, "file"),
 		Description: description,
@@ -330,7 +329,6 @@ func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.
 	vaultCfg := rt.VaultCfg
 
 	result, err := templatesvc.List(rt, templatesvc.ListRequest{
-		VaultPath:   req.VaultPath,
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
 	})
 	if err != nil {
@@ -358,7 +356,6 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 		}
 	}
 	result, err := templatesvc.Write(rt, templatesvc.WriteRequest{
-		VaultPath:   req.VaultPath,
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
 		Path:        stringArg(req.Args, "path"),
 		Content:     stringArg(req.Args, "content"),
@@ -384,7 +381,6 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
 	result, err := templatesvc.Delete(rt, templatesvc.DeleteRequest{
-		VaultPath:   req.VaultPath,
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
 		Path:        stringArg(req.Args, "path"),
 		Force:       boolArg(req.Args, "force"),

@@ -95,7 +95,6 @@ var schemaOperationTable = map[string]schemaOperation{
 		Target: opTargetType,
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 			result, err := schemasvc.AddType(rt, schemasvc.AddTypeRequest{
-				VaultPath:   req.VaultPath,
 				TypeName:    stringArg(req.Args, "name"),
 				DefaultPath: stringArg(req.Args, "default-path"),
 				NameField:   stringArg(req.Args, "name-field"),
@@ -123,7 +122,6 @@ var schemaOperationTable = map[string]schemaOperation{
 		Target: opTargetTrait,
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 			result, err := schemasvc.AddTrait(rt, schemasvc.AddTraitRequest{
-				VaultPath: req.VaultPath,
 				TraitName: stringArg(req.Args, "name"),
 				TraitType: stringArg(req.Args, "type"),
 				Values:    commaStringArg(req.Args, "values"),
@@ -146,7 +144,6 @@ var schemaOperationTable = map[string]schemaOperation{
 		Target: opTargetField,
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 			result, err := schemasvc.AddField(rt, schemasvc.AddFieldRequest{
-				VaultPath:   req.VaultPath,
 				TypeName:    stringArg(req.Args, "type_name"),
 				FieldName:   stringArg(req.Args, "field_name"),
 				FieldType:   stringArg(req.Args, "type"),
@@ -176,7 +173,6 @@ var schemaOperationTable = map[string]schemaOperation{
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 			name := stringArg(req.Args, "name")
 			result, err := schemasvc.UpdateType(rt, schemasvc.UpdateTypeRequest{
-				VaultPath:   req.VaultPath,
 				TypeName:    name,
 				DefaultPath: stringArg(req.Args, "default-path"),
 				NameField:   stringArg(req.Args, "name-field"),
@@ -201,7 +197,6 @@ var schemaOperationTable = map[string]schemaOperation{
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 			name := stringArg(req.Args, "name")
 			result, err := schemasvc.UpdateTrait(rt, schemasvc.UpdateTraitRequest{
-				VaultPath: req.VaultPath,
 				TraitName: name,
 				TraitType: stringArg(req.Args, "type"),
 				Values:    commaStringArg(req.Args, "values"),
@@ -225,7 +220,6 @@ var schemaOperationTable = map[string]schemaOperation{
 			typeName := stringArg(req.Args, "type_name")
 			fieldName := stringArg(req.Args, "field_name")
 			result, err := schemasvc.UpdateField(rt, schemasvc.UpdateFieldRequest{
-				VaultPath:   req.VaultPath,
 				TypeName:    typeName,
 				FieldName:   fieldName,
 				FieldType:   stringArg(req.Args, "type"),
@@ -252,7 +246,6 @@ var schemaOperationTable = map[string]schemaOperation{
 		Target: opTargetType,
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 			result, err := schemasvc.RemoveType(rt, schemasvc.RemoveTypeRequest{
-				VaultPath:   req.VaultPath,
 				TypeName:    stringArg(req.Args, "name"),
 				Force:       boolArg(req.Args, "force") || req.Confirm,
 				Interactive: false,
@@ -274,7 +267,6 @@ var schemaOperationTable = map[string]schemaOperation{
 		Target: opTargetTrait,
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 			result, err := schemasvc.RemoveTrait(rt, schemasvc.RemoveTraitRequest{
-				VaultPath:   req.VaultPath,
 				TraitName:   stringArg(req.Args, "name"),
 				Force:       boolArg(req.Args, "force") || req.Confirm,
 				Interactive: false,
@@ -298,7 +290,6 @@ var schemaOperationTable = map[string]schemaOperation{
 			typeName := stringArg(req.Args, "type_name")
 			fieldName := stringArg(req.Args, "field_name")
 			if _, err := schemasvc.RemoveField(rt, schemasvc.RemoveFieldRequest{
-				VaultPath: req.VaultPath,
 				TypeName:  typeName,
 				FieldName: fieldName,
 			}); err != nil {
@@ -317,7 +308,6 @@ var schemaOperationTable = map[string]schemaOperation{
 		Target: opTargetType,
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 			result, err := schemamigratesvc.RenameType(rt, schemamigratesvc.RenameTypeRequest{
-				VaultPath:         req.VaultPath,
 				OldName:           stringArg(req.Args, "old_name"),
 				NewName:           stringArg(req.Args, "new_name"),
 				Description:       stringArg(req.Args, "description"),
@@ -370,11 +360,10 @@ var schemaOperationTable = map[string]schemaOperation{
 		Target: opTargetField,
 		Execute: func(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
 			result, err := schemamigratesvc.RenameField(rt, schemamigratesvc.RenameFieldRequest{
-				VaultPath: req.VaultPath,
-				TypeName:  stringArg(req.Args, "type_name"),
-				OldField:  stringArg(req.Args, "old_field"),
-				NewField:  stringArg(req.Args, "new_field"),
-				Confirm:   req.Confirm,
+				TypeName: stringArg(req.Args, "type_name"),
+				OldField: stringArg(req.Args, "old_field"),
+				NewField: stringArg(req.Args, "new_field"),
+				Confirm:  req.Confirm,
 			})
 			if err != nil {
 				return commandexec.FromServiceError(err)
@@ -410,7 +399,6 @@ var schemaOperationTable = map[string]schemaOperation{
 				return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"high":true,"low":false}`)
 			}
 			result, err := schemamigratesvc.ConvertTrait(rt, schemamigratesvc.ConvertTraitRequest{
-				VaultPath:  req.VaultPath,
 				TraitName:  stringArg(req.Args, "name"),
 				TargetType: stringArg(req.Args, "type"),
 				Mapping:    mapping,
@@ -432,7 +420,6 @@ var schemaOperationTable = map[string]schemaOperation{
 				return commandexec.Failure(codes.ErrInvalidInput, "--map-json must be a JSON object", nil, `Provide an object such as {"true":"done","false":"todo"}`)
 			}
 			result, err := schemamigratesvc.ConvertField(rt, schemamigratesvc.ConvertFieldRequest{
-				VaultPath:  req.VaultPath,
 				TypeName:   stringArg(req.Args, "type_name"),
 				FieldName:  stringArg(req.Args, "field_name"),
 				TargetType: stringArg(req.Args, "type"),

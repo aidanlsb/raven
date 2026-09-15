@@ -15,7 +15,6 @@ import (
 )
 
 type UpdateTypeRequest struct {
-	VaultPath   string
 	TypeName    string
 	DefaultPath string
 	NameField   string
@@ -25,7 +24,6 @@ type UpdateTypeRequest struct {
 }
 
 type UpdateTraitRequest struct {
-	VaultPath string
 	TraitName string
 	TraitType string
 	Values    string
@@ -33,7 +31,6 @@ type UpdateTraitRequest struct {
 }
 
 type UpdateFieldRequest struct {
-	VaultPath   string
 	TypeName    string
 	FieldName   string
 	FieldType   string
@@ -52,21 +49,18 @@ type UpdateResult struct {
 }
 
 type RemoveTypeRequest struct {
-	VaultPath   string
 	TypeName    string
 	Force       bool
 	Interactive bool
 }
 
 type RemoveTraitRequest struct {
-	VaultPath   string
 	TraitName   string
 	Force       bool
 	Interactive bool
 }
 
 type RemoveFieldRequest struct {
-	VaultPath string
 	TypeName  string
 	FieldName string
 }

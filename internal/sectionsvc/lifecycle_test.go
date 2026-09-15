@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -85,18 +84,14 @@ func TestCreatePlacements(t *testing.T) {
 				WithSchema(testutil.PersonProjectSchema()).
 				WithFile("projects/site.md", lifecycleOutline).
 				Build()
-			sch := loadTestSchema(t, v.Path)
-			indexVaultFiles(t, v.Path, sch, "projects/site.md")
+			rt := testRuntime(t, v.Path)
+			indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-			result, err := Create(CreateRequest{
-				VaultPath:      v.Path,
-				VaultConfig:    config.DefaultVaultConfig(),
-				Schema:         sch,
+			result, err := Create(rt, CreateRequest{
 				FileReference:  "projects/site",
 				Title:          "Inserted",
 				Level:          tt.level,
 				Placement:      tt.placement,
-				ParseOptions:   nil,
 				FailOnIndexErr: true,
 			})
 			if err != nil {
@@ -275,13 +270,10 @@ func TestCreateDryRunDoesNotWrite(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("projects/site.md", lifecycleOutline).
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-	result, err := Create(CreateRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	result, err := Create(rt, CreateRequest{
 		FileReference:  "projects/site",
 		Title:          "Preview",
 		Level:          2,
@@ -341,13 +333,10 @@ func TestCreateRejectsIllegalDepthAndSlugCollision(t *testing.T) {
 				WithSchema(testutil.PersonProjectSchema()).
 				WithFile("projects/site.md", lifecycleOutline).
 				Build()
-			sch := loadTestSchema(t, v.Path)
-			indexVaultFiles(t, v.Path, sch, "projects/site.md")
+			rt := testRuntime(t, v.Path)
+			indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-			_, err := Create(CreateRequest{
-				VaultPath:      v.Path,
-				VaultConfig:    config.DefaultVaultConfig(),
-				Schema:         sch,
+			_, err := Create(rt, CreateRequest{
 				FileReference:  "projects/site",
 				Title:          tt.title,
 				Level:          tt.level,
@@ -371,13 +360,10 @@ func TestMoveReordersEntireSubtree(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("projects/site.md", lifecycleOutline).
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-	result, err := Move(MoveRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	result, err := Move(rt, MoveRequest{
 		Reference:      "projects/site#alpha",
 		Placement:      Placement{After: "projects/site#beta"},
 		FailOnIndexErr: true,
@@ -402,13 +388,10 @@ func TestMoveBeforeSibling(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("projects/site.md", lifecycleOutline).
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-	_, err := Move(MoveRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	_, err := Move(rt, MoveRequest{
 		Reference:      "projects/site#beta",
 		Placement:      Placement{Before: "projects/site#alpha"},
 		FailOnIndexErr: true,
@@ -447,13 +430,10 @@ func TestMoveToEOF(t *testing.T) {
 				WithSchema(testutil.PersonProjectSchema()).
 				WithFile("projects/site.md", lifecycleOutline).
 				Build()
-			sch := loadTestSchema(t, v.Path)
-			indexVaultFiles(t, v.Path, sch, "projects/site.md")
+			rt := testRuntime(t, v.Path)
+			indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-			_, err := Move(MoveRequest{
-				VaultPath:      v.Path,
-				VaultConfig:    config.DefaultVaultConfig(),
-				Schema:         sch,
+			_, err := Move(rt, MoveRequest{
 				Reference:      tt.reference,
 				FailOnIndexErr: true,
 			})
@@ -490,13 +470,10 @@ Child body
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("projects/site.md", content).
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-	_, err := Move(MoveRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	_, err := Move(rt, MoveRequest{
 		Reference:      "projects/site#gamma",
 		Placement:      Placement{Under: "projects/site#alpha"},
 		FailOnIndexErr: true,
@@ -521,13 +498,10 @@ func TestMoveDryRunAndInvalidPlacements(t *testing.T) {
 			WithSchema(testutil.PersonProjectSchema()).
 			WithFile("projects/site.md", lifecycleOutline).
 			Build()
-		sch := loadTestSchema(t, v.Path)
-		indexVaultFiles(t, v.Path, sch, "projects/site.md")
+		rt := testRuntime(t, v.Path)
+		indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-		_, err := Move(MoveRequest{
-			VaultPath:      v.Path,
-			VaultConfig:    config.DefaultVaultConfig(),
-			Schema:         sch,
+		_, err := Move(rt, MoveRequest{
 			Reference:      "projects/site#alpha",
 			Placement:      Placement{After: "projects/site#beta"},
 			Preview:        true,
@@ -575,13 +549,10 @@ func TestMoveDryRunAndInvalidPlacements(t *testing.T) {
 				WithSchema(testutil.PersonProjectSchema()).
 				WithFile("projects/site.md", lifecycleOutline).
 				Build()
-			sch := loadTestSchema(t, v.Path)
-			indexVaultFiles(t, v.Path, sch, "projects/site.md")
+			rt := testRuntime(t, v.Path)
+			indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-			_, err := Move(MoveRequest{
-				VaultPath:      v.Path,
-				VaultConfig:    config.DefaultVaultConfig(),
-				Schema:         sch,
+			_, err := Move(rt, MoveRequest{
 				Reference:      tt.reference,
 				Placement:      tt.placement,
 				FailOnIndexErr: true,
@@ -619,13 +590,10 @@ Second
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("projects/site.md", content).
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-	_, err := Move(MoveRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	_, err := Move(rt, MoveRequest{
 		Reference:      "projects/site#repeat-2",
 		Placement:      Placement{Before: "projects/site#repeat"},
 		FailOnIndexErr: true,

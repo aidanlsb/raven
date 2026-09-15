@@ -27,7 +27,6 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	defer rt.Close()
 	vaultCfg := rt.VaultCfg
-	sch := rt.Schema
 
 	typeName := strings.TrimSpace(stringArg(req.Args, "type"))
 	title := strings.TrimSpace(stringArg(req.Args, "title"))
@@ -46,20 +45,13 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 
-	result, err := objectsvc.Write(objectsvc.WriteRequest{
-		VaultPath:   vaultPath,
+	result, err := objectsvc.Write(rt, objectsvc.WriteRequest{
 		TypeName:    typeName,
 		Title:       title,
 		TargetPath:  targetPath,
 		FieldValues: allFieldValues,
-		VaultConfig: vaultCfg,
-		Schema:      sch,
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
-		TemplateDir: vaultCfg.GetTemplateDirectory(),
 		TemplateID:  stringArg(req.Args, "template"),
 		CreateOnly:  true,
-		Runtime:     rt,
 	})
 	if err != nil {
 		return mapContentMutationError(err)

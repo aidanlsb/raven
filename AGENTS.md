@@ -104,7 +104,7 @@ A `*svc` package is a use-case façade that:
 - **Pure domain logic** — reusable building blocks (path manipulation, parsing, validation) live in plain packages like `internal/paths/`, `internal/parser/`, `internal/schema/`, not services
 - **Transport-specific code** — CLI rendering and MCP serialization stay in `internal/cli/` and `internal/mcp/`
 
-**Shared runtime assembly:** `internal/vaultruntime` provides `Runtime` and `FromRequest` to assemble vault dependencies (config, schema, database, parse options) for both services and direct command handlers.
+**Shared runtime assembly:** `internal/vaultruntime` provides `Runtime` to assemble vault dependencies (config, schema, database, parse options) for both services and direct command handlers. Vault-scoped services take `rt *vaultruntime.Runtime` first; request structs hold only operation inputs.
 
 Examples:
 - **Keep as service:** `objectsvc` (coordinates parser, index, mutation, references, schema validation for multi-step object operations)

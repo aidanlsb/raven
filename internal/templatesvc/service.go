@@ -32,7 +32,6 @@ type TemplateFileInfo struct {
 }
 
 type ListRequest struct {
-	VaultPath   string
 	TemplateDir string
 }
 
@@ -42,14 +41,12 @@ type ListResult struct {
 }
 
 type WriteRequest struct {
-	VaultPath   string
 	TemplateDir string
 	Path        string
 	Content     string
 }
 
 type ReadRequest struct {
-	VaultPath   string
 	TemplateDir string
 	Path        string
 }
@@ -71,7 +68,6 @@ type WriteResult struct {
 }
 
 type DeleteRequest struct {
-	VaultPath   string
 	TemplateDir string
 	Path        string
 	Force       bool
@@ -89,10 +85,9 @@ func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
 	if err := vaultruntime.Require(rt); err != nil {
 		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
-	req.VaultPath = rt.VaultPath
 
-	root := filepath.Join(req.VaultPath, filepath.FromSlash(req.TemplateDir))
-	if err := paths.ValidateWithinVault(req.VaultPath, root); err != nil {
+	root := filepath.Join(rt.VaultPath, filepath.FromSlash(req.TemplateDir))
+	if err := paths.ValidateWithinVault(rt.VaultPath, root); err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "template directory must be within the vault", err)
 	}
 	if _, err := os.Stat(root); os.IsNotExist(err) {
@@ -116,7 +111,7 @@ func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
 		if err != nil {
 			return err
 		}
-		rel, err := filepath.Rel(req.VaultPath, path)
+		rel, err := filepath.Rel(rt.VaultPath, path)
 		if err != nil {
 			return err
 		}
@@ -137,12 +132,12 @@ func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
 	}, nil
 }
 
-func Read(req ReadRequest) (*ReadResult, error) {
-	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
+func Read(rt *vaultruntime.Runtime, req ReadRequest) (*ReadResult, error) {
+	if err := vaultruntime.Require(rt); err != nil {
 		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 
-	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
+	fileRef, fullPath, err := resolveTemplatePath(rt.VaultPath, req.TemplateDir, req.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -172,14 +167,13 @@ func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
 	if err := vaultruntime.Require(rt); err != nil {
 		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
-	req.VaultPath = rt.VaultPath
 	projectionLock, err := reindexsvc.LockProjection(rt, false)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = projectionLock.Close() }()
 
-	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
+	fileRef, fullPath, err := resolveTemplatePath(rt.VaultPath, req.TemplateDir, req.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -231,14 +225,13 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 	if err := vaultruntime.Require(rt); err != nil {
 		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
-	req.VaultPath = rt.VaultPath
 	projectionLock, err := reindexsvc.LockProjection(rt, false)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = projectionLock.Close() }()
 
-	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
+	fileRef, fullPath, err := resolveTemplatePath(rt.VaultPath, req.TemplateDir, req.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +250,7 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 		return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("template file %q is referenced by schema templates: %s", fileRef, strings.Join(templateIDs, ", "))).WithSuggestion("Remove those template definitions first with `rvn schema template remove <template_id>` or use --force")
 	}
 
-	trashRef, err := moveTemplateToTrash(req.VaultPath, fileRef)
+	trashRef, err := moveTemplateToTrash(rt.VaultPath, fileRef)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileWrite, "unable to move template file to .trash", err)
 	}

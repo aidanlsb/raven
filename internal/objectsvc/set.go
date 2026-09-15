@@ -5,26 +5,19 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type SetObjectFileRequest struct {
-	VaultPath     string
-	VaultConfig   *config.VaultConfig
 	FilePath      string
 	ObjectID      string
 	TypedUpdates  map[string]fieldvalue.FieldValue
-	Schema        *schema.Schema
 	AllowedFields map[string]bool
-	ParseOptions  *parser.ParseOptions
-	Runtime       *vaultruntime.Runtime
 	// Preview validates and computes the resulting fields without writing the
 	// file, for dry-run callers.
 	Preview bool
@@ -38,16 +31,15 @@ type SetObjectFileResult struct {
 	PreviousFields  map[string]fieldvalue.FieldValue
 }
 
-func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
-	if req.Schema == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
-	}
-	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.FilePath); err != nil {
+func SetObjectFile(rt *vaultruntime.Runtime, req SetObjectFileRequest) (*SetObjectFileResult, error) {
+	if err := requireVaultConfig(rt); err != nil {
 		return nil, err
 	}
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if owned {
-		defer rt.Close()
+	if err := requireSchema(rt); err != nil {
+		return nil, err
+	}
+	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, req.FilePath); err != nil {
+		return nil, err
 	}
 
 	content, err := os.ReadFile(req.FilePath)
@@ -68,13 +60,13 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 		objectType = "page"
 	}
 
-	refCtx := createRefValidationContext(rt, req.ParseOptions)
+	refCtx := createRefValidationContext(rt)
 	newContent, warningMessages, err := fieldmutation.PrepareValidatedFrontmatterMutationValues(
 		string(content),
 		fm,
 		objectType,
 		req.TypedUpdates,
-		req.Schema,
+		rt.Schema,
 		req.AllowedFields,
 		refCtx,
 	)

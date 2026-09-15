@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -18,16 +17,11 @@ import (
 )
 
 type MoveByReferenceRequest struct {
-	VaultPath     string
-	VaultConfig   *config.VaultConfig
-	Schema        *schema.Schema
 	Reference     string
 	Destination   string
 	UpdateRefs    bool
 	SkipTypeCheck bool
 	Preview       bool
-	ParseOptions  *parser.ParseOptions
-	Runtime       *vaultruntime.Runtime
 }
 
 type MoveTypeMismatch struct {
@@ -51,18 +45,10 @@ type MoveByReferenceResult struct {
 	ChangeSet         mutation.ChangeSet
 }
 
-func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error) {
-	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
+func MoveByReference(rt *vaultruntime.Runtime, req MoveByReferenceRequest) (*MoveByReferenceResult, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
-	}
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if owned {
-		defer rt.Close()
-	}
-	req.Runtime = rt
 	if strings.TrimSpace(req.Reference) == "" || strings.TrimSpace(req.Destination) == "" {
 		return nil, svcerr.New(codes.ErrInvalidInput, "source and destination are required").WithSuggestion("Usage: rvn move <source> <destination>")
 	}
@@ -85,21 +71,21 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		sourceFile = resolved.FilePath
 	}
 
-	if err := paths.ValidateWithinVault(req.VaultPath, sourceFile); err != nil {
+	if err := paths.ValidateWithinVault(rt.VaultPath, sourceFile); err != nil {
 		return nil, svcerr.Wrap(codes.ErrValidationFailed, "source path is outside vault", err).WithSuggestion("Files can only be moved within the vault")
 	}
 
 	if sourceRelPath == "" {
-		sourceRelPath, err = filepath.Rel(req.VaultPath, sourceFile)
+		sourceRelPath, err = filepath.Rel(rt.VaultPath, sourceFile)
 		if err != nil {
 			return nil, svcerr.Wrap(codes.ErrInternal, "failed to resolve source path", err)
 		}
 		sourceRelPath = paths.NormalizeVaultRelPath(sourceRelPath)
 	}
-	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, sourceRelPath); err != nil {
+	if err := mutationguard.ValidateContentMutationRelPath(rt.VaultCfg, sourceRelPath); err != nil {
 		return nil, err
 	}
-	sourceID := req.VaultConfig.FilePathToObjectID(sourceRelPath)
+	sourceID := rt.VaultCfg.FilePathToObjectID(sourceRelPath)
 	if sourceIsFile {
 		sourceID = sourceRelPath
 	}
@@ -132,17 +118,17 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	}
 
 	destPath := destination
-	if !sourceIsFile && req.VaultConfig.HasDirectoriesConfig() {
-		destPath = req.VaultConfig.ResolveReferenceToFilePath(strings.TrimSuffix(destination, ".md"))
+	if !sourceIsFile && rt.VaultCfg.HasDirectoriesConfig() {
+		destPath = rt.VaultCfg.ResolveReferenceToFilePath(strings.TrimSuffix(destination, ".md"))
 	}
 	destPath = paths.NormalizeVaultRelPath(destPath)
-	destFile := filepath.Join(req.VaultPath, destPath)
+	destFile := filepath.Join(rt.VaultPath, destPath)
 
-	if err := paths.ValidateWithinVault(req.VaultPath, destFile); err != nil {
+	if err := paths.ValidateWithinVault(rt.VaultPath, destFile); err != nil {
 		return nil, svcerr.Wrap(codes.ErrValidationFailed, "destination path is outside vault", err).WithSuggestion("Files can only be moved within the vault")
 	}
-	relDest, _ := filepath.Rel(req.VaultPath, destFile)
-	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, relDest); err != nil {
+	relDest, _ := filepath.Rel(rt.VaultPath, destFile)
+	if err := mutationguard.ValidateContentMutationRelPath(rt.VaultCfg, relDest); err != nil {
 		return nil, err
 	}
 	if _, err := os.Stat(destFile); err == nil {
@@ -150,18 +136,13 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	}
 
 	if sourceIsFile {
-		serviceResult, err := MoveFile(MoveFileRequest{
-			VaultPath:         req.VaultPath,
+		serviceResult, err := MoveFile(rt, MoveFileRequest{
 			SourceFile:        sourceFile,
 			DestinationFile:   destFile,
 			SourceObjectID:    sourceID,
 			DestinationObject: destPath,
 			UpdateRefs:        req.UpdateRefs,
 			Preview:           req.Preview,
-			VaultConfig:       req.VaultConfig,
-			Schema:            req.Schema,
-			ParseOptions:      req.ParseOptions,
-			Runtime:           rt,
 		})
 		if err != nil {
 			return nil, err
@@ -178,7 +159,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		}, nil
 	}
 
-	sch := req.Schema
+	sch := rt.Schema
 	if sch == nil {
 		sch = schema.New()
 	}
@@ -187,7 +168,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read source file", err)
 	}
-	doc, err := parser.ParseDocumentWithOptions(string(content), sourceFile, req.VaultPath, req.ParseOptions)
+	doc, err := parser.ParseDocumentWithOptions(string(content), sourceFile, rt.VaultPath, rt.ParseOptions)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse source file", err).WithSuggestion("Failed to parse source file")
 	}
@@ -207,7 +188,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 			return &MoveByReferenceResult{
 				SourceID:       sourceID,
 				SourceRelative: sourceRelPath,
-				DestinationID:  req.VaultConfig.FilePathToObjectID(destPath),
+				DestinationID:  rt.VaultCfg.FilePathToObjectID(destPath),
 				DestinationRel: destPath,
 				NeedsConfirm:   true,
 				Reason:         fmt.Sprintf("Type mismatch: file is '%s' but destination is default path for '%s'", fileType, typeName),
@@ -220,18 +201,13 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		}
 	}
 
-	serviceResult, err := MoveFile(MoveFileRequest{
-		VaultPath:         req.VaultPath,
+	serviceResult, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        sourceFile,
 		DestinationFile:   destFile,
 		SourceObjectID:    sourceID,
-		DestinationObject: req.VaultConfig.FilePathToObjectID(destPath),
+		DestinationObject: rt.VaultCfg.FilePathToObjectID(destPath),
 		UpdateRefs:        req.UpdateRefs,
 		Preview:           req.Preview,
-		VaultConfig:       req.VaultConfig,
-		Schema:            sch,
-		ParseOptions:      req.ParseOptions,
-		Runtime:           rt,
 	})
 	if err != nil {
 		return nil, err
@@ -240,7 +216,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	return &MoveByReferenceResult{
 		SourceID:         sourceID,
 		SourceRelative:   sourceRelPath,
-		DestinationID:    req.VaultConfig.FilePathToObjectID(destPath),
+		DestinationID:    rt.VaultCfg.FilePathToObjectID(destPath),
 		DestinationRel:   destPath,
 		UpdatedRefs:      serviceResult.UpdatedRefs,
 		UpdatedRefFields: serviceResult.UpdatedRefFields,

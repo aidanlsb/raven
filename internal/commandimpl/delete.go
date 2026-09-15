@@ -49,17 +49,12 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 	if rt.SchemaLoadErr != nil {
 		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
 	}
-	sch := rt.Schema
 	deletionCfg := vaultCfg.GetDeletionConfig()
 	if req.Preview {
-		preview, err := objectsvc.PreviewDeleteByReference(objectsvc.DeleteByReferenceRequest{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
-			Schema:      sch,
-			Reference:   reference,
-			Behavior:    deletionCfg.Behavior,
-			TrashDir:    deletionCfg.TrashDir,
-			Runtime:     rt,
+		preview, err := objectsvc.PreviewDeleteByReference(rt, objectsvc.DeleteByReferenceRequest{
+			Reference: reference,
+			Behavior:  deletionCfg.Behavior,
+			TrashDir:  deletionCfg.TrashDir,
 		})
 		if err != nil {
 			return mapContentMutationError(err)
@@ -75,14 +70,10 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		}, warnings, nil)
 	}
 
-	serviceResult, err := objectsvc.DeleteByReference(objectsvc.DeleteByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-		Schema:      sch,
-		Reference:   reference,
-		Behavior:    deletionCfg.Behavior,
-		TrashDir:    deletionCfg.TrashDir,
-		Runtime:     rt,
+	serviceResult, err := objectsvc.DeleteByReference(rt, objectsvc.DeleteByReferenceRequest{
+		Reference: reference,
+		Behavior:  deletionCfg.Behavior,
+		TrashDir:  deletionCfg.TrashDir,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -109,22 +100,18 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 }
 
 func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journalOperation string) commandexec.Result {
-	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
 	fileIDs, sectionIDs := splitSectionIDs(ids)
 	warnings := sectionSkipWarnings(sectionIDs)
 	deletionCfg := vaultCfg.GetDeletionConfig()
 	request := objectsvc.DeleteBulkRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-		ObjectIDs:   fileIDs,
-		Behavior:    deletionCfg.Behavior,
-		TrashDir:    deletionCfg.TrashDir,
-		Runtime:     rt,
+		ObjectIDs: fileIDs,
+		Behavior:  deletionCfg.Behavior,
+		TrashDir:  deletionCfg.TrashDir,
 	}
 
 	if !confirm {
-		preview, err := objectsvc.PreviewDeleteBulk(request)
+		preview, err := objectsvc.PreviewDeleteBulk(rt, request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
@@ -141,7 +128,7 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplyDeleteBulk(request)
+	summary, err := objectsvc.ApplyDeleteBulk(rt, request)
 	if err != nil {
 		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 	}

@@ -49,10 +49,9 @@ func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Res
 
 	start := time.Now()
 	result, err := reindexsvc.Run(rt, reindexsvc.RunRequest{
-		VaultPath: rt.VaultPath,
-		Full:      boolArg(req.Args, "full"),
-		DryRun:    boolArg(req.Args, "dry-run"),
-		Context:   ctx,
+		Full:    boolArg(req.Args, "full"),
+		DryRun:  boolArg(req.Args, "dry-run"),
+		Context: ctx,
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)

@@ -27,8 +27,8 @@ func Require(rt *Runtime) error {
 	return RequirePath(rt.VaultPath)
 }
 
-// RequirePath validates a vault path for compatibility service boundaries that
-// do not yet receive a Runtime.
+// RequirePath validates a vault path for boundaries that do not receive a Runtime,
+// such as vault-registry setup in configsvc.
 func RequirePath(vaultPath string) error {
 	if strings.TrimSpace(vaultPath) == "" {
 		return ErrVaultPathRequired
@@ -110,26 +110,6 @@ type Runtime struct {
 
 	// SchemaLoadErr records a tolerated schema load failure.
 	SchemaLoadErr error
-}
-
-// FromRequest reuses rt when provided or constructs a runtime from the request
-// dependencies. The returned bool reports whether a new runtime was constructed.
-func FromRequest(
-	rt *Runtime,
-	vaultPath string,
-	vaultCfg *config.VaultConfig,
-	sch *schema.Schema,
-	parseOptions *parser.ParseOptions,
-) (*Runtime, bool) {
-	if rt != nil {
-		return rt, false
-	}
-	return &Runtime{
-		VaultPath:    vaultPath,
-		VaultCfg:     vaultCfg,
-		Schema:       sch,
-		ParseOptions: parseOptions,
-	}, true
 }
 
 // New loads a vault runtime according to opts.

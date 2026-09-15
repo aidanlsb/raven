@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -47,10 +46,8 @@ type trashEntryMetadata struct {
 }
 
 type ListTrashRequest struct {
-	VaultPath   string
-	VaultConfig *config.VaultConfig
-	Reference   string
-	Kind        string
+	Reference string
+	Kind      string
 }
 
 type ListTrashResult struct {
@@ -61,8 +58,11 @@ type ListTrashResult struct {
 
 // ListTrash returns files from the configured trash directory in stable path
 // order. A missing trash directory is an empty list, not an error.
-func ListTrash(req ListTrashRequest) (*ListTrashResult, error) {
-	trashDir, trashRoot, err := resolveTrashRoot(req.VaultPath, req.VaultConfig)
+func ListTrash(rt *vaultruntime.Runtime, req ListTrashRequest) (*ListTrashResult, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
+	}
+	trashDir, trashRoot, err := resolveTrashRoot(rt)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func ListTrash(req ListTrashRequest) (*ListTrashResult, error) {
 	result := &ListTrashResult{
 		Entries:          []TrashEntry{},
 		TrashDir:         trashDir,
-		DeletionBehavior: req.VaultConfig.GetDeletionConfig().Behavior,
+		DeletionBehavior: rt.VaultCfg.GetDeletionConfig().Behavior,
 	}
 	info, statErr := os.Stat(trashRoot)
 	if os.IsNotExist(statErr) {
@@ -122,7 +122,7 @@ func ListTrash(req ListTrashRequest) (*ListTrashResult, error) {
 			return infoErr
 		}
 		if !info.Mode().IsRegular() &&
-			(info.Mode()&os.ModeSymlink == 0 || !symlinkRestoresWithinVault(req.VaultPath, filePath, restorePath)) {
+			(info.Mode()&os.ModeSymlink == 0 || !symlinkRestoresWithinVault(rt.VaultPath, filePath, restorePath)) {
 			return nil
 		}
 
@@ -130,7 +130,7 @@ func ListTrash(req ListTrashRequest) (*ListTrashResult, error) {
 		reference := restorePath
 		if paths.HasMDExtension(restorePath) {
 			entryKind = TrashKindMarkdown
-			reference = req.VaultConfig.FilePathToObjectID(restorePath)
+			reference = rt.VaultCfg.FilePathToObjectID(restorePath)
 		}
 		if kind != "" && entryKind != kind {
 			return nil
@@ -160,10 +160,7 @@ func ListTrash(req ListTrashRequest) (*ListTrashResult, error) {
 }
 
 type RestoreByReferenceRequest struct {
-	VaultPath   string
-	VaultConfig *config.VaultConfig
-	Reference   string
-	Runtime     *vaultruntime.Runtime
+	Reference string
 }
 
 type RestoreByReferenceResult struct {
@@ -171,26 +168,26 @@ type RestoreByReferenceResult struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewRestoreByReference(req RestoreByReferenceRequest) (*RestoreByReferenceResult, error) {
-	entry, err := prepareRestoreByReference(req)
+func PreviewRestoreByReference(rt *vaultruntime.Runtime, req RestoreByReferenceRequest) (*RestoreByReferenceResult, error) {
+	entry, err := prepareRestoreByReference(rt, req)
 	if err != nil {
 		return nil, err
 	}
 	return &RestoreByReferenceResult{Entry: *entry}, nil
 }
 
-func RestoreByReference(req RestoreByReferenceRequest) (*RestoreByReferenceResult, error) {
-	entry, err := prepareRestoreByReference(req)
+func RestoreByReference(rt *vaultruntime.Runtime, req RestoreByReferenceRequest) (*RestoreByReferenceResult, error) {
+	entry, err := prepareRestoreByReference(rt, req)
 	if err != nil {
 		return nil, err
 	}
 
-	sourcePath := filepath.Join(req.VaultPath, filepath.FromSlash(entry.TrashPath))
-	destinationPath := filepath.Join(req.VaultPath, filepath.FromSlash(entry.RestorePath))
+	sourcePath := filepath.Join(rt.VaultPath, filepath.FromSlash(entry.TrashPath))
+	destinationPath := filepath.Join(rt.VaultPath, filepath.FromSlash(entry.RestorePath))
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create restore parent directory", err)
 	}
-	if err := paths.ValidateWithinVault(req.VaultPath, destinationPath); err != nil {
+	if err := paths.ValidateWithinVault(rt.VaultPath, destinationPath); err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "restore destination is outside the vault", err)
 	}
 	if err := moveFileNoReplace(sourcePath, destinationPath); err != nil {
@@ -200,7 +197,7 @@ func RestoreByReference(req RestoreByReferenceRequest) (*RestoreByReferenceResul
 		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to restore trash entry", err)
 	}
 	if entry.MetadataPath != "" {
-		_ = os.Remove(filepath.Join(req.VaultPath, filepath.FromSlash(entry.MetadataPath)))
+		_ = os.Remove(filepath.Join(rt.VaultPath, filepath.FromSlash(entry.MetadataPath)))
 	}
 
 	changes := mutation.NewChangeSet()
@@ -211,13 +208,9 @@ func RestoreByReference(req RestoreByReferenceRequest) (*RestoreByReferenceResul
 	}, nil
 }
 
-func prepareRestoreByReference(req RestoreByReferenceRequest) (*TrashEntry, error) {
-	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
-	}
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").
-			WithSuggestion("Fix raven.yaml and try again")
+func prepareRestoreByReference(rt *vaultruntime.Runtime, req RestoreByReferenceRequest) (*TrashEntry, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
 	reference := strings.TrimSpace(req.Reference)
 	if reference == "" {
@@ -225,15 +218,12 @@ func prepareRestoreByReference(req RestoreByReferenceRequest) (*TrashEntry, erro
 			WithSuggestion("Usage: rvn restore <trash-reference-or-path>")
 	}
 
-	listResult, err := ListTrash(ListTrashRequest{
-		VaultPath:   req.VaultPath,
-		VaultConfig: req.VaultConfig,
-	})
+	listResult, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	normalizedReference, err := normalizeRestoreInput(req.VaultPath, reference)
+	normalizedReference, err := normalizeRestoreInput(rt.VaultPath, reference)
 	if err != nil {
 		return nil, err
 	}
@@ -271,8 +261,8 @@ func prepareRestoreByReference(req RestoreByReferenceRequest) (*TrashEntry, erro
 	}
 
 	entry := matches[0]
-	sourcePath := filepath.Join(req.VaultPath, filepath.FromSlash(entry.TrashPath))
-	if err := paths.ValidateWithinVault(req.VaultPath, filepath.Dir(sourcePath)); err != nil {
+	sourcePath := filepath.Join(rt.VaultPath, filepath.FromSlash(entry.TrashPath))
+	if err := paths.ValidateWithinVault(rt.VaultPath, filepath.Dir(sourcePath)); err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "trash entry is outside the vault", err)
 	}
 	sourceInfo, err := os.Lstat(sourcePath)
@@ -284,16 +274,16 @@ func prepareRestoreByReference(req RestoreByReferenceRequest) (*TrashEntry, erro
 		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to inspect trash entry", err)
 	}
 	if !sourceInfo.Mode().IsRegular() &&
-		(sourceInfo.Mode()&os.ModeSymlink == 0 || !symlinkRestoresWithinVault(req.VaultPath, sourcePath, entry.RestorePath)) {
+		(sourceInfo.Mode()&os.ModeSymlink == 0 || !symlinkRestoresWithinVault(rt.VaultPath, sourcePath, entry.RestorePath)) {
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("trash entry is not a restorable file: %s", entry.TrashPath)).
 			WithSuggestion("Only regular files and symlinks that remain within the vault can be restored")
 	}
 
-	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, entry.RestorePath); err != nil {
+	if err := mutationguard.ValidateContentMutationRelPath(rt.VaultCfg, entry.RestorePath); err != nil {
 		return nil, err
 	}
-	destinationPath := filepath.Join(req.VaultPath, filepath.FromSlash(entry.RestorePath))
-	if err := paths.ValidateWithinVault(req.VaultPath, destinationPath); err != nil {
+	destinationPath := filepath.Join(rt.VaultPath, filepath.FromSlash(entry.RestorePath))
+	if err := paths.ValidateWithinVault(rt.VaultPath, destinationPath); err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "restore destination is outside the vault", err)
 	}
 	if _, err := os.Lstat(destinationPath); err == nil {
@@ -305,16 +295,12 @@ func prepareRestoreByReference(req RestoreByReferenceRequest) (*TrashEntry, erro
 	return &entry, nil
 }
 
-func resolveTrashRoot(vaultPath string, vaultCfg *config.VaultConfig) (string, string, error) {
-	if err := vaultruntime.RequirePath(vaultPath); err != nil {
-		return "", "", svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
-	}
-	if vaultCfg == nil {
-		return "", "", svcerr.New(codes.ErrValidationFailed, "vault config is required").
-			WithSuggestion("Fix raven.yaml and try again")
+func resolveTrashRoot(rt *vaultruntime.Runtime) (string, string, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return "", "", err
 	}
 
-	return resolveTrashRootFromDir(vaultPath, vaultCfg.GetDeletionConfig().TrashDir)
+	return resolveTrashRootFromDir(rt.VaultPath, rt.VaultCfg.GetDeletionConfig().TrashDir)
 }
 
 func resolveTrashRootFromDir(vaultPath, rawTrashDir string) (string, string, error) {

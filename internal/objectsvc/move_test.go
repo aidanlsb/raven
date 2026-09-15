@@ -28,14 +28,10 @@ func TestMoveFileUpdatesBacklinksAfterRename(t *testing.T) {
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
 		WithFile("notes/ref.md", "See [[people/freya]].\n").
 		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md", "notes/ref.md")
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
-
-	result, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       &config.VaultConfig{},
-		Schema:            sch,
+	result, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
 		SourceObjectID:    "people/freya",
@@ -69,14 +65,10 @@ func TestMoveFileUpdatesMarkdownFileLinks(t *testing.T) {
 		WithFile("files/paper(1).pdf", "%PDF test\n").
 		WithFile("notes/ref.md", "Read [angle](<../files/paper(1).pdf>) and [escaped](../files/paper\\(1\\).pdf).\n").
 		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "notes/ref.md")
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "notes/ref.md")
-
-	preview, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       config.DefaultVaultConfig(),
-		Schema:            sch,
+	preview, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "files/paper(1).pdf"),
 		DestinationFile:   filepath.Join(v.Path, "files/archive/paper(1).pdf"),
 		SourceObjectID:    "files/paper(1).pdf",
@@ -85,7 +77,7 @@ func TestMoveFileUpdatesMarkdownFileLinks(t *testing.T) {
 		Preview:           true,
 	})
 	if err != nil {
-		t.Fatalf("MoveFile(preview) error = %v", err)
+		t.Fatalf("MoveFile(rt, preview) error = %v", err)
 	}
 	if len(preview.UpdatedRefs) != 1 || preview.UpdatedRefs[0] != "notes/ref" {
 		t.Fatalf("preview UpdatedRefs = %#v, want [notes/ref]", preview.UpdatedRefs)
@@ -94,10 +86,7 @@ func TestMoveFileUpdatesMarkdownFileLinks(t *testing.T) {
 		t.Fatalf("preview changed source link:\n%s", content)
 	}
 
-	result, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       config.DefaultVaultConfig(),
-		Schema:            sch,
+	result, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "files/paper(1).pdf"),
 		DestinationFile:   filepath.Join(v.Path, "files/archive/paper(1).pdf"),
 		SourceObjectID:    "files/paper(1).pdf",
@@ -134,14 +123,10 @@ func TestMoveFileDoesNotRewriteDifferentNormalizedLink(t *testing.T) {
 		WithFile("files/paper.pdf", "%PDF test\n").
 		WithFile("notes/ref.md", "This source-relative link points elsewhere: [paper](files/paper.pdf).\n").
 		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "notes/ref.md")
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "notes/ref.md")
-
-	result, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       config.DefaultVaultConfig(),
-		Schema:            sch,
+	result, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "files/paper.pdf"),
 		DestinationFile:   filepath.Join(v.Path, "files/archive/paper.pdf"),
 		SourceObjectID:    "files/paper.pdf",
@@ -184,19 +169,15 @@ func TestMoveFileRenameFailureDoesNotRewriteBacklinks(t *testing.T) {
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
 		WithFile("notes/ref.md", "See [[people/freya]].\n").
 		Build()
-
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md", "notes/ref.md")
 
 	destPath := filepath.Join(v.Path, "archive/freya.md")
 	if err := os.MkdirAll(destPath, 0o755); err != nil {
 		t.Fatalf("mkdir conflicting destination: %v", err)
 	}
 
-	_, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       &config.VaultConfig{},
-		Schema:            sch,
+	_, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   destPath,
 		SourceObjectID:    "people/freya",
@@ -232,18 +213,14 @@ func TestMoveFileWarnsWhenRefRewriteFails(t *testing.T) {
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
 		WithFile("notes/ref.md", "See [[people/freya]].\n").
 		Build()
-
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md", "notes/ref.md")
 
 	if err := os.Remove(filepath.Join(v.Path, "notes/ref.md")); err != nil {
 		t.Fatalf("remove backlink source: %v", err)
 	}
 
-	result, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       &config.VaultConfig{},
-		Schema:            sch,
+	result, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
 		SourceObjectID:    "people/freya",
@@ -273,9 +250,8 @@ func TestMoveFileRollsBackWhenRefRewriteWriteFails(t *testing.T) {
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
 		WithFile("notes/ref.md", "See [[people/freya]].\n").
 		Build()
-
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md", "notes/ref.md")
 
 	failPath := filepath.Join(v.Path, "notes/ref.md")
 	restoreWriter := swapMoveFileWriterForTest(func(path string, data []byte, perm os.FileMode) error {
@@ -286,10 +262,7 @@ func TestMoveFileRollsBackWhenRefRewriteWriteFails(t *testing.T) {
 	})
 	defer restoreWriter()
 
-	_, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       &config.VaultConfig{},
-		Schema:            sch,
+	_, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
 		SourceObjectID:    "people/freya",
@@ -327,14 +300,10 @@ func TestMoveFileReturnsChangeSetBeforeIndexProjection(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
 		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md")
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md")
-
-	result, err := MoveFile(MoveFileRequest{
-		VaultPath:          v.Path,
-		VaultConfig:        &config.VaultConfig{},
-		Schema:             sch,
+	result, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:         filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:    filepath.Join(v.Path, "archive/freya.md"),
 		SourceObjectID:     "people/freya",
@@ -382,14 +351,10 @@ func TestMoveFileUpdatesSelfRefsAfterRename(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n\nSee [[people/freya]].\n").
 		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md")
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md")
-
-	result, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       &config.VaultConfig{},
-		Schema:            sch,
+	result, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
 		SourceObjectID:    "people/freya",
@@ -420,14 +385,10 @@ func TestMoveFileSkipsRefsInsideInlineCode(t *testing.T) {
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
 		WithFile("notes/ref.md", "Real [[people/freya]] and code `[[people/freya]]`.\n").
 		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md", "notes/ref.md")
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
-
-	if _, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       &config.VaultConfig{},
-		Schema:            sch,
+	if _, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
 		SourceObjectID:    "people/freya",
@@ -457,14 +418,10 @@ func TestMoveFilePreservesFragmentAndDisplayText(t *testing.T) {
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n\n## Bio\n\nDetails.\n").
 		WithFile("notes/ref.md", "See [[people/freya#bio|Freya]] for details.\n").
 		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md", "notes/ref.md")
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
-
-	result, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       &config.VaultConfig{},
-		Schema:            sch,
+	result, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
 		SourceObjectID:    "people/freya",
@@ -492,15 +449,11 @@ func TestMoveFileUpdatesFrontmatterBareRef(t *testing.T) {
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
 		WithFile("projects/site.md", "---\ntype: project\ntitle: Site\nowner: people/freya\n---\n").
 		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md", "projects/site.md")
+	resolveVaultRefs(t, v.Path, rt.Schema)
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md", "projects/site.md")
-	resolveVaultRefs(t, v.Path, sch)
-
-	result, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       &config.VaultConfig{},
-		Schema:            sch,
+	result, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
 		SourceObjectID:    "people/freya",
@@ -550,15 +503,11 @@ types:
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
 		WithFile("meetings/kickoff.md", "---\ntype: meeting\ntitle: Kickoff\nhost: people/freya\nwith:\n  - people/freya\n---\n\nSee [[people/freya]].\n").
 		Build()
-
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md", "meetings/kickoff.md")
-	resolveVaultRefs(t, v.Path, sch)
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md", "meetings/kickoff.md")
+	resolveVaultRefs(t, v.Path, rt.Schema)
 
 	request := MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       config.DefaultVaultConfig(),
-		Schema:            sch,
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   filepath.Join(v.Path, "people/freya-renamed.md"),
 		SourceObjectID:    "people/freya",
@@ -566,9 +515,9 @@ types:
 		UpdateRefs:        true,
 		Preview:           true,
 	}
-	preview, err := MoveFile(request)
+	preview, err := MoveFile(rt, request)
 	if err != nil {
-		t.Fatalf("MoveFile(preview) error = %v", err)
+		t.Fatalf("MoveFile(rt, preview) error = %v", err)
 	}
 	if len(preview.UpdatedRefs) != 1 || preview.UpdatedRefs[0] != "meetings/kickoff" {
 		t.Fatalf("preview UpdatedRefs = %#v, want [meetings/kickoff]", preview.UpdatedRefs)
@@ -580,7 +529,7 @@ types:
 	v.AssertFileContains("meetings/kickoff.md", "  - people/freya")
 
 	request.Preview = false
-	result, err := MoveFile(request)
+	result, err := MoveFile(rt, request)
 	if err != nil {
 		t.Fatalf("MoveFile() error = %v", err)
 	}
@@ -699,10 +648,10 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 				WithSchema(testutil.PersonProjectSchema()).
 				WithFile(tt.sourceRel, "---\ntype: person\nname: Freya\n---\n").
 				Build()
+			rt := testRuntime(t, v.Path)
+			rt.VaultCfg = tt.vaultCfg
 
-			_, err := MoveFile(MoveFileRequest{
-				VaultPath:         v.Path,
-				VaultConfig:       tt.vaultCfg,
+			_, err := MoveFile(rt, MoveFileRequest{
 				SourceFile:        filepath.Join(v.Path, tt.sourceRel),
 				DestinationFile:   filepath.Join(v.Path, tt.destRel),
 				SourceObjectID:    tt.sourceObjID,
@@ -743,14 +692,10 @@ func TestMoveFileAllowsNormalContentPaths(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
 		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "people/freya.md")
 
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "people/freya.md")
-
-	_, err := MoveFile(MoveFileRequest{
-		VaultPath:         v.Path,
-		VaultConfig:       config.DefaultVaultConfig(),
-		Schema:            sch,
+	_, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
 		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
 		SourceObjectID:    "people/freya",

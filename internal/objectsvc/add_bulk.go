@@ -5,24 +5,17 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type AddBulkRequest struct {
-	VaultPath    string
-	VaultConfig  *config.VaultConfig
-	ObjectIDs    []string
-	Line         string
-	ParseOptions *parser.ParseOptions
-	Runtime      *vaultruntime.Runtime
+	ObjectIDs []string
+	Line      string
 }
 
 type AddBulkPreview struct {
@@ -42,12 +35,12 @@ type AddBulkSummary struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
+func PreviewAddBulk(rt *vaultruntime.Runtime, req AddBulkRequest) (*AddBulkPreview, error) {
 	if err := ValidateAddContent(req.Line); err != nil {
 		return nil, err
 	}
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
 
 	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
@@ -61,12 +54,12 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 			targetObjectID = id
 		}
 
-		filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, fileID, req.VaultConfig)
+		filePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, fileID, rt.VaultCfg)
 		if err != nil {
 			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
-		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
 			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
@@ -81,7 +74,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)})
 				continue
 			}
-			doc, err := parser.ParseDocumentWithOptions(string(content), filePath, req.VaultPath, req.ParseOptions)
+			doc, err := parser.ParseDocumentWithOptions(string(content), filePath, rt.VaultPath, rt.ParseOptions)
 			if err != nil {
 				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)})
 				continue
@@ -118,12 +111,12 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 	}, nil
 }
 
-func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
+func ApplyAddBulk(rt *vaultruntime.Runtime, req AddBulkRequest) (*AddBulkSummary, error) {
 	if err := ValidateAddContent(req.Line); err != nil {
 		return nil, err
 	}
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
 
 	results := make([]BulkResult, 0, len(req.ObjectIDs))
@@ -131,11 +124,7 @@ func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
 	skippedCount := 0
 	errorCount := 0
 	changes := mutation.NewChangeSet()
-	captureCfg := req.VaultConfig.GetCaptureConfig()
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, nil, req.ParseOptions)
-	if owned {
-		defer rt.Close()
-	}
+	captureCfg := rt.VaultCfg.GetCaptureConfig()
 
 	for _, id := range req.ObjectIDs {
 		result := BulkResult{ID: id}
@@ -146,7 +135,7 @@ func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
 			targetObjectID = id
 		}
 
-		filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, fileID, req.VaultConfig)
+		filePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, fileID, rt.VaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -154,7 +143,7 @@ func ApplyAddBulk(req AddBulkRequest) (*AddBulkSummary, error) {
 			results = append(results, result)
 			continue
 		}
-		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
 			result.Status = "error"
 			result.Reason = err.Error()
 			errorCount++

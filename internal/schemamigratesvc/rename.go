@@ -72,11 +72,10 @@ type FieldRenameConflict struct {
 }
 
 type RenameFieldRequest struct {
-	VaultPath string
-	TypeName  string
-	OldField  string
-	NewField  string
-	Confirm   bool
+	TypeName string
+	OldField string
+	NewField string
+	Confirm  bool
 }
 
 type RenameFieldResult struct {
@@ -91,7 +90,6 @@ type RenameFieldResult struct {
 }
 
 type RenameTypeRequest struct {
-	VaultPath         string
 	OldName           string
 	NewName           string
 	Description       string
@@ -155,7 +153,6 @@ type typeRenamePlan struct {
 var frontmatterTypeKeyLine = regexp.MustCompile(`^type\s*:`)
 
 func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameFieldResult, error) {
-	req.VaultPath = rt.VaultPath
 	typeName := strings.TrimSpace(req.TypeName)
 	oldField := strings.TrimSpace(req.OldField)
 	newField := strings.TrimSpace(req.NewField)
@@ -169,7 +166,7 @@ func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameField
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot rename fields on built-in type '%s'", typeName))
 	}
 
-	schemaDoc, err := loadSchemaDocument(req.VaultPath)
+	schemaDoc, err := loadSchemaDocument(rt.VaultPath)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +185,7 @@ func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameField
 		return nil, svcerr.New(codes.ErrObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", newField, typeName))
 	}
 
-	plan, err := buildFieldRenamePlan(req.VaultPath, schemaDoc, typeName, oldField, newField, rt.VaultCfg)
+	plan, err := buildFieldRenamePlan(rt.VaultPath, schemaDoc, typeName, oldField, newField, rt.VaultCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +227,6 @@ func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameField
 }
 
 func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeResult, error) {
-	req.VaultPath = rt.VaultPath
 	oldName := strings.TrimSpace(req.OldName)
 	newName := strings.TrimSpace(req.NewName)
 	if oldName == "" || newName == "" {
@@ -246,7 +242,7 @@ func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeRes
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot rename to '%s' - it's a built-in type", newName))
 	}
 
-	schemaDoc, err := loadSchemaDocument(req.VaultPath)
+	schemaDoc, err := loadSchemaDocument(rt.VaultPath)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +259,7 @@ func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeRes
 		return nil, svcerr.New(codes.ErrObjectExists, fmt.Sprintf("type '%s' already exists", newName)).WithSuggestion("Choose a different name")
 	}
 
-	plan, err := buildTypeRenamePlan(req.VaultPath, schemaDoc, req.Description, oldName, newName, oldTypeDef, vaultCfg)
+	plan, err := buildTypeRenamePlan(rt.VaultPath, schemaDoc, req.Description, oldName, newName, oldTypeDef, vaultCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +289,7 @@ func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeRes
 
 	applyDefaultPathRename := defaultPathPlan != nil && req.RenameDefaultPath
 	if applyDefaultPathRename {
-		if err := validateTypeDirectoryMoves(req.VaultPath, defaultPathPlan.Moves); err != nil {
+		if err := validateTypeDirectoryMoves(rt.VaultPath, defaultPathPlan.Moves); err != nil {
 			return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("cannot rename default directory: %v", err)).WithSuggestion("Use --confirm without --rename-default-path, or resolve destination conflicts and try again")
 		}
 	}

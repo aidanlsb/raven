@@ -958,7 +958,7 @@ func TestCompletionRefreshesAfterExternalIncrementalReindex(t *testing.T) {
 		t.Fatalf("write external file: %v", err)
 	}
 	rt := testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
-	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{VaultPath: vaultPath}); err != nil {
+	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{}); err != nil {
 		t.Fatalf("external incremental reindex: %v", err)
 	}
 

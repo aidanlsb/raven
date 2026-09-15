@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -39,13 +38,10 @@ func TestDeletePreviewReportsExactSubtreeAndInboundReferences(t *testing.T) {
 		WithFile("projects/site.md", deleteSectionOutline).
 		WithFile("notes/ref.md", "See [[projects/site#alpha]] and [[projects/site#alpha-child|child]].\n").
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md", "notes/ref.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md", "notes/ref.md")
 
-	result, err := Delete(DeleteRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	result, err := Delete(rt, DeleteRequest{
 		Reference:      "projects/site#alpha",
 		Preview:        true,
 		FailOnIndexErr: true,
@@ -89,13 +85,10 @@ func TestDeleteApplyRemovesOnlySubtreeAndLeavesReportedReferences(t *testing.T) 
 		WithFile("projects/site.md", deleteSectionOutline).
 		WithFile("notes/ref.md", "See [[projects/site#alpha]] and [[projects/site#alpha-child|child]].\n").
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md", "notes/ref.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md", "notes/ref.md")
 
-	result, err := Delete(DeleteRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	result, err := Delete(rt, DeleteRequest{
 		Reference:      "projects/site#alpha",
 		FailOnIndexErr: true,
 	})
@@ -130,15 +123,12 @@ func TestDeleteRejectsNonSectionReferences(t *testing.T) {
 		WithFile("projects/site.md", deleteSectionOutline).
 		WithFile("assets/paper.pdf", "pdf").
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
 	for _, reference := range []string{"projects/site", "projects/site.md", "assets/paper.pdf"} {
 		t.Run(reference, func(t *testing.T) {
-			_, err := Delete(DeleteRequest{
-				VaultPath:      v.Path,
-				VaultConfig:    config.DefaultVaultConfig(),
-				Schema:         sch,
+			_, err := Delete(rt, DeleteRequest{
 				Reference:      reference,
 				Preview:        true,
 				FailOnIndexErr: true,
@@ -174,13 +164,10 @@ Second
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("projects/site.md", content).
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-	_, err := Delete(DeleteRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	_, err := Delete(rt, DeleteRequest{
 		Reference:      "projects/site#repeat",
 		Preview:        true,
 		FailOnIndexErr: true,

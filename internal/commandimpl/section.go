@@ -35,18 +35,13 @@ func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec
 	if !hasLevel {
 		return commandexec.Failure("MISSING_ARGUMENT", "--level is required", nil, `Usage: rvn section create <file> "<title>" --level N`)
 	}
-	result, err := sectionsvc.Create(sectionsvc.CreateRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    rt.VaultCfg,
-		Schema:         rt.Schema,
+	result, err := sectionsvc.Create(rt, sectionsvc.CreateRequest{
 		FileReference:  fileReference,
 		Title:          title,
 		Level:          level,
 		Placement:      sectionPlacementArg(req.Args),
 		Preview:        req.Preview,
-		ParseOptions:   rt.ParseOptions,
 		FailOnIndexErr: true,
-		Runtime:        rt,
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -75,16 +70,11 @@ func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.R
 	if sectionID == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires section ID argument", nil, "Usage: rvn section move <file#section>")
 	}
-	result, err := sectionsvc.Move(sectionsvc.MoveRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    rt.VaultCfg,
-		Schema:         rt.Schema,
+	result, err := sectionsvc.Move(rt, sectionsvc.MoveRequest{
 		Reference:      sectionID,
 		Placement:      sectionPlacementArg(req.Args),
 		Preview:        req.Preview,
-		ParseOptions:   rt.ParseOptions,
 		FailOnIndexErr: true,
-		Runtime:        rt,
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -116,15 +106,10 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 			"Usage: rvn section delete <file#section> [--confirm]",
 		)
 	}
-	result, err := sectionsvc.Delete(sectionsvc.DeleteRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    rt.VaultCfg,
-		Schema:         rt.Schema,
+	result, err := sectionsvc.Delete(rt, sectionsvc.DeleteRequest{
 		Reference:      reference,
 		Preview:        req.Preview,
-		ParseOptions:   rt.ParseOptions,
 		FailOnIndexErr: true,
-		Runtime:        rt,
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -171,16 +156,11 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 			`Usage: rvn section rename <file#section> "<new heading text>"`,
 		)
 	}
-	result, err := sectionsvc.Rename(sectionsvc.RenameRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    rt.VaultCfg,
-		Schema:         rt.Schema,
+	result, err := sectionsvc.Rename(rt, sectionsvc.RenameRequest{
 		Reference:      sectionID,
 		NewHeadingText: newHeadingText,
 		Preview:        req.Preview,
-		ParseOptions:   rt.ParseOptions,
 		FailOnIndexErr: true,
-		Runtime:        rt,
 	})
 	if err != nil {
 		return commandexec.FromServiceError(err)

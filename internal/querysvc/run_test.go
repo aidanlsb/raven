@@ -115,7 +115,6 @@ func TestResolveRunOptionsUsesInvocationOptionsForSavedQuery(t *testing.T) {
 	vaultPath := t.TempDir()
 	rt := newQueryRuntime(t, vaultPath)
 	if _, err := Set(rt, SetRequest{
-		VaultPath:   vaultPath,
 		Name:        "open-issues",
 		QueryString: "type:issue .status=={{args.status}}",
 		Args:        []string{"status"},

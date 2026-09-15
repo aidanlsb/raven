@@ -24,7 +24,6 @@ import (
 )
 
 type ConvertTraitRequest struct {
-	VaultPath  string
 	TraitName  string
 	TargetType string
 	Mapping    map[string]interface{}
@@ -32,7 +31,6 @@ type ConvertTraitRequest struct {
 }
 
 type ConvertFieldRequest struct {
-	VaultPath  string
 	TypeName   string
 	FieldName  string
 	TargetType string
@@ -66,13 +64,12 @@ type conversionMapper struct {
 }
 
 func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertResult, error) {
-	req.VaultPath = rt.VaultPath
 	traitName := strings.TrimSpace(req.TraitName)
 	if traitName == "" {
 		return nil, svcerr.New(codes.ErrInvalidInput, "trait name cannot be empty").WithSuggestion("Usage: rvn schema convert trait <name> --map-json '<json>'")
 	}
 
-	schemaDoc, err := loadSchemaDocument(req.VaultPath)
+	schemaDoc, err := loadSchemaDocument(rt.VaultPath)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +124,7 @@ func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertRe
 
 	markdownFiles := make(map[string][]byte)
 	changes := make([]schemasvc.ValueConvertChange, 0)
-	err = vault.WalkMarkdownFilesWithOptions(req.VaultPath, walkOptions, func(result vault.WalkResult) error {
+	err = vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOptions, func(result vault.WalkResult) error {
 		if result.Error != nil {
 			return result.Error
 		}
@@ -181,7 +178,6 @@ func ConvertTrait(rt *vaultruntime.Runtime, req ConvertTraitRequest) (*ConvertRe
 }
 
 func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertResult, error) {
-	req.VaultPath = rt.VaultPath
 	typeName := strings.TrimSpace(req.TypeName)
 	fieldName := strings.TrimSpace(req.FieldName)
 	if typeName == "" || fieldName == "" {
@@ -191,7 +187,7 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot convert fields on built-in type '%s'", typeName))
 	}
 
-	schemaDoc, err := loadSchemaDocument(req.VaultPath)
+	schemaDoc, err := loadSchemaDocument(rt.VaultPath)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +261,7 @@ func ConvertField(rt *vaultruntime.Runtime, req ConvertFieldRequest) (*ConvertRe
 
 	markdownFiles := make(map[string][]byte)
 	changes := make([]schemasvc.ValueConvertChange, 0)
-	err = vault.WalkMarkdownFilesWithOptions(req.VaultPath, walkOptions, func(result vault.WalkResult) error {
+	err = vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOptions, func(result vault.WalkResult) error {
 		if result.Error != nil {
 			return result.Error
 		}

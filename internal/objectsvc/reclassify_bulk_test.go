@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 )
 
 func TestReclassifyBulkPreviewAndApplyMixedResults(t *testing.T) {
@@ -29,7 +28,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
+	rt := testRuntime(t, vaultPath)
 	if err := os.MkdirAll(filepath.Join(vaultPath, "notes"), 0o755); err != nil {
 		t.Fatalf("mkdir notes: %v", err)
 	}
@@ -49,15 +48,12 @@ traits: {}
 	}
 
 	request := ReclassifyBulkRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
 		ObjectIDs:   []string{"notes/ready", "notes/missing"},
 		NewTypeName: "doc",
 		UpdateRefs:  true,
 	}
 
-	preview, err := PreviewReclassifyBulk(request)
+	preview, err := PreviewReclassifyBulk(rt, request)
 	if err != nil {
 		t.Fatalf("PreviewReclassifyBulk: %v", err)
 	}
@@ -86,7 +82,7 @@ traits: {}
 		t.Fatalf("preview created destination, err=%v", err)
 	}
 
-	blocked, err := ApplyReclassifyBulk(request, nil)
+	blocked, err := ApplyReclassifyBulk(rt, request, nil)
 	if err != nil {
 		t.Fatalf("ApplyReclassifyBulk without force: %v", err)
 	}
@@ -96,7 +92,7 @@ traits: {}
 	assertReclassifyType(t, filepath.Join(vaultPath, "notes/ready.md"), "note")
 
 	request.Force = true
-	applied, err := ApplyReclassifyBulk(request, nil)
+	applied, err := ApplyReclassifyBulk(rt, request, nil)
 	if err != nil {
 		t.Fatalf("ApplyReclassifyBulk with force: %v", err)
 	}
@@ -126,7 +122,7 @@ types:
         type: string
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
+	rt := testRuntime(t, vaultPath)
 	for _, relPath := range []string{"notes/shared.md", "archive/shared.md"} {
 		filePath := filepath.Join(vaultPath, relPath)
 		if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
@@ -138,15 +134,12 @@ traits: {}
 	}
 
 	request := ReclassifyBulkRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
 		ObjectIDs:   []string{"notes/shared", "archive/shared"},
 		NewTypeName: "doc",
 		UpdateRefs:  true,
 	}
 
-	preview, err := PreviewReclassifyBulk(request)
+	preview, err := PreviewReclassifyBulk(rt, request)
 	if err != nil {
 		t.Fatalf("PreviewReclassifyBulk: %v", err)
 	}
@@ -157,7 +150,7 @@ traits: {}
 		t.Fatalf("collision destination = %#v, want docs/shared.md", got)
 	}
 
-	applied, err := ApplyReclassifyBulk(request, nil)
+	applied, err := ApplyReclassifyBulk(rt, request, nil)
 	if err != nil {
 		t.Fatalf("ApplyReclassifyBulk: %v", err)
 	}

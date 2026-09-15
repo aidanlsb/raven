@@ -13,7 +13,6 @@ import (
 )
 
 type AddTypeRequest struct {
-	VaultPath     string
 	TypeName      string
 	DefaultPath   string
 	NameField     string
@@ -30,7 +29,6 @@ type AddTypeResult struct {
 }
 
 type AddTraitRequest struct {
-	VaultPath string
 	TraitName string
 	TraitType string
 	Values    string
@@ -44,7 +42,6 @@ type AddTraitResult struct {
 }
 
 type AddFieldRequest struct {
-	VaultPath   string
 	TypeName    string
 	FieldName   string
 	FieldType   string

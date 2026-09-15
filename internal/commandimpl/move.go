@@ -29,8 +29,6 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		return failure
 	}
 	defer rt.Close()
-	vaultCfg := rt.VaultCfg
-	sch := rt.Schema
 
 	if stdinMode {
 		destination := strings.TrimSpace(stringArg(req.Args, "destination"))
@@ -49,17 +47,12 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires source and destination arguments", nil, "Usage: rvn move <source> <destination>")
 	}
 
-	serviceResult, err := objectsvc.MoveByReference(objectsvc.MoveByReferenceRequest{
-		VaultPath:     vaultPath,
-		VaultConfig:   vaultCfg,
-		Schema:        sch,
+	serviceResult, err := objectsvc.MoveByReference(rt, objectsvc.MoveByReferenceRequest{
 		Reference:     source,
 		Destination:   destination,
 		UpdateRefs:    boolArgDefault(req.Args, "update-refs", true),
 		SkipTypeCheck: boolArg(req.Args, "skip-type-check"),
 		Preview:       req.Preview,
-		ParseOptions:  rt.ParseOptions,
-		Runtime:       rt,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -121,9 +114,6 @@ func canonicalMoveRefFieldUpdates(updates []objectsvc.RefFieldUpdate) []commandp
 }
 
 func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, updateRefs bool, confirm bool, journalOperation string) commandexec.Result {
-	vaultPath := rt.VaultPath
-	vaultCfg := rt.VaultCfg
-	sch := rt.Schema
 	if strings.TrimSpace(destination) == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "no destination provided", nil, "Usage: rvn move --stdin <destination-directory/>").
 			WithAttemptedIDs("object_ids", ids)
@@ -138,18 +128,13 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 		return moveSectionSourceFailure(sectionIDs).WithAttemptedIDs("object_ids", ids)
 	}
 	request := objectsvc.MoveBulkRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    vaultCfg,
-		Schema:         sch,
 		ObjectIDs:      fileIDs,
 		DestinationDir: destination,
 		UpdateRefs:     updateRefs,
-		ParseOptions:   rt.ParseOptions,
-		Runtime:        rt,
 	}
 
 	if !confirm {
-		preview, err := objectsvc.PreviewMoveBulk(request)
+		preview, err := objectsvc.PreviewMoveBulk(rt, request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
@@ -165,7 +150,7 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplyMoveBulk(request)
+	summary, err := objectsvc.ApplyMoveBulk(rt, request)
 	if err != nil {
 		return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 	}

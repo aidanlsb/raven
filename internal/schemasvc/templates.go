@@ -23,7 +23,6 @@ type TemplateDefinition struct {
 }
 
 type SetTemplateRequest struct {
-	VaultPath   string
 	TemplateID  string
 	File        string
 	Description string

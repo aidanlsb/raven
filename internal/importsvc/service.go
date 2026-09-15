@@ -277,7 +277,6 @@ type ResultItem struct {
 }
 
 type RunRequest struct {
-	VaultPath     string
 	MappingConfig *MappingConfig
 	Items         []map[string]interface{}
 	DryRun        bool
@@ -332,7 +331,6 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 
 	objectsRoot := vaultCfg.GetObjectsRoot()
 	pagesRoot := vaultCfg.GetPagesRoot()
-	templateDir := vaultCfg.GetTemplateDirectory()
 
 	for i, item := range req.Items {
 		itemCfg, err := ResolveItemMapping(item, req.MappingConfig, sch)
@@ -395,20 +393,13 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 			continue
 		}
 
-		itemResult, warnMsgs, changes := applyObject(applyObjectRequest{
-			VaultPath:   vaultPath,
-			Exists:      exists,
-			TargetName:  targetName,
-			TargetPath:  targetPath,
-			TypeName:    itemCfg.TypeName,
-			Fields:      mapped,
-			Content:     contentValue,
-			Schema:      sch,
-			VaultConfig: vaultCfg,
-			ObjectsRoot: objectsRoot,
-			PagesRoot:   pagesRoot,
-			TemplateDir: templateDir,
-			Runtime:     rt,
+		itemResult, warnMsgs, changes := applyObject(rt, applyObjectRequest{
+			Exists:     exists,
+			TargetName: targetName,
+			TargetPath: targetPath,
+			TypeName:   itemCfg.TypeName,
+			Fields:     mapped,
+			Content:    contentValue,
 		})
 		result.Results = append(result.Results, itemResult)
 		result.WarningMessages = append(result.WarningMessages, warnMsgs...)
@@ -423,19 +414,12 @@ func importTargetName(matchValue string) string {
 }
 
 type applyObjectRequest struct {
-	VaultPath   string
-	Exists      bool
-	TargetName  string
-	TargetPath  string
-	TypeName    string
-	Fields      map[string]interface{}
-	Content     string
-	Schema      *schema.Schema
-	VaultConfig *config.VaultConfig
-	ObjectsRoot string
-	PagesRoot   string
-	TemplateDir string
-	Runtime     *vaultruntime.Runtime
+	Exists     bool
+	TargetName string
+	TargetPath string
+	TypeName   string
+	Fields     map[string]interface{}
+	Content    string
 }
 
 // applyObject creates or updates a single imported object by routing through
@@ -448,25 +432,18 @@ type applyObjectRequest struct {
 // body. So the body is only handed to write for replacement on update; on
 // create the object is written without body content and the content is appended
 // afterwards.
-func applyObject(req applyObjectRequest) (ResultItem, []string, mutation.ChangeSet) {
+func applyObject(rt *vaultruntime.Runtime, req applyObjectRequest) (ResultItem, []string, mutation.ChangeSet) {
 	fieldValues := fieldsToSchemaValues(req.Fields)
 	delete(fieldValues, "type")
 
 	replaceBody := req.Exists && req.Content != ""
 
-	result, err := objectsvc.Write(objectsvc.WriteRequest{
-		VaultPath:   req.VaultPath,
+	result, err := objectsvc.Write(rt, objectsvc.WriteRequest{
 		TypeName:    req.TypeName,
 		TargetPath:  req.TargetName,
 		ReplaceBody: replaceBody,
 		Content:     req.Content,
 		FieldValues: fieldValues,
-		VaultConfig: req.VaultConfig,
-		Schema:      req.Schema,
-		ObjectsRoot: req.ObjectsRoot,
-		PagesRoot:   req.PagesRoot,
-		TemplateDir: req.TemplateDir,
-		Runtime:     req.Runtime,
 	})
 	if err != nil {
 		return mutationErrorResult(req.TargetPath, err), nil, mutation.ChangeSet{}
@@ -483,7 +460,7 @@ func applyObject(req applyObjectRequest) (ResultItem, []string, mutation.ChangeS
 	}
 
 	return ResultItem{
-		ID:     req.VaultConfig.FilePathToObjectID(result.RelativePath),
+		ID:     rt.VaultCfg.FilePathToObjectID(result.RelativePath),
 		Action: importActionForWriteStatus(result.Status),
 		File:   result.RelativePath,
 	}, result.WarningMessages, result.ChangeSet

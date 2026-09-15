@@ -5,21 +5,15 @@ import (
 	"fmt"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
-	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type ReclassifyBulkRequest struct {
-	VaultPath   string
-	VaultConfig *config.VaultConfig
-	Schema      *schema.Schema
-	ObjectIDs   []string
+	ObjectIDs []string
 
 	NewTypeName string
 	FieldValues map[string]fieldvalue.FieldValue
@@ -27,9 +21,6 @@ type ReclassifyBulkRequest struct {
 	NoMove     bool
 	UpdateRefs bool
 	Force      bool
-
-	ParseOptions *parser.ParseOptions
-	Runtime      *vaultruntime.Runtime
 }
 
 type ReclassifyBulkPreviewItem struct {
@@ -95,8 +86,8 @@ type reclassifyBulkPlan struct {
 	err    error
 }
 
-func PreviewReclassifyBulk(req ReclassifyBulkRequest) (*ReclassifyBulkPreview, error) {
-	if err := validateReclassifyBulkRequest(req); err != nil {
+func PreviewReclassifyBulk(rt *vaultruntime.Runtime, req ReclassifyBulkRequest) (*ReclassifyBulkPreview, error) {
+	if err := validateReclassifyBulkRequest(rt, req); err != nil {
 		return nil, err
 	}
 
@@ -104,7 +95,7 @@ func PreviewReclassifyBulk(req ReclassifyBulkRequest) (*ReclassifyBulkPreview, e
 	skipped := make([]ReclassifyBulkResult, 0)
 	warnings := make([]string, 0)
 
-	for _, plan := range planReclassifyBulk(req) {
+	for _, plan := range planReclassifyBulk(rt, req) {
 		if plan.err != nil {
 			skipped = append(skipped, reclassifyBulkErrorResult(plan.id, req.NewTypeName, "skipped", plan.err))
 			continue
@@ -123,8 +114,8 @@ func PreviewReclassifyBulk(req ReclassifyBulkRequest) (*ReclassifyBulkPreview, e
 	}, nil
 }
 
-func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*ReclassifyResult)) (*ReclassifyBulkSummary, error) {
-	if err := validateReclassifyBulkRequest(req); err != nil {
+func ApplyReclassifyBulk(rt *vaultruntime.Runtime, req ReclassifyBulkRequest, onReclassified func(*ReclassifyResult)) (*ReclassifyBulkSummary, error) {
+	if err := validateReclassifyBulkRequest(rt, req); err != nil {
 		return nil, err
 	}
 
@@ -135,7 +126,7 @@ func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*Reclass
 	errorCount := 0
 	changes := mutation.NewChangeSet()
 
-	for _, plan := range planReclassifyBulk(req) {
+	for _, plan := range planReclassifyBulk(rt, req) {
 		if plan.err != nil {
 			item := reclassifyBulkErrorResult(plan.id, req.NewTypeName, "error", plan.err)
 			if item.ErrorCode == codes.ErrRefNotFound {
@@ -159,7 +150,7 @@ func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*Reclass
 			continue
 		}
 
-		result, err := reclassifyBulkObject(req, plan.id, false)
+		result, err := reclassifyBulkObject(rt, req, plan.id, false)
 		if err != nil {
 			results = append(results, reclassifyBulkErrorResult(plan.id, req.NewTypeName, "error", err))
 			errorCount++
@@ -190,12 +181,12 @@ func ApplyReclassifyBulk(req ReclassifyBulkRequest, onReclassified func(*Reclass
 	}, nil
 }
 
-func planReclassifyBulk(req ReclassifyBulkRequest) []reclassifyBulkPlan {
+func planReclassifyBulk(rt *vaultruntime.Runtime, req ReclassifyBulkRequest) []reclassifyBulkPlan {
 	plans := make([]reclassifyBulkPlan, 0, len(req.ObjectIDs))
 	destinations := make(map[string]string)
 
 	for _, id := range req.ObjectIDs {
-		result, err := reclassifyBulkObject(req, id, true)
+		result, err := reclassifyBulkObject(rt, req, id, true)
 		if err == nil && result.Moved && !result.NeedsConfirm {
 			if firstID, exists := destinations[result.NewPath]; exists {
 				err = svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("bulk destination collision: %s and %s would both move to %s", firstID, id, result.NewPath)).WithSuggestion("Rename one of the source objects or reclassify the objects separately").WithDetails(map[string]interface{}{
@@ -218,12 +209,12 @@ func isReclassifyBulkCollision(err error) bool {
 	return ok && svcErr.Details["first_id"] != nil && svcErr.Details["destination"] != nil
 }
 
-func validateReclassifyBulkRequest(req ReclassifyBulkRequest) error {
-	if req.VaultConfig == nil {
-		return svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+func validateReclassifyBulkRequest(rt *vaultruntime.Runtime, req ReclassifyBulkRequest) error {
+	if err := requireVaultConfig(rt); err != nil {
+		return err
 	}
-	if req.Schema == nil {
-		return svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
+	if err := requireSchema(rt); err != nil {
+		return err
 	}
 	if req.NewTypeName == "" {
 		return svcerr.New(codes.ErrInvalidInput, "new type is required").WithSuggestion("Usage: rvn reclassify <new-type> --stdin")
@@ -231,20 +222,15 @@ func validateReclassifyBulkRequest(req ReclassifyBulkRequest) error {
 	return nil
 }
 
-func reclassifyBulkObject(req ReclassifyBulkRequest, id string, preview bool) (*ReclassifyResult, error) {
-	return ReclassifyByReference(ReclassifyByReferenceRequest{
-		VaultPath:    req.VaultPath,
-		VaultConfig:  req.VaultConfig,
-		Schema:       req.Schema,
-		Reference:    id,
-		NewTypeName:  req.NewTypeName,
-		FieldValues:  req.FieldValues,
-		NoMove:       req.NoMove,
-		UpdateRefs:   req.UpdateRefs,
-		Force:        req.Force,
-		Preview:      preview,
-		ParseOptions: req.ParseOptions,
-		Runtime:      req.Runtime,
+func reclassifyBulkObject(rt *vaultruntime.Runtime, req ReclassifyBulkRequest, id string, preview bool) (*ReclassifyResult, error) {
+	return ReclassifyByReference(rt, ReclassifyByReferenceRequest{
+		Reference:   id,
+		NewTypeName: req.NewTypeName,
+		FieldValues: req.FieldValues,
+		NoMove:      req.NoMove,
+		UpdateRefs:  req.UpdateRefs,
+		Force:       req.Force,
+		Preview:     preview,
 	})
 }
 

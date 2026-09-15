@@ -13,7 +13,7 @@ import (
 func reindexForTest(t *testing.T, vaultPath string) {
 	t.Helper()
 	rt := testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
-	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{Full: true}); err != nil {
 		t.Fatalf("reindex: %v", err)
 	}
 }

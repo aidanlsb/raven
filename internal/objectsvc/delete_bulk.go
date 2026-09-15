@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -14,12 +13,9 @@ import (
 )
 
 type DeleteBulkRequest struct {
-	VaultPath   string
-	VaultConfig *config.VaultConfig
-	ObjectIDs   []string
-	Behavior    string
-	TrashDir    string
-	Runtime     *vaultruntime.Runtime
+	ObjectIDs []string
+	Behavior  string
+	TrashDir  string
 }
 
 type DeleteBulkPreview struct {
@@ -41,15 +37,11 @@ type DeleteBulkSummary struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+func PreviewDeleteBulk(rt *vaultruntime.Runtime, req DeleteBulkRequest) (*DeleteBulkPreview, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
 
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, nil, nil)
-	if owned {
-		defer rt.Close()
-	}
 	if err := rt.OpenDB(); err != nil {
 		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to open index database", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 	}
@@ -67,12 +59,12 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 	}
 
 	for _, id := range req.ObjectIDs {
-		target, err := resolveBulkDeleteTarget(req.VaultPath, req.VaultConfig, id)
+		target, err := resolveBulkDeleteTarget(rt.VaultPath, rt.VaultCfg, id)
 		if err != nil {
 			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object or file not found"})
 			continue
 		}
-		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, target.FilePath); err != nil {
 			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
@@ -112,15 +104,11 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 	}, nil
 }
 
-func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+func ApplyDeleteBulk(rt *vaultruntime.Runtime, req DeleteBulkRequest) (*DeleteBulkSummary, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
 
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, nil, nil)
-	if owned {
-		defer rt.Close()
-	}
 	results := make([]BulkResult, 0, len(req.ObjectIDs))
 	deletedCount := 0
 	skippedCount := 0
@@ -138,7 +126,7 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 	for _, id := range req.ObjectIDs {
 		result := BulkResult{ID: id}
 
-		target, err := resolveBulkDeleteTarget(req.VaultPath, req.VaultConfig, id)
+		target, err := resolveBulkDeleteTarget(rt.VaultPath, rt.VaultCfg, id)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object or file not found"
@@ -146,7 +134,7 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 			results = append(results, result)
 			continue
 		}
-		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, target.FilePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, target.FilePath); err != nil {
 			result.Status = "error"
 			result.Reason = err.Error()
 			errorCount++
@@ -154,11 +142,10 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 			continue
 		}
 
-		_, err = DeleteFile(DeleteFileRequest{
-			VaultPath: req.VaultPath,
-			FilePath:  target.FilePath,
-			Behavior:  behavior,
-			TrashDir:  trashDir,
+		_, err = DeleteFile(rt, DeleteFileRequest{
+			FilePath: target.FilePath,
+			Behavior: behavior,
+			TrashDir: trashDir,
 		})
 		if err != nil {
 			result.Status = "error"

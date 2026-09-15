@@ -7,26 +7,19 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type DeleteRequest struct {
-	VaultPath      string
-	VaultConfig    *config.VaultConfig
-	Schema         *schema.Schema
 	Reference      string
 	Preview        bool
-	ParseOptions   *parser.ParseOptions
 	FailOnIndexErr bool
-	Runtime        *vaultruntime.Runtime
 }
 
 type DeleteResult struct {
@@ -44,10 +37,9 @@ type DeleteResult struct {
 // Delete removes one heading and its complete subtree. References from outside
 // the deleted range are reported as backlinks and intentionally left unchanged:
 // Raven cannot infer a safe replacement target for a deleted section.
-func Delete(req DeleteRequest) (*DeleteResult, error) {
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if owned {
-		defer rt.Close()
+func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) {
+	if err := requireSectionRuntime(rt); err != nil {
+		return nil, err
 	}
 	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
 	if err != nil {
@@ -55,10 +47,6 @@ func Delete(req DeleteRequest) (*DeleteResult, error) {
 	}
 	if projectionLock != nil {
 		defer func() { _ = projectionLock.Close() }()
-	}
-	ctx, err := newLifecycleContext(rt, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if err != nil {
-		return nil, err
 	}
 
 	reference := strings.TrimSpace(req.Reference)
@@ -68,11 +56,11 @@ func Delete(req DeleteRequest) (*DeleteResult, error) {
 			WithSuggestion("Use a section ID like project/website#tasks")
 	}
 
-	resolved, err := ctx.resolveSection(reference)
+	resolved, err := resolveSection(rt, reference)
 	if err != nil {
 		return nil, err
 	}
-	state, err := ctx.loadDocument(resolved.FilePath, resolved.FileObjectID)
+	state, err := loadDocument(rt, resolved.FilePath, resolved.FileObjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +81,7 @@ func Delete(req DeleteRequest) (*DeleteResult, error) {
 	remaining := append([]trackedLine(nil), state.lines[:start]...)
 	remaining = append(remaining, state.lines[end:]...)
 	updatedContent := joinTrackedLines(remaining, state.trailingNewline)
-	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, state.filePath, ctx.vaultPath, ctx.parseOptions)
+	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, state.filePath, rt.VaultPath, rt.ParseOptions)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse content after section deletion", err).
 			WithSuggestion("Fix the file content and try again")
@@ -126,8 +114,8 @@ func Delete(req DeleteRequest) (*DeleteResult, error) {
 			state.fileRelative,
 			target.LineStart,
 			end,
-			req.VaultConfig.GetObjectsRoot(),
-			req.VaultConfig.GetPagesRoot(),
+			rt.VaultCfg.GetObjectsRoot(),
+			rt.VaultCfg.GetPagesRoot(),
 		)
 		if err != nil {
 			if req.FailOnIndexErr {
@@ -142,7 +130,7 @@ func Delete(req DeleteRequest) (*DeleteResult, error) {
 		return result, nil
 	}
 
-	warnings, indexWarnings, err := ctx.writeAndReindex(state.filePath, updatedContent, req.FailOnIndexErr)
+	warnings, indexWarnings, err := writeAndReindex(rt, state.filePath, updatedContent, req.FailOnIndexErr)
 	if err != nil {
 		return nil, err
 	}
