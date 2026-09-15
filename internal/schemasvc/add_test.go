@@ -23,7 +23,6 @@ func TestAddTrait_TrimsValuesAndCoercesBooleanDefault(t *testing.T) {
 
 	rt := schemaTestRuntime(t, vaultPath)
 	_, err := AddTrait(rt, AddTraitRequest{
-		VaultPath: vaultPath,
 		TraitName: "priority",
 		TraitType: "boolean",
 		Values:    "low, medium, ,high",
@@ -72,7 +71,6 @@ func TestAddTrait_PreservesStringDefaultForNonBooleanTypes(t *testing.T) {
 	}
 
 	_, err := AddTrait(schemaTestRuntime(t, vaultPath), AddTraitRequest{
-		VaultPath: vaultPath,
 		TraitName: "status",
 		TraitType: "enum",
 		Values:    "todo,doing,done",

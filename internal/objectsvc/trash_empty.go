@@ -13,18 +13,16 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 var ageDayUnit = regexp.MustCompile(`(?i)([0-9]+(?:\.[0-9]*)?)d`)
 
 type EmptyTrashRequest struct {
-	VaultPath   string
-	VaultConfig *config.VaultConfig
-	OlderThan   string
-	Now         func() time.Time
+	OlderThan string
+	Now       func() time.Time
 }
 
 type EmptyTrashResult struct {
@@ -34,20 +32,20 @@ type EmptyTrashResult struct {
 }
 
 // PreviewEmptyTrash lists trash entries that empty would permanently delete.
-func PreviewEmptyTrash(req EmptyTrashRequest) (*EmptyTrashResult, error) {
-	result, _, err := prepareEmptyTrash(req)
+func PreviewEmptyTrash(rt *vaultruntime.Runtime, req EmptyTrashRequest) (*EmptyTrashResult, error) {
+	result, _, err := prepareEmptyTrash(rt, req)
 	return result, err
 }
 
 // EmptyTrash permanently deletes matching files from the configured trash
 // directory. It never removes live vault objects.
-func EmptyTrash(req EmptyTrashRequest) (*EmptyTrashResult, error) {
-	result, trashRoot, err := prepareEmptyTrash(req)
+func EmptyTrash(rt *vaultruntime.Runtime, req EmptyTrashRequest) (*EmptyTrashResult, error) {
+	result, trashRoot, err := prepareEmptyTrash(rt, req)
 	if err != nil {
 		return nil, err
 	}
 	for _, entry := range result.Entries {
-		if err := permanentlyRemoveTrashEntry(req.VaultPath, trashRoot, entry); err != nil {
+		if err := permanentlyRemoveTrashEntry(rt.VaultPath, trashRoot, entry); err != nil {
 			return nil, err
 		}
 	}
@@ -57,7 +55,7 @@ func EmptyTrash(req EmptyTrashRequest) (*EmptyTrashResult, error) {
 	return result, nil
 }
 
-func prepareEmptyTrash(req EmptyTrashRequest) (*EmptyTrashResult, string, error) {
+func prepareEmptyTrash(rt *vaultruntime.Runtime, req EmptyTrashRequest) (*EmptyTrashResult, string, error) {
 	olderThan := strings.TrimSpace(req.OlderThan)
 	var minAge time.Duration
 	if olderThan != "" {
@@ -68,14 +66,11 @@ func prepareEmptyTrash(req EmptyTrashRequest) (*EmptyTrashResult, string, error)
 		}
 	}
 
-	listResult, err := ListTrash(ListTrashRequest{
-		VaultPath:   req.VaultPath,
-		VaultConfig: req.VaultConfig,
-	})
+	listResult, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		return nil, "", err
 	}
-	_, trashRoot, err := resolveTrashRoot(req.VaultPath, req.VaultConfig)
+	_, trashRoot, err := resolveTrashRoot(rt)
 	if err != nil {
 		return nil, "", err
 	}

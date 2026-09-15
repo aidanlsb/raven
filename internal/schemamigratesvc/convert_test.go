@@ -28,7 +28,7 @@ traits:
 	beforeSchema := v.ReadFile("schema.yaml")
 	beforeNote := v.ReadFile("notes/work.md")
 	preview, err := ConvertTrait(migrationTestRuntime(t, v.Path), ConvertTraitRequest{
-		VaultPath: v.Path, TraitName: "priority", TargetType: "bool", Mapping: mapping,
+		TraitName: "priority", TargetType: "bool", Mapping: mapping,
 	})
 	if err != nil {
 		t.Fatalf("preview ConvertTrait: %v", err)
@@ -44,7 +44,7 @@ traits:
 	}
 
 	applied, err := ConvertTrait(migrationTestRuntime(t, v.Path), ConvertTraitRequest{
-		VaultPath: v.Path, TraitName: "priority", TargetType: "bool", Mapping: mapping, Confirm: true,
+		TraitName: "priority", TargetType: "bool", Mapping: mapping, Confirm: true,
 	})
 	if err != nil {
 		t.Fatalf("apply ConvertTrait: %v", err)
@@ -76,7 +76,6 @@ traits: {}
 		Build()
 
 	result, err := ConvertField(migrationTestRuntime(t, v.Path), ConvertFieldRequest{
-		VaultPath:  v.Path,
 		TypeName:   "project",
 		FieldName:  "status",
 		TargetType: "enum",
@@ -110,7 +109,6 @@ traits:
 		Build()
 
 	_, err := ConvertTrait(migrationTestRuntime(t, v.Path), ConvertTraitRequest{
-		VaultPath: v.Path,
 		TraitName: "priority",
 		Mapping: map[string]interface{}{
 			"urgent": "critical",
@@ -142,7 +140,6 @@ traits:
 		Build()
 
 	_, err := ConvertTrait(migrationTestRuntime(t, v.Path), ConvertTraitRequest{
-		VaultPath:  v.Path,
 		TraitName:  "priority",
 		TargetType: "bool",
 		Mapping:    map[string]interface{}{"high": true, "medium": true},
@@ -164,7 +161,6 @@ traits:
 		Build()
 
 	_, err := ConvertTrait(migrationTestRuntime(t, v.Path), ConvertTraitRequest{
-		VaultPath:  v.Path,
 		TraitName:  "priority",
 		TargetType: "bool",
 		Mapping:    map[string]interface{}{"high": true, "low": false},
@@ -191,7 +187,6 @@ traits: {}
 		Build()
 
 	_, err := ConvertField(migrationTestRuntime(t, v.Path), ConvertFieldRequest{
-		VaultPath: v.Path,
 		TypeName:  "project",
 		FieldName: "states",
 		Mapping: map[string]interface{}{
@@ -227,7 +222,6 @@ traits:
 `).
 			Build()
 		_, err := ConvertTrait(migrationTestRuntime(t, v.Path), ConvertTraitRequest{
-			VaultPath:  v.Path,
 			TraitName:  "priority",
 			TargetType: "bool",
 			Mapping:    map[string]interface{}{"high": "true", "low": "false"},
@@ -251,7 +245,6 @@ traits: {}
 			WithFile("projects/a.md", "---\ntype: project\nlabels: [old]\n---\n").
 			Build()
 		_, err := ConvertField(migrationTestRuntime(t, v.Path), ConvertFieldRequest{
-			VaultPath: v.Path,
 			TypeName:  "project",
 			FieldName: "labels",
 			Mapping:   map[string]interface{}{"old": nil},
@@ -273,7 +266,6 @@ traits:
 `).
 			Build()
 		_, err := ConvertTrait(migrationTestRuntime(t, v.Path), ConvertTraitRequest{
-			VaultPath: v.Path,
 			TraitName: "priority",
 			Mapping:   map[string]interface{}{"high": "`code`", "low": "low"},
 		})
@@ -299,7 +291,6 @@ traits:
 		Build()
 
 	_, err := ConvertTrait(migrationTestRuntime(t, v.Path), ConvertTraitRequest{
-		VaultPath: v.Path,
 		TraitName: "priority",
 		Mapping:   map[string]interface{}{"high": "critical", "low": "low"},
 		Confirm:   true,
@@ -326,7 +317,6 @@ traits: {}
 		Build()
 
 	_, err := ConvertField(migrationTestRuntime(t, v.Path), ConvertFieldRequest{
-		VaultPath:  v.Path,
 		TypeName:   "project",
 		FieldName:  "owner",
 		TargetType: "ref",

@@ -8,7 +8,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -22,21 +21,14 @@ import (
 )
 
 type WriteRequest struct {
-	VaultPath   string
 	TypeName    string
 	Title       string
 	TargetPath  string
 	ReplaceBody bool
 	Content     string
 	FieldValues map[string]fieldvalue.FieldValue
-	VaultConfig *config.VaultConfig
-	Schema      *schema.Schema
-	ObjectsRoot string
-	PagesRoot   string
-	TemplateDir string
 	TemplateID  string
 	CreateOnly  bool
-	Runtime     *vaultruntime.Runtime
 }
 
 type WriteResult struct {
@@ -47,9 +39,12 @@ type WriteResult struct {
 	ChangeSet       mutation.ChangeSet
 }
 
-func Write(req WriteRequest) (*WriteResult, error) {
-	if req.Schema == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
+func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
+	if err := requireRuntime(rt); err != nil {
+		return nil, err
+	}
+	if err := requireSchema(rt); err != nil {
+		return nil, err
 	}
 	if req.CreateOnly {
 		if strings.TrimSpace(req.TypeName) == "" {
@@ -60,12 +55,7 @@ func Write(req WriteRequest) (*WriteResult, error) {
 		}
 	}
 
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
-	if owned {
-		defer rt.Close()
-	}
-
-	typeDef, err := lookupTypeDefinitionForCreate(req.Schema, req.TypeName)
+	typeDef, err := lookupTypeDefinitionForCreate(rt.Schema, req.TypeName)
 	if err != nil {
 		return nil, err
 	}
@@ -73,22 +63,22 @@ func Write(req WriteRequest) (*WriteResult, error) {
 	fieldValues := normalizedCreateFieldValues(req.FieldValues, typeDef, req.Title)
 	targetPath := deriveCreateTargetPath(req.TargetPath, req.Title)
 
-	resolvedTargetPath := pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot)
+	resolvedTargetPath := pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, rt.Schema, objectsRoot(rt), pagesRoot(rt))
 	resolvedSlugPath := slugs.PathSlug(resolvedTargetPath)
 	plannedRelPath := resolvedSlugPath
 	if !strings.HasSuffix(plannedRelPath, ".md") {
 		plannedRelPath += ".md"
 	}
-	if err := mutationguard.ValidateContentMutationRelPath(req.VaultConfig, plannedRelPath); err != nil {
+	if err := mutationguard.ValidateContentMutationRelPath(rt.VaultCfg, plannedRelPath); err != nil {
 		return nil, err
 	}
 
-	filePath := filepath.Join(req.VaultPath, plannedRelPath)
+	filePath := filepath.Join(rt.VaultPath, plannedRelPath)
 	relPath := plannedRelPath
 	status := "unchanged"
 	var warningMessages []string
 
-	if pages.Exists(req.VaultPath, resolvedTargetPath) {
+	if pages.Exists(rt.VaultPath, resolvedTargetPath) {
 		if req.CreateOnly {
 			return nil, svcerr.New(codes.ErrFileExists, fmt.Sprintf("file already exists: %s.md", resolvedSlugPath)).WithSuggestion("Choose a different title, or use `rvn open <reference>` to open the existing object")
 		}
@@ -126,13 +116,13 @@ func Write(req WriteRequest) (*WriteResult, error) {
 		nextContent := original
 		if len(updates) > 0 {
 			var updateWarnings []string
-			refCtx := createRefValidationContext(rt, nil)
+			refCtx := createRefValidationContext(rt)
 			nextContent, updateWarnings, err = fieldmutation.PrepareValidatedFrontmatterMutationValues(
 				original,
 				fm,
 				req.TypeName,
 				updates,
-				req.Schema,
+				rt.Schema,
 				map[string]bool{"type": true, "alias": true},
 				refCtx,
 			)
@@ -155,10 +145,10 @@ func Write(req WriteRequest) (*WriteResult, error) {
 	} else {
 		missingFields := requiredFieldGaps(typeDef, fieldValues)
 		if len(missingFields) > 0 {
-			return nil, requiredFieldsMissingError(req, missingFields)
+			return nil, requiredFieldsMissingError(rt, req, missingFields)
 		}
 
-		templateOverride, err := schema.ResolveTypeTemplateFile(req.Schema, req.TypeName, req.TemplateID)
+		templateOverride, err := schema.ResolveTypeTemplateFile(rt.Schema, req.TypeName, req.TemplateID)
 		if err != nil {
 			return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion("Use `rvn schema template list --type <type_name>` to see available template IDs")
 		}
@@ -167,11 +157,11 @@ func Write(req WriteRequest) (*WriteResult, error) {
 		if req.CreateOnly {
 			allowedUnknown = nil
 		}
-		refCtx := createRefValidationContext(rt, nil)
+		refCtx := createRefValidationContext(rt)
 		validatedCreateFields, createWarnings, err := validateCreateFieldValues(
 			req.TypeName,
 			fieldValues,
-			req.Schema,
+			rt.Schema,
 			allowedUnknown,
 			refCtx,
 		)
@@ -183,18 +173,12 @@ func Write(req WriteRequest) (*WriteResult, error) {
 		}
 		warningMessages = append(warningMessages, createWarnings...)
 
-		createResult, err := createObjectPage(createPageRequest{
-			VaultPath:        req.VaultPath,
+		createResult, err := createObjectPage(rt, createPageRequest{
 			TypeName:         req.TypeName,
 			Title:            req.Title,
 			TargetPath:       targetPath,
 			Fields:           validatedCreateFields,
-			Schema:           req.Schema,
 			TemplateOverride: templateOverride,
-			TemplateDir:      req.TemplateDir,
-			VaultConfig:      req.VaultConfig,
-			ObjectsRoot:      req.ObjectsRoot,
-			PagesRoot:        req.PagesRoot,
 		})
 		if err != nil {
 			return nil, err
@@ -231,7 +215,7 @@ func Write(req WriteRequest) (*WriteResult, error) {
 	}, nil
 }
 
-func requiredFieldsMissingError(req WriteRequest, missingFields []requiredFieldGap) error {
+func requiredFieldsMissingError(rt *vaultruntime.Runtime, req WriteRequest, missingFields []requiredFieldGap) error {
 	missingNames := requiredFieldGapNames(missingFields)
 	msg := fmt.Sprintf("Missing required fields: %s", strings.Join(missingNames, ", "))
 	details := map[string]interface{}{
@@ -245,7 +229,7 @@ func requiredFieldsMissingError(req WriteRequest, missingFields []requiredFieldG
 	}
 	if req.CreateOnly {
 		details["missing_fields"] = requiredFieldGapDetails(missingFields)
-		if typeDef, ok := req.Schema.Types[req.TypeName]; ok && typeDef != nil && typeDef.NameField != "" {
+		if typeDef, ok := rt.Schema.Types[req.TypeName]; ok && typeDef != nil && typeDef.NameField != "" {
 			details["name_field"] = typeDef.NameField
 			details["name_field_hint"] = fmt.Sprintf("The title argument auto-populates the '%s' field", typeDef.NameField)
 		}

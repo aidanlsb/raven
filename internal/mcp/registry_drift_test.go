@@ -309,7 +309,7 @@ func TestSavedQueriesPayloadParityBetweenServiceAndCommand(t *testing.T) {
 		Build()
 
 	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{SkipSchema: true})
-	result, err := querysvc.List(rt, querysvc.ListRequest{VaultPath: v.Path})
+	result, err := querysvc.List(rt)
 	if err != nil {
 		t.Fatalf("querysvc.List: %v", err)
 	}

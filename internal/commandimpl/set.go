@@ -62,8 +62,6 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		return failure
 	}
 	defer rt.Close()
-	vaultCfg := rt.VaultCfg
-	sch := rt.Schema
 
 	// Accept both "field" (new canonical) and "fields" (legacy MCP) for backward compat
 	fieldArg := req.Args["field"]
@@ -110,15 +108,10 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, false))
 	}
 
-	serviceResult, err := objectsvc.SetByReference(objectsvc.SetByReferenceRequest{
-		VaultPath:    vaultPath,
-		VaultConfig:  vaultCfg,
-		Schema:       sch,
+	serviceResult, err := objectsvc.SetByReference(rt, objectsvc.SetByReferenceRequest{
 		Reference:    reference,
 		TypedUpdates: allUpdates,
-		ParseOptions: rt.ParseOptions,
 		Preview:      req.Preview,
-		Runtime:      rt,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -167,8 +160,6 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		return failure
 	}
 	defer rt.Close()
-	vaultCfg := rt.VaultCfg
-	sch := rt.Schema
 
 	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
 	if reference == "" {
@@ -180,14 +171,9 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		return commandexec.Failure("MISSING_ARGUMENT", "no fields to unset", nil, "Usage: rvn unset <reference> <field>...")
 	}
 
-	serviceResult, err := objectsvc.UnsetByReference(objectsvc.UnsetByReferenceRequest{
-		VaultPath:    vaultPath,
-		VaultConfig:  vaultCfg,
-		Schema:       sch,
-		Reference:    reference,
-		Fields:       fields,
-		ParseOptions: rt.ParseOptions,
-		Runtime:      rt,
+	serviceResult, err := objectsvc.UnsetByReference(rt, objectsvc.UnsetByReferenceRequest{
+		Reference: reference,
+		Fields:    fields,
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -209,24 +195,16 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 }
 
 func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]fieldvalue.FieldValue, confirm bool, journalOperation string) commandexec.Result {
-	vaultPath := rt.VaultPath
-	vaultCfg := rt.VaultCfg
-	sch := rt.Schema
 	fileIDs, sectionIDs := splitSectionIDs(ids)
 	warnings := sectionSkipWarnings(sectionIDs)
 	request := objectsvc.SetBulkRequest{
-		VaultPath:    vaultPath,
-		VaultConfig:  vaultCfg,
-		Schema:       sch,
 		ObjectIDs:    fileIDs,
 		TypedUpdates: updates,
-		ParseOptions: rt.ParseOptions,
-		Runtime:      rt,
 	}
 	serializedUpdates := fieldmutation.SerializeFieldValueMap(updates)
 
 	if !confirm {
-		preview, err := objectsvc.PreviewSetBulk(request)
+		preview, err := objectsvc.PreviewSetBulk(rt, request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
@@ -243,7 +221,7 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplySetBulk(request)
+	summary, err := objectsvc.ApplySetBulk(rt, request)
 	if err != nil {
 		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 	}

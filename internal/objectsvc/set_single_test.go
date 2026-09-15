@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
@@ -29,8 +28,7 @@ types:
         type: string
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -39,11 +37,8 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := SetByReference(SetByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
-		Reference:   "people/freya",
+	result, err := SetByReference(rt, SetByReferenceRequest{
+		Reference: "people/freya",
 		TypedUpdates: map[string]fieldvalue.FieldValue{
 			"email": fieldvalue.String("new@example.com"),
 		},
@@ -84,13 +79,9 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	_, err := SetByReference(SetByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
-		Reference:   "people/missing",
+	rt := testRuntime(t, vaultPath)
+	_, err := SetByReference(rt, SetByReferenceRequest{
+		Reference: "people/missing",
 		TypedUpdates: map[string]fieldvalue.FieldValue{
 			"alias": fieldvalue.String("ghost"),
 		},

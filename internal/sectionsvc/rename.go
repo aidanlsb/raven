@@ -10,7 +10,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutationguard"
@@ -19,22 +18,16 @@ import (
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/refs"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type RenameRequest struct {
-	VaultPath      string
-	VaultConfig    *config.VaultConfig
-	Schema         *schema.Schema
 	Reference      string
 	NewHeadingText string
 	Preview        bool
-	ParseOptions   *parser.ParseOptions
 	FailOnIndexErr bool
-	Runtime        *vaultruntime.Runtime
 }
 
 type RenameResult struct {
@@ -60,18 +53,10 @@ type fileRewrite struct {
 //
 // NewHeadingText is plain heading text. The heading level is preserved and the
 // new slug is derived using the same rules the parser applies to headings.
-func Rename(req RenameRequest) (*RenameResult, error) {
-	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
+func Rename(rt *vaultruntime.Runtime, req RenameRequest) (*RenameResult, error) {
+	if err := requireSectionRuntime(rt); err != nil {
+		return nil, err
 	}
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
-	}
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if owned {
-		defer rt.Close()
-	}
-	req.Runtime = rt
 	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
 	if err != nil {
 		return nil, err
@@ -97,7 +82,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 		return nil, svcerr.New(codes.ErrInvalidInput, "section destination must be the new heading text, not a section ID").WithSuggestion(`Pass plain heading text, e.g. rvn section rename project/website#tasks "Completed Tasks"`)
 	}
 
-	resolved, err := resolveSectionReference(req, reference)
+	resolved, err := resolveSectionReference(rt, reference)
 	if err != nil {
 		return nil, err
 	}
@@ -108,10 +93,10 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	}
 
 	sourceFile := resolved.FilePath
-	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, sourceFile); err != nil {
 		return nil, normalizeMutationError(err)
 	}
-	sourceRelPath, err := filepath.Rel(req.VaultPath, sourceFile)
+	sourceRelPath, err := filepath.Rel(rt.VaultPath, sourceFile)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrInternal, "failed to resolve source path", err)
 	}
@@ -123,7 +108,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	}
 	content := string(contentBytes)
 
-	doc, err := parser.ParseDocumentWithOptions(content, sourceFile, req.VaultPath, req.ParseOptions)
+	doc, err := parser.ParseDocumentWithOptions(content, sourceFile, rt.VaultPath, rt.ParseOptions)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse source file", err).WithSuggestion("Fix the file content and try again")
 	}
@@ -147,7 +132,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 
 	// Re-parse the updated content so the new slug is derived exactly as the
 	// indexer would derive it (including duplicate suffixes).
-	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, sourceFile, req.VaultPath, req.ParseOptions)
+	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, sourceFile, rt.VaultPath, rt.ParseOptions)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse renamed content", err).WithSuggestion("Check the new heading text and try again")
 	}
@@ -220,7 +205,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	}
 
 	if db != nil && renamed.Slug != oldSlug {
-		backlinks, err := db.BacklinksWithRoots(oldSectionID, req.VaultConfig.GetObjectsRoot(), req.VaultConfig.GetPagesRoot())
+		backlinks, err := db.BacklinksWithRoots(oldSectionID, rt.VaultCfg.GetObjectsRoot(), rt.VaultCfg.GetPagesRoot())
 		if err != nil {
 			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to read backlinks for section rename: %v", err))
 		}
@@ -251,12 +236,12 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 				continue
 			}
 
-			refFilePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, sourceFileID, req.VaultConfig)
+			refFilePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, sourceFileID, rt.VaultCfg)
 			if err != nil {
 				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to update refs in %s: %v", sourceFileID, err))
 				continue
 			}
-			if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, refFilePath); err != nil {
+			if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, refFilePath); err != nil {
 				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Skipped ref update in %s: %v", sourceFileID, err))
 				continue
 			}
@@ -302,7 +287,7 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 		writtenFiles = append(writtenFiles, rewrite.path)
 	}
 
-	if db != nil && req.Schema != nil {
+	if db != nil && rt.Schema != nil {
 		for _, path := range writtenFiles {
 			result.IndexWarnings = append(result.IndexWarnings, reindexsvc.ProjectFileLocked(rt, path)...)
 		}
@@ -311,8 +296,8 @@ func Rename(req RenameRequest) (*RenameResult, error) {
 	return result, nil
 }
 
-func resolveSectionReference(req RenameRequest, reference string) (*refresolve.ResolveResult, error) {
-	resolved, err := refresolve.Resolve(reference, req.Runtime, false)
+func resolveSectionReference(rt *vaultruntime.Runtime, reference string) (*refresolve.ResolveResult, error) {
+	resolved, err := refresolve.Resolve(reference, rt, false)
 	if err != nil {
 		var ambiguousErr *refresolve.AmbiguousRefError
 		if errors.As(err, &ambiguousErr) {

@@ -32,7 +32,7 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 		WithFile("notes/alpha.md", "# Alpha\n\n## Details\n").
 		Build()
 	rt := testutil.NewVaultRuntime(t, v.Path, vaultruntime.Options{})
-	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{VaultPath: v.Path, Full: true, Context: context.Background()}); err != nil {
+	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{Full: true, Context: context.Background()}); err != nil {
 		t.Fatalf("reindexsvc.Run() error = %v", err)
 	}
 

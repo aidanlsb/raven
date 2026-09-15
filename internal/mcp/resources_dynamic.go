@@ -17,7 +17,7 @@ func (s *Server) readSavedQueriesResourceAt(vaultPath string) (string, error) {
 		return "", err
 	}
 	defer rt.Close()
-	result, err := querysvc.List(rt, querysvc.ListRequest{VaultPath: vaultPath})
+	result, err := querysvc.List(rt)
 	if err != nil {
 		return "", err
 	}

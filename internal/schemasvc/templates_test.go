@@ -24,7 +24,6 @@ func TestSetTemplateRejectsFrontmatter(t *testing.T) {
 	}
 
 	_, err := SetTemplate(schemaTestRuntime(t, vaultPath), SetTemplateRequest{
-		VaultPath:   vaultPath,
 		TemplateID:  "daily_default",
 		File:        "templates/daily.md",
 		Description: "Daily template",

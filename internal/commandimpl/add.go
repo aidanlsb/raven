@@ -67,22 +67,16 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 }
 
 func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm bool, journalOperation string) commandexec.Result {
-	vaultPath := rt.VaultPath
-	vaultCfg := rt.VaultCfg
 	// Section IDs (file#slug) are passed through: bulk add appends within the
 	// targeted section instead of at the end of the file.
 	var warnings []commandexec.Warning
 	request := objectsvc.AddBulkRequest{
-		VaultPath:    vaultPath,
-		VaultConfig:  vaultCfg,
-		ObjectIDs:    ids,
-		Line:         text,
-		ParseOptions: rt.ParseOptions,
-		Runtime:      rt,
+		ObjectIDs: ids,
+		Line:      text,
 	}
 
 	if !confirm {
-		preview, err := objectsvc.PreviewAddBulk(request)
+		preview, err := objectsvc.PreviewAddBulk(rt, request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
@@ -99,7 +93,7 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplyAddBulk(request)
+	summary, err := objectsvc.ApplyAddBulk(rt, request)
 	if err != nil {
 		return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 	}

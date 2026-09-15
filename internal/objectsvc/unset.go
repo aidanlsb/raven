@@ -5,23 +5,18 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type UnsetObjectFileRequest struct {
-	VaultPath    string
-	VaultConfig  *config.VaultConfig
-	FilePath     string
-	ObjectID     string
-	Fields       []string
-	Schema       *schema.Schema
-	ParseOptions *parser.ParseOptions
+	FilePath string
+	ObjectID string
+	Fields   []string
 }
 
 type UnsetObjectFileResult struct {
@@ -33,11 +28,14 @@ type UnsetObjectFileResult struct {
 	PreviousFields map[string]fieldvalue.FieldValue
 }
 
-func UnsetObjectFile(req UnsetObjectFileRequest) (*UnsetObjectFileResult, error) {
-	if req.Schema == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
+func UnsetObjectFile(rt *vaultruntime.Runtime, req UnsetObjectFileRequest) (*UnsetObjectFileResult, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
-	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.FilePath); err != nil {
+	if err := requireSchema(rt); err != nil {
+		return nil, err
+	}
+	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, req.FilePath); err != nil {
 		return nil, err
 	}
 
@@ -59,7 +57,7 @@ func UnsetObjectFile(req UnsetObjectFileRequest) (*UnsetObjectFileResult, error)
 		objectType = "page"
 	}
 
-	newContent, removedFields, missingFields, err := fieldmutation.PrepareFrontmatterUnset(string(content), req.Fields, req.Schema)
+	newContent, removedFields, missingFields, err := fieldmutation.PrepareFrontmatterUnset(string(content), req.Fields, rt.Schema)
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err)
 	}

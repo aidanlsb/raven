@@ -36,7 +36,6 @@ func TestWriteAndListLifecycle(t *testing.T) {
 	vaultPath := t.TempDir()
 
 	listResult, err := List(templateTestRuntime(t, vaultPath), ListRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 	})
 	if err != nil {
@@ -47,7 +46,6 @@ func TestWriteAndListLifecycle(t *testing.T) {
 	}
 
 	writeCreated, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
 		Content:     "# Meeting\n",
@@ -63,7 +61,6 @@ func TestWriteAndListLifecycle(t *testing.T) {
 	}
 
 	writeUnchanged, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
 		Content:     "# Meeting\n",
@@ -76,7 +73,6 @@ func TestWriteAndListLifecycle(t *testing.T) {
 	}
 
 	writeUpdated, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
 		Content:     "# Meeting\n\n## Notes\n",
@@ -97,7 +93,6 @@ func TestWriteAndListLifecycle(t *testing.T) {
 	}
 
 	finalList, err := List(templateTestRuntime(t, vaultPath), ListRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 	})
 	if err != nil {
@@ -114,7 +109,6 @@ func TestWriteAndListLifecycle(t *testing.T) {
 func TestReadReturnsExistingContentOrEmptyNewTemplate(t *testing.T) {
 	vaultPath := t.TempDir()
 	if _, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
 		Content:     "# Meeting\n",
@@ -122,8 +116,7 @@ func TestReadReturnsExistingContentOrEmptyNewTemplate(t *testing.T) {
 		t.Fatalf("Write returned error: %v", err)
 	}
 
-	existing, err := Read(ReadRequest{
-		VaultPath:   vaultPath,
+	existing, err := Read(templateTestRuntime(t, vaultPath), ReadRequest{
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
 	})
@@ -134,8 +127,7 @@ func TestReadReturnsExistingContentOrEmptyNewTemplate(t *testing.T) {
 		t.Fatalf("unexpected existing read result: %#v", existing)
 	}
 
-	missing, err := Read(ReadRequest{
-		VaultPath:   vaultPath,
+	missing, err := Read(templateTestRuntime(t, vaultPath), ReadRequest{
 		TemplateDir: "templates/",
 		Path:        "new.md",
 	})
@@ -151,7 +143,6 @@ func TestWriteRejectsFrontmatter(t *testing.T) {
 	vaultPath := t.TempDir()
 
 	_, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "daily.md",
 		Content:     "---\ntype: date\n---\n# {{date}}\n",
@@ -166,7 +157,6 @@ func TestDeleteRespectsSchemaReferences(t *testing.T) {
 	vaultPath := t.TempDir()
 
 	_, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
 		Content:     "# Meeting\n",
@@ -185,7 +175,6 @@ templates:
 	}
 
 	_, err = Delete(templateTestRuntime(t, vaultPath), DeleteRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
 		Force:       false,
@@ -200,7 +189,6 @@ templates:
 	}
 
 	deleteResult, err := Delete(templateTestRuntime(t, vaultPath), DeleteRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "meeting.md",
 		Force:       true,
@@ -232,7 +220,6 @@ templates:
 func TestWriteRejectsPathOutsideTemplateDirectory(t *testing.T) {
 	vaultPath := t.TempDir()
 	_, err := Write(templateTestRuntime(t, vaultPath), WriteRequest{
-		VaultPath:   vaultPath,
 		TemplateDir: "templates/",
 		Path:        "other/meeting.md",
 		Content:     "# Meeting\n",

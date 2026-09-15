@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -25,8 +24,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "docs/cleanup.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -36,13 +34,10 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := UnsetObjectFile(UnsetObjectFileRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		FilePath:    filePath,
-		ObjectID:    "docs/cleanup",
-		Fields:      []string{"date", "missing"},
-		Schema:      sch,
+	result, err := UnsetObjectFile(rt, UnsetObjectFileRequest{
+		FilePath: filePath,
+		ObjectID: "docs/cleanup",
+		Fields:   []string{"date", "missing"},
 	})
 	if err != nil {
 		t.Fatalf("UnsetObjectFile: %v", err)
@@ -86,8 +81,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "docs/cleanup.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -96,13 +90,10 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := UnsetObjectFile(UnsetObjectFileRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		FilePath:    filePath,
-		ObjectID:    "docs/cleanup",
-		Fields:      []string{"type"},
-		Schema:      sch,
+	_, err := UnsetObjectFile(rt, UnsetObjectFileRequest{
+		FilePath: filePath,
+		ObjectID: "docs/cleanup",
+		Fields:   []string{"type"},
 	})
 	if err == nil {
 		t.Fatal("expected error")

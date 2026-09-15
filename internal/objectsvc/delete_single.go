@@ -4,22 +4,16 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutation"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type DeleteByReferenceRequest struct {
-	VaultPath   string
-	VaultConfig *config.VaultConfig
-	Schema      *schema.Schema
-	Reference   string
-	Behavior    string
-	TrashDir    string
-	Runtime     *vaultruntime.Runtime
+	Reference string
+	Behavior  string
+	TrashDir  string
 }
 
 type DeleteByReferenceResult struct {
@@ -30,36 +24,28 @@ type DeleteByReferenceResult struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
-	if owned {
-		defer rt.Close()
+func PreviewDeleteByReference(rt *vaultruntime.Runtime, req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
-	req.Runtime = rt
-	result, _, err := prepareDeleteByReference(req)
+	result, _, err := prepareDeleteByReference(rt, req)
 	return result, err
 }
 
-func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, *deleteTarget, error) {
-	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
-	}
-	if req.VaultConfig == nil {
-		return nil, nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
-	}
+func prepareDeleteByReference(rt *vaultruntime.Runtime, req DeleteByReferenceRequest) (*DeleteByReferenceResult, *deleteTarget, error) {
 	if strings.TrimSpace(req.Reference) == "" {
 		return nil, nil, svcerr.New(codes.ErrInvalidInput, "reference or file path is required").WithSuggestion("Usage: rvn delete <reference-or-file-path>")
 	}
 
-	filePath, relPath, isFile, err := resolveLiteralNonMarkdownFileForMutation(req.Runtime, req.Reference)
+	filePath, relPath, isFile, err := resolveLiteralNonMarkdownFileForMutation(rt, req.Reference)
 	if err != nil {
 		return nil, nil, err
 	}
 	var target *deleteTarget
 	if isFile {
-		target, err = deleteTargetFromFilePath(req.VaultPath, req.VaultConfig, filePath, relPath)
+		target, err = deleteTargetFromFilePath(rt.VaultPath, rt.VaultCfg, filePath, relPath)
 	} else {
-		resolved, resolveErr := resolveReferenceForMutation(req.Runtime, req.Reference)
+		resolved, resolveErr := resolveReferenceForMutation(rt, req.Reference)
 		if resolveErr != nil {
 			return nil, nil, resolveErr
 		}
@@ -67,19 +53,19 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 			return nil, nil, svcerr.New(codes.ErrInvalidInput, "delete only supports file-level objects").
 				WithSuggestion("Use 'rvn section delete <file#section>' to preview the section subtree, then add --confirm to delete it")
 		}
-		target, err = deleteTargetFromFilePath(req.VaultPath, req.VaultConfig, resolved.FilePath, resolved.ObjectID)
+		target, err = deleteTargetFromFilePath(rt.VaultPath, rt.VaultCfg, resolved.FilePath, resolved.ObjectID)
 	}
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if err := req.Runtime.OpenDB(); err != nil {
+	if err := rt.OpenDB(); err != nil {
 		return nil, nil, svcerr.Wrap(codes.ErrDatabase, "failed to open index database", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 	}
 
 	var backlinks []model.Reference
 	if target.RavenObject {
-		backlinks, err = req.Runtime.DB.Backlinks(target.ObjectID)
+		backlinks, err = rt.DB.Backlinks(target.ObjectID)
 		if err != nil {
 			return nil, nil, svcerr.Wrap(codes.ErrDatabase, "failed to read backlinks", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
 		}
@@ -92,23 +78,20 @@ func prepareDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 	}, target, nil
 }
 
-func DeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, nil)
-	if owned {
-		defer rt.Close()
+func DeleteByReference(rt *vaultruntime.Runtime, req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
-	req.Runtime = rt
 
-	preview, target, err := prepareDeleteByReference(req)
+	preview, target, err := prepareDeleteByReference(rt, req)
 	if err != nil {
 		return nil, err
 	}
 
-	delResult, err := DeleteFile(DeleteFileRequest{
-		VaultPath: req.VaultPath,
-		FilePath:  target.FilePath,
-		Behavior:  req.Behavior,
-		TrashDir:  req.TrashDir,
+	delResult, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: target.FilePath,
+		Behavior: req.Behavior,
+		TrashDir: req.TrashDir,
 	})
 	if err != nil {
 		return nil, err

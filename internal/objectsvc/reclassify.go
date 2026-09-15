@@ -10,7 +10,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/frontmatter"
@@ -23,10 +22,6 @@ import (
 )
 
 type ReclassifyRequest struct {
-	VaultPath   string
-	VaultConfig *config.VaultConfig
-	Schema      *schema.Schema
-
 	ObjectRef string
 	ObjectID  string
 	FilePath  string
@@ -38,16 +33,9 @@ type ReclassifyRequest struct {
 	UpdateRefs bool
 	Force      bool
 	Preview    bool
-
-	ParseOptions *parser.ParseOptions
-	Runtime      *vaultruntime.Runtime
 }
 
 type ReclassifyByReferenceRequest struct {
-	VaultPath   string
-	VaultConfig *config.VaultConfig
-	Schema      *schema.Schema
-
 	Reference string
 
 	NewTypeName string
@@ -57,9 +45,6 @@ type ReclassifyByReferenceRequest struct {
 	UpdateRefs bool
 	Force      bool
 	Preview    bool
-
-	ParseOptions *parser.ParseOptions
-	Runtime      *vaultruntime.Runtime
 }
 
 type ReclassifyResult struct {
@@ -80,21 +65,13 @@ type ReclassifyResult struct {
 	WarningMessages []string           `json:"-"`
 }
 
-func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
-	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
+func Reclassify(rt *vaultruntime.Runtime, req ReclassifyRequest) (*ReclassifyResult, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+	if err := requireSchema(rt); err != nil {
+		return nil, err
 	}
-	if req.Schema == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
-	}
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if owned {
-		defer rt.Close()
-	}
-	req.Runtime = rt
 	if strings.TrimSpace(req.FilePath) == "" {
 		return nil, svcerr.New(codes.ErrInvalidInput, "file path is required")
 	}
@@ -132,10 +109,10 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("cannot reclassify to built-in type '%s'", req.NewTypeName)).WithSuggestion("Built-in types (page, section, date) cannot be used as reclassify targets")
 	}
 
-	newTypeDef, typeExists := req.Schema.Types[req.NewTypeName]
+	newTypeDef, typeExists := rt.Schema.Types[req.NewTypeName]
 	if !typeExists {
 		var typeNames []string
-		for name := range req.Schema.Types {
+		for name := range rt.Schema.Types {
 			typeNames = append(typeNames, name)
 		}
 		sort.Strings(typeNames)
@@ -168,7 +145,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 
 	droppedFields := collectDroppedFieldsForReclassify(fm, newTypeDef)
 
-	relPath, err := filepath.Rel(req.VaultPath, req.FilePath)
+	relPath, err := filepath.Rel(rt.VaultPath, req.FilePath)
 	if err != nil {
 		relPath = req.FilePath
 	}
@@ -191,12 +168,12 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	}
 
 	nextFieldValues := mergeReclassifyFieldValues(fm, fieldValues, droppedFields)
-	refCtx := createRefValidationContext(rt, req.ParseOptions)
+	refCtx := createRefValidationContext(rt)
 	validatedFieldValues, warningMessages, err := fieldmutation.PrepareValidatedFieldMutationValues(
 		req.NewTypeName,
 		nil,
 		nextFieldValues,
-		req.Schema,
+		rt.Schema,
 		map[string]bool{"type": true, "alias": true},
 		refCtx,
 	)
@@ -228,9 +205,9 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 			// Build the destination object ID, then let the canonical helper
 			// apply the correct root/type rules for the new type.
 			newID := path.Join(defaultDir, paths.ShortNameFromID(req.ObjectID))
-			destRelPath := req.VaultConfig.ObjectIDToFilePath(newID, req.NewTypeName)
+			destRelPath := rt.VaultCfg.ObjectIDToFilePath(newID, req.NewTypeName)
 			moveDestRelPath = paths.EnsureMDExtension(destRelPath)
-			moveDestAbsPath = filepath.Join(req.VaultPath, moveDestRelPath)
+			moveDestAbsPath = filepath.Join(rt.VaultPath, moveDestRelPath)
 			if _, err := os.Stat(moveDestAbsPath); err == nil {
 				moveDestRelPath = ""
 				moveDestAbsPath = ""
@@ -249,9 +226,8 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		return result, nil
 	}
 
-	destinationObjectID := req.VaultConfig.FilePathToObjectID(moveDestRelPath)
-	moveResult, err := MoveFile(MoveFileRequest{
-		VaultPath:          req.VaultPath,
+	destinationObjectID := rt.VaultCfg.FilePathToObjectID(moveDestRelPath)
+	moveResult, err := MoveFile(rt, MoveFileRequest{
 		SourceFile:         req.FilePath,
 		DestinationFile:    moveDestAbsPath,
 		SourceObjectID:     req.ObjectID,
@@ -259,10 +235,6 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		ReplacementContent: []byte(newContent),
 		UpdateRefs:         req.UpdateRefs,
 		Preview:            req.Preview,
-		VaultConfig:        req.VaultConfig,
-		Schema:             req.Schema,
-		ParseOptions:       req.ParseOptions,
-		Runtime:            rt,
 	})
 	if err != nil {
 		return nil, err
@@ -280,14 +252,15 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	return result, nil
 }
 
-func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult, error) {
+func ReclassifyByReference(rt *vaultruntime.Runtime, req ReclassifyByReferenceRequest) (*ReclassifyResult, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
+	}
+	if err := requireSchema(rt); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(req.Reference) == "" {
 		return nil, svcerr.New(codes.ErrInvalidInput, "reference is required").WithSuggestion("Usage: rvn reclassify <reference> <new-type>")
-	}
-
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if owned {
-		defer rt.Close()
 	}
 	resolved, err := resolveReferenceForMutation(rt, req.Reference)
 	if err != nil {
@@ -297,21 +270,16 @@ func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult,
 		return nil, svcerr.New(codes.ErrInvalidInput, "reclassify only supports file-level objects").WithSuggestion("Use a file-level object ID without a section fragment")
 	}
 
-	return Reclassify(ReclassifyRequest{
-		VaultPath:    req.VaultPath,
-		VaultConfig:  req.VaultConfig,
-		Schema:       req.Schema,
-		ObjectRef:    req.Reference,
-		ObjectID:     resolved.ObjectID,
-		FilePath:     resolved.FilePath,
-		NewTypeName:  req.NewTypeName,
-		FieldValues:  req.FieldValues,
-		NoMove:       req.NoMove,
-		UpdateRefs:   req.UpdateRefs,
-		Force:        req.Force,
-		Preview:      req.Preview,
-		ParseOptions: req.ParseOptions,
-		Runtime:      rt,
+	return Reclassify(rt, ReclassifyRequest{
+		ObjectRef:   req.Reference,
+		ObjectID:    resolved.ObjectID,
+		FilePath:    resolved.FilePath,
+		NewTypeName: req.NewTypeName,
+		FieldValues: req.FieldValues,
+		NoMove:      req.NoMove,
+		UpdateRefs:  req.UpdateRefs,
+		Force:       req.Force,
+		Preview:     req.Preview,
 	})
 }
 

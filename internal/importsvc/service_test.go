@@ -42,7 +42,6 @@ traits: {}
 		Build()
 
 	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
-		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "person",
 		},
@@ -94,7 +93,6 @@ name: AC/DC #1
 		Build()
 
 	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
-		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "person",
 		},
@@ -137,7 +135,6 @@ traits: {}
 		Build()
 
 	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
-		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type:         "person",
 			ContentField: "bio",
@@ -184,7 +181,6 @@ name: Freya
 		Build()
 
 	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
-		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type:         "person",
 			ContentField: "bio",
@@ -227,7 +223,6 @@ traits: {}
 		Build()
 
 	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
-		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "person",
 		},
@@ -280,7 +275,6 @@ name: Freya
 		Build()
 
 	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
-		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "person",
 		},
@@ -325,7 +319,6 @@ traits: {}
 		Build()
 
 	result, err := Run(importTestRuntime(t, v.Path), RunRequest{
-		VaultPath: v.Path,
 		MappingConfig: &MappingConfig{
 			Type: "task",
 		},

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 )
 
@@ -26,8 +25,7 @@ types:
         type: string
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	people := map[string]string{
 		"one": "One",
 		"two": "Two",
@@ -43,11 +41,8 @@ traits: {}
 		}
 	}
 
-	summary, err := ApplySetBulk(SetBulkRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
-		ObjectIDs:   []string{"people/one", "people/two"},
+	summary, err := ApplySetBulk(rt, SetBulkRequest{
+		ObjectIDs: []string{"people/one", "people/two"},
 		TypedUpdates: map[string]fieldvalue.FieldValue{
 			"email": fieldvalue.String("true"),
 		},

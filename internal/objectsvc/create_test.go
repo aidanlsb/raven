@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
@@ -27,14 +26,11 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	result, err := Create(CreateRequest{
-		VaultPath:  vaultPath,
+	rt := testRuntime(t, vaultPath)
+	result, err := Create(rt, CreateRequest{
 		TypeName:   "person",
 		Title:      "Freya",
 		TargetPath: "Freya",
-		Schema:     sch,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -92,14 +88,11 @@ types:
         required: true
 traits: {}
 `)
-			sch := loadTestSchema(t, vaultPath)
-
+			rt := testRuntime(t, vaultPath)
 			// No TargetPath: the path/slug is derived from the title.
-			result, err := Create(CreateRequest{
-				VaultPath: vaultPath,
-				TypeName:  "note",
-				Title:     tc.title,
-				Schema:    sch,
+			result, err := Create(rt, CreateRequest{
+				TypeName: "note",
+				Title:    tc.title,
 			})
 			if err != nil {
 				t.Fatalf("Create: %v", err)
@@ -136,14 +129,11 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	_, err := Create(CreateRequest{
-		VaultPath:  vaultPath,
+	rt := testRuntime(t, vaultPath)
+	_, err := Create(rt, CreateRequest{
 		TypeName:   "task",
 		Title:      "Write tests",
 		TargetPath: "Write tests",
-		Schema:     sch,
 	})
 	if err == nil {
 		t.Fatal("expected required field error")
@@ -172,17 +162,14 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	_, err := Create(CreateRequest{
-		VaultPath:  vaultPath,
+	rt := testRuntime(t, vaultPath)
+	_, err := Create(rt, CreateRequest{
 		TypeName:   "person",
 		Title:      "Freya",
 		TargetPath: "Freya",
 		FieldValues: map[string]fieldvalue.FieldValue{
 			"favorite_color": fieldvalue.String("blue"),
 		},
-		Schema: sch,
 	})
 	if err == nil {
 		t.Fatal("expected validation error")
@@ -214,8 +201,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	if err := os.MkdirAll(filepath.Join(vaultPath, "people"), 0o755); err != nil {
 		t.Fatalf("mkdir people: %v", err)
 	}
@@ -223,12 +209,10 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := Create(CreateRequest{
-		VaultPath:  vaultPath,
+	_, err := Create(rt, CreateRequest{
 		TypeName:   "person",
 		Title:      "Freya",
 		TargetPath: "Freya",
-		Schema:     sch,
 	})
 	if err == nil {
 		t.Fatal("expected file exists error")
@@ -265,8 +249,7 @@ types:
         target: page
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	notePath := filepath.Join(vaultPath, "notes/overview.md")
 	if err := os.MkdirAll(filepath.Dir(notePath), 0o755); err != nil {
 		t.Fatalf("mkdir notes: %v", err)
@@ -275,16 +258,13 @@ traits: {}
 		t.Fatalf("seed note: %v", err)
 	}
 
-	_, err := Create(CreateRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		TypeName:    "issue",
-		Title:       "Broken parent",
-		TargetPath:  "Broken parent",
+	_, err := Create(rt, CreateRequest{
+		TypeName:   "issue",
+		Title:      "Broken parent",
+		TargetPath: "Broken parent",
 		FieldValues: map[string]fieldvalue.FieldValue{
 			"parent": fieldvalue.Ref("notes/overview"),
 		},
-		Schema: sch,
 	})
 	if err == nil {
 		t.Fatal("expected validation error")
@@ -318,17 +298,14 @@ types:
         type: enum-ish
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	_, err := Create(CreateRequest{
-		VaultPath:  vaultPath,
+	rt := testRuntime(t, vaultPath)
+	_, err := Create(rt, CreateRequest{
 		TypeName:   "task",
 		Title:      "Broken schema",
 		TargetPath: "Broken schema",
 		FieldValues: map[string]fieldvalue.FieldValue{
 			"status": fieldvalue.String("open"),
 		},
-		Schema: sch,
 	})
 	if err == nil {
 		t.Fatal("expected validation error")
@@ -362,17 +339,14 @@ types:
         type: string
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	result, err := Create(CreateRequest{
-		VaultPath:  vaultPath,
+	rt := testRuntime(t, vaultPath)
+	result, err := Create(rt, CreateRequest{
 		TypeName:   "person",
 		Title:      "Typed Freya",
 		TargetPath: "Typed Freya",
 		FieldValues: map[string]fieldvalue.FieldValue{
 			"email": fieldvalue.String("true"),
 		},
-		Schema: sch,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)

@@ -20,7 +20,6 @@ import (
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -29,7 +28,6 @@ import (
 )
 
 type MoveFileRequest struct {
-	VaultPath          string
 	SourceFile         string
 	DestinationFile    string
 	SourceObjectID     string
@@ -38,10 +36,6 @@ type MoveFileRequest struct {
 	UpdateRefs         bool
 	Preview            bool
 	PriorMoves         []mutation.Move
-	VaultConfig        *config.VaultConfig
-	Schema             *schema.Schema
-	ParseOptions       *parser.ParseOptions
-	Runtime            *vaultruntime.Runtime
 }
 
 type MoveFileResult struct {
@@ -107,9 +101,9 @@ var (
 	moveFileWriter   = atomicfile.WriteFile
 )
 
-func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
-	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
+func MoveFile(rt *vaultruntime.Runtime, req MoveFileRequest) (*MoveFileResult, error) {
+	if err := requireRuntime(rt); err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(req.SourceFile) == "" || strings.TrimSpace(req.DestinationFile) == "" {
 		return nil, svcerr.New(codes.ErrInvalidInput, "source and destination files are required")
@@ -122,27 +116,21 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	// patterns, and the template directory. MoveByReference already validates
 	// these paths, but callers like Reclassify derive the destination from a
 	// type's default_path and would otherwise bypass the guard.
-	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.SourceFile); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, req.SourceFile); err != nil {
 		return nil, err
 	}
-	if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.DestinationFile); err != nil {
+	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, req.DestinationFile); err != nil {
 		return nil, err
 	}
 
 	result := &MoveFileResult{}
-	objectRoot := ""
-	pageRoot := ""
+	objectRoot := objectsRoot(rt)
+	pageRoot := pagesRoot(rt)
 	dailyDir := ""
-	if req.VaultConfig != nil {
-		objectRoot = req.VaultConfig.GetObjectsRoot()
-		pageRoot = req.VaultConfig.GetPagesRoot()
-		dailyDir = req.VaultConfig.GetDailyDirectory()
+	if rt.VaultCfg != nil {
+		dailyDir = rt.VaultCfg.GetDailyDirectory()
 	}
 
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if owned {
-		defer rt.Close()
-	}
 	var db *index.Database
 	if err := rt.OpenDB(); err != nil {
 		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for move update: %v", err))
@@ -155,9 +143,9 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	var linkPlans []linkUpdatePlan
 	if req.UpdateRefs && db != nil {
 		if paths.HasMDExtension(req.SourceFile) {
-			refPlans, fieldRefPlans, result.WarningMessages = prepareRefUpdatePlans(db, req, objectRoot, pageRoot, dailyDir, result.WarningMessages)
+			refPlans, fieldRefPlans, result.WarningMessages = prepareRefUpdatePlans(db, rt, req, objectRoot, pageRoot, dailyDir, result.WarningMessages)
 		}
-		linkPlans, result.WarningMessages = prepareLinkUpdatePlans(db, req, result.WarningMessages)
+		linkPlans, result.WarningMessages = prepareLinkUpdatePlans(db, rt, req, result.WarningMessages)
 	}
 
 	sourceSnapshot, err := readFileSnapshot(req.SourceFile)
@@ -165,7 +153,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read source file", err)
 	}
 
-	writePlan, warnings, err := prepareMoveWritePlan(req, refPlans, fieldRefPlans, linkPlans, sourceSnapshot, objectRoot, pageRoot)
+	writePlan, warnings, err := prepareMoveWritePlan(rt, req, refPlans, fieldRefPlans, linkPlans, sourceSnapshot, objectRoot, pageRoot)
 	result.WarningMessages = append(result.WarningMessages, warnings...)
 	if err != nil {
 		return nil, err
@@ -197,7 +185,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	var appliedRewrites []*fileRewrite
 	for _, rewrite := range writePlan.rewriteFiles {
 		if err := writeMoveFile(rewrite.path, rewrite.updatedContent, rewrite.perm); err != nil {
-			rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
+			rollbackErr := rollbackMovedFiles(rt, req, sourceSnapshot, appliedRewrites)
 			return nil, moveRollbackError("failed to update refs after move", err, rollbackErr)
 		}
 		appliedRewrites = append(appliedRewrites, rewrite)
@@ -205,13 +193,13 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	result.UpdatedRefs = append(result.UpdatedRefs, writePlan.updatedRefs...)
 	result.UpdatedRefFields = append(result.UpdatedRefFields, writePlan.updatedRefFields...)
 
-	sourceRel, sourceRelErr := filepath.Rel(req.VaultPath, req.SourceFile)
-	destRel, destRelErr := filepath.Rel(req.VaultPath, req.DestinationFile)
+	sourceRel, sourceRelErr := filepath.Rel(rt.VaultPath, req.SourceFile)
+	destRel, destRelErr := filepath.Rel(rt.VaultPath, req.DestinationFile)
 	if sourceRelErr == nil && destRelErr == nil {
 		result.ChangeSet.AddMoved(sourceRel, destRel)
 	}
 	for _, rewrite := range appliedRewrites {
-		if relPath, relErr := filepath.Rel(req.VaultPath, rewrite.path); relErr == nil {
+		if relPath, relErr := filepath.Rel(rt.VaultPath, rewrite.path); relErr == nil {
 			result.ChangeSet.AddChanged(relPath)
 		}
 	}
@@ -219,7 +207,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	return result, nil
 }
 
-func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, fieldRefPlans []fieldRefUpdatePlan, linkPlans []linkUpdatePlan, sourceSnapshot *fileSnapshot, objectRoot, pageRoot string) (*moveWritePlan, []string, error) {
+func prepareMoveWritePlan(rt *vaultruntime.Runtime, req MoveFileRequest, refPlans []refUpdatePlan, fieldRefPlans []fieldRefUpdatePlan, linkPlans []linkUpdatePlan, sourceSnapshot *fileSnapshot, objectRoot, pageRoot string) (*moveWritePlan, []string, error) {
 	plan := &moveWritePlan{}
 
 	destinationContent := sourceSnapshot.content
@@ -266,7 +254,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, fieldRe
 		return linkPlans[i].link.PositionStart > linkPlans[j].link.PositionStart
 	})
 	for _, linkPlan := range linkPlans {
-		rewrite, err := planRewriteForLinkSource(req.VaultPath, req.VaultConfig, linkPlan)
+		rewrite, err := planRewriteForLinkSource(rt.VaultPath, rt.VaultCfg, linkPlan)
 		if err != nil {
 			var svcErr *svcerr.Error
 			if errors.As(err, &svcErr) && svcErr.Code == codes.ErrValidationFailed {
@@ -317,7 +305,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, fieldRe
 			continue
 		}
 
-		rewrite, err := planRewriteForSource(req.VaultPath, req.VaultConfig, refUpdatePlan{
+		rewrite, err := planRewriteForSource(rt.VaultPath, rt.VaultCfg, refUpdatePlan{
 			reportSourceID: fieldPlan.reportSourceID,
 			applySourceID:  fieldPlan.applySourceID,
 		})
@@ -370,7 +358,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, fieldRe
 			continue
 		}
 
-		rewrite, err := planRewriteForSource(req.VaultPath, req.VaultConfig, refPlan)
+		rewrite, err := planRewriteForSource(rt.VaultPath, rt.VaultCfg, refPlan)
 		if err != nil {
 			var svcErr *svcerr.Error
 			if errors.As(err, &svcErr) && svcErr.Code == codes.ErrValidationFailed {
@@ -569,7 +557,7 @@ func readFileSnapshot(path string) (*fileSnapshot, error) {
 	}, nil
 }
 
-func rollbackMovedFiles(req MoveFileRequest, sourceSnapshot *fileSnapshot, rewrites []*fileRewrite) error {
+func rollbackMovedFiles(rt *vaultruntime.Runtime, req MoveFileRequest, sourceSnapshot *fileSnapshot, rewrites []*fileRewrite) error {
 	var rollbackErr error
 
 	for i := len(rewrites) - 1; i >= 0; i-- {
@@ -611,7 +599,7 @@ func writeMoveFile(path string, data []byte, perm os.FileMode) error {
 	return writer(path, data, perm)
 }
 
-func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, pageRoot, dailyDir string, warnings []string) ([]refUpdatePlan, []fieldRefUpdatePlan, []string) {
+func prepareRefUpdatePlans(db *index.Database, rt *vaultruntime.Runtime, req MoveFileRequest, objectRoot, pageRoot, dailyDir string, warnings []string) ([]refUpdatePlan, []fieldRefUpdatePlan, []string) {
 	backlinks, err := db.BacklinksWithRoots(req.SourceObjectID, objectRoot, pageRoot)
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("Failed to read backlinks for move update: %v", err))
@@ -661,8 +649,8 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 		for _, priorMove := range req.PriorMoves {
 			reportSourceID = remapMovedSourceID(
 				reportSourceID,
-				movePathObjectID(priorMove.From, req.VaultConfig),
-				movePathObjectID(priorMove.To, req.VaultConfig),
+				movePathObjectID(priorMove.From, rt.VaultCfg),
+				movePathObjectID(priorMove.To, rt.VaultCfg),
 			)
 		}
 		plans = append(plans, refUpdatePlan{
@@ -685,14 +673,14 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 		for _, priorMove := range req.PriorMoves {
 			reportSourceID = remapMovedSourceID(
 				reportSourceID,
-				movePathObjectID(priorMove.From, req.VaultConfig),
-				movePathObjectID(priorMove.To, req.VaultConfig),
+				movePathObjectID(priorMove.From, rt.VaultCfg),
+				movePathObjectID(priorMove.To, rt.VaultCfg),
 			)
 		}
 		fieldPlans = append(fieldPlans, fieldRefUpdatePlan{
 			reportSourceID: reportSourceID,
 			applySourceID:  reportSourceID,
-			filePath:       remapRefFieldFilePath(fieldRef.FilePath, req),
+			filePath:       remapRefFieldFilePath(fieldRef.FilePath, rt, req),
 			fieldName:      fieldRef.FieldName,
 			oldBase:        base,
 			replacement:    ChooseReplacementRefBase(base, req.SourceObjectID, req.DestinationObject, aliasSlugToID, res),
@@ -702,8 +690,8 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 	return plans, fieldPlans, warnings
 }
 
-func prepareLinkUpdatePlans(db *index.Database, req MoveFileRequest, warnings []string) ([]linkUpdatePlan, []string) {
-	sourceRel, err := filepath.Rel(req.VaultPath, req.SourceFile)
+func prepareLinkUpdatePlans(db *index.Database, rt *vaultruntime.Runtime, req MoveFileRequest, warnings []string) ([]linkUpdatePlan, []string) {
+	sourceRel, err := filepath.Rel(rt.VaultPath, req.SourceFile)
 	if err != nil {
 		return nil, append(warnings, fmt.Sprintf("Failed to resolve source path for file-link updates: %v", err))
 	}
@@ -714,7 +702,7 @@ func prepareLinkUpdatePlans(db *index.Database, req MoveFileRequest, warnings []
 		return nil, append(warnings, fmt.Sprintf("Failed to read inbound file links for move update: %v", err))
 	}
 
-	destRel, err := filepath.Rel(req.VaultPath, req.DestinationFile)
+	destRel, err := filepath.Rel(rt.VaultPath, req.DestinationFile)
 	if err != nil {
 		return nil, append(warnings, fmt.Sprintf("Failed to resolve destination path for file-link updates: %v", err))
 	}
@@ -728,15 +716,15 @@ func prepareLinkUpdatePlans(db *index.Database, req MoveFileRequest, warnings []
 			filePath = remapMovedFilePath(filePath, priorMove)
 			reportSourceID = remapMovedSourceID(
 				reportSourceID,
-				movePathObjectID(priorMove.From, req.VaultConfig),
-				movePathObjectID(priorMove.To, req.VaultConfig),
+				movePathObjectID(priorMove.From, rt.VaultCfg),
+				movePathObjectID(priorMove.To, rt.VaultCfg),
 			)
 		}
 		plans = append(plans, linkUpdatePlan{
 			reportSourceID: reportSourceID,
 			filePath:       filePath,
 			link:           link,
-			replacement:    linktarget.RetargetFile(link.RawTarget, filePath, req.VaultPath, destKey),
+			replacement:    linktarget.RetargetFile(link.RawTarget, filePath, rt.VaultPath, destKey),
 		})
 	}
 	return plans, warnings
@@ -749,9 +737,9 @@ func remapMovedFilePath(filePath string, move mutation.Move) string {
 	return filePath
 }
 
-func remapRefFieldFilePath(filePath string, req MoveFileRequest) string {
-	sourceRel, sourceErr := filepath.Rel(req.VaultPath, req.SourceFile)
-	destRel, destErr := filepath.Rel(req.VaultPath, req.DestinationFile)
+func remapRefFieldFilePath(filePath string, rt *vaultruntime.Runtime, req MoveFileRequest) string {
+	sourceRel, sourceErr := filepath.Rel(rt.VaultPath, req.SourceFile)
+	destRel, destErr := filepath.Rel(rt.VaultPath, req.DestinationFile)
 	if sourceErr == nil && destErr == nil {
 		filePath = remapMovedFilePath(filePath, mutation.Move{From: sourceRel, To: destRel})
 	}

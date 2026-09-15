@@ -9,7 +9,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
@@ -27,38 +26,35 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	req := WriteRequest{
-		VaultPath:   vaultPath,
 		TypeName:    "brief",
 		Title:       "Daily Brief 2026-02-14",
 		TargetPath:  "Daily Brief 2026-02-14",
 		ReplaceBody: true,
 		Content:     "# Brief V1",
-		Schema:      sch,
 	}
 
-	created, err := Write(req)
+	created, err := Write(rt, req)
 	if err != nil {
-		t.Fatalf("Write(create): %v", err)
+		t.Fatalf("Write(rt, create): %v", err)
 	}
 	if created.Status != "created" {
 		t.Fatalf("expected created status, got %q", created.Status)
 	}
 
-	unchanged, err := Write(req)
+	unchanged, err := Write(rt, req)
 	if err != nil {
-		t.Fatalf("Write(unchanged): %v", err)
+		t.Fatalf("Write(rt, unchanged): %v", err)
 	}
 	if unchanged.Status != "unchanged" {
 		t.Fatalf("expected unchanged status, got %q", unchanged.Status)
 	}
 
 	req.Content = "# Brief V2"
-	updated, err := Write(req)
+	updated, err := Write(rt, req)
 	if err != nil {
-		t.Fatalf("Write(update): %v", err)
+		t.Fatalf("Write(rt, update): %v", err)
 	}
 	if updated.Status != "updated" {
 		t.Fatalf("expected updated status, got %q", updated.Status)
@@ -94,14 +90,11 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	_, err := Write(WriteRequest{
-		VaultPath:  vaultPath,
+	rt := testRuntime(t, vaultPath)
+	_, err := Write(rt, WriteRequest{
 		TypeName:   "task",
 		Title:      "Write tests",
 		TargetPath: "Write tests",
-		Schema:     sch,
 	})
 	if err == nil {
 		t.Fatal("expected required-field error")
@@ -140,26 +133,21 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	path := "shared/object"
-	_, err := Write(WriteRequest{
-		VaultPath:  vaultPath,
+	_, err := Write(rt, WriteRequest{
 		TypeName:   "brief",
 		Title:      "Shared Object",
 		TargetPath: path,
-		Schema:     sch,
 	})
 	if err != nil {
 		t.Fatalf("setup write: %v", err)
 	}
 
-	_, err = Write(WriteRequest{
-		VaultPath:  vaultPath,
+	_, err = Write(rt, WriteRequest{
 		TypeName:   "note",
 		Title:      "Shared Object",
 		TargetPath: path,
-		Schema:     sch,
 	})
 	if err == nil {
 		t.Fatal("expected type mismatch error")
@@ -193,17 +181,14 @@ types:
         type: string
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	result, err := Write(WriteRequest{
-		VaultPath:  vaultPath,
+	rt := testRuntime(t, vaultPath)
+	result, err := Write(rt, WriteRequest{
 		TypeName:   "person",
 		Title:      "Typed Write Freya",
 		TargetPath: "Typed Write Freya",
 		FieldValues: map[string]fieldvalue.FieldValue{
 			"email": fieldvalue.String("true"),
 		},
-		Schema: sch,
 	})
 	if err != nil {
 		t.Fatalf("Write: %v", err)
@@ -247,14 +232,11 @@ traits: {}
 	if err := os.WriteFile(filepath.Join(vaultPath, "templates", "interview", "default.md"), []byte("## Interview Template\n"), 0o644); err != nil {
 		t.Fatalf("write template: %v", err)
 	}
-	sch := loadTestSchema(t, vaultPath)
-
-	result, err := Write(WriteRequest{
-		VaultPath:  vaultPath,
+	rt := testRuntime(t, vaultPath)
+	result, err := Write(rt, WriteRequest{
 		TypeName:   "interview",
 		Title:      "Jane Doe",
 		TargetPath: "Jane Doe",
-		Schema:     sch,
 	})
 	if err != nil {
 		t.Fatalf("Write: %v", err)
@@ -286,17 +268,14 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
-	created, err := Write(WriteRequest{
-		VaultPath:  vaultPath,
+	rt := testRuntime(t, vaultPath)
+	created, err := Write(rt, WriteRequest{
 		TypeName:   "person",
 		Title:      "Freya",
 		TargetPath: "Freya",
-		Schema:     sch,
 	})
 	if err != nil {
-		t.Fatalf("Write(create): %v", err)
+		t.Fatalf("Write(rt, create): %v", err)
 	}
 	if created.Status != "created" {
 		t.Fatalf("expected created status, got %q", created.Status)
@@ -306,15 +285,13 @@ traits: {}
 		t.Fatalf("seed existing body: %v", err)
 	}
 
-	_, err = Write(WriteRequest{
-		VaultPath:   vaultPath,
+	_, err = Write(rt, WriteRequest{
 		TypeName:    "person",
 		Title:       "Freya",
 		TargetPath:  "Freya",
 		ReplaceBody: true,
 		Content:     "# replaced",
 		CreateOnly:  true,
-		Schema:      sch,
 	})
 	if err == nil {
 		t.Fatal("expected create-only write to fail when the object exists")
@@ -342,13 +319,4 @@ func writeTestSchema(t *testing.T, vaultPath, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write schema: %v", err)
 	}
-}
-
-func loadTestSchema(t *testing.T, vaultPath string) *schema.Schema {
-	t.Helper()
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		t.Fatalf("load schema: %v", err)
-	}
-	return sch
 }

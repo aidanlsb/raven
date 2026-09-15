@@ -15,11 +15,10 @@ import (
 )
 
 type DeleteFileRequest struct {
-	VaultPath string
-	FilePath  string
-	Behavior  string
-	TrashDir  string
-	Now       func() time.Time
+	FilePath string
+	Behavior string
+	TrashDir string
+	Now      func() time.Time
 }
 
 type DeleteFileResult struct {
@@ -27,9 +26,9 @@ type DeleteFileResult struct {
 	TrashPath string
 }
 
-func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
-	if err := vaultruntime.RequirePath(req.VaultPath); err != nil {
-		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
+func DeleteFile(rt *vaultruntime.Runtime, req DeleteFileRequest) (*DeleteFileResult, error) {
+	if err := requireRuntime(rt); err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(req.FilePath) == "" {
 		return nil, svcerr.New(codes.ErrInvalidInput, "file path is required")
@@ -46,18 +45,18 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 		if trashDir == "" {
 			trashDir = ".trash"
 		}
-		_, trashRoot, err := resolveTrashRootFromDir(req.VaultPath, trashDir)
+		_, trashRoot, err := resolveTrashRootFromDir(rt.VaultPath, trashDir)
 		if err != nil {
 			return nil, err
 		}
 		if err := os.MkdirAll(trashRoot, 0o755); err != nil {
 			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create trash directory", err)
 		}
-		if err := validateTrashRoot(req.VaultPath, trashRoot); err != nil {
+		if err := validateTrashRoot(rt.VaultPath, trashRoot); err != nil {
 			return nil, err
 		}
 
-		relPath, err := filepath.Rel(req.VaultPath, req.FilePath)
+		relPath, err := filepath.Rel(rt.VaultPath, req.FilePath)
 		if err != nil {
 			return nil, svcerr.Wrap(codes.ErrInvalidInput, "failed to compute relative path", err)
 		}
@@ -65,7 +64,7 @@ func DeleteFile(req DeleteFileRequest) (*DeleteFileResult, error) {
 		if !paths.IsCleanRelSubpath(filepath.ToSlash(relPath)) {
 			return nil, svcerr.New(codes.ErrFileOutsideVault, "file path is outside the vault")
 		}
-		if err := paths.ValidateWithinVault(req.VaultPath, req.FilePath); err != nil {
+		if err := paths.ValidateWithinVault(rt.VaultPath, req.FilePath); err != nil {
 			return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "file path is outside the vault", err)
 		}
 		if err := ensureTrashParent(trashRoot, relPath); err != nil {

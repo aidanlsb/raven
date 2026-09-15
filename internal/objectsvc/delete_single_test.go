@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
@@ -36,12 +35,11 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := DeleteByReference(DeleteByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Reference:   "people/freya",
-		Behavior:    "trash",
-		TrashDir:    ".trash",
+	rt := testRuntime(t, vaultPath)
+	result, err := DeleteByReference(rt, DeleteByReferenceRequest{
+		Reference: "people/freya",
+		Behavior:  "trash",
+		TrashDir:  ".trash",
 	})
 	if err != nil {
 		t.Fatalf("DeleteByReference: %v", err)
@@ -68,17 +66,13 @@ func TestDeleteByReferenceFilePreviewAndApply(t *testing.T) {
 		WithSchema(testutil.MinimalSchema()).
 		WithFile(filePath, "png").
 		Build()
-	sch := loadTestSchema(t, v.Path)
-
+	rt := testRuntime(t, v.Path)
 	req := DeleteByReferenceRequest{
-		VaultPath:   v.Path,
-		VaultConfig: config.DefaultVaultConfig(),
-		Schema:      sch,
-		Reference:   filePath,
-		Behavior:    "trash",
-		TrashDir:    ".trash",
+		Reference: filePath,
+		Behavior:  "trash",
+		TrashDir:  ".trash",
 	}
-	preview, err := PreviewDeleteByReference(req)
+	preview, err := PreviewDeleteByReference(rt, req)
 	if err != nil {
 		t.Fatalf("PreviewDeleteByReference() error = %v", err)
 	}
@@ -90,7 +84,7 @@ func TestDeleteByReferenceFilePreviewAndApply(t *testing.T) {
 	}
 	v.AssertFileExists(filePath)
 
-	result, err := DeleteByReference(req)
+	result, err := DeleteByReference(rt, req)
 	if err != nil {
 		t.Fatalf("DeleteByReference() error = %v", err)
 	}
@@ -108,14 +102,11 @@ func TestDeleteByReferenceRejectsSection(t *testing.T) {
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("notes/sectioned.md", "# Notes\n\n## Details\n").
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "notes/sectioned.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "notes/sectioned.md")
 
-	_, err := PreviewDeleteByReference(DeleteByReferenceRequest{
-		VaultPath:   v.Path,
-		VaultConfig: config.DefaultVaultConfig(),
-		Schema:      sch,
-		Reference:   "notes/sectioned#details",
+	_, err := PreviewDeleteByReference(rt, DeleteByReferenceRequest{
+		Reference: "notes/sectioned#details",
 	})
 	if err == nil {
 		t.Fatal("PreviewDeleteByReference() succeeded for a section ID")

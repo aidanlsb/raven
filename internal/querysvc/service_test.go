@@ -112,7 +112,6 @@ func TestSavedQueryLifecycle(t *testing.T) {
 	rt := newQueryRuntime(t, vaultPath)
 
 	created, err := Set(rt, SetRequest{
-		VaultPath:   vaultPath,
 		Name:        "project-todos",
 		QueryString: "trait:todo refs([[{{args.project}}]])",
 		Args:        []string{"project"},
@@ -125,7 +124,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("Set(create) status = %q, want %q", created.Status, SetStatusCreated)
 	}
 
-	got, err := Get(rt, GetRequest{VaultPath: vaultPath, Name: "project-todos"})
+	got, err := Get(rt, GetRequest{Name: "project-todos"})
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
@@ -133,7 +132,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("Get() = %#v", got.Query)
 	}
 
-	listed, err := List(rt, ListRequest{VaultPath: vaultPath})
+	listed, err := List(rt)
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
@@ -148,7 +147,6 @@ func TestSavedQueryLifecycle(t *testing.T) {
 	}
 
 	unchanged, err := Set(rt, SetRequest{
-		VaultPath:   vaultPath,
 		Name:        "project-todos",
 		QueryString: "trait:todo refs([[{{args.project}}]])",
 		Args:        []string{"project"},
@@ -162,7 +160,6 @@ func TestSavedQueryLifecycle(t *testing.T) {
 	}
 
 	updated, err := Set(rt, SetRequest{
-		VaultPath:   vaultPath,
 		Name:        "project-todos",
 		QueryString: "trait:todo refs([[{{args.project}}]]) .value==todo",
 		Args:        []string{"project"},
@@ -177,7 +174,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("Set(update) description = %q, want empty", updated.Query.Description)
 	}
 
-	removed, err := Remove(rt, RemoveRequest{VaultPath: vaultPath, Name: "project-todos"})
+	removed, err := Remove(rt, RemoveRequest{Name: "project-todos"})
 	if err != nil {
 		t.Fatalf("Remove() unexpected error: %v", err)
 	}
@@ -185,7 +182,7 @@ func TestSavedQueryLifecycle(t *testing.T) {
 		t.Fatalf("Remove() removed = false, want true")
 	}
 
-	if _, err := Get(rt, GetRequest{VaultPath: vaultPath, Name: "project-todos"}); err == nil {
+	if _, err := Get(rt, GetRequest{Name: "project-todos"}); err == nil {
 		t.Fatal("Get() after remove expected error, got nil")
 	}
 }

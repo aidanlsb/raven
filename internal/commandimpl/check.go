@@ -76,7 +76,6 @@ func HandleCheckCreateMissing(ctx context.Context, req commandexec.Request) comm
 }
 
 func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool, journalOperation string) commandexec.Result {
-	vaultPath := rt.VaultPath
 	fixes := checkfixsvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch, vaultCfg)
 	grouped := checkfixsvc.GroupFixesByFile(fixes)
 
@@ -92,7 +91,7 @@ func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch 
 		}, nil)
 	}
 
-	applied, err := checkfixsvc.ApplyFixes(vaultPath, fixes, vaultCfg, sch)
+	applied, err := checkfixsvc.ApplyFixes(rt, fixes)
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}

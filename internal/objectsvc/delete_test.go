@@ -15,6 +15,7 @@ import (
 func TestDeleteFileTrashMovesFile(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -23,11 +24,10 @@ func TestDeleteFileTrashMovesFile(t *testing.T) {
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filePath,
-		Behavior:  "trash",
-		TrashDir:  ".trash",
+	result, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filePath,
+		Behavior: "trash",
+		TrashDir: ".trash",
 	})
 	if err != nil {
 		t.Fatalf("DeleteFile: %v", err)
@@ -49,6 +49,7 @@ func TestDeleteFileTrashMovesFile(t *testing.T) {
 func TestDeleteFileTrashCollisionAddsTimestamp(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	trashPath := filepath.Join(vaultPath, ".trash/people/freya.md")
 
@@ -66,11 +67,10 @@ func TestDeleteFileTrashCollisionAddsTimestamp(t *testing.T) {
 	}
 
 	now := time.Date(2026, 3, 10, 11, 22, 33, 0, time.UTC)
-	result, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filePath,
-		Behavior:  "trash",
-		TrashDir:  ".trash",
+	result, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filePath,
+		Behavior: "trash",
+		TrashDir: ".trash",
 		Now: func() time.Time {
 			return now
 		},
@@ -95,6 +95,7 @@ func TestDeleteFileTrashCollisionAddsTimestamp(t *testing.T) {
 func TestDeleteFileTrashCollisionAllocatesSequenceWithoutOverwrite(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	trashPath := filepath.Join(vaultPath, ".trash/people/freya.md")
 	tag := trashCollisionTag("people/freya.md")
@@ -114,12 +115,11 @@ func TestDeleteFileTrashCollisionAllocatesSequenceWithoutOverwrite(t *testing.T)
 	}
 
 	now := time.Date(2026, 3, 10, 11, 22, 33, 0, time.UTC)
-	result, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filePath,
-		Behavior:  "trash",
-		TrashDir:  ".trash",
-		Now:       func() time.Time { return now },
+	result, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filePath,
+		Behavior: "trash",
+		TrashDir: ".trash",
+		Now:      func() time.Time { return now },
 	})
 	if err != nil {
 		t.Fatalf("DeleteFile: %v", err)
@@ -150,6 +150,7 @@ func TestDeleteFileTrashCollisionAllocatesSequenceWithoutOverwrite(t *testing.T)
 func TestDeleteFilePermanentRemovesFile(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -158,10 +159,9 @@ func TestDeleteFilePermanentRemovesFile(t *testing.T) {
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filePath,
-		Behavior:  "permanent",
+	result, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filePath,
+		Behavior: "permanent",
 	})
 	if err != nil {
 		t.Fatalf("DeleteFile: %v", err)
@@ -177,6 +177,7 @@ func TestDeleteFilePermanentRemovesFile(t *testing.T) {
 func TestDeleteFileInvalidBehavior(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -185,10 +186,9 @@ func TestDeleteFileInvalidBehavior(t *testing.T) {
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filePath,
-		Behavior:  "invalid",
+	_, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filePath,
+		Behavior: "invalid",
 	})
 	if err == nil {
 		t.Fatal("expected error")
@@ -227,11 +227,11 @@ func TestDeleteFileRejectsUnsafeTrashDirectories(t *testing.T) {
 				t.Fatalf("seed file: %v", err)
 			}
 
-			_, err := DeleteFile(DeleteFileRequest{
-				VaultPath: vaultPath,
-				FilePath:  filePath,
-				Behavior:  "trash",
-				TrashDir:  trashDir,
+			rt := testRuntime(t, vaultPath)
+			_, err := DeleteFile(rt, DeleteFileRequest{
+				FilePath: filePath,
+				Behavior: "trash",
+				TrashDir: trashDir,
 			})
 			if err == nil {
 				t.Fatal("DeleteFile() succeeded with unsafe trash directory")
@@ -251,6 +251,7 @@ func TestDeleteFileRejectsSymlinkedTrashDirectory(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	realTrash := filepath.Join(vaultPath, "real-trash")
 	if err := os.MkdirAll(realTrash, 0o755); err != nil {
 		t.Fatalf("mkdir real trash: %v", err)
@@ -266,11 +267,10 @@ func TestDeleteFileRejectsSymlinkedTrashDirectory(t *testing.T) {
 		t.Fatalf("seed source: %v", err)
 	}
 
-	_, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filePath,
-		Behavior:  "trash",
-		TrashDir:  "linked-trash",
+	_, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filePath,
+		Behavior: "trash",
+		TrashDir: "linked-trash",
 	})
 	if err == nil {
 		t.Fatal("DeleteFile() succeeded with symlinked trash directory")
@@ -288,6 +288,7 @@ func TestDeleteFileNormalizesRelativeBackslashTrashDirectory(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir source: %v", err)
@@ -296,11 +297,10 @@ func TestDeleteFileNormalizesRelativeBackslashTrashDirectory(t *testing.T) {
 		t.Fatalf("seed source: %v", err)
 	}
 
-	result, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filePath,
-		Behavior:  "trash",
-		TrashDir:  `archive\trash`,
+	result, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filePath,
+		Behavior: "trash",
+		TrashDir: `archive\trash`,
 	})
 	if err != nil {
 		t.Fatalf("DeleteFile() error = %v", err)
@@ -312,18 +312,16 @@ func TestDeleteFileNormalizesRelativeBackslashTrashDirectory(t *testing.T) {
 	if _, err := os.Stat(expected); err != nil {
 		t.Fatalf("normalized trash entry missing: %v", err)
 	}
-	vaultCfg := &config.VaultConfig{Deletion: &config.DeletionConfig{TrashDir: `archive\trash`}}
-	listed, err := ListTrash(ListTrashRequest{VaultPath: vaultPath, VaultConfig: vaultCfg})
+	rt.VaultCfg = &config.VaultConfig{Deletion: &config.DeletionConfig{TrashDir: `archive\trash`}}
+	listed, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		t.Fatalf("ListTrash() error = %v", err)
 	}
 	if len(listed.Entries) != 1 || listed.Entries[0].TrashPath != "archive/trash/people/freya.md" {
 		t.Fatalf("entries = %#v, want normalized trash path", listed.Entries)
 	}
-	if _, err := RestoreByReference(RestoreByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-		Reference:   "people/freya",
+	if _, err := RestoreByReference(rt, RestoreByReferenceRequest{
+		Reference: "people/freya",
 	}); err != nil {
 		t.Fatalf("RestoreByReference() error = %v", err)
 	}
@@ -336,6 +334,7 @@ func TestDeleteFileRejectsSymlinkBelowTrashRoot(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	outsidePath := t.TempDir()
 	trashRoot := filepath.Join(vaultPath, ".trash")
 	if err := os.MkdirAll(trashRoot, 0o755); err != nil {
@@ -352,11 +351,10 @@ func TestDeleteFileRejectsSymlinkBelowTrashRoot(t *testing.T) {
 		t.Fatalf("seed source: %v", err)
 	}
 
-	_, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filePath,
-		Behavior:  "trash",
-		TrashDir:  ".trash",
+	_, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filePath,
+		Behavior: "trash",
+		TrashDir: ".trash",
 	})
 	if err == nil {
 		t.Fatal("DeleteFile() succeeded through symlinked trash parent")

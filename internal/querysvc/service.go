@@ -34,17 +34,12 @@ func (q SavedQueryInfo) Payload() map[string]interface{} {
 	return data
 }
 
-type ListRequest struct {
-	VaultPath string
-}
-
 type ListResult struct {
 	Queries []SavedQueryInfo
 }
 
 type GetRequest struct {
-	VaultPath string
-	Name      string
+	Name string
 }
 
 type GetResult struct {
@@ -52,7 +47,6 @@ type GetResult struct {
 }
 
 type SetRequest struct {
-	VaultPath   string
 	Name        string
 	QueryString string
 	Args        []string
@@ -73,8 +67,7 @@ type SetResult struct {
 }
 
 type RemoveRequest struct {
-	VaultPath string
-	Name      string
+	Name string
 }
 
 type RemoveResult struct {
@@ -87,7 +80,7 @@ type ApplyCommand struct {
 	Args    []string
 }
 
-func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
+func List(rt *vaultruntime.Runtime) (*ListResult, error) {
 	vaultCfg, err := runtimeConfig(rt)
 	if err != nil {
 		return nil, err

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -30,8 +29,7 @@ types:
         type: string
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -40,11 +38,10 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := SetObjectFile(SetObjectFileRequest{
+	result, err := SetObjectFile(rt, SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
 		TypedUpdates:  map[string]fieldvalue.FieldValue{"email": fieldvalue.String("new@example.com")},
-		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
 	if err != nil {
@@ -87,8 +84,7 @@ types:
         type: enum-ish
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -97,11 +93,10 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := SetObjectFile(SetObjectFileRequest{
+	_, err := SetObjectFile(rt, SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
 		TypedUpdates:  map[string]fieldvalue.FieldValue{"status": fieldvalue.String("open")},
-		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
 	if err == nil {
@@ -134,18 +129,16 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "note.md")
 	if err := os.WriteFile(filePath, []byte("# no frontmatter\n"), 0o644); err != nil {
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := SetObjectFile(SetObjectFileRequest{
+	_, err := SetObjectFile(rt, SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "note",
 		TypedUpdates:  map[string]fieldvalue.FieldValue{"status": fieldvalue.String("done")},
-		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
 	if err == nil {
@@ -175,8 +168,7 @@ types:
         required: true
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -185,11 +177,10 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := SetObjectFile(SetObjectFileRequest{
+	_, err := SetObjectFile(rt, SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
 		TypedUpdates:  map[string]fieldvalue.FieldValue{"unknown": fieldvalue.String("x")},
-		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
 	if err == nil {
@@ -225,8 +216,7 @@ types:
         target: person
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	companyPath := filepath.Join(vaultPath, "companies/acme.md")
 	if err := os.MkdirAll(filepath.Dir(companyPath), 0o755); err != nil {
 		t.Fatalf("mkdir companies: %v", err)
@@ -243,15 +233,12 @@ traits: {}
 		t.Fatalf("seed person: %v", err)
 	}
 
-	_, err := SetObjectFile(SetObjectFileRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		FilePath:    personPath,
-		ObjectID:    "people/freya",
+	_, err := SetObjectFile(rt, SetObjectFileRequest{
+		FilePath: personPath,
+		ObjectID: "people/freya",
 		TypedUpdates: map[string]fieldvalue.FieldValue{
 			"employer": fieldvalue.Ref("companies/acme"),
 		},
-		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
 	if err == nil {

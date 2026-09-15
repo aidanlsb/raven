@@ -7,27 +7,19 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type SetBulkRequest struct {
-	VaultPath    string
-	VaultConfig  *config.VaultConfig
-	Schema       *schema.Schema
 	ObjectIDs    []string
 	TypedUpdates map[string]fieldvalue.FieldValue
-	ParseOptions *parser.ParseOptions
-	Runtime      *vaultruntime.Runtime
 }
 
 type SetBulkPreview struct {
@@ -47,16 +39,12 @@ type SetBulkSummary struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+func PreviewSetBulk(rt *vaultruntime.Runtime, req SetBulkRequest) (*SetBulkPreview, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
-	if req.Schema == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
-	}
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if owned {
-		defer rt.Close()
+	if err := requireSchema(rt); err != nil {
+		return nil, err
 	}
 
 	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
@@ -68,12 +56,12 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 			continue
 		}
 
-		filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
+		filePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, id, rt.VaultCfg)
 		if err != nil {
 			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
-		if err := mutationguard.ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
 			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
 			continue
 		}
@@ -94,12 +82,12 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 		if objectType == "" {
 			objectType = "page"
 		}
-		refCtx := createRefValidationContext(rt, req.ParseOptions)
+		refCtx := createRefValidationContext(rt)
 		validatedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
 			objectType,
 			fm.Fields,
 			req.TypedUpdates,
-			req.Schema,
+			rt.Schema,
 			map[string]bool{"alias": true},
 			refCtx,
 		)
@@ -128,16 +116,12 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 	}, nil
 }
 
-func ApplySetBulk(req SetBulkRequest) (*SetBulkSummary, error) {
-	if req.VaultConfig == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
+func ApplySetBulk(rt *vaultruntime.Runtime, req SetBulkRequest) (*SetBulkSummary, error) {
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
-	if req.Schema == nil {
-		return nil, svcerr.New(codes.ErrValidationFailed, "schema is required").WithSuggestion("Fix schema.yaml and try again")
-	}
-	rt, owned := vaultruntime.FromRequest(req.Runtime, req.VaultPath, req.VaultConfig, req.Schema, req.ParseOptions)
-	if owned {
-		defer rt.Close()
+	if err := requireSchema(rt); err != nil {
+		return nil, err
 	}
 
 	results := make([]BulkResult, 0, len(req.ObjectIDs))
@@ -157,7 +141,7 @@ func ApplySetBulk(req SetBulkRequest) (*SetBulkSummary, error) {
 			continue
 		}
 
-		filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
+		filePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, id, rt.VaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -166,16 +150,11 @@ func ApplySetBulk(req SetBulkRequest) (*SetBulkSummary, error) {
 			continue
 		}
 
-		_, err = SetObjectFile(SetObjectFileRequest{
-			VaultPath:     req.VaultPath,
-			VaultConfig:   req.VaultConfig,
+		_, err = SetObjectFile(rt, SetObjectFileRequest{
 			FilePath:      filePath,
 			ObjectID:      id,
 			TypedUpdates:  req.TypedUpdates,
-			Schema:        req.Schema,
 			AllowedFields: map[string]bool{"alias": true},
-			ParseOptions:  req.ParseOptions,
-			Runtime:       rt,
 		})
 		if err != nil {
 			result.Status = "error"
@@ -187,7 +166,7 @@ func ApplySetBulk(req SetBulkRequest) (*SetBulkSummary, error) {
 
 		result.Status = "modified"
 		modifiedCount++
-		if relPath, relErr := filepath.Rel(req.VaultPath, filePath); relErr == nil {
+		if relPath, relErr := filepath.Rel(rt.VaultPath, filePath); relErr == nil {
 			changes.AddChanged(relPath)
 		}
 		results = append(results, result)

@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestApplyFixes_ReplacesVaultFileAtomically(t *testing.T) {
@@ -32,7 +33,7 @@ func TestApplyFixes_ReplacesVaultFileAtomically(t *testing.T) {
 		t.Skipf("hard links unavailable: %v", err)
 	}
 
-	result, err := ApplyFixes(vault.Path, []FixableIssue{
+	result, err := ApplyFixes(testutil.NewVaultRuntime(t, vault.Path, vaultruntime.Options{}), []FixableIssue{
 		{
 			FilePath:    "notes/example.md",
 			Line:        1,
@@ -42,7 +43,7 @@ func TestApplyFixes_ReplacesVaultFileAtomically(t *testing.T) {
 			NewValue:    "people/freya",
 			Description: "[[freya]] -> [[people/freya]]",
 		},
-	}, nil, nil)
+	})
 	if err != nil {
 		t.Fatalf("ApplyFixes returned error: %v", err)
 	}
@@ -88,7 +89,7 @@ owner: "[[people/freya]]"
 ---`).
 		Build()
 
-	result, err := ApplyFixes(vault.Path, []FixableIssue{
+	result, err := ApplyFixes(testutil.NewVaultRuntime(t, vault.Path, vaultruntime.Options{}), []FixableIssue{
 		{
 			FilePath:    "projects/roadmap.md",
 			Line:        4,
@@ -98,7 +99,7 @@ owner: "[[people/freya]]"
 			NewValue:    "people/freya",
 			Description: "[[freya]] -> [[people/freya]]",
 		},
-	}, nil, nil)
+	})
 	if err != nil {
 		t.Fatalf("ApplyFixes returned error: %v", err)
 	}
@@ -181,7 +182,7 @@ func TestApplyFixes_TextFixesAreLineScoped(t *testing.T) {
 				WithFile("notes/refs.md", tt.content).
 				Build()
 
-			result, err := ApplyFixes(vault.Path, tt.fixes, nil, nil)
+			result, err := ApplyFixes(testutil.NewVaultRuntime(t, vault.Path, vaultruntime.Options{}), tt.fixes)
 			if err != nil {
 				t.Fatalf("ApplyFixes returned error: %v", err)
 			}

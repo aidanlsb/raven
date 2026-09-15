@@ -15,6 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/templatesvc"
 	"github.com/aidanlsb/raven/internal/ui"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 var templateCmd = &cobra.Command{
@@ -82,8 +83,8 @@ func editTemplateContent(pathArg string) (string, error) {
 	if err != nil {
 		return "", handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
-	readResult, err := templatesvc.Read(templatesvc.ReadRequest{
-		VaultPath:   vaultPath,
+	rt := &vaultruntime.Runtime{VaultPath: vaultPath, VaultCfg: vaultCfg}
+	readResult, err := templatesvc.Read(rt, templatesvc.ReadRequest{
 		TemplateDir: vaultCfg.GetTemplateDirectory(),
 		Path:        pathArg,
 	})

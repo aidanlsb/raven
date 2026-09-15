@@ -16,14 +16,11 @@ func TestListTrashReturnsMirroredEntriesAndFilters(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "---\ntype: person\nname: Freya\n---\n")
 	writeTrashTestFile(t, vaultPath, ".trash/files/paper.pdf", "pdf")
-	vaultCfg := config.DefaultVaultConfig()
 
-	result, err := ListTrash(ListTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-	})
+	result, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		t.Fatalf("ListTrash() error = %v", err)
 	}
@@ -46,14 +43,12 @@ func TestListTrashReturnsMirroredEntriesAndFilters(t *testing.T) {
 		t.Fatalf("markdown entry = %#v", got)
 	}
 
-	filtered, err := ListTrash(ListTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-		Reference:   "people/freya",
-		Kind:        TrashKindMarkdown,
+	filtered, err := ListTrash(rt, ListTrashRequest{
+		Reference: "people/freya",
+		Kind:      TrashKindMarkdown,
 	})
 	if err != nil {
-		t.Fatalf("ListTrash(filtered) error = %v", err)
+		t.Fatalf("ListTrash(rt, filtered) error = %v", err)
 	}
 	if len(filtered.Entries) != 1 || filtered.Entries[0].Reference != "people/freya" {
 		t.Fatalf("filtered entries = %#v", filtered.Entries)
@@ -64,16 +59,14 @@ func TestListTrashUsesConfiguredDirectory(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, "archive/trash/files/paper.pdf", "pdf")
-	vaultCfg := &config.VaultConfig{Deletion: &config.DeletionConfig{
+	rt.VaultCfg.Deletion = &config.DeletionConfig{
 		Behavior: "permanent",
 		TrashDir: "archive/trash",
-	}}
+	}
 
-	result, err := ListTrash(ListTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-	})
+	result, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		t.Fatalf("ListTrash() error = %v", err)
 	}
@@ -89,15 +82,15 @@ func TestListTrashPreservesOriginalReferenceForVersionedCollisions(t *testing.T)
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "oldest")
 	writeTrashTestFile(t, vaultPath, "people/freya.md", "newest")
 	now := time.Date(2026, 3, 10, 11, 22, 33, 0, time.UTC)
-	deleted, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filepath.Join(vaultPath, "people/freya.md"),
-		Behavior:  "trash",
-		TrashDir:  ".trash",
-		Now:       func() time.Time { return now },
+	deleted, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filepath.Join(vaultPath, "people/freya.md"),
+		Behavior: "trash",
+		TrashDir: ".trash",
+		Now:      func() time.Time { return now },
 	})
 	if err != nil {
 		t.Fatalf("DeleteFile() error = %v", err)
@@ -107,12 +100,9 @@ func TestListTrashPreservesOriginalReferenceForVersionedCollisions(t *testing.T)
 		t.Fatalf("resolve version path: %v", err)
 	}
 	versionPath = filepath.ToSlash(versionPath)
-	vaultCfg := config.DefaultVaultConfig()
 
-	result, err := ListTrash(ListTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-		Reference:   "people/freya",
+	result, err := ListTrash(rt, ListTrashRequest{
+		Reference: "people/freya",
 	})
 	if err != nil {
 		t.Fatalf("ListTrash() error = %v", err)
@@ -127,20 +117,16 @@ func TestListTrashPreservesOriginalReferenceForVersionedCollisions(t *testing.T)
 		}
 	}
 
-	_, err = PreviewRestoreByReference(RestoreByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-		Reference:   "people/freya",
+	_, err = PreviewRestoreByReference(rt, RestoreByReferenceRequest{
+		Reference: "people/freya",
 	})
 	requireTrashServiceErrorCode(t, err, codes.ErrRefAmbiguous)
 
-	restored, err := RestoreByReference(RestoreByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-		Reference:   versionPath,
+	restored, err := RestoreByReference(rt, RestoreByReferenceRequest{
+		Reference: versionPath,
 	})
 	if err != nil {
-		t.Fatalf("RestoreByReference(exact path) error = %v", err)
+		t.Fatalf("RestoreByReference(rt, exact path) error = %v", err)
 	}
 	if restored.Entry.Reference != "people/freya" || restored.Entry.RestorePath != "people/freya.md" {
 		t.Fatalf("restored entry = %#v", restored.Entry)
@@ -155,14 +141,12 @@ func TestListTrashDoesNotDecodeUnverifiedCollisionMarker(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	tag := trashCollisionTag("people/freya.md")
 	literalPath := ".trash/people/freya.raven-trash-" + tag + "-2026-03-10-112233-1.md"
 	writeTrashTestFile(t, vaultPath, literalPath, "literal")
 
-	result, err := ListTrash(ListTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-	})
+	result, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		t.Fatalf("ListTrash() error = %v", err)
 	}
@@ -179,6 +163,7 @@ func TestListTrashMatchesMetadataPathCaseInsensitively(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	entryPath := ".trash/People/Freya.raven-trash-version.md"
 	writeTrashTestFile(t, vaultPath, entryPath, "version")
 	writeTrashTestFile(
@@ -188,10 +173,7 @@ func TestListTrashMatchesMetadataPathCaseInsensitively(t *testing.T) {
 		`{"version":1,"trash_path":"people/freya.raven-trash-version.md","restore_path":"people/freya.md"}`+"\n",
 	)
 
-	result, err := ListTrash(ListTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-	})
+	result, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		t.Fatalf("ListTrash() error = %v", err)
 	}
@@ -207,13 +189,11 @@ func TestListTrashPreservesTimestampedLiteralPath(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	timestampedPath := ".trash/people/freya-2026-03-10-112233.md"
 	writeTrashTestFile(t, vaultPath, timestampedPath, "literal")
 
-	result, err := ListTrash(ListTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-	})
+	result, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		t.Fatalf("ListTrash() error = %v", err)
 	}
@@ -230,15 +210,13 @@ func TestListTrashSkipsNonRegularEntries(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, ".trash/files/regular.txt", "regular")
 	if err := os.Symlink("../../outside.txt", filepath.Join(vaultPath, ".trash/files/link.txt")); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
 
-	result, err := ListTrash(ListTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-	})
+	result, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		t.Fatalf("ListTrash() error = %v", err)
 	}
@@ -251,17 +229,17 @@ func TestTrashRoundTripPreservesSafeVaultSymlink(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, "files/target.txt", "target")
 	sourcePath := filepath.Join(vaultPath, "files/link.txt")
 	if err := os.Symlink("target.txt", sourcePath); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
 
-	deleted, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  sourcePath,
-		Behavior:  "trash",
-		TrashDir:  ".trash",
+	deleted, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: sourcePath,
+		Behavior: "trash",
+		TrashDir: ".trash",
 	})
 	if err != nil {
 		t.Fatalf("DeleteFile() error = %v", err)
@@ -270,10 +248,7 @@ func TestTrashRoundTripPreservesSafeVaultSymlink(t *testing.T) {
 		t.Fatalf("trashed symlink info = %#v, error = %v", info, statErr)
 	}
 
-	listed, err := ListTrash(ListTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-	})
+	listed, err := ListTrash(rt, ListTrashRequest{})
 	if err != nil {
 		t.Fatalf("ListTrash() error = %v", err)
 	}
@@ -281,10 +256,8 @@ func TestTrashRoundTripPreservesSafeVaultSymlink(t *testing.T) {
 		t.Fatalf("entries = %#v, want safe symlink", listed.Entries)
 	}
 
-	if _, err := RestoreByReference(RestoreByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-		Reference:   "files/link.txt",
+	if _, err := RestoreByReference(rt, RestoreByReferenceRequest{
+		Reference: "files/link.txt",
 	}); err != nil {
 		t.Fatalf("RestoreByReference() error = %v", err)
 	}
@@ -301,14 +274,13 @@ func TestRestoreByReferencePreviewAndApply(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "restored")
 	req := RestoreByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-		Reference:   "people/freya",
+		Reference: "people/freya",
 	}
 
-	preview, err := PreviewRestoreByReference(req)
+	preview, err := PreviewRestoreByReference(rt, req)
 	if err != nil {
 		t.Fatalf("PreviewRestoreByReference() error = %v", err)
 	}
@@ -318,7 +290,7 @@ func TestRestoreByReferencePreviewAndApply(t *testing.T) {
 	requireTrashTestPath(t, vaultPath, ".trash/people/freya.md", true)
 	requireTrashTestPath(t, vaultPath, "people/freya.md", false)
 
-	result, err := RestoreByReference(req)
+	result, err := RestoreByReference(rt, req)
 	if err != nil {
 		t.Fatalf("RestoreByReference() error = %v", err)
 	}
@@ -335,13 +307,12 @@ func TestRestoreByReferenceRejectsOccupiedDestination(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "trashed")
 	writeTrashTestFile(t, vaultPath, "people/freya.md", "current")
 
-	_, err := RestoreByReference(RestoreByReferenceRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-		Reference:   "people/freya",
+	_, err := RestoreByReference(rt, RestoreByReferenceRequest{
+		Reference: "people/freya",
 	})
 	requireTrashServiceErrorCode(t, err, codes.ErrFileExists)
 	requireTrashTestPath(t, vaultPath, ".trash/people/freya.md", true)
@@ -358,10 +329,9 @@ func TestRestoreByReferenceRejectsOccupiedDestination(t *testing.T) {
 func TestRestoreByReferenceRejectsMissingEntry(t *testing.T) {
 	t.Parallel()
 
-	_, err := PreviewRestoreByReference(RestoreByReferenceRequest{
-		VaultPath:   t.TempDir(),
-		VaultConfig: config.DefaultVaultConfig(),
-		Reference:   "people/missing",
+	rt := testRuntime(t, t.TempDir())
+	_, err := PreviewRestoreByReference(rt, RestoreByReferenceRequest{
+		Reference: "people/missing",
 	})
 	requireTrashServiceErrorCode(t, err, codes.ErrFileNotFound)
 }
@@ -392,13 +362,11 @@ func TestPreviewEmptyTrashDoesNotDelete(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "trashed")
 	writeTrashTestFile(t, vaultPath, "people/live.md", "live")
 
-	preview, err := PreviewEmptyTrash(EmptyTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-	})
+	preview, err := PreviewEmptyTrash(rt, EmptyTrashRequest{})
 	if err != nil {
 		t.Fatalf("PreviewEmptyTrash() error = %v", err)
 	}
@@ -413,14 +381,12 @@ func TestEmptyTrashRemovesMatchingEntriesAndLeavesLiveObjects(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "trashed")
 	writeTrashTestFile(t, vaultPath, ".trash/files/paper.pdf", "pdf")
 	writeTrashTestFile(t, vaultPath, "people/freya.md", "live")
 
-	result, err := EmptyTrash(EmptyTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-	})
+	result, err := EmptyTrash(rt, EmptyTrashRequest{})
 	if err != nil {
 		t.Fatalf("EmptyTrash() error = %v", err)
 	}
@@ -446,6 +412,7 @@ func TestEmptyTrashOlderThanFiltersByModificationTime(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, ".trash/old.md", "old")
 	writeTrashTestFile(t, vaultPath, ".trash/recent.md", "recent")
 	writeTrashTestFile(t, vaultPath, "notes/keep.md", "keep")
@@ -454,14 +421,12 @@ func TestEmptyTrashOlderThanFiltersByModificationTime(t *testing.T) {
 	setTrashTestModTime(t, vaultPath, ".trash/old.md", now.Add(-10*24*time.Hour))
 	setTrashTestModTime(t, vaultPath, ".trash/recent.md", now.Add(-2*time.Hour))
 
-	preview, err := PreviewEmptyTrash(EmptyTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-		OlderThan:   "7d",
-		Now:         func() time.Time { return now },
+	preview, err := PreviewEmptyTrash(rt, EmptyTrashRequest{
+		OlderThan: "7d",
+		Now:       func() time.Time { return now },
 	})
 	if err != nil {
-		t.Fatalf("PreviewEmptyTrash(older-than) error = %v", err)
+		t.Fatalf("PreviewEmptyTrash(rt, older-than) error = %v", err)
 	}
 	if len(preview.Entries) != 1 || preview.Entries[0].TrashPath != ".trash/old.md" {
 		t.Fatalf("preview entries = %#v, want only old.md", preview.Entries)
@@ -469,14 +434,12 @@ func TestEmptyTrashOlderThanFiltersByModificationTime(t *testing.T) {
 	requireTrashTestPath(t, vaultPath, ".trash/old.md", true)
 	requireTrashTestPath(t, vaultPath, ".trash/recent.md", true)
 
-	result, err := EmptyTrash(EmptyTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-		OlderThan:   "7d",
-		Now:         func() time.Time { return now },
+	result, err := EmptyTrash(rt, EmptyTrashRequest{
+		OlderThan: "7d",
+		Now:       func() time.Time { return now },
 	})
 	if err != nil {
-		t.Fatalf("EmptyTrash(older-than) error = %v", err)
+		t.Fatalf("EmptyTrash(rt, older-than) error = %v", err)
 	}
 	if len(result.Entries) != 1 || result.Entries[0].TrashPath != ".trash/old.md" {
 		t.Fatalf("emptied entries = %#v, want only old.md", result.Entries)
@@ -490,15 +453,15 @@ func TestEmptyTrashRemovesCollisionMetadataSidecar(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
 	writeTrashTestFile(t, vaultPath, ".trash/people/freya.md", "oldest")
 	writeTrashTestFile(t, vaultPath, "people/freya.md", "newest")
 	now := time.Date(2026, 3, 10, 11, 22, 33, 0, time.UTC)
-	deleted, err := DeleteFile(DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filepath.Join(vaultPath, "people/freya.md"),
-		Behavior:  "trash",
-		TrashDir:  ".trash",
-		Now:       func() time.Time { return now },
+	deleted, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: filepath.Join(vaultPath, "people/freya.md"),
+		Behavior: "trash",
+		TrashDir: ".trash",
+		Now:      func() time.Time { return now },
 	})
 	if err != nil {
 		t.Fatalf("DeleteFile() error = %v", err)
@@ -509,10 +472,7 @@ func TestEmptyTrashRemovesCollisionMetadataSidecar(t *testing.T) {
 	}
 	versionPath = filepath.ToSlash(versionPath)
 
-	if _, err := EmptyTrash(EmptyTrashRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: config.DefaultVaultConfig(),
-	}); err != nil {
+	if _, err := EmptyTrash(rt, EmptyTrashRequest{}); err != nil {
 		t.Fatalf("EmptyTrash() error = %v", err)
 	}
 	requireTrashTestPath(t, vaultPath, ".trash/people/freya.md", false)
@@ -523,10 +483,9 @@ func TestEmptyTrashRemovesCollisionMetadataSidecar(t *testing.T) {
 func TestEmptyTrashRejectsInvalidOlderThan(t *testing.T) {
 	t.Parallel()
 
-	_, err := PreviewEmptyTrash(EmptyTrashRequest{
-		VaultPath:   t.TempDir(),
-		VaultConfig: config.DefaultVaultConfig(),
-		OlderThan:   "last week",
+	rt := testRuntime(t, t.TempDir())
+	_, err := PreviewEmptyTrash(rt, EmptyTrashRequest{
+		OlderThan: "last week",
 	})
 	requireTrashServiceErrorCode(t, err, codes.ErrInvalidInput)
 }

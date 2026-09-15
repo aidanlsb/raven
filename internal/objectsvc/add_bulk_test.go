@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -14,17 +13,11 @@ func TestPreviewAddBulk(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/alice.md", "---\ntype: person\nname: Alice\n---\n").
 		Build()
+	rt := testRuntime(t, v.Path)
 
-	vaultCfg, err := config.LoadVaultConfig(v.Path)
-	if err != nil {
-		t.Fatalf("load vault config: %v", err)
-	}
-
-	preview, err := PreviewAddBulk(AddBulkRequest{
-		VaultPath:   v.Path,
-		VaultConfig: vaultCfg,
-		ObjectIDs:   []string{"people/alice", "people/missing"},
-		Line:        "bulk note",
+	preview, err := PreviewAddBulk(rt, AddBulkRequest{
+		ObjectIDs: []string{"people/alice", "people/missing"},
+		Line:      "bulk note",
 	})
 	if err != nil {
 		t.Fatalf("PreviewAddBulk() error = %v", err)
@@ -47,17 +40,11 @@ func TestApplyAddBulk(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/alice.md", "---\ntype: person\nname: Alice\n---\n").
 		Build()
+	rt := testRuntime(t, v.Path)
 
-	vaultCfg, err := config.LoadVaultConfig(v.Path)
-	if err != nil {
-		t.Fatalf("load vault config: %v", err)
-	}
-
-	summary, err := ApplyAddBulk(AddBulkRequest{
-		VaultPath:   v.Path,
-		VaultConfig: vaultCfg,
-		ObjectIDs:   []string{"people/alice", "people/missing"},
-		Line:        "bulk apply line",
+	summary, err := ApplyAddBulk(rt, AddBulkRequest{
+		ObjectIDs: []string{"people/alice", "people/missing"},
+		Line:      "bulk apply line",
 	})
 	if err != nil {
 		t.Fatalf("ApplyAddBulk() error = %v", err)

@@ -3,7 +3,6 @@ package objectsvc
 import (
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -15,15 +14,14 @@ func TestDeleteBulkFilePreviewAndApply(t *testing.T) {
 		WithSchema(testutil.MinimalSchema()).
 		WithFile(filePath, "png").
 		Build()
+	rt := testRuntime(t, v.Path)
 
 	req := DeleteBulkRequest{
-		VaultPath:   v.Path,
-		VaultConfig: config.DefaultVaultConfig(),
-		ObjectIDs:   []string{filePath},
-		Behavior:    "trash",
-		TrashDir:    ".trash",
+		ObjectIDs: []string{filePath},
+		Behavior:  "trash",
+		TrashDir:  ".trash",
 	}
-	preview, err := PreviewDeleteBulk(req)
+	preview, err := PreviewDeleteBulk(rt, req)
 	if err != nil {
 		t.Fatalf("PreviewDeleteBulk() error = %v", err)
 	}
@@ -38,7 +36,7 @@ func TestDeleteBulkFilePreviewAndApply(t *testing.T) {
 	}
 	v.AssertFileExists(filePath)
 
-	summary, err := ApplyDeleteBulk(req)
+	summary, err := ApplyDeleteBulk(rt, req)
 	if err != nil {
 		t.Fatalf("ApplyDeleteBulk() error = %v", err)
 	}

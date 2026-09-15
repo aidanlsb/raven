@@ -9,14 +9,15 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 type FixType string
@@ -136,8 +137,11 @@ func GroupFixesByFile(fixes []FixableIssue) []FileFixes {
 // collected as Skipped entries and processing continues
 // past them; an error is returned only for unrecoverable I/O issues against
 // known-good files.
-func ApplyFixes(vaultPath string, fixes []FixableIssue, vaultCfg *config.VaultConfig, sch *schema.Schema) (FixResult, error) {
+func ApplyFixes(rt *vaultruntime.Runtime, fixes []FixableIssue) (FixResult, error) {
 	result := FixResult{}
+	if err := vaultruntime.Require(rt); err != nil {
+		return result, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
+	}
 
 	textFixes := make([]FixableIssue, 0, len(fixes))
 	moveFixes := make([]FixableIssue, 0)
@@ -149,7 +153,7 @@ func ApplyFixes(vaultPath string, fixes []FixableIssue, vaultCfg *config.VaultCo
 		textFixes = append(textFixes, fix)
 	}
 
-	textResult, err := applyTextFixes(vaultPath, textFixes)
+	textResult, err := applyTextFixes(rt.VaultPath, textFixes)
 	if err != nil {
 		return result, err
 	}
@@ -158,7 +162,7 @@ func ApplyFixes(vaultPath string, fixes []FixableIssue, vaultCfg *config.VaultCo
 	result.Skipped = append(result.Skipped, textResult.Skipped...)
 	result.ChangeSet.Merge(textResult.ChangeSet)
 
-	moveResult := applyMoveFixes(vaultPath, vaultCfg, sch, moveFixes)
+	moveResult := applyMoveFixes(rt, moveFixes)
 	result.FileCount += moveResult.FileCount
 	result.IssueCount += moveResult.IssueCount
 	result.Skipped = append(result.Skipped, moveResult.Skipped...)
@@ -269,21 +273,19 @@ func contentLineRanges(content string) []contentLineRange {
 	return append(ranges, contentLineRange{start: start, end: len(content)})
 }
 
-func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, fixes []FixableIssue) FixResult {
+func applyMoveFixes(rt *vaultruntime.Runtime, fixes []FixableIssue) FixResult {
 	result := FixResult{}
 	if len(fixes) == 0 {
 		return result
 	}
-
-	parseOpts := parseopts.FromVaultConfig(vaultCfg)
 
 	sort.Slice(fixes, func(i, j int) bool {
 		return fixes[i].FilePath < fixes[j].FilePath
 	})
 
 	for _, fix := range fixes {
-		sourceAbs := filepath.Join(vaultPath, fix.FilePath)
-		destAbs := filepath.Join(vaultPath, fix.NewFilePath)
+		sourceAbs := filepath.Join(rt.VaultPath, fix.FilePath)
+		destAbs := filepath.Join(rt.VaultPath, fix.NewFilePath)
 
 		if _, err := os.Stat(sourceAbs); err != nil {
 			result.Skipped = append(result.Skipped, skippedFix(fix, fmt.Sprintf("source file no longer exists: %v", err)))
@@ -294,21 +296,17 @@ func applyMoveFixes(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.
 			continue
 		}
 
-		if err := mutationguard.ValidateContentMutationRelPath(vaultCfg, fix.NewFilePath); err != nil {
+		if err := mutationguard.ValidateContentMutationRelPath(rt.VaultCfg, fix.NewFilePath); err != nil {
 			result.Skipped = append(result.Skipped, skippedFix(fix, err.Error()))
 			continue
 		}
 
-		moveResult, err := objectsvc.MoveFile(objectsvc.MoveFileRequest{
-			VaultPath:         vaultPath,
+		moveResult, err := objectsvc.MoveFile(rt, objectsvc.MoveFileRequest{
 			SourceFile:        sourceAbs,
 			DestinationFile:   destAbs,
 			SourceObjectID:    fix.SourceObjectID,
 			DestinationObject: fix.DestObjectID,
 			UpdateRefs:        true,
-			VaultConfig:       vaultCfg,
-			Schema:            sch,
-			ParseOptions:      parseOpts,
 		})
 		if err != nil {
 			result.Skipped = append(result.Skipped, skippedFix(fix, fmt.Sprintf("move failed: %v", err)))

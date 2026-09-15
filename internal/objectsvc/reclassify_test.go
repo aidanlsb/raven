@@ -30,8 +30,7 @@ types:
         type: string
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	sourcePath := filepath.Join(vaultPath, "notes/my-note.md")
 	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -40,10 +39,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := Reclassify(ReclassifyRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
+	result, err := Reclassify(rt, ReclassifyRequest{
 		ObjectID:    "notes/my-note",
 		FilePath:    sourcePath,
 		NewTypeName: "book",
@@ -85,15 +81,12 @@ types:
         type: string
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	// Directories config: typed items live under "type/", pages under "page/".
-	vaultCfg := &config.VaultConfig{
-		DailyDirectory: "daily",
-		Directories: &config.DirectoriesConfig{
-			Object: "type/",
-			Page:   "page/",
-		},
+	rt.VaultCfg.DailyDirectory = "daily"
+	rt.VaultCfg.Directories = &config.DirectoriesConfig{
+		Object: "type/",
+		Page:   "page/",
 	}
 
 	sourcePath := filepath.Join(vaultPath, "type/notes/my-note.md")
@@ -104,10 +97,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := Reclassify(ReclassifyRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-		Schema:      sch,
+	result, err := Reclassify(rt, ReclassifyRequest{
 		ObjectID:    "notes/my-note",
 		FilePath:    sourcePath,
 		NewTypeName: "book",
@@ -191,8 +181,7 @@ types:
         type: string
 traits: {}
 `, tt.defaultPath))
-			sch := loadTestSchema(t, vaultPath)
-
+			rt := testRuntime(t, vaultPath)
 			sourcePath := filepath.Join(vaultPath, "notes/my-note.md")
 			if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 				t.Fatalf("mkdir: %v", err)
@@ -201,10 +190,7 @@ traits: {}
 				t.Fatalf("seed file: %v", err)
 			}
 
-			_, err := Reclassify(ReclassifyRequest{
-				VaultPath:   vaultPath,
-				VaultConfig: tt.vaultCfg,
-				Schema:      sch,
+			_, err := Reclassify(rt, ReclassifyRequest{
 				ObjectID:    "notes/my-note",
 				FilePath:    sourcePath,
 				NewTypeName: "book",
@@ -260,8 +246,7 @@ types:
         type: string
 traits: {}
 `)
-	sch := loadTestSchema(t, vaultPath)
-
+	rt := testRuntime(t, vaultPath)
 	sourcePath := filepath.Join(vaultPath, "notes/my-note.md")
 	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 		t.Fatalf("mkdir source dir: %v", err)
@@ -279,10 +264,7 @@ traits: {}
 	})
 	defer restoreWriter()
 
-	_, err := Reclassify(ReclassifyRequest{
-		VaultPath:   vaultPath,
-		VaultConfig: &config.VaultConfig{},
-		Schema:      sch,
+	_, err := Reclassify(rt, ReclassifyRequest{
 		ObjectID:    "notes/my-note",
 		FilePath:    sourcePath,
 		NewTypeName: "book",

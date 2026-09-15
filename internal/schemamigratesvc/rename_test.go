@@ -72,7 +72,7 @@ func TestRenameType_PreviewCountMatchesApplyForQuotedTypes(t *testing.T) {
 		WithFile("notes/other.md", "---\ntype: page\ntitle: Other\n---\n# Other\n").
 		Build()
 
-	preview, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
+	preview, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{OldName: "event", NewName: "meeting"})
 	if err != nil {
 		t.Fatalf("preview RenameType: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestRenameType_PreviewCountMatchesApplyForQuotedTypes(t *testing.T) {
 		t.Fatalf("expected preview to count 3 frontmatter changes (quoted, single, plain), got %d\n%+v", got, preview.Changes)
 	}
 
-	apply, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting", Confirm: true})
+	apply, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{OldName: "event", NewName: "meeting", Confirm: true})
 	if err != nil {
 		t.Fatalf("apply RenameType: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestRenameType_PreviewListsReferenceUpdatesFromDirectoryMove(t *testing.T) 
 		Build()
 
 	beforeRoadmap := vault.ReadFile("projects/roadmap.md")
-	preview, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
+	preview, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{OldName: "event", NewName: "meeting"})
 	if err != nil {
 		t.Fatalf("preview RenameType: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs(t *testing.T) {
 		WithFile("projects/roadmap.md", "---\ntype: project\nkickoff: events/kickoff\n---\n# Roadmap\n\nKickoff: [[events/kickoff]]\n").
 		Build()
 
-	preview, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{VaultPath: vault.Path, OldName: "event", NewName: "meeting"})
+	preview, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{OldName: "event", NewName: "meeting"})
 	if err != nil {
 		t.Fatalf("preview RenameType: %v", err)
 	}
@@ -168,7 +168,6 @@ func TestRenameType_DefaultPathRenameHandlesQuotedTypeAndRefs(t *testing.T) {
 	}
 
 	result, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{
-		VaultPath:         vault.Path,
 		OldName:           "event",
 		NewName:           "meeting",
 		Confirm:           true,
@@ -239,10 +238,9 @@ traits: {}
 	beforePage := vault.ReadFile("notes/email.md")
 
 	preview, err := RenameField(migrationTestRuntime(t, vault.Path), RenameFieldRequest{
-		VaultPath: vault.Path,
-		TypeName:  "person",
-		OldField:  "email",
-		NewField:  "contact",
+		TypeName: "person",
+		OldField: "email",
+		NewField: "contact",
 	})
 	if err != nil {
 		t.Fatalf("preview RenameField() error = %v", err)
@@ -263,11 +261,10 @@ traits: {}
 	}
 
 	applied, err := RenameField(migrationTestRuntime(t, vault.Path), RenameFieldRequest{
-		VaultPath: vault.Path,
-		TypeName:  "person",
-		OldField:  "email",
-		NewField:  "contact",
-		Confirm:   true,
+		TypeName: "person",
+		OldField: "email",
+		NewField: "contact",
+		Confirm:  true,
 	})
 	if err != nil {
 		t.Fatalf("apply RenameField() error = %v", err)
@@ -307,11 +304,10 @@ traits: {}
 	beforePerson := vault.ReadFile("people/alex.md")
 
 	_, err := RenameField(migrationTestRuntime(t, vault.Path), RenameFieldRequest{
-		VaultPath: vault.Path,
-		TypeName:  "person",
-		OldField:  "email",
-		NewField:  "contact",
-		Confirm:   true,
+		TypeName: "person",
+		OldField: "email",
+		NewField: "contact",
+		Confirm:  true,
 	})
 	requireMigrationCode(t, err, codes.ErrDataIntegrityBlock)
 	if got := vault.ReadFile("schema.yaml"); got != beforeSchema {
@@ -337,7 +333,6 @@ func TestRenameType_DestinationConflictBlocksAllWrites(t *testing.T) {
 	beforeReference := vault.ReadFile("projects/roadmap.md")
 
 	_, err := RenameType(migrationTestRuntime(t, vault.Path), RenameTypeRequest{
-		VaultPath:         vault.Path,
 		OldName:           "event",
 		NewName:           "meeting",
 		Confirm:           true,

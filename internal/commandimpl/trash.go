@@ -16,11 +16,9 @@ func HandleTrashList(_ context.Context, req commandexec.Request) commandexec.Res
 	}
 	defer rt.Close()
 
-	result, err := objectsvc.ListTrash(objectsvc.ListTrashRequest{
-		VaultPath:   rt.VaultPath,
-		VaultConfig: rt.VaultCfg,
-		Reference:   strings.TrimSpace(stringArg(req.Args, "reference")),
-		Kind:        strings.TrimSpace(stringArg(req.Args, "kind")),
+	result, err := objectsvc.ListTrash(rt, objectsvc.ListTrashRequest{
+		Reference: strings.TrimSpace(stringArg(req.Args, "reference")),
+		Kind:      strings.TrimSpace(stringArg(req.Args, "kind")),
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -43,20 +41,17 @@ func HandleRestore(_ context.Context, req commandexec.Request) commandexec.Resul
 	defer rt.Close()
 
 	restoreReq := objectsvc.RestoreByReferenceRequest{
-		VaultPath:   rt.VaultPath,
-		VaultConfig: rt.VaultCfg,
-		Reference:   strings.TrimSpace(stringArg(req.Args, "reference")),
-		Runtime:     rt,
+		Reference: strings.TrimSpace(stringArg(req.Args, "reference")),
 	}
 	if req.Preview {
-		result, err := objectsvc.PreviewRestoreByReference(restoreReq)
+		result, err := objectsvc.PreviewRestoreByReference(rt, restoreReq)
 		if err != nil {
 			return mapContentMutationError(err)
 		}
 		return commandexec.Success(restoreResultData(result, true), nil)
 	}
 
-	result, err := objectsvc.RestoreByReference(restoreReq)
+	result, err := objectsvc.RestoreByReference(rt, restoreReq)
 	if err != nil {
 		return mapContentMutationError(err)
 	}
@@ -78,19 +73,17 @@ func HandleTrashEmpty(_ context.Context, req commandexec.Request) commandexec.Re
 	defer rt.Close()
 
 	emptyReq := objectsvc.EmptyTrashRequest{
-		VaultPath:   rt.VaultPath,
-		VaultConfig: rt.VaultCfg,
-		OlderThan:   strings.TrimSpace(stringArg(req.Args, "older-than")),
+		OlderThan: strings.TrimSpace(stringArg(req.Args, "older-than")),
 	}
 	if req.Preview {
-		result, err := objectsvc.PreviewEmptyTrash(emptyReq)
+		result, err := objectsvc.PreviewEmptyTrash(rt, emptyReq)
 		if err != nil {
 			return mapContentMutationError(err)
 		}
 		return commandexec.Success(emptyTrashResultData(result, true), &commandexec.Meta{Count: len(result.Entries)})
 	}
 
-	result, err := objectsvc.EmptyTrash(emptyReq)
+	result, err := objectsvc.EmptyTrash(rt, emptyReq)
 	if err != nil {
 		return mapContentMutationError(err)
 	}

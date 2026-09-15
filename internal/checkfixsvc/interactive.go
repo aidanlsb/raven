@@ -124,7 +124,6 @@ func AddTrait(vaultPath string, s *schema.Schema, traitName, traitType string, e
 
 	rt := &vaultruntime.Runtime{VaultPath: vaultPath, Schema: s}
 	_, err := schemasvc.AddTrait(rt, schemasvc.AddTraitRequest{
-		VaultPath: vaultPath,
 		TraitName: traitName,
 		TraitType: traitType,
 		Values:    strings.Join(trimmedValues, ","),
@@ -154,7 +153,6 @@ func AddTrait(vaultPath string, s *schema.Schema, traitName, traitType string, e
 func AddType(vaultPath string, s *schema.Schema, typeName, defaultPath string) error {
 	rt := &vaultruntime.Runtime{VaultPath: vaultPath, Schema: s}
 	_, err := schemasvc.AddType(rt, schemasvc.AddTypeRequest{
-		VaultPath:   vaultPath,
 		TypeName:    typeName,
 		DefaultPath: strings.TrimSpace(defaultPath),
 	})
