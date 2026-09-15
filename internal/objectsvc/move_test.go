@@ -649,6 +649,7 @@ func TestMoveFileGuardsProtectedAndExcludedPaths(t *testing.T) {
 				WithFile(tt.sourceRel, "---\ntype: person\nname: Freya\n---\n").
 				Build()
 			rt := testRuntime(t, v.Path)
+			rt.VaultCfg = tt.vaultCfg
 
 			_, err := MoveFile(rt, MoveFileRequest{
 				SourceFile:        filepath.Join(v.Path, tt.sourceRel),

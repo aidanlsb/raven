@@ -182,6 +182,7 @@ types:
 traits: {}
 `, tt.defaultPath))
 			rt := testRuntime(t, vaultPath)
+			rt.VaultCfg = tt.vaultCfg
 			sourcePath := filepath.Join(vaultPath, "notes/my-note.md")
 			if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 				t.Fatalf("mkdir: %v", err)
