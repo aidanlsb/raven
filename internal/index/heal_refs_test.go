@@ -57,10 +57,10 @@ func TestIndexDocumentHealsPendingInboundRefs(t *testing.T) {
 
 	var status string
 	err = db.db.QueryRow(`
-		SELECT resolution_status FROM field_refs WHERE source_id = ? AND field_name = ?
+		SELECT resolution_status FROM refs WHERE source_id = ? AND field_name = ?
 	`, "people/ada", "company").Scan(&status)
 	if err != nil {
-		t.Fatalf("failed to query field_refs before heal: %v", err)
+		t.Fatalf("failed to query field ref before heal: %v", err)
 	}
 	if status != "missing" {
 		t.Fatalf("expected pre-heal status 'missing', got %q", status)
@@ -85,10 +85,10 @@ func TestIndexDocumentHealsPendingInboundRefs(t *testing.T) {
 
 	var targetID string
 	err = db.db.QueryRow(`
-		SELECT target_id, resolution_status FROM field_refs WHERE source_id = ? AND field_name = ?
+		SELECT target_id, resolution_status FROM refs WHERE source_id = ? AND field_name = ?
 	`, "people/ada", "company").Scan(&targetID, &status)
 	if err != nil {
-		t.Fatalf("failed to query field_refs after heal: %v", err)
+		t.Fatalf("failed to query field ref after heal: %v", err)
 	}
 	if targetID != "companies/cursor" {
 		t.Errorf("field ref target_id = %q, want %q", targetID, "companies/cursor")
@@ -99,7 +99,7 @@ func TestIndexDocumentHealsPendingInboundRefs(t *testing.T) {
 
 	var bodyTargetID string
 	err = db.db.QueryRow(`
-		SELECT target_id FROM refs WHERE file_path = ? AND target_raw = ?
+		SELECT target_id FROM refs WHERE file_path = ? AND target_raw = ? AND field_name IS NULL
 	`, "people/ada.md", "cursor").Scan(&bodyTargetID)
 	if err != nil {
 		t.Fatalf("failed to query refs after heal: %v", err)

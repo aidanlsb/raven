@@ -481,7 +481,7 @@ func (e *Executor) loadFieldRefAmbiguityResults(keys []fieldRefAmbiguityKey) err
 
 	query := fmt.Sprintf(`
 		SELECT o.type, fr.field_name, fr.target_raw
-		FROM field_refs fr
+		FROM refs fr
 		JOIN objects o ON fr.source_id = o.id
 		WHERE fr.resolution_status = 'ambiguous'
 		  AND (%s)
@@ -569,10 +569,10 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 	matchCond := fieldRefMatchCond("fr")
 	if p.CompareOp == CompareNeq {
 		cond := fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM field_refs fr
+			SELECT 1 FROM refs fr
 			WHERE fr.source_id = %s.id AND fr.field_name = ?
 		) AND NOT EXISTS (
-			SELECT 1 FROM field_refs fr
+			SELECT 1 FROM refs fr
 			WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 		)`, alias, alias, matchCond)
 		args := []interface{}{p.Field, p.Field, resolved, p.Value}
@@ -583,7 +583,7 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 	}
 
 	cond := fmt.Sprintf(`EXISTS (
-		SELECT 1 FROM field_refs fr
+		SELECT 1 FROM refs fr
 		WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 	)`, alias, matchCond)
 	args := []interface{}{p.Field, resolved, p.Value}
@@ -617,13 +617,13 @@ func (e *Executor) buildRefArrayQuantifierPredicateSQL(p *ArrayQuantifierPredica
 	case ArrayQuantifierAny:
 		if elem.CompareOp == CompareEq {
 			cond = fmt.Sprintf(`EXISTS (
-				SELECT 1 FROM field_refs fr
+				SELECT 1 FROM refs fr
 				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 			)`, alias, matchCond)
 			args = []interface{}{p.Field, resolved, elem.Value}
 		} else {
 			cond = fmt.Sprintf(`EXISTS (
-				SELECT 1 FROM field_refs fr
+				SELECT 1 FROM refs fr
 				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 			)`, alias, notMatchCond)
 			args = []interface{}{p.Field, resolved, elem.Value}
@@ -631,13 +631,13 @@ func (e *Executor) buildRefArrayQuantifierPredicateSQL(p *ArrayQuantifierPredica
 	case ArrayQuantifierNone:
 		if elem.CompareOp == CompareEq {
 			cond = fmt.Sprintf(`NOT EXISTS (
-				SELECT 1 FROM field_refs fr
+				SELECT 1 FROM refs fr
 				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 			)`, alias, matchCond)
 			args = []interface{}{p.Field, resolved, elem.Value}
 		} else {
 			cond = fmt.Sprintf(`NOT EXISTS (
-				SELECT 1 FROM field_refs fr
+				SELECT 1 FROM refs fr
 				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 			)`, alias, notMatchCond)
 			args = []interface{}{p.Field, resolved, elem.Value}
@@ -645,13 +645,13 @@ func (e *Executor) buildRefArrayQuantifierPredicateSQL(p *ArrayQuantifierPredica
 	case ArrayQuantifierAll:
 		if elem.CompareOp == CompareEq {
 			cond = fmt.Sprintf(`NOT EXISTS (
-				SELECT 1 FROM field_refs fr
+				SELECT 1 FROM refs fr
 				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 			)`, alias, notMatchCond)
 			args = []interface{}{p.Field, resolved, elem.Value}
 		} else {
 			cond = fmt.Sprintf(`NOT EXISTS (
-				SELECT 1 FROM field_refs fr
+				SELECT 1 FROM refs fr
 				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 			)`, alias, matchCond)
 			args = []interface{}{p.Field, resolved, elem.Value}

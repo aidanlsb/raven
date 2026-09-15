@@ -95,9 +95,6 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	if err := indexLinks(tx, doc); err != nil {
 		return err
 	}
-	if err := indexFieldRefs(tx, doc, sch); err != nil {
-		return err
-	}
 	if err := indexDates(tx, doc, sch); err != nil {
 		return err
 	}
@@ -332,34 +329,26 @@ func indexedTraits(doc *parser.ParsedDocument, sch *schema.Schema) []indexedTrai
 
 func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
 	refStmt, err := tx.Prepare(`
-		INSERT INTO refs (source_id, target_id, target_raw, display_text, file_path, line_number, position_start, position_end)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO refs (source_id, target_id, target_raw, display_text, field_name, resolution_status, file_path, line_number, position_start, position_end)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return err
 	}
 	defer refStmt.Close()
 
-	// Collect all refs: parsed refs + refs from schema-typed ref fields
-	allRefs := doc.Refs
-
-	// Extract additional refs from ref-typed fields in frontmatter.
-	// This allows `company: cursor` to work when the schema declares `company: ref`.
-	if sch != nil {
-		schemaRefs := parser.SchemaFieldRefsAsReferences(parser.ExtractSchemaFieldRefs(doc.Objects, sch))
-		allRefs = mergeRefs(allRefs, schemaRefs)
-	}
-
-	for _, ref := range allRefs {
+	for _, ref := range collectIndexedRefs(doc, sch) {
 		_, err = refStmt.Exec(
-			ref.SourceID,
+			ref.sourceID,
 			nil, // target_id resolved later
-			ref.TargetRaw,
-			ref.DisplayText,
+			ref.targetRaw,
+			ref.displayText,
+			ref.fieldName,
+			resolutionStatusMissing,
 			doc.FilePath,
-			ref.LineOrZero(),
-			ref.PositionStartOrZero(),
-			ref.PositionEndOrZero(),
+			ref.line,
+			ref.positionStart,
+			ref.positionEnd,
 		)
 		if err != nil {
 			return err
@@ -367,6 +356,91 @@ func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error
 	}
 
 	return nil
+}
+
+type indexedRef struct {
+	sourceID      string
+	targetRaw     string
+	displayText   *string
+	fieldName     *string
+	line          int
+	positionStart int
+	positionEnd   int
+}
+
+func collectIndexedRefs(doc *parser.ParsedDocument, sch *schema.Schema) []indexedRef {
+	schemaRefs := parser.ExtractSchemaFieldRefs(doc.Objects, sch)
+	remainingByKey := make(map[string][]int, len(schemaRefs))
+	used := make([]bool, len(schemaRefs))
+	for i, sr := range schemaRefs {
+		if sr.TargetRaw == "" {
+			used[i] = true
+			continue
+		}
+		key := sr.SourceID + "\x00" + sr.TargetRaw
+		remainingByKey[key] = append(remainingByKey[key], i)
+	}
+
+	fmStart, fmEnd, hasFrontmatter := frontmatterContentLineRange(doc.RawContent)
+	out := make([]indexedRef, 0, len(doc.Refs)+len(schemaRefs))
+
+	for _, ref := range doc.Refs {
+		if ref == nil {
+			continue
+		}
+		var fieldName *string
+		key := ref.SourceID + "\x00" + ref.TargetRaw
+		line := ref.LineOrZero()
+		if hasFrontmatter && line >= fmStart && line <= fmEnd {
+			if idxs := remainingByKey[key]; len(idxs) > 0 {
+				i := idxs[0]
+				remainingByKey[key] = idxs[1:]
+				used[i] = true
+				name := schemaRefs[i].FieldName
+				fieldName = &name
+			}
+		}
+		out = append(out, indexedRef{
+			sourceID:      ref.SourceID,
+			targetRaw:     ref.TargetRaw,
+			displayText:   ref.DisplayText,
+			fieldName:     fieldName,
+			line:          line,
+			positionStart: ref.PositionStartOrZero(),
+			positionEnd:   ref.PositionEndOrZero(),
+		})
+	}
+
+	for i, sr := range schemaRefs {
+		if used[i] {
+			continue
+		}
+		name := sr.FieldName
+		out = append(out, indexedRef{
+			sourceID:  sr.SourceID,
+			targetRaw: sr.TargetRaw,
+			fieldName: &name,
+			line:      sr.Line,
+		})
+	}
+
+	return out
+}
+
+func frontmatterContentLineRange(raw string) (start, end int, ok bool) {
+	if raw == "" {
+		return 0, 0, false
+	}
+	fm, err := parser.ParseFrontmatter(raw)
+	if err != nil || fm == nil || fm.Raw == "" {
+		return 0, 0, false
+	}
+	start = 2
+	end = fm.EndLine - 1
+	if end < start {
+		return 0, 0, false
+	}
+	return start, end, true
 }
 
 func indexLinks(tx *sql.Tx, doc *parser.ParsedDocument) error {
@@ -399,46 +473,6 @@ func indexLinks(tx *sql.Tx, doc *parser.ParsedDocument) error {
 			link.Scheme,
 			link.Ext,
 			link.NormalizedKey,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func indexFieldRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
-	if sch == nil {
-		return nil
-	}
-
-	fieldRefs := parser.ExtractSchemaFieldRefs(doc.Objects, sch)
-	if len(fieldRefs) == 0 {
-		return nil
-	}
-
-	stmt, err := tx.Prepare(`
-		INSERT INTO field_refs (source_id, field_name, target_raw, target_id, resolution_status, file_path, line_number)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	for _, ref := range fieldRefs {
-		if ref.TargetRaw == "" {
-			continue
-		}
-		_, err = stmt.Exec(
-			ref.SourceID,
-			ref.FieldName,
-			ref.TargetRaw,
-			nil,
-			"missing",
-			doc.FilePath,
-			ref.Line,
 		)
 		if err != nil {
 			return err
@@ -720,29 +754,4 @@ func getTraitDefault(sch *schema.Schema, traitType string) interface{} {
 		return s
 	}
 	return fmt.Sprintf("%v", traitDef.Default)
-}
-
-// mergeRefs merges two ref slices, deduplicating by (sourceID, targetRaw) pairs.
-// This prevents double-indexing when a ref is both:
-// 1. Found by raw YAML scanning (as [[target]])
-// 2. Extracted from a ref-typed field
-func mergeRefs(existing, additional []*model.Reference) []*model.Reference {
-	// Build a set of existing (sourceID, targetRaw) pairs
-	seen := make(map[string]bool)
-	for _, ref := range existing {
-		key := ref.SourceID + "\x00" + ref.TargetRaw
-		seen[key] = true
-	}
-
-	// Add new refs that aren't duplicates
-	result := existing
-	for _, ref := range additional {
-		key := ref.SourceID + "\x00" + ref.TargetRaw
-		if !seen[key] {
-			result = append(result, ref)
-			seen[key] = true
-		}
-	}
-
-	return result
 }

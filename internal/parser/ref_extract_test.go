@@ -62,23 +62,6 @@ func TestExtractSchemaFieldRefs(t *testing.T) {
 	}
 }
 
-func TestSchemaFieldRefsAsReferences(t *testing.T) {
-	t.Parallel()
-
-	refs := SchemaFieldRefsAsReferences([]SchemaFieldRef{{
-		SourceID:  "person/ada",
-		FieldName: "company",
-		TargetRaw: "cursor",
-		Line:      4,
-	}})
-	if len(refs) != 1 {
-		t.Fatalf("len = %d, want 1", len(refs))
-	}
-	if refs[0].SourceID != "person/ada" || refs[0].TargetRaw != "cursor" || refs[0].LineOrZero() != 4 {
-		t.Fatalf("ref = %#v", refs[0])
-	}
-}
-
 func TestSchemaFieldRefAtPosition(t *testing.T) {
 	t.Parallel()
 
