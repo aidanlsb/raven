@@ -127,22 +127,3 @@ func ExtractSchemaFieldRefs(objects []*model.Object, sch *schema.Schema) []Schem
 
 	return refs
 }
-
-// SchemaFieldRefsAsReferences converts schema field refs into model.Reference values.
-func SchemaFieldRefsAsReferences(schemaRefs []SchemaFieldRef) []*model.Reference {
-	if len(schemaRefs) == 0 {
-		return nil
-	}
-	refs := make([]*model.Reference, 0, len(schemaRefs))
-	for _, schemaRef := range schemaRefs {
-		refs = append(refs, model.NewInlineReference(
-			schemaRef.SourceID,
-			schemaRef.TargetRaw,
-			nil,
-			schemaRef.Line,
-			0,
-			0,
-		))
-	}
-	return refs
-}

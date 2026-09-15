@@ -15,10 +15,11 @@ type ReferenceResolutionResult struct {
 	Ambiguous  int // Number of ambiguous references (multiple matches)
 	Total      int // Total number of references processed
 
-	FieldResolved   int // Number of field refs successfully resolved
-	FieldUnresolved int // Number of field refs that couldn't be resolved
-	FieldAmbiguous  int // Number of ambiguous field refs (multiple matches)
-	FieldTotal      int // Total number of field refs processed
+	// Field* counts are derived from rows with field_name set.
+	FieldResolved   int
+	FieldUnresolved int
+	FieldAmbiguous  int
+	FieldTotal      int
 }
 
 // ResolveReferences resolves all unresolved references in the refs table.
@@ -65,9 +66,6 @@ func (d *Database) resolveReferencesWithSchemaLocked(filePath *string, dailyDire
 	if err := d.resolveRefs(res, filePath, result); err != nil {
 		return nil, err
 	}
-	if err := d.resolveFieldRefs(res, filePath, result); err != nil {
-		return nil, err
-	}
 
 	return result, nil
 }
@@ -83,6 +81,7 @@ const (
 type unresolvedReference struct {
 	id        int64
 	targetRaw string
+	fieldName sql.NullString
 }
 
 type referenceResolution struct {
@@ -90,83 +89,32 @@ type referenceResolution struct {
 	status   string
 }
 
-type referenceResolutionCounters struct {
-	total      *int
-	resolved   *int
-	unresolved *int
-	ambiguous  *int
+func (r *ReferenceResolutionResult) record(resolution referenceResolution, fieldRef bool) {
+	r.Total++
+	recordResolutionCounters(&r.Resolved, &r.Unresolved, &r.Ambiguous, resolution)
+	if !fieldRef {
+		return
+	}
+	r.FieldTotal++
+	recordResolutionCounters(&r.FieldResolved, &r.FieldUnresolved, &r.FieldAmbiguous, resolution)
 }
 
-func (c referenceResolutionCounters) record(resolution referenceResolution) {
+func recordResolutionCounters(resolved, unresolved, ambiguous *int, resolution referenceResolution) {
 	switch resolution.status {
 	case resolutionStatusResolved:
-		(*c.resolved)++
+		(*resolved)++
 	case resolutionStatusAmbiguous:
-		(*c.ambiguous)++
-		(*c.unresolved)++
+		(*ambiguous)++
+		(*unresolved)++
 	case resolutionStatusMissing:
-		(*c.unresolved)++
+		(*unresolved)++
 	}
 }
 
-type referenceBatchPlan struct {
-	name              string
-	fetchAllSQL       string
-	fetchForFileSQL   string
-	updateSQL         string
-	counters          referenceResolutionCounters
-	persistResolution func(*sql.Stmt, unresolvedReference, referenceResolution) error
-}
-
 func (d *Database) resolveRefs(res *resolver.Resolver, filePath *string, result *ReferenceResolutionResult) error {
-	return d.resolveReferenceBatches(res, filePath, referenceBatchPlan{
-		name:            "refs",
-		fetchAllSQL:     `SELECT id, target_raw FROM refs WHERE target_id IS NULL AND id > ? ORDER BY id LIMIT ?`,
-		fetchForFileSQL: `SELECT id, target_raw FROM refs WHERE target_id IS NULL AND file_path = ? AND id > ? ORDER BY id LIMIT ?`,
-		updateSQL:       `UPDATE refs SET target_id = ? WHERE id = ?`,
-		counters: referenceResolutionCounters{
-			total:      &result.Total,
-			resolved:   &result.Resolved,
-			unresolved: &result.Unresolved,
-			ambiguous:  &result.Ambiguous,
-		},
-		persistResolution: func(stmt *sql.Stmt, ref unresolvedReference, resolution referenceResolution) error {
-			if resolution.status != resolutionStatusResolved {
-				return nil
-			}
-			_, err := stmt.Exec(resolution.targetID, ref.id)
-			return err
-		},
-	})
-}
-
-func (d *Database) resolveFieldRefs(res *resolver.Resolver, filePath *string, result *ReferenceResolutionResult) error {
-	return d.resolveReferenceBatches(res, filePath, referenceBatchPlan{
-		name:            "field refs",
-		fetchAllSQL:     `SELECT id, target_raw FROM field_refs WHERE target_id IS NULL AND id > ? ORDER BY id LIMIT ?`,
-		fetchForFileSQL: `SELECT id, target_raw FROM field_refs WHERE target_id IS NULL AND file_path = ? AND id > ? ORDER BY id LIMIT ?`,
-		updateSQL:       `UPDATE field_refs SET target_id = ?, resolution_status = ? WHERE id = ?`,
-		counters: referenceResolutionCounters{
-			total:      &result.FieldTotal,
-			resolved:   &result.FieldResolved,
-			unresolved: &result.FieldUnresolved,
-			ambiguous:  &result.FieldAmbiguous,
-		},
-		persistResolution: func(stmt *sql.Stmt, ref unresolvedReference, resolution referenceResolution) error {
-			var targetID any
-			if resolution.status == resolutionStatusResolved {
-				targetID = resolution.targetID
-			}
-			_, err := stmt.Exec(targetID, resolution.status, ref.id)
-			return err
-		},
-	})
-}
-
-func (d *Database) resolveReferenceBatches(res *resolver.Resolver, filePath *string, plan referenceBatchPlan) error {
 	var lastID int64
 	for {
-		refs, err := d.fetchUnresolvedReferenceBatch(filePath, lastID, resolveRefsBatchSize, plan)
+		refs, err := d.fetchUnresolvedReferenceBatch(filePath, lastID, resolveRefsBatchSize)
 		if err != nil {
 			return err
 		}
@@ -174,7 +122,7 @@ func (d *Database) resolveReferenceBatches(res *resolver.Resolver, filePath *str
 			return nil
 		}
 
-		if err := d.resolveReferenceBatch(res, refs, plan); err != nil {
+		if err := d.resolveReferenceBatch(res, refs, result); err != nil {
 			return err
 		}
 
@@ -186,25 +134,24 @@ func (d *Database) fetchUnresolvedReferenceBatch(
 	filePath *string,
 	afterID int64,
 	limit int,
-	plan referenceBatchPlan,
 ) ([]unresolvedReference, error) {
-	query := plan.fetchAllSQL
+	query := `SELECT id, target_raw, field_name FROM refs WHERE target_id IS NULL AND id > ? ORDER BY id LIMIT ?`
 	args := []any{afterID, limit}
 	if filePath != nil {
-		query = plan.fetchForFileSQL
+		query = `SELECT id, target_raw, field_name FROM refs WHERE target_id IS NULL AND file_path = ? AND id > ? ORDER BY id LIMIT ?`
 		args = []any{*filePath, afterID, limit}
 	}
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query %s: %w", plan.name, err)
+		return nil, fmt.Errorf("failed to query refs: %w", err)
 	}
 	defer rows.Close()
 
 	refs := make([]unresolvedReference, 0, limit)
 	for rows.Next() {
 		var r unresolvedReference
-		if err := rows.Scan(&r.id, &r.targetRaw); err != nil {
+		if err := rows.Scan(&r.id, &r.targetRaw, &r.fieldName); err != nil {
 			return nil, err
 		}
 		refs = append(refs, r)
@@ -219,17 +166,15 @@ func (d *Database) fetchUnresolvedReferenceBatch(
 func (d *Database) resolveReferenceBatch(
 	res *resolver.Resolver,
 	refs []unresolvedReference,
-	plan referenceBatchPlan,
+	result *ReferenceResolutionResult,
 ) error {
-	*plan.counters.total += len(refs)
-
 	tx, err := d.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(plan.updateSQL)
+	stmt, err := tx.Prepare(`UPDATE refs SET target_id = ?, resolution_status = ? WHERE id = ?`)
 	if err != nil {
 		return err
 	}
@@ -249,8 +194,13 @@ func (d *Database) resolveReferenceBatch(
 			resolution.status = resolutionStatusAmbiguous
 		}
 
-		plan.counters.record(resolution)
-		if err := plan.persistResolution(stmt, ref, resolution); err != nil {
+		result.record(resolution, ref.fieldName.Valid && ref.fieldName.String != "")
+
+		var targetID any
+		if resolution.status == resolutionStatusResolved {
+			targetID = resolution.targetID
+		}
+		if _, err := stmt.Exec(targetID, resolution.status, ref.id); err != nil {
 			return err
 		}
 	}

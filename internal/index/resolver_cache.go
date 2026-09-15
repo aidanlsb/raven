@@ -311,22 +311,10 @@ func (d *Database) hasUnresolvedReferencesLocked(filePath *string) (bool, error)
 	var query string
 	var args []any
 	if filePath == nil {
-		query = `
-			SELECT EXISTS(
-				SELECT 1 FROM refs WHERE target_id IS NULL
-				UNION ALL
-				SELECT 1 FROM field_refs WHERE target_id IS NULL
-			)
-		`
+		query = `SELECT EXISTS(SELECT 1 FROM refs WHERE target_id IS NULL)`
 	} else {
-		query = `
-			SELECT EXISTS(
-				SELECT 1 FROM refs WHERE target_id IS NULL AND file_path = ?
-				UNION ALL
-				SELECT 1 FROM field_refs WHERE target_id IS NULL AND file_path = ?
-			)
-		`
-		args = []any{*filePath, *filePath}
+		query = `SELECT EXISTS(SELECT 1 FROM refs WHERE target_id IS NULL AND file_path = ?)`
+		args = []any{*filePath}
 	}
 	var exists bool
 	if err := d.db.QueryRow(query, args...).Scan(&exists); err != nil {

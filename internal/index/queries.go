@@ -239,8 +239,8 @@ func (d *Database) FieldBacklinksWithRoots(targetID, objectRoot, pageRoot string
 	conditions, args := refTargetConditions("fr", targetID, objectRoot, pageRoot)
 	query := `
 		SELECT fr.source_id, fr.field_name, fr.target_raw, fr.file_path, fr.line_number
-		FROM field_refs fr
-		WHERE ` + conditions + `
+		FROM refs fr
+		WHERE fr.field_name IS NOT NULL AND (` + conditions + `)
 		ORDER BY fr.file_path, fr.source_id, fr.field_name, fr.id
 	`
 

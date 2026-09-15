@@ -28,11 +28,11 @@ func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		INSERT INTO refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
 		VALUES ('people/ada', 'company', 'companies/cursor', 'cursor', 'resolved', 'people/ada.md', 1)
 	`)
 	if err != nil {
-		t.Fatalf("failed to insert field_refs: %v", err)
+		t.Fatalf("failed to insert field ref: %v", err)
 	}
 
 	sch := schema.New()
@@ -92,14 +92,14 @@ func TestRefFieldQueryRelativeDateKeywordsResolveToDailyRefs(t *testing.T) {
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		INSERT INTO refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
 		VALUES
 			('brief/yesterday', 'date', '2026-04-04', '2026-04-04', 'resolved', 'brief/yesterday.md', 1),
 			('brief/today', 'date', '2026-04-05', '2026-04-05', 'resolved', 'brief/today.md', 1),
 			('brief/tomorrow', 'date', '2026-04-06', '2026-04-06', 'resolved', 'brief/tomorrow.md', 1)
 	`)
 	if err != nil {
-		t.Fatalf("failed to insert field_refs: %v", err)
+		t.Fatalf("failed to insert field ref: %v", err)
 	}
 
 	executor := NewExecutor(db)
@@ -155,11 +155,11 @@ func TestRefFieldQueryRelativeDateKeywordUsesSingleExecutionTimestamp(t *testing
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		INSERT INTO refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
 		VALUES ('brief/today', 'date', '2026-04-05', '2026-04-05', 'resolved', 'brief/today.md', 1)
 	`)
 	if err != nil {
-		t.Fatalf("failed to insert field_refs: %v", err)
+		t.Fatalf("failed to insert field ref: %v", err)
 	}
 
 	callCount := 0
@@ -210,11 +210,11 @@ func TestRefFieldQueryErrorsOnAmbiguousStoredValue(t *testing.T) {
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		INSERT INTO refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
 		VALUES ('people/ada', 'company', NULL, 'cursor', 'ambiguous', 'people/ada.md', 1)
 	`)
 	if err != nil {
-		t.Fatalf("failed to insert field_refs: %v", err)
+		t.Fatalf("failed to insert field ref: %v", err)
 	}
 
 	sch := schema.New()
@@ -257,11 +257,11 @@ func TestRefFieldQueryMemoizesAmbiguityChecksWithinExecution(t *testing.T) {
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		INSERT INTO refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
 		VALUES ('people/ada', 'company', 'companies/cursor', 'cursor', 'resolved', 'people/ada.md', 1)
 	`)
 	if err != nil {
-		t.Fatalf("failed to insert field_refs: %v", err)
+		t.Fatalf("failed to insert field ref: %v", err)
 	}
 
 	sch := schema.New()
@@ -327,13 +327,13 @@ func TestRefFieldQueryBatchesDistinctAmbiguityChecksWithinExecution(t *testing.T
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		INSERT INTO refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
 		VALUES
 			('people/ada', 'company', 'companies/cursor', 'cursor', 'resolved', 'people/ada.md', 1),
 			('people/ada', 'manager', 'people/freya', 'freya', 'resolved', 'people/ada.md', 1)
 	`)
 	if err != nil {
-		t.Fatalf("failed to insert field_refs: %v", err)
+		t.Fatalf("failed to insert field ref: %v", err)
 	}
 
 	sch := schema.New()

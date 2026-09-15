@@ -24,7 +24,7 @@ func TestSchemaSQL(t *testing.T) {
 
 	tables := []string{
 		"meta", "objects", "sections", "traits", "refs", "links",
-		"field_refs", "date_index", "fts_content",
+		"date_index", "fts_content",
 	}
 	for _, table := range tables {
 		var name string
@@ -53,9 +53,9 @@ func TestSchemaSQL_Indexes(t *testing.T) {
 		"idx_sections_file", "idx_sections_file_object", "idx_sections_parent",
 		"idx_traits_file", "idx_traits_type", "idx_traits_parent",
 		"idx_refs_source", "idx_refs_target", "idx_refs_file",
+		"idx_refs_source_field", "idx_refs_field_target", "idx_refs_field_raw",
+		"idx_refs_status",
 		"idx_links_source", "idx_links_file", "idx_links_normalized_key",
-		"idx_field_refs_source_field", "idx_field_refs_field_target",
-		"idx_field_refs_field_raw", "idx_field_refs_status", "idx_field_refs_file",
 		"idx_traits_file_line", "idx_refs_file_line", "idx_traits_type_value",
 		"idx_date_index_date", "idx_date_index_file",
 	}
@@ -195,7 +195,7 @@ func TestCurrentDBVersion(t *testing.T) {
 	if CurrentDBVersion <= 0 {
 		t.Errorf("CurrentDBVersion = %d, want > 0", CurrentDBVersion)
 	}
-	if CurrentDBVersion != 16 {
-		t.Errorf("CurrentDBVersion = %d, want 16 (update this test if intentionally changed)", CurrentDBVersion)
+	if CurrentDBVersion != 17 {
+		t.Errorf("CurrentDBVersion = %d, want 17 (update this test if intentionally changed)", CurrentDBVersion)
 	}
 }

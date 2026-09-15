@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added preview-first `rvn trash empty` / `trash_empty` to permanently remove matching trash entries. `--confirm` applies; `--older-than` limits the wipe to files whose modification time is at least the given duration in the past (`24h`, `7d`, `30d`). Live vault objects are never touched.
 
 ### Changed
+- **Breaking (index):** Markdown wikilinks and schema-backed frontmatter references now share one `refs` table, with nullable `field_name` and a common `resolution_status`. The separate `field_refs` table is gone. Index schema version is 17; Raven rebuilds the derived database on the next open or `rvn reindex`.
 - **Breaking:** renamed `rvn upsert` and the MCP command `upsert` to `rvn write` / `write`. There is no alias. `write` is create-or-replace: the canonical idempotent write. `new` is the interactive create-only path on the same create mutation; it still fails with `FILE_EXISTS` rather than replacing an existing object. Agents should call `write` for reruns. Humans creating one-offs should call `new`.
 - MCP `rvn serve` now constructs the server from typed options (config path, vault pin, executable) instead of round-tripping Cobra flags through CLI argument strings. Launch pins from `--vault-path` and `--vault` report `vault_context.source` as `pinned`. The previous `base_args` source is gone.
 

@@ -14,7 +14,8 @@ package indexschema
 // v14: Added subtree line ranges for heading-derived sections
 // v15: Added lightweight outgoing link edges for non-Raven targets
 // v16: Removed the obsolete non-Markdown resource table
-const CurrentDBVersion = 16
+// v17: Folded field_refs into refs with nullable field_name and shared resolution_status
+const CurrentDBVersion = 17
 
 // SchemaSQL is the authoritative SQLite schema shared by the index writer and
 // SQL-generating consumers.
@@ -73,13 +74,17 @@ const SchemaSQL = `
 		indexed_at INTEGER          -- When this row was written to the index
 	);
 
-	-- References between objects
+	-- References between objects.
+	-- Markdown wikilinks leave field_name NULL. Schema-backed frontmatter
+	-- ref/ref[] fields set field_name. resolution_status is shared.
 	CREATE TABLE IF NOT EXISTS refs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		source_id TEXT NOT NULL,
 		target_id TEXT,
 		target_raw TEXT NOT NULL,
 		display_text TEXT,
+		field_name TEXT,
+		resolution_status TEXT NOT NULL DEFAULT 'missing', -- resolved | ambiguous | missing
 		file_path TEXT NOT NULL,
 		line_number INTEGER,
 		position_start INTEGER,
@@ -101,18 +106,6 @@ const SchemaSQL = `
 		scheme TEXT NOT NULL,
 		ext TEXT NOT NULL,
 		normalized_key TEXT NOT NULL
-	);
-
-	-- References from ref-typed fields (schema-aware)
-	CREATE TABLE IF NOT EXISTS field_refs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		source_id TEXT NOT NULL,
-		field_name TEXT NOT NULL,
-		target_id TEXT,
-		target_raw TEXT NOT NULL,
-		resolution_status TEXT NOT NULL, -- resolved | ambiguous | missing
-		file_path TEXT NOT NULL,
-		line_number INTEGER
 	);
 
 	-- Keep resolver caches on other database handles/processes coherent,
@@ -165,16 +158,14 @@ const SchemaSQL = `
 	CREATE INDEX IF NOT EXISTS idx_refs_source ON refs(source_id);
 	CREATE INDEX IF NOT EXISTS idx_refs_target ON refs(target_id);
 	CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file_path);
+	CREATE INDEX IF NOT EXISTS idx_refs_source_field ON refs(source_id, field_name) WHERE field_name IS NOT NULL;
+	CREATE INDEX IF NOT EXISTS idx_refs_field_target ON refs(field_name, target_id) WHERE field_name IS NOT NULL;
+	CREATE INDEX IF NOT EXISTS idx_refs_field_raw ON refs(field_name, target_raw) WHERE field_name IS NOT NULL;
+	CREATE INDEX IF NOT EXISTS idx_refs_status ON refs(resolution_status);
 
 	CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id);
 	CREATE INDEX IF NOT EXISTS idx_links_file ON links(file_path);
 	CREATE INDEX IF NOT EXISTS idx_links_normalized_key ON links(normalized_key);
-
-	CREATE INDEX IF NOT EXISTS idx_field_refs_source_field ON field_refs(source_id, field_name);
-	CREATE INDEX IF NOT EXISTS idx_field_refs_field_target ON field_refs(field_name, target_id);
-	CREATE INDEX IF NOT EXISTS idx_field_refs_field_raw ON field_refs(field_name, target_raw);
-	CREATE INDEX IF NOT EXISTS idx_field_refs_status ON field_refs(resolution_status);
-	CREATE INDEX IF NOT EXISTS idx_field_refs_file ON field_refs(file_path);
 
 	-- Composite indexes for trait refs matching (content scope rule)
 	CREATE INDEX IF NOT EXISTS idx_traits_file_line ON traits(file_path, line_number);

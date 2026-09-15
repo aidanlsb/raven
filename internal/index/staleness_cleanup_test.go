@@ -225,14 +225,6 @@ func TestRemoveDeletedFiles(t *testing.T) {
 	if err := db.IndexDocument(alsoMissingDoc, sch); err != nil {
 		t.Fatalf("failed to index also-missing doc: %v", err)
 	}
-	if _, err := db.db.Exec(`
-		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
-		VALUES
-			('notes/missing', 'owner', NULL, 'people/freya', 'unresolved', 'notes/missing.md', 1),
-			('notes/also-missing', 'owner', NULL, 'people/thor', 'unresolved', 'notes/also-missing.md', 1)
-	`); err != nil {
-		t.Fatalf("failed to insert field_refs: %v", err)
-	}
 
 	removed, err := db.RemoveDeletedFiles(vaultDir)
 	if err != nil {
