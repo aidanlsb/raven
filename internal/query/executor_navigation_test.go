@@ -64,7 +64,7 @@ func TestTraitWithinIncludesAttachmentScope(t *testing.T) {
 		if parseErr != nil {
 			t.Fatalf("parse error: %v", parseErr)
 		}
-		results, queryErr := executor.executeTraitQuery(q)
+		results, queryErr := traitsFrom(executor.Run(q, RunRequest{}))
 		if queryErr != nil {
 			t.Fatalf("execute error: %v", queryErr)
 		}
@@ -153,7 +153,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			results, err := objectsFrom(executor.Run(q, RunRequest{}))
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -213,7 +213,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			results, err := traitsFrom(executor.Run(q, RunRequest{}))
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -243,7 +243,7 @@ func TestSectionContainsNestedSection(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	results, err := NewExecutor(db).executeSectionQuery(q)
+	results, err := sectionsFrom(NewExecutor(db).Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -289,9 +289,9 @@ func TestSectionRefsPredicateUsesCompleteSubtree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse(): %v", err)
 	}
-	results, err := NewExecutor(db).executeSectionQuery(q)
+	results, err := sectionsFrom(NewExecutor(db).Run(q, RunRequest{}))
 	if err != nil {
-		t.Fatalf("executeSectionQuery(): %v", err)
+		t.Fatalf("Run(): %v", err)
 	}
 	if len(results) != 1 || results[0].ID != "projects/website#tasks" {
 		t.Fatalf("results = %#v, want parent Tasks section", results)
@@ -349,7 +349,7 @@ func TestAtPredicate(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			results, err := traitsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -423,7 +423,7 @@ func TestRefdPredicate(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			results, err := objectsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -463,7 +463,7 @@ func TestRefdShorthand(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			results, err := objectsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -543,7 +543,7 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			results, err := objectsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -597,7 +597,7 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			results, err := traitsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

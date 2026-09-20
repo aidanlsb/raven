@@ -7,7 +7,38 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/aidanlsb/raven/internal/indexschema"
+	"github.com/aidanlsb/raven/internal/model"
 )
+
+// objectsFrom unpacks object rows from Run. Tests use this instead of typed
+// Execute* wrappers so every path goes through the production entry point.
+func objectsFrom(r *RunResult, err error) ([]model.Object, error) {
+	if err != nil || r == nil {
+		return nil, err
+	}
+	return r.Objects, nil
+}
+
+func traitsFrom(r *RunResult, err error) ([]model.Trait, error) {
+	if err != nil || r == nil {
+		return nil, err
+	}
+	return r.Traits, nil
+}
+
+func sectionsFrom(r *RunResult, err error) ([]model.Section, error) {
+	if err != nil || r == nil {
+		return nil, err
+	}
+	return r.Sections, nil
+}
+
+func linksFrom(r *RunResult, err error) ([]model.Link, error) {
+	if err != nil || r == nil {
+		return nil, err
+	}
+	return r.Links, nil
+}
 
 func setupTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite", ":memory:")

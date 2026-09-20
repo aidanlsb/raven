@@ -61,7 +61,7 @@ func TestOrAndGroupPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			results, err := objectsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -104,7 +104,7 @@ func TestOrAndGroupPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			results, err := traitsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -163,7 +163,7 @@ func TestBooleanEdgeCasesExecution(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			results, err := objectsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -218,7 +218,7 @@ func TestComparisonOperators(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			results, err := traitsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

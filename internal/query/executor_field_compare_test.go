@@ -31,7 +31,7 @@ func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	results, err := objectsFrom(e.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestObjectFieldComparison_BooleanLiteralsUseBoolStorage(t *testing.T) {
 				t.Fatalf("parse: %v", err)
 			}
 
-			results, err := e.ExecuteObjectQuery(q)
+			results, err := objectsFrom(e.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("exec: %v", err)
 			}
@@ -159,7 +159,7 @@ func TestObjectFieldComparison_RelativeDateKeywordOrdering(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	results, err := objectsFrom(e.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestObjectFieldComparison_DatetimeLiteralOrdering(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	results, err := objectsFrom(e.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestObjectFieldComparison_InvalidDateReturnsError(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	_, err = e.ExecuteObjectQuery(q)
+	_, err = e.Run(q, RunRequest{})
 	if err == nil {
 		t.Fatal("expected invalid date comparison to fail")
 	}
@@ -233,7 +233,7 @@ func TestObjectFieldComparison_InvalidDatetimeReturnsError(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	_, err = e.ExecuteObjectQuery(q)
+	_, err = e.Run(q, RunRequest{})
 	if err == nil {
 		t.Fatal("expected invalid datetime comparison to fail")
 	}
@@ -271,7 +271,7 @@ func TestObjectFieldComparison_RelativeDateUsesSingleExecutionTimestamp(t *testi
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	results, err := objectsFrom(e.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}

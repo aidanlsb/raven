@@ -25,9 +25,9 @@ type RunResult struct {
 }
 
 // Run executes a parsed query in the requested mode against any root
-// (object/trait/section/link). It is the single execution entry point for the
-// read service: the count / ids-only / paginated / full branching lives here
-// once instead of being copy-pasted per root.
+// (object/trait/section/link). It is the single execution entry point: the
+// count / ids-only / paginated / full branching lives here once instead of
+// being copy-pasted per root.
 //
 // Pagination semantics match the previous per-root code exactly:
 //   - count-only returns Total only.

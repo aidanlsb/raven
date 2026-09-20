@@ -183,7 +183,7 @@ func TestExecuteObjectQuery(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			results, err := objectsFrom(executor.Run(q, RunRequest{}))
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -214,7 +214,7 @@ func TestExecuteTraitQuery_MatchesDirectRefsAcrossRootVariants(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	results, err := executor.executeTraitQuery(q)
+	results, err := traitsFrom(executor.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestExecuteObjectQuery_HasAppliesNestedTraitPredicates(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	results, err := executor.executeObjectQuery(q)
+	results, err := objectsFrom(executor.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestExecuteTraitQuery(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			results, err := traitsFrom(executor.Run(q, RunRequest{}))
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")

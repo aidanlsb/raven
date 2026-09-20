@@ -50,7 +50,7 @@ func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err := executor.ExecuteObjectQuery(q)
+	results, err := objectsFrom(executor.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err = executor.ExecuteObjectQuery(q)
+	results, err = objectsFrom(executor.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestRefFieldQueryRelativeDateKeywordsResolveToDailyRefs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
-			results, err := executor.ExecuteObjectQuery(q)
+			results, err := objectsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("query error: %v", err)
 			}
@@ -177,7 +177,7 @@ func TestRefFieldQueryRelativeDateKeywordUsesSingleExecutionTimestamp(t *testing
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err := executor.ExecuteObjectQuery(q)
+	results, err := objectsFrom(executor.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestRefFieldQueryErrorsOnAmbiguousStoredValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	if _, err := executor.ExecuteObjectQuery(q); err == nil {
+	if _, err := executor.Run(q, RunRequest{}); err == nil {
 		t.Fatal("expected error for ambiguous stored ref, got nil")
 	}
 }
@@ -283,7 +283,7 @@ func TestRefFieldQueryMemoizesAmbiguityChecksWithinExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err := executor.ExecuteObjectQuery(q)
+	results, err := objectsFrom(executor.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
@@ -356,7 +356,7 @@ func TestRefFieldQueryBatchesDistinctAmbiguityChecksWithinExecution(t *testing.T
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err := executor.ExecuteObjectQuery(q)
+	results, err := objectsFrom(executor.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
@@ -454,7 +454,7 @@ func TestRefArrayQuantifierCompilesCompoundElementPredsAgainstRefs(t *testing.T)
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
-			results, err := executor.ExecuteObjectQuery(q)
+			results, err := objectsFrom(executor.Run(q, RunRequest{}))
 			if err != nil {
 				t.Fatalf("query error: %v", err)
 			}
@@ -513,7 +513,7 @@ func TestRefArrayQuantifierCompoundPredStillChecksAmbiguity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	if _, err := executor.ExecuteObjectQuery(q); err == nil {
+	if _, err := executor.Run(q, RunRequest{}); err == nil {
 		t.Fatal("expected ambiguity error for compound ref[] element pred, got nil")
 	}
 }

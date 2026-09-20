@@ -23,7 +23,7 @@ func TestObjectFieldEquality_NumericArrayMembership(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	results, err := objectsFrom(e.Run(q, RunRequest{}))
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
