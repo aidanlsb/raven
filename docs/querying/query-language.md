@@ -271,6 +271,12 @@ type:project none(.tags, _ == "deprecated")
 
 `refs` accepts direct targets or nested object/section queries.
 
+Direct `refs([[target]])`, field-ref equality, and `refd()` share one match
+rule: a resolved refs row matches on its canonical `target_id` only.
+Unresolved rows, where `target_id` is null, still match on the stored
+`target_raw`. A resolved row whose leftover `target_raw` happens to equal
+another name does not match that name.
+
 `has` matches only traits/sections *directly* on the object; `contains` searches the whole section tree. Because traits attach to the nearest section, prefer `contains(trait:...)` for inline traits like `@todo`/`@due` that usually live under a heading. See [Common Mistake: Todos Under a Heading](#common-mistake-todos-under-a-heading).
 
 Examples:

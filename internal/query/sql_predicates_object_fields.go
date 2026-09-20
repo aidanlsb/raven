@@ -292,10 +292,6 @@ func (e *Executor) fieldEqualityMode(typeName, fieldName string) fieldEqualityMo
 	return fieldEqualityModeScalar
 }
 
-func fieldRefMatchCond(alias string) string {
-	return fmt.Sprintf("(%s.target_id = ? OR (%s.target_id IS NULL AND %s.target_raw = ?))", alias, alias, alias)
-}
-
 type fieldRefAmbiguityKey struct {
 	typeName       string
 	fieldName      string
@@ -572,7 +568,7 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 		return "", nil, err
 	}
 
-	matchCond := fieldRefMatchCond("fr")
+	matchCond, matchArgs := refResolvedIDPreferredMatch("fr", resolved, p.Value)
 	if p.CompareOp == CompareNeq {
 		cond := fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs fr
@@ -581,7 +577,7 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 			SELECT 1 FROM refs fr
 			WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 		)`, alias, alias, matchCond)
-		args := []interface{}{p.Field, p.Field, resolved, p.Value}
+		args := append([]interface{}{p.Field, p.Field}, matchArgs...)
 		if p.Negated() {
 			cond = "NOT (" + cond + ")"
 		}
@@ -592,7 +588,7 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 		SELECT 1 FROM refs fr
 		WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
 	)`, alias, matchCond)
-	args := []interface{}{p.Field, resolved, p.Value}
+	args := append([]interface{}{p.Field}, matchArgs...)
 	if p.Negated() {
 		cond = "NOT (" + cond + ")"
 	}
@@ -660,11 +656,11 @@ func (e *Executor) buildRefArrayElementEqualitySQL(p *ElementEqualityPredicate, 
 		return "", nil, err
 	}
 
-	matchCond := fieldRefMatchCond(refAlias)
+	matchCond, matchArgs := refResolvedIDPreferredMatch(refAlias, resolved, p.Value)
 	if p.CompareOp == CompareNeq {
 		matchCond = "NOT " + matchCond
 	}
-	return wrapNot(matchCond, p.Negated()), []interface{}{resolved, p.Value}, nil
+	return wrapNot(matchCond, p.Negated()), matchArgs, nil
 }
 
 func (e *Executor) buildRefArrayElementStringFuncSQL(p *StringFuncPredicate, refAlias string) (string, []interface{}, error) {

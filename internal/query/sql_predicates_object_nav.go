@@ -279,7 +279,7 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root Qu
 		if err != nil {
 			return "", nil, err
 		}
-		targetCond, targetArgs := buildRefTargetVariantsCondition("r", resolvedTarget, p.Target)
+		targetCond, targetArgs := refResolvedIDPreferredMatch("r", resolvedTarget, p.Target)
 
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
@@ -307,15 +307,11 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root Qu
 			return "", nil, err
 		}
 
-		// Prefer target_id (resolved at index time), fall back to target_raw for unresolved refs
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
-			JOIN %s %s ON (
-				r.target_id = %s.id OR 
-				(r.target_id IS NULL AND r.target_raw = %s.id)
-			)
+			JOIN %s %s ON %s
 			WHERE %s AND %s
-		)`, targetTable, targetAlias, targetAlias, targetAlias, sourceCond, targetCondition)
+		)`, targetTable, targetAlias, refResolvedIDPreferredMatchSQL("r", targetAlias+".id"), sourceCond, targetCondition)
 	} else {
 		return "", nil, fmt.Errorf("refs predicate must have target or subquery")
 	}
