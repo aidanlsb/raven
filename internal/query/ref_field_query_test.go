@@ -50,10 +50,11 @@ func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err := executor.ExecuteObjectQuery(q)
+	run, err := executor.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
+	results := run.Objects
 	if len(results) != 1 || results[0].ID != "people/ada" {
 		t.Fatalf("expected people/ada, got %+v", results)
 	}
@@ -62,10 +63,11 @@ func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err = executor.ExecuteObjectQuery(q)
+	run, err = executor.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
+	results = run.Objects
 	if len(results) != 1 || results[0].ID != "people/ada" {
 		t.Fatalf("expected people/ada for shorthand query, got %+v", results)
 	}
@@ -128,10 +130,11 @@ func TestRefFieldQueryRelativeDateKeywordsResolveToDailyRefs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
-			results, err := executor.ExecuteObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("query error: %v", err)
 			}
+			results := run.Objects
 			if len(results) != 1 || results[0].ID != tt.wantID {
 				t.Fatalf("expected %s, got %+v", tt.wantID, results)
 			}
@@ -177,10 +180,11 @@ func TestRefFieldQueryRelativeDateKeywordUsesSingleExecutionTimestamp(t *testing
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err := executor.ExecuteObjectQuery(q)
+	run, err := executor.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
+	results := run.Objects
 	if len(results) != 1 || results[0].ID != "brief/today" {
 		t.Fatalf("expected brief/today, got %+v", results)
 	}
@@ -232,7 +236,7 @@ func TestRefFieldQueryErrorsOnAmbiguousStoredValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	if _, err := executor.ExecuteObjectQuery(q); err == nil {
+	if _, err := executor.Run(q, RunRequest{}); err == nil {
 		t.Fatal("expected error for ambiguous stored ref, got nil")
 	}
 }
@@ -283,10 +287,11 @@ func TestRefFieldQueryMemoizesAmbiguityChecksWithinExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err := executor.ExecuteObjectQuery(q)
+	run, err := executor.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
+	results := run.Objects
 	if len(results) != 1 || results[0].ID != "people/ada" {
 		t.Fatalf("expected people/ada, got %+v", results)
 	}
@@ -356,10 +361,11 @@ func TestRefFieldQueryBatchesDistinctAmbiguityChecksWithinExecution(t *testing.T
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	results, err := executor.ExecuteObjectQuery(q)
+	run, err := executor.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("query error: %v", err)
 	}
+	results := run.Objects
 	if len(results) != 1 || results[0].ID != "people/ada" {
 		t.Fatalf("expected people/ada, got %+v", results)
 	}
@@ -454,10 +460,11 @@ func TestRefArrayQuantifierCompilesCompoundElementPredsAgainstRefs(t *testing.T)
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
-			results, err := executor.ExecuteObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("query error: %v", err)
 			}
+			results := run.Objects
 			got := make(map[string]bool, len(results))
 			for _, r := range results {
 				got[r.ID] = true
@@ -513,7 +520,7 @@ func TestRefArrayQuantifierCompoundPredStillChecksAmbiguity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	if _, err := executor.ExecuteObjectQuery(q); err == nil {
+	if _, err := executor.Run(q, RunRequest{}); err == nil {
 		t.Fatal("expected ambiguity error for compound ref[] element pred, got nil")
 	}
 }

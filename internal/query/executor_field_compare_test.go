@@ -31,13 +31,13 @@ func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	run, err := e.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
 
-	ids := make([]string, 0, len(results))
-	for _, r := range results {
+	ids := make([]string, 0, len(run.Objects))
+	for _, r := range run.Objects {
 		ids = append(ids, r.ID)
 	}
 
@@ -111,13 +111,13 @@ func TestObjectFieldComparison_BooleanLiteralsUseBoolStorage(t *testing.T) {
 				t.Fatalf("parse: %v", err)
 			}
 
-			results, err := e.ExecuteObjectQuery(q)
+			run, err := e.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("exec: %v", err)
 			}
 
-			ids := make([]string, 0, len(results))
-			for _, r := range results {
+			ids := make([]string, 0, len(run.Objects))
+			for _, r := range run.Objects {
 				ids = append(ids, r.ID)
 			}
 
@@ -159,13 +159,13 @@ func TestObjectFieldComparison_RelativeDateKeywordOrdering(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	run, err := e.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
 
-	if len(results) != 1 || results[0].ID != "task/yesterday" {
-		t.Fatalf("unexpected results: %#v", results)
+	if len(run.Objects) != 1 || run.Objects[0].ID != "task/yesterday" {
+		t.Fatalf("unexpected results: %#v", run.Objects)
 	}
 }
 
@@ -190,13 +190,13 @@ func TestObjectFieldComparison_DatetimeLiteralOrdering(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	run, err := e.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
 
-	if len(results) != 1 || results[0].ID != "meeting/late" {
-		t.Fatalf("unexpected results: %#v", results)
+	if len(run.Objects) != 1 || run.Objects[0].ID != "meeting/late" {
+		t.Fatalf("unexpected results: %#v", run.Objects)
 	}
 }
 
@@ -212,7 +212,7 @@ func TestObjectFieldComparison_InvalidDateReturnsError(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	_, err = e.ExecuteObjectQuery(q)
+	_, err = e.Run(q, RunRequest{})
 	if err == nil {
 		t.Fatal("expected invalid date comparison to fail")
 	}
@@ -233,7 +233,7 @@ func TestObjectFieldComparison_InvalidDatetimeReturnsError(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	_, err = e.ExecuteObjectQuery(q)
+	_, err = e.Run(q, RunRequest{})
 	if err == nil {
 		t.Fatal("expected invalid datetime comparison to fail")
 	}
@@ -271,13 +271,13 @@ func TestObjectFieldComparison_RelativeDateUsesSingleExecutionTimestamp(t *testi
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	run, err := e.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
 
-	if len(results) != 1 || results[0].ID != "task/fixed-today" {
-		t.Fatalf("unexpected results: %#v", results)
+	if len(run.Objects) != 1 || run.Objects[0].ID != "task/fixed-today" {
+		t.Fatalf("unexpected results: %#v", run.Objects)
 	}
 	if callCount != 1 {
 		t.Fatalf("nowFn callCount = %d, want 1", callCount)

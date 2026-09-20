@@ -79,12 +79,12 @@ func TestExecuteLinkQuery(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse(%q): %v", tt.query, err)
 			}
-			rows, err := executor.ExecuteLinkQuery(q)
+			result, err := executor.Run(q, RunRequest{})
 			if err != nil {
-				t.Fatalf("ExecuteLinkQuery(%q): %v", tt.query, err)
+				t.Fatalf("Run(%q): %v", tt.query, err)
 			}
-			got := make([]string, 0, len(rows))
-			for _, row := range rows {
+			got := make([]string, 0, len(result.Links))
+			for _, row := range result.Links {
 				got = append(got, row.RawTarget)
 			}
 			if !reflect.DeepEqual(got, tt.wantTarget) {
@@ -105,28 +105,28 @@ func TestExecuteLinkQueryModes(t *testing.T) {
 		t.Fatalf("Parse(): %v", err)
 	}
 
-	ids, err := executor.ExecuteLinkIDQuery(q, 2, 0)
+	ids, err := executor.Run(q, RunRequest{IDsOnly: true, Limit: 2})
 	if err != nil {
-		t.Fatalf("ExecuteLinkIDQuery(): %v", err)
+		t.Fatalf("Run ids: %v", err)
 	}
-	if want := []string{"projects/mobile", "projects/mobile"}; !reflect.DeepEqual(ids, want) {
-		t.Fatalf("source IDs = %#v, want %#v", ids, want)
+	if want := []string{"projects/mobile", "projects/mobile"}; !reflect.DeepEqual(ids.IDs, want) {
+		t.Fatalf("source IDs = %#v, want %#v", ids.IDs, want)
 	}
 
-	count, err := executor.ExecuteLinkCountQuery(q)
+	count, err := executor.Run(q, RunRequest{CountOnly: true})
 	if err != nil {
-		t.Fatalf("ExecuteLinkCountQuery(): %v", err)
+		t.Fatalf("Run count: %v", err)
 	}
-	if count != 5 {
-		t.Fatalf("count = %d, want 5", count)
+	if count.Total != 5 {
+		t.Fatalf("count = %d, want 5", count.Total)
 	}
 
-	page, err := executor.ExecuteLinkPageQuery(q, 1, 1)
+	page, err := executor.Run(q, RunRequest{Limit: 1, Offset: 1})
 	if err != nil {
-		t.Fatalf("ExecuteLinkPageQuery(): %v", err)
+		t.Fatalf("Run page: %v", err)
 	}
-	if len(page) != 1 || page[0].RawTarget != "../manual.pdf" {
-		t.Fatalf("page = %#v, want manual PDF edge", page)
+	if len(page.Links) != 1 || page.Links[0].RawTarget != "../manual.pdf" {
+		t.Fatalf("page = %#v, want manual PDF edge", page.Links)
 	}
 }
 
@@ -163,12 +163,12 @@ func TestExecuteLinkQuery_CaseSensitiveIdentityFields(t *testing.T) {
 			if parseErr != nil {
 				t.Fatalf("Parse(): %v", parseErr)
 			}
-			rows, execErr := executor.ExecuteLinkQuery(q)
+			result, execErr := executor.Run(q, RunRequest{})
 			if execErr != nil {
-				t.Fatalf("ExecuteLinkQuery(): %v", execErr)
+				t.Fatalf("Run(): %v", execErr)
 			}
-			if len(rows) != 1 || rows[0].RawTarget != "https://example.com/Guide.PDF" {
-				t.Fatalf("rows = %#v, want only path-case-exact URL", rows)
+			if len(result.Links) != 1 || result.Links[0].RawTarget != "https://example.com/Guide.PDF" {
+				t.Fatalf("rows = %#v, want only path-case-exact URL", result.Links)
 			}
 		})
 	}

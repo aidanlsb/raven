@@ -61,13 +61,13 @@ func TestOrAndGroupPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Objects) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Objects), tt.wantCount)
+				for _, r := range run.Objects {
 					t.Logf("  - %s (%s)", r.ID, r.Type)
 				}
 			}
@@ -104,13 +104,13 @@ func TestOrAndGroupPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Traits) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Traits), tt.wantCount)
+				for _, r := range run.Traits {
 					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentScopeID)
 				}
 			}
@@ -163,13 +163,13 @@ func TestBooleanEdgeCasesExecution(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Objects) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Objects), tt.wantCount)
+				for _, r := range run.Objects {
 					t.Logf("  - %s (%s)", r.ID, r.Type)
 				}
 			}
@@ -218,13 +218,13 @@ func TestComparisonOperators(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Traits) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Traits), tt.wantCount)
+				for _, r := range run.Traits {
 					t.Logf("  - %s: %v", r.TraitType, r.Value)
 				}
 			}

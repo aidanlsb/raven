@@ -23,13 +23,13 @@ func TestObjectFieldEquality_NumericArrayMembership(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQuery(q)
+	run, err := e.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
 
 	got := make(map[string]bool)
-	for _, r := range results {
+	for _, r := range run.Objects {
 		got[r.ID] = true
 	}
 

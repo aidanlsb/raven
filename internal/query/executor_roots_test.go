@@ -183,7 +183,7 @@ func TestExecuteObjectQuery(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -193,9 +193,9 @@ func TestExecuteObjectQuery(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Objects) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Objects), tt.wantCount)
+				for _, r := range run.Objects {
 					t.Logf("  - %s (%s)", r.ID, r.Type)
 				}
 			}
@@ -214,15 +214,15 @@ func TestExecuteTraitQuery_MatchesDirectRefsAcrossRootVariants(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	results, err := executor.executeTraitQuery(q)
+	run, err := executor.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(results) != 1 {
-		t.Fatalf("got %d results, want 1", len(results))
+	if len(run.Traits) != 1 {
+		t.Fatalf("got %d results, want 1", len(run.Traits))
 	}
-	if results[0].FilePath != "daily/2026-02-14.md" || results[0].Line != 5 {
-		t.Fatalf("unexpected trait match: %+v", results[0])
+	if run.Traits[0].FilePath != "daily/2026-02-14.md" || run.Traits[0].Line != 5 {
+		t.Fatalf("unexpected trait match: %+v", run.Traits[0])
 	}
 }
 func TestExecuteObjectQuery_HasAppliesNestedTraitPredicates(t *testing.T) {
@@ -237,15 +237,15 @@ func TestExecuteObjectQuery_HasAppliesNestedTraitPredicates(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	results, err := executor.executeObjectQuery(q)
+	run, err := executor.Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(results) != 1 {
-		t.Fatalf("got %d results, want 1", len(results))
+	if len(run.Objects) != 1 {
+		t.Fatalf("got %d results, want 1", len(run.Objects))
 	}
-	if results[0].ID != "daily/2026-02-15" {
-		t.Fatalf("unexpected object match: %+v", results[0])
+	if run.Objects[0].ID != "daily/2026-02-15" {
+		t.Fatalf("unexpected object match: %+v", run.Objects[0])
 	}
 }
 func TestExecuteTraitQuery(t *testing.T) {
@@ -417,7 +417,7 @@ func TestExecuteTraitQuery(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -427,9 +427,9 @@ func TestExecuteTraitQuery(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Traits) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Traits), tt.wantCount)
+				for _, r := range run.Traits {
 					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentScopeID)
 				}
 			}

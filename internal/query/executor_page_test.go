@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestExecuteObjectPageQuery(t *testing.T) {
+func TestRunObjectPage(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
@@ -16,55 +16,47 @@ func TestExecuteObjectPageQuery(t *testing.T) {
 	}
 
 	t.Run("all results with no limit", func(t *testing.T) {
-		results, err := exec.ExecuteObjectPageQuery(q, 0, 0)
+		result, err := exec.Run(q, RunRequest{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(results) != 2 {
-			t.Errorf("expected 2 results, got %d", len(results))
+		if len(result.Objects) != 2 {
+			t.Errorf("expected 2 results, got %d", len(result.Objects))
 		}
 	})
 
 	t.Run("limit restricts count", func(t *testing.T) {
-		results, err := exec.ExecuteObjectPageQuery(q, 1, 0)
+		result, err := exec.Run(q, RunRequest{Limit: 1})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(results) != 1 {
-			t.Errorf("expected 1 result, got %d", len(results))
+		if len(result.Objects) != 1 {
+			t.Errorf("expected 1 result, got %d", len(result.Objects))
 		}
 	})
 
 	t.Run("offset skips results", func(t *testing.T) {
-		results, err := exec.ExecuteObjectPageQuery(q, 1, 1)
+		result, err := exec.Run(q, RunRequest{Limit: 1, Offset: 1})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(results) != 1 {
-			t.Errorf("expected 1 result, got %d", len(results))
+		if len(result.Objects) != 1 {
+			t.Errorf("expected 1 result, got %d", len(result.Objects))
 		}
 	})
 
 	t.Run("offset beyond results returns empty", func(t *testing.T) {
-		results, err := exec.ExecuteObjectPageQuery(q, 10, 100)
+		result, err := exec.Run(q, RunRequest{Limit: 10, Offset: 100})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(results) != 0 {
-			t.Errorf("expected 0 results, got %d", len(results))
-		}
-	})
-
-	t.Run("rejects trait query", func(t *testing.T) {
-		tq, _ := Parse("trait:todo")
-		_, err := exec.ExecuteObjectPageQuery(tq, 0, 0)
-		if err == nil {
-			t.Error("expected error for trait query on object page executor")
+		if len(result.Objects) != 0 {
+			t.Errorf("expected 0 results, got %d", len(result.Objects))
 		}
 	})
 }
 
-func TestExecuteObjectCountQuery(t *testing.T) {
+func TestRunObjectCount(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
@@ -73,47 +65,39 @@ func TestExecuteObjectCountQuery(t *testing.T) {
 
 	t.Run("counts all of type", func(t *testing.T) {
 		q, _ := Parse("type:project")
-		count, err := exec.ExecuteObjectCountQuery(q)
+		result, err := exec.Run(q, RunRequest{CountOnly: true})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if count != 2 {
-			t.Errorf("expected count 2, got %d", count)
+		if result.Total != 2 {
+			t.Errorf("expected count 2, got %d", result.Total)
 		}
 	})
 
 	t.Run("counts with predicate", func(t *testing.T) {
 		q, _ := Parse(`type:project .status==active`)
-		count, err := exec.ExecuteObjectCountQuery(q)
+		result, err := exec.Run(q, RunRequest{CountOnly: true})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if count != 1 {
-			t.Errorf("expected count 1, got %d", count)
+		if result.Total != 1 {
+			t.Errorf("expected count 1, got %d", result.Total)
 		}
 	})
 
 	t.Run("zero count for no matches", func(t *testing.T) {
 		q, _ := Parse(`type:project .status==archived`)
-		count, err := exec.ExecuteObjectCountQuery(q)
+		result, err := exec.Run(q, RunRequest{CountOnly: true})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if count != 0 {
-			t.Errorf("expected count 0, got %d", count)
-		}
-	})
-
-	t.Run("rejects trait query", func(t *testing.T) {
-		tq, _ := Parse("trait:todo")
-		_, err := exec.ExecuteObjectCountQuery(tq)
-		if err == nil {
-			t.Error("expected error for trait query on object count executor")
+		if result.Total != 0 {
+			t.Errorf("expected count 0, got %d", result.Total)
 		}
 	})
 }
 
-func TestExecuteObjectIDQuery(t *testing.T) {
+func TestRunObjectIDs(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
@@ -122,14 +106,14 @@ func TestExecuteObjectIDQuery(t *testing.T) {
 
 	t.Run("returns IDs only", func(t *testing.T) {
 		q, _ := Parse("type:project")
-		ids, err := exec.ExecuteObjectIDQuery(q, 0, 0)
+		result, err := exec.Run(q, RunRequest{IDsOnly: true})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(ids) != 2 {
-			t.Errorf("expected 2 IDs, got %d", len(ids))
+		if len(result.IDs) != 2 {
+			t.Errorf("expected 2 IDs, got %d", len(result.IDs))
 		}
-		for _, id := range ids {
+		for _, id := range result.IDs {
 			if id == "" {
 				t.Error("got empty ID")
 			}
@@ -138,28 +122,28 @@ func TestExecuteObjectIDQuery(t *testing.T) {
 
 	t.Run("limit restricts IDs", func(t *testing.T) {
 		q, _ := Parse("type:project")
-		ids, err := exec.ExecuteObjectIDQuery(q, 1, 0)
+		result, err := exec.Run(q, RunRequest{IDsOnly: true, Limit: 1})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(ids) != 1 {
-			t.Errorf("expected 1 ID, got %d", len(ids))
+		if len(result.IDs) != 1 {
+			t.Errorf("expected 1 ID, got %d", len(result.IDs))
 		}
 	})
 
 	t.Run("offset beyond results returns empty", func(t *testing.T) {
 		q, _ := Parse("type:project")
-		ids, err := exec.ExecuteObjectIDQuery(q, 10, 100)
+		result, err := exec.Run(q, RunRequest{IDsOnly: true, Limit: 10, Offset: 100})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(ids) != 0 {
-			t.Errorf("expected 0 IDs, got %d", len(ids))
+		if len(result.IDs) != 0 {
+			t.Errorf("expected 0 IDs, got %d", len(result.IDs))
 		}
 	})
 }
 
-func TestExecuteTraitPageQuery(t *testing.T) {
+func TestRunTraitPage(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
@@ -171,45 +155,37 @@ func TestExecuteTraitPageQuery(t *testing.T) {
 	}
 
 	t.Run("all results with no limit", func(t *testing.T) {
-		results, err := exec.ExecuteTraitPageQuery(q, 0, 0)
+		result, err := exec.Run(q, RunRequest{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(results) != 3 {
-			t.Errorf("expected 3 results, got %d", len(results))
+		if len(result.Traits) != 3 {
+			t.Errorf("expected 3 results, got %d", len(result.Traits))
 		}
 	})
 
 	t.Run("limit restricts count", func(t *testing.T) {
-		results, err := exec.ExecuteTraitPageQuery(q, 1, 0)
+		result, err := exec.Run(q, RunRequest{Limit: 1})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(results) != 1 {
-			t.Errorf("expected 1 result, got %d", len(results))
+		if len(result.Traits) != 1 {
+			t.Errorf("expected 1 result, got %d", len(result.Traits))
 		}
 	})
 
 	t.Run("offset beyond results", func(t *testing.T) {
-		results, err := exec.ExecuteTraitPageQuery(q, 10, 100)
+		result, err := exec.Run(q, RunRequest{Limit: 10, Offset: 100})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(results) != 0 {
-			t.Errorf("expected 0 results, got %d", len(results))
-		}
-	})
-
-	t.Run("rejects type query", func(t *testing.T) {
-		oq, _ := Parse("type:project")
-		_, err := exec.ExecuteTraitPageQuery(oq, 0, 0)
-		if err == nil {
-			t.Error("expected error for type query on trait page executor")
+		if len(result.Traits) != 0 {
+			t.Errorf("expected 0 results, got %d", len(result.Traits))
 		}
 	})
 }
 
-func TestExecuteTraitCountQuery(t *testing.T) {
+func TestRunTraitCount(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
@@ -218,36 +194,28 @@ func TestExecuteTraitCountQuery(t *testing.T) {
 
 	t.Run("counts all of type", func(t *testing.T) {
 		q, _ := Parse("trait:due")
-		count, err := exec.ExecuteTraitCountQuery(q)
+		result, err := exec.Run(q, RunRequest{CountOnly: true})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if count != 3 {
-			t.Errorf("expected count 3, got %d", count)
+		if result.Total != 3 {
+			t.Errorf("expected count 3, got %d", result.Total)
 		}
 	})
 
 	t.Run("counts with value predicate", func(t *testing.T) {
 		q, _ := Parse("trait:todo .value==todo")
-		count, err := exec.ExecuteTraitCountQuery(q)
+		result, err := exec.Run(q, RunRequest{CountOnly: true})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if count != 2 {
-			t.Errorf("expected count 2, got %d", count)
-		}
-	})
-
-	t.Run("rejects type query", func(t *testing.T) {
-		oq, _ := Parse("type:project")
-		_, err := exec.ExecuteTraitCountQuery(oq)
-		if err == nil {
-			t.Error("expected error for type query on trait count executor")
+		if result.Total != 2 {
+			t.Errorf("expected count 2, got %d", result.Total)
 		}
 	})
 }
 
-func TestExecuteTraitIDQuery(t *testing.T) {
+func TestRunTraitIDs(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
@@ -256,14 +224,14 @@ func TestExecuteTraitIDQuery(t *testing.T) {
 
 	t.Run("returns IDs only", func(t *testing.T) {
 		q, _ := Parse("trait:todo")
-		ids, err := exec.ExecuteTraitIDQuery(q, 0, 0)
+		result, err := exec.Run(q, RunRequest{IDsOnly: true})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(ids) != 3 {
-			t.Errorf("expected 3 IDs, got %d", len(ids))
+		if len(result.IDs) != 3 {
+			t.Errorf("expected 3 IDs, got %d", len(result.IDs))
 		}
-		for _, id := range ids {
+		for _, id := range result.IDs {
 			if id == "" {
 				t.Error("got empty ID")
 			}
@@ -272,12 +240,12 @@ func TestExecuteTraitIDQuery(t *testing.T) {
 
 	t.Run("limit restricts IDs", func(t *testing.T) {
 		q, _ := Parse("trait:todo")
-		ids, err := exec.ExecuteTraitIDQuery(q, 1, 0)
+		result, err := exec.Run(q, RunRequest{IDsOnly: true, Limit: 1})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(ids) != 1 {
-			t.Errorf("expected 1 ID, got %d", len(ids))
+		if len(result.IDs) != 1 {
+			t.Errorf("expected 1 ID, got %d", len(result.IDs))
 		}
 	})
 }

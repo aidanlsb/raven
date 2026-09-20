@@ -106,46 +106,20 @@ func TestRun_AllRootsCountIDsPageFull(t *testing.T) {
 	}
 }
 
-// TestRun_MatchesTypedExecutors verifies Run yields the same rows/counts as the
-// typed Execute* methods, i.e. the generic path did not change semantics.
-func TestRun_MatchesTypedExecutors(t *testing.T) {
+func TestRun_UnsupportedQueryType(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 	exec := NewExecutor(db)
 
-	t.Run("object", func(t *testing.T) {
-		q, _ := Parse("type:project")
-		run, err := exec.Run(q, RunRequest{})
-		if err != nil {
-			t.Fatalf("run: %v", err)
-		}
-		typed, err := exec.ExecuteObjectQuery(q)
-		if err != nil {
-			t.Fatalf("typed: %v", err)
-		}
-		if len(run.Objects) != len(typed) {
-			t.Fatalf("object row counts differ: run=%d typed=%d", len(run.Objects), len(typed))
-		}
-		for i := range typed {
-			if run.Objects[i].ID != typed[i].ID {
-				t.Fatalf("object[%d] id mismatch: run=%q typed=%q", i, run.Objects[i].ID, typed[i].ID)
-			}
-		}
-	})
-
-	t.Run("trait", func(t *testing.T) {
-		q, _ := Parse("trait:todo")
-		run, err := exec.Run(q, RunRequest{})
-		if err != nil {
-			t.Fatalf("run: %v", err)
-		}
-		typed, err := exec.ExecuteTraitQuery(q)
-		if err != nil {
-			t.Fatalf("typed: %v", err)
-		}
-		if len(run.Traits) != len(typed) {
-			t.Fatalf("trait row counts differ: run=%d typed=%d", len(run.Traits), len(typed))
-		}
-	})
+	q := &Query{Type: QueryType(99)}
+	if _, err := exec.Run(q, RunRequest{}); err == nil {
+		t.Fatal("expected error for unsupported query type")
+	}
+	if _, err := exec.Run(q, RunRequest{CountOnly: true}); err == nil {
+		t.Fatal("expected count error for unsupported query type")
+	}
+	if _, err := exec.Run(q, RunRequest{IDsOnly: true}); err == nil {
+		t.Fatal("expected ids error for unsupported query type")
+	}
 }

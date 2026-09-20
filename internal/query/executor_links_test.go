@@ -71,31 +71,26 @@ func TestExecuteLinksPredicateByRoot(t *testing.T) {
 				t.Fatalf("parse: %v", err)
 			}
 
+			run, err := executor.Run(q, RunRequest{})
+			if err != nil {
+				t.Fatalf("execute: %v", err)
+			}
 			var got []string
 			switch q.Type {
 			case QueryTypeObject:
-				results, execErr := executor.executeObjectQuery(q)
-				err = execErr
-				for _, result := range results {
+				for _, result := range run.Objects {
 					got = append(got, result.ID)
 				}
 			case QueryTypeTrait:
-				results, execErr := executor.executeTraitQuery(q)
-				err = execErr
-				for _, result := range results {
+				for _, result := range run.Traits {
 					got = append(got, result.ID)
 				}
 			case QueryTypeSection:
-				results, execErr := executor.executeSectionQuery(q)
-				err = execErr
-				for _, result := range results {
+				for _, result := range run.Sections {
 					got = append(got, result.ID)
 				}
 			default:
 				t.Fatalf("unexpected root: %v", q.Type)
-			}
-			if err != nil {
-				t.Fatalf("execute: %v", err)
 			}
 			if strings.Join(got, ",") != strings.Join(tt.wantIDs, ",") {
 				t.Fatalf("IDs = %#v, want %#v", got, tt.wantIDs)
