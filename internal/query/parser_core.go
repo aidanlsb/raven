@@ -123,7 +123,7 @@ func (p *Parser) parseQuery() (*Query, error) {
 			queryType = QueryTypeLink
 		}
 		query := Query{Type: queryType}
-		pred, err := p.parsePredicate(query.Type)
+		pred, err := p.parsePredicate()
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +157,7 @@ func (p *Parser) parseQuery() (*Query, error) {
 	query.TypeName = typeName
 
 	// Parse predicates
-	pred, err := p.parsePredicate(query.Type)
+	pred, err := p.parsePredicate()
 	if err != nil {
 		return nil, err
 	}
@@ -172,13 +172,13 @@ func (p *Parser) parseQuery() (*Query, error) {
 }
 
 // parsePredicate parses a boolean expression of predicates.
-func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
-	return p.parseOrPredicate(qt)
+func (p *Parser) parsePredicate() (Predicate, error) {
+	return p.parseOrPredicate()
 }
 
 // parseOrPredicate parses OR expressions (lowest precedence).
-func (p *Parser) parseOrPredicate(qt QueryType) (Predicate, error) {
-	first, err := p.parseAndPredicate(qt)
+func (p *Parser) parseOrPredicate() (Predicate, error) {
+	first, err := p.parseAndPredicate()
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func (p *Parser) parseOrPredicate(qt QueryType) (Predicate, error) {
 		if looksLikeShellPipeCommand(p.curr) {
 			return nil, shellPipeQueryError(pipePos)
 		}
-		next, err := p.parseAndPredicate(qt)
+		next, err := p.parseAndPredicate()
 		if err != nil {
 			return nil, err
 		}
@@ -211,7 +211,7 @@ func (p *Parser) parseOrPredicate(qt QueryType) (Predicate, error) {
 }
 
 // parseAndPredicate parses implicit AND expressions (middle precedence).
-func (p *Parser) parseAndPredicate(qt QueryType) (Predicate, error) {
+func (p *Parser) parseAndPredicate() (Predicate, error) {
 	var preds []Predicate
 
 	for {
@@ -220,7 +220,7 @@ func (p *Parser) parseAndPredicate(qt QueryType) (Predicate, error) {
 			break
 		}
 
-		pred, err := p.parseUnaryPredicate(qt)
+		pred, err := p.parseUnaryPredicate()
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +243,7 @@ func (p *Parser) parseAndPredicate(qt QueryType) (Predicate, error) {
 }
 
 // parseUnaryPredicate parses NOT and grouped predicates (highest precedence).
-func (p *Parser) parseUnaryPredicate(qt QueryType) (Predicate, error) {
+func (p *Parser) parseUnaryPredicate() (Predicate, error) {
 	negated := false
 	if p.curr.Type == TokenBang {
 		negated = true
@@ -252,7 +252,7 @@ func (p *Parser) parseUnaryPredicate(qt QueryType) (Predicate, error) {
 
 	if p.curr.Type == TokenLParen {
 		p.advance()
-		pred, err := p.parseOrPredicate(qt)
+		pred, err := p.parseOrPredicate()
 		if err != nil {
 			return nil, err
 		}
@@ -268,7 +268,7 @@ func (p *Parser) parseUnaryPredicate(qt QueryType) (Predicate, error) {
 		return &NotPredicate{Inner: pred}, nil
 	}
 
-	return p.parseAtomicPredicate(qt, negated)
+	return p.parseAtomicPredicate(negated)
 }
 
 // predicateFuncParser is the signature for predicate function parsers.
@@ -315,7 +315,7 @@ func init() {
 }
 
 // parseAtomicPredicate parses a single predicate without boolean composition.
-func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, error) {
+func (p *Parser) parseAtomicPredicate(negated bool) (Predicate, error) {
 	if p.curr.Type == TokenLBrace {
 		return nil, fmt.Errorf("brace subqueries are no longer supported; write nested queries directly (e.g., has(trait:due .value<today))")
 	}
@@ -545,7 +545,7 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 // over link rows. links(...) uses it now; the link query root uses the same
 // expression grammar rather than maintaining a second field parser.
 func (p *Parser) parseLinkPredicateExpression() (Predicate, error) {
-	return p.parseOrPredicate(QueryTypeObject)
+	return p.parseOrPredicate()
 }
 
 func (p *Parser) parseLinksFuncPredicate(negated bool) (Predicate, error) {

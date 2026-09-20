@@ -21,10 +21,7 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 	}
 
 	if p.IsExists {
-		cond, args := fieldExistsCond(alias, jsonPath, p.CompareOp == CompareNeq)
-		if p.Negated() {
-			cond = "NOT (" + cond + ")"
-		}
+		cond, args := fieldExistsCond(alias, jsonPath, p.Negated())
 		return cond, args, nil
 	}
 
@@ -126,14 +123,7 @@ func (e *Executor) buildDateVirtualFieldPredicateSQL(p *FieldPredicate, alias st
 	existsCond := fmt.Sprintf("%s GLOB '????-??-??'", fieldExpr)
 
 	if p.IsExists {
-		cond := existsCond
-		if p.CompareOp == CompareNeq {
-			cond = "NOT (" + cond + ")"
-		}
-		if p.Negated() {
-			cond = "NOT (" + cond + ")"
-		}
-		return cond, nil, nil
+		return wrapNot(existsCond, p.Negated()), nil, nil
 	}
 
 	if p.IsRefValue {
@@ -377,24 +367,7 @@ func (e *Executor) collectRefFieldAmbiguityPredicate(queryType QueryType, typeNa
 		if queryType != QueryTypeObject || !e.isRefArrayField(typeName, p.Field) {
 			return nil
 		}
-		elem, ok := p.ElementPred.(*ElementEqualityPredicate)
-		if !ok {
-			return nil
-		}
-		if elem.CompareOp != CompareEq && elem.CompareOp != CompareNeq {
-			return nil
-		}
-		resolved, _, err := e.resolveRefFieldValue(typeName, p.Field, elem.Value)
-		if err != nil {
-			return err
-		}
-		keys[fieldRefAmbiguityKey{
-			typeName:       typeName,
-			fieldName:      p.Field,
-			rawValue:       elem.Value,
-			resolvedTarget: resolved,
-		}] = struct{}{}
-		return nil
+		return e.collectRefArrayElementAmbiguity(typeName, p.Field, p.ElementPred, keys)
 	case *HasPredicate:
 		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
 	case *InPredicate:
@@ -425,6 +398,44 @@ func (e *Executor) collectRefFieldAmbiguityPredicate(queryType QueryType, typeNa
 		return e.collectRefFieldAmbiguityPredicate(queryType, typeName, p.Inner, keys)
 	}
 	return nil
+}
+
+func (e *Executor) collectRefArrayElementAmbiguity(typeName, fieldName string, pred Predicate, keys map[fieldRefAmbiguityKey]struct{}) error {
+	switch p := pred.(type) {
+	case *ElementEqualityPredicate:
+		if p.CompareOp != CompareEq && p.CompareOp != CompareNeq {
+			return nil
+		}
+		resolved, _, err := e.resolveRefFieldValue(typeName, fieldName, p.Value)
+		if err != nil {
+			return err
+		}
+		keys[fieldRefAmbiguityKey{
+			typeName:       typeName,
+			fieldName:      fieldName,
+			rawValue:       p.Value,
+			resolvedTarget: resolved,
+		}] = struct{}{}
+		return nil
+	case *OrPredicate:
+		for _, sub := range p.Predicates {
+			if err := e.collectRefArrayElementAmbiguity(typeName, fieldName, sub, keys); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *GroupPredicate:
+		for _, sub := range p.Predicates {
+			if err := e.collectRefArrayElementAmbiguity(typeName, fieldName, sub, keys); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *NotPredicate:
+		return e.collectRefArrayElementAmbiguity(typeName, fieldName, p.Inner, keys)
+	default:
+		return nil
+	}
 }
 
 func (e *Executor) loadFieldRefAmbiguityResults(keys []fieldRefAmbiguityKey) error {
@@ -592,75 +603,85 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 	return cond, args, nil
 }
 
-func (e *Executor) buildRefArrayQuantifierPredicateSQL(p *ArrayQuantifierPredicate, elem *ElementEqualityPredicate, alias, typeName string) (string, []interface{}, error) {
-	if elem.CompareOp != CompareEq && elem.CompareOp != CompareNeq {
-		return "", nil, fmt.Errorf("unsupported comparison for ref array field '.%s' (use == or !=)", p.Field)
-	}
-
-	resolved, _, err := e.resolveRefFieldValue(typeName, p.Field, elem.Value)
+func (e *Executor) buildRefArrayQuantifierPredicateSQL(p *ArrayQuantifierPredicate, alias, typeName string) (string, []interface{}, error) {
+	elemCond, elemArgs, err := e.buildRefArrayElementPredicateSQL(p.ElementPred, typeName, p.Field, "fr")
 	if err != nil {
 		return "", nil, err
 	}
 
-	if err := e.checkAmbiguousFieldRefs(typeName, p.Field, elem.Value, resolved); err != nil {
+	fieldMatch := fmt.Sprintf("fr.source_id = %s.id AND fr.field_name = ?", alias)
+	var cond string
+	switch p.Quantifier {
+	case ArrayQuantifierAny:
+		cond = fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM refs fr
+			WHERE %s AND %s
+		)`, fieldMatch, elemCond)
+	case ArrayQuantifierNone:
+		cond = fmt.Sprintf(`NOT EXISTS (
+			SELECT 1 FROM refs fr
+			WHERE %s AND %s
+		)`, fieldMatch, elemCond)
+	case ArrayQuantifierAll:
+		cond = fmt.Sprintf(`NOT EXISTS (
+			SELECT 1 FROM refs fr
+			WHERE %s AND NOT (%s)
+		)`, fieldMatch, elemCond)
+	default:
+		return "", nil, fmt.Errorf("unknown array quantifier: %v", p.Quantifier)
+	}
+
+	args := append([]interface{}{p.Field}, elemArgs...)
+	return wrapNot(cond, p.Negated()), args, nil
+}
+
+func (e *Executor) buildRefArrayElementPredicateSQL(pred Predicate, typeName, field, refAlias string) (string, []interface{}, error) {
+	return compileBooleanPredicate(pred, func(leaf Predicate) (string, []interface{}, error) {
+		switch p := leaf.(type) {
+		case *ElementEqualityPredicate:
+			return e.buildRefArrayElementEqualitySQL(p, typeName, field, refAlias)
+		case *StringFuncPredicate:
+			if !p.IsElementRef {
+				return "", nil, fmt.Errorf("string function in array context must use _ as first argument")
+			}
+			return e.buildRefArrayElementStringFuncSQL(p, refAlias)
+		default:
+			return "", nil, fmt.Errorf("unsupported element predicate type: %T", leaf)
+		}
+	})
+}
+
+func (e *Executor) buildRefArrayElementEqualitySQL(p *ElementEqualityPredicate, typeName, field, refAlias string) (string, []interface{}, error) {
+	if p.CompareOp != CompareEq && p.CompareOp != CompareNeq {
+		return "", nil, fmt.Errorf("unsupported comparison for ref array field '.%s' (use == or !=)", field)
+	}
+
+	resolved, _, err := e.resolveRefFieldValue(typeName, field, p.Value)
+	if err != nil {
+		return "", nil, err
+	}
+	if err := e.checkAmbiguousFieldRefs(typeName, field, p.Value, resolved); err != nil {
 		return "", nil, err
 	}
 
-	matchCond := fieldRefMatchCond("fr")
-	notMatchCond := "NOT " + matchCond
-
-	var cond string
-	var args []interface{}
-
-	switch p.Quantifier {
-	case ArrayQuantifierAny:
-		if elem.CompareOp == CompareEq {
-			cond = fmt.Sprintf(`EXISTS (
-				SELECT 1 FROM refs fr
-				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
-			)`, alias, matchCond)
-			args = []interface{}{p.Field, resolved, elem.Value}
-		} else {
-			cond = fmt.Sprintf(`EXISTS (
-				SELECT 1 FROM refs fr
-				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
-			)`, alias, notMatchCond)
-			args = []interface{}{p.Field, resolved, elem.Value}
-		}
-	case ArrayQuantifierNone:
-		if elem.CompareOp == CompareEq {
-			cond = fmt.Sprintf(`NOT EXISTS (
-				SELECT 1 FROM refs fr
-				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
-			)`, alias, matchCond)
-			args = []interface{}{p.Field, resolved, elem.Value}
-		} else {
-			cond = fmt.Sprintf(`NOT EXISTS (
-				SELECT 1 FROM refs fr
-				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
-			)`, alias, notMatchCond)
-			args = []interface{}{p.Field, resolved, elem.Value}
-		}
-	case ArrayQuantifierAll:
-		if elem.CompareOp == CompareEq {
-			cond = fmt.Sprintf(`NOT EXISTS (
-				SELECT 1 FROM refs fr
-				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
-			)`, alias, notMatchCond)
-			args = []interface{}{p.Field, resolved, elem.Value}
-		} else {
-			cond = fmt.Sprintf(`NOT EXISTS (
-				SELECT 1 FROM refs fr
-				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
-			)`, alias, matchCond)
-			args = []interface{}{p.Field, resolved, elem.Value}
-		}
+	matchCond := fieldRefMatchCond(refAlias)
+	if p.CompareOp == CompareNeq {
+		matchCond = "NOT " + matchCond
 	}
+	return wrapNot(matchCond, p.Negated()), []interface{}{resolved, p.Value}, nil
+}
 
-	if p.Negated() {
-		cond = "NOT (" + cond + ")"
+func (e *Executor) buildRefArrayElementStringFuncSQL(p *StringFuncPredicate, refAlias string) (string, []interface{}, error) {
+	idCond, idArgs, err := buildStringFuncCondition(p.FuncType, refAlias+".target_id", p.Value, p.CaseSensitive)
+	if err != nil {
+		return "", nil, err
 	}
-	return cond, args, nil
+	rawCond, rawArgs, err := buildStringFuncCondition(p.FuncType, refAlias+".target_raw", p.Value, p.CaseSensitive)
+	if err != nil {
+		return "", nil, err
+	}
+	args := append(idArgs, rawArgs...)
+	return wrapNot("("+idCond+" OR "+rawCond+")", p.Negated()), args, nil
 }
 
 func dedupeStrings(values []string) []string {
@@ -702,108 +723,63 @@ func (e *Executor) buildStringFuncPredicateSQL(p *StringFuncPredicate, alias str
 // Handles: any(.tags, _ == "urgent"), all(.tags, startswith(_, "feature-")), none(.tags, _ == "deprecated")
 func (e *Executor) buildArrayQuantifierPredicateSQL(p *ArrayQuantifierPredicate, alias, typeName string) (string, []interface{}, error) {
 	if e.isRefArrayField(typeName, p.Field) {
-		if elem, ok := p.ElementPred.(*ElementEqualityPredicate); ok {
-			return e.buildRefArrayQuantifierPredicateSQL(p, elem, alias, typeName)
-		}
+		return e.buildRefArrayQuantifierPredicateSQL(p, alias, typeName)
 	}
 
 	jsonPath := fmt.Sprintf("$.%s", p.Field)
 
-	var cond string
-	var args []interface{}
-
-	// Build the element condition
 	elemCond, elemArgs, err := e.buildElementPredicateSQL(p.ElementPred)
 	if err != nil {
 		return "", nil, err
 	}
 
+	var cond string
+	var args []interface{}
 	switch p.Quantifier {
 	case ArrayQuantifierAny:
-		// EXISTS (SELECT 1 FROM json_each(fields, '$.field') WHERE <elemCond>)
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM json_each(%s.fields, ?)
 			WHERE %s
 		)`, alias, elemCond)
 		args = append(args, jsonPath)
 		args = append(args, elemArgs...)
-
 	case ArrayQuantifierAll:
-		// NOT EXISTS (SELECT 1 FROM json_each(fields, '$.field') WHERE NOT <elemCond>)
-		// This means: there is no element that doesn't satisfy the condition
 		cond = fmt.Sprintf(`NOT EXISTS (
 			SELECT 1 FROM json_each(%s.fields, ?)
 			WHERE NOT (%s)
 		)`, alias, elemCond)
 		args = append(args, jsonPath)
 		args = append(args, elemArgs...)
-
 	case ArrayQuantifierNone:
-		// NOT EXISTS (SELECT 1 FROM json_each(fields, '$.field') WHERE <elemCond>)
 		cond = fmt.Sprintf(`NOT EXISTS (
 			SELECT 1 FROM json_each(%s.fields, ?)
 			WHERE %s
 		)`, alias, elemCond)
 		args = append(args, jsonPath)
 		args = append(args, elemArgs...)
+	default:
+		return "", nil, fmt.Errorf("unknown array quantifier: %v", p.Quantifier)
 	}
 
-	if p.Negated() {
-		cond = "NOT (" + cond + ")"
-	}
-
-	return cond, args, nil
+	return wrapNot(cond, p.Negated()), args, nil
 }
 
 // buildElementPredicateSQL builds SQL for predicates used within array quantifiers.
 // The context is json_each.value representing the current array element.
 func (e *Executor) buildElementPredicateSQL(pred Predicate) (string, []interface{}, error) {
-	switch p := pred.(type) {
-	case *ElementEqualityPredicate:
-		return e.buildElementEqualitySQL(p)
-
-	case *StringFuncPredicate:
-		if !p.IsElementRef {
-			return "", nil, fmt.Errorf("string function in array context must use _ as first argument")
-		}
-		return e.buildElementStringFuncSQL(p)
-
-	case *OrPredicate:
-		var conditions []string
-		var args []interface{}
-		for _, subPred := range p.Predicates {
-			cond, predArgs, err := e.buildElementPredicateSQL(subPred)
-			if err != nil {
-				return "", nil, err
+	return compileBooleanPredicate(pred, func(leaf Predicate) (string, []interface{}, error) {
+		switch p := leaf.(type) {
+		case *ElementEqualityPredicate:
+			return e.buildElementEqualitySQL(p)
+		case *StringFuncPredicate:
+			if !p.IsElementRef {
+				return "", nil, fmt.Errorf("string function in array context must use _ as first argument")
 			}
-			conditions = append(conditions, cond)
-			args = append(args, predArgs...)
+			return e.buildElementStringFuncSQL(p)
+		default:
+			return "", nil, fmt.Errorf("unsupported element predicate type: %T", leaf)
 		}
-		return "(" + strings.Join(conditions, " OR ") + ")", args, nil
-
-	case *NotPredicate:
-		cond, args, err := e.buildElementPredicateSQL(p.Inner)
-		if err != nil {
-			return "", nil, err
-		}
-		return "NOT (" + cond + ")", args, nil
-
-	case *GroupPredicate:
-		var conditions []string
-		var args []interface{}
-		for _, subPred := range p.Predicates {
-			cond, predArgs, err := e.buildElementPredicateSQL(subPred)
-			if err != nil {
-				return "", nil, err
-			}
-			conditions = append(conditions, cond)
-			args = append(args, predArgs...)
-		}
-		return "(" + strings.Join(conditions, " AND ") + ")", args, nil
-
-	default:
-		return "", nil, fmt.Errorf("unsupported element predicate type: %T", pred)
-	}
+	})
 }
 
 // buildElementEqualitySQL builds SQL for _ == value or _ != value.
@@ -824,11 +800,7 @@ func (e *Executor) buildElementEqualitySQL(p *ElementEqualityPredicate) (string,
 	}
 
 	condFor := func(v string) (string, []interface{}) {
-		vp := &ValuePredicate{
-			Value:     v,
-			CompareOp: p.CompareOp,
-		}
-		return e.buildValueCondition(vp, "json_each.value")
+		return e.buildCompareCondition(v, p.CompareOp, false, "json_each.value")
 	}
 
 	cond, args := condFor(value)

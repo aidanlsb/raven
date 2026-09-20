@@ -130,19 +130,6 @@ type ContentPredicate struct {
 
 func (ContentPredicate) predicateNode() {}
 
-// ValuePredicate filters traits by value.
-//
-// Deprecated: Use FieldPredicate with Field="value" instead.
-// The parser now creates FieldPredicate for .value== syntax.
-// This type is retained for internal SQL generation helpers.
-type ValuePredicate struct {
-	basePredicate
-	Value     string
-	CompareOp CompareOp // comparison operator (==, !=, <, >, <=, >=)
-}
-
-func (ValuePredicate) predicateNode() {}
-
 // WithinPredicate filters scoped results by any containing scope.
 // Syntax: within(type:<name> ...), within(section ...), within([[target]])
 type WithinPredicate struct {
