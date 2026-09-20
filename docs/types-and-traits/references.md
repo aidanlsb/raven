@@ -204,7 +204,9 @@ rvn query 'trait:todo refs([[person/freya]])'
 
 `refs()` accepts nested queries, wiki-links, or bare target shorthand. Prefer
 canonical IDs in direct targets, especially in saved queries; bare shorthand is
-resolution sugar and can become ambiguous as the vault grows. See
+resolution sugar and can become ambiguous as the vault grows. Direct
+`refs([[target]])` matches a resolved reference on its canonical target id;
+unresolved references still match on the stored raw target. See
 the [query language reference](../querying/query-language.md) for full syntax.
 
 ## Reference maintenance

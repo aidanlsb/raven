@@ -116,8 +116,12 @@ func setupRefRegressionDB(t *testing.T) *sql.DB {
 			('trait1', 'daily/2026-02-14.md', 'daily/2026-02-14', 'todo', 'todo', 'Investigate [[project/raven]]', 5),
 			('trait2', 'daily/2026-02-15.md', 'daily/2026-02-15', 'todo', 'todo', 'Follow up on [[projects/website]]', 6);
 
+		-- Resolved body refs store the canonical object ID in target_id and
+		-- the written wikilink in target_raw. Identity-first matching uses
+		-- target_id once resolved, so [[project/raven]] still hits the object
+		-- at objects/project/raven after query-time resolution.
 		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number) VALUES
-			('daily/2026-02-14', 'project/raven', 'project/raven', 'daily/2026-02-14.md', 5),
+			('daily/2026-02-14', 'objects/project/raven', 'project/raven', 'daily/2026-02-14.md', 5),
 			('daily/2026-02-15', NULL, 'projects/website', 'daily/2026-02-15.md', 6);
 	`)
 	if err != nil {

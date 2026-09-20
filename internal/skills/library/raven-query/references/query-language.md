@@ -99,6 +99,10 @@ Type queries support field predicates plus:
 - `refd(...)`: object is referenced by a target, matching type query, or matching trait query
 - `content("term")`: full-text content search within objects
 
+Direct `refs([[target]])` and field-ref equality match a resolved refs row on
+its canonical target id. Unresolved rows still match on the stored raw
+target. `refd()` uses the same rule.
+
 Scope predicates accept nested type/section queries, wikilinks, or target
 shorthands. Prefer canonical object IDs in direct targets; short forms are
 resolution sugar and can become ambiguous as the vault grows:

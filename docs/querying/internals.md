@@ -86,6 +86,11 @@ targets intentionally match nothing instead of creating implicit objects.
 
 For schema `ref` and `ref[]` fields, field comparisons use reference-aware semantics. Preserve explicit ambiguity errors for shorthand values that could match multiple objects.
 
+Wikilink target matching for field-ref equality, body `refs()`, and `refd()`
+uses one identity-first rule in `refResolvedIDPreferredMatchSQL`: match
+`target_id` when the refs row resolved; compare `target_raw` only when
+`target_id` is NULL. Do not OR both columns on resolved rows.
+
 ## Testing guidance
 
 Add tests at the lowest layer that owns the behavior:

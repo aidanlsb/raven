@@ -76,6 +76,25 @@ func buildStringFuncCondition(funcType StringFuncType, fieldExpr string, value s
 	}
 }
 
+// refResolvedIDPreferredMatchSQL matches a refs-table row against a target
+// identity. Prefer canonical target_id when the row resolved; only compare
+// target_raw when target_id is NULL.
+//
+// identExpr is "?" for bound arguments in order (resolvedID, rawQuery), or a
+// SQL expression such as "o.id" when joining against another row's identity.
+func refResolvedIDPreferredMatchSQL(refAlias, identExpr string) string {
+	return fmt.Sprintf(
+		"(%s.target_id = %s OR (%s.target_id IS NULL AND %s.target_raw = %s))",
+		refAlias, identExpr, refAlias, refAlias, identExpr,
+	)
+}
+
+// refResolvedIDPreferredMatch is the bound-argument form of
+// refResolvedIDPreferredMatchSQL. Args are (resolvedID, rawQuery).
+func refResolvedIDPreferredMatch(refAlias, resolvedID, rawQuery string) (string, []interface{}) {
+	return refResolvedIDPreferredMatchSQL(refAlias, "?"), []interface{}{resolvedID, rawQuery}
+}
+
 // buildRefStringFuncMatchSQL matches a string function against a refs-table
 // row's resolved target_id or stored target_raw.
 func buildRefStringFuncMatchSQL(p *StringFuncPredicate, refAlias string) (string, []interface{}, error) {
@@ -88,36 +107,6 @@ func buildRefStringFuncMatchSQL(p *StringFuncPredicate, refAlias string) (string
 		return "", nil, err
 	}
 	return "(" + idCond + " OR " + rawCond + ")", append(idArgs, rawArgs...), nil
-}
-
-func buildRefTargetVariantsCondition(refAlias, resolvedTarget, rawTarget string) (string, []interface{}) {
-	variants := make([]string, 0, 2)
-	seen := make(map[string]struct{}, 2)
-	for _, candidate := range []string{resolvedTarget, rawTarget} {
-		if candidate == "" {
-			continue
-		}
-		if _, ok := seen[candidate]; ok {
-			continue
-		}
-		seen[candidate] = struct{}{}
-		variants = append(variants, candidate)
-	}
-
-	clauses := make([]string, 0, len(variants)*2)
-	args := make([]interface{}, 0, len(variants)*2)
-	for _, variant := range variants {
-		clauses = append(clauses, fmt.Sprintf("%s.target_id = ?", refAlias))
-		args = append(args, variant)
-		clauses = append(clauses, fmt.Sprintf("%s.target_raw = ?", refAlias))
-		args = append(args, variant)
-	}
-
-	if len(clauses) == 0 {
-		return "1=0", nil
-	}
-
-	return "(" + strings.Join(clauses, " OR ") + ")", args
 }
 
 // buildRefdPredicateSQL builds SQL for refd(...) predicates.
@@ -133,8 +122,8 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		cond := fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
 			WHERE (r.source_id = ? OR r.source_id LIKE ? || '#%%')
-			  AND (r.target_id = %s.id OR r.target_raw = %s.id)
-		)`, alias, alias)
+			  AND %s
+		)`, refResolvedIDPreferredMatchSQL("r", alias+".id"))
 		if p.Negated() {
 			cond = "NOT " + cond
 		}
@@ -161,9 +150,9 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		cond := fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
 			JOIN objects src ON (r.source_id = src.id OR r.source_id LIKE src.id || '#%%')
-			WHERE (r.target_id = %s.id OR r.target_raw = %s.id)
+			WHERE %s
 			  AND %s
-		)`, alias, alias, strings.Join(sourceConditions, " AND "))
+		)`, refResolvedIDPreferredMatchSQL("r", alias+".id"), strings.Join(sourceConditions, " AND "))
 
 		if p.Negated() {
 			cond = "NOT " + cond
@@ -180,9 +169,9 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		sqlCond := fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
 			JOIN sections src_s ON r.source_id = src_s.id
-			WHERE (r.target_id = %s.id OR r.target_raw = %s.id)
+			WHERE %s
 			  AND %s
-		)`, alias, alias, cond)
+		)`, refResolvedIDPreferredMatchSQL("r", alias+".id"), cond)
 
 		if p.Negated() {
 			sqlCond = "NOT " + sqlCond
@@ -207,9 +196,9 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		SELECT 1 FROM refs r
 		JOIN traits src_t ON r.file_path = src_t.file_path 
 		                 AND r.line_number = src_t.line_number
-		WHERE (r.target_id = %s.id OR r.target_raw = %s.id)
+		WHERE %s
 		  AND %s
-	)`, alias, alias, strings.Join(sourceConditions, " AND "))
+	)`, refResolvedIDPreferredMatchSQL("r", alias+".id"), strings.Join(sourceConditions, " AND "))
 
 	if p.Negated() {
 		cond = "NOT " + cond
