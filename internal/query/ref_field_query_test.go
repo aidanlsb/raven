@@ -621,10 +621,11 @@ func TestScalarRefStringFuncsCompileAgainstRefs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
-			results, err := executor.ExecuteObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("query error: %v", err)
 			}
+			results := run.Objects
 			got := make(map[string]bool, len(results))
 			for _, r := range results {
 				got[r.ID] = true

@@ -246,7 +246,7 @@ func TestTraitValueComparison_InvalidDateReturnsError(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	_, err = e.ExecuteTraitQuery(q)
+	_, err = e.Run(q, RunRequest{})
 	if err == nil {
 		t.Fatal("expected invalid date comparison to fail instead of falling back to string compare")
 	}
@@ -267,7 +267,7 @@ func TestTraitValueComparison_InvalidDatetimeReturnsError(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	_, err = e.ExecuteTraitQuery(q)
+	_, err = e.Run(q, RunRequest{})
 	if err == nil {
 		t.Fatal("expected invalid datetime comparison to fail instead of falling back to string compare")
 	}
