@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/dates"
-	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
@@ -146,14 +145,7 @@ func (e *Executor) buildDateVirtualFieldPredicateSQL(p *FieldPredicate, alias st
 }
 
 func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr string, jsonPath string, now time.Time) (string, []interface{}, bool, error) {
-	cond, dateArgs, ok, err := indexschema.TryParseTemporalComparisonWithOptions(
-		value,
-		compareOpToSQL(compareOp),
-		fieldExpr,
-		indexschema.DateFilterOptions{
-			Now: now,
-		},
-	)
+	cond, dateArgs, ok, err := tryTemporalCompareSQL(value, compareOp, fieldExpr, now)
 	if err != nil {
 		return "", nil, false, err
 	}
@@ -799,13 +791,19 @@ func (e *Executor) buildElementEqualitySQL(p *ElementEqualityPredicate) (string,
 		altValue = alt
 	}
 
-	condFor := func(v string) (string, []interface{}) {
+	condFor := func(v string) (string, []interface{}, error) {
 		return e.buildCompareCondition(v, p.CompareOp, false, "json_each.value")
 	}
 
-	cond, args := condFor(value)
+	cond, args, err := condFor(value)
+	if err != nil {
+		return "", nil, err
+	}
 	if altValue != "" && (p.CompareOp == CompareEq || p.CompareOp == CompareNeq) {
-		cond2, args2 := condFor(altValue)
+		cond2, args2, err := condFor(altValue)
+		if err != nil {
+			return "", nil, err
+		}
 		if p.CompareOp == CompareEq {
 			cond = "(" + cond + " OR " + cond2 + ")"
 		} else {

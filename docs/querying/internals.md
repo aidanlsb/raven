@@ -65,6 +65,11 @@ Most predicates need changes in several places:
 
 Keep SQL builders parameterized. Do not interpolate user query values into SQL strings; return SQL fragments plus argument slices.
 
+Object-field and trait `.value` date/datetime comparisons share one SQL helper.
+Values that look like dates or datetimes but fail to parse must fail the query;
+do not fall back to string comparison. Non-temporal values may still use numeric
+or string comparison.
+
 ## Reference semantics
 
 Reference-like syntax can mean either a literal target or a nested query result set:

@@ -73,7 +73,10 @@ func TestBuildValueCondition_NumericUsesCast(t *testing.T) {
 		Value:     "10",
 		CompareOp: CompareGt,
 	}
-	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	cond, args, err := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
 	if cond != "CAST(t.value AS REAL) > ?" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -92,7 +95,10 @@ func TestBuildValueCondition_StringEqIsCaseInsensitive(t *testing.T) {
 		Value:     "TODO",
 		CompareOp: CompareEq,
 	}
-	cond, _ := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	cond, _, err := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
 	if cond != "LOWER(t.value) = LOWER(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -106,7 +112,10 @@ func TestBuildValueCondition_DateFilterToday(t *testing.T) {
 		Value:     "today",
 		CompareOp: CompareEq,
 	}
-	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	cond, args, err := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
 	if cond != "date(t.value) = date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -127,7 +136,10 @@ func TestBuildValueCondition_DateFilterTomorrowNotEqual(t *testing.T) {
 		Value:     "tomorrow",
 		CompareOp: CompareNeq,
 	}
-	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	cond, args, err := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
 	if cond != "date(t.value) != date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -144,7 +156,10 @@ func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 4, 5, 10, 30, 0, 0, time.UTC)
 	e := &Executor{nowFn: func() time.Time { return now }}
-	cond, args := e.buildCompareCondition("today", CompareLt, false, "t.value")
+	cond, args, err := e.buildCompareCondition("today", CompareLt, false, "t.value")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
 	if cond != "date(t.value) < date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -160,7 +175,10 @@ func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
 func TestBuildCompareCondition_DatetimeLiteralOrdering(t *testing.T) {
 	t.Parallel()
 	e := &Executor{}
-	cond, args := e.buildCompareCondition("2026-04-05T10:30", CompareGte, false, "t.value")
+	cond, args, err := e.buildCompareCondition("2026-04-05T10:30", CompareGte, false, "t.value")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
 	if cond != "datetime(t.value) >= datetime(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -172,12 +190,39 @@ func TestBuildCompareCondition_DatetimeLiteralOrdering(t *testing.T) {
 func TestBuildCompareCondition_UnknownKeywordFallsBackToString(t *testing.T) {
 	t.Parallel()
 	e := &Executor{}
-	cond, args := e.buildCompareCondition("this-week", CompareEq, false, "t.value")
+	cond, args, err := e.buildCompareCondition("this-week", CompareEq, false, "t.value")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
 	if cond != "LOWER(t.value) = LOWER(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 || args[0] != "this-week" {
 		t.Fatalf("args = %#v", args)
+	}
+}
+
+func TestBuildCompareCondition_InvalidDateReturnsError(t *testing.T) {
+	t.Parallel()
+	e := &Executor{}
+	_, _, err := e.buildCompareCondition("2026-13-45", CompareGt, false, "t.value")
+	if err == nil {
+		t.Fatal("expected invalid date comparison to fail instead of falling back to string compare")
+	}
+	if got := err.Error(); got != `invalid date filter: "2026-13-45"` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildCompareCondition_InvalidDatetimeReturnsError(t *testing.T) {
+	t.Parallel()
+	e := &Executor{}
+	_, _, err := e.buildCompareCondition("2026-04-05T99:00", CompareGt, false, "t.value")
+	if err == nil {
+		t.Fatal("expected invalid datetime comparison to fail instead of falling back to string compare")
+	}
+	if got := err.Error(); got != `invalid date filter: "2026-04-05T99:00"` {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

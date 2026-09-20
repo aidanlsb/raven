@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/aidanlsb/raven/internal/indexschema"
 )
 
 func wrapNot(cond string, negated bool) string {
@@ -65,6 +68,19 @@ func compareOpToSQL(op CompareOp) string {
 	default:
 		return "="
 	}
+}
+
+// tryTemporalCompareSQL compiles a date/datetime comparison when value is temporal.
+// A non-temporal value returns ok=false and a nil error so callers can fall back.
+// An invalid temporal value returns an error; callers must fail the query rather
+// than falling back to string comparison.
+func tryTemporalCompareSQL(value string, compareOp CompareOp, fieldExpr string, now time.Time) (string, []interface{}, bool, error) {
+	return indexschema.TryParseTemporalComparisonWithOptions(
+		value,
+		compareOpToSQL(compareOp),
+		fieldExpr,
+		indexschema.DateFilterOptions{Now: now},
+	)
 }
 
 func likeCond(expr string, wrapLower bool) string {

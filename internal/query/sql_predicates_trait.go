@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/aidanlsb/raven/internal/indexschema"
 )
 
 // buildTraitContentPredicateSQL builds SQL for content("search terms") predicates on traits.
@@ -91,13 +88,14 @@ func (e *Executor) buildTraitArrayQuantifierPredicateSQL(p *ArrayQuantifierPredi
 	return cond, elemArgs, nil
 }
 
-func (e *Executor) buildCompareCondition(value string, compareOp CompareOp, negated bool, column string) (string, []interface{}) {
+func (e *Executor) buildCompareCondition(value string, compareOp CompareOp, negated bool, column string) (string, []interface{}, error) {
 	// Date filters (today/tomorrow/yesterday, YYYY-MM-DD, etc.)
-	if cond, args, ok := buildDateFilterConditionForCompare(strings.TrimSpace(value), compareOp, column, e.queryNow()); ok {
-		if negated {
-			cond = "NOT (" + cond + ")"
-		}
-		return cond, args
+	cond, args, ok, err := tryTemporalCompareSQL(strings.TrimSpace(value), compareOp, column, e.queryNow())
+	if err != nil {
+		return "", nil, err
+	}
+	if ok {
+		return wrapNot(cond, negated), args, nil
 	}
 
 	// Pick operator for the predicate.
@@ -106,49 +104,24 @@ func (e *Executor) buildCompareCondition(value string, compareOp CompareOp, nega
 	// Prefer numeric comparisons when RHS parses as a number.
 	if n, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
 		cond := fmt.Sprintf("CAST(%s AS REAL) %s ?", column, op)
-		if negated {
-			cond = "NOT (" + cond + ")"
-		}
-		return cond, []interface{}{n}
+		return wrapNot(cond, negated), []interface{}{n}, nil
 	}
 
 	// String comparisons:
 	// - equality/inequality are case-insensitive (existing behavior)
 	// - ordering comparisons are case-sensitive (existing behavior)
-	cond := ""
 	if op == "=" || op == "!=" {
 		cond = fmt.Sprintf("LOWER(%s) %s LOWER(?)", column, op)
 	} else {
 		cond = fmt.Sprintf("%s %s ?", column, op)
 	}
 
-	if negated {
-		cond = "NOT (" + cond + ")"
-	}
-
-	return cond, []interface{}{value}
+	return wrapNot(cond, negated), []interface{}{value}, nil
 }
 
 // buildTraitValueFieldPredicateSQL builds SQL for .value==val predicates on traits.
 func (e *Executor) buildTraitValueFieldPredicateSQL(p *FieldPredicate, alias string) (string, []interface{}, error) {
-	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, p.Negated(), fmt.Sprintf("%s.value", alias))
-	return cond, args, nil
-}
-
-func buildDateFilterConditionForCompare(value string, compareOp CompareOp, column string, now time.Time) (string, []interface{}, bool) {
-	if value == "" {
-		return "", nil, false
-	}
-	cond, args, ok, err := indexschema.TryParseTemporalComparisonWithOptions(value, compareOpToSQL(compareOp), column, indexschema.DateFilterOptions{
-		Now: now,
-	})
-	if err != nil {
-		return "", nil, false
-	}
-	if !ok {
-		return "", nil, false
-	}
-	return cond, args, true
+	return e.buildCompareCondition(p.Value, p.CompareOp, p.Negated(), fmt.Sprintf("%s.value", alias))
 }
 
 // buildAtPredicateSQL builds SQL for at(trait:...) predicates.
