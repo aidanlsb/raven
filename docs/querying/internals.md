@@ -42,7 +42,7 @@ The parser only understands syntax. It should build AST nodes, preserve literal 
 
 The validator owns schema-aware checks. It rejects unknown object types, traits, fields, and invalid predicate/root combinations before execution. When adding a predicate that depends on field type, put those checks in the validator rather than the parser.
 
-The executor owns index-aware behavior. It resolves query-time references with the resolver, snapshots `today`/`now` for one execution, prepares SQL, and scans rows. Execution errors should be reserved for problems that require index state, such as ambiguous reference resolution.
+The executor owns index-aware behavior. It resolves query-time references with the resolver, snapshots `today`/`now` for one execution, prepares SQL, and scans rows. Execution errors should be reserved for problems that require index state, such as ambiguous reference resolution. `Executor.Run` is the single execution entry point.
 
 `internal/querysvc` owns command-flow semantics around saved queries,
 pagination, `--ids`, `--count-only`, `--apply`, refresh, and query-specific

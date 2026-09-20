@@ -187,7 +187,7 @@ func (e *Executor) buildEntityCountSQL(q *Query, spec entitySQLSpec) (string, []
 
 // queryEntityRows runs a row-returning query and scans it with the supplied
 // entity scanner. It is the single query+scan implementation shared by all
-// roots and by both the typed executor methods and Run.
+// roots through Run.
 func queryEntityRows[T any](e *Executor, sqlStr string, args []interface{}, scan func(*sql.Rows) ([]T, error)) ([]T, error) {
 	rows, err := e.db.Query(sqlStr, args...)
 	if err != nil {

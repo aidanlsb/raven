@@ -82,22 +82,22 @@ func TestExecuteString_MatchesManualParseThenExecute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	manualResult, err := exec.ExecuteObjectQuery(q)
+	manual, err := exec.Run(q, RunRequest{})
 	if err != nil {
-		t.Fatalf("ExecuteObjectQuery: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 
 	directObjects := directResult.([]model.Object)
-	if len(directObjects) != len(manualResult) {
-		t.Errorf("result count mismatch: Execute=%d, manual=%d", len(directObjects), len(manualResult))
+	if len(directObjects) != len(manual.Objects) {
+		t.Errorf("result count mismatch: Execute=%d, Run=%d", len(directObjects), len(manual.Objects))
 	}
 
 	for i := range directObjects {
-		if i >= len(manualResult) {
+		if i >= len(manual.Objects) {
 			break
 		}
-		if directObjects[i].ID != manualResult[i].ID {
-			t.Errorf("result %d: ID mismatch: %q vs %q", i, directObjects[i].ID, manualResult[i].ID)
+		if directObjects[i].ID != manual.Objects[i].ID {
+			t.Errorf("result %d: ID mismatch: %q vs %q", i, directObjects[i].ID, manual.Objects[i].ID)
 		}
 	}
 }

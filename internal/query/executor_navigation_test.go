@@ -64,12 +64,12 @@ func TestTraitWithinIncludesAttachmentScope(t *testing.T) {
 		if parseErr != nil {
 			t.Fatalf("parse error: %v", parseErr)
 		}
-		results, queryErr := executor.executeTraitQuery(q)
+		run, queryErr := executor.Run(q, RunRequest{})
 		if queryErr != nil {
 			t.Fatalf("execute error: %v", queryErr)
 		}
-		ids := make([]string, 0, len(results))
-		for _, result := range results {
+		ids := make([]string, 0, len(run.Traits))
+		for _, result := range run.Traits {
 			ids = append(ids, result.ID)
 		}
 		return ids
@@ -153,7 +153,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -163,9 +163,9 @@ func TestDirectTargetPredicates(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Objects) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Objects), tt.wantCount)
+				for _, r := range run.Objects {
 					t.Logf("  - %s (%s)", r.ID, r.Type)
 				}
 			}
@@ -213,7 +213,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -223,9 +223,9 @@ func TestDirectTargetPredicates(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Traits) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Traits), tt.wantCount)
+				for _, r := range run.Traits {
 					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentScopeID)
 				}
 			}
@@ -243,10 +243,11 @@ func TestSectionContainsNestedSection(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	results, err := NewExecutor(db).executeSectionQuery(q)
+	run, err := NewExecutor(db).Run(q, RunRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	results := run.Sections
 
 	want := map[string]bool{
 		"projects/website#tasks":          true,
@@ -289,10 +290,11 @@ func TestSectionRefsPredicateUsesCompleteSubtree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse(): %v", err)
 	}
-	results, err := NewExecutor(db).executeSectionQuery(q)
+	run, err := NewExecutor(db).Run(q, RunRequest{})
 	if err != nil {
-		t.Fatalf("executeSectionQuery(): %v", err)
+		t.Fatalf("Run(): %v", err)
 	}
+	results := run.Sections
 	if len(results) != 1 || results[0].ID != "projects/website#tasks" {
 		t.Fatalf("results = %#v, want parent Tasks section", results)
 	}
@@ -349,13 +351,13 @@ func TestAtPredicate(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Traits) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Traits), tt.wantCount)
+				for _, r := range run.Traits {
 					t.Logf("  - %s: %s (line: %d)", r.TraitType, r.Content, r.Line)
 				}
 			}
@@ -423,13 +425,13 @@ func TestRefdPredicate(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Objects) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Objects), tt.wantCount)
+				for _, r := range run.Objects {
 					t.Logf("  - %s (%s)", r.ID, r.Type)
 				}
 			}
@@ -463,13 +465,13 @@ func TestRefdShorthand(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Objects) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Objects), tt.wantCount)
+				for _, r := range run.Objects {
 					t.Logf("  - %s (%s)", r.ID, r.Type)
 				}
 			}
@@ -543,13 +545,13 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeObjectQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Objects) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Objects), tt.wantCount)
+				for _, r := range run.Objects {
 					t.Logf("  - %s (%s)", r.ID, r.Type)
 				}
 			}
@@ -597,13 +599,13 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.executeTraitQuery(q)
+			run, err := executor.Run(q, RunRequest{})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(results) != tt.wantCount {
-				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
-				for _, r := range results {
+			if len(run.Traits) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(run.Traits), tt.wantCount)
+				for _, r := range run.Traits {
 					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentScopeID)
 				}
 			}
