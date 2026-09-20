@@ -76,6 +76,20 @@ func buildStringFuncCondition(funcType StringFuncType, fieldExpr string, value s
 	}
 }
 
+// buildRefStringFuncMatchSQL matches a string function against a refs-table
+// row's resolved target_id or stored target_raw.
+func buildRefStringFuncMatchSQL(p *StringFuncPredicate, refAlias string) (string, []interface{}, error) {
+	idCond, idArgs, err := buildStringFuncCondition(p.FuncType, refAlias+".target_id", p.Value, p.CaseSensitive)
+	if err != nil {
+		return "", nil, err
+	}
+	rawCond, rawArgs, err := buildStringFuncCondition(p.FuncType, refAlias+".target_raw", p.Value, p.CaseSensitive)
+	if err != nil {
+		return "", nil, err
+	}
+	return "(" + idCond + " OR " + rawCond + ")", append(idArgs, rawArgs...), nil
+}
+
 func buildRefTargetVariantsCondition(refAlias, resolvedTarget, rawTarget string) (string, []interface{}) {
 	variants := make([]string, 0, 2)
 	seen := make(map[string]struct{}, 2)

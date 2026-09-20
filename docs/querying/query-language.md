@@ -224,6 +224,11 @@ as reference targets. Prefer canonical object IDs, such as
 `.company==company/cursor`. Unbracketed short forms such as `.company==cursor`
 are accepted as resolution sugar but can become ambiguous.
 
+String functions on scalar `ref` fields, and on `ref[]` elements inside
+`any()`/`all()`/`none()`, search the resolved target ID and the stored raw
+target. They do not search the frontmatter JSON token, so a stored wikilink
+such as `[[people/freya]]` is not matched by `includes(.company, "[[")`.
+
 The built-in `date` type has a generated `.date` field derived from the daily note's canonical `YYYY-MM-DD` object ID. It is queryable but not authored in frontmatter.
 
 ### String matching

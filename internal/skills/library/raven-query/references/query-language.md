@@ -70,7 +70,9 @@ String functions are case-insensitive by default. Add `true` as the third argume
 
 Use string predicates on scalar string-like type fields, trait `.value`, and
 the string-valued shared link fields. For array fields, use
-`any()`/`all()`/`none()` with `_`.
+`any()`/`all()`/`none()` with `_`. On `ref` fields and `ref[]` elements, string
+functions search the resolved target ID and stored raw target, not the
+frontmatter JSON token.
 
 ## Array predicates
 
