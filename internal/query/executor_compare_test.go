@@ -236,7 +236,7 @@ func TestLikeCond_EscapesWildcards(t *testing.T) {
 		CaseSensitive: true,
 	}
 
-	cond, args, err := e.buildStringFuncPredicateSQL(p, "o")
+	cond, args, err := e.buildStringFuncPredicateSQL(p, "o", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -251,6 +251,46 @@ func TestLikeCond_EscapesWildcards(t *testing.T) {
 	}
 	if args[1] != `%a\%b\_c\\z%` {
 		t.Fatalf("pattern arg = %#v", args[1])
+	}
+}
+
+func TestBuildStringFuncPredicateSQL_ScalarRefUsesRefsTable(t *testing.T) {
+	t.Parallel()
+
+	e := &Executor{}
+	e.SetSchema(&schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"person": {
+				Fields: map[string]*schema.FieldDefinition{
+					"company": {Type: schema.FieldTypeRef, Target: "company"},
+				},
+			},
+		},
+	})
+	p := &StringFuncPredicate{
+		FuncType: StringFuncIncludes,
+		Field:    "company",
+		Value:    "cursor",
+	}
+
+	cond, args, err := e.buildStringFuncPredicateSQL(p, "o", "person")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if strings.Contains(cond, "json_extract") {
+		t.Fatalf("expected refs-table SQL without json_extract, got %q", cond)
+	}
+	if !containsAll(cond,
+		"EXISTS (",
+		"FROM refs fr",
+		"fr.source_id = o.id AND fr.field_name = ?",
+		"fr.target_id",
+		"fr.target_raw",
+	) {
+		t.Fatalf("cond = %q", cond)
+	}
+	if len(args) != 3 || args[0] != "company" {
+		t.Fatalf("args = %#v", args)
 	}
 }
 

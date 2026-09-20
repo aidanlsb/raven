@@ -517,3 +517,119 @@ func TestRefArrayQuantifierCompoundPredStillChecksAmbiguity(t *testing.T) {
 		t.Fatal("expected ambiguity error for compound ref[] element pred, got nil")
 	}
 }
+
+func employeeCompanyRefSchema() *schema.Schema {
+	sch := schema.New()
+	sch.Types["employee"] = &schema.TypeDefinition{
+		Fields: map[string]*schema.FieldDefinition{
+			"company": {Type: schema.FieldTypeRef, Target: "company"},
+		},
+	}
+	sch.Types["company"] = &schema.TypeDefinition{Fields: map[string]*schema.FieldDefinition{}}
+	return sch
+}
+
+func TestScalarRefStringFuncsCompileAgainstRefs(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	// JSON stores mixed forms of the same target. A json_extract fallback would
+	// match the stored token, including wikilink punctuation, and miss a
+	// resolved ID when the file only stored a shorthand name.
+	_, err := db.Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start)
+		VALUES
+			('companies/cursor', 'companies/cursor.md', 'company', '{}', 1),
+			('companies/acme', 'companies/acme.md', 'company', '{}', 1),
+			('staff/ada', 'staff/ada.md', 'employee', '{"company":"cursor"}', 1),
+			('staff/bob', 'staff/bob.md', 'employee', '{"company":"companies/cursor"}', 1),
+			('staff/wikilink', 'staff/wikilink.md', 'employee', '{"company":"[[companies/cursor]]"}', 1),
+			('staff/eve', 'staff/eve.md', 'employee', '{"company":"acme"}', 1)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert objects: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		VALUES
+			('staff/ada', 'company', 'companies/cursor', 'cursor', 'resolved', 'staff/ada.md', 1),
+			('staff/bob', 'company', 'companies/cursor', 'companies/cursor', 'resolved', 'staff/bob.md', 1),
+			('staff/wikilink', 'company', 'companies/cursor', 'companies/cursor', 'resolved', 'staff/wikilink.md', 1),
+			('staff/eve', 'company', 'companies/acme', 'acme', 'resolved', 'staff/eve.md', 1)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert field refs: %v", err)
+	}
+
+	executor := NewExecutor(db)
+	executor.SetSchema(employeeCompanyRefSchema())
+
+	tests := []struct {
+		name    string
+		query   string
+		wantIDs map[string]bool
+	}{
+		{
+			name:    "includes resolved id matches shorthand JSON",
+			query:   `type:employee includes(.company, "companies/cursor")`,
+			wantIDs: map[string]bool{"staff/ada": true, "staff/bob": true, "staff/wikilink": true},
+		},
+		{
+			name:    "includes shorthand matches resolved stored id",
+			query:   `type:employee includes(.company, "cursor")`,
+			wantIDs: map[string]bool{"staff/ada": true, "staff/bob": true, "staff/wikilink": true},
+		},
+		{
+			name:    "wikilink punctuation in JSON is not searchable",
+			query:   `type:employee includes(.company, "[[")`,
+			wantIDs: map[string]bool{},
+		},
+		{
+			name:    "startswith resolved prefix matches shorthand JSON",
+			query:   `type:employee startswith(.company, "companies/c")`,
+			wantIDs: map[string]bool{"staff/ada": true, "staff/bob": true, "staff/wikilink": true},
+		},
+		{
+			name:    "endswith target name",
+			query:   `type:employee endswith(.company, "cursor")`,
+			wantIDs: map[string]bool{"staff/ada": true, "staff/bob": true, "staff/wikilink": true},
+		},
+		{
+			name:    "matches regex against resolved id",
+			query:   `type:employee matches(.company, "companies/c.+")`,
+			wantIDs: map[string]bool{"staff/ada": true, "staff/bob": true, "staff/wikilink": true},
+		},
+		{
+			name:    "negated includes excludes matching refs",
+			query:   `type:employee !includes(.company, "cursor")`,
+			wantIDs: map[string]bool{"staff/eve": true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+			results, err := executor.ExecuteObjectQuery(q)
+			if err != nil {
+				t.Fatalf("query error: %v", err)
+			}
+			got := make(map[string]bool, len(results))
+			for _, r := range results {
+				got[r.ID] = true
+			}
+			if len(got) != len(tt.wantIDs) {
+				t.Fatalf("got ids %#v, want %#v", got, tt.wantIDs)
+			}
+			for id := range tt.wantIDs {
+				if !got[id] {
+					t.Fatalf("missing %s in %#v", id, got)
+				}
+			}
+		})
+	}
+}

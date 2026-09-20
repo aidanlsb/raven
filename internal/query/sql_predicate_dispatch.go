@@ -49,7 +49,7 @@ func init() {
 			return e.buildSectionStringFuncPredicateSQL(p.(*StringFuncPredicate), alias)
 		},
 		{reflect.TypeOf((*StringFuncPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {
-			return e.buildStringFuncPredicateSQL(p.(*StringFuncPredicate), alias)
+			return e.buildStringFuncPredicateSQL(p.(*StringFuncPredicate), alias, typeName)
 		},
 
 		{reflect.TypeOf((*ArrayQuantifierPredicate)(nil)), QueryTypeObject}: func(e *Executor, p Predicate, alias, typeName string) (string, []interface{}, error) {

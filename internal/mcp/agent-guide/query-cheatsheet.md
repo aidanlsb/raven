@@ -17,7 +17,7 @@ Quick reference for common Raven Query Language (RQL) patterns.
   - `.field == value` (works for arrays)
   - `any(.field, _ == value)` (explicit)
 - List membership: `oneof(.field, [a, b, c])` (this is set membership, NOT the scope predicate `in(...)`)
-- String matching: `includes(.field, "text")`, `startswith(...)`, `endswith(...)`, `matches(...)`
+- String matching: `includes(.field, "text")`, `startswith(...)`, `endswith(...)`, `matches(...)`. On `ref` / `ref[]`, these search resolved target ID and stored raw target, not frontmatter JSON.
 - Text search: `content("phrase")`
 - References:
   - `refs([[target]])` (objects/traits that reference target)

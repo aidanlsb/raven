@@ -241,6 +241,10 @@ func (e *Executor) isRefArrayField(typeName, fieldName string) bool {
 	return fieldDef.Type.IsRef() && fieldDef.Type.IsArray()
 }
 
+func (e *Executor) isScalarRefField(typeName, fieldName string) bool {
+	return e.isRefField(typeName, fieldName) && !e.isRefArrayField(typeName, fieldName)
+}
+
 func (e *Executor) normalizeBoolFieldComparisonValue(typeName, fieldName, value string, op CompareOp) string {
 	if op != CompareEq && op != CompareNeq {
 		return value
@@ -664,16 +668,24 @@ func (e *Executor) buildRefArrayElementEqualitySQL(p *ElementEqualityPredicate, 
 }
 
 func (e *Executor) buildRefArrayElementStringFuncSQL(p *StringFuncPredicate, refAlias string) (string, []interface{}, error) {
-	idCond, idArgs, err := buildStringFuncCondition(p.FuncType, refAlias+".target_id", p.Value, p.CaseSensitive)
+	cond, args, err := buildRefStringFuncMatchSQL(p, refAlias)
 	if err != nil {
 		return "", nil, err
 	}
-	rawCond, rawArgs, err := buildStringFuncCondition(p.FuncType, refAlias+".target_raw", p.Value, p.CaseSensitive)
+	return wrapNot(cond, p.Negated()), args, nil
+}
+
+func (e *Executor) buildRefFieldStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {
+	matchCond, matchArgs, err := buildRefStringFuncMatchSQL(p, "fr")
 	if err != nil {
 		return "", nil, err
 	}
-	args := append(idArgs, rawArgs...)
-	return wrapNot("("+idCond+" OR "+rawCond+")", p.Negated()), args, nil
+	cond := fmt.Sprintf(`EXISTS (
+		SELECT 1 FROM refs fr
+		WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
+	)`, alias, matchCond)
+	args := append([]interface{}{p.Field}, matchArgs...)
+	return wrapNot(cond, p.Negated()), args, nil
 }
 
 func dedupeStrings(values []string) []string {
@@ -694,7 +706,11 @@ func dedupeStrings(values []string) []string {
 
 // buildStringFuncPredicateSQL builds SQL for string function predicates.
 // Handles: includes(.field, "str"), startswith(.field, "str"), endswith(.field, "str"), matches(.field, "pattern")
-func (e *Executor) buildStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {
+func (e *Executor) buildStringFuncPredicateSQL(p *StringFuncPredicate, alias, typeName string) (string, []interface{}, error) {
+	if e.isScalarRefField(typeName, p.Field) {
+		return e.buildRefFieldStringFuncPredicateSQL(p, alias)
+	}
+
 	jsonPath := jsonFieldPath(p.Field)
 	fieldExpr := fmt.Sprintf("json_extract(%s.fields, ?)", alias)
 
