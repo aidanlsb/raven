@@ -41,6 +41,18 @@ func (t FieldType) IsBool() bool {
 	return t.scalarType() == FieldTypeBool
 }
 
+// IsStringLike reports whether t is a scalar type that stores a string value
+// (string, url, date, datetime, enum, or ref). Array types are not string-like;
+// use ElementType() first when checking array elements.
+func (t FieldType) IsStringLike() bool {
+	switch t {
+	case FieldTypeString, FieldTypeURL, FieldTypeDate, FieldTypeDatetime, FieldTypeEnum, FieldTypeRef:
+		return true
+	default:
+		return false
+	}
+}
+
 func (t FieldType) scalarType() FieldType {
 	if elem, ok := t.ElementType(); ok {
 		return elem

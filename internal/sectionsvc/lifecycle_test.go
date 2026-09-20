@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 

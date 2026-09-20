@@ -6,6 +6,59 @@ import (
 	"strings"
 )
 
+type sectionFieldInfo struct {
+	name    string
+	column  string
+	numeric bool
+}
+
+// sectionFields is the single vocabulary for section built-in columns.
+// Suggestion text is derived from this list so validator messages cannot drift
+// from the SQL column map.
+var sectionFields = []sectionFieldInfo{
+	{name: "id", column: "id"},
+	{name: "file_object_id", column: "file_object_id"},
+	{name: "file_path", column: "file_path"},
+	{name: "slug", column: "slug"},
+	{name: "title", column: "title"},
+	{name: "level", column: "level", numeric: true},
+	{name: "line_start", column: "line_start", numeric: true},
+	{name: "line_end", column: "line_end", numeric: true},
+	{name: "direct_line_end", column: "line_end", numeric: true},
+	{name: "subtree_line_end", column: "subtree_line_end", numeric: true},
+	{name: "parent_section_id", column: "parent_section_id"},
+}
+
+func lookupSectionField(field string) (sectionFieldInfo, bool) {
+	for _, info := range sectionFields {
+		if info.name == field {
+			return info, true
+		}
+	}
+	return sectionFieldInfo{}, false
+}
+
+func availableSectionFields() []string {
+	names := make([]string, len(sectionFields))
+	for i, info := range sectionFields {
+		names[i] = info.name
+	}
+	return names
+}
+
+func sectionFieldColumn(alias, field string) (string, bool) {
+	info, ok := lookupSectionField(field)
+	if !ok {
+		return "", false
+	}
+	return alias + "." + info.column, true
+}
+
+func isNumericSectionField(field string) bool {
+	info, ok := lookupSectionField(field)
+	return ok && info.numeric
+}
+
 func (e *Executor) buildSectionFieldPredicateSQL(p *FieldPredicate, alias string) (string, []interface{}, error) {
 	column, ok := sectionFieldColumn(alias, p.Field)
 	if !ok {
@@ -15,13 +68,7 @@ func (e *Executor) buildSectionFieldPredicateSQL(p *FieldPredicate, alias string
 		return "", nil, fmt.Errorf("section field '.%s' does not support reference values", p.Field)
 	}
 	if p.IsExists {
-		cond := fmt.Sprintf("%s IS NOT NULL", column)
-		if p.CompareOp == CompareNeq {
-			cond = fmt.Sprintf("%s IS NULL", column)
-		}
-		if p.Negated() {
-			cond = "NOT (" + cond + ")"
-		}
+		cond := wrapNot(column+" IS NOT NULL", p.Negated())
 		return cond, nil, nil
 	}
 
@@ -42,10 +89,7 @@ func (e *Executor) buildSectionFieldPredicateSQL(p *FieldPredicate, alias string
 		cond = fmt.Sprintf("%s %s ?", column, op)
 		args = []interface{}{p.Value}
 	}
-	if p.Negated() {
-		cond = "NOT (" + cond + ")"
-	}
-	return cond, args, nil
+	return wrapNot(cond, p.Negated()), args, nil
 }
 
 func (e *Executor) buildSectionStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {
@@ -63,41 +107,5 @@ func (e *Executor) buildSectionStringFuncPredicateSQL(p *StringFuncPredicate, al
 	if err != nil {
 		return "", nil, err
 	}
-	if p.Negated() {
-		cond = "NOT (" + cond + ")"
-	}
-	return cond, args, nil
-}
-
-func sectionFieldColumn(alias, field string) (string, bool) {
-	switch field {
-	case "id":
-		return alias + ".id", true
-	case "file_object_id":
-		return alias + ".file_object_id", true
-	case "file_path":
-		return alias + ".file_path", true
-	case "slug":
-		return alias + ".slug", true
-	case "title":
-		return alias + ".title", true
-	case "level":
-		return alias + ".level", true
-	case "line_start":
-		return alias + ".line_start", true
-	case "line_end":
-		return alias + ".line_end", true
-	case "direct_line_end":
-		return alias + ".line_end", true
-	case "subtree_line_end":
-		return alias + ".subtree_line_end", true
-	case "parent_section_id":
-		return alias + ".parent_section_id", true
-	default:
-		return "", false
-	}
-}
-
-func isNumericSectionField(field string) bool {
-	return field == "level" || field == "line_start" || field == "line_end" || field == "direct_line_end" || field == "subtree_line_end"
+	return wrapNot(cond, p.Negated()), args, nil
 }

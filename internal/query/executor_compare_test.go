@@ -69,11 +69,11 @@ func TestCompareValues_Temporal(t *testing.T) {
 func TestBuildValueCondition_NumericUsesCast(t *testing.T) {
 	t.Parallel()
 	e := &Executor{}
-	p := &ValuePredicate{
+	p := &FieldPredicate{
 		Value:     "10",
 		CompareOp: CompareGt,
 	}
-	cond, args := e.buildValueCondition(p, "t.value")
+	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
 	if cond != "CAST(t.value AS REAL) > ?" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -88,11 +88,11 @@ func TestBuildValueCondition_NumericUsesCast(t *testing.T) {
 func TestBuildValueCondition_StringEqIsCaseInsensitive(t *testing.T) {
 	t.Parallel()
 	e := &Executor{}
-	p := &ValuePredicate{
+	p := &FieldPredicate{
 		Value:     "TODO",
 		CompareOp: CompareEq,
 	}
-	cond, _ := e.buildValueCondition(p, "t.value")
+	cond, _ := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
 	if cond != "LOWER(t.value) = LOWER(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -102,11 +102,11 @@ func TestBuildValueCondition_DateFilterToday(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 4, 5, 10, 30, 0, 0, time.UTC)
 	e := &Executor{nowFn: func() time.Time { return now }}
-	p := &ValuePredicate{
+	p := &FieldPredicate{
 		Value:     "today",
 		CompareOp: CompareEq,
 	}
-	cond, args := e.buildValueCondition(p, "t.value")
+	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
 	if cond != "date(t.value) = date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -123,11 +123,11 @@ func TestBuildValueCondition_DateFilterTomorrowNotEqual(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 4, 5, 10, 30, 0, 0, time.UTC)
 	e := &Executor{nowFn: func() time.Time { return now }}
-	p := &ValuePredicate{
+	p := &FieldPredicate{
 		Value:     "tomorrow",
 		CompareOp: CompareNeq,
 	}
-	cond, args := e.buildValueCondition(p, "t.value")
+	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
 	if cond != "date(t.value) != date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}

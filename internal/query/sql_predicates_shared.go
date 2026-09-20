@@ -111,28 +111,6 @@ func buildRefTargetVariantsCondition(refAlias, resolvedTarget, rawTarget string)
 // isTrait indicates if we're building for a trait query (uses different columns).
 func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait bool) (string, []interface{}, error) {
 	if p.Target != "" {
-		// Check for trait line marker: __trait_line:filepath:line
-		if strings.HasPrefix(p.Target, "__trait_line:") {
-			// Parse file:line from the marker
-			rest := strings.TrimPrefix(p.Target, "__trait_line:")
-			lastColon := strings.LastIndex(rest, ":")
-			if lastColon > 0 {
-				filePath := rest[:lastColon]
-				lineStr := rest[lastColon+1:]
-				// Find refs on that specific line
-				cond := fmt.Sprintf(`EXISTS (
-					SELECT 1 FROM refs r
-					WHERE r.file_path = ?
-					  AND r.line_number = ?
-					  AND (r.target_id = %s.id OR r.target_raw = %s.id)
-				)`, alias, alias)
-				if p.Negated() {
-					cond = "NOT " + cond
-				}
-				return cond, []interface{}{filePath, lineStr}, nil
-			}
-		}
-
 		// Referenced by a specific source
 		sourceID, err := e.resolveTarget(p.Target)
 		if err != nil {

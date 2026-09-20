@@ -45,14 +45,7 @@ func buildLinkFieldPredicateSQL(p *FieldPredicate, alias string) (string, []inte
 	}
 
 	if p.IsExists {
-		cond := column + " IS NOT NULL"
-		if p.CompareOp == CompareNeq {
-			cond = column + " IS NULL"
-		}
-		if p.Negated() {
-			cond = "NOT (" + cond + ")"
-		}
-		return cond, nil, nil
+		return wrapNot(column+" IS NOT NULL", p.Negated()), nil, nil
 	}
 
 	fieldType := linkFieldTypes[p.Field]

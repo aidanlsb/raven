@@ -32,7 +32,6 @@ const (
 	predKindLinks
 	predKindRefd
 	predKindContent
-	predKindValue
 	predKindAt
 )
 
@@ -61,8 +60,6 @@ func predicateKindOf(pred Predicate) predKind {
 		return predKindRefd
 	case *ContentPredicate:
 		return predKindContent
-	case *ValuePredicate:
-		return predKindValue
 	case *AtPredicate:
 		return predKindAt
 	default:
@@ -84,10 +81,6 @@ type predicateCapability struct {
 // checks performed elsewhere).
 var disallowedPredicates = map[QueryType]map[predKind]predicateCapability{
 	QueryTypeObject: {
-		predKindValue: {
-			message:    "value predicate is only valid for trait queries",
-			suggestion: "Use .value==X in trait queries, or use .field==X for type fields",
-		},
 		predKindIn: {
 			message:    "in() predicate is only valid for trait and section queries",
 			suggestion: "Use in(type:...) or in(section ...) on traits or sections",
@@ -119,10 +112,6 @@ var disallowedPredicates = map[QueryType]map[predKind]predicateCapability{
 		predKindArray: {
 			message:    "array predicates are not valid for section queries",
 			suggestion: "Sections only expose scalar built-in fields",
-		},
-		predKindValue: {
-			message:    "value predicates are not valid for section queries",
-			suggestion: "Use section fields such as .title, .slug, or .level",
 		},
 		predKindAt: {
 			message:    "at() predicate is only valid for trait queries",
@@ -161,10 +150,6 @@ var disallowedPredicates = map[QueryType]map[predKind]predicateCapability{
 		predKindContent: {
 			message:    "content() predicate is not valid for link queries",
 			suggestion: `Use string functions on link fields, such as includes(.display, "text")`,
-		},
-		predKindValue: {
-			message:    "value predicates are not valid for link queries",
-			suggestion: "Use link fields such as .raw_target, .display, .ext, or .scheme",
 		},
 		predKindAt: {
 			message:    "at() predicate is not valid for link queries",

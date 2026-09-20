@@ -6,38 +6,39 @@ func TestFieldTypeFamilies(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		typ     FieldType
-		elem    FieldType
-		hasElem bool
-		isArray bool
-		isRef   bool
-		isEnum  bool
-		isBool  bool
-		isValid bool
+		name         string
+		typ          FieldType
+		elem         FieldType
+		hasElem      bool
+		isArray      bool
+		isRef        bool
+		isEnum       bool
+		isBool       bool
+		isStringLike bool
+		isValid      bool
 	}{
-		{"string", FieldTypeString, "", false, false, false, false, false, true},
-		{"string[]", FieldTypeStringArray, FieldTypeString, true, true, false, false, false, true},
-		{"number", FieldTypeNumber, "", false, false, false, false, false, true},
-		{"number[]", FieldTypeNumberArray, FieldTypeNumber, true, true, false, false, false, true},
-		{"url", FieldTypeURL, "", false, false, false, false, false, true},
-		{"url[]", FieldTypeURLArray, FieldTypeURL, true, true, false, false, false, true},
-		{"date", FieldTypeDate, "", false, false, false, false, false, true},
-		{"date[]", FieldTypeDateArray, FieldTypeDate, true, true, false, false, false, true},
-		{"datetime", FieldTypeDatetime, "", false, false, false, false, false, true},
-		{"datetime[]", FieldTypeDatetimeArray, FieldTypeDatetime, true, true, false, false, false, true},
-		{"enum", FieldTypeEnum, "", false, false, false, true, false, true},
-		{"enum[]", FieldTypeEnumArray, FieldTypeEnum, true, true, false, true, false, true},
-		{"bool", FieldTypeBool, "", false, false, false, false, true, true},
-		{"bool[]", FieldTypeBoolArray, FieldTypeBool, true, true, false, false, true, true},
-		{"ref", FieldTypeRef, "", false, false, true, false, false, true},
-		{"ref[]", FieldTypeRefArray, FieldTypeRef, true, true, true, false, false, true},
-		{"empty", FieldType(""), "", false, false, false, false, false, false},
-		{"unknown", FieldType("unknown"), "", false, false, false, false, false, false},
-		{"unknown array suffix", FieldType("unknown[]"), "", false, false, false, false, false, false},
-		{"boolean alias", FieldType("boolean"), "", false, false, false, false, false, false},
-		{"reference alias", FieldType("reference"), "", false, false, false, false, false, false},
-		{"reference array alias", FieldType("reference[]"), "", false, false, false, false, false, false},
+		{"string", FieldTypeString, "", false, false, false, false, false, true, true},
+		{"string[]", FieldTypeStringArray, FieldTypeString, true, true, false, false, false, false, true},
+		{"number", FieldTypeNumber, "", false, false, false, false, false, false, true},
+		{"number[]", FieldTypeNumberArray, FieldTypeNumber, true, true, false, false, false, false, true},
+		{"url", FieldTypeURL, "", false, false, false, false, false, true, true},
+		{"url[]", FieldTypeURLArray, FieldTypeURL, true, true, false, false, false, false, true},
+		{"date", FieldTypeDate, "", false, false, false, false, false, true, true},
+		{"date[]", FieldTypeDateArray, FieldTypeDate, true, true, false, false, false, false, true},
+		{"datetime", FieldTypeDatetime, "", false, false, false, false, false, true, true},
+		{"datetime[]", FieldTypeDatetimeArray, FieldTypeDatetime, true, true, false, false, false, false, true},
+		{"enum", FieldTypeEnum, "", false, false, false, true, false, true, true},
+		{"enum[]", FieldTypeEnumArray, FieldTypeEnum, true, true, false, true, false, false, true},
+		{"bool", FieldTypeBool, "", false, false, false, false, true, false, true},
+		{"bool[]", FieldTypeBoolArray, FieldTypeBool, true, true, false, false, true, false, true},
+		{"ref", FieldTypeRef, "", false, false, true, false, false, true, true},
+		{"ref[]", FieldTypeRefArray, FieldTypeRef, true, true, true, false, false, false, true},
+		{"empty", FieldType(""), "", false, false, false, false, false, false, false},
+		{"unknown", FieldType("unknown"), "", false, false, false, false, false, false, false},
+		{"unknown array suffix", FieldType("unknown[]"), "", false, false, false, false, false, false, false},
+		{"boolean alias", FieldType("boolean"), "", false, false, false, false, false, false, false},
+		{"reference alias", FieldType("reference"), "", false, false, false, false, false, false, false},
+		{"reference array alias", FieldType("reference[]"), "", false, false, false, false, false, false, false},
 	}
 
 	for _, tt := range tests {
@@ -60,6 +61,9 @@ func TestFieldTypeFamilies(t *testing.T) {
 			}
 			if got := tt.typ.IsBool(); got != tt.isBool {
 				t.Errorf("IsBool() = %v, want %v", got, tt.isBool)
+			}
+			if got := tt.typ.IsStringLike(); got != tt.isStringLike {
+				t.Errorf("IsStringLike() = %v, want %v", got, tt.isStringLike)
 			}
 			if got := IsValidFieldType(tt.typ); got != tt.isValid {
 				t.Errorf("IsValidFieldType() = %v, want %v", got, tt.isValid)

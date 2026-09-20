@@ -274,8 +274,6 @@ func (v *Validator) validateLegalObjectPredicate(typeName string, typeDef *schem
 
 func (v *Validator) validateLegalTraitPredicate(traitName string, pred Predicate) error {
 	switch p := pred.(type) {
-	case *ValuePredicate:
-		return nil
 	case *FieldPredicate:
 		// Allow .value for traits (the trait's value field).
 		if p.Field == "value" {
@@ -329,7 +327,7 @@ func (v *Validator) validateLegalSectionPredicate(pred Predicate) error {
 		if _, ok := sectionFieldColumn("s", p.Field); !ok {
 			return &ValidationError{
 				Message:    fmt.Sprintf("section has no field '%s'", p.Field),
-				Suggestion: "Available section fields: id, file_object_id, file_path, slug, title, level, line_start, line_end, direct_line_end, subtree_line_end, parent_section_id",
+				Suggestion: fmt.Sprintf("Available section fields: %s", strings.Join(availableSectionFields(), ", ")),
 			}
 		}
 		if isNumericSectionField(p.Field) {
@@ -345,7 +343,7 @@ func (v *Validator) validateLegalSectionPredicate(pred Predicate) error {
 		if _, ok := sectionFieldColumn("s", p.Field); !ok {
 			return &ValidationError{
 				Message:    fmt.Sprintf("section has no field '%s'", p.Field),
-				Suggestion: "Available section fields: id, file_object_id, file_path, slug, title, level, line_start, line_end, direct_line_end, subtree_line_end, parent_section_id",
+				Suggestion: fmt.Sprintf("Available section fields: %s", strings.Join(availableSectionFields(), ", ")),
 			}
 		}
 		if isNumericSectionField(p.Field) {
@@ -444,7 +442,7 @@ func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, ty
 			}
 		}
 
-		if !isStringLikeFieldType(fieldDef.Type) {
+		if !fieldDef.Type.IsStringLike() {
 			return &ValidationError{
 				Message:    fmt.Sprintf("string function predicates are not valid for field '.%s' of type %s", p.Field, fieldDef.Type),
 				Suggestion: "Use comparison predicates (.field==value, .field!=value, .field<value, etc.) for non-string fields",
@@ -492,7 +490,7 @@ func (v *Validator) validateArrayElementPredicate(pred Predicate, elemType schem
 				Suggestion: `Use includes(_, "..."), startswith(_, "..."), endswith(_, "..."), or matches(_, "...")`,
 			}
 		}
-		if !isStringLikeFieldType(elemType) {
+		if !elemType.IsStringLike() {
 			return &ValidationError{
 				Message:    fmt.Sprintf("string functions are not valid for array elements of type %s", elemType),
 				Suggestion: "Use element comparisons (_==value, _!=value, _<value, etc.) for non-string array element types",
@@ -557,20 +555,6 @@ func (v *Validator) fieldDefinitionForType(typeName string, typeDef *schema.Type
 	}
 
 	return fieldDef, nil
-}
-
-func isStringLikeFieldType(fieldType schema.FieldType) bool {
-	switch fieldType {
-	case schema.FieldTypeString,
-		schema.FieldTypeURL,
-		schema.FieldTypeDate,
-		schema.FieldTypeDatetime,
-		schema.FieldTypeEnum,
-		schema.FieldTypeRef:
-		return true
-	default:
-		return false
-	}
 }
 
 func (v *Validator) availableTypes() []string {

@@ -367,3 +367,153 @@ func TestRefFieldQueryBatchesDistinctAmbiguityChecksWithinExecution(t *testing.T
 		t.Fatalf("ambiguity checks = %d, want 1", checkCount)
 	}
 }
+
+func ownerRefArraySchema() *schema.Schema {
+	sch := schema.New()
+	sch.Types["task"] = &schema.TypeDefinition{
+		Fields: map[string]*schema.FieldDefinition{
+			"owners": {Type: schema.FieldTypeRefArray, Target: "person"},
+		},
+	}
+	sch.Types["person"] = &schema.TypeDefinition{Fields: map[string]*schema.FieldDefinition{}}
+	return sch
+}
+
+func TestRefArrayQuantifierCompilesCompoundElementPredsAgainstRefs(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	// JSON stores shorthand names. A json_each fallback would compare those
+	// strings to resolved IDs like "people/freya" and miss. The refs table
+	// holds the resolved target, which is what compound element preds must use.
+	_, err := db.Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start)
+		VALUES
+			('tasks/ada', 'tasks/ada.md', 'task', '{"owners":["freya","loki"]}', 1),
+			('tasks/loki', 'tasks/loki.md', 'task', '{"owners":["loki"]}', 1)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert objects: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		VALUES
+			('tasks/ada', 'owners', 'people/freya', 'freya', 'resolved', 'tasks/ada.md', 1),
+			('tasks/ada', 'owners', 'people/loki', 'loki', 'resolved', 'tasks/ada.md', 1),
+			('tasks/loki', 'owners', 'people/loki', 'loki', 'resolved', 'tasks/loki.md', 1)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert field refs: %v", err)
+	}
+
+	executor := NewExecutor(db)
+	executor.SetSchema(ownerRefArraySchema())
+
+	tests := []struct {
+		name    string
+		query   string
+		wantIDs map[string]bool
+	}{
+		{
+			name:    "leaf equality uses refs",
+			query:   `type:task any(.owners, _ == [[people/freya]])`,
+			wantIDs: map[string]bool{"tasks/ada": true},
+		},
+		{
+			name:    "compound OR uses refs, not json_each",
+			query:   `type:task any(.owners, _ == [[people/freya]] | _ == [[people/loki]])`,
+			wantIDs: map[string]bool{"tasks/ada": true, "tasks/loki": true},
+		},
+		{
+			name:    "none of resolved target",
+			query:   `type:task none(.owners, _ == [[people/freya]])`,
+			wantIDs: map[string]bool{"tasks/loki": true},
+		},
+		{
+			name:    "all equal to one resolved target",
+			query:   `type:task all(.owners, _ == [[people/loki]])`,
+			wantIDs: map[string]bool{"tasks/loki": true},
+		},
+		{
+			name:    "any not-equal still uses refs",
+			query:   `type:task any(.owners, _ != [[people/freya]])`,
+			wantIDs: map[string]bool{"tasks/ada": true, "tasks/loki": true},
+		},
+		{
+			name:    "string func matches resolved id or raw",
+			query:   `type:task any(.owners, includes(_, "freya"))`,
+			wantIDs: map[string]bool{"tasks/ada": true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+			results, err := executor.ExecuteObjectQuery(q)
+			if err != nil {
+				t.Fatalf("query error: %v", err)
+			}
+			got := make(map[string]bool, len(results))
+			for _, r := range results {
+				got[r.ID] = true
+			}
+			if len(got) != len(tt.wantIDs) {
+				t.Fatalf("got ids %#v, want %#v", got, tt.wantIDs)
+			}
+			for id := range tt.wantIDs {
+				if !got[id] {
+					t.Fatalf("missing %s in %#v", id, got)
+				}
+			}
+		})
+	}
+}
+
+func TestRefArrayQuantifierCompoundPredStillChecksAmbiguity(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start)
+		VALUES
+			('companies/cursor', 'companies/cursor.md', 'company', '{}', 1),
+			('orgs/cursor', 'orgs/cursor.md', 'company', '{}', 1),
+			('tasks/ada', 'tasks/ada.md', 'task', '{"owners":["cursor"]}', 1)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert objects: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		VALUES ('tasks/ada', 'owners', NULL, 'cursor', 'ambiguous', 'tasks/ada.md', 1)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert field ref: %v", err)
+	}
+
+	sch := schema.New()
+	sch.Types["task"] = &schema.TypeDefinition{
+		Fields: map[string]*schema.FieldDefinition{
+			"owners": {Type: schema.FieldTypeRefArray, Target: "company"},
+		},
+	}
+	sch.Types["company"] = &schema.TypeDefinition{Fields: map[string]*schema.FieldDefinition{}}
+
+	executor := NewExecutor(db)
+	executor.SetSchema(sch)
+
+	q, err := Parse(`type:task any(.owners, _ == [[companies/cursor]] | _ == [[orgs/cursor]])`)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if _, err := executor.ExecuteObjectQuery(q); err == nil {
+		t.Fatal("expected ambiguity error for compound ref[] element pred, got nil")
+	}
+}

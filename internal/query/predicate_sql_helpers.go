@@ -6,6 +6,50 @@ import (
 	"strings"
 )
 
+func wrapNot(cond string, negated bool) string {
+	if negated {
+		return "NOT (" + cond + ")"
+	}
+	return cond
+}
+
+func compileBooleanPredicate(pred Predicate, leaf func(Predicate) (string, []interface{}, error)) (string, []interface{}, error) {
+	switch p := pred.(type) {
+	case *OrPredicate:
+		var conditions []string
+		var args []interface{}
+		for _, subPred := range p.Predicates {
+			cond, predArgs, err := compileBooleanPredicate(subPred, leaf)
+			if err != nil {
+				return "", nil, err
+			}
+			conditions = append(conditions, cond)
+			args = append(args, predArgs...)
+		}
+		return "(" + strings.Join(conditions, " OR ") + ")", args, nil
+	case *NotPredicate:
+		cond, args, err := compileBooleanPredicate(p.Inner, leaf)
+		if err != nil {
+			return "", nil, err
+		}
+		return "NOT (" + cond + ")", args, nil
+	case *GroupPredicate:
+		var conditions []string
+		var args []interface{}
+		for _, subPred := range p.Predicates {
+			cond, predArgs, err := compileBooleanPredicate(subPred, leaf)
+			if err != nil {
+				return "", nil, err
+			}
+			conditions = append(conditions, cond)
+			args = append(args, predArgs...)
+		}
+		return "(" + strings.Join(conditions, " AND ") + ")", args, nil
+	default:
+		return leaf(pred)
+	}
+}
+
 func compareOpToSQL(op CompareOp) string {
 	switch op {
 	case CompareNeq:
@@ -37,7 +81,6 @@ func jsonFieldPath(field string) string {
 }
 
 func fieldExistsCond(alias string, jsonPath string, negated bool) (string, []interface{}) {
-	// notnull(.field) means field exists, isnull(.field) means field doesn't exist
 	if negated {
 		return fmt.Sprintf("json_extract(%s.fields, ?) IS NULL", alias), []interface{}{jsonPath}
 	}

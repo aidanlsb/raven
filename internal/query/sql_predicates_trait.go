@@ -91,17 +91,6 @@ func (e *Executor) buildTraitArrayQuantifierPredicateSQL(p *ArrayQuantifierPredi
 	return cond, elemArgs, nil
 }
 
-// buildValuePredicateSQL builds SQL for value==val predicates.
-// Comparisons are case-insensitive for equality, but case-sensitive for ordering comparisons.
-func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (string, []interface{}, error) {
-	cond, args := e.buildValueCondition(p, fmt.Sprintf("%s.value", alias))
-	return cond, args, nil
-}
-
-func (e *Executor) buildValueCondition(p *ValuePredicate, column string) (string, []interface{}) {
-	return e.buildCompareCondition(p.Value, p.CompareOp, p.Negated(), column)
-}
-
 func (e *Executor) buildCompareCondition(value string, compareOp CompareOp, negated bool, column string) (string, []interface{}) {
 	// Date filters (today/tomorrow/yesterday, YYYY-MM-DD, etc.)
 	if cond, args, ok := buildDateFilterConditionForCompare(strings.TrimSpace(value), compareOp, column, e.queryNow()); ok {
@@ -141,7 +130,6 @@ func (e *Executor) buildCompareCondition(value string, compareOp CompareOp, nega
 }
 
 // buildTraitValueFieldPredicateSQL builds SQL for .value==val predicates on traits.
-// This is the newer syntax that replaces the bare value== syntax.
 func (e *Executor) buildTraitValueFieldPredicateSQL(p *FieldPredicate, alias string) (string, []interface{}, error) {
 	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, p.Negated(), fmt.Sprintf("%s.value", alias))
 	return cond, args, nil
@@ -167,19 +155,6 @@ func buildDateFilterConditionForCompare(value string, compareOp CompareOp, colum
 // Matches traits at the same file:line location as matching traits.
 func (e *Executor) buildAtPredicateSQL(p *AtPredicate, alias string) (string, []interface{}, error) {
 	if p.Target != "" {
-		// Check for special self-reference marker from at:_ binding
-		if strings.HasPrefix(p.Target, "__selfref_trait:") {
-			// Parse file:line from the marker
-			parts := strings.SplitN(strings.TrimPrefix(p.Target, "__selfref_trait:"), ":", 2)
-			if len(parts) == 2 {
-				cond := fmt.Sprintf(`(%s.file_path = ? AND %s.line_number = ?)`, alias, alias)
-				if p.Negated() {
-					cond = "NOT " + cond
-				}
-				return cond, []interface{}{parts[0], parts[1]}, nil
-			}
-		}
-
 		// Direct reference to specific trait location
 		// Need to look up the trait's file:line
 		cond := fmt.Sprintf(`EXISTS (
