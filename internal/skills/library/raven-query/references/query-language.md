@@ -46,7 +46,8 @@ Scope shortcuts: downward (`has`/`contains`) live on container roots (`type:`/`s
 
 Traits attach to the nearest section, so lead with the forgiving forms: use `type:project contains(trait:todo ...)` (not `has`) and `trait:todo within(type:project)` (not `in`). `in(...)` is containment scope, not set membership — for value-in-a-set use `oneof(.field, [...])`.
 
-For both `refs(...)` and `links(...)`, type roots inspect the whole file,
+For both `refs(...)` and `links(...)`, type roots inspect the whole file
+(including section-fragment `source_id` values such as `objectId#slug`),
 section roots inspect the complete section subtree, and trait roots inspect
 only the trait's source line. The bare `link` root supports neither predicate.
 

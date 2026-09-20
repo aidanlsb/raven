@@ -73,7 +73,7 @@ Reading the scope rows:
 
 Outgoing predicate scope is also root-dependent:
 
-- On `type:<t>`, `refs(...)` and `links(...)` inspect the whole file, including its section tree.
+- On `type:<t>`, `refs(...)` and `links(...)` inspect the whole file, including edges whose `source_id` is a section fragment (`objectId#slug`).
 - On `section`, both predicates inspect that section's complete subtree.
 - On `trait:<name>`, both predicates inspect only the trait's source line.
 - The bare `link` root has neither predicate; it already returns the outgoing edge rows.

@@ -267,7 +267,7 @@ func scopeParentExpr(alias string, root QueryType) string {
 func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root QueryType) (string, []interface{}, error) {
 	var cond string
 	var args []interface{}
-	sourceCond, err := refsSourceCondition(alias, root)
+	sourceCond, err := edgeSourceCondition("r", alias, root, "refs")
 	if err != nil {
 		return "", nil, err
 	}
@@ -321,22 +321,6 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root Qu
 	}
 
 	return cond, args, nil
-}
-
-func refsSourceCondition(alias string, root QueryType) (string, error) {
-	switch root {
-	case QueryTypeObject:
-		return fmt.Sprintf("(r.source_id = %[1]s.id OR r.source_id LIKE %[1]s.id || '#%%')", alias), nil
-	case QueryTypeTrait:
-		return fmt.Sprintf("r.file_path = %[1]s.file_path AND r.line_number = %[1]s.line_number", alias), nil
-	case QueryTypeSection:
-		return fmt.Sprintf(
-			"r.file_path = %[1]s.file_path AND r.line_number >= %[1]s.line_start AND (%[1]s.subtree_line_end IS NULL OR r.line_number <= %[1]s.subtree_line_end)",
-			alias,
-		), nil
-	default:
-		return "", fmt.Errorf("refs() predicate is not supported for %s queries", queryTypeName(root))
-	}
 }
 
 // buildContentPredicateSQL builds SQL for content("search terms") predicates.

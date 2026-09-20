@@ -85,7 +85,8 @@ results, and the delegated file-level bulk move rejects section IDs. Invoke
 Use `links(...)` on type, section, or trait roots to filter by outgoing non-Raven
 links, for example `type:project links(.ext==pdf)` or
 `trait:todo links(.is_image==true)`.
-For both `refs(...)` and `links(...)`, a type root covers the whole file, a
+For both `refs(...)` and `links(...)`, a type root covers the whole file
+(including section-fragment `source_id` values such as `objectId#slug`), a
 section root covers the complete section subtree, and a trait root covers only
 the trait's source line.
 

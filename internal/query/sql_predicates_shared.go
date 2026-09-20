@@ -51,6 +51,26 @@ func (e *Executor) buildGroupPredicateSQL(p *GroupPredicate, alias string,
 	return "(" + strings.Join(conditions, " AND ") + ")", args, nil
 }
 
+// edgeSourceCondition scopes refs/links edge rows to a query root.
+// Object roots include the file object and any section-fragment source IDs
+// under it (source_id = id OR source_id LIKE id || '#%'). Trait roots use the
+// source line; section roots use the complete subtree line range.
+func edgeSourceCondition(edgeAlias, rootAlias string, root QueryType, predName string) (string, error) {
+	switch root {
+	case QueryTypeObject:
+		return fmt.Sprintf("(%[1]s.source_id = %[2]s.id OR %[1]s.source_id LIKE %[2]s.id || '#%%')", edgeAlias, rootAlias), nil
+	case QueryTypeTrait:
+		return fmt.Sprintf("%[1]s.file_path = %[2]s.file_path AND %[1]s.line_number = %[2]s.line_number", edgeAlias, rootAlias), nil
+	case QueryTypeSection:
+		return fmt.Sprintf(
+			"%[1]s.file_path = %[2]s.file_path AND %[1]s.line_number >= %[2]s.line_start AND (%[2]s.subtree_line_end IS NULL OR %[1]s.line_number <= %[2]s.subtree_line_end)",
+			edgeAlias, rootAlias,
+		), nil
+	default:
+		return "", fmt.Errorf("%s() predicate is not supported for %s queries", predName, queryTypeName(root))
+	}
+}
+
 // buildStringFuncCondition builds SQL for string function predicates against a field expression.
 func buildStringFuncCondition(funcType StringFuncType, fieldExpr string, value string, caseSensitive bool) (string, []interface{}, error) {
 	wrapLower := !caseSensitive
