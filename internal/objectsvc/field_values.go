@@ -3,6 +3,7 @@ package objectsvc
 import (
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -30,4 +31,11 @@ func ensureNameFieldValue(fields map[string]fieldvalue.FieldValue, typeDef *sche
 
 func fieldValueMatchesValue(existing, input fieldvalue.FieldValue) bool {
 	return fieldmutation.SerializeFieldValueLiteral(existing) == fieldmutation.SerializeFieldValueLiteral(input)
+}
+
+func objectTypeOrPage(fm *parser.Frontmatter) string {
+	if fm == nil || fm.ObjectType == "" {
+		return "page"
+	}
+	return fm.ObjectType
 }

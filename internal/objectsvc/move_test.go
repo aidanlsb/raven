@@ -14,10 +14,12 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestMoveFileUpdatesBacklinksAfterRename(t *testing.T) {
@@ -731,6 +733,21 @@ func indexVaultFiles(t *testing.T, vaultPath string, sch *schema.Schema, relPath
 		if err := db.IndexDocument(doc, sch); err != nil {
 			t.Fatalf("index %s: %v", relPath, err)
 		}
+	}
+}
+
+func TestRemapSourceIDThroughMoves(t *testing.T) {
+	t.Parallel()
+	rt := &vaultruntime.Runtime{}
+	got := remapSourceIDThroughMoves("people/freya#notes", rt, MoveFileRequest{
+		SourceObjectID:    "people/freya",
+		DestinationObject: "archive/freya",
+		PriorMoves: []mutation.Move{
+			{From: "notes/ref.md", To: "kept/ref.md"},
+		},
+	})
+	if got != "archive/freya#notes" {
+		t.Fatalf("remapSourceIDThroughMoves() = %q, want archive/freya#notes", got)
 	}
 }
 

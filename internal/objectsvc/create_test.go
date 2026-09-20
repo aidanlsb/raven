@@ -8,9 +8,41 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
+
+func TestFillRequiredFieldDefaultsDoesNotMutateInput(t *testing.T) {
+	t.Parallel()
+	typeDef := &schema.TypeDefinition{
+		Fields: map[string]*schema.FieldDefinition{
+			"title": {
+				Type:     schema.FieldTypeString,
+				Required: true,
+			},
+			"status": {
+				Type:     schema.FieldTypeString,
+				Required: true,
+				Default:  "open",
+			},
+		},
+	}
+	in := map[string]fieldvalue.FieldValue{
+		"title": fieldvalue.String("Ship it"),
+	}
+	filled, missing := fillRequiredFieldDefaults(typeDef, in)
+	if len(missing) != 0 {
+		t.Fatalf("unexpected missing fields: %#v", missing)
+	}
+	if _, ok := in["status"]; ok {
+		t.Fatal("fillRequiredFieldDefaults mutated the input map")
+	}
+	if got, ok := filled["status"]; !ok || fieldmutation.SerializeFieldValueLiteral(got) != "open" {
+		t.Fatalf("expected default status=open, filled=%#v", filled)
+	}
+}
 
 func TestCreateObjectSuccess(t *testing.T) {
 	t.Parallel()

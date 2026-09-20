@@ -55,10 +55,7 @@ func SetObjectFile(rt *vaultruntime.Runtime, req SetObjectFileRequest) (*SetObje
 		return nil, svcerr.New(codes.ErrInvalidInput, "file has no frontmatter").WithSuggestion("The file must have YAML frontmatter (---) to set fields")
 	}
 
-	objectType := fm.ObjectType
-	if objectType == "" {
-		objectType = "page"
-	}
+	objectType := objectTypeOrPage(fm)
 
 	refCtx := createRefValidationContext(rt)
 	newContent, warningMessages, err := fieldmutation.PrepareValidatedFrontmatterMutationValues(

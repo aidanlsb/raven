@@ -96,10 +96,7 @@ func Reclassify(rt *vaultruntime.Runtime, req ReclassifyRequest) (*ReclassifyRes
 		return nil, svcerr.New(codes.ErrInvalidInput, "file has no frontmatter").WithSuggestion("The file must have YAML frontmatter (---) to reclassify")
 	}
 
-	oldType := fm.ObjectType
-	if oldType == "" {
-		oldType = "page"
-	}
+	oldType := objectTypeOrPage(fm)
 
 	if req.NewTypeName == oldType {
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("object is already type '%s'", oldType)).WithSuggestion("Specify a different target type")
@@ -111,12 +108,7 @@ func Reclassify(rt *vaultruntime.Runtime, req ReclassifyRequest) (*ReclassifyRes
 
 	newTypeDef, typeExists := rt.Schema.Types[req.NewTypeName]
 	if !typeExists {
-		var typeNames []string
-		for name := range rt.Schema.Types {
-			typeNames = append(typeNames, name)
-		}
-		sort.Strings(typeNames)
-		return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", req.NewTypeName)).WithSuggestion(fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", "))).WithDetails(map[string]interface{}{"available_types": typeNames})
+		return nil, typeNotFoundError(rt.Schema, req.NewTypeName)
 	}
 
 	fieldValues := cloneFieldValues(req.FieldValues)
@@ -136,7 +128,7 @@ func Reclassify(rt *vaultruntime.Runtime, req ReclassifyRequest) (*ReclassifyRes
 			"retry_with": map[string]interface{}{
 				"object":   objectRef,
 				"new_type": req.NewTypeName,
-				"field":    buildReclassifyFieldTemplate(missingFieldNames),
+				"field":    buildFieldTemplate(missingFieldNames),
 			},
 		}
 
@@ -406,12 +398,4 @@ func updateFrontmatterForReclassify(content, newType string, fieldValues map[str
 	}
 
 	return newFrontmatter + strings.Join(lines[endLine+1:], "\n"), nil
-}
-
-func buildReclassifyFieldTemplate(missingFields []string) map[string]string {
-	result := make(map[string]string, len(missingFields))
-	for _, f := range missingFields {
-		result[f] = "<value>"
-	}
-	return result
 }

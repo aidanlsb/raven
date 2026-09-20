@@ -313,6 +313,94 @@ traits: {}
 	}
 }
 
+func TestWriteCreateAppliesFieldDefault(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  task:
+    default_path: task/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      status:
+        type: string
+        required: true
+        default: open
+traits: {}
+`)
+	rt := testRuntime(t, vaultPath)
+	result, err := Write(rt, WriteRequest{
+		TypeName:   "task",
+		Title:      "Ship it",
+		TargetPath: "Ship it",
+	})
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if result.Status != "created" {
+		t.Fatalf("expected created status, got %q", result.Status)
+	}
+
+	created, err := os.ReadFile(result.FilePath)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	if !strings.Contains(string(created), "status: open") {
+		t.Fatalf("expected schema default status, got:\n%s", created)
+	}
+}
+
+func TestWriteCreateWithContentSkipsTemplate(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+version: 2
+templates:
+  missing_default:
+    file: templates/does-not-exist.md
+types:
+  interview:
+    default_path: interviews/
+    name_field: title
+    templates: [missing_default]
+    default_template: missing_default
+    fields:
+      title:
+        type: string
+        required: true
+traits: {}
+`)
+	rt := testRuntime(t, vaultPath)
+	result, err := Write(rt, WriteRequest{
+		TypeName:    "interview",
+		Title:       "Jane Doe",
+		TargetPath:  "Jane Doe",
+		ReplaceBody: true,
+		Content:     "# Interview notes",
+	})
+	if err != nil {
+		t.Fatalf("Write with content should not require the type template: %v", err)
+	}
+	if result.Status != "created" {
+		t.Fatalf("expected created status, got %q", result.Status)
+	}
+
+	created, err := os.ReadFile(result.FilePath)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	content := string(created)
+	if !strings.Contains(content, "# Interview notes") {
+		t.Fatalf("expected provided body, got:\n%s", content)
+	}
+	if strings.Contains(content, "does-not-exist") {
+		t.Fatalf("template path leaked into created file:\n%s", content)
+	}
+}
+
 func writeTestSchema(t *testing.T, vaultPath, content string) {
 	t.Helper()
 	path := filepath.Join(vaultPath, "schema.yaml")

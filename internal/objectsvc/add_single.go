@@ -31,8 +31,8 @@ type AddResult struct {
 }
 
 func Add(rt *vaultruntime.Runtime, req AddRequest) (*AddResult, error) {
-	if err := vaultruntime.Require(rt); err != nil {
-		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault runtime is required", err)
+	if err := requireVaultConfig(rt); err != nil {
+		return nil, err
 	}
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg

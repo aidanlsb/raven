@@ -52,10 +52,7 @@ func UnsetObjectFile(rt *vaultruntime.Runtime, req UnsetObjectFileRequest) (*Uns
 		return nil, svcerr.New(codes.ErrInvalidInput, "file has no frontmatter").WithSuggestion("The file must have YAML frontmatter (---) to unset fields")
 	}
 
-	objectType := fm.ObjectType
-	if objectType == "" {
-		objectType = "page"
-	}
+	objectType := objectTypeOrPage(fm)
 
 	newContent, removedFields, missingFields, err := fieldmutation.PrepareFrontmatterUnset(string(content), req.Fields, rt.Schema)
 	if err != nil {
