@@ -588,7 +588,7 @@ func TestScalarRefStringFuncsCompileAgainstRefs(t *testing.T) {
 		},
 		{
 			name:    "startswith resolved prefix matches shorthand JSON",
-			query:   `type:employee startswith(.company, "companies/")`,
+			query:   `type:employee startswith(.company, "companies/c")`,
 			wantIDs: map[string]bool{"staff/ada": true, "staff/bob": true, "staff/wikilink": true},
 		},
 		{
@@ -598,7 +598,7 @@ func TestScalarRefStringFuncsCompileAgainstRefs(t *testing.T) {
 		},
 		{
 			name:    "matches regex against resolved id",
-			query:   `type:employee matches(.company, "companies/.+")`,
+			query:   `type:employee matches(.company, "companies/c.+")`,
 			wantIDs: map[string]bool{"staff/ada": true, "staff/bob": true, "staff/wikilink": true},
 		},
 		{
