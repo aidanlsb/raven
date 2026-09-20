@@ -4,7 +4,24 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/aidanlsb/raven/internal/indexschema"
 )
+
+// tryTemporalCompareCondition compiles a date, datetime, or relative-date
+// comparison against fieldExpr. Invalid temporal literals return an error;
+// non-temporal values return ok=false so callers can fall back to numeric or
+// string comparison. Object fields and trait .value both use this helper so
+// they share one error policy.
+func tryTemporalCompareCondition(value string, compareOp CompareOp, fieldExpr string, now time.Time) (string, []interface{}, bool, error) {
+	return indexschema.TryParseTemporalComparisonWithOptions(
+		value,
+		compareOpToSQL(compareOp),
+		fieldExpr,
+		indexschema.DateFilterOptions{Now: now},
+	)
+}
 
 func wrapNot(cond string, negated bool) string {
 	if negated {

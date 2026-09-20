@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP `rvn serve` now constructs the server from typed options (config path, vault pin, executable) instead of round-tripping Cobra flags through CLI argument strings. Launch pins from `--vault-path` and `--vault` report `vault_context.source` as `pinned`. The previous `base_args` source is gone.
 
 ### Fixed
+- Invalid date and datetime query values now fail trait `.value` compares the same way they fail object field compares, instead of silently falling back to string comparison.
 - `--json` now prints a standard error envelope when flag parsing fails, instead of exiting 1 with empty stdout and stderr.
 - raven-core Safety now tells agents to mention trait tokens in backticks or fences. A slash prefix or italics still parse as traits.
 - `rvn section create` inserts one blank line before a new heading when the previous line is non-empty body text. It does not insert a blank line after the heading.

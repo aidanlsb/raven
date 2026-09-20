@@ -200,45 +200,72 @@ func TestObjectFieldComparison_DatetimeLiteralOrdering(t *testing.T) {
 	}
 }
 
-func TestObjectFieldComparison_InvalidDateReturnsError(t *testing.T) {
+func TestTemporalComparison_InvalidValuesReturnError(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
 	e := NewExecutor(db)
 
-	q, err := Parse(`type:project .due>"2026-13-45"`)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
+	tests := []struct {
+		name  string
+		query string
+		exec  func(*Query) error
+		want  string
+	}{
+		{
+			name:  "object field invalid date",
+			query: `type:project .due>"2026-13-45"`,
+			exec: func(q *Query) error {
+				_, err := e.ExecuteObjectQuery(q)
+				return err
+			},
+			want: `invalid date filter: "2026-13-45"`,
+		},
+		{
+			name:  "object field invalid datetime",
+			query: `type:project .starts_at>"2026-04-05T99:00"`,
+			exec: func(q *Query) error {
+				_, err := e.ExecuteObjectQuery(q)
+				return err
+			},
+			want: `invalid date filter: "2026-04-05T99:00"`,
+		},
+		{
+			name:  "trait value invalid date",
+			query: `trait:due .value>"2026-13-45"`,
+			exec: func(q *Query) error {
+				_, err := e.ExecuteTraitQuery(q)
+				return err
+			},
+			want: `invalid date filter: "2026-13-45"`,
+		},
+		{
+			name:  "trait value invalid datetime",
+			query: `trait:due .value>"2026-04-05T99:00"`,
+			exec: func(q *Query) error {
+				_, err := e.ExecuteTraitQuery(q)
+				return err
+			},
+			want: `invalid date filter: "2026-04-05T99:00"`,
+		},
 	}
 
-	_, err = e.ExecuteObjectQuery(q)
-	if err == nil {
-		t.Fatal("expected invalid date comparison to fail")
-	}
-	if got := err.Error(); got != `invalid date filter: "2026-13-45"` {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
 
-func TestObjectFieldComparison_InvalidDatetimeReturnsError(t *testing.T) {
-	t.Parallel()
-	db := setupTestDB(t)
-	defer db.Close()
-
-	e := NewExecutor(db)
-
-	q, err := Parse(`type:project .starts_at>"2026-04-05T99:00"`)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-
-	_, err = e.ExecuteObjectQuery(q)
-	if err == nil {
-		t.Fatal("expected invalid datetime comparison to fail")
-	}
-	if got := err.Error(); got != `invalid date filter: "2026-04-05T99:00"` {
-		t.Fatalf("unexpected error: %v", err)
+			err = tt.exec(q)
+			if err == nil {
+				t.Fatal("expected invalid temporal comparison to fail")
+			}
+			if got := err.Error(); got != tt.want {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 

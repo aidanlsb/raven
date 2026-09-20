@@ -73,7 +73,7 @@ func TestBuildValueCondition_NumericUsesCast(t *testing.T) {
 		Value:     "10",
 		CompareOp: CompareGt,
 	}
-	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	cond, args := mustBuildCompareCondition(t, e, p.Value, p.CompareOp, false, "t.value")
 	if cond != "CAST(t.value AS REAL) > ?" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -92,7 +92,7 @@ func TestBuildValueCondition_StringEqIsCaseInsensitive(t *testing.T) {
 		Value:     "TODO",
 		CompareOp: CompareEq,
 	}
-	cond, _ := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	cond, _ := mustBuildCompareCondition(t, e, p.Value, p.CompareOp, false, "t.value")
 	if cond != "LOWER(t.value) = LOWER(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -106,7 +106,7 @@ func TestBuildValueCondition_DateFilterToday(t *testing.T) {
 		Value:     "today",
 		CompareOp: CompareEq,
 	}
-	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	cond, args := mustBuildCompareCondition(t, e, p.Value, p.CompareOp, false, "t.value")
 	if cond != "date(t.value) = date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -127,7 +127,7 @@ func TestBuildValueCondition_DateFilterTomorrowNotEqual(t *testing.T) {
 		Value:     "tomorrow",
 		CompareOp: CompareNeq,
 	}
-	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, false, "t.value")
+	cond, args := mustBuildCompareCondition(t, e, p.Value, p.CompareOp, false, "t.value")
 	if cond != "date(t.value) != date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -144,7 +144,7 @@ func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 4, 5, 10, 30, 0, 0, time.UTC)
 	e := &Executor{nowFn: func() time.Time { return now }}
-	cond, args := e.buildCompareCondition("today", CompareLt, false, "t.value")
+	cond, args := mustBuildCompareCondition(t, e, "today", CompareLt, false, "t.value")
 	if cond != "date(t.value) < date(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -160,7 +160,7 @@ func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
 func TestBuildCompareCondition_DatetimeLiteralOrdering(t *testing.T) {
 	t.Parallel()
 	e := &Executor{}
-	cond, args := e.buildCompareCondition("2026-04-05T10:30", CompareGte, false, "t.value")
+	cond, args := mustBuildCompareCondition(t, e, "2026-04-05T10:30", CompareGte, false, "t.value")
 	if cond != "datetime(t.value) >= datetime(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -172,13 +172,63 @@ func TestBuildCompareCondition_DatetimeLiteralOrdering(t *testing.T) {
 func TestBuildCompareCondition_UnknownKeywordFallsBackToString(t *testing.T) {
 	t.Parallel()
 	e := &Executor{}
-	cond, args := e.buildCompareCondition("this-week", CompareEq, false, "t.value")
+	cond, args := mustBuildCompareCondition(t, e, "this-week", CompareEq, false, "t.value")
 	if cond != "LOWER(t.value) = LOWER(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 || args[0] != "this-week" {
 		t.Fatalf("args = %#v", args)
 	}
+}
+
+func TestTemporalCompareErrorPolicy_InvalidValuesFailOnObjectAndTrait(t *testing.T) {
+	t.Parallel()
+	e := &Executor{}
+
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{
+			name:  "invalid date",
+			value: "2026-13-45",
+			want:  `invalid date filter: "2026-13-45"`,
+		},
+		{
+			name:  "invalid datetime",
+			value: "2026-04-05T99:00",
+			want:  `invalid date filter: "2026-04-05T99:00"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, ok, objErr := buildDateFieldCompareCondition(tt.value, CompareGt, "json_extract(o.fields, ?)", "$.due", time.Time{})
+			if objErr == nil || ok {
+				t.Fatal("object field path: expected invalid temporal comparison to fail")
+			}
+			_, _, traitErr := e.buildCompareCondition(tt.value, CompareGt, false, "t.value")
+			if traitErr == nil {
+				t.Fatal("trait .value path: expected invalid temporal comparison to fail")
+			}
+			if objErr.Error() != tt.want {
+				t.Fatalf("object error = %q, want %q", objErr.Error(), tt.want)
+			}
+			if traitErr.Error() != objErr.Error() {
+				t.Fatalf("trait error = %q, object error = %q", traitErr.Error(), objErr.Error())
+			}
+		})
+	}
+}
+
+func mustBuildCompareCondition(t *testing.T, e *Executor, value string, op CompareOp, negated bool, column string) (string, []interface{}) {
+	t.Helper()
+	cond, args, err := e.buildCompareCondition(value, op, negated, column)
+	if err != nil {
+		t.Fatalf("buildCompareCondition(%q): %v", value, err)
+	}
+	return cond, args
 }
 
 func TestLikeCond_EscapesWildcards(t *testing.T) {

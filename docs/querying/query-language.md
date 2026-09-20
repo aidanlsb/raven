@@ -344,7 +344,9 @@ Date and datetime comparisons also support relative date keywords:
 - `yesterday`
 
 Relative keywords compare by calendar date. Datetime literals compare by datetime
-when written as full datetime values such as `2026-03-01T09:30`.
+when written as full datetime values such as `2026-03-01T09:30`. Values that look
+like a date or datetime but are invalid fail the query with an error. They do
+not fall back to string comparison.
 
 The same date comparison values work for `type:date .date...` predicates and
 for object fields declared as `ref` with `target: date`. Date-target ref fields
