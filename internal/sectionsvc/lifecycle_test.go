@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -202,13 +201,10 @@ func TestCreateInsertsBlankLineBeforeHeadingWhenPreviousIsBody(t *testing.T) {
 				WithSchema(testutil.PersonProjectSchema()).
 				WithFile("projects/site.md", flushLifecycleOutline).
 				Build()
-			sch := loadTestSchema(t, v.Path)
-			indexVaultFiles(t, v.Path, sch, "projects/site.md")
+			rt := testRuntime(t, v.Path)
+			indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-			result, err := Create(CreateRequest{
-				VaultPath:      v.Path,
-				VaultConfig:    config.DefaultVaultConfig(),
-				Schema:         sch,
+			result, err := Create(rt, CreateRequest{
 				FileReference:  "projects/site",
 				Title:          "Inserted",
 				Level:          tt.level,
@@ -241,13 +237,10 @@ func TestCreateLeavesExistingBlankLineBeforeHeading(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("projects/site.md", lifecycleOutline).
 		Build()
-	sch := loadTestSchema(t, v.Path)
-	indexVaultFiles(t, v.Path, sch, "projects/site.md")
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-	_, err := Create(CreateRequest{
-		VaultPath:      v.Path,
-		VaultConfig:    config.DefaultVaultConfig(),
-		Schema:         sch,
+	_, err := Create(rt, CreateRequest{
 		FileReference:  "projects/site",
 		Title:          "Inserted",
 		Level:          2,
