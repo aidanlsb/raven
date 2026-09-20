@@ -231,3 +231,47 @@ func TestComparisonOperators(t *testing.T) {
 		})
 	}
 }
+
+func TestTraitValueComparison_InvalidDateReturnsError(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	e := NewExecutor(db)
+
+	// A less-than compare against an invalid date used to fall back to
+	// lexicographic string comparison and silently match every due trait.
+	q, err := Parse(`trait:due .value<"2026-13-45"`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	_, err = e.ExecuteTraitQuery(q)
+	if err == nil {
+		t.Fatal("expected invalid date comparison to fail instead of falling back to string compare")
+	}
+	if got := err.Error(); got != `invalid date filter: "2026-13-45"` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTraitValueComparison_InvalidDatetimeReturnsError(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	e := NewExecutor(db)
+
+	q, err := Parse(`trait:due .value>"2026-04-05T99:00"`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	_, err = e.ExecuteTraitQuery(q)
+	if err == nil {
+		t.Fatal("expected invalid datetime comparison to fail instead of falling back to string compare")
+	}
+	if got := err.Error(); got != `invalid date filter: "2026-04-05T99:00"` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
