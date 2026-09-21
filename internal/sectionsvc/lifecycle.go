@@ -1,20 +1,11 @@
 package sectionsvc
 
 import (
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/mutationguard"
-	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -77,33 +68,14 @@ type parsedPlacement struct {
 	reference string
 }
 
-type documentState struct {
-	filePath        string
-	fileRelative    string
-	fileID          string
-	trailingNewline bool
-	lines           []trackedLine
-	doc             *parser.ParsedDocument
-	sectionsByID    map[string]*model.Section
-}
-
-type trackedLine struct {
-	text         string
-	originalLine int
-}
-
 // Create inserts a new, empty heading at a structural section boundary.
 func Create(rt *vaultruntime.Runtime, req CreateRequest) (*CreateResult, error) {
-	if err := requireSectionRuntime(rt); err != nil {
-		return nil, err
-	}
-	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
+	unlock, err := lockSectionMutation(rt, req.Preview)
 	if err != nil {
 		return nil, err
 	}
-	if projectionLock != nil {
-		defer func() { _ = projectionLock.Close() }()
-	}
+	defer unlock()
+
 	title, err := validateCreateTitle(req.Title)
 	if err != nil {
 		return nil, err
@@ -116,15 +88,7 @@ func Create(rt *vaultruntime.Runtime, req CreateRequest) (*CreateResult, error) 
 		return nil, err
 	}
 
-	resolvedFile, err := resolveReference(rt, strings.TrimSpace(req.FileReference))
-	if err != nil {
-		return nil, err
-	}
-	if resolvedFile.IsSection {
-		return nil, svcerr.New(codes.ErrInvalidInput, "section create target must be a file, not a section").WithSuggestion("Pass the containing file before the title")
-	}
-
-	state, err := loadDocument(rt, resolvedFile.FilePath, resolvedFile.FileObjectID)
+	state, err := loadResolvedFile(rt, req.FileReference)
 	if err != nil {
 		return nil, err
 	}
@@ -146,9 +110,9 @@ func Create(rt *vaultruntime.Runtime, req CreateRequest) (*CreateResult, error) 
 	inserted := headingInsertLines(state.lines, insertIndex, heading)
 	updatedLines := insertTrackedLines(state.lines, insertIndex, inserted)
 	updatedContent := joinTrackedLines(updatedLines, state.trailingNewline)
-	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, state.filePath, rt.VaultPath, rt.ParseOptions)
+	updatedDoc, err := parseDocumentContent(rt, state.filePath, updatedContent, "failed to parse created section", "Check the heading title and level")
 	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse created section", err).WithSuggestion("Check the heading title and level")
+		return nil, err
 	}
 
 	createdLine := insertIndex + len(inserted)
@@ -156,10 +120,7 @@ func Create(rt *vaultruntime.Runtime, req CreateRequest) (*CreateResult, error) 
 	if created == nil || created.Title != title || created.Level != req.Level {
 		return nil, svcerr.New(codes.ErrValidationFailed, "new heading does not parse as the requested section").WithSuggestion("Use plain, single-line title text")
 	}
-	expectedSlug := parser.Slugify(title)
-	if expectedSlug == "" {
-		expectedSlug = "section"
-	}
+	expectedSlug := headingSlug(title)
 	if created.Slug != expectedSlug {
 		return nil, svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("creating would duplicate section slug '%s' in %s", expectedSlug, state.fileID)).WithSuggestion("Choose a heading title that is unique within the file")
 	}
@@ -197,32 +158,20 @@ func Create(rt *vaultruntime.Runtime, req CreateRequest) (*CreateResult, error) 
 // Move reorders or reparents one section and its complete subtree without
 // changing any heading text, level, or slug.
 func Move(rt *vaultruntime.Runtime, req MoveRequest) (*MoveResult, error) {
-	if err := requireSectionRuntime(rt); err != nil {
-		return nil, err
-	}
-	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
+	unlock, err := lockSectionMutation(rt, req.Preview)
 	if err != nil {
 		return nil, err
 	}
-	if projectionLock != nil {
-		defer func() { _ = projectionLock.Close() }()
-	}
+	defer unlock()
+
 	placement, err := parsePlacement(req.Placement)
 	if err != nil {
 		return nil, err
 	}
 
-	resolvedSource, err := resolveSection(rt, strings.TrimSpace(req.Reference))
+	state, source, err := loadResolvedSection(rt, req.Reference)
 	if err != nil {
 		return nil, err
-	}
-	state, err := loadDocument(rt, resolvedSource.FilePath, resolvedSource.FileObjectID)
-	if err != nil {
-		return nil, err
-	}
-	source := state.sectionsByID[resolvedSource.ObjectID]
-	if source == nil {
-		return nil, svcerr.New(codes.ErrRefNotFound, fmt.Sprintf("section not found: %s", resolvedSource.ObjectID)).WithSuggestion("Run 'rvn reindex' if the index is stale")
 	}
 
 	sourceStart := source.LineStart - 1
@@ -257,9 +206,9 @@ func Move(rt *vaultruntime.Runtime, req MoveRequest) (*MoveResult, error) {
 	}
 	updatedLines := insertTrackedLines(remaining, destinationIndex, movedLines)
 	updatedContent := joinTrackedLines(updatedLines, state.trailingNewline)
-	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, state.filePath, rt.VaultPath, rt.ParseOptions)
+	updatedDoc, err := parseDocumentContent(rt, state.filePath, updatedContent, "failed to parse moved section", "Choose a structurally compatible anchor")
 	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse moved section", err).WithSuggestion("Choose a structurally compatible anchor")
+		return nil, err
 	}
 	if err := validateOriginalSectionSlugs(state, updatedDoc, updatedLines, 0); err != nil {
 		return nil, err
@@ -297,16 +246,6 @@ func Move(rt *vaultruntime.Runtime, req MoveRequest) (*MoveResult, error) {
 	return result, nil
 }
 
-func requireSectionRuntime(rt *vaultruntime.Runtime) error {
-	if err := vaultruntime.Require(rt); err != nil {
-		return svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
-	}
-	if rt.VaultCfg == nil {
-		return svcerr.New(codes.ErrValidationFailed, "vault config is required").WithSuggestion("Fix raven.yaml and try again")
-	}
-	return nil
-}
-
 func validateCreateTitle(raw string) (string, error) {
 	title := strings.TrimSpace(raw)
 	switch {
@@ -341,86 +280,6 @@ func parsePlacement(raw Placement) (parsedPlacement, error) {
 		result = parsedPlacement{kind: candidate.kind, reference: candidate.value}
 	}
 	return result, nil
-}
-
-func resolveReference(rt *vaultruntime.Runtime, reference string) (*refresolve.ResolveResult, error) {
-	if reference == "" {
-		return nil, svcerr.New(codes.ErrInvalidInput, "file reference is required").WithSuggestion("Pass an existing Markdown file")
-	}
-	resolved, err := refresolve.Resolve(reference, rt, false)
-	if err == nil {
-		return resolved, nil
-	}
-	var ambiguousErr *refresolve.AmbiguousRefError
-	if errors.As(err, &ambiguousErr) {
-		return nil, svcerr.Wrap(codes.ErrRefAmbiguous, ambiguousErr.Error(), err).WithSuggestion("Use a full object or section ID to disambiguate").WithDetails(map[string]any{"matches": ambiguousErr.Matches})
-	}
-	var notFoundErr *refresolve.RefNotFoundError
-	if errors.As(err, &notFoundErr) {
-		return nil, svcerr.Wrap(codes.ErrRefNotFound, notFoundErr.Error(), err).WithSuggestion("Check the reference and run 'rvn reindex' if needed")
-	}
-	return nil, svcerr.Wrap(codes.ErrInternal, fmt.Sprintf("failed to resolve reference: %v", err), err).WithSuggestion("Run 'rvn reindex' and try again")
-}
-
-func resolveSection(rt *vaultruntime.Runtime, reference string) (*refresolve.ResolveResult, error) {
-	resolved, err := resolveReference(rt, reference)
-	if err != nil {
-		return nil, err
-	}
-	if !resolved.IsSection {
-		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("section reference required: %s", reference)).WithSuggestion("Use a section ID like project/website#tasks")
-	}
-	return resolved, nil
-}
-
-func loadDocument(rt *vaultruntime.Runtime, filePath, fileID string) (*documentState, error) {
-	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
-		return nil, normalizeMutationError(err)
-	}
-	contentBytes, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read section file", err)
-	}
-	content := string(contentBytes)
-	doc, err := parser.ParseDocumentWithOptions(content, filePath, rt.VaultPath, rt.ParseOptions)
-	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse section file", err).WithSuggestion("Fix the file content and try again")
-	}
-	relative, err := filepath.Rel(rt.VaultPath, filePath)
-	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrInternal, "failed to resolve section file path", err)
-	}
-	lines, trailingNewline := splitTrackedLines(content)
-	sectionsByID := make(map[string]*model.Section, len(doc.Sections))
-	for _, section := range doc.Sections {
-		if section != nil {
-			sectionsByID[section.ID] = section
-		}
-	}
-	return &documentState{
-		filePath:        filePath,
-		fileRelative:    paths.NormalizeVaultRelPath(relative),
-		fileID:          fileID,
-		trailingNewline: trailingNewline,
-		lines:           lines,
-		doc:             doc,
-		sectionsByID:    sectionsByID,
-	}, nil
-}
-
-func resolveAnchor(rt *vaultruntime.Runtime, state *documentState, reference string) (*model.Section, error) {
-	resolved, err := resolveSection(rt, reference)
-	if err != nil {
-		return nil, err
-	}
-	if resolved.FileObjectID != state.fileID {
-		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("anchor %s is not in %s", resolved.ObjectID, state.fileID)).WithSuggestion("Choose a section in the same file")
-	}
-	anchor := state.sectionsByID[resolved.ObjectID]
-	if anchor == nil {
-		return nil, svcerr.New(codes.ErrRefNotFound, fmt.Sprintf("anchor section not found: %s", resolved.ObjectID)).WithSuggestion("Run 'rvn reindex' if the index is stale")
-	}
-	return anchor, nil
 }
 
 func validatePlacementLevel(level int, anchor *model.Section, kind placementKind) error {
@@ -465,29 +324,6 @@ func placementIndex(lines []trackedLine, anchor *model.Section, kind placementKi
 	return sectionSubtreeEnd(anchor, len(lines))
 }
 
-func sectionSubtreeEnd(section *model.Section, lineCount int) int {
-	if section != nil && section.SubtreeLineEnd != nil {
-		return *section.SubtreeLineEnd
-	}
-	return lineCount
-}
-
-func splitTrackedLines(content string) ([]trackedLine, bool) {
-	if content == "" {
-		return nil, false
-	}
-	trailingNewline := strings.HasSuffix(content, "\n")
-	if trailingNewline {
-		content = strings.TrimSuffix(content, "\n")
-	}
-	rawLines := strings.Split(content, "\n")
-	lines := make([]trackedLine, len(rawLines))
-	for i, line := range rawLines {
-		lines[i] = trackedLine{text: line, originalLine: i + 1}
-	}
-	return lines, trailingNewline
-}
-
 func headingInsertLines(lines []trackedLine, insertIndex int, heading string) []trackedLine {
 	inserted := make([]trackedLine, 0, 2)
 	if shouldInsertBlankLineBeforeHeading(lines, insertIndex) {
@@ -510,103 +346,4 @@ func shouldInsertBlankLineBeforeHeading(lines []trackedLine, insertIndex int) bo
 		return false
 	}
 	return strings.TrimSpace(lines[insertIndex-1].text) != ""
-}
-
-func insertTrackedLines(lines []trackedLine, index int, inserted []trackedLine) []trackedLine {
-	if index < 0 {
-		index = 0
-	}
-	if index > len(lines) {
-		index = len(lines)
-	}
-	result := make([]trackedLine, 0, len(lines)+len(inserted))
-	result = append(result, lines[:index]...)
-	result = append(result, inserted...)
-	result = append(result, lines[index:]...)
-	return result
-}
-
-func joinTrackedLines(lines []trackedLine, trailingNewline bool) string {
-	raw := make([]string, len(lines))
-	for i := range lines {
-		raw[i] = lines[i].text
-	}
-	content := strings.Join(raw, "\n")
-	if trailingNewline {
-		content += "\n"
-	}
-	return content
-}
-
-func sectionAtLine(sections []*model.Section, line int) *model.Section {
-	for _, section := range sections {
-		if section != nil && section.LineStart == line {
-			return section
-		}
-	}
-	return nil
-}
-
-func trackedLineNumber(lines []trackedLine, originalLine int) int {
-	for i, line := range lines {
-		if line.originalLine == originalLine {
-			return i + 1
-		}
-	}
-	return 0
-}
-
-func validateOriginalSectionSlugs(state *documentState, updatedDoc *parser.ParsedDocument, updatedLines []trackedLine, createdLine int) error {
-	originalByLine := make(map[int]*model.Section, len(state.doc.Sections))
-	for _, section := range state.doc.Sections {
-		if section != nil {
-			originalByLine[section.LineStart] = section
-		}
-	}
-	seen := make(map[int]bool, len(originalByLine))
-	for _, section := range updatedDoc.Sections {
-		if section == nil || section.LineStart == createdLine {
-			continue
-		}
-		if section.LineStart < 1 || section.LineStart > len(updatedLines) {
-			return svcerr.New(codes.ErrInternal, "updated section line is out of range")
-		}
-		originalLine := updatedLines[section.LineStart-1].originalLine
-		original := originalByLine[originalLine]
-		if original == nil {
-			continue
-		}
-		seen[originalLine] = true
-		if section.Slug != original.Slug {
-			return svcerr.New(codes.ErrValidationFailed, fmt.Sprintf("section placement would shift slug '%s' to '%s'", original.Slug, section.Slug)).WithSuggestion("Choose a unique heading title or a placement that preserves section identities").WithDetails(map[string]any{"section": original.ID, "new_slug": section.Slug})
-		}
-	}
-	if len(seen) != len(originalByLine) {
-		return svcerr.New(codes.ErrValidationFailed, "section placement would change the existing outline").WithSuggestion("Choose a structurally compatible placement")
-	}
-	return nil
-}
-
-func writeAndReindex(rt *vaultruntime.Runtime, filePath, content string, failOnIndexErr bool) ([]string, []reindexsvc.ProjectionWarning, error) {
-	var warnings []string
-	if err := rt.OpenDB(); err != nil {
-		if failOnIndexErr || errors.Is(err, index.ErrIndexRebuildRequired) {
-			return nil, nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to open index database for section mutation", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
-		}
-		warnings = append(warnings, fmt.Sprintf("Failed to open index database for section mutation: %v", err))
-	}
-	db := rt.DB
-
-	perm := os.FileMode(0o644)
-	if st, statErr := os.Stat(filePath); statErr == nil {
-		perm = st.Mode()
-	}
-	if err := atomicfile.WriteFile(filePath, []byte(content), perm); err != nil {
-		return nil, nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write section mutation", err)
-	}
-	var indexWarnings []reindexsvc.ProjectionWarning
-	if db != nil && rt.Schema != nil {
-		indexWarnings = reindexsvc.ProjectFileLocked(rt, filePath)
-	}
-	return warnings, indexWarnings, nil
 }

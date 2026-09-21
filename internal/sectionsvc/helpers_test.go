@@ -1,0 +1,56 @@
+package sectionsvc
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
+)
+
+func testRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
+	t.Helper()
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{RequireSchema: true})
+}
+
+func indexVaultFiles(t *testing.T, vaultPath string, sch *schema.Schema, relPaths ...string) {
+	t.Helper()
+
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	defer db.Close()
+
+	for _, relPath := range relPaths {
+		fullPath := filepath.Join(vaultPath, relPath)
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", relPath, err)
+		}
+		doc, err := parser.ParseDocument(string(content), fullPath, vaultPath)
+		if err != nil {
+			t.Fatalf("parse %s: %v", relPath, err)
+		}
+		if err := db.IndexDocument(doc, sch); err != nil {
+			t.Fatalf("index %s: %v", relPath, err)
+		}
+	}
+}
+
+func assertServiceCode(t *testing.T, err error, want codes.ErrorCode) {
+	t.Helper()
+	svcErr, ok := svcerr.AsError(err)
+	if !ok {
+		t.Fatalf("error = %v (%T), want service error %s", err, err, want)
+	}
+	if svcErr.Code != want {
+		t.Fatalf("error code = %s, want %s (%v)", svcErr.Code, want, err)
+	}
+}

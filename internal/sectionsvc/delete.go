@@ -1,7 +1,6 @@
 package sectionsvc
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -38,16 +37,11 @@ type DeleteResult struct {
 // the deleted range are reported as backlinks and intentionally left unchanged:
 // Raven cannot infer a safe replacement target for a deleted section.
 func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) {
-	if err := requireSectionRuntime(rt); err != nil {
-		return nil, err
-	}
-	projectionLock, err := reindexsvc.LockProjection(rt, req.Preview)
+	unlock, err := lockSectionMutation(rt, req.Preview)
 	if err != nil {
 		return nil, err
 	}
-	if projectionLock != nil {
-		defer func() { _ = projectionLock.Close() }()
-	}
+	defer unlock()
 
 	reference := strings.TrimSpace(req.Reference)
 	fileID, slug, isSection := paths.ParseSectionID(reference)
@@ -56,18 +50,9 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 			WithSuggestion("Use a section ID like project/website#tasks")
 	}
 
-	resolved, err := resolveSection(rt, reference)
+	state, target, err := loadResolvedSection(rt, reference)
 	if err != nil {
 		return nil, err
-	}
-	state, err := loadDocument(rt, resolved.FilePath, resolved.FileObjectID)
-	if err != nil {
-		return nil, err
-	}
-	target := state.sectionsByID[resolved.ObjectID]
-	if target == nil {
-		return nil, svcerr.New(codes.ErrRefNotFound, fmt.Sprintf("section not found: %s", resolved.ObjectID)).
-			WithSuggestion("Run 'rvn reindex' if the index is stale")
 	}
 
 	start := target.LineStart - 1
@@ -81,10 +66,9 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 	remaining := append([]trackedLine(nil), state.lines[:start]...)
 	remaining = append(remaining, state.lines[end:]...)
 	updatedContent := joinTrackedLines(remaining, state.trailingNewline)
-	updatedDoc, err := parser.ParseDocumentWithOptions(updatedContent, state.filePath, rt.VaultPath, rt.ParseOptions)
+	updatedDoc, err := parseDocumentContent(rt, state.filePath, updatedContent, "failed to parse content after section deletion", "Fix the file content and try again")
 	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to parse content after section deletion", err).
-			WithSuggestion("Fix the file content and try again")
+		return nil, err
 	}
 	if err := validateSurvivingSectionSlugs(state, updatedDoc, remaining, target.LineStart, end); err != nil {
 		return nil, err
@@ -101,15 +85,14 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 		DeletedSections: deletedSections,
 	}
 
-	if err := rt.OpenDB(); err != nil {
-		if req.FailOnIndexErr || errors.Is(err, index.ErrIndexRebuildRequired) {
-			return nil, svcerr.Wrap(codes.ErrValidationFailed, "failed to open index database for section deletion", err).
-				WithSuggestion("Run 'rvn reindex' to rebuild the database")
-		}
-		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for section deletion: %v", err))
-	} else {
+	db, warnings, err := openSectionIndex(rt, req.FailOnIndexErr, "deletion")
+	if err != nil {
+		return nil, err
+	}
+	result.WarningMessages = append(result.WarningMessages, warnings...)
+	if db != nil {
 		result.Backlinks, err = sectionDeletionBacklinks(
-			rt.DB,
+			db,
 			deletedSections,
 			state.fileRelative,
 			target.LineStart,
@@ -130,11 +113,11 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 		return result, nil
 	}
 
-	warnings, indexWarnings, err := writeAndReindex(rt, state.filePath, updatedContent, req.FailOnIndexErr)
+	writeWarnings, indexWarnings, err := writeAndReindex(rt, state.filePath, updatedContent, req.FailOnIndexErr)
 	if err != nil {
 		return nil, err
 	}
-	result.WarningMessages = append(result.WarningMessages, warnings...)
+	result.WarningMessages = append(result.WarningMessages, writeWarnings...)
 	result.IndexWarnings = indexWarnings
 	return result, nil
 }
@@ -163,39 +146,26 @@ func validateSurvivingSectionSlugs(
 	removedStart,
 	removedEnd int,
 ) error {
-	originalByLine := make(map[int]*model.Section, len(state.doc.Sections))
-	for _, section := range state.doc.Sections {
-		if section == nil || (section.LineStart >= removedStart && section.LineStart <= removedEnd) {
-			continue
-		}
-		originalByLine[section.LineStart] = section
+	include := func(section *model.Section) bool {
+		return section.LineStart < removedStart || section.LineStart > removedEnd
 	}
-
-	seen := make(map[int]bool, len(originalByLine))
-	for _, section := range updatedDoc.Sections {
-		if section == nil || section.LineStart < 1 || section.LineStart > len(updatedLines) {
-			return svcerr.New(codes.ErrInternal, "updated section line is out of range")
-		}
-		originalLine := updatedLines[section.LineStart-1].originalLine
-		original := originalByLine[originalLine]
-		if original == nil {
-			continue
-		}
-		seen[originalLine] = true
-		if section.Slug != original.Slug {
+	return validatePreservedSlugs(
+		state,
+		updatedDoc,
+		updatedLines,
+		include,
+		0,
+		func(original, updated *model.Section) error {
 			return svcerr.New(
 				codes.ErrValidationFailed,
-				fmt.Sprintf("section deletion would shift slug '%s' to '%s'", original.Slug, section.Slug),
+				fmt.Sprintf("section deletion would shift slug '%s' to '%s'", original.Slug, updated.Slug),
 			).
 				WithSuggestion("Rename duplicate headings before deleting this section").
-				WithDetails(map[string]any{"section": original.ID, "new_slug": section.Slug})
-		}
-	}
-	if len(seen) != len(originalByLine) {
-		return svcerr.New(codes.ErrValidationFailed, "section deletion would change the surviving outline").
-			WithSuggestion("Fix the heading structure and try again")
-	}
-	return nil
+				WithDetails(map[string]any{"section": original.ID, "new_slug": updated.Slug})
+		},
+		svcerr.New(codes.ErrValidationFailed, "section deletion would change the surviving outline").
+			WithSuggestion("Fix the heading structure and try again"),
+	)
 }
 
 func sectionDeletionBacklinks(
