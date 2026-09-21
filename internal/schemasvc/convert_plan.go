@@ -11,16 +11,6 @@ import (
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
-// ValueConvertChange describes one logical schema or vault-data mutation.
-// Vault file changes are appended by schemamigrate to the schema-only changes
-// produced here.
-type ValueConvertChange struct {
-	FilePath    string `json:"file_path"`
-	ChangeType  string `json:"change_type"`
-	Description string `json:"description"`
-	Line        int    `json:"line,omitempty"`
-}
-
 type ConvertTraitPlanRequest struct {
 	SchemaDoc  *schemadoc.Document
 	TraitName  string
@@ -46,7 +36,7 @@ type ConvertFieldPlanRequest struct {
 
 type ValueConvertPlan struct {
 	SchemaYAML      []byte
-	Changes         []ValueConvertChange
+	Changes         []SchemaChange
 	SchemaMutations int
 }
 
@@ -70,7 +60,7 @@ func BuildTraitConvertPlan(req ConvertTraitPlanRequest) (*ValueConvertPlan, erro
 		return nil, svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("trait '%s' has invalid definition", req.TraitName))
 	}
 
-	plan := &ValueConvertPlan{Changes: make([]ValueConvertChange, 0)}
+	plan := &ValueConvertPlan{Changes: make([]SchemaChange, 0)}
 	applyDefinitionConversion(
 		plan,
 		traitNode,
@@ -123,7 +113,7 @@ func BuildFieldConvertPlan(req ConvertFieldPlanRequest) (*ValueConvertPlan, erro
 		return nil, svcerr.New(codes.ErrSchemaInvalid, fmt.Sprintf("field '%s.%s' has invalid definition", req.TypeName, req.FieldName))
 	}
 
-	plan := &ValueConvertPlan{Changes: make([]ValueConvertChange, 0)}
+	plan := &ValueConvertPlan{Changes: make([]SchemaChange, 0)}
 	applyDefinitionConversion(
 		plan,
 		fieldNode,
@@ -186,7 +176,7 @@ func applyDefinitionConversion(
 }
 
 func (p *ValueConvertPlan) addSchemaChange(changeType, description string) {
-	p.Changes = append(p.Changes, ValueConvertChange{
+	p.Changes = append(p.Changes, SchemaChange{
 		FilePath:    "schema.yaml",
 		ChangeType:  changeType,
 		Description: description,

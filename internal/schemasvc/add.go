@@ -2,7 +2,6 @@ package schemasvc
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -58,28 +57,6 @@ type AddFieldResult struct {
 	FieldType   string
 	Required    bool
 	Description string
-}
-
-type FieldTypeValidation struct {
-	Valid      bool
-	BaseType   string
-	IsArray    bool
-	Error      string
-	Suggestion string
-	Examples   []string
-	ValidTypes []string
-	TargetHint string
-}
-
-var validFieldTypes = map[string]bool{
-	"string":   true,
-	"number":   true,
-	"url":      true,
-	"date":     true,
-	"datetime": true,
-	"bool":     true,
-	"enum":     true,
-	"ref":      true,
 }
 
 func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, error) {
@@ -267,15 +244,6 @@ func AddField(rt *vaultruntime.Runtime, req AddFieldRequest) (*AddFieldResult, e
 	}, nil
 }
 
-func normalizeFieldTypeAlias(baseType string) string {
-	switch strings.ToLower(baseType) {
-	case "boolean":
-		return "bool"
-	default:
-		return strings.ToLower(baseType)
-	}
-}
-
 func splitCommaValues(raw string) []string {
 	parts := strings.Split(raw, ",")
 	values := make([]string, 0, len(parts))
@@ -310,129 +278,6 @@ func normalizeTraitDefaultValue(traitType, raw string) (interface{}, bool) {
 		}
 	}
 	return trimmed, true
-}
-
-func ValidateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema) FieldTypeValidation {
-	result := FieldTypeValidation{
-		ValidTypes: []string{"string", "number", "url", "date", "datetime", "bool", "enum", "ref"},
-	}
-
-	if fieldType == "" {
-		fieldType = "string"
-	}
-
-	isArray := strings.HasSuffix(fieldType, "[]")
-	baseType := normalizeFieldTypeAlias(strings.TrimSuffix(fieldType, "[]"))
-	result.BaseType = baseType
-	result.IsArray = isArray
-
-	if sch != nil {
-		if _, isSchemaType := sch.Types[baseType]; isSchemaType && !validFieldTypes[baseType] {
-			result.Error = fmt.Sprintf("'%s' is a type name, not a field type", baseType)
-			result.Suggestion = fmt.Sprintf("To reference objects of type '%s', use --type ref --target %s", baseType, baseType)
-			if isArray {
-				result.Examples = []string{
-					fmt.Sprintf("--type ref[] --target %s  (array of %s references)", baseType, baseType),
-				}
-			} else {
-				result.Examples = []string{
-					fmt.Sprintf("--type ref --target %s  (single %s reference)", baseType, baseType),
-					fmt.Sprintf("--type ref[] --target %s  (array of %s references)", baseType, baseType),
-				}
-			}
-			return result
-		}
-
-		cleanType := strings.TrimSuffix(baseType, "[]")
-		if _, isSchemaType := sch.Types[cleanType]; isSchemaType && !validFieldTypes[cleanType] {
-			result.Error = fmt.Sprintf("'%s' is a type name, not a field type", cleanType)
-			result.Suggestion = fmt.Sprintf("To reference an array of '%s' objects, use --type ref[] --target %s", cleanType, cleanType)
-			result.Examples = []string{
-				fmt.Sprintf("--type ref[] --target %s", cleanType),
-			}
-			return result
-		}
-	}
-
-	if !validFieldTypes[baseType] {
-		result.Error = fmt.Sprintf("'%s' is not a valid field type", fieldType)
-		result.Suggestion = "Valid types: string, number, url, date, datetime, bool, enum, ref (add [] suffix for arrays)"
-		result.Examples = []string{
-			"--type string        (text)",
-			"--type string[]      (array of text, e.g., tags)",
-			"--type url           (web link)",
-			"--type ref --target person   (reference to a person)",
-			"--type ref[] --target person (array of person references)",
-			"--type enum --values a,b,c   (single choice from list)",
-		}
-		return result
-	}
-
-	if baseType == "ref" && target == "" {
-		result.Error = "ref fields require --target to specify which type they reference"
-		result.Suggestion = "Add --target <type_name> to specify the referenced type"
-		if sch != nil && len(sch.Types) > 0 {
-			typeNames := make([]string, 0, len(sch.Types))
-			for name := range sch.Types {
-				typeNames = append(typeNames, name)
-			}
-			sort.Strings(typeNames)
-			if len(typeNames) > 3 {
-				typeNames = typeNames[:3]
-			}
-			result.Examples = []string{}
-			for _, t := range typeNames {
-				if isArray {
-					result.Examples = append(result.Examples, fmt.Sprintf("--type ref[] --target %s", t))
-				} else {
-					result.Examples = append(result.Examples, fmt.Sprintf("--type ref --target %s", t))
-				}
-			}
-		}
-		result.TargetHint = "Available types can be listed with 'rvn schema types'"
-		return result
-	}
-
-	if baseType == "enum" && values == "" {
-		result.Error = "enum fields require --values to specify allowed values"
-		result.Suggestion = "Add --values with comma-separated allowed values"
-		result.Examples = []string{
-			"--type enum --values active,paused,done",
-			"--type enum[] --values red,green,blue  (allows multiple selections)",
-		}
-		return result
-	}
-
-	if target != "" && baseType != "ref" {
-		result.Error = fmt.Sprintf("--target is only valid for ref fields, but type is '%s'", fieldType)
-		result.Suggestion = "Either change --type to ref (or ref[]) or remove --target"
-		result.Examples = []string{
-			fmt.Sprintf("--type ref --target %s  (single reference)", target),
-			fmt.Sprintf("--type ref[] --target %s  (array of references)", target),
-		}
-		return result
-	}
-
-	if target != "" && sch != nil {
-		if _, exists := sch.Types[target]; !exists {
-			if !schema.IsBuiltinType(target) {
-				result.Error = fmt.Sprintf("target type '%s' does not exist in schema", target)
-				result.Suggestion = fmt.Sprintf("Either create the type first with 'rvn schema add type %s' or use an existing type", target)
-				if len(sch.Types) > 0 {
-					typeNames := make([]string, 0, len(sch.Types))
-					for name := range sch.Types {
-						typeNames = append(typeNames, name)
-					}
-					sort.Strings(typeNames)
-					result.TargetHint = fmt.Sprintf("Existing types: %s", strings.Join(typeNames, ", "))
-				}
-				return result
-			}
-		}
-	}
-
-	result.Valid = true
-	return result
 }
 
 func normalizeDirRoot(root string) string {

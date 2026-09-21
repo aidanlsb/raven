@@ -1,5 +1,7 @@
 package schema
 
+import "strings"
+
 // arrayElementTypes is the canonical mapping from array FieldTypes to their
 // scalar element types.
 var arrayElementTypes = map[FieldType]FieldType{
@@ -58,4 +60,53 @@ func (t FieldType) scalarType() FieldType {
 		return elem
 	}
 	return t
+}
+
+// declaredFieldTypes is the canonical catalog of schema field types. Scalars
+// are paired with their array forms. Order matches ValidFieldTypes().
+var declaredFieldTypes = []FieldType{
+	FieldTypeString, FieldTypeStringArray,
+	FieldTypeNumber, FieldTypeNumberArray,
+	FieldTypeURL, FieldTypeURLArray,
+	FieldTypeDate, FieldTypeDateArray,
+	FieldTypeDatetime, FieldTypeDatetimeArray,
+	FieldTypeEnum, FieldTypeEnumArray,
+	FieldTypeBool, FieldTypeBoolArray,
+	FieldTypeRef, FieldTypeRefArray,
+}
+
+// IsScalarFieldType reports whether t is a declared scalar FieldType.
+func IsScalarFieldType(t FieldType) bool {
+	return IsValidFieldType(t) && !t.IsArray()
+}
+
+// ScalarFieldTypes returns declared scalar field types in canonical order.
+func ScalarFieldTypes() []FieldType {
+	out := make([]FieldType, 0, len(declaredFieldTypes)/2)
+	for _, t := range declaredFieldTypes {
+		if !t.IsArray() {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// IsValidFieldType reports whether fieldType is a declared schema field type.
+func IsValidFieldType(fieldType FieldType) bool {
+	for _, t := range declaredFieldTypes {
+		if t == fieldType {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidFieldTypes returns the comma-separated catalog used in user-facing
+// error messages.
+func ValidFieldTypes() string {
+	parts := make([]string, len(declaredFieldTypes))
+	for i, t := range declaredFieldTypes {
+		parts[i] = string(t)
+	}
+	return strings.Join(parts, ", ")
 }

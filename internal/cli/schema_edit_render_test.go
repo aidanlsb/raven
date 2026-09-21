@@ -3,27 +3,19 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/schemasvc"
 )
 
 func TestPrintSchemaFileChangesGroupsAndSortsCanonicalChanges(t *testing.T) {
-	type change struct {
-		file        string
-		line        int
-		description string
-	}
-	changes := []change{
-		{file: "z.md", description: "schema update"},
-		{file: "a.md", line: 7, description: "frontmatter update"},
-		{file: "a.md", description: "template update"},
+	changes := []schemasvc.SchemaChange{
+		{FilePath: "z.md", Description: "schema update"},
+		{FilePath: "a.md", Line: 7, Description: "frontmatter update"},
+		{FilePath: "a.md", Description: "template update"},
 	}
 
 	out := captureStdout(t, func() {
-		printSchemaFileChanges(
-			changes,
-			func(item change) string { return item.file },
-			func(item change) int { return item.line },
-			func(item change) string { return item.description },
-		)
+		printSchemaFileChanges(changes)
 	})
 
 	if strings.Index(out, "a.md") > strings.Index(out, "z.md") {

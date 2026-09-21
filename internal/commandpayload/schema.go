@@ -57,13 +57,13 @@ type SchemaRemoveResult struct {
 
 // SchemaRenameFieldPreviewResult is the preview payload for a field rename.
 type SchemaRenameFieldPreviewResult struct {
-	Preview      bool                          `json:"preview"`
-	Type         string                        `json:"type"`
-	OldField     string                        `json:"old_field"`
-	NewField     string                        `json:"new_field"`
-	TotalChanges int                           `json:"total_changes"`
-	Changes      []schemasvc.FieldRenameChange `json:"changes"`
-	Hint         string                        `json:"hint"`
+	Preview      bool                     `json:"preview"`
+	Type         string                   `json:"type"`
+	OldField     string                   `json:"old_field"`
+	NewField     string                   `json:"new_field"`
+	TotalChanges int                      `json:"total_changes"`
+	Changes      []schemasvc.SchemaChange `json:"changes"`
+	Hint         string                   `json:"hint"`
 }
 
 // SchemaRenameFieldResult is the applied field-rename payload.
@@ -80,18 +80,18 @@ type SchemaRenameFieldResult struct {
 // Optional default-path fields are pointers so an available zero/false value is
 // still serialized while unavailable fields remain absent.
 type SchemaRenameTypePreviewResult struct {
-	Preview                    bool                          `json:"preview"`
-	OldName                    string                        `json:"old_name"`
-	NewName                    string                        `json:"new_name"`
-	TotalChanges               int                           `json:"total_changes"`
-	Changes                    []schemasvc.TypeRenameChange  `json:"changes"`
-	Hint                       string                        `json:"hint"`
-	DefaultPathRenameAvailable *bool                         `json:"default_path_rename_available,omitempty"`
-	DefaultPathOld             *string                       `json:"default_path_old,omitempty"`
-	DefaultPathNew             *string                       `json:"default_path_new,omitempty"`
-	OptionalTotalChanges       *int                          `json:"optional_total_changes,omitempty"`
-	OptionalChanges            *[]schemasvc.TypeRenameChange `json:"optional_changes,omitempty"`
-	FilesToMove                *int                          `json:"files_to_move,omitempty"`
+	Preview                    bool                      `json:"preview"`
+	OldName                    string                    `json:"old_name"`
+	NewName                    string                    `json:"new_name"`
+	TotalChanges               int                       `json:"total_changes"`
+	Changes                    []schemasvc.SchemaChange  `json:"changes"`
+	Hint                       string                    `json:"hint"`
+	DefaultPathRenameAvailable *bool                     `json:"default_path_rename_available,omitempty"`
+	DefaultPathOld             *string                   `json:"default_path_old,omitempty"`
+	DefaultPathNew             *string                   `json:"default_path_new,omitempty"`
+	OptionalTotalChanges       *int                      `json:"optional_total_changes,omitempty"`
+	OptionalChanges            *[]schemasvc.SchemaChange `json:"optional_changes,omitempty"`
+	FilesToMove                *int                      `json:"files_to_move,omitempty"`
 }
 
 // SchemaRenameTypeResult is the applied type-rename payload.
@@ -111,15 +111,15 @@ type SchemaRenameTypeResult struct {
 
 // SchemaConvertPreviewResult is the preview payload for trait/field conversion.
 type SchemaConvertPreviewResult struct {
-	Kind         string                         `json:"kind"`
-	Name         string                         `json:"name"`
-	SourceType   string                         `json:"source_type"`
-	TargetType   string                         `json:"target_type"`
-	Hint         string                         `json:"hint"`
-	Type         string                         `json:"type,omitempty"`
-	Preview      bool                           `json:"preview"`
-	TotalChanges int                            `json:"total_changes"`
-	Changes      []schemasvc.ValueConvertChange `json:"changes"`
+	Kind         string                   `json:"kind"`
+	Name         string                   `json:"name"`
+	SourceType   string                   `json:"source_type"`
+	TargetType   string                   `json:"target_type"`
+	Hint         string                   `json:"hint"`
+	Type         string                   `json:"type,omitempty"`
+	Preview      bool                     `json:"preview"`
+	TotalChanges int                      `json:"total_changes"`
+	Changes      []schemasvc.SchemaChange `json:"changes"`
 }
 
 // SchemaConvertResult is the applied trait/field conversion payload.

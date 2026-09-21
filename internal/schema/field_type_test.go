@@ -1,6 +1,9 @@
 package schema
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestFieldTypeFamilies(t *testing.T) {
 	t.Parallel()
@@ -68,6 +71,9 @@ func TestFieldTypeFamilies(t *testing.T) {
 			if got := IsValidFieldType(tt.typ); got != tt.isValid {
 				t.Errorf("IsValidFieldType() = %v, want %v", got, tt.isValid)
 			}
+			if got := IsScalarFieldType(tt.typ); got != (tt.isValid && !tt.isArray) {
+				t.Errorf("IsScalarFieldType() = %v, want %v", got, tt.isValid && !tt.isArray)
+			}
 		})
 	}
 }
@@ -112,6 +118,16 @@ func TestDeclaredFieldTypesHaveMatchingArrayForms(t *testing.T) {
 
 	if len(scalars) != len(arrays) {
 		t.Errorf("scalar count %d != array count %d", len(scalars), len(arrays))
+	}
+	if got, want := ValidFieldTypes(), "string, string[], number, number[], url, url[], date, date[], datetime, datetime[], enum, enum[], bool, bool[], ref, ref[]"; got != want {
+		t.Errorf("ValidFieldTypes() = %q, want %q", got, want)
+	}
+	wantScalars := []FieldType{
+		FieldTypeString, FieldTypeNumber, FieldTypeURL, FieldTypeDate,
+		FieldTypeDatetime, FieldTypeEnum, FieldTypeBool, FieldTypeRef,
+	}
+	if got := ScalarFieldTypes(); !slices.Equal(got, wantScalars) {
+		t.Errorf("ScalarFieldTypes() = %v, want %v", got, wantScalars)
 	}
 	for arrayType, elem := range arrays {
 		if _, ok := scalars[elem]; !ok {

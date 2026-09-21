@@ -39,7 +39,7 @@ types:
 traits: {}
 `
 
-func countTypeChanges(changes []schemasvc.TypeRenameChange, changeType string) int {
+func countTypeChanges(changes []schemasvc.SchemaChange, changeType string) int {
 	count := 0
 	for _, change := range changes {
 		if change.ChangeType == changeType {
@@ -49,7 +49,7 @@ func countTypeChanges(changes []schemasvc.TypeRenameChange, changeType string) i
 	return count
 }
 
-func hasTypeChangeForFile(changes []schemasvc.TypeRenameChange, changeType, filePath string) bool {
+func hasTypeChangeForFile(changes []schemasvc.SchemaChange, changeType, filePath string) bool {
 	for _, change := range changes {
 		if change.ChangeType == changeType && change.FilePath == filePath {
 			return true
@@ -416,7 +416,7 @@ func TestValidateTypeDirectoryMoves(t *testing.T) {
 	}
 }
 
-func countFieldChanges(changes []schemasvc.FieldRenameChange, changeType string) int {
+func countFieldChanges(changes []schemasvc.SchemaChange, changeType string) int {
 	count := 0
 	for _, change := range changes {
 		if change.ChangeType == changeType {
