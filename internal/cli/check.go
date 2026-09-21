@@ -90,6 +90,8 @@ func handleCheckResult(cmd *cobra.Command, result commandexec.Result, render fun
 
 func checkShouldExit(result commandexec.Result, strict bool) bool {
 	switch data := result.Data.(type) {
+	case commandpayload.CheckResultJSON:
+		return data.ErrorCount > 0 || (strict && data.WarnCount > 0)
 	case commandpayload.CheckFixPreviewResult:
 		return data.ErrorCount > 0 || (strict && data.WarningCount > 0)
 	case commandpayload.CheckFixResult:

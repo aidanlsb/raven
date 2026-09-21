@@ -2,7 +2,6 @@ package commandimpl
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -52,10 +51,7 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 	case boolArg(req.Args, "create-missing"):
 		return handleCheckCreateMissing(vaultPath, vaultCfg, sch, result, req.Confirm)
 	default:
-		data, convErr := structToMap(checksvc.BuildJSON(vaultPath, result))
-		if convErr != nil {
-			return commandexec.Failure("INTERNAL_ERROR", "failed to build check response", nil, "")
-		}
+		data := commandpayload.BuildJSON(vaultPath, result)
 		if warnings := checkIncompleteWarnings(result); len(warnings) > 0 {
 			return commandexec.SuccessWithWarnings(data, warnings, nil)
 		}
@@ -182,18 +178,6 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		}, nil)
 	}
 	return commandexec.Success(data, nil)
-}
-
-func structToMap(value any) (map[string]interface{}, error) {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return nil, err
-	}
-	var data map[string]interface{}
-	if err := json.Unmarshal(encoded, &data); err != nil {
-		return nil, err
-	}
-	return data, nil
 }
 
 func checkScopeData(result *checksvc.RunResult) commandpayload.CheckScope {

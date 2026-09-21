@@ -8,18 +8,17 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/checkfixsvc"
-	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-type CheckIssueJSON = checksvc.CheckIssueJSON
-type CheckSummaryJSON = checksvc.CheckSummaryJSON
-type CheckScopeJSON = checksvc.CheckScopeJSON
-type CheckResultJSON = checksvc.CheckResultJSON
+type CheckIssueJSON = commandpayload.CheckIssueJSON
+type CheckSummaryJSON = commandpayload.CheckSummaryJSON
+type CheckScopeJSON = commandpayload.CheckScopeJSON
+type CheckResultJSON = commandpayload.CheckResultJSON
 
-func printCheckScopeHeader(vaultPath string, scope checksvc.Scope) {
+func printCheckScopeHeader(vaultPath string, scope commandpayload.CheckScope) {
 	switch scope.Type {
 	case "full":
 		fmt.Printf("Checking vault: %s\n", ui.Muted.Render(vaultPath))
@@ -34,27 +33,30 @@ func printCheckScopeHeader(vaultPath string, scope checksvc.Scope) {
 	}
 }
 
-func checkScopeFromResult(result commandexec.Result) checksvc.Scope {
+func checkScopeFromResult(result commandexec.Result) commandpayload.CheckScope {
 	if scope, ok := commandpayload.CheckResultScope(result.Data); ok {
 		return scope
 	}
 	data := canonicalDataMap(result)
 	if scopeMap, ok := data["scope"].(map[string]interface{}); ok {
-		return checksvc.Scope{
+		return commandpayload.CheckScope{
 			Type:  stringValue(scopeMap["type"]),
 			Value: stringValue(scopeMap["value"]),
 		}
 	}
 	if decoded, ok := decodeCanonicalCheckJSON(result); ok && decoded.Scope != nil {
-		return checksvc.Scope{
+		return commandpayload.CheckScope{
 			Type:  decoded.Scope.Type,
 			Value: decoded.Scope.Value,
 		}
 	}
-	return checksvc.Scope{Type: "full"}
+	return commandpayload.CheckScope{Type: "full"}
 }
 
 func decodeCanonicalCheckJSON(result commandexec.Result) (CheckResultJSON, bool) {
+	if decoded, ok := result.Data.(commandpayload.CheckResultJSON); ok {
+		return decoded, true
+	}
 	var decoded CheckResultJSON
 	data := canonicalDataMap(result)
 	if len(data) == 0 {
