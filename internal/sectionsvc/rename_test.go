@@ -2,16 +2,11 @@ package sectionsvc
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
-	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 const renameSectionProjectContent = `---
@@ -373,32 +368,94 @@ func TestRenameSameSlugUpdatesTitleOnly(t *testing.T) {
 	}
 }
 
-func testRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
-	t.Helper()
-	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{RequireSchema: true})
+func TestRenameUsesSharedDocumentLoad(t *testing.T) {
+	t.Parallel()
+
+	content := strings.TrimSuffix(renameSectionProjectContent, "\n")
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", content).
+		WithFile("notes/ref.md", "See [[projects/site#tasks]].").
+		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md", "notes/ref.md")
+
+	result, err := Rename(rt, RenameRequest{
+		Reference:      "projects/site#tasks",
+		NewHeadingText: "Completed Tasks",
+		FailOnIndexErr: true,
+	})
+	if err != nil {
+		t.Fatalf("Rename() error = %v", err)
+	}
+	if result.DestinationID != "projects/site#completed-tasks" {
+		t.Fatalf("DestinationID = %q", result.DestinationID)
+	}
+
+	site := v.ReadFile("projects/site.md")
+	if strings.HasSuffix(site, "\n") {
+		t.Fatalf("loadDocument rewrite added a trailing newline:\n%q", site)
+	}
+	if !strings.Contains(site, "## Completed Tasks") {
+		t.Fatalf("heading not renamed:\n%s", site)
+	}
+	if !strings.Contains(site, "[[projects/site#completed-tasks]]") {
+		t.Fatalf("same-file ref not rewritten:\n%s", site)
+	}
+	if got := v.ReadFile("notes/ref.md"); got != "See [[projects/site#completed-tasks]]." {
+		t.Fatalf("inbound ref file = %q", got)
+	}
 }
 
-func indexVaultFiles(t *testing.T, vaultPath string, sch *schema.Schema, relPaths ...string) {
-	t.Helper()
+func TestRenameRejectsFileReferences(t *testing.T) {
+	t.Parallel()
 
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		t.Fatalf("open index: %v", err)
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", renameSectionProjectContent).
+		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
+
+	_, err := Rename(rt, RenameRequest{
+		Reference:      "projects/site",
+		NewHeadingText: "Done",
+		FailOnIndexErr: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid section ID") {
+		t.Fatalf("Rename() error = %v, want invalid section ID", err)
 	}
-	defer db.Close()
+	assertServiceCode(t, err, "INVALID_INPUT")
+}
 
-	for _, relPath := range relPaths {
-		fullPath := filepath.Join(vaultPath, relPath)
-		content, err := os.ReadFile(fullPath)
-		if err != nil {
-			t.Fatalf("read %s: %v", relPath, err)
-		}
-		doc, err := parser.ParseDocument(string(content), fullPath, vaultPath)
-		if err != nil {
-			t.Fatalf("parse %s: %v", relPath, err)
-		}
-		if err := db.IndexDocument(doc, sch); err != nil {
-			t.Fatalf("index %s: %v", relPath, err)
-		}
+func TestRewriteHeadingLeavesOtherLinesUnchanged(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", renameSectionProjectContent).
+		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
+
+	state, target, err := loadResolvedSection(rt, "projects/site#tasks")
+	if err != nil {
+		t.Fatalf("loadResolvedSection() error = %v", err)
+	}
+	updated, renamed, err := rewriteHeading(rt, state, target, "Completed Tasks")
+	if err != nil {
+		t.Fatalf("rewriteHeading() error = %v", err)
+	}
+	if renamed == nil || renamed.ID != "projects/site#completed-tasks" {
+		t.Fatalf("renamed = %#v", renamed)
+	}
+	if strings.Contains(updated, "## Tasks\n") {
+		t.Fatalf("old heading remains:\n%s", updated)
+	}
+	if !strings.Contains(updated, "## Notes") || !strings.Contains(updated, "Cross ref [[projects/site#tasks]]") {
+		t.Fatalf("rewriteHeading mutated non-heading lines:\n%s", updated)
+	}
+	if got := v.ReadFile("projects/site.md"); got != renameSectionProjectContent {
+		t.Fatal("rewriteHeading wrote the vault file")
 	}
 }

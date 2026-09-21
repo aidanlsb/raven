@@ -257,6 +257,31 @@ func TestCreateLeavesExistingBlankLineBeforeHeading(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsSectionFileReference(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", lifecycleOutline).
+		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
+
+	_, err := Create(rt, CreateRequest{
+		FileReference:  "projects/site#alpha",
+		Title:          "Inserted",
+		Level:          2,
+		FailOnIndexErr: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "must be a file") {
+		t.Fatalf("Create() error = %v, want file-only rejection", err)
+	}
+	assertServiceCode(t, err, "INVALID_INPUT")
+	if got := v.ReadFile("projects/site.md"); got != lifecycleOutline {
+		t.Fatalf("rejected create changed file:\n%s", got)
+	}
+}
+
 func TestCreateDryRunDoesNotWrite(t *testing.T) {
 	t.Parallel()
 
@@ -345,6 +370,27 @@ func TestCreateRejectsIllegalDepthAndSlugCollision(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMoveRejectsFileReference(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("projects/site.md", lifecycleOutline).
+		Build()
+	rt := testRuntime(t, v.Path)
+	indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
+
+	_, err := Move(rt, MoveRequest{
+		Reference:      "projects/site",
+		Placement:      Placement{After: "projects/site#beta"},
+		FailOnIndexErr: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "section reference required") {
+		t.Fatalf("Move() error = %v, want section-only rejection", err)
+	}
+	assertServiceCode(t, err, "INVALID_INPUT")
 }
 
 func TestMoveReordersEntireSubtree(t *testing.T) {
