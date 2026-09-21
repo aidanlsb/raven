@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.36] - 2026-09-20
+
 ### Added
 - Added preview-first `rvn trash empty` / `trash_empty` to permanently remove matching trash entries. `--confirm` applies; `--older-than` limits the wipe to files whose modification time is at least the given duration in the past (`24h`, `7d`, `30d`). Live vault objects are never touched.
 
@@ -14,11 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bumped the Go toolchain from 1.25.13 to 1.26.8 and refreshed module dependencies (including goldmark, golang.org/x/sys, and modernc.org/sqlite). 1.26.8 is required for `govulncheck` to clear reachable standard-library issues still present in 1.26.0 and 1.26.1.
 - **Breaking (index):** Markdown wikilinks and schema-backed frontmatter references now share one `refs` table, with nullable `field_name` and a common `resolution_status`. The separate `field_refs` table is gone. Index schema version is 17; Raven rebuilds the derived database on the next open or `rvn reindex`.
 - **Breaking:** renamed `rvn upsert` and the MCP command `upsert` to `rvn write` / `write`. There is no alias. `write` is create-or-replace: the canonical idempotent write. `new` is the interactive create-only path on the same create mutation; it still fails with `FILE_EXISTS` rather than replacing an existing object. Agents should call `write` for reruns. Humans creating one-offs should call `new`.
+- Creating an object with `--content` (or MCP `content`) writes that body after frontmatter and skips the type template, so a broken template cannot block an explicit body.
+- Body `refs()` now uses the same identity-first target matching as field refs and `refd()`: resolved rows match `target_id`; leftover `target_raw` is compared only while unresolved.
+- Scalar-ref string functions (`includes()`, `startswith()`, and related) and `ref[]` `any`/`all`/`none` trees now compile against the unified `refs` table instead of stored JSON text. Queries that previously matched wikilink punctuation or unresolved shorthand in frontmatter JSON will see different results.
 - MCP `rvn serve` now constructs the server from typed options (config path, vault pin, executable) instead of round-tripping Cobra flags through CLI argument strings. Launch pins from `--vault-path` and `--vault` report `vault_context.source` as `pinned`. The previous `base_args` source is gone.
 
 ### Fixed
 - Object-root `links(...)` now matches file/URL links whose `source_id` is a section fragment (`objectId#slug`), the same source scope object-root `refs(...)` already uses for wikilinks. Trait and section `links()` stay line- and subtree-scoped.
 - `--json` now prints a standard error envelope when flag parsing fails, instead of exiting 1 with empty stdout and stderr.
+- Invalid date/datetime literals in trait `.value` comparisons now fail the query instead of falling back to string comparison.
 - raven-core Safety now tells agents to mention trait tokens in backticks or fences. A slash prefix or italics still parse as traits.
 - `rvn section create` inserts one blank line before a new heading when the previous line is non-empty body text. It does not insert a blank line after the heading.
 
@@ -486,7 +492,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.35...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.36...HEAD
+[v0.0.36]: https://github.com/aidanlsb/raven/compare/v0.0.35...v0.0.36
 [v0.0.35]: https://github.com/aidanlsb/raven/compare/v0.0.34...v0.0.35
 [v0.0.34]: https://github.com/aidanlsb/raven/compare/v0.0.33...v0.0.34
 [v0.0.33]: https://github.com/aidanlsb/raven/compare/v0.0.32...v0.0.33
