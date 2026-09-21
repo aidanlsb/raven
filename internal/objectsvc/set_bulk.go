@@ -78,10 +78,7 @@ func PreviewSetBulk(rt *vaultruntime.Runtime, req SetBulkRequest) (*SetBulkPrevi
 			continue
 		}
 
-		objectType := fm.ObjectType
-		if objectType == "" {
-			objectType = "page"
-		}
+		objectType := objectTypeOrPage(fm)
 		refCtx := createRefValidationContext(rt)
 		validatedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
 			objectType,

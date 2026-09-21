@@ -50,6 +50,8 @@ type createPageRequest struct {
 	TargetPath       string
 	Fields           map[string]fieldvalue.FieldValue
 	TemplateOverride string
+	ReplaceBody      bool
+	Body             string
 }
 
 func lookupTypeDefinitionForCreate(sch *schema.Schema, typeName string) (*schema.TypeDefinition, error) {
@@ -57,14 +59,18 @@ func lookupTypeDefinitionForCreate(sch *schema.Schema, typeName string) (*schema
 	if typeExists || schema.IsBuiltinType(typeName) {
 		return typeDef, nil
 	}
+	return nil, typeNotFoundError(sch, typeName)
+}
 
+func typeNotFoundError(sch *schema.Schema, typeName string) error {
 	typeNames := make([]string, 0, len(sch.Types))
 	for name := range sch.Types {
 		typeNames = append(typeNames, name)
 	}
 	sort.Strings(typeNames)
-
-	return nil, svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName)).WithSuggestion(fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", "))).WithDetails(map[string]interface{}{"available_types": typeNames})
+	return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName)).
+		WithSuggestion(fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", "))).
+		WithDetails(map[string]interface{}{"available_types": typeNames})
 }
 
 func normalizedCreateFieldValues(values map[string]fieldvalue.FieldValue, typeDef *schema.TypeDefinition, title string) map[string]fieldvalue.FieldValue {
@@ -73,9 +79,13 @@ func normalizedCreateFieldValues(values map[string]fieldvalue.FieldValue, typeDe
 	return fieldValues
 }
 
-func requiredFieldGaps(typeDef *schema.TypeDefinition, fields map[string]fieldvalue.FieldValue) []requiredFieldGap {
+// fillRequiredFieldDefaults copies fields, fills schema defaults for missing
+// required fields, and returns the remaining required-field gaps. The input
+// map is not modified.
+func fillRequiredFieldDefaults(typeDef *schema.TypeDefinition, fields map[string]fieldvalue.FieldValue) (map[string]fieldvalue.FieldValue, []requiredFieldGap) {
+	filled := cloneFieldValues(fields)
 	if typeDef == nil {
-		return nil
+		return filled, nil
 	}
 
 	fieldNames := make([]string, 0, len(typeDef.Fields))
@@ -90,11 +100,11 @@ func requiredFieldGaps(typeDef *schema.TypeDefinition, fields map[string]fieldva
 		if fieldDef == nil || !fieldDef.Required {
 			continue
 		}
-		if _, ok := fields[fieldName]; ok {
+		if _, ok := filled[fieldName]; ok {
 			continue
 		}
 		if fieldDef.Default != nil {
-			fields[fieldName] = parser.FieldValueFromYAML(fieldDef.Default)
+			filled[fieldName] = parser.FieldValueFromYAML(fieldDef.Default)
 			continue
 		}
 
@@ -108,7 +118,7 @@ func requiredFieldGaps(typeDef *schema.TypeDefinition, fields map[string]fieldva
 		missing = append(missing, gap)
 	}
 
-	return missing
+	return filled, missing
 }
 
 func requiredFieldGapNames(gaps []requiredFieldGap) []string {
@@ -182,16 +192,6 @@ func resolveReferenceType(rt *vaultruntime.Runtime, parseOptions *parser.ParseOp
 	return "", fmt.Errorf("resolved object %q not found in parsed document", resolved.ObjectID)
 }
 
-func validateCreateFieldValues(
-	typeName string,
-	fields map[string]fieldvalue.FieldValue,
-	sch *schema.Schema,
-	allowedUnknown map[string]bool,
-	refCtx *fieldmutation.RefValidationContext,
-) (map[string]fieldvalue.FieldValue, []string, error) {
-	return fieldmutation.PrepareValidatedFieldMutationValues(typeName, nil, fields, sch, allowedUnknown, refCtx)
-}
-
 func createObjectPage(rt *vaultruntime.Runtime, req createPageRequest) (*pages.CreateResult, error) {
 	result, err := pages.Create(pages.CreateOptions{
 		VaultPath:         rt.VaultPath,
@@ -205,6 +205,8 @@ func createObjectPage(rt *vaultruntime.Runtime, req createPageRequest) (*pages.C
 		ProtectedPrefixes: protectedPrefixes(rt.VaultCfg),
 		ObjectsRoot:       objectsRoot(rt),
 		PagesRoot:         pagesRoot(rt),
+		ReplaceBody:       req.ReplaceBody,
+		Body:              req.Body,
 	})
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to create object", err)

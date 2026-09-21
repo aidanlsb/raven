@@ -49,14 +49,7 @@ func PreviewDeleteBulk(rt *vaultruntime.Runtime, req DeleteBulkRequest) (*Delete
 
 	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
 	skipped := make([]BulkResult, 0)
-	behavior := req.Behavior
-	if behavior == "" {
-		behavior = "trash"
-	}
-	trashDir := req.TrashDir
-	if trashDir == "" {
-		trashDir = ".trash"
-	}
+	behavior, trashDir := normalizeDeletionBehavior(req.Behavior, req.TrashDir)
 
 	for _, id := range req.ObjectIDs {
 		target, err := resolveBulkDeleteTarget(rt.VaultPath, rt.VaultCfg, id)
@@ -114,14 +107,7 @@ func ApplyDeleteBulk(rt *vaultruntime.Runtime, req DeleteBulkRequest) (*DeleteBu
 	skippedCount := 0
 	errorCount := 0
 	changes := mutation.NewChangeSet()
-	behavior := req.Behavior
-	if behavior == "" {
-		behavior = "trash"
-	}
-	trashDir := req.TrashDir
-	if trashDir == "" {
-		trashDir = ".trash"
-	}
+	behavior, trashDir := normalizeDeletionBehavior(req.Behavior, req.TrashDir)
 
 	for _, id := range req.ObjectIDs {
 		result := BulkResult{ID: id}

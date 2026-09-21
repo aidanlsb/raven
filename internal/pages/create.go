@@ -71,6 +71,13 @@ type CreateOptions struct {
 	// PagesRoot is the root directory for untyped pages (e.g., "pages/").
 	// If set, pages without a type-specific directory go here.
 	PagesRoot string
+
+	// ReplaceBody writes Body after frontmatter and skips the type template.
+	// Callers that already have the intended markdown body (rvn write --content)
+	// should set this so create is one atomic write and a broken template cannot
+	// block an explicit body.
+	ReplaceBody bool
+	Body        string
 }
 
 // CreateResult contains information about the created page.
@@ -153,33 +160,14 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	content.WriteString(frontmatterContent)
 	content.WriteString("\n")
 
-	// Determine template to use
-	templateSpec := opts.TemplateOverride
-	if templateSpec == "" && opts.Schema != nil {
-		resolvedTemplate, err := schema.ResolveTypeTemplateFile(opts.Schema, opts.TypeName, "")
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve template for type %q: %w", opts.TypeName, err)
+	if opts.ReplaceBody {
+		content.WriteString(opts.Body)
+		if !strings.HasSuffix(opts.Body, "\n") {
+			content.WriteString("\n")
 		}
-		templateSpec = resolvedTemplate
+	} else if err := writeCreateTemplate(&content, opts); err != nil {
+		return nil, err
 	}
-
-	// Load and apply template if specified
-	if templateSpec != "" {
-		templateContent, err := template.Load(opts.VaultPath, templateSpec, opts.TemplateDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load template: %w", err)
-		}
-
-		if templateContent != "" {
-			content.WriteString(templateContent)
-			// Ensure template ends with newline
-			if !strings.HasSuffix(templateContent, "\n") {
-				content.WriteString("\n")
-			}
-		}
-	}
-	// No template specified - leave file with just frontmatter
-	// (Headings create section objects which adds noise to the index)
 
 	// Write the file
 	if err := atomicfile.WriteFile(filePath, []byte(content.String()), 0o644); err != nil {
@@ -193,6 +181,35 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		RelativePath:  relPath,
 		SlugifiedPath: slugifiedPath,
 	}, nil
+}
+
+func writeCreateTemplate(content *strings.Builder, opts CreateOptions) error {
+	templateSpec := opts.TemplateOverride
+	if templateSpec == "" && opts.Schema != nil {
+		resolvedTemplate, err := schema.ResolveTypeTemplateFile(opts.Schema, opts.TypeName, "")
+		if err != nil {
+			return fmt.Errorf("failed to resolve template for type %q: %w", opts.TypeName, err)
+		}
+		templateSpec = resolvedTemplate
+	}
+	if templateSpec == "" {
+		// No template specified — leave the file with just frontmatter.
+		// Headings create section objects, which adds noise to the index.
+		return nil
+	}
+
+	templateContent, err := template.Load(opts.VaultPath, templateSpec, opts.TemplateDir)
+	if err != nil {
+		return fmt.Errorf("failed to load template: %w", err)
+	}
+	if templateContent == "" {
+		return nil
+	}
+	content.WriteString(templateContent)
+	if !strings.HasSuffix(templateContent, "\n") {
+		content.WriteString("\n")
+	}
+	return nil
 }
 
 func validateCreateRelPath(relPath, templateDir string, protectedPrefixes []string) error {

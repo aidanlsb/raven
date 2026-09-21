@@ -433,6 +433,44 @@ func TestCreateWithTemplate(t *testing.T) {
 	})
 }
 
+func TestCreateReplaceBodySkipsTemplate(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	if err := os.MkdirAll(templateDir, 0o755); err != nil {
+		t.Fatalf("mkdir templates: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templateDir, "note.md"), []byte("## From Template\n"), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+
+	result, err := Create(CreateOptions{
+		VaultPath:        tmpDir,
+		TypeName:         "note",
+		Title:            "Body Wins",
+		TargetPath:       "notes/body-wins",
+		TemplateOverride: "templates/note.md",
+		TemplateDir:      "templates/",
+		ReplaceBody:      true,
+		Body:             "# Provided body",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	content, err := os.ReadFile(result.FilePath)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	got := string(content)
+	if !strings.Contains(got, "# Provided body") {
+		t.Fatalf("expected provided body, got:\n%s", got)
+	}
+	if strings.Contains(got, "## From Template") {
+		t.Fatalf("ReplaceBody should skip the template, got:\n%s", got)
+	}
+}
+
 func TestExists(t *testing.T) {
 	t.Parallel()
 	// Create a temp directory for testing

@@ -34,17 +34,10 @@ func DeleteFile(rt *vaultruntime.Runtime, req DeleteFileRequest) (*DeleteFileRes
 		return nil, svcerr.New(codes.ErrInvalidInput, "file path is required")
 	}
 
-	behavior := strings.TrimSpace(req.Behavior)
-	if behavior == "" {
-		behavior = "trash"
-	}
+	behavior, trashDir := normalizeDeletionBehavior(req.Behavior, req.TrashDir)
 
 	switch behavior {
 	case "trash":
-		trashDir := strings.TrimSpace(req.TrashDir)
-		if trashDir == "" {
-			trashDir = ".trash"
-		}
 		_, trashRoot, err := resolveTrashRootFromDir(rt.VaultPath, trashDir)
 		if err != nil {
 			return nil, err
@@ -126,4 +119,16 @@ func DeleteFile(rt *vaultruntime.Runtime, req DeleteFileRequest) (*DeleteFileRes
 	default:
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid deletion behavior: %s", behavior)).WithSuggestion("Use 'trash' or 'permanent'")
 	}
+}
+
+func normalizeDeletionBehavior(behavior, trashDir string) (string, string) {
+	behavior = strings.TrimSpace(behavior)
+	if behavior == "" {
+		behavior = "trash"
+	}
+	trashDir = strings.TrimSpace(trashDir)
+	if trashDir == "" {
+		trashDir = ".trash"
+	}
+	return behavior, trashDir
 }

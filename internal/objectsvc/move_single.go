@@ -147,16 +147,7 @@ func MoveByReference(rt *vaultruntime.Runtime, req MoveByReferenceRequest) (*Mov
 		if err != nil {
 			return nil, err
 		}
-		return &MoveByReferenceResult{
-			SourceID:         sourceID,
-			SourceRelative:   sourceRelPath,
-			DestinationID:    destPath,
-			DestinationRel:   destPath,
-			UpdatedRefs:      serviceResult.UpdatedRefs,
-			UpdatedRefFields: serviceResult.UpdatedRefFields,
-			WarningMessages:  serviceResult.WarningMessages,
-			ChangeSet:        serviceResult.ChangeSet,
-		}, nil
+		return moveByReferenceResult(sourceID, sourceRelPath, destPath, destPath, serviceResult), nil
 	}
 
 	sch := rt.Schema
@@ -213,14 +204,24 @@ func MoveByReference(rt *vaultruntime.Runtime, req MoveByReferenceRequest) (*Mov
 		return nil, err
 	}
 
+	return moveByReferenceResult(
+		sourceID,
+		sourceRelPath,
+		rt.VaultCfg.FilePathToObjectID(destPath),
+		destPath,
+		serviceResult,
+	), nil
+}
+
+func moveByReferenceResult(sourceID, sourceRel, destID, destRel string, serviceResult *MoveFileResult) *MoveByReferenceResult {
 	return &MoveByReferenceResult{
 		SourceID:         sourceID,
-		SourceRelative:   sourceRelPath,
-		DestinationID:    rt.VaultCfg.FilePathToObjectID(destPath),
-		DestinationRel:   destPath,
+		SourceRelative:   sourceRel,
+		DestinationID:    destID,
+		DestinationRel:   destRel,
 		UpdatedRefs:      serviceResult.UpdatedRefs,
 		UpdatedRefFields: serviceResult.UpdatedRefFields,
 		WarningMessages:  serviceResult.WarningMessages,
 		ChangeSet:        serviceResult.ChangeSet,
-	}, nil
+	}
 }
