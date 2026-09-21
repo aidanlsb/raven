@@ -331,39 +331,11 @@ func validateSchemaTraitDefinition(traitName string, traitDef *TraitDefinition) 
 	return issues
 }
 
-func IsValidFieldType(fieldType FieldType) bool {
-	switch fieldType {
-	case FieldTypeString,
-		FieldTypeStringArray,
-		FieldTypeNumber,
-		FieldTypeNumberArray,
-		FieldTypeURL,
-		FieldTypeURLArray,
-		FieldTypeDate,
-		FieldTypeDateArray,
-		FieldTypeDatetime,
-		FieldTypeDatetimeArray,
-		FieldTypeEnum,
-		FieldTypeEnumArray,
-		FieldTypeBool,
-		FieldTypeBoolArray,
-		FieldTypeRef,
-		FieldTypeRefArray:
-		return true
-	default:
-		return false
-	}
-}
-
 func IsValidTraitType(fieldType FieldType) bool {
 	if fieldType == "boolean" {
 		return true
 	}
 	return IsValidFieldType(fieldType)
-}
-
-func ValidFieldTypes() string {
-	return "string, string[], number, number[], url, url[], date, date[], datetime, datetime[], enum, enum[], bool, bool[], ref, ref[]"
 }
 
 func ValidTraitTypes() string {

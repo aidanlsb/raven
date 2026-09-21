@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestUpdateField_RejectsInvalidFieldSpecs(t *testing.T) {
@@ -197,6 +198,130 @@ func TestUpdateTrait_RejectsTypeAndValueRemaps(t *testing.T) {
 			assertUpdateRemapRejected(t, err, tt.flag, "schema convert trait")
 			if got := vault.ReadFile("schema.yaml"); got != before {
 				t.Fatalf("rejected update changed schema.yaml:\n%s", got)
+			}
+		})
+	}
+}
+
+func TestRemoveSchemaDefinitions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		run      func(*vaultruntime.Runtime) error
+		wantCode codes.ErrorCode
+		gone     func(*schema.Schema) bool
+	}{
+		{
+			name: "remove type",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveType(rt, RemoveTypeRequest{TypeName: "project"})
+				return err
+			},
+			gone: func(sch *schema.Schema) bool { return sch.Types["project"] == nil },
+		},
+		{
+			name: "remove type empty name",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveType(rt, RemoveTypeRequest{})
+				return err
+			},
+			wantCode: codes.ErrInvalidInput,
+		},
+		{
+			name: "remove builtin type",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveType(rt, RemoveTypeRequest{TypeName: "page"})
+				return err
+			},
+			wantCode: codes.ErrInvalidInput,
+		},
+		{
+			name: "remove missing type",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveType(rt, RemoveTypeRequest{TypeName: "company"})
+				return err
+			},
+			wantCode: codes.ErrTypeNotFound,
+		},
+		{
+			name: "remove trait",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveTrait(rt, RemoveTraitRequest{TraitName: "priority"})
+				return err
+			},
+			gone: func(sch *schema.Schema) bool { return sch.Traits["priority"] == nil },
+		},
+		{
+			name: "remove trait empty name",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveTrait(rt, RemoveTraitRequest{})
+				return err
+			},
+			wantCode: codes.ErrInvalidInput,
+		},
+		{
+			name: "remove missing trait",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveTrait(rt, RemoveTraitRequest{TraitName: "missing"})
+				return err
+			},
+			wantCode: codes.ErrTraitNotFound,
+		},
+		{
+			name: "remove field",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveField(rt, RemoveFieldRequest{TypeName: "project", FieldName: "status"})
+				return err
+			},
+			gone: func(sch *schema.Schema) bool {
+				return sch.Types["project"] != nil && sch.Types["project"].Fields["status"] == nil
+			},
+		},
+		{
+			name: "remove field empty names",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveField(rt, RemoveFieldRequest{})
+				return err
+			},
+			wantCode: codes.ErrInvalidInput,
+		},
+		{
+			name: "remove field from builtin",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveField(rt, RemoveFieldRequest{TypeName: "page", FieldName: "title"})
+				return err
+			},
+			wantCode: codes.ErrInvalidInput,
+		},
+		{
+			name: "remove missing field",
+			run: func(rt *vaultruntime.Runtime) error {
+				_, err := RemoveField(rt, RemoveFieldRequest{TypeName: "project", FieldName: "missing"})
+				return err
+			},
+			wantCode: codes.ErrFieldNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			vault := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+			err := tt.run(schemaTestRuntime(t, vault.Path))
+			if tt.wantCode != "" {
+				requireSchemaCode(t, err, tt.wantCode)
+				return
+			}
+			if err != nil {
+				t.Fatalf("remove error = %v", err)
+			}
+			loaded, err := schema.Load(vault.Path)
+			if err != nil {
+				t.Fatalf("load schema: %v", err)
+			}
+			if tt.gone != nil && !tt.gone(loaded) {
+				t.Fatal("expected definition to be removed from schema")
 			}
 		})
 	}

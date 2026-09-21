@@ -2,7 +2,6 @@ package schemasvc
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -10,20 +9,6 @@ import (
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 )
-
-type TypeRenameChange struct {
-	FilePath    string `json:"file_path"`
-	ChangeType  string `json:"change_type"`
-	Description string `json:"description"`
-	Line        int    `json:"line,omitempty"`
-}
-
-type FieldRenameChange struct {
-	FilePath    string `json:"file_path"`
-	ChangeType  string `json:"change_type"`
-	Description string `json:"description"`
-	Line        int    `json:"line,omitempty"`
-}
 
 // TypeRenamePlanRequest contains only the schema-document inputs needed to
 // transform a type definition. Vault scanning and file migration are handled
@@ -42,8 +27,8 @@ type TypeRenamePlanRequest struct {
 type TypeRenamePlan struct {
 	SchemaYAML                []byte
 	SchemaYAMLWithDefaultPath []byte
-	Changes                   []TypeRenameChange
-	OptionalChanges           []TypeRenameChange
+	Changes                   []SchemaChange
+	OptionalChanges           []SchemaChange
 	CoreSchemaMutations       int
 	DefaultPathMutation       bool
 	DefaultPathOld            string
@@ -64,7 +49,7 @@ type FieldRenamePlanRequest struct {
 // rewrite.
 type FieldRenamePlan struct {
 	SchemaYAML   []byte
-	Changes      []FieldRenameChange
+	Changes      []SchemaChange
 	TemplateSpec string
 }
 
@@ -74,8 +59,8 @@ type FieldRenamePlan struct {
 func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 	description := strings.TrimSpace(req.Description)
 	plan := &TypeRenamePlan{
-		Changes:         make([]TypeRenameChange, 0),
-		OptionalChanges: make([]TypeRenameChange, 0),
+		Changes:         make([]SchemaChange, 0),
+		OptionalChanges: make([]SchemaChange, 0),
 	}
 
 	if req.SchemaDoc == nil {
@@ -86,7 +71,7 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 		return nil, svcerr.New(codes.ErrSchemaInvalid, "types section not found")
 	}
 
-	plan.Changes = append(plan.Changes, TypeRenameChange{
+	plan.Changes = append(plan.Changes, SchemaChange{
 		FilePath:    "schema.yaml",
 		ChangeType:  "schema_type",
 		Description: fmt.Sprintf("rename type '%s' to '%s'", req.OldName, req.NewName),
@@ -102,7 +87,7 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 			if isClearSentinel(req.Description) {
 				if _, hadDescription := typeDefMap["description"]; hadDescription {
 					delete(typeDefMap, "description")
-					plan.Changes = append(plan.Changes, TypeRenameChange{
+					plan.Changes = append(plan.Changes, SchemaChange{
 						FilePath:    "schema.yaml",
 						ChangeType:  "schema_description",
 						Description: fmt.Sprintf("remove description from type '%s'", req.NewName),
@@ -111,7 +96,7 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 				}
 			} else if current, _ := typeDefMap["description"].(string); current != req.Description {
 				typeDefMap["description"] = req.Description
-				plan.Changes = append(plan.Changes, TypeRenameChange{
+				plan.Changes = append(plan.Changes, SchemaChange{
 					FilePath:    "schema.yaml",
 					ChangeType:  "schema_description",
 					Description: fmt.Sprintf("update description for type '%s'", req.NewName),
@@ -121,7 +106,7 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 		}
 	}
 
-	for _, typeName := range sortedRenameKeys(typesNode) {
+	for _, typeName := range SortedKeys(typesNode) {
 		typeMap, ok := typesNode[typeName].(map[string]interface{})
 		if !ok {
 			continue
@@ -130,14 +115,14 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 		if !ok {
 			continue
 		}
-		for _, fieldName := range sortedRenameKeys(fields) {
+		for _, fieldName := range SortedKeys(fields) {
 			fieldMap, ok := fields[fieldName].(map[string]interface{})
 			if !ok {
 				continue
 			}
 			if target, ok := fieldMap["target"].(string); ok && target == req.OldName {
 				fieldMap["target"] = req.NewName
-				plan.Changes = append(plan.Changes, TypeRenameChange{
+				plan.Changes = append(plan.Changes, SchemaChange{
 					FilePath:    "schema.yaml",
 					ChangeType:  "schema_ref_target",
 					Description: fmt.Sprintf("update field '%s.%s' target from '%s' to '%s'", typeName, fieldName, req.OldName, req.NewName),
@@ -156,7 +141,7 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 	if suggestedPath, ok := suggestRenamedDefaultPath(req.OldDefaultPath, req.OldName, req.NewName); ok {
 		plan.DefaultPathOld = paths.NormalizeDirRoot(req.OldDefaultPath)
 		plan.DefaultPathNew = suggestedPath
-		plan.OptionalChanges = append(plan.OptionalChanges, TypeRenameChange{
+		plan.OptionalChanges = append(plan.OptionalChanges, SchemaChange{
 			FilePath:    "schema.yaml",
 			ChangeType:  "schema_default_path",
 			Description: fmt.Sprintf("update default_path '%s' → '%s' for type '%s'", plan.DefaultPathOld, plan.DefaultPathNew, req.NewName),
@@ -179,7 +164,7 @@ func BuildTypeRenamePlan(req TypeRenamePlanRequest) (*TypeRenamePlan, error) {
 // BuildFieldRenamePlan transforms schema.yaml without touching templates,
 // saved queries, or Markdown objects.
 func BuildFieldRenamePlan(req FieldRenamePlanRequest) (*FieldRenamePlan, error) {
-	plan := &FieldRenamePlan{Changes: make([]FieldRenameChange, 0)}
+	plan := &FieldRenamePlan{Changes: make([]SchemaChange, 0)}
 
 	if req.SchemaDoc == nil {
 		return nil, svcerr.New(codes.ErrInternal, "schema document is required")
@@ -220,7 +205,7 @@ func BuildFieldRenamePlan(req FieldRenamePlanRequest) (*FieldRenamePlan, error) 
 
 	fields[req.NewField] = fields[req.OldField]
 	delete(fields, req.OldField)
-	plan.Changes = append(plan.Changes, FieldRenameChange{
+	plan.Changes = append(plan.Changes, SchemaChange{
 		FilePath:    "schema.yaml",
 		ChangeType:  "schema_field",
 		Description: fmt.Sprintf("rename field '%s' → '%s' on type '%s'", req.OldField, req.NewField, req.TypeName),
@@ -228,7 +213,7 @@ func BuildFieldRenamePlan(req FieldRenamePlanRequest) (*FieldRenamePlan, error) 
 
 	if nameField, ok := typeNode["name_field"].(string); ok && nameField == req.OldField {
 		typeNode["name_field"] = req.NewField
-		plan.Changes = append(plan.Changes, FieldRenameChange{
+		plan.Changes = append(plan.Changes, SchemaChange{
 			FilePath:    "schema.yaml",
 			ChangeType:  "schema_name_field",
 			Description: fmt.Sprintf("update name_field: %s → %s", req.OldField, req.NewField),
@@ -280,13 +265,4 @@ func suggestRenamedDefaultPath(oldDefaultPath, oldName, newName string) (string,
 		return "", false
 	}
 	return next, true
-}
-
-func sortedRenameKeys[V any](values map[string]V) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }

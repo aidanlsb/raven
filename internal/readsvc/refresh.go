@@ -271,3 +271,10 @@ func filterIncluded(paths []string, matcher *ravenignore.Matcher) []string {
 	}
 	return out
 }
+
+// ReindexForSchemaChange adapts SmartReindex to schemachange.ReindexFunc so
+// schema mutation packages can apply invalidation without duplicating adapters.
+func ReindexForSchemaChange(rt *vaultruntime.Runtime) error {
+	_, err := SmartReindex(rt)
+	return err
+}

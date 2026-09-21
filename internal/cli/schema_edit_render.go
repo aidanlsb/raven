@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/spf13/cobra"
 
@@ -164,12 +163,7 @@ func renderSchemaConvert(_ *cobra.Command, result commandexec.Result) error {
 	if preview != nil {
 		fmt.Printf("%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: Convert %s '%s' from %s to %s", kind, label, sourceType, targetType)))
 		fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Changes to be made (%d total):", preview.TotalChanges)))
-		printSchemaFileChanges(
-			preview.Changes,
-			func(change schemasvc.ValueConvertChange) string { return change.FilePath },
-			func(change schemasvc.ValueConvertChange) int { return change.Line },
-			func(change schemasvc.ValueConvertChange) string { return change.Description },
-		)
+		printSchemaFileChanges(preview.Changes)
 		fmt.Printf("\n%s\n", ui.Hint("Run with --confirm to apply these changes."))
 		return nil
 	}
@@ -185,12 +179,7 @@ func renderSchemaRenameField(_ *cobra.Command, result commandexec.Result) error 
 	if data, ok := result.Data.(commandpayload.SchemaRenameFieldPreviewResult); ok {
 		fmt.Printf("%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: Rename field '%s.%s' to '%s.%s'", data.Type, data.OldField, data.Type, data.NewField)))
 		fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Changes to be made (%d total):", data.TotalChanges)))
-		printSchemaFileChanges(
-			data.Changes,
-			func(change schemasvc.FieldRenameChange) string { return change.FilePath },
-			func(change schemasvc.FieldRenameChange) int { return change.Line },
-			func(change schemasvc.FieldRenameChange) string { return change.Description },
-		)
+		printSchemaFileChanges(data.Changes)
 		fmt.Printf("\n%s\n", ui.Hint("Run with --confirm to apply these changes."))
 		return nil
 	}
@@ -209,12 +198,7 @@ func renderSchemaRenameType(_ *cobra.Command, result commandexec.Result) error {
 	if data, ok := result.Data.(commandpayload.SchemaRenameTypePreviewResult); ok {
 		fmt.Printf("%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: Rename type '%s' to '%s'", data.OldName, data.NewName)))
 		fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Changes to be made (%d total):", data.TotalChanges)))
-		printSchemaFileChanges(
-			data.Changes,
-			func(change schemasvc.TypeRenameChange) string { return change.FilePath },
-			func(change schemasvc.TypeRenameChange) int { return change.Line },
-			func(change schemasvc.TypeRenameChange) string { return change.Description },
-		)
+		printSchemaFileChanges(data.Changes)
 		if data.DefaultPathRenameAvailable != nil && *data.DefaultPathRenameAvailable {
 			fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Optional default directory rename (%d changes):", *data.OptionalTotalChanges)))
 			fmt.Printf("  %s %s → %s\n", ui.Hint("default_path:"), *data.DefaultPathOld, *data.DefaultPathNew)
@@ -246,31 +230,19 @@ func renderSchemaRenameType(_ *cobra.Command, result commandexec.Result) error {
 	return nil
 }
 
-func printSchemaFileChanges[T any](
-	changes []T,
-	filePath func(T) string,
-	line func(T) int,
-	description func(T) string,
-) {
-	byFile := make(map[string][]T)
+func printSchemaFileChanges(changes []schemasvc.SchemaChange) {
+	byFile := make(map[string][]schemasvc.SchemaChange)
 	for _, change := range changes {
-		path := filePath(change)
-		byFile[path] = append(byFile[path], change)
+		byFile[change.FilePath] = append(byFile[change.FilePath], change)
 	}
 
-	files := make([]string, 0, len(byFile))
-	for file := range byFile {
-		files = append(files, file)
-	}
-	sort.Strings(files)
-
-	for _, file := range files {
+	for _, file := range schemasvc.SortedKeys(byFile) {
 		fmt.Printf("\n  %s:\n", ui.FilePath(file))
 		for _, change := range byFile[file] {
-			if line(change) > 0 {
-				fmt.Printf("    %s %s\n", ui.Hint(fmt.Sprintf("Line %d:", line(change))), description(change))
+			if change.Line > 0 {
+				fmt.Printf("    %s %s\n", ui.Hint(fmt.Sprintf("Line %d:", change.Line)), change.Description)
 			} else {
-				fmt.Printf("    %s\n", description(change))
+				fmt.Printf("    %s\n", change.Description)
 			}
 		}
 	}
