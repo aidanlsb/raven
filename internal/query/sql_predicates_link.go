@@ -101,9 +101,10 @@ func buildLinkStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (stri
 	return cond, args, nil
 }
 
-// buildLinksPredicateSQL matches each supported source root to link rows:
-// objects own every link in their file, traits own links on their source line,
-// and sections own links in their complete subtree line range.
+// buildLinksPredicateSQL matches each supported source root to link rows.
+// Object roots include the file object and section-fragment source IDs under
+// it, matching refs(). Traits own links on their source line; sections own
+// links in their complete subtree line range.
 func (e *Executor) buildLinksPredicateSQL(p *LinksPredicate, alias string, root QueryType) (string, []interface{}, error) {
 	if p.LinkPredicate == nil {
 		return "", nil, fmt.Errorf("links() requires a link field predicate")
@@ -113,19 +114,9 @@ func (e *Executor) buildLinksPredicateSQL(p *LinksPredicate, alias string, root 
 		return "", nil, err
 	}
 
-	var sourceCond string
-	switch root {
-	case QueryTypeObject:
-		sourceCond = fmt.Sprintf("l.source_id = %s.id", alias)
-	case QueryTypeTrait:
-		sourceCond = fmt.Sprintf("l.file_path = %[1]s.file_path AND l.line_number = %[1]s.line_number", alias)
-	case QueryTypeSection:
-		sourceCond = fmt.Sprintf(
-			"l.file_path = %[1]s.file_path AND l.line_number >= %[1]s.line_start AND (%[1]s.subtree_line_end IS NULL OR l.line_number <= %[1]s.subtree_line_end)",
-			alias,
-		)
-	default:
-		return "", nil, fmt.Errorf("links() predicate is not supported for %s queries", queryTypeName(root))
+	sourceCond, err := edgeSourceCondition("l", alias, root, "links")
+	if err != nil {
+		return "", nil, err
 	}
 
 	cond := fmt.Sprintf(`EXISTS (

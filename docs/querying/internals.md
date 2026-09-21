@@ -70,6 +70,12 @@ Values that look like dates or datetimes but fail to parse must fail the query;
 do not fall back to string comparison. Non-temporal values may still use numeric
 or string comparison.
 
+`refs(...)` and `links(...)` share `edgeSourceCondition` in
+`sql_predicates_shared.go`. Object roots match `source_id = object.id OR
+source_id LIKE object.id || '#%'`. Trait roots match the source line; section
+roots match the complete subtree line range. Do not special-case object-root
+`links()` back to exact `source_id` equality.
+
 ## Reference semantics
 
 Reference-like syntax can mean either a literal target or a nested query result set:

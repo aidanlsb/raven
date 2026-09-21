@@ -98,3 +98,36 @@ func TestExecuteLinksPredicateByRoot(t *testing.T) {
 		})
 	}
 }
+
+func TestExecuteLinksPredicateObjectRootIncludesSectionFragmentSource(t *testing.T) {
+	t.Parallel()
+
+	db := setupTestDB(t)
+	defer db.Close()
+	_, err := db.Exec(`
+		INSERT INTO links (
+			source_id, source_type, file_path, line_number, position_start, position_end,
+			raw_target, display, is_image, scheme, ext, normalized_key
+		) VALUES (
+			'projects/website#design', 'project', 'projects/website.md', 56, 0, 40,
+			'https://cdn.example.com/sheet.csv', 'sheet', 0, 'url', 'csv',
+			'https://cdn.example.com/sheet.csv'
+		)
+	`)
+	if err != nil {
+		t.Fatalf("insert section-sourced link: %v", err)
+	}
+
+	executor := NewExecutor(db)
+	q, err := Parse(`type:project links(.ext==csv)`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	run, err := executor.Run(q, RunRequest{})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(run.Objects) != 1 || run.Objects[0].ID != "projects/website" {
+		t.Fatalf("IDs = %#v, want [projects/website]", run.Objects)
+	}
+}

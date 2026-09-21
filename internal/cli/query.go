@@ -74,7 +74,8 @@ Predicates for link queries:
   within(type:...)       Source file matches a type query
   within(section ...)    Link occurs in a matching section subtree
 
-For refs() and links(), type roots inspect the whole file, section roots inspect
+For refs() and links(), type roots inspect the whole file (including
+section-fragment source IDs such as objectId#slug), section roots inspect
 the complete subtree, and trait roots inspect only the trait's source line.
 All link fields are present, so exists()/!exists() are invalid; use an empty
 comparison such as .ext=="" when appropriate. Link has no in(); use

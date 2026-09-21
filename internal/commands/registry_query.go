@@ -54,8 +54,9 @@ Common predicates:
   links() is outgoing-only: external files and URLs are leaves, so there is no
   linkd() inverse.
 - refs()/links() scope follows the source root: type queries inspect the whole
-  file, section queries inspect the complete section subtree, and trait queries
-  inspect only the trait's source line.
+  file, including section-fragment source IDs (objectId#slug); section queries
+  inspect the complete section subtree; and trait queries inspect only the
+  trait's source line.
 - Prefer canonical object IDs in direct reference targets; bare short forms are
   resolution sugar and can become ambiguous.
 - .value==X — Trait value equals X (.value==today, .value==high)
