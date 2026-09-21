@@ -11,14 +11,10 @@ import (
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexschema"
-	"github.com/aidanlsb/raven/internal/linktarget"
-	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/svcerr"
-	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -51,68 +47,66 @@ type RunResult struct {
 	ShortRefs         map[string]string
 }
 
-type CheckIssueJSON struct {
-	Type       string `json:"type"`
-	Level      string `json:"level"`
-	FilePath   string `json:"file_path"`
-	Line       int    `json:"line"`
-	Message    string `json:"message"`
-	Value      string `json:"value,omitempty"`
-	FixCommand string `json:"fix_command,omitempty"`
-	FixHint    string `json:"fix_hint,omitempty"`
-}
-
-type CheckSummaryJSON struct {
-	IssueType    string   `json:"issue_type"`
-	Count        int      `json:"count"`
-	UniqueValues int      `json:"unique_values,omitempty"`
-	FixCommand   string   `json:"fix_command,omitempty"`
-	FixHint      string   `json:"fix_hint,omitempty"`
-	TopValues    []string `json:"top_values,omitempty"`
-}
-
-type CheckScopeJSON struct {
-	Type  string `json:"type"`
-	Value string `json:"value,omitempty"`
-}
-
-type CheckResultJSON struct {
-	VaultPath  string             `json:"vault_path"`
-	Scope      *CheckScopeJSON    `json:"scope,omitempty"`
-	FileCount  int                `json:"file_count"`
-	ErrorCount int                `json:"error_count"`
-	WarnCount  int                `json:"warning_count"`
-	Issues     []CheckIssueJSON   `json:"issues"`
-	Summary    []CheckSummaryJSON `json:"summary"`
-}
-
 type issueCollector struct {
-	issues       *[]check.Issue
-	schemaIssues *[]check.SchemaIssue
+	issues       []check.Issue
+	schemaIssues []check.SchemaIssue
 	result       *RunResult
 	include      map[check.IssueType]bool
 	exclude      map[check.IssueType]bool
 	errorsOnly   bool
+	scope        *Scope
+	docsByPath   map[string]*parser.ParsedDocument
 }
 
-func (c *issueCollector) appendFiltered(issue check.Issue) {
-	if !shouldIncludeIssue(issue, c.include, c.exclude, c.errorsOnly) {
-		return
-	}
-	*c.issues = append(*c.issues, issue)
-	if issue.Level == check.LevelWarning {
-		c.result.WarningCount++
-	} else {
-		c.result.ErrorCount++
+func newIssueCollector(result *RunResult, include, exclude map[check.IssueType]bool, errorsOnly bool, scope *Scope) *issueCollector {
+	return &issueCollector{
+		result:     result,
+		include:    include,
+		exclude:    exclude,
+		errorsOnly: errorsOnly,
+		scope:      scope,
+		docsByPath: make(map[string]*parser.ParsedDocument),
 	}
 }
 
-func (c *issueCollector) appendSchemaFiltered(issue check.SchemaIssue) {
-	if !shouldIncludeSchemaIssue(issue, c.include, c.exclude, c.errorsOnly) {
+func (c *issueCollector) setDocs(docs []*parser.ParsedDocument) {
+	c.docsByPath = make(map[string]*parser.ParsedDocument, len(docs))
+	for _, doc := range docs {
+		if doc != nil && doc.FilePath != "" {
+			c.docsByPath[doc.FilePath] = doc
+		}
+	}
+}
+
+func (c *issueCollector) addAll(issues []check.Issue) {
+	for _, issue := range issues {
+		c.add(issue)
+	}
+}
+
+func (c *issueCollector) add(issue check.Issue) {
+	if doc := c.docsByPath[issue.FilePath]; doc != nil && !isIssueInScope(issue, doc, c.scope) {
 		return
 	}
-	*c.schemaIssues = append(*c.schemaIssues, issue)
-	if issue.Level == check.LevelWarning {
+	if !shouldInclude(issue.Level, issue.Type, c.include, c.exclude, c.errorsOnly) {
+		return
+	}
+	c.issues = append(c.issues, issue)
+	c.count(issue.Level)
+}
+
+func (c *issueCollector) addSchemaAll(issues []check.SchemaIssue) {
+	for _, issue := range issues {
+		if !shouldInclude(issue.Level, issue.Type, c.include, c.exclude, c.errorsOnly) {
+			continue
+		}
+		c.schemaIssues = append(c.schemaIssues, issue)
+		c.count(issue.Level)
+	}
+}
+
+func (c *issueCollector) count(level check.IssueLevel) {
+	if level == check.LevelWarning {
 		c.result.WarningCount++
 	} else {
 		c.result.ErrorCount++
@@ -120,7 +114,7 @@ func (c *issueCollector) appendSchemaFiltered(issue check.SchemaIssue) {
 }
 
 func (c *issueCollector) recordIncomplete(subsystem string, cause error) {
-	c.appendFiltered(check.Issue{
+	c.add(check.Issue{
 		Level:      check.LevelWarning,
 		Type:       check.IssueCheckIncomplete,
 		FilePath:   "",
@@ -161,7 +155,7 @@ func loadIndexResources(
 		staleFiles := filterIncludedPaths(stalenessInfo.StaleFiles, excludeMatcher)
 		staleCount := len(staleFiles)
 		if staleCount > 0 && scope.Type == "full" {
-			collector.appendFiltered(check.Issue{
+			collector.add(check.Issue{
 				Level:      check.LevelWarning,
 				Type:       check.IssueStaleIndex,
 				FilePath:   "",
@@ -198,41 +192,17 @@ func loadIndexResources(
 	return resources
 }
 
-type scopeWalkSetup struct {
-	walkPath      string
-	targetFileSet map[string]bool
-}
-
-func prepareScopeWalkSetup(vaultPath string, scope *Scope) scopeWalkSetup {
-	setup := scopeWalkSetup{
-		walkPath:      vaultPath,
-		targetFileSet: make(map[string]bool),
-	}
-	switch scope.Type {
-	case "file":
-		for _, f := range scope.targetFiles {
-			setup.targetFileSet[f] = true
-		}
-	case "directory":
-		setup.walkPath = filepath.Join(vaultPath, scope.Value)
-	}
-	return setup
-}
-
 func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 	if rt == nil || rt.VaultCfg == nil || rt.Schema == nil {
 		return nil, fmt.Errorf("vault runtime with config and schema is required")
 	}
-	vaultPath := rt.VaultPath
-	vaultCfg := rt.VaultCfg
-	sch := rt.Schema
 	scope, err := resolveScope(rt, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	includeIssues, excludeIssues := parseIssueFilter(opts)
-	excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
+	excludeMatcher, err := ravenignore.NewMatcher(rt.VaultCfg.GetExcludePatterns())
 	if err != nil {
 		return nil, svcerr.ValidationError(fmt.Errorf("invalid exclude config: %w", err))
 	}
@@ -243,380 +213,33 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 			Value: scope.Value,
 		},
 	}
+	collector := newIssueCollector(result, includeIssues, excludeIssues, opts.ErrorsOnly, scope)
 
-	var allDocs []*parser.ParsedDocument
-	var allObjectInfos []check.ObjectInfo
-	var allIssues []check.Issue
-	var parseErrors []check.Issue
-	var schemaIssues []check.SchemaIssue
-
-	collector := &issueCollector{
-		issues:       &allIssues,
-		schemaIssues: &schemaIssues,
-		result:       result,
-		include:      includeIssues,
-		exclude:      excludeIssues,
-		errorsOnly:   opts.ErrorsOnly,
-	}
-
-	// Check staleness + pull aliases from index when available.
 	indexRes := loadIndexResources(rt, scope, excludeMatcher, collector, result)
-	db := indexRes.db
-	aliases := indexRes.aliases
-	duplicateAliases := indexRes.duplicateAliases
-	canonicalResolver := indexRes.canonicalResolver
 
-	scopeSetup := prepareScopeWalkSetup(vaultPath, scope)
-	walkPath := scopeSetup.walkPath
-	targetFileSet := scopeSetup.targetFileSet
-
-	walkOpts := &vault.WalkOptions{
-		ParseOptions:   parseopts.FromVaultConfig(vaultCfg),
-		ExcludeMatcher: excludeMatcher,
-	}
-	walkErr := vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(walkResult vault.WalkResult) error {
-		if walkResult.Error != nil {
-			if isFileInScope(walkResult.Path, scope, walkPath, targetFileSet) {
-				result.FileCount++
-				parseErrors = append(parseErrors, check.Issue{
-					Level:    check.LevelError,
-					Type:     check.IssueParseError,
-					FilePath: walkResult.RelativePath,
-					Line:     1,
-					Message:  walkResult.Error.Error(),
-					FixHint:  "Fix the YAML frontmatter or markdown syntax",
-				})
-			}
-			return nil
-		}
-
-		for _, obj := range walkResult.Document.Objects {
-			allObjectInfos = append(allObjectInfos, check.ObjectInfo{ID: obj.ID, Type: obj.Type})
-		}
-
-		if isFileInScope(walkResult.Path, scope, walkPath, targetFileSet) {
-			result.FileCount++
-			allDocs = append(allDocs, walkResult.Document)
-		}
-
-		return nil
-	})
+	walked, walkErr := walkScopedDocuments(rt, scope, excludeMatcher)
 	if walkErr != nil {
-		return nil, svcerr.ValidationError(fmt.Errorf("error walking vault: %w", walkErr))
+		return nil, walkErr
 	}
+	result.FileCount = walked.fileCount
+	collector.setDocs(walked.docs)
+	collector.addAll(walked.parseErrors)
 
-	var objectsRoot, pagesRoot string
-	if vaultCfg.HasDirectoriesConfig() {
-		objectsRoot = vaultCfg.GetObjectsRoot()
-		pagesRoot = vaultCfg.GetPagesRoot()
-	}
-	validator := check.New(check.Options{
-		Schema:           sch,
-		ObjectInfos:      allObjectInfos,
-		Aliases:          aliases,
-		Resolver:         canonicalResolver,
-		DuplicateAliases: duplicateAliases,
-		ObjectsRoot:      objectsRoot,
-		PagesRoot:        pagesRoot,
-		DailyDir:         vaultCfg.GetDailyDirectory(),
-	})
-	if canonicalResolver == nil {
-		validator.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-	}
+	validator := newCheckValidator(rt, walked.objectInfos, indexRes)
+	collector.addAll(detectDocumentIssues(walked.docs, validator))
+	collector.addAll(detectMarkdownLinkToVaultNoteIssues(walked.docs, rt.VaultPath))
+	collector.addAll(detectNonCanonicalIssues(walked.docs, rt.Schema, rt.VaultCfg))
+	detectBrokenFileLinksFromIndex(indexRes, rt.VaultPath, excludeMatcher, scope, walked, collector)
+	collector.addSchemaAll(detectSchemaIssues(validator, scope))
 
-	for _, doc := range allDocs {
-		issues := validator.ValidateDocument(doc)
-		for _, issue := range issues {
-			if !isIssueInScope(issue, doc, scope) {
-				continue
-			}
-			collector.appendFiltered(issue)
-		}
-	}
-
-	for _, issue := range detectMarkdownLinkToVaultNoteIssues(allDocs, vaultPath) {
-		doc := docByPath(allDocs, issue.FilePath)
-		if doc != nil && !isIssueInScope(issue, doc, scope) {
-			continue
-		}
-		collector.appendFiltered(issue)
-	}
-
-	for _, issue := range detectNonCanonicalIssues(allDocs, sch, vaultCfg) {
-		doc := docByPath(allDocs, issue.FilePath)
-		if doc != nil && !isIssueInScope(issue, doc, scope) {
-			continue
-		}
-		collector.appendFiltered(issue)
-	}
-
-	if db != nil {
-		fileLinks, linksErr := db.FileLinks()
-		if linksErr != nil {
-			collector.recordIncomplete("file links", linksErr)
-		} else {
-			for _, issue := range detectBrokenFileLinkIssues(fileLinks, vaultPath, excludeMatcher, scope, walkPath, targetFileSet, allDocs) {
-				collector.appendFiltered(issue)
-			}
-		}
-	}
-
-	for _, pe := range parseErrors {
-		if shouldIncludeIssue(pe, includeIssues, excludeIssues, opts.ErrorsOnly) {
-			allIssues = append([]check.Issue{pe}, allIssues...)
-			if pe.Level == check.LevelWarning {
-				result.WarningCount++
-			} else {
-				result.ErrorCount++
-			}
-		}
-	}
-
-	if scope.Type == "full" || scope.Type == "type_filter" || scope.Type == "trait_filter" {
-		rawSchemaIssues := validator.ValidateSchema()
-		for _, issue := range rawSchemaIssues {
-			if scope.Type == "type_filter" {
-				if !strings.Contains(issue.Value, scope.Value) && !strings.HasPrefix(issue.Value, scope.Value+".") {
-					continue
-				}
-			}
-			if scope.Type == "trait_filter" && issue.Value != scope.Value {
-				continue
-			}
-			collector.appendSchemaFiltered(issue)
-		}
-	}
-
-	result.Issues = allIssues
-	result.SchemaIssues = schemaIssues
+	result.Issues = collector.issues
+	result.SchemaIssues = collector.schemaIssues
 	result.MissingRefs = validator.MissingRefs()
 	result.UndefinedTraits = validator.UndefinedTraits()
 	result.ShortRefs = validator.ShortRefs()
-	sort.Slice(result.Issues, func(i, j int) bool {
-		a := result.Issues[i]
-		b := result.Issues[j]
-		if a.FilePath != b.FilePath {
-			return a.FilePath < b.FilePath
-		}
-		if a.Line != b.Line {
-			return a.Line < b.Line
-		}
-		if a.Level != b.Level {
-			return a.Level.String() < b.Level.String()
-		}
-		if a.Type != b.Type {
-			return string(a.Type) < string(b.Type)
-		}
-		if a.Value != b.Value {
-			return a.Value < b.Value
-		}
-		return a.Message < b.Message
-	})
-	sort.Slice(result.SchemaIssues, func(i, j int) bool {
-		a := result.SchemaIssues[i]
-		b := result.SchemaIssues[j]
-		if a.Level != b.Level {
-			return a.Level.String() < b.Level.String()
-		}
-		if a.Type != b.Type {
-			return string(a.Type) < string(b.Type)
-		}
-		if a.Value != b.Value {
-			return a.Value < b.Value
-		}
-		return a.Message < b.Message
-	})
+	sortIssues(result.Issues)
+	sortSchemaIssues(result.SchemaIssues)
 	return result, nil
-}
-
-func BuildJSON(vaultPath string, result *RunResult) CheckResultJSON {
-	jsonResult := CheckResultJSON{
-		VaultPath:  vaultPath,
-		FileCount:  result.FileCount,
-		ErrorCount: result.ErrorCount,
-		WarnCount:  result.WarningCount,
-		Issues:     make([]CheckIssueJSON, 0, len(result.Issues)+len(result.SchemaIssues)),
-	}
-	if result.Scope.Type != "" && result.Scope.Type != "full" {
-		jsonResult.Scope = &CheckScopeJSON{
-			Type:  result.Scope.Type,
-			Value: result.Scope.Value,
-		}
-	}
-
-	for _, issue := range result.Issues {
-		jsonResult.Issues = append(jsonResult.Issues, CheckIssueJSON{
-			Type:       string(issue.Type),
-			Level:      issue.Level.String(),
-			FilePath:   issue.FilePath,
-			Line:       issue.Line,
-			Message:    issue.Message,
-			Value:      issue.Value,
-			FixCommand: issue.FixCommand,
-			FixHint:    issue.FixHint,
-		})
-	}
-	for _, issue := range result.SchemaIssues {
-		jsonResult.Issues = append(jsonResult.Issues, CheckIssueJSON{
-			Type:       string(issue.Type),
-			Level:      issue.Level.String(),
-			FilePath:   "schema.yaml",
-			Line:       0,
-			Message:    issue.Message,
-			Value:      issue.Value,
-			FixCommand: issue.FixCommand,
-			FixHint:    issue.FixHint,
-		})
-	}
-
-	typeCountMap := make(map[string]int)
-	typeValueCountMap := make(map[string]map[string]int)
-	for _, issue := range result.Issues {
-		typeKey := string(issue.Type)
-		typeCountMap[typeKey]++
-		if typeValueCountMap[typeKey] == nil {
-			typeValueCountMap[typeKey] = make(map[string]int)
-		}
-		if issue.Value != "" {
-			typeValueCountMap[typeKey][issue.Value]++
-		}
-	}
-
-	for issueType, count := range typeCountMap {
-		valueCounts := typeValueCountMap[issueType]
-		type valueCount struct {
-			value string
-			count int
-		}
-		var sortedValues []valueCount
-		for value, valueCountValue := range valueCounts {
-			sortedValues = append(sortedValues, valueCount{value: value, count: valueCountValue})
-		}
-		sort.Slice(sortedValues, func(i, j int) bool {
-			if sortedValues[i].count != sortedValues[j].count {
-				return sortedValues[i].count > sortedValues[j].count
-			}
-			return sortedValues[i].value < sortedValues[j].value
-		})
-
-		topValues := make([]string, 0, 10)
-		for i := 0; i < len(sortedValues) && i < 10; i++ {
-			topValues = append(topValues, sortedValues[i].value)
-		}
-
-		fixCmd, fixHint := summaryFix(issueType, result.Issues)
-
-		jsonResult.Summary = append(jsonResult.Summary, CheckSummaryJSON{
-			IssueType:    issueType,
-			Count:        count,
-			UniqueValues: len(valueCounts),
-			FixCommand:   fixCmd,
-			FixHint:      fixHint,
-			TopValues:    topValues,
-		})
-	}
-	sort.Slice(jsonResult.Summary, func(i, j int) bool {
-		if jsonResult.Summary[i].Count != jsonResult.Summary[j].Count {
-			return jsonResult.Summary[i].Count > jsonResult.Summary[j].Count
-		}
-		return jsonResult.Summary[i].IssueType < jsonResult.Summary[j].IssueType
-	})
-
-	return jsonResult
-}
-
-func summaryFix(issueType string, issues []check.Issue) (string, string) {
-	if issueType == string(check.IssueMissingReference) {
-		return "rvn check create-missing --json", "Preview missing referenced pages, then run with --confirm after review"
-	}
-
-	for _, issue := range issues {
-		if string(issue.Type) == issueType && issue.FixCommand != "" {
-			return issue.FixCommand, issue.FixHint
-		}
-	}
-	return "", ""
-}
-
-func detectMarkdownLinkToVaultNoteIssues(docs []*parser.ParsedDocument, vaultPath string) []check.Issue {
-	var issues []check.Issue
-	for _, doc := range docs {
-		for _, link := range doc.MarkdownLinks {
-			if !linktarget.IsRavenTargetAuthored(link.RawTarget, link.Target, doc.FilePath, vaultPath) {
-				continue
-			}
-			targetInfo := linktarget.AnalyzeAuthored(link.RawTarget, link.Target, doc.FilePath, vaultPath)
-			if !strings.EqualFold(targetInfo.Ext, "md") {
-				continue
-			}
-
-			linkKind := "link"
-			if link.IsImage {
-				linkKind = "image"
-			}
-			issues = append(issues, check.Issue{
-				Level:    check.LevelError,
-				Type:     check.IssueMarkdownLinkToVaultNote,
-				FilePath: doc.FilePath,
-				Line:     link.Line,
-				Message:  fmt.Sprintf("Markdown %s target %q points to a vault note but is not tracked as a Raven reference", linkKind, link.RawTarget),
-				Value:    link.RawTarget,
-				FixHint:  "Use a Raven wikilink/object reference (for example, [[target]]) so backlinks and moves can track it",
-			})
-		}
-	}
-	return issues
-}
-
-func detectBrokenFileLinkIssues(links []model.Link, vaultPath string, excludeMatcher *ravenignore.Matcher, scope *Scope, walkPath string, targetFileSet map[string]bool, docs []*parser.ParsedDocument) []check.Issue {
-	var issues []check.Issue
-	for _, link := range links {
-		if excludeMatcher.Match(link.FilePath, false) {
-			continue
-		}
-		sourcePath := filepath.Join(vaultPath, filepath.FromSlash(link.FilePath))
-		if !isFileInScope(sourcePath, scope, walkPath, targetFileSet) {
-			continue
-		}
-
-		issue := check.Issue{
-			Level:    check.LevelError,
-			Type:     check.IssueBrokenFileLink,
-			FilePath: link.FilePath,
-			Line:     link.Line,
-			Message:  fmt.Sprintf("File link target %q does not exist", link.RawTarget),
-			Value:    link.RawTarget,
-			FixHint:  "Restore the target file or update/remove this Markdown link",
-		}
-		if doc := docByPath(docs, link.FilePath); doc != nil {
-			if !isIssueInScope(issue, doc, scope) {
-				continue
-			}
-		} else if scope.Type == "type_filter" || scope.Type == "trait_filter" {
-			continue
-		}
-
-		targetPath := linktarget.ResolveFileKey(link.NormalizedKey, vaultPath)
-		if _, err := os.Stat(targetPath); err == nil || !os.IsNotExist(err) {
-			continue
-		}
-		issues = append(issues, issue)
-	}
-	return issues
-}
-
-func filterIncludedPaths(paths []string, excludeMatcher *ravenignore.Matcher) []string {
-	if len(paths) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(paths))
-	for _, path := range paths {
-		if excludeMatcher.Match(path, false) {
-			continue
-		}
-		out = append(out, path)
-	}
-	return out
 }
 
 func resolveScope(rt *vaultruntime.Runtime, opts Options) (*Scope, error) {
@@ -669,80 +292,34 @@ func resolveScope(rt *vaultruntime.Runtime, opts Options) (*Scope, error) {
 }
 
 func parseIssueFilter(opts Options) (include map[check.IssueType]bool, exclude map[check.IssueType]bool) {
-	include = make(map[check.IssueType]bool)
-	exclude = make(map[check.IssueType]bool)
-
-	if opts.Issues != "" {
-		for _, issueType := range strings.Split(opts.Issues, ",") {
-			issueType = strings.TrimSpace(issueType)
-			if issueType != "" {
-				include[check.IssueType(issueType)] = true
-			}
-		}
-	}
-	if opts.Exclude != "" {
-		for _, issueType := range strings.Split(opts.Exclude, ",") {
-			issueType = strings.TrimSpace(issueType)
-			if issueType != "" {
-				exclude[check.IssueType(issueType)] = true
-			}
-		}
-	}
-
-	return include, exclude
+	return parseIssueTypeSet(opts.Issues), parseIssueTypeSet(opts.Exclude)
 }
 
-func shouldIncludeIssue(issue check.Issue, include, exclude map[check.IssueType]bool, errorsOnly bool) bool {
-	if errorsOnly && issue.Level == check.LevelWarning {
+func parseIssueTypeSet(raw string) map[check.IssueType]bool {
+	out := make(map[check.IssueType]bool)
+	if raw == "" {
+		return out
+	}
+	for _, issueType := range strings.Split(raw, ",") {
+		issueType = strings.TrimSpace(issueType)
+		if issueType != "" {
+			out[check.IssueType(issueType)] = true
+		}
+	}
+	return out
+}
+
+func shouldInclude(level check.IssueLevel, issueType check.IssueType, include, exclude map[check.IssueType]bool, errorsOnly bool) bool {
+	if errorsOnly && level == check.LevelWarning {
 		return false
 	}
-	if len(include) > 0 && !include[issue.Type] {
+	if len(include) > 0 && !include[issueType] {
 		return false
 	}
-	if exclude[issue.Type] {
+	if exclude[issueType] {
 		return false
 	}
 	return true
-}
-
-func shouldIncludeSchemaIssue(issue check.SchemaIssue, include, exclude map[check.IssueType]bool, errorsOnly bool) bool {
-	if errorsOnly && issue.Level == check.LevelWarning {
-		return false
-	}
-	if len(include) > 0 && !include[issue.Type] {
-		return false
-	}
-	if exclude[issue.Type] {
-		return false
-	}
-	return true
-}
-
-func isFileInScope(filePath string, scope *Scope, walkPath string, targetFileSet map[string]bool) bool {
-	switch scope.Type {
-	case "file":
-		return targetFileSet[filePath]
-	case "directory":
-		rel, err := filepath.Rel(walkPath, filePath)
-		if err != nil || filepath.IsAbs(rel) {
-			return false
-		}
-		return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-	default:
-		return true
-	}
-}
-
-func docByPath(docs []*parser.ParsedDocument, filePath string) *parser.ParsedDocument {
-	if filePath == "" {
-		return nil
-	}
-	for _, doc := range docs {
-		if doc != nil && doc.FilePath == filePath {
-			return doc
-		}
-	}
-	return nil
 }
 
 func isIssueInScope(issue check.Issue, doc *parser.ParsedDocument, scope *Scope) bool {
@@ -769,4 +346,44 @@ func isIssueInScope(issue check.Issue, doc *parser.ParsedDocument, scope *Scope)
 	default:
 		return true
 	}
+}
+
+func sortIssues(issues []check.Issue) {
+	sort.Slice(issues, func(i, j int) bool {
+		a := issues[i]
+		b := issues[j]
+		if a.FilePath != b.FilePath {
+			return a.FilePath < b.FilePath
+		}
+		if a.Line != b.Line {
+			return a.Line < b.Line
+		}
+		if a.Level != b.Level {
+			return a.Level.String() < b.Level.String()
+		}
+		if a.Type != b.Type {
+			return string(a.Type) < string(b.Type)
+		}
+		if a.Value != b.Value {
+			return a.Value < b.Value
+		}
+		return a.Message < b.Message
+	})
+}
+
+func sortSchemaIssues(issues []check.SchemaIssue) {
+	sort.Slice(issues, func(i, j int) bool {
+		a := issues[i]
+		b := issues[j]
+		if a.Level != b.Level {
+			return a.Level.String() < b.Level.String()
+		}
+		if a.Type != b.Type {
+			return string(a.Type) < string(b.Type)
+		}
+		if a.Value != b.Value {
+			return a.Value < b.Value
+		}
+		return a.Message < b.Message
+	})
 }

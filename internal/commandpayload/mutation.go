@@ -3,7 +3,6 @@ package commandpayload
 import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/checkfixsvc"
-	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/importsvc"
@@ -419,17 +418,22 @@ type CheckCreateMissingResult struct {
 	UndefinedTraitsNote string                              `json:"undefined_traits_note,omitempty"`
 }
 
-// CheckResultScope returns the scope of any typed check mutation payload.
-func CheckResultScope(data any) (checksvc.Scope, bool) {
+// CheckResultScope returns the scope of any typed check payload.
+func CheckResultScope(data any) (CheckScope, bool) {
 	switch payload := data.(type) {
 	case CheckFixPreviewResult:
-		return checksvc.Scope{Type: payload.Scope.Type, Value: payload.Scope.Value}, true
+		return payload.Scope, true
 	case CheckFixResult:
-		return checksvc.Scope{Type: payload.Scope.Type, Value: payload.Scope.Value}, true
+		return payload.Scope, true
 	case CheckCreateMissingResult:
-		return checksvc.Scope{Type: payload.Scope.Type, Value: payload.Scope.Value}, true
+		return payload.Scope, true
+	case CheckResultJSON:
+		if payload.Scope == nil {
+			return CheckScope{Type: "full"}, true
+		}
+		return CheckScope{Type: payload.Scope.Type, Value: payload.Scope.Value}, true
 	default:
-		return checksvc.Scope{}, false
+		return CheckScope{}, false
 	}
 }
 

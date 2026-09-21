@@ -32,7 +32,7 @@ func detectNonCanonicalIssues(
 	objectsRoot := paths.NormalizeDirRoot(vaultCfg.GetObjectsRoot())
 	pagesRoot := paths.NormalizeDirRoot(vaultCfg.GetPagesRoot())
 
-	exempt := exemptDirs(vaultCfg)
+	exempt := exemptPrefixes(vaultCfg, true)
 
 	var issues []check.Issue
 	for _, doc := range docs {
@@ -46,14 +46,20 @@ func detectNonCanonicalIssues(
 	return issues
 }
 
-// exemptDirs returns the set of directory prefixes (each ending in "/") whose
-// contents are exempt from non_canonical_path detection. Includes hard-protected
-// prefixes (.raven/, .trash/, .git/), daily/template directories, and any
-// user-configured protected prefixes.
-func exemptDirs(vaultCfg *config.VaultConfig) []string {
+// exemptPrefixes returns directory prefixes (each ending in "/") whose contents
+// are skipped by path-layout checks. Hard-protected prefixes (.raven/, .trash/,
+// .git/), the template directory, and user-configured protected prefixes are
+// always included. Daily notes are included only when includeDaily is true —
+// they are exempt from non_canonical_path but still checked for type mismatch.
+func exemptPrefixes(vaultCfg *config.VaultConfig, includeDaily bool) []string {
 	prefixes := []string{".raven/", ".trash/", ".git/"}
-	if dir := paths.NormalizeDirRoot(vaultCfg.GetDailyDirectory()); dir != "" {
-		prefixes = append(prefixes, dir)
+	if vaultCfg == nil {
+		return prefixes
+	}
+	if includeDaily {
+		if dir := paths.NormalizeDirRoot(vaultCfg.GetDailyDirectory()); dir != "" {
+			prefixes = append(prefixes, dir)
+		}
 	}
 	if dir := paths.NormalizeDirRoot(vaultCfg.GetTemplateDirectory()); dir != "" {
 		prefixes = append(prefixes, dir)
@@ -64,6 +70,15 @@ func exemptDirs(vaultCfg *config.VaultConfig) []string {
 		}
 	}
 	return prefixes
+}
+
+func hasExemptPrefix(relPath string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(relPath, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // detectNonCanonicalPath flags file-backed objects whose file location is not
@@ -83,10 +98,8 @@ func detectNonCanonicalPath(
 		return nil
 	}
 
-	for _, prefix := range exempt {
-		if strings.HasPrefix(relPath, prefix) {
-			return nil
-		}
+	if hasExemptPrefix(relPath, exempt) {
+		return nil
 	}
 
 	fileObj := primaryFileObject(doc)
@@ -166,21 +179,7 @@ func detectDirectoryTypeMismatch(
 }
 
 func isTypeInferenceExempt(relPath string, vaultCfg *config.VaultConfig) bool {
-	prefixes := []string{".raven/", ".trash/", ".git/"}
-	if dir := paths.NormalizeDirRoot(vaultCfg.GetTemplateDirectory()); dir != "" {
-		prefixes = append(prefixes, dir)
-	}
-	for _, raw := range vaultCfg.ProtectedPrefixes {
-		if dir := paths.NormalizeDirRoot(raw); dir != "" {
-			prefixes = append(prefixes, dir)
-		}
-	}
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(relPath, prefix) {
-			return true
-		}
-	}
-	return false
+	return hasExemptPrefix(relPath, exemptPrefixes(vaultCfg, false))
 }
 
 func expectedTypeForDirectory(relPath string, sch *schema.Schema, vaultCfg *config.VaultConfig) (string, bool) {

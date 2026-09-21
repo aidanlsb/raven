@@ -61,50 +61,35 @@ func TestRun_FiltersParseErrorsBeforeCounting(t *testing.T) {
 			if len(result.Issues) != 0 {
 				t.Fatalf("issues = %v, want none", result.Issues)
 			}
-
-			jsonResult := BuildJSON(vault.Path, result)
-			if got := jsonResult.ErrorCount; got != 0 {
-				t.Fatalf("json error_count = %d, want 0", got)
-			}
-			if len(jsonResult.Issues) != 0 {
-				t.Fatalf("json issues = %v, want none", jsonResult.Issues)
-			}
 		})
 	}
 }
 
-func TestBuildJSON_MissingReferenceSummarySuggestsCreateMissing(t *testing.T) {
+func TestRun_TypeFilterKeepsMatchingDocuments(t *testing.T) {
 	t.Parallel()
 
-	result := &RunResult{
-		Issues: []check.Issue{
-			{
-				Type:       check.IssueMissingReference,
-				Level:      check.LevelError,
-				FilePath:   "project/roadmap.md",
-				Line:       4,
-				Message:    "Reference [[meeting/all-hands]] not found",
-				Value:      "meeting/all-hands",
-				FixCommand: `rvn new meeting "meeting/all-hands"`,
-				FixHint:    "Create the missing meeting",
-			},
-		},
-		ErrorCount: 1,
+	vault := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\nunknown: yes\n---\n").
+		WithFile("projects/website.md", "---\ntype: project\ntitle: Website\nowner: people/ghost\n---\n").
+		Build()
+
+	sch, err := schema.Load(vault.Path)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+	result, err := runCheckTest(t, vault.Path, &config.VaultConfig{}, sch, Options{TypeFilter: "person"})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
 	}
 
-	jsonResult := BuildJSON("/vault", result)
-	if len(jsonResult.Summary) != 1 {
-		t.Fatalf("summary = %#v, want one item", jsonResult.Summary)
+	for _, issue := range result.Issues {
+		if issue.FilePath == "projects/website.md" {
+			t.Fatalf("type filter leaked project issue: %#v", issue)
+		}
 	}
-	summary := jsonResult.Summary[0]
-	if summary.IssueType != string(check.IssueMissingReference) {
-		t.Fatalf("issue_type = %q, want missing_reference", summary.IssueType)
-	}
-	if summary.FixCommand != "rvn check create-missing --json" {
-		t.Fatalf("fix_command = %q, want create-missing preview command", summary.FixCommand)
-	}
-	if !strings.Contains(summary.FixHint, "--confirm") {
-		t.Fatalf("fix_hint = %q, want confirm guidance", summary.FixHint)
+	if !hasIssue(result.Issues, check.IssueUnknownFrontmatter) {
+		t.Fatalf("issues = %#v, want unknown_frontmatter_key on the person file", result.Issues)
 	}
 }
 
