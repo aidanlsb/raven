@@ -8,9 +8,9 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -30,7 +30,7 @@ type DeleteResult struct {
 	DeletedSections []string
 	Backlinks       []model.Reference
 	WarningMessages []string
-	IndexWarnings   []reindexsvc.ProjectionWarning
+	ChangeSet       mutation.ChangeSet
 }
 
 // Delete removes one heading and its complete subtree. References from outside
@@ -113,12 +113,12 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 		return result, nil
 	}
 
-	writeWarnings, indexWarnings, err := writeAndReindex(rt, state.filePath, updatedContent, req.FailOnIndexErr)
+	changes, writeWarnings, err := writeDocument(rt, state.filePath, updatedContent)
 	if err != nil {
 		return nil, err
 	}
 	result.WarningMessages = append(result.WarningMessages, writeWarnings...)
-	result.IndexWarnings = indexWarnings
+	result.ChangeSet = changes
 	return result, nil
 }
 

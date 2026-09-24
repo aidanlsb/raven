@@ -194,19 +194,23 @@ var mutationPhaseCommandIDs = map[string]struct{}{
 // The shared invoker uses this policy to install a write-ahead journal guard
 // before dispatch.
 var postMutationIndexCommandIDs = map[string]struct{}{
-	"new":        {},
-	"write":      {},
-	"add":        {},
-	"set":        {},
-	"unset":      {},
-	"delete":     {},
-	"restore":    {},
-	"move":       {},
-	"reclassify": {},
-	"update":     {},
-	"edit":       {},
-	"import":     {},
-	"check_fix":  {},
+	"new":            {},
+	"write":          {},
+	"add":            {},
+	"set":            {},
+	"unset":          {},
+	"delete":         {},
+	"restore":        {},
+	"move":           {},
+	"section_create": {},
+	"section_delete": {},
+	"section_move":   {},
+	"section_rename": {},
+	"reclassify":     {},
+	"update":         {},
+	"edit":           {},
+	"import":         {},
+	"check_fix":      {},
 }
 
 // EmitsMutationPhase reports whether a command carries the standard

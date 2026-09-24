@@ -6,7 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/reindexsvc"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -35,7 +35,7 @@ type CreateResult struct {
 	Placement       string
 	AnchorID        string
 	WarningMessages []string
-	IndexWarnings   []reindexsvc.ProjectionWarning
+	ChangeSet       mutation.ChangeSet
 }
 
 type MoveRequest struct {
@@ -51,7 +51,7 @@ type MoveResult struct {
 	Placement       string
 	AnchorID        string
 	WarningMessages []string
-	IndexWarnings   []reindexsvc.ProjectionWarning
+	ChangeSet       mutation.ChangeSet
 }
 
 type placementKind string
@@ -146,12 +146,12 @@ func Create(rt *vaultruntime.Runtime, req CreateRequest) (*CreateResult, error) 
 		return result, nil
 	}
 
-	warnings, indexWarnings, err := writeAndReindex(rt, state.filePath, updatedContent, req.FailOnIndexErr)
+	changes, warnings, err := writeDocument(rt, state.filePath, updatedContent)
 	if err != nil {
 		return nil, err
 	}
 	result.WarningMessages = warnings
-	result.IndexWarnings = indexWarnings
+	result.ChangeSet = changes
 	return result, nil
 }
 
@@ -237,12 +237,12 @@ func Move(rt *vaultruntime.Runtime, req MoveRequest) (*MoveResult, error) {
 		return result, nil
 	}
 
-	warnings, indexWarnings, err := writeAndReindex(rt, state.filePath, updatedContent, req.FailOnIndexErr)
+	changes, warnings, err := writeDocument(rt, state.filePath, updatedContent)
 	if err != nil {
 		return nil, err
 	}
 	result.WarningMessages = warnings
-	result.IndexWarnings = indexWarnings
+	result.ChangeSet = changes
 	return result, nil
 }
 

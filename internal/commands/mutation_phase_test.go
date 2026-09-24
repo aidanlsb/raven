@@ -62,3 +62,13 @@ func TestPostMutationIndexCommandsAreAppliedWrites(t *testing.T) {
 		}
 	}
 }
+
+func TestPostMutationIndexIncludesSectionCommands(t *testing.T) {
+	t.Parallel()
+
+	for _, commandID := range []string{"section_create", "section_delete", "section_move", "section_rename"} {
+		if !UsesPostMutationIndex(commandID) {
+			t.Fatalf("%s should project through the shared ChangeSet path", commandID)
+		}
+	}
+}

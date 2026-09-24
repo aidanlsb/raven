@@ -71,6 +71,12 @@ func TestIntegration_SectionCreatePlacements(t *testing.T) {
 				t.Fatalf("section = %q, want projects/site#inserted", got)
 			}
 			assertIntegrationHeadingOrder(t, v.ReadFile("projects/site.md"), tt.wantOrder...)
+
+			query := v.RunCLI("query", `section .title==Inserted`)
+			query.MustSucceed(t)
+			if !strings.Contains(query.RawJSON, "projects/site#inserted") {
+				t.Fatalf("created section missing from index after ChangeSet projection: %s", query.RawJSON)
+			}
 		})
 	}
 }

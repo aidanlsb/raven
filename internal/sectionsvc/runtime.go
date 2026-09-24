@@ -18,8 +18,10 @@ func requireSectionRuntime(rt *vaultruntime.Runtime) error {
 	return nil
 }
 
-// lockSectionMutation acquires the projection lock shared by create/move/delete/rename.
-// Preview skips the lock. The returned function always releases it and is safe to defer.
+// lockSectionMutation acquires the projection lock shared by create/move/delete/rename
+// so plan-and-write cannot race a concurrent projection. Preview skips the lock.
+// The returned function always releases it and is safe to defer. Index projection
+// happens after the service returns, via commandimpl.applyChangeSet.
 func lockSectionMutation(rt *vaultruntime.Runtime, preview bool) (func(), error) {
 	if err := requireSectionRuntime(rt); err != nil {
 		return nil, err

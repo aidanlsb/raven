@@ -64,6 +64,7 @@ func TestDeletePreviewReportsExactSubtreeAndInboundReferences(t *testing.T) {
 		t.Fatalf("DeletedSections = %q", got)
 	}
 
+	assertChangeSetEmpty(t, result.ChangeSet)
 	if len(result.Backlinks) != 3 {
 		t.Fatalf("Backlinks = %#v, want three references outside the deleted subtree", result.Backlinks)
 	}
@@ -98,6 +99,7 @@ func TestDeleteApplyRemovesOnlySubtreeAndLeavesReportedReferences(t *testing.T) 
 	if len(result.Backlinks) != 3 {
 		t.Fatalf("Backlinks = %#v, want three reported stale references", result.Backlinks)
 	}
+	assertChangeSetChanged(t, result.ChangeSet, "projects/site.md")
 
 	content := v.ReadFile("projects/site.md")
 	for _, removed := range []string{"## Alpha", "### Alpha Child", "Alpha body", "Child body"} {
