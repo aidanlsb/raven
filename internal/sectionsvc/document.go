@@ -11,10 +11,10 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -261,20 +261,22 @@ func openSectionIndex(rt *vaultruntime.Runtime, failOnIndexErr bool, operation s
 	return rt.DB, nil, nil
 }
 
-func writeAndReindex(rt *vaultruntime.Runtime, filePath, content string, failOnIndexErr bool) ([]string, []reindexsvc.ProjectionWarning, error) {
-	return writeAndReindexFiles(rt, []pendingWrite{{
+// writeDocument applies one durable section-file write and records it on a
+// ChangeSet. Callers project the ChangeSet through commandimpl.applyChangeSet;
+// this helper does not reindex.
+func writeDocument(rt *vaultruntime.Runtime, filePath, content string) (mutation.ChangeSet, []string, error) {
+	return writePendingFiles(rt, []pendingWrite{{
 		path:    filePath,
 		content: []byte(content),
-	}}, failOnIndexErr)
+	}})
 }
 
-func writeAndReindexFiles(rt *vaultruntime.Runtime, writes []pendingWrite, failOnIndexErr bool) ([]string, []reindexsvc.ProjectionWarning, error) {
-	db, warnings, err := openSectionIndex(rt, failOnIndexErr, "mutation")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var written []string
+// writePendingFiles applies planned durable writes and records each successful
+// path on a ChangeSet. Optional inbound-ref writes warn instead of failing the
+// mutation. Index projection is the caller's job via applyChangeSet.
+func writePendingFiles(rt *vaultruntime.Runtime, writes []pendingWrite) (mutation.ChangeSet, []string, error) {
+	changes := mutation.NewChangeSet()
+	var warnings []string
 	for i := range writes {
 		write := writes[i]
 		perm := write.perm
@@ -293,16 +295,11 @@ func writeAndReindexFiles(rt *vaultruntime.Runtime, writes []pendingWrite, failO
 				warnings = append(warnings, fmt.Sprintf("Failed to update refs in %s: %v", reportID, err))
 				continue
 			}
-			return nil, nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write section mutation", err)
+			return mutation.ChangeSet{}, nil, svcerr.Wrap(codes.ErrFileWrite, "failed to write section mutation", err)
 		}
-		written = append(written, write.path)
-	}
-
-	var indexWarnings []reindexsvc.ProjectionWarning
-	if db != nil && rt.Schema != nil {
-		for _, path := range written {
-			indexWarnings = append(indexWarnings, reindexsvc.ProjectFileLocked(rt, path)...)
+		if relPath, relErr := filepath.Rel(rt.VaultPath, write.path); relErr == nil {
+			changes.AddChanged(relPath)
 		}
 	}
-	return warnings, indexWarnings, nil
+	return changes, warnings, nil
 }

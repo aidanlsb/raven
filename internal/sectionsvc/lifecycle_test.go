@@ -100,6 +100,7 @@ func TestCreatePlacements(t *testing.T) {
 			if result.SectionID != "projects/site#inserted" {
 				t.Fatalf("SectionID = %q, want projects/site#inserted", result.SectionID)
 			}
+			assertChangeSetChanged(t, result.ChangeSet, "projects/site.md")
 			tt.assert(t, v.ReadFile("projects/site.md"))
 		})
 	}
@@ -306,6 +307,7 @@ func TestCreateDryRunDoesNotWrite(t *testing.T) {
 	if result.SectionID != "projects/site#preview" {
 		t.Fatalf("SectionID = %q, want projects/site#preview", result.SectionID)
 	}
+	assertChangeSetEmpty(t, result.ChangeSet)
 	if got := v.ReadFile("projects/site.md"); got != lifecycleOutline {
 		t.Fatalf("dry run changed file:\n%s", got)
 	}
@@ -414,6 +416,7 @@ func TestMoveReordersEntireSubtree(t *testing.T) {
 	if result.SectionID != "projects/site#alpha" {
 		t.Fatalf("SectionID = %q, want projects/site#alpha", result.SectionID)
 	}
+	assertChangeSetChanged(t, result.ChangeSet, "projects/site.md")
 	content := v.ReadFile("projects/site.md")
 	assertHeadingOrder(t, content, "## Beta", "## Alpha", "### Alpha Child")
 	if !strings.Contains(content, "### Alpha Child\n\nChild body") {
@@ -541,7 +544,7 @@ func TestMoveDryRunAndInvalidPlacements(t *testing.T) {
 		rt := testRuntime(t, v.Path)
 		indexVaultFiles(t, v.Path, rt.Schema, "projects/site.md")
 
-		_, err := Move(rt, MoveRequest{
+		result, err := Move(rt, MoveRequest{
 			Reference:      "projects/site#alpha",
 			Placement:      Placement{After: "projects/site#beta"},
 			Preview:        true,
@@ -550,6 +553,7 @@ func TestMoveDryRunAndInvalidPlacements(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Move() error = %v", err)
 		}
+		assertChangeSetEmpty(t, result.ChangeSet)
 		if got := v.ReadFile("projects/site.md"); got != lifecycleOutline {
 			t.Fatalf("dry run changed file:\n%s", got)
 		}

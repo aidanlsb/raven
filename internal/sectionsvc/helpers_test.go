@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -52,5 +53,34 @@ func assertServiceCode(t *testing.T, err error, want codes.ErrorCode) {
 	}
 	if svcErr.Code != want {
 		t.Fatalf("error code = %s, want %s (%v)", svcErr.Code, want, err)
+	}
+}
+
+func assertChangeSetChanged(t *testing.T, changes mutation.ChangeSet, want ...string) {
+	t.Helper()
+	got := make(map[string]int, len(changes.Changed))
+	for _, path := range changes.Changed {
+		got[path]++
+	}
+	for _, path := range want {
+		if got[path] == 0 {
+			t.Fatalf("ChangeSet.Changed = %#v, missing %q", changes.Changed, path)
+		}
+		got[path]--
+	}
+	for path, extra := range got {
+		if extra != 0 {
+			t.Fatalf("ChangeSet.Changed = %#v, unexpected extra %q", changes.Changed, path)
+		}
+	}
+	if len(changes.Deleted) != 0 || len(changes.Moved) != 0 {
+		t.Fatalf("ChangeSet extra ops: deleted=%#v moved=%#v", changes.Deleted, changes.Moved)
+	}
+}
+
+func assertChangeSetEmpty(t *testing.T, changes mutation.ChangeSet) {
+	t.Helper()
+	if !changes.Empty() {
+		t.Fatalf("ChangeSet = %#v, want empty", changes)
 	}
 }

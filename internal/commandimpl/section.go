@@ -6,7 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/reindexsvc"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/sectionsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -51,7 +51,7 @@ func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec
 	data.Level = result.Level
 	return commandexec.SuccessWithWarnings(
 		data,
-		sectionCommandWarnings(rt, result.WarningMessages, result.IndexWarnings),
+		sectionMutationWarnings(rt, result.WarningMessages, result.ChangeSet, req.Preview, req.IndexJournalOperation),
 		nil,
 	)
 }
@@ -82,7 +82,7 @@ func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.R
 
 	return commandexec.SuccessWithWarnings(
 		sectionLifecycleData(result.SectionID, result.FileRelative, result.Placement, result.AnchorID, req.Preview),
-		sectionCommandWarnings(rt, result.WarningMessages, result.IndexWarnings),
+		sectionMutationWarnings(rt, result.WarningMessages, result.ChangeSet, req.Preview, req.IndexJournalOperation),
 		nil,
 	)
 }
@@ -132,7 +132,7 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 	}
 
 	warnings := deleteBacklinkCommandWarnings(result.Backlinks)
-	warnings = appendCommandWarnings(warnings, sectionCommandWarnings(rt, result.WarningMessages, result.IndexWarnings))
+	warnings = appendCommandWarnings(warnings, sectionMutationWarnings(rt, result.WarningMessages, result.ChangeSet, req.Preview, req.IndexJournalOperation))
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
@@ -180,14 +180,18 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 
 	return commandexec.SuccessWithWarnings(
 		data,
-		sectionCommandWarnings(rt, result.WarningMessages, result.IndexWarnings),
+		sectionMutationWarnings(rt, result.WarningMessages, result.ChangeSet, req.Preview, req.IndexJournalOperation),
 		nil,
 	)
 }
 
-func sectionCommandWarnings(_ *vaultruntime.Runtime, warningMessages []string, indexWarnings []reindexsvc.ProjectionWarning) []commandexec.Warning {
+func sectionMutationWarnings(rt *vaultruntime.Runtime, warningMessages []string, changes mutation.ChangeSet, preview bool, journalOperation string) []commandexec.Warning {
 	warnings := warningMessagesToCommandWarnings(warningMessages, indexUpdateFailedWarningCode)
-	return append(warnings, projectionCommandWarnings(indexWarnings)...)
+	if preview {
+		return warnings
+	}
+	_, postWarnings := applyChangeSet(rt, changes, journalOperation)
+	return appendCommandWarnings(warnings, postWarnings)
 }
 
 func sectionPlacementArg(args map[string]any) sectionsvc.Placement {

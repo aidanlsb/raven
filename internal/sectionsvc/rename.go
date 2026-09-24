@@ -6,8 +6,8 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -26,7 +26,7 @@ type RenameResult struct {
 	DestinationRel  string
 	UpdatedRefs     []string
 	WarningMessages []string
-	IndexWarnings   []reindexsvc.ProjectionWarning
+	ChangeSet       mutation.ChangeSet
 }
 
 // Rename renames a section heading in place and rewrites all inbound
@@ -105,12 +105,12 @@ func Rename(rt *vaultruntime.Runtime, req RenameRequest) (*RenameResult, error) 
 		})
 	}
 
-	writeWarnings, indexWarnings, err := writeAndReindexFiles(rt, writes, req.FailOnIndexErr)
+	changes, writeWarnings, err := writePendingFiles(rt, writes)
 	if err != nil {
 		return nil, err
 	}
 	result.WarningMessages = append(result.WarningMessages, writeWarnings...)
-	result.IndexWarnings = indexWarnings
+	result.ChangeSet = changes
 	return result, nil
 }
 

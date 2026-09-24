@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -68,6 +69,7 @@ func TestRenameRewritesInboundReferences(t *testing.T) {
 	if strings.Contains(site+ref, "#tasks]]") {
 		t.Fatalf("stale fragment refs remain:\nsite:\n%s\nref:\n%s", site, ref)
 	}
+	assertChangeSetChanged(t, result.ChangeSet, "projects/site.md", "notes/ref.md")
 
 	wantUpdated := map[string]bool{"projects/site": false, "notes/ref": false}
 	for _, id := range result.UpdatedRefs {
@@ -156,6 +158,7 @@ related: projects/site#tasks
 	if !strings.Contains(consumer, "related: projects/site#completed-tasks") {
 		t.Fatalf("frontmatter ref not rewritten:\n%s", consumer)
 	}
+	assertChangeSetChanged(t, result.ChangeSet, "projects/site.md", "notes/ref.md", "projects/consumer.md")
 }
 
 func TestRenamePreservesPostCommitResolutionErrors(t *testing.T) {
@@ -195,19 +198,22 @@ func TestRenamePreservesPostCommitResolutionErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Rename() error = %v", err)
 	}
-	if len(result.IndexWarnings) == 0 {
-		t.Fatalf("index warnings = %#v, want post-commit resolution failure", result.IndexWarnings)
+	assertChangeSetChanged(t, result.ChangeSet, "projects/site.md", "notes/ref.md")
+
+	projected := reindexsvc.ProjectChanges(rt, result.ChangeSet, "")
+	if len(projected.Warnings) == 0 {
+		t.Fatalf("projection warnings = %#v, want post-commit resolution failure", projected.Warnings)
 	}
 	var resolutionErr *index.PostCommitReferenceResolutionError
 	foundVaultWide := false
-	for _, warning := range result.IndexWarnings {
+	for _, warning := range projected.Warnings {
 		if errors.As(warning.Err, &resolutionErr) && resolutionErr.VaultWide {
 			foundVaultWide = true
 			break
 		}
 	}
 	if !foundVaultWide {
-		t.Fatalf("index warnings = %#v, want vault-wide post-commit error", result.IndexWarnings)
+		t.Fatalf("projection warnings = %#v, want vault-wide post-commit error", projected.Warnings)
 	}
 	checkDB, err := index.Open(v.Path)
 	if err != nil {
@@ -245,6 +251,7 @@ func TestRenamePreviewDoesNotWrite(t *testing.T) {
 	if result.DestinationID != "projects/site#completed-tasks" {
 		t.Errorf("DestinationID = %q, want projects/site#completed-tasks", result.DestinationID)
 	}
+	assertChangeSetEmpty(t, result.ChangeSet)
 	if len(result.UpdatedRefs) == 0 {
 		t.Errorf("preview UpdatedRefs = %#v, want planned updates", result.UpdatedRefs)
 	}
