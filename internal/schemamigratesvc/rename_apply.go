@@ -3,10 +3,11 @@ package schemamigratesvc
 import (
 	"path/filepath"
 
+	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-func applyFieldRenamePlan(rt *vaultruntime.Runtime, plan *fieldRenamePlan) (int, error) {
+func applyFieldRenamePlan(rt *vaultruntime.Runtime, plan *fieldRenamePlan) (int, []schemasvc.Warning, error) {
 	fileSets := []map[string][]byte{plan.TemplateFiles}
 	if len(plan.RavenYAML) > 0 {
 		fileSets = append(fileSets, map[string][]byte{
@@ -27,7 +28,7 @@ func applyFieldRenamePlan(rt *vaultruntime.Runtime, plan *fieldRenamePlan) (int,
 	})
 }
 
-func applyTypeRenamePlan(rt *vaultruntime.Runtime, plan *typeRenamePlan, applyDefaultPathRename bool) (int, int, int, error) {
+func applyTypeRenamePlan(rt *vaultruntime.Runtime, plan *typeRenamePlan, applyDefaultPathRename bool) (int, int, int, []schemasvc.Warning, error) {
 	schemaBytes := plan.SchemaPlan.SchemaYAML
 	schemaApplied := plan.SchemaPlan.CoreSchemaMutations
 	if applyDefaultPathRename && plan.SchemaPlan.SchemaYAMLWithDefaultPath != nil {
@@ -39,7 +40,7 @@ func applyTypeRenamePlan(rt *vaultruntime.Runtime, plan *typeRenamePlan, applyDe
 
 	movedFiles := 0
 	referenceFilesUpdated := 0
-	applied, err := applyStagedFilesThenInvalidate(rt, stagedApply{
+	applied, warnings, err := applyStagedFilesThenInvalidate(rt, stagedApply{
 		SchemaYAML:    schemaBytes,
 		SchemaApplied: schemaApplied,
 		FileSets:      []map[string][]byte{plan.MarkdownFiles},
@@ -65,7 +66,7 @@ func applyTypeRenamePlan(rt *vaultruntime.Runtime, plan *typeRenamePlan, applyDe
 		},
 	})
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, nil, err
 	}
-	return applied, movedFiles, referenceFilesUpdated, nil
+	return applied, movedFiles, referenceFilesUpdated, warnings, nil
 }

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- If the automatic index refresh fails after a schema write, the command still succeeds and now returns `INDEX_UPDATE_FAILED` with a suggestion to run `rvn reindex`.
+
 ## [v0.0.36] - 2026-09-20
 
 ### Added

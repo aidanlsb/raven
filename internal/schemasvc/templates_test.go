@@ -23,7 +23,7 @@ func TestSetTemplateRejectsFrontmatter(t *testing.T) {
 		t.Fatalf("write template: %v", err)
 	}
 
-	_, err := SetTemplate(schemaTestRuntime(t, vaultPath), SetTemplateRequest{
+	_, _, err := SetTemplate(schemaTestRuntime(t, vaultPath), SetTemplateRequest{
 		TemplateID:  "daily_default",
 		File:        "templates/daily.md",
 		Description: "Daily template",

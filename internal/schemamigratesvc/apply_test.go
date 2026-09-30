@@ -72,7 +72,7 @@ types:
 traits: {}
 `)
 
-	applied, err := applyStagedFilesThenInvalidate(rt, stagedApply{
+	applied, warnings, err := applyStagedFilesThenInvalidate(rt, stagedApply{
 		SchemaYAML:    newSchema,
 		SchemaApplied: 1,
 		FileSets: []map[string][]byte{
@@ -83,6 +83,9 @@ traits: {}
 	})
 	if err != nil {
 		t.Fatalf("applyStagedFilesThenInvalidate: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none when auto-reindex is off", warnings)
 	}
 	if applied != 2 {
 		t.Fatalf("applied = %d, want 2 (schema + markdown)", applied)

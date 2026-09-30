@@ -41,6 +41,7 @@ type ConvertResult struct {
 	Changes        []schemasvc.SchemaChange
 	ChangesApplied int
 	Hint           string
+	Warnings       []schemasvc.Warning
 }
 
 type valueConvertPlan struct {
