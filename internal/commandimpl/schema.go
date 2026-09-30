@@ -190,7 +190,7 @@ func HandleSchemaTemplateSet(_ context.Context, req commandexec.Request) command
 		return failure
 	}
 	defer rt.Close()
-	item, err := schemasvc.SetTemplate(rt, schemasvc.SetTemplateRequest{
+	item, warnings, err := schemasvc.SetTemplate(rt, schemasvc.SetTemplateRequest{
 		TemplateID:  stringArg(req.Args, "template_id"),
 		File:        stringArg(req.Args, "file"),
 		Description: description,
@@ -198,7 +198,7 @@ func HandleSchemaTemplateSet(_ context.Context, req commandexec.Request) command
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(schemaTemplateDefinitionPayload(item.ID, item.File, strings.TrimSpace(description)), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return schemaCommandSuccess(schemaTemplateDefinitionPayload(item.ID, item.File, strings.TrimSpace(description)), warnings, start)
 }
 
 // HandleSchemaTemplateRemove executes the canonical `schema_template_remove` command.
@@ -210,13 +210,14 @@ func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) comm
 		return failure
 	}
 	defer rt.Close()
-	if err := schemasvc.RemoveTemplate(rt, templateID); err != nil {
+	warnings, err := schemasvc.RemoveTemplate(rt, templateID)
+	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(commandpayload.SchemaTemplateRemoveResult{
+	return schemaCommandSuccess(commandpayload.SchemaTemplateRemoveResult{
 		Removed: true,
 		ID:      templateID,
-	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	}, warnings, start)
 }
 
 // HandleSchemaTemplateBind executes the canonical `schema_template_bind` command.
@@ -236,25 +237,33 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 	setDefault := boolArg(req.Args, "default")
 
 	var (
-		result *schemasvc.AddTemplateBindingResult
-		err    error
+		result   *schemasvc.AddTemplateBindingResult
+		err      error
+		warnings []schemasvc.Warning
 	)
 	switch targetKind {
 	case "type":
 		result, err = schemasvc.AddTypeTemplate(rt, scopeValue, templateID)
 		if err == nil && setDefault {
-			_, err = schemasvc.SetTypeDefaultTemplate(rt, scopeValue, templateID)
+			var defaultWarnings []schemasvc.Warning
+			_, defaultWarnings, err = schemasvc.SetTypeDefaultTemplate(rt, scopeValue, templateID)
+			warnings = append(warnings, defaultWarnings...)
 		}
 	case "core":
 		result, err = schemasvc.AddCoreTemplate(rt, scopeValue, templateID)
 		if err == nil && setDefault {
-			_, err = schemasvc.SetCoreDefaultTemplate(rt, scopeValue, templateID)
+			var defaultWarnings []schemasvc.Warning
+			_, defaultWarnings, err = schemasvc.SetCoreDefaultTemplate(rt, scopeValue, templateID)
+			warnings = append(warnings, defaultWarnings...)
 		}
 	default:
 		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
 	}
 	if err != nil {
 		return commandexec.FromServiceError(err)
+	}
+	if result != nil {
+		warnings = append(result.Warnings, warnings...)
 	}
 
 	data := commandpayload.SchemaTemplateBindResult{
@@ -272,7 +281,7 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 	if setDefault {
 		data.DefaultTemplate = templateID
 	}
-	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return schemaCommandSuccess(data, warnings, start)
 }
 
 // HandleSchemaTemplateUnbind executes the canonical `schema_template_unbind` command.
@@ -290,12 +299,15 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 
 	templateID := strings.TrimSpace(stringArg(req.Args, "template_id"))
 	clearDefault := boolArg(req.Args, "clear-default")
-	var err error
+	var (
+		err      error
+		warnings []schemasvc.Warning
+	)
 	switch targetKind {
 	case "type":
-		err = schemasvc.RemoveTypeTemplate(rt, scopeValue, templateID, clearDefault)
+		warnings, err = schemasvc.RemoveTypeTemplate(rt, scopeValue, templateID, clearDefault)
 	case "core":
-		err = schemasvc.RemoveCoreTemplate(rt, scopeValue, templateID, clearDefault)
+		warnings, err = schemasvc.RemoveCoreTemplate(rt, scopeValue, templateID, clearDefault)
 	default:
 		return commandexec.Failure("INVALID_INPUT", "unknown template target", nil, "")
 	}
@@ -315,7 +327,7 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 	if clearDefault {
 		data.DefaultCleared = true
 	}
-	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return schemaCommandSuccess(data, warnings, start)
 }
 
 // HandleTemplateList executes the canonical `template_list` command.
@@ -408,9 +420,21 @@ func canonicalSchemaWarnings(serviceWarnings []schemasvc.Warning) []commandexec.
 	}
 	warnings := make([]commandexec.Warning, 0, len(serviceWarnings))
 	for _, warning := range serviceWarnings {
-		warnings = append(warnings, commandexec.Warning{Code: warning.Code, Message: warning.Message})
+		warnings = append(warnings, commandexec.Warning{
+			Code:    warning.Code,
+			Message: warning.Message,
+			Ref:     warning.Ref,
+		})
 	}
 	return warnings
+}
+
+func schemaCommandSuccess(data interface{}, warnings []schemasvc.Warning, start time.Time) commandexec.Result {
+	return commandexec.SuccessWithWarnings(
+		data,
+		canonicalSchemaWarnings(warnings),
+		&commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()},
+	)
 }
 
 func canonicalTemplateWarnings(serviceWarnings []templatesvc.Warning) []commandexec.Warning {

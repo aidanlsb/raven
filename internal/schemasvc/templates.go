@@ -72,17 +72,17 @@ func GetTemplate(rt *vaultruntime.Runtime, templateID string) (*TemplateDefiniti
 	}, nil
 }
 
-func SetTemplate(rt *vaultruntime.Runtime, req SetTemplateRequest) (*TemplateDefinition, error) {
+func SetTemplate(rt *vaultruntime.Runtime, req SetTemplateRequest) (*TemplateDefinition, []Warning, error) {
 	templateID := strings.TrimSpace(req.TemplateID)
 	if templateID == "" {
-		return nil, svcerr.New(codes.ErrInvalidInput, "template_id cannot be empty")
+		return nil, nil, svcerr.New(codes.ErrInvalidInput, "template_id cannot be empty")
 	}
 	if strings.TrimSpace(req.File) == "" {
-		return nil, svcerr.New(codes.ErrInvalidInput, "--file is required").WithSuggestion("Use --file <path-under-directories.template>")
+		return nil, nil, svcerr.New(codes.ErrInvalidInput, "--file is required").WithSuggestion("Use --file <path-under-directories.template>")
 	}
 
 	if rt == nil || rt.VaultCfg == nil {
-		return nil, svcerr.New(codes.ErrConfigInvalid, "vault config runtime is required").WithSuggestion("Fix raven.yaml and try again")
+		return nil, nil, svcerr.New(codes.ErrConfigInvalid, "vault config runtime is required").WithSuggestion("Fix raven.yaml and try again")
 	}
 	vaultPath := rt.VaultPath
 	vaultCfg := rt.VaultCfg
@@ -90,28 +90,28 @@ func SetTemplate(rt *vaultruntime.Runtime, req SetTemplateRequest) (*TemplateDef
 	templateDir := vaultCfg.GetTemplateDirectory()
 	fileRef, err := template.ResolveFileRef(req.File, templateDir)
 	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion(fmt.Sprintf("Use a file path under %s", templateDir))
+		return nil, nil, svcerr.Wrap(codes.ErrInvalidInput, err.Error(), err).WithSuggestion(fmt.Sprintf("Use a file path under %s", templateDir))
 	}
 
 	fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
 	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "template files must be within the vault", err).WithSuggestion("Template files must be within the vault")
+		return nil, nil, svcerr.Wrap(codes.ErrFileOutsideVault, "template files must be within the vault", err).WithSuggestion("Template files must be within the vault")
 	}
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		return nil, svcerr.Wrap(codes.ErrFileNotFound, fmt.Sprintf("template file not found: %s", fileRef), err).WithSuggestion("Create the file first under directories.template (for example: templates/...)")
+		return nil, nil, svcerr.Wrap(codes.ErrFileNotFound, fmt.Sprintf("template file not found: %s", fileRef), err).WithSuggestion("Create the file first under directories.template (for example: templates/...)")
 	} else if err != nil {
-		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read template file metadata", err)
+		return nil, nil, svcerr.Wrap(codes.ErrFileRead, "failed to read template file metadata", err)
 	}
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
-		return nil, svcerr.Wrap(codes.ErrFileRead, "failed to read template file", err)
+		return nil, nil, svcerr.Wrap(codes.ErrFileRead, "failed to read template file", err)
 	}
 	if err := template.ValidateContent(string(content)); err != nil {
-		return nil, svcerr.Wrap(codes.ErrValidationFailed, err.Error(), err).WithSuggestion("Template files should contain only body Markdown; Raven writes object frontmatter separately")
+		return nil, nil, svcerr.Wrap(codes.ErrValidationFailed, err.Error(), err).WithSuggestion("Template files should contain only body Markdown; Raven writes object frontmatter separately")
 	}
 
 	description := strings.TrimSpace(req.Description)
-	err = editRuntimeSchemaWithLoadError(rt, "", codes.ErrSchemaInvalid, func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchemaWithLoadError(rt, "", codes.ErrSchemaInvalid, func(doc *schemadoc.Document) error {
 		templatesNode := schemadoc.EnsureMap(doc.Root(), "templates")
 		templateNode := schemadoc.EnsureMap(templatesNode, templateID)
 		templateNode["file"] = fileRef
@@ -125,20 +125,20 @@ func SetTemplate(rt *vaultruntime.Runtime, req SetTemplateRequest) (*TemplateDef
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	return &TemplateDefinition{
 		ID:          templateID,
 		File:        fileRef,
 		Description: description,
-	}, nil
+	}, warnings, nil
 }
 
-func RemoveTemplate(rt *vaultruntime.Runtime, templateID string) error {
+func RemoveTemplate(rt *vaultruntime.Runtime, templateID string) ([]Warning, error) {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
-		return svcerr.New(codes.ErrInvalidInput, "template_id cannot be empty")
+		return nil, svcerr.New(codes.ErrInvalidInput, "template_id cannot be empty")
 	}
 
 	return editRuntimeSchema(rt, "Run 'rvn init' to create a schema", func(doc *schemadoc.Document) error {

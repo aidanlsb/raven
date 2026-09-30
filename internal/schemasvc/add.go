@@ -25,6 +25,7 @@ type AddTypeResult struct {
 	Description      string
 	NameField        string
 	AutoCreatedField string
+	Warnings         []Warning
 }
 
 type AddTraitRequest struct {
@@ -35,9 +36,10 @@ type AddTraitRequest struct {
 }
 
 type AddTraitResult struct {
-	Name   string
-	Type   string
-	Values []string
+	Name     string
+	Type     string
+	Values   []string
+	Warnings []Warning
 }
 
 type AddFieldRequest struct {
@@ -57,6 +59,7 @@ type AddFieldResult struct {
 	FieldType   string
 	Required    bool
 	Description string
+	Warnings    []Warning
 }
 
 func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, error) {
@@ -77,7 +80,7 @@ func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, erro
 	description := strings.TrimSpace(req.Description)
 	nameField := strings.TrimSpace(req.NameField)
 	autoCreatedField := ""
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Types[typeName]; exists {
 			return svcerr.New(codes.ErrObjectExists, fmt.Sprintf("type '%s' already exists", typeName))
 		}
@@ -112,6 +115,7 @@ func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, erro
 		Description:      description,
 		NameField:        nameField,
 		AutoCreatedField: autoCreatedField,
+		Warnings:         warnings,
 	}, nil
 }
 
@@ -124,7 +128,7 @@ func AddTrait(rt *vaultruntime.Runtime, req AddTraitRequest) (*AddTraitResult, e
 	traitType := normalizeTraitTypeInput(req.TraitType)
 	trimmedValues := splitCommaValues(req.Values)
 
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Traits[traitName]; exists {
 			return svcerr.New(codes.ErrObjectExists, fmt.Sprintf("trait '%s' already exists", traitName))
 		}
@@ -147,8 +151,9 @@ func AddTrait(rt *vaultruntime.Runtime, req AddTraitRequest) (*AddTraitResult, e
 	}
 
 	result := &AddTraitResult{
-		Name: traitName,
-		Type: traitType,
+		Name:     traitName,
+		Type:     traitType,
+		Warnings: warnings,
 	}
 	result.Values = trimmedValues
 	return result, nil
@@ -167,7 +172,7 @@ func AddField(rt *vaultruntime.Runtime, req AddFieldRequest) (*AddFieldResult, e
 	trimmedTarget := strings.TrimSpace(req.Target)
 	trimmedValues := splitCommaValues(req.Values)
 	fieldType := ""
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		typeDef, exists := sch.Types[typeName]
 		if !exists {
@@ -241,6 +246,7 @@ func AddField(rt *vaultruntime.Runtime, req AddFieldRequest) (*AddFieldResult, e
 		FieldType:   fieldType,
 		Required:    req.Required,
 		Description: req.Description,
+		Warnings:    warnings,
 	}, nil
 }
 

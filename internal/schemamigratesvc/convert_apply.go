@@ -2,6 +2,7 @@ package schemamigratesvc
 
 import (
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -27,7 +28,7 @@ func finishValueConversion(
 		return result, nil
 	}
 
-	applied, err := applyValueConvertPlan(rt, plan)
+	applied, warnings, err := applyValueConvertPlan(rt, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -36,10 +37,11 @@ func finishValueConversion(
 	result.TotalChanges = 0
 	result.ChangesApplied = applied
 	result.Hint = "Run 'rvn reindex --full' to update the index, then run 'rvn check'"
+	result.Warnings = warnings
 	return result, nil
 }
 
-func applyValueConvertPlan(rt *vaultruntime.Runtime, plan *valueConvertPlan) (int, error) {
+func applyValueConvertPlan(rt *vaultruntime.Runtime, plan *valueConvertPlan) (int, []schemasvc.Warning, error) {
 	schemaYAML := []byte(nil)
 	schemaApplied := 0
 	if plan.SchemaPlan.SchemaMutations > 0 {

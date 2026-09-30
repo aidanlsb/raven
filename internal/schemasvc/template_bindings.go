@@ -20,6 +20,7 @@ type TemplateBindingState struct {
 type AddTemplateBindingResult struct {
 	AlreadySet   bool
 	DefaultMatch bool
+	Warnings     []Warning
 }
 
 type bindingTarget struct {
@@ -73,7 +74,7 @@ func addTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID stri
 	}
 
 	result := &AddTemplateBindingResult{}
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		if _, exists := sch.Templates[templateID]; !exists {
 			return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("unknown template '%s'", templateID)).WithSuggestion("Use `rvn schema template list` to see available template IDs")
@@ -92,6 +93,7 @@ func addTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID stri
 	if err != nil {
 		return nil, err
 	}
+	result.Warnings = warnings
 	return result, nil
 }
 
@@ -111,10 +113,10 @@ func AddCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string) 
 	return addTemplate(rt, target, templateID)
 }
 
-func removeTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID string, clearDefault bool) error {
+func removeTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID string, clearDefault bool) ([]Warning, error) {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
-		return svcerr.New(codes.ErrInvalidInput, "template_id cannot be empty")
+		return nil, svcerr.New(codes.ErrInvalidInput, "template_id cannot be empty")
 	}
 
 	return editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
@@ -140,26 +142,26 @@ func removeTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID s
 	})
 }
 
-func RemoveTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string, clearDefault bool) error {
+func RemoveTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string, clearDefault bool) ([]Warning, error) {
 	target, err := loadTypeTarget(rt, typeName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return removeTemplate(rt, target, templateID, clearDefault)
 }
 
-func RemoveCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string, clearDefault bool) error {
+func RemoveCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string, clearDefault bool) ([]Warning, error) {
 	target, err := loadCoreTarget(rt, coreTypeName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return removeTemplate(rt, target, templateID, clearDefault)
 }
 
-func setDefaultTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID string) (string, error) {
+func setDefaultTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID string) (string, []Warning, error) {
 	templateID = strings.TrimSpace(templateID)
 
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		targetNode := ensureTargetNode(doc, target)
 
 		if templateID == "" {
@@ -173,24 +175,24 @@ func setDefaultTemplate(rt *vaultruntime.Runtime, target bindingTarget, template
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return templateID, nil
+	return templateID, warnings, nil
 }
 
-func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID string) (string, error) {
+func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID string) (string, []Warning, error) {
 	target, err := loadTypeTarget(rt, typeName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	return setDefaultTemplate(rt, target, templateID)
 }
 
-func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string) (string, error) {
+func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string) (string, []Warning, error) {
 	target, err := loadCoreTarget(rt, coreTypeName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	return setDefaultTemplate(rt, target, templateID)
 }

@@ -52,7 +52,7 @@ type stagedApply struct {
 	AfterFiles      func() (int, error)
 }
 
-func applyStagedFilesThenInvalidate(rt *vaultruntime.Runtime, apply stagedApply) (int, error) {
+func applyStagedFilesThenInvalidate(rt *vaultruntime.Runtime, apply stagedApply) (int, []schemasvc.Warning, error) {
 	applied := 0
 	var operationID string
 	var classification schemachange.Classification
@@ -60,7 +60,7 @@ func applyStagedFilesThenInvalidate(rt *vaultruntime.Runtime, apply stagedApply)
 	if len(apply.SchemaYAML) > 0 {
 		opID, classif, err := writeSchemaWithInvalidation(rt, apply.SchemaYAML)
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		operationID = opID
 		classification = classif
@@ -69,28 +69,28 @@ func applyStagedFilesThenInvalidate(rt *vaultruntime.Runtime, apply stagedApply)
 
 	n, err := writeStagedFileMaps(apply.WriteSuggestion, apply.FileSets...)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	applied += n
 
 	if apply.AfterFiles != nil {
 		extra, afterErr := apply.AfterFiles()
 		if afterErr != nil {
-			return 0, afterErr
+			return 0, nil, afterErr
 		}
 		applied += extra
 	}
 
-	if operationID != "" {
-		if err := rt.ReloadSchema(true); err != nil {
-			return 0, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to reload schema after "+apply.ReloadContext, err)
-		}
-		// Attempt to apply invalidation. If it fails, the schema write still succeeded
-		// and the journal entry persists, so a manual reindex will recover.
-		_ = schemachange.ApplyInvalidation(rt, operationID, classification, readsvc.ReindexForSchemaChange)
+	if operationID == "" {
+		return applied, nil, nil
 	}
-
-	return applied, nil
+	if err := rt.ReloadSchema(true); err != nil {
+		return 0, nil, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to reload schema after "+apply.ReloadContext, err)
+	}
+	if applyErr := schemachange.ApplyInvalidation(rt, operationID, classification, readsvc.ReindexForSchemaChange); applyErr != nil {
+		return applied, []schemasvc.Warning{schemasvc.NewIndexUpdateFailedWarning(applyErr)}, nil
+	}
+	return applied, nil, nil
 }
 
 func writeStagedFileMaps(writeSuggestion string, fileSets ...map[string][]byte) (int, error) {

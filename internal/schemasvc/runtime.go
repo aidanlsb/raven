@@ -1,22 +1,17 @@
 package schemasvc
 
 import (
+	"fmt"
+
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemachange"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
-
-func init() {
-	// Wire up the schemadoc invalidation hook to avoid import cycles
-	schemadoc.SetRecordInvalidationHook(func(vaultPath string, beforeSchema, afterSchema *schema.Schema) (string, interface{}, error) {
-		operationID, classification, err := schemachange.RecordInvalidation(vaultPath, beforeSchema, afterSchema)
-		return operationID, classification, err
-	})
-}
 
 func runtimeSchema(rt *vaultruntime.Runtime, suggestion string) (*schema.Schema, error) {
 	if err := vaultruntime.Require(rt); err != nil {
@@ -31,21 +26,8 @@ func runtimeSchema(rt *vaultruntime.Runtime, suggestion string) (*schema.Schema,
 	return rt.Schema, nil
 }
 
-func editRuntimeSchema(rt *vaultruntime.Runtime, suggestion string, edit func(*schemadoc.Document) error) error {
-	result, err := editSchemaWithInvalidation(rt.VaultPath, suggestion, edit)
-	if err != nil {
-		return err
-	}
-	if reloadErr := reloadRuntimeSchema(rt); reloadErr != nil {
-		return reloadErr
-	}
-	// Apply invalidation after schema reload (when auto-reindex enabled)
-	if result != nil && result.OperationID != "" {
-		// Attempt to apply invalidation. If it fails, the schema write still succeeded
-		// and the journal entry persists, so a manual reindex will recover.
-		_ = schemachange.ApplyInvalidation(rt, result.OperationID, result.Classification, readsvc.ReindexForSchemaChange)
-	}
-	return nil
+func editRuntimeSchema(rt *vaultruntime.Runtime, suggestion string, edit func(*schemadoc.Document) error) ([]Warning, error) {
+	return editRuntimeSchemaRefreshing(rt, suggestion, codes.ErrSchemaNotFound, edit, readsvc.ReindexForSchemaChange)
 }
 
 func editRuntimeSchemaWithLoadError(
@@ -53,11 +35,45 @@ func editRuntimeSchemaWithLoadError(
 	suggestion string,
 	loadErrorCode codes.ErrorCode,
 	edit func(*schemadoc.Document) error,
-) error {
-	if err := editSchemaWithLoadError(rt.VaultPath, suggestion, loadErrorCode, edit); err != nil {
-		return err
+) ([]Warning, error) {
+	return editRuntimeSchemaRefreshing(rt, suggestion, loadErrorCode, edit, readsvc.ReindexForSchemaChange)
+}
+
+func editRuntimeSchemaRefreshing(
+	rt *vaultruntime.Runtime,
+	suggestion string,
+	loadErrorCode codes.ErrorCode,
+	edit func(*schemadoc.Document) error,
+	reindex schemachange.ReindexFunc,
+) ([]Warning, error) {
+	result, err := editSchemaWithInvalidationAndLoadError(rt.VaultPath, suggestion, loadErrorCode, edit)
+	if err != nil {
+		return nil, err
 	}
-	return reloadRuntimeSchema(rt)
+	if reloadErr := reloadRuntimeSchema(rt); reloadErr != nil {
+		return nil, reloadErr
+	}
+	return applySchemaInvalidation(rt, result, reindex), nil
+}
+
+func applySchemaInvalidation(rt *vaultruntime.Runtime, result *schemadoc.EditResult, reindex schemachange.ReindexFunc) []Warning {
+	if result == nil || result.OperationID == "" {
+		return nil
+	}
+	if err := schemachange.ApplyInvalidation(rt, result.OperationID, result.Classification, reindex); err != nil {
+		return []Warning{NewIndexUpdateFailedWarning(err)}
+	}
+	return nil
+}
+
+// NewIndexUpdateFailedWarning reports that the schema write succeeded but the
+// automatic index refresh did not. The journal entry remains for `rvn reindex`.
+func NewIndexUpdateFailedWarning(err error) Warning {
+	return Warning{
+		Code:    codes.WarnIndexUpdateFailed,
+		Message: fmt.Sprintf("auto-reindex failed after schema change: %v", err),
+		Ref:     reindexsvc.IndexUpdateFailedWarningRef,
+	}
 }
 
 func reloadRuntimeSchema(rt *vaultruntime.Runtime) error {

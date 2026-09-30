@@ -10,17 +10,21 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sync"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemachange"
 )
 
 // ErrNoChange lets a mutation finish successfully without rewriting schema.yaml.
 var ErrNoChange = errors.New("schema document unchanged")
+
+// ErrInvalidationRequired is returned when EditWithInvalidation is called
+// without a recorder. Schema writes that need index recovery must pass one.
+var ErrInvalidationRequired = errors.New("schema invalidation recorder is required")
 
 // Operation identifies the stage of a failed document edit.
 type Operation string
@@ -116,13 +120,20 @@ type EditResult struct {
 	// OperationID is the index journal operation ID, if invalidation was recorded.
 	// Empty when the mutation requires no index work.
 	OperationID string
+	// Classification is the invalidation policy recorded for this edit. It
+	// belongs to this result, not to process-wide state.
+	Classification schemachange.Classification
 	// Changed is true if the schema.yaml file was rewritten.
 	Changed bool
 }
 
+// RecordInvalidationFunc records index invalidation for one schema edit.
+// Callers pass schemachange.RecordInvalidation, or a test double.
+type RecordInvalidationFunc func(vaultPath string, beforeSchema, afterSchema *schema.Schema) (operationID string, classification schemachange.Classification, err error)
+
 // EditWithInvalidation runs a schema mutation and records index invalidation
-// before the durable schema write. It returns the operation ID for tracking
-// and whether the schema changed.
+// before the durable schema write. recordInvalidation is required; omitting it
+// is an error so a schema edit cannot skip marking the index stale.
 //
 // If the mutation requires index recovery (PolicyFullScan or
 // PolicyResolverRefresh), this function:
@@ -135,7 +146,11 @@ type EditResult struct {
 // If recording invalidation fails, the mutation aborts before writing schema.yaml.
 // The caller is responsible for running ApplyInvalidation afterward when
 // auto-reindex is enabled.
-func EditWithInvalidation(vaultPath string, mutate func(*Document) error) (*EditResult, error) {
+func EditWithInvalidation(vaultPath string, recordInvalidation RecordInvalidationFunc, mutate func(*Document) error) (*EditResult, error) {
+	if recordInvalidation == nil {
+		return nil, ErrInvalidationRequired
+	}
+
 	// Load before state
 	beforeSchema, beforeErr := schema.Load(vaultPath)
 	if beforeErr != nil {
@@ -175,9 +190,6 @@ func EditWithInvalidation(vaultPath string, mutate func(*Document) error) (*Edit
 	if classifyErr != nil {
 		return nil, classifyErr
 	}
-	classificationState.Lock()
-	classificationState.value = classification
-	classificationState.Unlock()
 
 	// Write schema.yaml atomically
 	if err := atomicfile.WriteFile(paths.SchemaPath(vaultPath), output, 0o644); err != nil {
@@ -185,41 +197,10 @@ func EditWithInvalidation(vaultPath string, mutate func(*Document) error) (*Edit
 	}
 
 	return &EditResult{
-		OperationID: operationID,
-		Changed:     true,
+		OperationID:    operationID,
+		Classification: classification,
+		Changed:        true,
 	}, nil
-}
-
-// RecordInvalidationFunc is the signature for the schema invalidation hook.
-type RecordInvalidationFunc func(vaultPath string, beforeSchema, afterSchema *schema.Schema) (operationID string, classification interface{}, err error)
-
-// recordInvalidation is the internal hook for schema change classification.
-// It is defined as a variable so tests can override it and so we can avoid
-// import cycles (schemasvc sets this via SetRecordInvalidationHook).
-var recordInvalidation RecordInvalidationFunc = func(vaultPath string, beforeSchema, afterSchema *schema.Schema) (string, interface{}, error) {
-	// Default no-op: no invalidation recorded
-	return "", nil, nil
-}
-
-// SetRecordInvalidationHook wires up the schema change invalidation logic.
-// Called by schemasvc.init() to avoid import cycles.
-func SetRecordInvalidationHook(fn RecordInvalidationFunc) {
-	recordInvalidation = fn
-}
-
-// classificationState stores the classification from the most recent edit.
-// Protected by a mutex for concurrent access.
-var classificationState struct {
-	sync.RWMutex
-	value interface{}
-}
-
-// GetLastClassification returns the classification from the most recent
-// EditWithInvalidation call. This is a workaround for the hook interface.
-func GetLastClassification() interface{} {
-	classificationState.RLock()
-	defer classificationState.RUnlock()
-	return classificationState.value
 }
 
 // Schema returns the typed model loaded from the document's original bytes.

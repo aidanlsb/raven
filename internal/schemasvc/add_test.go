@@ -15,7 +15,7 @@ import (
 
 func schemaTestRuntime(t *testing.T, vaultPath string) *vaultruntime.Runtime {
 	t.Helper()
-	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
+	return testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{OpenDB: true})
 }
 
 func requireSchemaCode(t *testing.T, err error, want codes.ErrorCode) {

@@ -42,10 +42,11 @@ type UpdateFieldRequest struct {
 }
 
 type UpdateResult struct {
-	Name    string
-	Type    string
-	Field   string
-	Changes []string
+	Name     string
+	Type     string
+	Field    string
+	Changes  []string
+	Warnings []Warning
 }
 
 type RemoveTypeRequest struct {
@@ -68,6 +69,7 @@ type RemoveFieldRequest struct {
 type Warning struct {
 	Code    codes.WarningCode `json:"code"`
 	Message string            `json:"message"`
+	Ref     string            `json:"ref,omitempty"`
 }
 
 type RemoveResult struct {
@@ -87,7 +89,7 @@ func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult,
 	}
 
 	changes := make([]string, 0)
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		typeDef, exists := sch.Types[typeName]
 		if !exists {
@@ -185,8 +187,9 @@ func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult,
 	}
 
 	return &UpdateResult{
-		Name:    typeName,
-		Changes: changes,
+		Name:     typeName,
+		Changes:  changes,
+		Warnings: warnings,
 	}, nil
 }
 
@@ -200,7 +203,7 @@ func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResul
 	}
 
 	changes := make([]string, 0)
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		traitDef, exists := doc.Schema().Traits[traitName]
 		if !exists {
 			return svcerr.New(codes.ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName)).WithSuggestion("Use 'rvn schema add trait' to create it")
@@ -227,8 +230,9 @@ func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResul
 	}
 
 	return &UpdateResult{
-		Name:    traitName,
-		Changes: changes,
+		Name:     traitName,
+		Changes:  changes,
+		Warnings: warnings,
 	}, nil
 }
 
@@ -243,7 +247,7 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 	}
 
 	changes := make([]string, 0)
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		sch := doc.Schema()
 		typeDef, exists := sch.Types[typeName]
 		if !exists {
@@ -369,9 +373,10 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 	}
 
 	return &UpdateResult{
-		Type:    typeName,
-		Field:   fieldName,
-		Changes: changes,
+		Type:     typeName,
+		Field:    fieldName,
+		Changes:  changes,
+		Warnings: warnings,
 	}, nil
 }
 
@@ -424,7 +429,7 @@ func RemoveType(rt *vaultruntime.Runtime, req RemoveTypeRequest) (*RemoveResult,
 	}
 
 	warnings := make([]Warning, 0)
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	editWarnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Types[typeName]; !exists {
 			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName))
 		}
@@ -476,7 +481,7 @@ func RemoveType(rt *vaultruntime.Runtime, req RemoveTypeRequest) (*RemoveResult,
 
 	return &RemoveResult{
 		Name:     typeName,
-		Warnings: warnings,
+		Warnings: append(warnings, editWarnings...),
 	}, nil
 }
 
@@ -487,7 +492,7 @@ func RemoveTrait(rt *vaultruntime.Runtime, req RemoveTraitRequest) (*RemoveResul
 	}
 
 	warnings := make([]Warning, 0)
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	editWarnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Traits[traitName]; !exists {
 			return svcerr.New(codes.ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName))
 		}
@@ -522,7 +527,7 @@ func RemoveTrait(rt *vaultruntime.Runtime, req RemoveTraitRequest) (*RemoveResul
 
 	return &RemoveResult{
 		Name:     traitName,
-		Warnings: warnings,
+		Warnings: append(warnings, editWarnings...),
 	}, nil
 }
 
@@ -533,7 +538,7 @@ func RemoveField(rt *vaultruntime.Runtime, req RemoveFieldRequest) (*RemoveResul
 		return nil, svcerr.New(codes.ErrInvalidInput, "type and field names are required")
 	}
 
-	err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
+	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		typeDef, exists := doc.Schema().Types[typeName]
 		if !exists {
 			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName))
@@ -592,8 +597,9 @@ func RemoveField(rt *vaultruntime.Runtime, req RemoveFieldRequest) (*RemoveResul
 	}
 
 	return &RemoveResult{
-		Type:  typeName,
-		Field: fieldName,
+		Type:     typeName,
+		Field:    fieldName,
+		Warnings: warnings,
 	}, nil
 }
 

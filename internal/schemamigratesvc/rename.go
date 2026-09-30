@@ -36,6 +36,7 @@ type RenameFieldResult struct {
 	Changes        []schemasvc.SchemaChange
 	ChangesApplied int
 	Hint           string
+	Warnings       []schemasvc.Warning
 }
 
 type RenameTypeRequest struct {
@@ -63,6 +64,7 @@ type RenameTypeResult struct {
 	ChangesApplied             int
 	FilesMoved                 int
 	ReferenceFilesUpdated      int
+	Warnings                   []schemasvc.Warning
 }
 
 type typeDirectoryMove struct {
@@ -159,7 +161,7 @@ func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameField
 		}, nil
 	}
 
-	appliedChanges, err := applyFieldRenamePlan(rt, plan)
+	appliedChanges, warnings, err := applyFieldRenamePlan(rt, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +172,7 @@ func RenameField(rt *vaultruntime.Runtime, req RenameFieldRequest) (*RenameField
 		NewField:       newField,
 		ChangesApplied: appliedChanges,
 		Hint:           "Run 'rvn reindex --full' to update the index",
+		Warnings:       warnings,
 	}, nil
 }
 
@@ -241,7 +244,7 @@ func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeRes
 		}
 	}
 
-	appliedChanges, movedFiles, referenceFilesUpdated, err := applyTypeRenamePlan(rt, plan, applyDefaultPathRename)
+	appliedChanges, movedFiles, referenceFilesUpdated, warnings, err := applyTypeRenamePlan(rt, plan, applyDefaultPathRename)
 	if err != nil {
 		return nil, err
 	}
@@ -258,5 +261,6 @@ func RenameType(rt *vaultruntime.Runtime, req RenameTypeRequest) (*RenameTypeRes
 		DefaultPathNew:             defaultPathValue(defaultPathPlan, false),
 		FilesMoved:                 movedFiles,
 		ReferenceFilesUpdated:      referenceFilesUpdated,
+		Warnings:                   warnings,
 	}, nil
 }
