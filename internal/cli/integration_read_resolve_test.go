@@ -55,6 +55,56 @@ Bob is a software engineer.
 	}
 }
 
+func TestIntegration_ReadJSONLinks(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+# Alice
+`).
+		WithFile("projects/site.md", `---
+type: project
+title: Site
+status: active
+owner: people/alice
+---
+café See [[people/alice|Alice]] and [[missing]].
+`).
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("read", "projects/site")
+	result.MustSucceed(t)
+
+	rawLinks, ok := result.Data["links"].([]interface{})
+	if !ok {
+		t.Fatalf("links = %#v, want array; raw: %s", result.Data["links"], result.RawJSON)
+	}
+	if len(rawLinks) != 2 {
+		t.Fatalf("got %d links, want 2; raw: %s", len(rawLinks), result.RawJSON)
+	}
+
+	content := result.DataString("content")
+	first, _ := rawLinks[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	start := int(first["byte_start"].(float64))
+	end := int(first["byte_end"].(float64))
+	if content[start:end] != text {
+		t.Fatalf("content[%d:%d] = %q, want %q", start, end, content[start:end], text)
+	}
+	if first["status"] != "resolved" || first["object_id"] != "people/alice" {
+		t.Fatalf("first link = %#v, want resolved people/alice", first)
+	}
+
+	second, _ := rawLinks[1].(map[string]interface{})
+	if second["text"] != "[[missing]]" || second["status"] != "unresolved" {
+		t.Fatalf("second link = %#v, want unresolved [[missing]]", second)
+	}
+}
+
 // TestIntegration_ReadSections tests the --sections outline view.
 func TestIntegration_ReadSections(t *testing.T) {
 	t.Parallel()

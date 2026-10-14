@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Enriched `rvn read --json` (and the same payload on `rvn api` `POST /v1/invoke`) includes `data.links`: each body `[[wikilink]]` with UTF-8 byte and UTF-16 code-unit offsets into `data.content`, the raw span, the target as written, and identity-first resolution (`resolved` / `unresolved` / `ambiguous`). Offsets match section slices. Human output, `--raw`, and `--sections` are unchanged.
 - `rvn api` serves a loopback-only HTTP API (`127.0.0.1`) for companion UIs such as Perch. Startup prints the URL and bearer token; `--json` emits one parseable envelope line. `POST /v1/invoke` runs through `commandexec.Invoker.Execute`. The MVP allowlist is read-only vault commands plus `set`, `unset`, `new`, and `move`. Disallowed commands return `COMMAND_NOT_ALLOWED`. `GET /v1/schema`, `GET /v1/commands` (registry-derived, with `api_version`), and `GET /v1/health` are included. On `INDEX_LOCKED` the API retries for about two seconds before returning the error.
 
 ### Changed

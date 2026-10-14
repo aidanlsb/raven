@@ -27,10 +27,26 @@ The primary homogeneous collection in a successful response is always
 `null`.
 
 Semantically distinct or secondary collections keep descriptive keys, such as
-`ids` for `query --ids`, `issues` for `check`, `sections` for read outlines, and
-`items_by_target` / `items_by_source` for grouped link traversal. Ambiguous
-reference failures also keep candidate IDs in `error.details.matches`; that is
-error detail, not a successful result collection.
+`ids` for `query --ids`, `issues` for `check`, `sections` for read outlines,
+`links` for wikilink spans on enriched `read`, and `items_by_target` /
+`items_by_source` for grouped link traversal. Ambiguous reference failures also
+keep candidate IDs in `error.details.matches`; that is error detail, not a
+successful result collection.
+
+Enriched `read` JSON (`data.content`) includes `data.links`. Each entry is a
+`[[wikilink]]` in that exact `content` string:
+
+- `byte_start` / `byte_end` — UTF-8 byte offsets (0-based, end-exclusive)
+- `utf16_start` / `utf16_end` — UTF-16 code-unit offsets for JavaScript clients
+- `text` — the raw `[[target]]` or `[[target|alias]]` span
+- `target` — the target as written
+- `status` — `resolved`, `unresolved`, or `ambiguous`
+- `object_id` — canonical object ID when `status` is `resolved`
+- `matches` — candidate IDs when `status` is `ambiguous`
+
+Offsets stay valid when `read` returns a section subtree. Wikilinks in fenced,
+indented, or inline code are omitted, matching the document parser. `--raw` and
+`--sections` do not include `links`.
 
 ## Compact invoke flow
 

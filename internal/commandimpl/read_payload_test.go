@@ -108,7 +108,14 @@ func TestHandleReadTypedContentResult(t *testing.T) {
 	}
 
 	wire := marshalToMap(t, payload)
-	assertKeys(t, wire, []string{"object_id", "path", "content", "line_count", "references", "backlinks"})
+	assertKeys(t, wire, []string{"object_id", "path", "content", "line_count", "references", "backlinks", "links"})
+	if len(payload.Links) == 0 {
+		t.Fatalf("links = %#v, want structured wikilink spans", payload.Links)
+	}
+	link := payload.Links[0]
+	if payload.Content[link.ByteStart:link.ByteEnd] != link.Text {
+		t.Fatalf("link slice = %q, want %q", payload.Content[link.ByteStart:link.ByteEnd], link.Text)
+	}
 }
 
 func TestHandleReadTypedRawResult(t *testing.T) {
