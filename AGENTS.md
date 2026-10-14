@@ -51,7 +51,7 @@ Markdown files → Parser → Index (SQLite) → Query Executor
 
 ## Language and Tooling
 
-- **Go 1.26.8+** — all code in standard Go style
+- **Go 1.26.9+** — all code in standard Go style
 - **Build:** `go build -o rvn ./cmd/rvn` or `make build`
 - **Formatting:** `gofmt -s` and `goimports` with local prefix `github.com/aidanlsb/raven`
 - **Linting:** `golangci-lint v2` (see `.golangci.yml` for enabled linters)
@@ -237,8 +237,9 @@ When reporting completed work, include:
 
 Build/lint/test commands are documented above (see **Building and Testing**). Notes specific to running in this cloud environment:
 
-- **Go toolchain:** `go.mod` requires `go 1.26.8`. `GOTOOLCHAIN` auto-downloads the pinned toolchain on first `go` invocation, so no manual Go install is needed.
+- **Go toolchain:** `go.mod` requires `go 1.26.9`. `GOTOOLCHAIN` auto-downloads the pinned toolchain on first `go` invocation, so no manual Go install is needed.
 - **Dev tools for lint/fmt:** `make lint` and `make fmt` need `golangci-lint` (pinned `v2.9.0`) and `goimports`, installed via `make tools` into `$(go env GOPATH)/bin` (`/home/ubuntu/go/bin`), which is already on `PATH`. The startup/update script runs `make tools`, so these are available without re-running it.
 - **No long-running services:** `rvn` is a single self-contained binary with an embedded pure-Go SQLite index (no external DB/server/port). There is nothing to keep running to test the product — build with `make build`, then invoke `./rvn <command>`.
 - **Commands need a vault:** any command that reads/writes vault data requires either `--vault-path /abs/path`, `--vault <name>`, or an active vault (`rvn vault use`). Without one, commands fail with error code `VAULT_NOT_SPECIFIED`. Create a throwaway vault for manual testing with `rvn init /tmp/some-vault`.
-- **MCP server:** `rvn serve --vault-path <path>` speaks JSON-RPC 2.0 over stdin/stdout (stdio transport, not a network port). It is optional and only needed to exercise the agent-facing path.
+- **MCP server:** `rvn mcp serve --vault-path <path>` speaks JSON-RPC 2.0 over stdin/stdout (stdio transport, not a network port). It is optional and only needed to exercise the agent-facing path.
+- **Local HTTP API:** `rvn api --vault-path <path>` listens on 127.0.0.1 for companion UIs. It prints a URL and bearer token (use `--json` for a parseable startup line). There is no shipped UI.

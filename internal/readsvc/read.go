@@ -51,6 +51,7 @@ type ReadResult struct {
 	References     []ReadReference
 	Backlinks      []ReadBacklinkGroup
 	BacklinksCount int
+	Links          []ReadLink
 }
 
 type InvalidLineRangeError struct {
@@ -167,6 +168,11 @@ func Read(rt *vaultruntime.Runtime, req ReadRequest) (*ReadResult, error) {
 	_, body := splitFrontmatterBody(result.Content)
 	refs := collectReadReferences(body, rt, resolveOp)
 
+	links, err := collectReadLinks(result.Content, resolveOp)
+	if err != nil {
+		return nil, err
+	}
+
 	backlinkGroups, backlinksCount, err := readBacklinksWithContext(rt, resolved.ObjectID)
 	if err != nil {
 		return nil, err
@@ -175,6 +181,7 @@ func Read(rt *vaultruntime.Runtime, req ReadRequest) (*ReadResult, error) {
 	result.References = refs
 	result.Backlinks = backlinkGroups
 	result.BacklinksCount = backlinksCount
+	result.Links = links
 	return result, nil
 }
 

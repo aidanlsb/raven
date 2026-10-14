@@ -42,8 +42,9 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 			"Initialize first-run setup before any other MCP tool calls",
 		},
 	},
-	"serve": {
-		Name:        "serve",
+	"mcp_serve": {
+		Name:        "mcp serve",
+		CLIPath:     []string{"mcp", "serve"},
 		Description: "Run Raven as an MCP server",
 		VaultScope:  VaultScopeNone,
 		LongDesc: `Run Raven as an MCP server over stdio.
@@ -51,12 +52,40 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 Vault-scoped calls must provide vault or vault_path unless the server is pinned
 with --vault or --vault-path.`,
 		Examples: []string{
-			"rvn serve",
-			"rvn serve --vault personal",
-			"rvn serve --vault-path /path/to/vault",
+			"rvn mcp serve",
+			"rvn mcp serve --vault personal",
+			"rvn mcp serve --vault-path /path/to/vault",
 		},
 		UseCases: []string{
 			"Launch Raven MCP server for local clients",
+		},
+	},
+	"api": {
+		Name:        "api",
+		Description: "Run Raven as a local HTTP API for companion UIs",
+		VaultScope:  VaultScopeRequired,
+		LongDesc: `Run a loopback-only HTTP API that invokes canonical Raven commands.
+
+The server binds 127.0.0.1 only. Every request except CORS preflight requires
+a bearer token (generated per run, or set with --token / RAVEN_API_TOKEN).
+POST /v1/invoke runs through the same command layer as the CLI and MCP.
+The MVP allowlist is read-only vault commands plus set, unset, new, and move.
+
+On startup Raven prints the listen URL and token. Pass --json for a single
+startup envelope line that a launcher (for example Tauri) can parse.`,
+		Flags: []FlagMeta{
+			{Name: "port", Description: "Listen port (0 chooses an ephemeral port)", Type: FlagTypeInt, Default: "7438"},
+			{Name: "token", Description: "Bearer token (default: generated per run; env RAVEN_API_TOKEN)", Type: FlagTypeString},
+			{Name: "cors-origin", Description: "Allowed CORS origin (repeatable; default localhost dev ports)", Type: FlagTypeStringSlice},
+		},
+		Examples: []string{
+			"rvn api --vault-path /path/to/vault",
+			"rvn api --vault personal --port 7438 --json",
+			"rvn api --vault-path /path/to/vault --token $RAVEN_API_TOKEN",
+		},
+		UseCases: []string{
+			"Launch the local HTTP API for a companion UI such as Perch",
+			"Print a JSON startup line a native launcher can parse",
 		},
 	},
 	"lsp": {

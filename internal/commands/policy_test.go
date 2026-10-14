@@ -18,7 +18,7 @@ func TestPolicyForCommandID(t *testing.T) {
 		},
 		{
 			name:          "non-invokable runtime command",
-			commandID:     "serve",
+			commandID:     "mcp_serve",
 			wantInvokable: false,
 			wantDiscover:  false,
 		},

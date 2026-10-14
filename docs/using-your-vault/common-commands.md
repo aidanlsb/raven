@@ -62,6 +62,15 @@ Key flags:
 - `--lines`: include line numbers (useful for agents preparing edits)
 - `--sections`: list the file's headings with section IDs, levels, and line ranges instead of content
 
+JSON (and the local HTTP API) add a `links` array on the enriched read payload.
+Each entry locates a `[[wikilink]]` in the returned `content` string: UTF-8
+`byte_start`/`byte_end` and UTF-16 `utf16_start`/`utf16_end` (0-based,
+end-exclusive), the raw `text`, the `target` as written, and identity-first
+resolution (`status` is `resolved`, `unresolved`, or `ambiguous`; `object_id`
+when resolved). Offsets match `content` exactly, including section slices.
+Wikilinks inside code are omitted, as they are when indexing. `--raw` and
+`--sections` do not include `links`. Human terminal output is unchanged.
+
 Section references (`file#slug`) limit output to that section's subtree: the section itself plus any nested child sections. Use `--sections` first to discover a file's section IDs.
 
 ### `rvn open`

@@ -391,3 +391,17 @@ func TestIntegration_JSONSuccessReturnsZeroExit(t *testing.T) {
 		t.Fatalf("expected success envelope: %s", output)
 	}
 }
+
+func TestIntegration_ServeCommandRemoved(t *testing.T) {
+	t.Parallel()
+	binary := testutil.BuildCLI(t)
+	cmd := exec.Command(binary, "--json", "serve")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected rvn serve to fail, got success:\n%s", output)
+	}
+	raw := string(output)
+	if !strings.Contains(raw, "unknown command") && !strings.Contains(raw, "COMMAND_NOT_FOUND") && !strings.Contains(raw, "unknown command \"serve\"") {
+		t.Fatalf("expected unknown command for rvn serve, got:\n%s", raw)
+	}
+}
