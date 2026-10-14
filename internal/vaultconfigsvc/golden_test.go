@@ -1,6 +1,7 @@
 package vaultconfigsvc
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -344,7 +345,13 @@ func assertConfigYAMLGolden(t *testing.T, vaultPath, name string, wantMissing bo
 	if err != nil {
 		t.Fatalf("read golden %s: %v", goldenPath, err)
 	}
+	got = normalizeYAMLNewlines(got)
+	want = normalizeYAMLNewlines(want)
 	if string(got) != string(want) {
 		t.Fatalf("raven.yaml mismatch for %s\n got:\n%s\nwant:\n%s", name, got, want)
 	}
+}
+
+func normalizeYAMLNewlines(data []byte) []byte {
+	return bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 }
