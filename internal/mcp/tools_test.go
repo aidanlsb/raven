@@ -70,6 +70,9 @@ func TestBuildCommandContractStrictTypes(t *testing.T) {
 		if got := contract.Parameters["fields-json"].Type; got != paramTypeObject {
 			t.Fatalf("%s.fields-json type=%q, want %q", commandID, got, paramTypeObject)
 		}
+		if got := contract.Parameters["field"].Type; got != paramTypeObject {
+			t.Fatalf("%s.field type=%q, want object", commandID, got)
+		}
 		if _, exists := contract.Parameters["field-json"]; exists {
 			t.Fatalf("did not expect removed %s.field-json parameter", commandID)
 		}

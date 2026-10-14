@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bumped the Go toolchain from 1.26.8 to 1.26.9 and `golang.org/x/net` to v0.60.0, addressing GO-2026-6603 through GO-2026-6617 (mostly net/http HTTP/2).
 - If the automatic index refresh fails after a schema write, the command still succeeds and now returns `INDEX_UPDATE_FAILED` with a suggestion to run `rvn reindex`.
 
+### Fixed
+- `rvn set` again accepts positional `field=value` arguments (`rvn set project/perch name=Perch`), including after `--`. Registry arity from the command-spine parser allowed only the reference, so a second argument failed with `INVALID_INPUT`. Repeated `--field`, `--fields-json`, and `--stdin` bulk updates are unchanged.
+
 ## [v0.0.36] - 2026-09-20
 
 ### Added

@@ -217,7 +217,8 @@ func cobraArgsForMeta(meta commands.Meta) cobra.PositionalArgs {
 		}
 	}
 
-	if variadic {
+	// Trailing positional key=value pairs are unbounded, same as a variadic arg.
+	if _, hasPositionalKV := positionalKeyValueFlag(meta); variadic || hasPositionalKV {
 		return cobra.MinimumNArgs(minArgs)
 	}
 
@@ -327,6 +328,7 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 					argsMap[arg.Name] = append([]string{}, remaining...)
 				}
 			}
+			argIndex = len(args)
 			break
 		}
 		if argIndex < len(args) {
@@ -341,6 +343,16 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 				fmt.Sprintf("missing required argument: %s", arg.Name),
 				fmt.Sprintf("Usage: %s", meta.Use))
 		}
+	}
+
+	var positionalPairs map[string]interface{}
+	positionalFlag, hasPositionalKV := positionalKeyValueFlag(meta)
+	if hasPositionalKV && argIndex < len(args) {
+		parsed, err := parsePositionalKeyValueArgs(args[argIndex:])
+		if err != nil {
+			return nil, err
+		}
+		positionalPairs = parsed
 	}
 
 	// Check for conflicting stdin + reference in same command
@@ -381,7 +393,68 @@ func buildCanonicalArgsForMeta(meta commands.Meta, cmd *cobra.Command, args []st
 		argsMap["dry-run"] = value
 	}
 
+	if len(positionalPairs) > 0 {
+		if err := mergePositionalKeyValues(positionalFlag, positionalPairs, argsMap); err != nil {
+			return nil, err
+		}
+	}
+
 	return argsMap, nil
+}
+
+func positionalKeyValueFlag(meta commands.Meta) (commands.FlagMeta, bool) {
+	for _, flag := range meta.Flags {
+		if flag.PositionalKeyValue && flag.Type == commands.FlagTypeKeyValue {
+			return flag, true
+		}
+	}
+	return commands.FlagMeta{}, false
+}
+
+func parsePositionalKeyValueArgs(values []string) (map[string]interface{}, error) {
+	out := make(map[string]interface{}, len(values))
+	for _, value := range values {
+		key, item, ok := strings.Cut(value, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			return nil, handleErrorMsg("INVALID_INPUT",
+				fmt.Sprintf("invalid field format: %s", value),
+				"Use format: field=value")
+		}
+		if _, exists := out[key]; exists {
+			return nil, handleErrorMsg("INVALID_INPUT",
+				fmt.Sprintf("field %q specified more than once", key),
+				"Pass each field once")
+		}
+		out[key] = item
+	}
+	return out, nil
+}
+
+func mergePositionalKeyValues(flag commands.FlagMeta, positional map[string]interface{}, argsMap map[string]interface{}) error {
+	argsKey := flag.Name
+	if flag.ArgsKey != "" {
+		argsKey = flag.ArgsKey
+	}
+	existing, ok := argsMap[argsKey]
+	if !ok {
+		argsMap[argsKey] = positional
+		return nil
+	}
+	current, ok := existing.(map[string]interface{})
+	if !ok {
+		return handleErrorMsg("INVALID_INPUT",
+			fmt.Sprintf("cannot combine positional field=value arguments with --%s", flag.Name),
+			"Pass field values as field=value arguments or with the flag, not both forms for the same payload")
+	}
+	for key, value := range positional {
+		if _, exists := current[key]; exists {
+			return handleErrorMsg("INVALID_INPUT",
+				fmt.Sprintf("field %q specified both positionally and with --%s", key, flag.Name),
+				"Pass each field once")
+		}
+		current[key] = value
+	}
+	return nil
 }
 
 type flagParser func(cmd *cobra.Command, flagName, argsKey string, argsMap map[string]interface{}) error
