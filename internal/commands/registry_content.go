@@ -579,7 +579,7 @@ changes, required-field failures, and reference updates by default. Use
 	},
 	"set": {
 		Name:        "set",
-		Use:         "set <reference>",
+		Use:         "set [reference] [field=value...]",
 		Description: "Set frontmatter fields on an object",
 		LongDesc: `Set one or more frontmatter fields on an existing object.
 
@@ -590,16 +590,18 @@ known type. Unknown fields are rejected.
 
 Use this to update existing objects' metadata without manually editing files.
 
-Use --field for shell-friendly literal values (can be repeated). Use --fields-json
-when exact type control matters, such as preserving the string "true" instead of a
-boolean or providing arrays/nulls explicitly.
+Use positional field=value arguments or repeated --field flags for shell-friendly
+literal values. Use --fields-json when exact type control matters, such as
+preserving the string "true" instead of a boolean or providing arrays/nulls
+explicitly.
 
 Single-object set applies immediately. Pass --dry-run to preview the resulting
 field changes (including previous values) without writing.
 
 Bulk operations:
 Use --stdin to read references from stdin (one per line). Bulk updates accept
-both --field flags and --fields-json typed values.
+positional field=value arguments, repeated --field flags, and --fields-json
+typed values.
 
 Permissive writes: if a ref field is set to a target that does not exist yet, the
 update still succeeds. The response adds data.missing_refs, data.missing_ref_items,
@@ -608,7 +610,7 @@ and a REF_TARGET_MISSING warning per missing target.`,
 			{Name: "reference", Description: "Object reference to update (e.g., people/freya)", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
+			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, PositionalKeyValue: true, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
 			{Name: "fields", Description: "Legacy MCP parameter (use field instead)", Type: FlagTypeKeyValue, ArgsKey: "field"},
 			{Name: "fields-json", Description: "Fields to update as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "stdin", Description: "Read references from stdin for bulk operations", Type: FlagTypeBool},
@@ -617,7 +619,7 @@ and a REF_TARGET_MISSING warning per missing target.`,
 		},
 		BulkStdinArgName: "references",
 		Examples: []string{
-			"rvn set people/freya --field email=freya@asgard.realm --json",
+			"rvn set people/freya email=freya@asgard.realm --json",
 			`rvn set people/freya --fields-json '{"email":"true"}' --json`,
 			"rvn set people/freya --field name=\"Freya\" --field status=active --json",
 			"rvn set projects/website --field priority=high --dry-run --json",

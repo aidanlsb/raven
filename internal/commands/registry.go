@@ -48,6 +48,10 @@ type FlagMeta struct {
 	Required    bool     // Whether callers must provide the flag
 	Examples    []string // Example values
 	ArgsKey     string   // Override the args map key (defaults to Name if empty)
+	// PositionalKeyValue accepts trailing positional key=value arguments and
+	// merges them into this flag. It is CLI-only: MCP still passes the flag as
+	// an object. Ignored unless Type is FlagTypeKeyValue.
+	PositionalKeyValue bool `json:"-"`
 }
 
 // FlagType represents the type of a flag.
