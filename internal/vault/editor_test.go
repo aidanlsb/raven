@@ -83,6 +83,49 @@ func TestEditorOpenArgsAtLine(t *testing.T) {
 	}
 }
 
+func TestResolvedEditor(t *testing.T) {
+	t.Run("config editor and gui mode", func(t *testing.T) {
+		t.Setenv("EDITOR", "nano")
+		cfg := &config.Config{Editor: " code --wait ", EditorMode: "gui"}
+		editor, mode := ResolvedEditor(cfg)
+		if editor != "code --wait" || mode != "gui" {
+			t.Fatalf("ResolvedEditor() = %q, %q; want code --wait, gui", editor, mode)
+		}
+	})
+
+	t.Run("falls back to EDITOR env", func(t *testing.T) {
+		t.Setenv("EDITOR", "nano")
+		editor, mode := ResolvedEditor(&config.Config{})
+		if editor != "nano" || mode != "auto" {
+			t.Fatalf("ResolvedEditor() = %q, %q; want nano, auto", editor, mode)
+		}
+	})
+
+	t.Run("nil config still uses EDITOR env", func(t *testing.T) {
+		t.Setenv("EDITOR", "hx")
+		editor, mode := ResolvedEditor(nil)
+		if editor != "hx" || mode != "auto" {
+			t.Fatalf("ResolvedEditor(nil) = %q, %q; want hx, auto", editor, mode)
+		}
+	})
+
+	t.Run("canonicalizes mode aliases", func(t *testing.T) {
+		t.Setenv("EDITOR", "")
+		editor, mode := ResolvedEditor(&config.Config{EditorMode: "tui"})
+		if editor != "" || mode != "terminal" {
+			t.Fatalf("ResolvedEditor(tui) = %q, %q; want \"\", terminal", editor, mode)
+		}
+		_, mode = ResolvedEditor(&config.Config{EditorMode: "background"})
+		if mode != "gui" {
+			t.Fatalf("ResolvedEditor(background) mode = %q, want gui", mode)
+		}
+		_, mode = ResolvedEditor(&config.Config{EditorMode: "whatever"})
+		if mode != "auto" {
+			t.Fatalf("ResolvedEditor(whatever) mode = %q, want auto", mode)
+		}
+	})
+}
+
 func TestParseEditorMode(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

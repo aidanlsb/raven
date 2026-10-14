@@ -144,6 +144,24 @@ func OpenInEditorOrPrintPath(cfg *config.Config, filePath string) {
 	}
 }
 
+// ResolvedEditor returns the editor command and launch mode OpenInEditor uses.
+// Editor is config.toml `editor`, then $EDITOR, then empty. Mode is the
+// canonical editor_mode OpenInEditor applies: auto, terminal, or gui.
+func ResolvedEditor(cfg *config.Config) (editor, mode string) {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+	editor = strings.TrimSpace(cfg.GetEditor())
+	switch parseEditorMode(cfg) {
+	case editorModeTerminal:
+		return editor, "terminal"
+	case editorModeGUI:
+		return editor, "gui"
+	default:
+		return editor, "auto"
+	}
+}
+
 type editorMode int
 
 const (

@@ -14,6 +14,7 @@ import (
 func (s *Server) mux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", s.handleHealth)
+	mux.HandleFunc("/v1/session", s.handleSession)
 	mux.HandleFunc("/v1/schema", s.handleSchema)
 	mux.HandleFunc("/v1/commands", s.handleCommands)
 	mux.HandleFunc("/v1/invoke", s.handleInvoke)

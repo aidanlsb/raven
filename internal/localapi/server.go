@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,8 +18,9 @@ import (
 )
 
 const (
-	// Version is the HTTP API contract version advertised on /v1/commands
-	// and in the startup envelope. It matches the /v1/ URL prefix.
+	// Version is the HTTP API contract version advertised on /v1/commands,
+	// /v1/health, /v1/session, and in the startup envelope. It matches the
+	// /v1/ URL prefix.
 	Version = "1"
 
 	defaultPort     = 7438
@@ -128,7 +130,7 @@ func New(opts Options) (*Server, error) {
 	}
 
 	s := &Server{
-		vaultPath:    strings.TrimSpace(opts.VaultPath),
+		vaultPath:    absoluteVaultPath(opts.VaultPath),
 		configPath:   strings.TrimSpace(opts.ConfigPath),
 		token:        token,
 		port:         opts.Port,
@@ -206,6 +208,18 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func absoluteVaultPath(vaultPath string) string {
+	vaultPath = strings.TrimSpace(vaultPath)
+	if vaultPath == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(vaultPath)
+	if err != nil {
+		return vaultPath
+	}
+	return abs
 }
 
 func generateToken() (string, error) {

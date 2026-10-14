@@ -90,6 +90,45 @@ func TestIntegration_APIServerAgainstTempVault(t *testing.T) {
 		t.Fatalf("health status = %d body=%s", healthResp.StatusCode, body)
 	}
 
+	sessionReq, err := http.NewRequest(http.MethodGet, envelope.Data.URL+"/v1/session", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth(sessionReq)
+	sessionResp, err := client.Do(sessionReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sessionResp.Body.Close()
+	if sessionResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(sessionResp.Body)
+		t.Fatalf("session status = %d body=%s", sessionResp.StatusCode, body)
+	}
+	var sessionEnvelope struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			APIVersion string `json:"api_version"`
+			VaultPath  string `json:"vault_path"`
+			Editor     string `json:"editor"`
+			EditorMode string `json:"editor_mode"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(sessionResp.Body).Decode(&sessionEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	if !sessionEnvelope.OK {
+		t.Fatalf("session envelope = %#v", sessionEnvelope)
+	}
+	if sessionEnvelope.Data.APIVersion != "1" {
+		t.Fatalf("session api_version = %q, want 1", sessionEnvelope.Data.APIVersion)
+	}
+	if sessionEnvelope.Data.VaultPath != vault.Path {
+		t.Fatalf("session vault_path = %q, want %q", sessionEnvelope.Data.VaultPath, vault.Path)
+	}
+	if sessionEnvelope.Data.EditorMode == "" {
+		t.Fatal("session editor_mode is empty")
+	}
+
 	schemaReq, err := http.NewRequest(http.MethodGet, envelope.Data.URL+"/v1/schema", nil)
 	if err != nil {
 		t.Fatal(err)
