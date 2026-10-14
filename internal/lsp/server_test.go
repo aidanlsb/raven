@@ -976,10 +976,6 @@ func TestCompletionRefreshesAfterExternalIncrementalReindex(t *testing.T) {
 		t.Fatalf("external incremental reindex: %v", err)
 	}
 
-	client.notifyServer("textDocument/didSave", DidSaveTextDocumentParams{
-		TextDocument: TextDocumentIdentifier{URI: uri},
-	})
-
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		raw := client.request("textDocument/completion", TextDocumentPositionParams{

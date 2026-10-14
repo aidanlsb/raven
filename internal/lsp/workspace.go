@@ -99,6 +99,15 @@ func (ws *workspace) vaultPath() string {
 	return ws.rt.VaultPath
 }
 
+// resolverGeneration is the cheap staleness signal ensureCachesFresh used:
+// it changes when another index handle commits resolver-relevant writes.
+func (ws *workspace) resolverGeneration() (int64, error) {
+	if ws == nil || ws.rt == nil || ws.rt.DB == nil {
+		return 0, fmt.Errorf("workspace database is not open")
+	}
+	return ws.rt.DB.ResolverGeneration()
+}
+
 func (ws *workspace) loaded() *workspaceCaches {
 	if c := ws.cache.Load(); c != nil {
 		return c

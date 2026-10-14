@@ -2,10 +2,15 @@ package lsp
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/aidanlsb/raven/internal/reindexsvc"
+	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
 func TestSaveRefreshDoesNotBlockInFlightRequests(t *testing.T) {
@@ -134,6 +139,83 @@ func TestSaveRefreshCoalesces(t *testing.T) {
 	if got := server.refreshCount.Load(); got != 2 {
 		t.Fatalf("refresh count = %d, want 2 (one in-flight + one coalesced)", got)
 	}
+}
+
+func TestRequestTriggersRefreshAfterExternalReindex(t *testing.T) {
+	vaultPath := newTestVault(t)
+	client, server := startConfiguredTestServer(t, vaultPath, Options{
+		DiagnosticsDebounce: -1,
+	}, nil)
+	client.initialize(vaultPath)
+
+	content := "Link: [[\n"
+	uri := client.openDocument(filepath.Join(vaultPath, "scratch.md"), content)
+	client.diagnosticsFor(uri)
+
+	odinPath := filepath.Join(vaultPath, "people", "odin.md")
+	odinContent := "---\ntype: person\nname: Odin\n---\n\n# Odin\n"
+	if err := os.WriteFile(odinPath, []byte(odinContent), 0o644); err != nil {
+		t.Fatalf("write external file: %v", err)
+	}
+	rt := testutil.NewVaultRuntime(t, vaultPath, vaultruntime.Options{})
+	if _, err := reindexsvc.Run(rt, reindexsvc.RunRequest{}); err != nil {
+		t.Fatalf("external incremental reindex: %v", err)
+	}
+
+	complete := func() CompletionList {
+		t.Helper()
+		raw := client.request("textDocument/completion", TextDocumentPositionParams{
+			TextDocument: TextDocumentIdentifier{URI: uri},
+			Position:     Position{Line: 0, Character: len("Link: [[")},
+		})
+		var list CompletionList
+		if err := json.Unmarshal(raw, &list); err != nil {
+			t.Fatalf("invalid completion result: %v", err)
+		}
+		return list
+	}
+
+	first := complete()
+	if completionHasLabel(first, "people/odin") {
+		t.Fatal("first request after external reindex returned rebuilt cache instead of the current pointer")
+	}
+
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 20 {
+				ws, _, ok := server.snapshot(uri)
+				if !ok {
+					t.Error("snapshot missed open document during external refresh")
+					return
+				}
+				_ = ws.catalog.Objects
+			}
+		}()
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if completionHasLabel(complete(), "people/odin") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("later request did not see people/odin after snapshot-triggered refresh")
+		}
+	}
+	wg.Wait()
+	waitRefreshIdle(t, server, 5*time.Second)
+}
+
+func completionHasLabel(list CompletionList, label string) bool {
+	for _, item := range list.Items {
+		if item.Label == label {
+			return true
+		}
+	}
+	return false
 }
 
 func waitBegin(t *testing.T, begin <-chan struct{}) {

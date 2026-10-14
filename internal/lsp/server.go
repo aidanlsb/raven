@@ -15,7 +15,10 @@ import (
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
-const defaultDiagnosticsDebounce = 200 * time.Millisecond
+const (
+	defaultDiagnosticsDebounce = 200 * time.Millisecond
+	staleCheckInterval         = time.Second
+)
 
 // Options configures an LSP server.
 type Options struct {
@@ -69,6 +72,8 @@ type Server struct {
 	refreshClosed   bool
 	refreshDone     chan struct{}
 	refreshShutdown chan struct{}
+	staleCheckWG    sync.WaitGroup
+	lastStaleCheck  atomic.Int64
 
 	// Test-only hooks. refreshBegin is signaled when a background refresh
 	// starts; refreshAllow, if set, must receive before the refresh runs.
@@ -400,8 +405,8 @@ func (s *Server) scheduleDiagnostics(uri string) {
 }
 
 // snapshot returns a pinned cache view and one open document. It only reads
-// the current cache pointer; reindex and cache rebuilds happen on the
-// background save refresher.
+// the current cache pointer. A throttled generation check may schedule the
+// coalesced background refresher, but the request never waits for a rebuild.
 func (s *Server) snapshot(uri string) (*workspace, document, bool) {
 	s.mu.Lock()
 	ws := s.ws
@@ -410,7 +415,50 @@ func (s *Server) snapshot(uri string) (*workspace, document, bool) {
 	if ws == nil || !ok {
 		return nil, document{}, false
 	}
-	return ws.view(), *doc, true
+	view := ws.view()
+	docCopy := *doc
+	s.maybeScheduleStaleRefresh(ws)
+	return view, docCopy, true
+}
+
+// maybeScheduleStaleRefresh compares the cached resolver generation to the
+// on-disk index at most once every staleCheckInterval. A mismatch schedules
+// the same coalesced refresher as didSave. The check runs off the session
+// lock and off the request path.
+func (s *Server) maybeScheduleStaleRefresh(ws *workspace) {
+	now := time.Now().UnixNano()
+	last := s.lastStaleCheck.Load()
+	if last != 0 && now-last < int64(staleCheckInterval) {
+		return
+	}
+	if !s.lastStaleCheck.CompareAndSwap(last, now) {
+		return
+	}
+
+	s.refreshMu.Lock()
+	if s.refreshClosed || s.refreshing || s.refreshPending {
+		s.refreshMu.Unlock()
+		return
+	}
+	s.staleCheckWG.Add(1)
+	s.refreshMu.Unlock()
+
+	go func() {
+		defer s.staleCheckWG.Done()
+		s.checkIndexGeneration(ws)
+	}()
+}
+
+func (s *Server) checkIndexGeneration(ws *workspace) {
+	generation, err := ws.resolverGeneration()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "rvn lsp: index generation check failed: %v\n", err)
+		return
+	}
+	if c := ws.cache.Load(); c != nil && c.catalog.Generation == generation {
+		return
+	}
+	s.scheduleRefresh()
 }
 
 // scheduleRefresh coalesces didSave notifications onto a single background
@@ -510,6 +558,7 @@ func (s *Server) stopRefresher() {
 	if running && done != nil {
 		<-done
 	}
+	s.staleCheckWG.Wait()
 }
 
 func (s *Server) refreshIdle() bool {
