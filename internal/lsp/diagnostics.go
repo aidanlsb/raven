@@ -28,25 +28,33 @@ var traitIssueTypes = map[check.IssueType]struct{}{
 }
 
 // publishDiagnostics computes and publishes diagnostics for one open document.
-// The computation runs under the state lock because debounce timers invoke it
-// off the main dispatch loop.
+// Cache reads and validation run off the session lock so debounce timers do
+// not stall request handling.
 func (s *Server) publishDiagnostics(uri string) {
 	s.mu.Lock()
 	ws := s.ws
 	doc, open := s.docs[uri]
+	encoding := s.encoding
 	if ws == nil || !open {
 		s.mu.Unlock()
 		return
 	}
+	docCopy := *doc
+	s.mu.Unlock()
+
+	view := ws.view()
 	absPath := uriToPath(uri)
-	if absPath == "" || ws.relativePath(absPath) == "" {
-		s.mu.Unlock()
+	if absPath == "" || view.relativePath(absPath) == "" {
 		return
 	}
-	s.ensureWorkspaceCachesFreshLocked(ws)
-	validator := ws.newValidator()
-	diagnostics := computeDiagnostics(ws, validator, doc.content, absPath, s.encoding)
+	diagnostics := computeDiagnostics(view, view.newValidator(), docCopy.content, absPath, encoding)
+
+	s.mu.Lock()
+	_, stillOpen := s.docs[uri]
 	s.mu.Unlock()
+	if !stillOpen {
+		return
+	}
 
 	s.notify("textDocument/publishDiagnostics", PublishDiagnosticsParams{
 		URI:         uri,

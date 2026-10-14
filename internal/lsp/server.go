@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
@@ -51,14 +51,30 @@ type Server struct {
 	out     io.Writer
 	writeMu sync.Mutex
 
-	// mu guards all state below. Request dispatch is sequential, but
-	// debounced diagnostics run on timer goroutines.
+	// mu guards session state: the workspace pointer, open documents,
+	// encoding, initialization, and diagnostic timers. Derived index caches
+	// live on workspace.cache and are swapped without holding mu.
+	// Request dispatch is sequential, but debounced diagnostics and the
+	// coalesced save refresher run on other goroutines.
 	mu          sync.Mutex
 	ws          *workspace
 	docs        map[string]*document
 	encoding    string
 	initialized bool
 	diagTimers  map[string]*time.Timer
+
+	refreshMu       sync.Mutex
+	refreshPending  bool
+	refreshing      bool
+	refreshClosed   bool
+	refreshDone     chan struct{}
+	refreshShutdown chan struct{}
+
+	// Test-only hooks. refreshBegin is signaled when a background refresh
+	// starts; refreshAllow, if set, must receive before the refresh runs.
+	refreshBegin chan struct{}
+	refreshAllow chan struct{}
+	refreshCount atomic.Int64
 }
 
 // NewServer creates an LSP server.
@@ -74,12 +90,13 @@ func NewServer(opts Options) *Server {
 	}
 
 	return &Server{
-		opts:       opts,
-		in:         bufio.NewReader(opts.In),
-		out:        opts.Out,
-		encoding:   encodingUTF16,
-		docs:       make(map[string]*document),
-		diagTimers: make(map[string]*time.Timer),
+		opts:            opts,
+		in:              bufio.NewReader(opts.In),
+		out:             opts.Out,
+		encoding:        encodingUTF16,
+		docs:            make(map[string]*document),
+		diagTimers:      make(map[string]*time.Timer),
+		refreshShutdown: make(chan struct{}),
 	}
 }
 
@@ -87,12 +104,16 @@ func NewServer(opts Options) *Server {
 func (s *Server) Run() error {
 	defer func() {
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		for _, timer := range s.diagTimers {
 			timer.Stop()
 		}
-		s.ws.close()
+		ws := s.ws
 		s.ws = nil
+		s.mu.Unlock()
+		s.stopRefresher()
+		if ws != nil {
+			ws.close()
+		}
 	}()
 
 	for {
@@ -332,26 +353,11 @@ func (s *Server) handleDidSave(raw json.RawMessage) {
 			doc.content = *params.Text
 		}
 	}
-	ws := s.ws
+	ready := s.ws != nil
 	s.mu.Unlock()
 
-	if ws != nil {
-		s.mu.Lock()
-		err := ws.refresh()
-		openURIs := make([]string, 0, len(s.docs))
-		for uri := range s.docs {
-			openURIs = append(openURIs, uri)
-		}
-		s.mu.Unlock()
-		if err != nil {
-			// Index writes can contend with a concurrent CLI reindex; diagnostics
-			// keep working against the previous caches.
-			fmt.Fprintf(os.Stderr, "rvn lsp: refresh after save failed: %v\n", err)
-		}
-
-		for _, uri := range openURIs {
-			s.publishDiagnostics(uri)
-		}
+	if ready {
+		s.scheduleRefresh()
 	}
 }
 
@@ -393,28 +399,121 @@ func (s *Server) scheduleDiagnostics(uri string) {
 	})
 }
 
-// snapshot returns immutable views of the workspace caches and one open
-// document. Copying the workspace keeps request handlers race-free if a
-// diagnostics timer refreshes the live caches concurrently.
+// snapshot returns a pinned cache view and one open document. It only reads
+// the current cache pointer; reindex and cache rebuilds happen on the
+// background save refresher.
 func (s *Server) snapshot(uri string) (*workspace, document, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.ws == nil {
-		return nil, document{}, false
-	}
+	ws := s.ws
 	doc, ok := s.docs[uri]
-	if !ok {
+	s.mu.Unlock()
+	if ws == nil || !ok {
 		return nil, document{}, false
 	}
-	s.ensureWorkspaceCachesFreshLocked(s.ws)
-	wsSnapshot := *s.ws
-	return &wsSnapshot, *doc, true
+	return ws.view(), *doc, true
 }
 
-// ensureWorkspaceCachesFreshLocked refreshes LSP caches after commits made by
-// another index handle. The caller must hold s.mu.
-func (s *Server) ensureWorkspaceCachesFreshLocked(ws *workspace) {
-	if err := ws.ensureCachesFresh(); err != nil && !errors.Is(err, readsvc.ErrCatalogChanging) {
-		fmt.Fprintf(os.Stderr, "rvn lsp: external index refresh failed: %v\n", err)
+// scheduleRefresh coalesces didSave notifications onto a single background
+// worker. Overlapping saves set a pending flag so one follow-up refresh runs
+// after the in-flight one.
+func (s *Server) scheduleRefresh() {
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	if s.refreshClosed {
+		return
 	}
+	s.refreshPending = true
+	if s.refreshing {
+		return
+	}
+	s.refreshing = true
+	s.refreshDone = make(chan struct{})
+	go s.refreshLoop(s.refreshDone)
+}
+
+func (s *Server) refreshLoop(done chan struct{}) {
+	defer close(done)
+	for {
+		s.refreshMu.Lock()
+		if s.refreshClosed || !s.refreshPending {
+			s.refreshing = false
+			s.refreshMu.Unlock()
+			return
+		}
+		s.refreshPending = false
+		s.refreshMu.Unlock()
+		s.runRefresh()
+	}
+}
+
+func (s *Server) runRefresh() {
+	if !s.waitRefreshGate() {
+		return
+	}
+
+	s.mu.Lock()
+	ws := s.ws
+	s.mu.Unlock()
+	if ws == nil {
+		return
+	}
+
+	s.refreshCount.Add(1)
+	err := ws.refresh()
+	if err != nil {
+		// Index writes can contend with a concurrent CLI reindex; diagnostics
+		// keep working against the previous caches.
+		fmt.Fprintf(os.Stderr, "rvn lsp: refresh after save failed: %v\n", err)
+	}
+
+	s.mu.Lock()
+	openURIs := make([]string, 0, len(s.docs))
+	for uri := range s.docs {
+		openURIs = append(openURIs, uri)
+	}
+	s.mu.Unlock()
+	for _, uri := range openURIs {
+		s.publishDiagnostics(uri)
+	}
+}
+
+func (s *Server) waitRefreshGate() bool {
+	if s.refreshBegin != nil {
+		select {
+		case s.refreshBegin <- struct{}{}:
+		case <-s.refreshShutdown:
+			return false
+		}
+	}
+	if s.refreshAllow != nil {
+		select {
+		case <-s.refreshAllow:
+		case <-s.refreshShutdown:
+			return false
+		}
+	}
+	s.refreshMu.Lock()
+	closed := s.refreshClosed
+	s.refreshMu.Unlock()
+	return !closed
+}
+
+func (s *Server) stopRefresher() {
+	s.refreshMu.Lock()
+	if !s.refreshClosed {
+		s.refreshClosed = true
+		close(s.refreshShutdown)
+	}
+	done := s.refreshDone
+	running := s.refreshing
+	s.refreshMu.Unlock()
+	if running && done != nil {
+		<-done
+	}
+}
+
+func (s *Server) refreshIdle() bool {
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	return !s.refreshing && !s.refreshPending
 }
