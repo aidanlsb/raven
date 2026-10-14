@@ -372,10 +372,8 @@ func assertEnvelopeParity(t *testing.T, cli, api commandexec.Result) {
 			t.Fatalf("error.code cli=%s api=%s", cli.Error.Code, api.Error.Code)
 		}
 	}
-	cliData, _ := json.Marshal(cli.Data)
-	apiData, _ := json.Marshal(api.Data)
-	if string(cliData) != string(apiData) {
-		t.Fatalf("data mismatch\ncli=%s\napi=%s", cliData, apiData)
+	if canonicalJSON(cli.Data) != canonicalJSON(api.Data) {
+		t.Fatalf("data mismatch\ncli=%s\napi=%s", canonicalJSON(cli.Data), canonicalJSON(api.Data))
 	}
 	if mutationPhase(cli) != mutationPhase(api) {
 		t.Fatalf("mutation phase cli=%q api=%q", mutationPhase(cli), mutationPhase(api))
@@ -392,6 +390,22 @@ func mutationPhase(result commandexec.Result) string {
 func mustJSON(v interface{}) string {
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+func canonicalJSON(v interface{}) string {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	var generic interface{}
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return string(raw)
+	}
+	out, err := json.Marshal(generic)
+	if err != nil {
+		return string(raw)
+	}
+	return string(out)
 }
 
 func TestInvalidInvokeJSON(t *testing.T) {

@@ -250,7 +250,7 @@ func TestInstallUpdate(t *testing.T) {
 	servers := data["mcpServers"].(map[string]interface{})
 	raven := servers["raven"].(map[string]interface{})
 	args := raven["args"].([]interface{})
-	if len(args) != 3 || args[1] != "--vault" {
+	if len(args) != 4 || args[2] != "--vault" {
 		t.Fatalf("unexpected args after update: %v", args)
 	}
 }
@@ -401,7 +401,7 @@ func TestStatusInstalled(t *testing.T) {
 	if cs.Entry.Command != ResolveCommand() {
 		t.Fatalf("unexpected command: %s", cs.Entry.Command)
 	}
-	if len(cs.Entry.Args) != 3 || cs.Entry.Args[1] != "--vault" || cs.Entry.Args[2] != "work" {
+	if len(cs.Entry.Args) != 4 || cs.Entry.Args[2] != "--vault" || cs.Entry.Args[3] != "work" {
 		t.Fatalf("unexpected args: %v", cs.Entry.Args)
 	}
 }

@@ -118,7 +118,7 @@ func TestMcpShowBuildsCorrectSnippet(t *testing.T) {
 	}
 
 	entryWithVault := mcpclient.BuildServerEntry("", "personal", "")
-	if len(entryWithVault.Args) != 3 {
-		t.Fatalf("expected 3 args, got %d", len(entryWithVault.Args))
+	if len(entryWithVault.Args) != 4 {
+		t.Fatalf("expected 4 args, got %d", len(entryWithVault.Args))
 	}
 }
