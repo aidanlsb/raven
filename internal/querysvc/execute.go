@@ -134,6 +134,10 @@ func Run(rt *vaultruntime.Runtime, req ExecuteRequest) (*RunResult, error) {
 			return nil, svcerr.Wrap(codes.ErrDatabaseVersion, "index schema is stale or a rebuild was interrupted", err).
 				WithSuggestion("Run 'rvn reindex --full' to rebuild the index")
 		}
+		if errors.Is(err, index.ErrIndexLocked) {
+			return nil, svcerr.Wrap(codes.ErrIndexLocked, "index is locked for rebuild", err).
+				WithSuggestion("Wait for the other process to finish and retry")
+		}
 		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to open database", err).
 			WithSuggestion("Run 'rvn reindex' to rebuild the database")
 	}

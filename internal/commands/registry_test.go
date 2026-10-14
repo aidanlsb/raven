@@ -125,7 +125,7 @@ func TestRequiresVaultMetadata(t *testing.T) {
 
 	noVaultCommands := []string{
 		"init",
-		"serve",
+		"mcp_serve",
 		"version",
 		"config",
 		"config_show",
@@ -157,7 +157,7 @@ func TestRequiresVaultMetadata(t *testing.T) {
 		}
 	}
 
-	vaultCommands := []string{"query", "read", "vault_path", "vault_stats"}
+	vaultCommands := []string{"query", "read", "vault_path", "vault_stats", "api"}
 	for _, commandID := range vaultCommands {
 		if !RequiresVault(commandID) {
 			t.Fatalf("expected %q to require a resolved vault", commandID)

@@ -69,7 +69,7 @@ func TestMCPIntegration_ToolsList(t *testing.T) {
 	}
 }
 
-// TestMCPIntegration_ServeRejectsLegacyToolNames ensures the live `rvn serve`
+// TestMCPIntegration_ServeRejectsLegacyToolNames ensures the live `rvn mcp serve`
 // JSON-RPC path only accepts compact tools and rejects legacy names.
 func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
 	t.Parallel()
@@ -84,7 +84,7 @@ func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"raven_new","arguments":{"type":"page","title":"Legacy Path"}}}`,
 	}, "\n") + "\n"
 
-	cmd := exec.Command(binary, "--vault-path", v.Path, "serve")
+	cmd := exec.Command(binary, "--vault-path", v.Path, "mcp", "serve")
 	cmd.Stdin = strings.NewReader(requests)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -92,7 +92,7 @@ func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("serve command failed: %v\nstderr: %s\nstdout: %s", err, stderr.String(), stdout.String())
+		t.Fatalf("mcp serve command failed: %v\nstderr: %s\nstdout: %s", err, stderr.String(), stdout.String())
 	}
 
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
@@ -212,14 +212,14 @@ func TestMCPIntegration_ServeTypedLaunchPins(t *testing.T) {
 
 func runServeInitialize(t *testing.T, binary string, extraArgs ...string) (stdout, stderr string) {
 	t.Helper()
-	args := append(append([]string{}, extraArgs...), "serve")
+	args := append(append([]string{}, extraArgs...), "mcp", "serve")
 	cmd := exec.Command(binary, args...)
 	cmd.Stdin = strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}` + "\n")
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("serve command failed: %v\nstderr: %s\nstdout: %s", err, stderrBuf.String(), stdoutBuf.String())
+		t.Fatalf("mcp serve command failed: %v\nstderr: %s\nstdout: %s", err, stderrBuf.String(), stdoutBuf.String())
 	}
 	return stdoutBuf.String(), stderrBuf.String()
 }

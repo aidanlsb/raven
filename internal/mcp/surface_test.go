@@ -226,7 +226,7 @@ func TestCompactInvokeRejectsNonInvokableCommand(t *testing.T) {
 	t.Parallel()
 	server := NewServer(ServerOptions{})
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
-		"command": "serve",
+		"command": "mcp_serve",
 	})
 	if !isErr {
 		t.Fatalf("expected invoke error, got: %s", out)

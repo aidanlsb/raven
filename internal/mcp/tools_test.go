@@ -123,8 +123,11 @@ func TestDiscoverableContractsApplyPolicy(t *testing.T) {
 	if _, ok := byID["docs_list"]; ok {
 		t.Fatal("did not expect removed docs_list command to be discoverable")
 	}
-	if _, ok := byID["serve"]; ok {
-		t.Fatal("did not expect serve to be discoverable")
+	if _, ok := byID["mcp_serve"]; ok {
+		t.Fatal("did not expect mcp_serve to be discoverable")
+	}
+	if _, ok := byID["api"]; ok {
+		t.Fatal("did not expect api to be discoverable")
 	}
 	if _, ok := byID["schema_template_default"]; ok {
 		t.Fatal("did not expect removed schema_template_default command to be discoverable")

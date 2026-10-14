@@ -57,35 +57,35 @@ func TestBuildServerEntry(t *testing.T) {
 		if e.Command == "" {
 			t.Fatal("expected non-empty command")
 		}
-		if len(e.Args) != 1 || e.Args[0] != "serve" {
-			t.Fatalf("expected args=[serve], got %v", e.Args)
+		if len(e.Args) != 2 || e.Args[0] != "mcp" || e.Args[1] != "serve" {
+			t.Fatalf("expected args=[mcp serve], got %v", e.Args)
 		}
 	})
 
 	t.Run("vault name", func(t *testing.T) {
 		e := BuildServerEntry("", "work", "")
-		if len(e.Args) != 3 || e.Args[1] != "--vault" || e.Args[2] != "work" {
-			t.Fatalf("expected [serve --vault work], got %v", e.Args)
+		if len(e.Args) != 4 || e.Args[2] != "--vault" || e.Args[3] != "work" {
+			t.Fatalf("expected [mcp serve --vault work], got %v", e.Args)
 		}
 	})
 
 	t.Run("vault path", func(t *testing.T) {
 		e := BuildServerEntry("", "", "/my/vault")
-		if len(e.Args) != 3 || e.Args[1] != "--vault-path" || e.Args[2] != "/my/vault" {
-			t.Fatalf("expected [serve --vault-path /my/vault], got %v", e.Args)
+		if len(e.Args) != 4 || e.Args[2] != "--vault-path" || e.Args[3] != "/my/vault" {
+			t.Fatalf("expected [mcp serve --vault-path /my/vault], got %v", e.Args)
 		}
 	})
 
 	t.Run("vault path takes precedence", func(t *testing.T) {
 		e := BuildServerEntry("", "work", "/my/vault")
-		if len(e.Args) != 3 || e.Args[1] != "--vault-path" {
+		if len(e.Args) != 4 || e.Args[2] != "--vault-path" {
 			t.Fatalf("expected vault-path to take precedence, got %v", e.Args)
 		}
 	})
 
 	t.Run("config", func(t *testing.T) {
 		e := BuildServerEntry("/tmp/config.toml", "", "")
-		want := []string{"serve", "--config", "/tmp/config.toml"}
+		want := []string{"mcp", "serve", "--config", "/tmp/config.toml"}
 		if len(e.Args) != len(want) {
 			t.Fatalf("expected %v, got %v", want, e.Args)
 		}
@@ -250,7 +250,7 @@ func TestInstallUpdate(t *testing.T) {
 	servers := data["mcpServers"].(map[string]interface{})
 	raven := servers["raven"].(map[string]interface{})
 	args := raven["args"].([]interface{})
-	if len(args) != 3 || args[1] != "--vault" {
+	if len(args) != 4 || args[2] != "--vault" {
 		t.Fatalf("unexpected args after update: %v", args)
 	}
 }
@@ -304,7 +304,7 @@ func TestRemovePreservesOtherServers(t *testing.T) {
 		"mcpServers": map[string]interface{}{
 			"raven": map[string]interface{}{
 				"command": "rvn",
-				"args":    []interface{}{"serve"},
+				"args":    []interface{}{"mcp", "serve"},
 			},
 			"other": map[string]interface{}{
 				"command": "other",
@@ -401,7 +401,7 @@ func TestStatusInstalled(t *testing.T) {
 	if cs.Entry.Command != ResolveCommand() {
 		t.Fatalf("unexpected command: %s", cs.Entry.Command)
 	}
-	if len(cs.Entry.Args) != 3 || cs.Entry.Args[1] != "--vault" || cs.Entry.Args[2] != "work" {
+	if len(cs.Entry.Args) != 4 || cs.Entry.Args[2] != "--vault" || cs.Entry.Args[3] != "work" {
 		t.Fatalf("unexpected args: %v", cs.Entry.Args)
 	}
 }
@@ -520,7 +520,7 @@ func TestInstallTOMLUpdate(t *testing.T) {
 	if !cs.Installed || cs.Entry == nil {
 		t.Fatal("expected installed raven entry")
 	}
-	if len(cs.Entry.Args) != 3 || cs.Entry.Args[1] != "--vault" || cs.Entry.Args[2] != "work" {
+	if len(cs.Entry.Args) != 4 || cs.Entry.Args[2] != "--vault" || cs.Entry.Args[3] != "work" {
 		t.Fatalf("unexpected args after TOML update: %v", cs.Entry.Args)
 	}
 }

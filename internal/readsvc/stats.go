@@ -1,7 +1,10 @@
 package readsvc
 
 import (
+	"errors"
+
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -18,6 +21,10 @@ func Stats(rt *vaultruntime.Runtime) (*StatsResult, error) {
 		return nil, svcerr.Wrap(codes.ErrInvalidInput, "vault path is required", err)
 	}
 	if err := rt.OpenDB(); err != nil {
+		if errors.Is(err, index.ErrIndexLocked) {
+			return nil, svcerr.Wrap(codes.ErrIndexLocked, "index is locked for rebuild", err).
+				WithSuggestion("Wait for the other process to finish and retry")
+		}
 		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to open database", err).
 			WithSuggestion("Run 'rvn reindex' to rebuild the database")
 	}
