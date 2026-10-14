@@ -34,6 +34,11 @@ a bearer token (generated per run, or set with --token / RAVEN_API_TOKEN).
 POST /v1/invoke runs through the same command layer as the CLI and MCP.
 The MVP allowlist is read-only vault commands plus set, unset, new, and move.
 
+GET /v1/health is liveness. GET /v1/session is the attach handshake: the
+absolute vault root plus the editor command and editor_mode that rvn open
+resolves (config.toml, then $EDITOR). Companion UIs should read session
+rather than reimplementing editor resolution or invoking vault_path.
+
 On startup Raven prints the listen URL and token. Pass --json for a single
 startup envelope line that a launcher (for example Tauri) can parse.
 
@@ -154,6 +159,6 @@ func printAPIStartup(info localapi.Startup) error {
 
 	fmt.Printf("%s %s\n", ui.Check("Listening"), ui.FilePath(info.URL))
 	fmt.Printf("%s Bearer %s\n", ui.Hint("Authorization:"), info.Token)
-	fmt.Printf("%s GET /v1/health /v1/schema /v1/commands; POST /v1/invoke\n", ui.Hint("Endpoints:"))
+	fmt.Printf("%s GET /v1/health /v1/session /v1/schema /v1/commands; POST /v1/invoke\n", ui.Hint("Endpoints:"))
 	return nil
 }

@@ -6,7 +6,19 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/configsvc"
+	"github.com/aidanlsb/raven/internal/vault"
 )
+
+// Session is the GET /v1/session payload: the bound vault and the editor
+// OpenInEditor would use for this process.
+type Session struct {
+	APIVersion string `json:"api_version"`
+	VaultPath  string `json:"vault_path"`
+	Editor     string `json:"editor"`
+	EditorMode string `json:"editor_mode"`
+}
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodGet) {
@@ -16,6 +28,33 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status":      "ok",
 		"api_version": Version,
 	}, nil))
+}
+
+func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	writeResult(w, http.StatusOK, commandexec.Success(s.session(), nil))
+}
+
+func (s *Server) session() Session {
+	editor, mode := vault.ResolvedEditor(s.loadSessionConfig())
+	return Session{
+		APIVersion: Version,
+		VaultPath:  s.vaultPath,
+		Editor:     editor,
+		EditorMode: mode,
+	}
+}
+
+func (s *Server) loadSessionConfig() *config.Config {
+	ctx, err := configsvc.ShowContext(configsvc.ContextOptions{
+		ConfigPathOverride: s.configPath,
+	})
+	if err != nil || ctx == nil || ctx.Cfg == nil {
+		return &config.Config{}
+	}
+	return ctx.Cfg
 }
 
 func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {

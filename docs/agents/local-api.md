@@ -52,8 +52,8 @@ are not listed do not receive `Access-Control-Allow-Origin`.
 ## Versioning
 
 The HTTP path prefix is `/v1/`. The same version string is advertised as
-`api_version` on `GET /v1/commands`, `GET /v1/health`, the startup envelope, and
-the `X-Raven-API-Version` response header.
+`api_version` on `GET /v1/commands`, `GET /v1/health`, `GET /v1/session`, the
+startup envelope, and the `X-Raven-API-Version` response header.
 
 Breaking changes to the HTTP contract increment this version (new prefix and
 startup field). Additive fields on command envelopes follow the existing CLI/MCP
@@ -67,7 +67,30 @@ still use HTTP 200; the envelope's `ok` field is the success signal.
 
 ### `GET /v1/health`
 
-Liveness. `data.status` is `"ok"`. Requires the bearer token.
+Liveness. `data.status` is `"ok"` and `data.api_version` is `"1"`. Requires the
+bearer token. Health does not identify the vault or the user's editor; use
+`GET /v1/session` for that.
+
+### `GET /v1/session`
+
+Bound session for attach-only clients (a UI that did not spawn `rvn api` and
+therefore never saw the startup envelope). Requires the bearer token.
+
+```json
+{"ok":true,"data":{"api_version":"1","vault_path":"/path/to/vault","editor":"code","editor_mode":"auto"}}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `vault_path` | Absolute vault root this process is pinned to |
+| `editor` | Command `rvn open` would launch: `config.toml` `editor`, else `$EDITOR`, else `""` |
+| `editor_mode` | Canonical launch mode `rvn open` applies: `auto`, `terminal`, or `gui` (empty config is `auto`; aliases such as `tui` become `terminal`) |
+| `api_version` | Same contract version as health and `/v1/commands` |
+
+This lives on `/v1/session` rather than `/v1/health` so health stays a cheap
+liveness probe. Session is the attach handshake: which vault, and how to open
+files the way Raven itself would, without reimplementing config/`$EDITOR`
+resolution or invoking `vault_path`.
 
 ### `GET /v1/schema`
 
@@ -80,7 +103,9 @@ canonical `schema` command.
 Machine-readable description of commands the API will accept, generated from
 the command registry: id, summary, description, `read_only`, `destructive`,
 `preview_mode`, `args_schema`, and `schema_hash`, plus `api_version`. Type the
-UI against this document rather than a hard-coded command list.
+UI against this document rather than a hard-coded command list. HTTP routes
+(`/v1/health`, `/v1/session`, `/v1/schema`, `/v1/commands`, `/v1/invoke`) are
+not commands; they are documented above.
 
 ### `POST /v1/invoke`
 
@@ -124,6 +149,7 @@ infer apply-vs-preview from ad-hoc data fields.
 ```bash
 TOKEN=...
 curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/health
+curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/session
 curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/schema
 curl -sS -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \

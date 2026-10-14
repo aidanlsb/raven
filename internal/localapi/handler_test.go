@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -68,6 +70,54 @@ func decodeResult(t *testing.T, rec *httptest.ResponseRecorder) commandexec.Resu
 	return result
 }
 
+func decodeDataMap(t *testing.T, result commandexec.Result) map[string]interface{} {
+	t.Helper()
+	raw, err := json.Marshal(result.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data map[string]interface{}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		t.Fatalf("decode data: %v", err)
+	}
+	return data
+}
+
+func isolatedConfigPath(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "config.toml")
+}
+
+func writeTestConfig(t *testing.T, content string) string {
+	t.Helper()
+	path := isolatedConfigPath(t)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func getSession(t *testing.T, server *Server) Session {
+	t.Helper()
+	rec := doJSON(t, server.Handler(), http.MethodGet, "http://127.0.0.1/v1/session", testToken, "127.0.0.1", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	result := decodeResult(t, rec)
+	if !result.OK {
+		t.Fatalf("session failed: %#v", result)
+	}
+	raw, err := json.Marshal(result.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var session Session
+	if err := json.Unmarshal(raw, &session); err != nil {
+		t.Fatalf("decode session: %v\nbody: %s", err, rec.Body.String())
+	}
+	return session
+}
+
 func TestHealthRequiresAuth(t *testing.T) {
 	t.Parallel()
 	server := newTestServer(t, Options{})
@@ -100,6 +150,121 @@ func TestHealthOK(t *testing.T) {
 	result := decodeResult(t, rec)
 	if !result.OK {
 		t.Fatalf("health failed: %#v", result)
+	}
+	data := decodeDataMap(t, result)
+	if data["status"] != "ok" {
+		t.Fatalf("status = %#v, want ok", data["status"])
+	}
+	if data["api_version"] != Version {
+		t.Fatalf("api_version = %#v, want %q", data["api_version"], Version)
+	}
+	if _, ok := data["editor"]; ok {
+		t.Fatal("health must not include editor; use GET /v1/session")
+	}
+	if _, ok := data["vault_path"]; ok {
+		t.Fatal("health must not include vault_path; use GET /v1/session")
+	}
+}
+
+func TestSessionRequiresAuth(t *testing.T) {
+	t.Parallel()
+	server := newTestServer(t, Options{ConfigPath: isolatedConfigPath(t)})
+	rec := doJSON(t, server.Handler(), http.MethodGet, "http://127.0.0.1/v1/session", "", "127.0.0.1", "", "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+	result := decodeResult(t, rec)
+	if result.OK || result.Error == nil || result.Error.Code != codes.ErrUnauthorized {
+		t.Fatalf("result = %#v, want UNAUTHORIZED", result)
+	}
+}
+
+func TestSessionRejectsWrongToken(t *testing.T) {
+	t.Parallel()
+	server := newTestServer(t, Options{ConfigPath: isolatedConfigPath(t)})
+	rec := doJSON(t, server.Handler(), http.MethodGet, "http://127.0.0.1/v1/session", "wrong-token", "127.0.0.1", "", "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestSessionExposesAbsoluteVaultPath(t *testing.T) {
+	t.Parallel()
+	vaultDir := t.TempDir()
+	server := newTestServer(t, Options{
+		VaultPath:  vaultDir,
+		ConfigPath: isolatedConfigPath(t),
+	})
+	session := getSession(t, server)
+	if session.VaultPath != vaultDir {
+		t.Fatalf("vault_path = %q, want %q", session.VaultPath, vaultDir)
+	}
+	if !filepath.IsAbs(session.VaultPath) {
+		t.Fatalf("vault_path %q is not absolute", session.VaultPath)
+	}
+}
+
+func TestSessionAbsolutizesRelativeVaultPath(t *testing.T) {
+	parent := t.TempDir()
+	if err := os.Mkdir(filepath.Join(parent, "notes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(parent)
+	server := newTestServer(t, Options{
+		VaultPath:  "notes",
+		ConfigPath: isolatedConfigPath(t),
+	})
+	session := getSession(t, server)
+	want, err := filepath.Abs("notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.VaultPath != want {
+		t.Fatalf("vault_path = %q, want %q", session.VaultPath, want)
+	}
+}
+
+func TestSessionResolvesEditorFromConfig(t *testing.T) {
+	t.Setenv("EDITOR", "nano")
+	configPath := writeTestConfig(t, "editor = \"code --wait\"\neditor_mode = \"gui\"\n")
+	server := newTestServer(t, Options{
+		VaultPath:  t.TempDir(),
+		ConfigPath: configPath,
+	})
+	session := getSession(t, server)
+	if session.Editor != "code --wait" {
+		t.Fatalf("editor = %q, want code --wait", session.Editor)
+	}
+	if session.EditorMode != "gui" {
+		t.Fatalf("editor_mode = %q, want gui", session.EditorMode)
+	}
+	if session.APIVersion != Version {
+		t.Fatalf("api_version = %q, want %q", session.APIVersion, Version)
+	}
+}
+
+func TestSessionFallsBackToEditorEnv(t *testing.T) {
+	t.Setenv("EDITOR", "hx")
+	server := newTestServer(t, Options{
+		VaultPath:  t.TempDir(),
+		ConfigPath: isolatedConfigPath(t),
+	})
+	session := getSession(t, server)
+	if session.Editor != "hx" {
+		t.Fatalf("editor = %q, want hx", session.Editor)
+	}
+	if session.EditorMode != "auto" {
+		t.Fatalf("editor_mode = %q, want auto", session.EditorMode)
+	}
+}
+
+func TestSessionCanonicalizesEditorModeAliases(t *testing.T) {
+	t.Setenv("EDITOR", "")
+	configPath := writeTestConfig(t, "editor_mode = \"tui\"\n")
+	server := newTestServer(t, Options{ConfigPath: configPath})
+	session := getSession(t, server)
+	if session.EditorMode != "terminal" {
+		t.Fatalf("editor_mode = %q, want terminal", session.EditorMode)
 	}
 }
 
