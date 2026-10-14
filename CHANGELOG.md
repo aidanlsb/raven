@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.37] - 2026-10-14
+
 ### Added
 - Enriched `rvn read --json` (and the same payload on `rvn api` `POST /v1/invoke`) includes `data.links`: each body `[[wikilink]]` with UTF-8 byte and UTF-16 code-unit offsets into `data.content`, the raw span, the target as written, and identity-first resolution (`resolved` / `unresolved` / `ambiguous`). Offsets match section slices. Human output, `--raw`, and `--sections` are unchanged.
 - `rvn api` serves a loopback-only HTTP API (`127.0.0.1`) for companion UIs such as Perch. Startup prints the URL and bearer token; `--json` emits one parseable envelope line. `POST /v1/invoke` runs through `commandexec.Invoker.Execute`. The MVP allowlist is read-only vault commands plus `set`, `unset`, `new`, and `move`. Disallowed commands return `COMMAND_NOT_ALLOWED`. `GET /v1/schema`, `GET /v1/commands` (registry-derived, with `api_version`), `GET /v1/health`, and `GET /v1/session` are included. `GET /v1/session` returns the absolute `vault_path` plus the `editor` and `editor_mode` that `rvn open` resolves (`config.toml`, then `$EDITOR`). On `INDEX_LOCKED` the API retries for about two seconds before returning the error.
@@ -18,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `rvn set` again accepts positional `field=value` arguments (`rvn set project/perch name=Perch`), including after `--`. Registry arity from the command-spine parser allowed only the reference, so a second argument failed with `INVALID_INPUT`. Repeated `--field`, `--fields-json`, and `--stdin` bulk updates are unchanged.
+- The LSP server no longer holds its session lock while reindexing on save, so other requests are not blocked; a non-blocking staleness check refreshes the index after external reindexes.
+
+### Internal
+- Split `reindexsvc.Run` into prepare, plan and apply stages, and routed vault config mutations through one shared helper.
+- Bumped `golang.org/x/sys` and `modernc.org/sqlite`.
 
 ## [v0.0.36] - 2026-09-20
 
