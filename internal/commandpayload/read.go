@@ -54,8 +54,9 @@ type SearchResult struct {
 }
 
 // ReadContentResult is the success payload for an enriched (non-raw) `read`.
-// References and backlinks are always present so downstream consumers can rely
-// on the keys existing even when empty.
+// References, backlinks, and links are always present so downstream consumers
+// can rely on the keys existing even when empty. Links locate [[wikilinks]] in
+// Content with UTF-8 byte and UTF-16 code-unit offsets.
 type ReadContentResult struct {
 	ObjectID   string                      `json:"object_id"`
 	Path       string                      `json:"path"`
@@ -63,6 +64,7 @@ type ReadContentResult struct {
 	LineCount  int                         `json:"line_count"`
 	References []readsvc.ReadReference     `json:"references"`
 	Backlinks  []readsvc.ReadBacklinkGroup `json:"backlinks"`
+	Links      []readsvc.ReadLink          `json:"links"`
 }
 
 // ReadRawResult is the success payload for a raw or line-range `read`. The

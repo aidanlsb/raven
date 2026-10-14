@@ -23,7 +23,14 @@ and unambiguous short forms are also accepted as resolution inputs, but short
 forms are not the preferred input for automation.
 
 By default, this command returns enriched output (rendered wikilinks + backlinks).
-Use --raw to output only the raw file content (recommended for agents preparing precise edits).
+JSON output also includes data.links: wikilink spans in the returned content
+string, with UTF-8 byte offsets and UTF-16 code-unit offsets, the raw [[text]],
+the target as written, and identity-first resolution (object_id when resolved;
+status unresolved or ambiguous otherwise). Offsets are 0-based and end-exclusive
+into data.content, including when that string is a section slice. Code fences,
+indented code, and inline code are skipped, matching the document parser.
+Human (non-JSON) output is unchanged. Use --raw to output only the raw file
+content (recommended for agents preparing precise edits).
 
 Section references such as project/website#tasks are supported: without an
 explicit line range, output is limited to that section's subtree (the section

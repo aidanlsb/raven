@@ -335,6 +335,10 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	meta.Count = result.BacklinksCount
+	links := result.Links
+	if links == nil {
+		links = []readsvc.ReadLink{}
+	}
 	return withSchemaLoadWarning(rt, commandexec.Success(commandpayload.ReadContentResult{
 		ObjectID:   result.ObjectID,
 		Path:       result.Path,
@@ -342,6 +346,7 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 		LineCount:  result.LineCount,
 		References: result.References,
 		Backlinks:  result.Backlinks,
+		Links:      links,
 	}, meta))
 }
 

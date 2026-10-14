@@ -31,6 +31,14 @@ type ResolveResult struct {
 	MatchSource    string
 }
 
+// LookupResult is an identity-first resolution of a wikilink target, matching
+// the index refs matcher without command-level literal-path overlay.
+type LookupResult struct {
+	ObjectID  string
+	Ambiguous bool
+	Matches   []string
+}
+
 type AmbiguousRefError struct {
 	Reference    string
 	Matches      []string
@@ -151,6 +159,25 @@ func (op *Operation) getDB() (*index.Database, error) {
 	}
 	op.db = op.rt.DB
 	return op.db, nil
+}
+
+// Lookup resolves a wikilink target with the same identity-first matcher the
+// index uses for refs (alias, name field, object ID, short name). It does not
+// apply the literal-path overlay used by command-level Resolve.
+func (op *Operation) Lookup(target string) (LookupResult, error) {
+	if op == nil || op.rt == nil {
+		return LookupResult{}, fmt.Errorf("runtime is required")
+	}
+	res, err := op.getResolver()
+	if err != nil {
+		return LookupResult{}, err
+	}
+	resolved := res.Resolve(strings.TrimSpace(target))
+	return LookupResult{
+		ObjectID:  resolved.TargetID,
+		Ambiguous: resolved.Ambiguous,
+		Matches:   append([]string{}, resolved.Matches...),
+	}, nil
 }
 
 func (op *Operation) getResolver() (*resolver.Resolver, error) {

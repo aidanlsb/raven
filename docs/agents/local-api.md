@@ -85,8 +85,15 @@ UI against this document rather than a hard-coded command list.
 ### `POST /v1/invoke`
 
 ```json
-{"command":"read","args":{"reference":"people/freya","raw":true}}
+{"command":"read","args":{"reference":"people/freya"}}
 ```
+
+Enriched `read` JSON includes `data.links`: each `[[wikilink]]` in `data.content`
+with UTF-8 byte and UTF-16 code-unit offsets, the raw text, the target as
+written, and identity-first resolution. Offsets are into that `content` string
+(including section slices). `--raw` omits `links`. `GET /v1/schema` is the vault
+type/trait schema and does not describe command result shapes; command argument
+metadata stays on `GET /v1/commands`.
 
 Runs `commandexec.Invoker.Execute` with `caller=api`, the same path as CLI and
 MCP. The response envelope is unchanged, including `meta.mutation.phase`
