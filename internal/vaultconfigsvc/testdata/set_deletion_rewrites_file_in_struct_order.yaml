@@ -1,0 +1,5 @@
+auto_reindex: false
+capture:
+    destination: inbox.md
+deletion:
+    behavior: permanent

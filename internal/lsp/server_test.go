@@ -61,12 +61,21 @@ func TestOpenWorkspacePreservesDegradedSchemaBehavior(t *testing.T) {
 	if ws.schema() == nil {
 		t.Fatal("workspace schema = nil, want built-in degraded schema")
 	}
-	if ws.catalog.Resolver == nil {
+	if ws.loaded().catalog.Resolver == nil {
 		t.Fatal("catalog resolver = nil in degraded schema mode")
 	}
 }
 
 func startTestServer(t *testing.T, vaultPath string) *testClient {
+	t.Helper()
+	client, _ := startConfiguredTestServer(t, vaultPath, Options{
+		ExplicitVaultPath:   vaultPath,
+		DiagnosticsDebounce: -1, // synchronous diagnostics in tests
+	}, nil)
+	return client
+}
+
+func startConfiguredTestServer(t *testing.T, vaultPath string, opts Options, setup func(*Server)) (*testClient, *Server) {
 	t.Helper()
 
 	inR, inW, err := os.Pipe()
@@ -78,12 +87,17 @@ func startTestServer(t *testing.T, vaultPath string) *testClient {
 		t.Fatalf("failed to create stdout pipe: %v", err)
 	}
 
-	server := NewServer(Options{
-		ExplicitVaultPath:   vaultPath,
-		In:                  inR,
-		Out:                 outW,
-		DiagnosticsDebounce: -1, // synchronous diagnostics in tests
-	})
+	opts.ExplicitVaultPath = vaultPath
+	opts.In = inR
+	opts.Out = outW
+	if opts.DiagnosticsDebounce == 0 {
+		opts.DiagnosticsDebounce = -1
+	}
+
+	server := NewServer(opts)
+	if setup != nil {
+		setup(server)
+	}
 
 	client := &testClient{
 		t:      t,
@@ -109,7 +123,7 @@ func startTestServer(t *testing.T, vaultPath string) *testClient {
 		outR.Close()
 	})
 
-	return client
+	return client, server
 }
 
 func (c *testClient) send(message interface{}) {
@@ -962,20 +976,25 @@ func TestCompletionRefreshesAfterExternalIncrementalReindex(t *testing.T) {
 		t.Fatalf("external incremental reindex: %v", err)
 	}
 
-	raw := client.request("textDocument/completion", TextDocumentPositionParams{
-		TextDocument: TextDocumentIdentifier{URI: uri},
-		Position:     Position{Line: 0, Character: len("Link: [[")},
-	})
-	var list CompletionList
-	if err := json.Unmarshal(raw, &list); err != nil {
-		t.Fatalf("invalid completion result: %v", err)
-	}
-	for _, item := range list.Items {
-		if item.Label == "people/odin" {
-			return
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		raw := client.request("textDocument/completion", TextDocumentPositionParams{
+			TextDocument: TextDocumentIdentifier{URI: uri},
+			Position:     Position{Line: 0, Character: len("Link: [[")},
+		})
+		var list CompletionList
+		if err := json.Unmarshal(raw, &list); err != nil {
+			t.Fatalf("invalid completion result: %v", err)
+		}
+		for _, item := range list.Items {
+			if item.Label == "people/odin" {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("completion did not refresh after external reindex: %+v", list.Items)
 		}
 	}
-	t.Fatalf("completion did not refresh after external reindex: %+v", list.Items)
 }
 
 func TestDidSaveRefreshesIndex(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
@@ -16,12 +17,25 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
+// workspaceCaches is an immutable snapshot of derived LSP state. Refresh builds
+// a new value off the session lock and publishes it with a single Store.
+type workspaceCaches struct {
+	catalog     readsvc.CatalogSnapshot
+	objectInfos []check.ObjectInfo
+	schema      *schema.Schema
+	vaultCfg    *config.VaultConfig
+}
+
 // workspace holds the resolved vault and a read-side catalog. The catalog is
-// rebuilt on save and when another database handle changes resolver-relevant
-// index state.
+// rebuilt on save and published atomically so request handlers can read it
+// without waiting for reindex.
 type workspace struct {
 	rt *vaultruntime.Runtime
 
+	cache atomic.Pointer[workspaceCaches]
+
+	// Pinned copies used by request-handler snapshots. The live workspace
+	// leaves these zero and serves them from cache.
 	catalog     readsvc.CatalogSnapshot
 	objectInfos []check.ObjectInfo
 }
@@ -85,19 +99,53 @@ func (ws *workspace) vaultPath() string {
 	return ws.rt.VaultPath
 }
 
+// resolverGeneration is the cheap staleness signal ensureCachesFresh used:
+// it changes when another index handle commits resolver-relevant writes.
+func (ws *workspace) resolverGeneration() (int64, error) {
+	if ws == nil || ws.rt == nil || ws.rt.DB == nil {
+		return 0, fmt.Errorf("workspace database is not open")
+	}
+	return ws.rt.DB.ResolverGeneration()
+}
+
+func (ws *workspace) loaded() *workspaceCaches {
+	if c := ws.cache.Load(); c != nil {
+		return c
+	}
+	return &workspaceCaches{}
+}
+
 func (ws *workspace) vaultConfig() *config.VaultConfig {
-	return ws.rt.VaultCfg
+	if c := ws.cache.Load(); c != nil && c.vaultCfg != nil {
+		return c.vaultCfg
+	}
+	if ws.rt != nil {
+		return ws.rt.VaultCfg
+	}
+	return nil
 }
 
 func (ws *workspace) schema() *schema.Schema {
-	if ws.rt.Schema != nil {
+	if c := ws.cache.Load(); c != nil && c.schema != nil {
+		return c.schema
+	}
+	if ws.rt != nil && ws.rt.Schema != nil {
 		return ws.rt.Schema
 	}
 	return schema.New()
 }
 
+// view returns a handler-safe snapshot that pins the current cache pointer.
+func (ws *workspace) view() *workspace {
+	c := ws.loaded()
+	snap := &workspace{rt: ws.rt, catalog: c.catalog, objectInfos: c.objectInfos}
+	snap.cache.Store(c)
+	return snap
+}
+
 // refresh reloads vault config and schema from disk, incrementally reindexes
-// changed files, and rebuilds derived caches. Called after didSave.
+// changed files, and rebuilds derived caches. Called from the background
+// save refresher, not under the session lock.
 func (ws *workspace) refresh() error {
 	// Reload config and schema from disk. A reload failure keeps the previous
 	// (stale) value so the workspace stays usable, but it is never swallowed:
@@ -114,20 +162,6 @@ func (ws *workspace) refresh() error {
 		return fmt.Errorf("reindex failed: %w", err)
 	} else if len(report.Failures) > 0 {
 		fmt.Fprintf(os.Stderr, "rvn lsp: reindex skipped %d file(s)\n", len(report.Failures))
-	}
-	return ws.rebuildCaches()
-}
-
-// ensureCachesFresh reloads derived state after another SQLite handle commits
-// resolver-relevant changes. It deliberately avoids a filesystem walk: the
-// external writer has already brought the on-disk index up to date.
-func (ws *workspace) ensureCachesFresh() error {
-	current, err := readsvc.Catalog(ws.rt, readsvc.CatalogOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to read index generation: %w", err)
-	}
-	if current.Generation == ws.catalog.Generation {
-		return nil
 	}
 	return ws.rebuildCaches()
 }
@@ -150,26 +184,46 @@ func (ws *workspace) rebuildCaches() error {
 		infos = append(infos, check.ObjectInfo{ID: obj.ID, Type: obj.Type})
 	}
 
-	ws.catalog = catalog
-	ws.objectInfos = infos
+	sch := ws.rt.Schema
+	if sch == nil {
+		sch = schema.New()
+	}
+	ws.cache.Store(&workspaceCaches{
+		catalog:     catalog,
+		objectInfos: infos,
+		schema:      sch,
+		vaultCfg:    ws.rt.VaultCfg,
+	})
 	return nil
 }
 
 // newValidator builds a document validator backed by the cached index state.
 func (ws *workspace) newValidator() *check.Validator {
-	var objectsRoot, pagesRoot string
-	if ws.vaultConfig().HasDirectoriesConfig() {
-		objectsRoot = ws.vaultConfig().GetObjectsRoot()
-		pagesRoot = ws.vaultConfig().GetPagesRoot()
+	c := ws.loaded()
+	vaultCfg := c.vaultCfg
+	if vaultCfg == nil {
+		vaultCfg = ws.vaultConfig()
+	}
+	sch := c.schema
+	if sch == nil {
+		sch = ws.schema()
+	}
+	var objectsRoot, pagesRoot, dailyDir string
+	if vaultCfg != nil {
+		if vaultCfg.HasDirectoriesConfig() {
+			objectsRoot = vaultCfg.GetObjectsRoot()
+			pagesRoot = vaultCfg.GetPagesRoot()
+		}
+		dailyDir = vaultCfg.GetDailyDirectory()
 	}
 	return check.New(check.Options{
-		Schema:      ws.schema(),
-		ObjectInfos: ws.objectInfos,
-		Aliases:     ws.catalog.Aliases,
-		Resolver:    ws.catalog.Resolver,
+		Schema:      sch,
+		ObjectInfos: c.objectInfos,
+		Aliases:     c.catalog.Aliases,
+		Resolver:    c.catalog.Resolver,
 		ObjectsRoot: objectsRoot,
 		PagesRoot:   pagesRoot,
-		DailyDir:    ws.vaultConfig().GetDailyDirectory(),
+		DailyDir:    dailyDir,
 	})
 }
 
