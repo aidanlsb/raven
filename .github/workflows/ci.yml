@@ -55,7 +55,7 @@ jobs:
       - name: Run integration tests
         run: |
           mkdir -p .tmp/coverage
-          go test -race -coverpkg=./... -coverprofile=.tmp/coverage/integration.out -tags=integration -v ./internal/cli ./internal/mcp
+          go test -race -coverpkg=./... -coverprofile=.tmp/coverage/integration.out -tags=integration -v ./internal/cli ./internal/mcp ./internal/localapi
 
       - name: Upload integration coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1

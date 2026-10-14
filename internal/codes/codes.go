@@ -52,6 +52,7 @@ const (
 	ErrMissingArgument      ErrorCode = "MISSING_ARGUMENT"
 	ErrCommandNotFound      ErrorCode = "COMMAND_NOT_FOUND"
 	ErrCommandNotInvokable  ErrorCode = "COMMAND_NOT_INVOKABLE"
+	ErrCommandNotAllowed    ErrorCode = "COMMAND_NOT_ALLOWED"
 	ErrDuplicateName        ErrorCode = "DUPLICATE_NAME"
 	ErrPrefixNotFound       ErrorCode = "PREFIX_NOT_FOUND"
 	ErrStringNotFound       ErrorCode = "STRING_NOT_FOUND"
@@ -82,6 +83,11 @@ const (
 	ErrToolReturnedError  ErrorCode = "TOOL_RETURNED_ERROR"
 	ErrFetchFailed        ErrorCode = "FETCH_FAILED"
 	ErrCancelled          ErrorCode = "CANCELLED"
+
+	// Local HTTP API errors.
+	ErrUnauthorized ErrorCode = "UNAUTHORIZED"
+	ErrInvalidHost  ErrorCode = "INVALID_HOST"
+	ErrIndexLocked  ErrorCode = "INDEX_LOCKED"
 
 	// General errors.
 	ErrInternal       ErrorCode = "INTERNAL_ERROR"
@@ -120,10 +126,11 @@ var knownErrorCodes = map[ErrorCode]struct{}{
 	ErrSchemaNotFound: {}, ErrSchemaInvalid: {}, ErrSchemaMismatch: {}, ErrTypeNotFound: {}, ErrTraitNotFound: {}, ErrFieldNotFound: {}, ErrDataIntegrityBlock: {}, ErrConfirmationRequired: {},
 	ErrObjectNotFound: {}, ErrObjectExists: {}, ErrObjectInvalid: {}, ErrRefNotFound: {}, ErrRefInvalid: {}, ErrRefAmbiguous: {},
 	ErrFileNotFound: {}, ErrFileExists: {}, ErrFileRead: {}, ErrFileWrite: {}, ErrFileOutsideVault: {}, ErrDatabase: {}, ErrDatabaseVersion: {},
-	ErrValidationFailed: {}, ErrRequiredFieldMissing: {}, ErrInvalidValue: {}, ErrUnknownField: {}, ErrInvalidInput: {}, ErrInvalidArgs: {}, ErrMissingArgument: {}, ErrCommandNotFound: {}, ErrCommandNotInvokable: {}, ErrDuplicateName: {}, ErrPrefixNotFound: {}, ErrStringNotFound: {}, ErrMultipleMatches: {}, ErrNotFound: {},
+	ErrValidationFailed: {}, ErrRequiredFieldMissing: {}, ErrInvalidValue: {}, ErrUnknownField: {}, ErrInvalidInput: {}, ErrInvalidArgs: {}, ErrMissingArgument: {}, ErrCommandNotFound: {}, ErrCommandNotInvokable: {}, ErrCommandNotAllowed: {}, ErrDuplicateName: {}, ErrPrefixNotFound: {}, ErrStringNotFound: {}, ErrMultipleMatches: {}, ErrNotFound: {},
 	ErrQueryNotFound: {}, ErrQueryInvalid: {}, ErrQueryFailed: {},
 	ErrSkillNotFound: {}, ErrSkillNotInstalled: {}, ErrSkillTargetUnsupported: {}, ErrSkillRenderFailed: {}, ErrSkillPathUnresolved: {}, ErrSkillReceiptInvalid: {},
 	ErrMCPClientInvalid: {}, ErrMCPConfigWrite: {}, ErrExecutableRequired: {}, ErrUnknownTool: {}, ErrExecutionFailed: {}, ErrExecutionError: {}, ErrInvalidJSON: {}, ErrToolReturnedError: {}, ErrFetchFailed: {}, ErrCancelled: {},
+	ErrUnauthorized: {}, ErrInvalidHost: {}, ErrIndexLocked: {},
 	ErrInternal: {}, ErrNotImplemented: {},
 }
 

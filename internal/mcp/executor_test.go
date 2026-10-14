@@ -72,7 +72,7 @@ func TestExecuteToolDirectToolError(t *testing.T) {
 func TestExecuteToolDirectRejectsNonInvokableCommands(t *testing.T) {
 	t.Parallel()
 
-	_, err := ExecuteToolDirect("", "serve", nil)
+	_, err := ExecuteToolDirect("", "mcp_serve", nil)
 	if err == nil {
 		t.Fatal("expected non-invokable command error")
 	}

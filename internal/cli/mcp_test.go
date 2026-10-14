@@ -38,7 +38,7 @@ func TestMcpInstallAndRemove(t *testing.T) {
 		t.Fatalf("unexpected command: %v", raven["command"])
 	}
 	args := raven["args"].([]interface{})
-	if len(args) != 1 || args[0] != "serve" {
+	if len(args) != 2 || args[0] != "mcp" || args[1] != "serve" {
 		t.Fatalf("unexpected args: %v", args)
 	}
 
@@ -103,8 +103,8 @@ func TestMcpInstallWithVault(t *testing.T) {
 	servers := data["mcpServers"].(map[string]interface{})
 	raven := servers["raven"].(map[string]interface{})
 	args := raven["args"].([]interface{})
-	if len(args) != 3 || args[1] != "--vault" || args[2] != "work" {
-		t.Fatalf("expected [serve --vault work], got %v", args)
+	if len(args) != 4 || args[2] != "--vault" || args[3] != "work" {
+		t.Fatalf("expected [mcp serve --vault work], got %v", args)
 	}
 }
 
@@ -113,12 +113,12 @@ func TestMcpShowBuildsCorrectSnippet(t *testing.T) {
 	if entry.Command == "" {
 		t.Fatal("expected non-empty command")
 	}
-	if len(entry.Args) != 1 || entry.Args[0] != "serve" {
-		t.Fatalf("expected args=[serve], got %v", entry.Args)
+	if len(entry.Args) != 2 || entry.Args[0] != "mcp" || entry.Args[1] != "serve" {
+		t.Fatalf("expected args=[mcp serve], got %v", entry.Args)
 	}
 
 	entryWithVault := mcpclient.BuildServerEntry("", "personal", "")
-	if len(entryWithVault.Args) != 3 {
-		t.Fatalf("expected 3 args, got %d", len(entryWithVault.Args))
+	if len(entryWithVault.Args) != 4 {
+		t.Fatalf("expected 4 args, got %d", len(entryWithVault.Args))
 	}
 }

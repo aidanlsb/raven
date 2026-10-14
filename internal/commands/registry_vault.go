@@ -199,7 +199,7 @@ normal CLI/MCP vault routing and fails when no vault can be resolved.`,
 		LongDesc: `Validate a vault target for MCP session focus.
 
 When invoked through raven_invoke, this command updates only the running
-rvn serve process's in-memory session focus. The focus is used by subsequent
+rvn mcp serve process's in-memory session focus. The focus is used by subsequent
 vault-scoped MCP calls that omit per-call vault and vault_path overrides.
 
 Direct CLI invocation validates and describes the target but cannot mutate
