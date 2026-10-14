@@ -1,0 +1,125 @@
+# Local HTTP API
+
+Raven ships no UI. Companion apps such as Perch talk to a vault through
+`rvn api`, a headless local HTTP server. Markdown files stay the source of
+truth. Every mutating or read operation goes through the same canonical
+command layer as the CLI and MCP.
+
+## Start the server
+
+```bash
+rvn api --vault-path /path/to/vault
+rvn api --vault personal --port 7438 --json
+```
+
+The process binds **127.0.0.1 only**. It never listens on a public or LAN
+address. Default port is `7438`; `--port 0` asks the OS for an ephemeral port.
+
+On startup Raven prints the listen URL and a bearer token. With `--json` it
+prints a single compact envelope line so a launcher (for example Tauri) can
+parse it:
+
+```json
+{"ok":true,"data":{"url":"http://127.0.0.1:7438","token":"...","port":7438,"bind":"127.0.0.1","api_version":"1","vault_path":"/path/to/vault","cors_origins":["http://localhost:5173"]}}
+```
+
+Override the token with `--token` or `RAVEN_API_TOKEN`. Override the port with
+`--port` or `RAVEN_API_PORT`. SIGINT and SIGTERM shut the server down.
+
+## Authentication
+
+Every request except CORS preflight (`OPTIONS`) requires:
+
+```
+Authorization: Bearer <token>
+```
+
+Missing or wrong tokens return HTTP 401 with `error.code` `UNAUTHORIZED`.
+
+## Host check
+
+Requests whose `Host` header is not a loopback name (`127.0.0.1`, `localhost`,
+or another loopback IP, with or without a port) are rejected with HTTP 403 and
+`INVALID_HOST`. This blocks DNS-rebinding attacks against the loopback listener.
+
+## CORS
+
+Allowed origins default to local dev ports (`http://localhost:5173`,
+`http://127.0.0.1:5173`, `4173`, and `1420`). Replace the list with repeated
+`--cors-origin` flags or comma-separated `RAVEN_API_CORS_ORIGINS`. Origins that
+are not listed do not receive `Access-Control-Allow-Origin`.
+
+## Versioning
+
+The HTTP path prefix is `/v1/`. The same version string is advertised as
+`api_version` on `GET /v1/commands`, `GET /v1/health`, the startup envelope, and
+the `X-Raven-API-Version` response header.
+
+Breaking changes to the HTTP contract increment this version (new prefix and
+startup field). Additive fields on command envelopes follow the existing CLI/MCP
+result contract and do not bump the API version.
+
+## Endpoints
+
+All JSON responses use the standard Raven envelope:
+`{ ok, data, error?, warnings?, meta? }`. Command failures from `/v1/invoke`
+still use HTTP 200; the envelope's `ok` field is the success signal.
+
+### `GET /v1/health`
+
+Liveness. `data.status` is `"ok"`. Requires the bearer token.
+
+### `GET /v1/schema`
+
+The vault schema: types, fields (including enum `values`), traits, and related
+introspection. This is the same payload as `rvn schema --json`, produced by the
+canonical `schema` command.
+
+### `GET /v1/commands`
+
+Machine-readable description of commands the API will accept, generated from
+the command registry: id, summary, description, `read_only`, `destructive`,
+`preview_mode`, `args_schema`, and `schema_hash`, plus `api_version`. Type the
+UI against this document rather than a hard-coded command list.
+
+### `POST /v1/invoke`
+
+```json
+{"command":"read","args":{"reference":"people/freya","raw":true}}
+```
+
+Runs `commandexec.Invoker.Execute` with `caller=api`, the same path as CLI and
+MCP. The response envelope is unchanged, including `meta.mutation.phase`
+(`preview` or `applied`) on writes.
+
+If the index is locked for rebuild (`INDEX_LOCKED`), the API waits and retries
+for about two seconds with backoff, then returns the error.
+
+## Allowlist
+
+MVP commands:
+
+- Read: `query`, `query_saved_list`, `query_saved_get`, `read`, `backlinks`,
+  `outlinks`, `search`, `daily`, `date`, `schema`, `schema_validate`,
+  `schema_template_list`, `schema_template_get`, `vault_stats`, `resolve`,
+  `check`, `trash_list`
+- Write: `set`, `unset`, `new`, `move`
+
+Anything else returns `ok: false` with `COMMAND_NOT_ALLOWED`. Use the CLI or
+`rvn mcp serve` for commands outside this list.
+
+Bulk writes still preview unless `confirm` is set. Single-object `set` / `move`
+apply immediately unless `dry-run` is set. Read `meta.mutation.phase`; do not
+infer apply-vs-preview from ad-hoc data fields.
+
+## Example
+
+```bash
+TOKEN=...
+curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/health
+curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/schema
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"query","args":{"query_string":"type:person"}}' \
+  http://127.0.0.1:7438/v1/invoke
+```

@@ -261,6 +261,7 @@ where they're stored via `directories.daily` in `raven.yaml`. See the
 - [Bulk Operations](docs/vault-management/bulk-operations.md)
 - [Import](docs/vault-management/import.md)
 - [MCP Reference](docs/agents/mcp.md)
+- [Local HTTP API](docs/agents/local-api.md)
 
 You can also browse the docs from the CLI:
 

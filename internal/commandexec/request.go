@@ -6,7 +6,14 @@ type Caller string
 const (
 	CallerCLI Caller = "cli"
 	CallerMCP Caller = "mcp"
+	CallerAPI Caller = "api"
 )
+
+// IsMachine reports whether the caller is a structured machine transport
+// (MCP or the local HTTP API) rather than the interactive CLI.
+func (c Caller) IsMachine() bool {
+	return c == CallerMCP || c == CallerAPI
+}
 
 // Request is the normalized execution request shared across adapters.
 type Request struct {

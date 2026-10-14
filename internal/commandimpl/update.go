@@ -11,7 +11,7 @@ import (
 )
 
 func updateMissingBulkTraitIDs(caller commandexec.Caller) (string, string) {
-	if caller == commandexec.CallerMCP {
+	if caller.IsMachine() {
 		return "no trait_ids provided for bulk update", "Provide trait_ids for the bulk update and retry"
 	}
 	return "no trait IDs provided via stdin", "Pipe trait IDs to stdin, one per line"

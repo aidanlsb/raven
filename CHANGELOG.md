@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `rvn api` serves a loopback-only HTTP API (`127.0.0.1`) for companion UIs such as Perch. Startup prints the URL and bearer token; `--json` emits one parseable envelope line. `POST /v1/invoke` runs through `commandexec.Invoker.Execute`. The MVP allowlist is read-only vault commands plus `set`, `unset`, `new`, and `move`. Disallowed commands return `COMMAND_NOT_ALLOWED`. `GET /v1/schema`, `GET /v1/commands` (registry-derived, with `api_version`), and `GET /v1/health` are included. On `INDEX_LOCKED` the API retries for about two seconds before returning the error.
+
 ### Changed
+- **Breaking:** renamed `rvn serve` to `rvn mcp serve`. There is no alias; `rvn serve` is removed. Update MCP client configs (`rvn mcp install` now writes `mcp serve`) and any scripts or docs that launched the MCP server.
 - Bumped the Go toolchain from 1.26.8 to 1.26.9 and `golang.org/x/net` to v0.60.0, addressing GO-2026-6603 through GO-2026-6617 (mostly net/http HTTP/2).
 - If the automatic index refresh fails after a schema write, the command still succeeds and now returns `INDEX_UPDATE_FAILED` with a suggestion to run `rvn reindex`.
 

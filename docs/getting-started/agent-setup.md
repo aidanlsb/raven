@@ -142,7 +142,7 @@ rvn mcp show --client codex --vault-path /path/to/vault
 If you run the server manually, use:
 
 ```bash
-rvn serve --vault-path /path/to/vault
+rvn mcp serve --vault-path /path/to/vault
 ```
 
 To remove Raven from a client config again:

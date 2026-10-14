@@ -19,10 +19,10 @@ var (
 var mcpCmd = &cobra.Command{
 	Use:   "mcp",
 	Short: "Manage MCP client integrations",
-	Long: `Manage MCP client integrations for raven.
-
-Install, remove, or inspect the raven MCP server entry in supported
-client config files (Codex, Claude Code, Claude Desktop, Cursor).`,
+	Long: "Manage MCP client integrations for raven.\n\n" +
+		"Install, remove, or inspect the raven MCP server entry in supported\n" +
+		"client config files (Codex, Claude Code, Claude Desktop, Cursor), or\n" +
+		"run the MCP server with rvn mcp serve.",
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()

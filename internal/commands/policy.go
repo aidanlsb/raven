@@ -68,7 +68,8 @@ func ShouldPreviewByDefault(commandID string, args map[string]interface{}) bool 
 
 var nonInvokableCommandIDs = map[string]struct{}{
 	"path":        {},
-	"serve":       {},
+	"api":         {},
+	"mcp_serve":   {},
 	"lsp":         {},
 	"mcp_install": {},
 	"mcp_remove":  {},

@@ -79,3 +79,6 @@ sections:
       mcp:
         title: MCP reference
         path: mcp.md
+      local-api:
+        title: Local HTTP API
+        path: local-api.md

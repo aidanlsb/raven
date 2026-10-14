@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -101,6 +102,14 @@ func mapVaultRuntimeSetupFailure(err error) commandexec.Result {
 		case vaultruntime.StageSchema:
 			return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
 		case vaultruntime.StageDatabase:
+			if errors.Is(setupErr.Err, index.ErrIndexLocked) {
+				return commandexec.Failure(
+					codes.ErrIndexLocked,
+					"index is locked for rebuild",
+					nil,
+					"Wait for the other process to finish and retry",
+				)
+			}
 			return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
 		}
 	}
