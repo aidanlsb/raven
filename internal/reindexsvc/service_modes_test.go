@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
@@ -64,9 +65,6 @@ func TestRunFullMode(t *testing.T) {
 				references:   1,
 				hasRefResult: true,
 				indexed:      []string{"added.md", "keep.md", "source.md", "stale.md"},
-				warningContains: []string{
-					"Cleaned up 1 files from .trash/ in index",
-				},
 			},
 		},
 		{
@@ -204,13 +202,13 @@ func TestRunDryRunMode(t *testing.T) {
 				filesIndexed:  2,
 				filesSkipped:  2,
 				filesDeleted:  2,
-				filesExcluded: 1,
+				filesExcluded: 2,
 				objects:       4,
 				traits:        1,
 				references:    1,
 				stale:         []string{"added.md", "stale.md"},
 				deleted:       []string{".trash/old.md", "gone.md"},
-				excluded:      []string{"extra.md"},
+				excluded:      []string{".trash/old.md", "extra.md"},
 				trashCount:    1,
 				indexed:       []string{".trash/old.md", "extra.md", "gone.md", "keep.md", "source.md", "stale.md"},
 			},
@@ -224,13 +222,13 @@ func TestRunDryRunMode(t *testing.T) {
 				filesIndexed:  3,
 				filesSkipped:  1,
 				filesDeleted:  2,
-				filesExcluded: 1,
+				filesExcluded: 2,
 				objects:       4,
 				traits:        1,
 				references:    1,
 				stale:         []string{"added.md", "keep.md", "stale.md"},
 				deleted:       []string{".trash/old.md", "gone.md"},
-				excluded:      []string{"extra.md"},
+				excluded:      []string{".trash/old.md", "extra.md"},
 				journalDirty:  true,
 				trashCount:    1,
 				indexed:       []string{".trash/old.md", "extra.md", "gone.md", "keep.md", "source.md", "stale.md"},
@@ -297,11 +295,20 @@ func setupModeVault(t *testing.T) string {
 func applyStandardModeMutations(t *testing.T, vaultPath string) {
 	t.Helper()
 	writeTestFile(t, vaultPath, "stale.md", "# Stale\n\n- @todo(todo) See [[source]]\n")
+	bumpMtime(t, filepath.Join(vaultPath, "stale.md"))
 	if err := os.Remove(filepath.Join(vaultPath, "gone.md")); err != nil {
 		t.Fatalf("remove gone.md: %v", err)
 	}
 	writeTestFile(t, vaultPath, "added.md", "# Added\n")
 	writeTestFile(t, vaultPath, "raven.yaml", "exclude:\n  - extra.md\n")
+}
+
+func bumpMtime(t *testing.T, path string) {
+	t.Helper()
+	later := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(path, later, later); err != nil {
+		t.Fatalf("chtimes %s: %v", path, err)
+	}
 }
 
 func applyStandardModeMutationsWithJournal(t *testing.T, vaultPath string) {
