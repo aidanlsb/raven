@@ -1,6 +1,8 @@
 # MCP reference
 
-Raven speaks MCP through `rvn serve`.
+Raven speaks MCP through `rvn mcp serve`. `rvn serve` remains a hidden
+deprecated alias that prints a deprecation notice on stderr (never on stdout,
+which carries JSON-RPC).
 
 There are exactly three tools:
 - `raven_discover`
@@ -44,7 +46,7 @@ For Codex, `rvn mcp show --client codex` prints the TOML snippet for `~/.codex/c
 Start the server directly with:
 
 ```bash
-rvn serve --vault-path /path/to/vault
+rvn mcp serve --vault-path /path/to/vault
 ```
 
 ## Vault resolution
@@ -55,7 +57,7 @@ vault in this priority order:
 1. Per-call `vault_path` (explicit path)
 2. Per-call `vault` (configured vault name)
 3. In-memory session focus set by the `vault_focus` command ID
-4. Server launch pin (`rvn serve --vault-path` / `--vault`)
+4. Server launch pin (`rvn mcp serve --vault-path` / `--vault`)
 
 If none is present, Raven returns `VAULT_AMBIGUOUS`. MCP never guesses from the
 CLI's active or default vault. The resolved vault is always reported in
@@ -93,7 +95,7 @@ that invocation. Clear focus to return to the server's immutable launch pin:
 
 If the server started unpinned, clearing focus returns it to unpinned behavior,
 so unqualified vault-scoped calls fail with `VAULT_AMBIGUOUS`. Restarting
-`rvn serve` also discards session focus.
+`rvn mcp serve` also discards session focus.
 
 `rvn vault use` writes CLI `active_vault`, and `rvn vault pin` writes
 `default_vault`; MCP intentionally reads neither. Running `rvn vault focus`

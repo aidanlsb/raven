@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `rvn api` serves a headless local HTTP API on `127.0.0.1` for companion UIs. It requires a per-run bearer token, exposes `/v1/invoke`, `/v1/schema`, `/v1/commands`, and `/v1/health`, and runs invokes through the same command layer as the CLI and MCP. Writes are allowlisted to `set`, `unset`, `new`, and `move`.
+- Documented the local API contract and versioning in `docs/agents/local-api.md`.
+
 ### Changed
 - If the automatic index refresh fails after a schema write, the command still succeeds and now returns `INDEX_UPDATE_FAILED` with a suggestion to run `rvn reindex`.
+- Renamed `rvn serve` to `rvn mcp serve`. `rvn serve` remains a hidden deprecated alias that prints a deprecation notice on stderr so JSON-RPC stdout stays clean. `rvn mcp install` / `show` now write `args: ["mcp", "serve", ...]`.
 
 ## [v0.0.36] - 2026-09-20
 

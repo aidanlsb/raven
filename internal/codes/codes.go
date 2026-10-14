@@ -83,6 +83,11 @@ const (
 	ErrFetchFailed        ErrorCode = "FETCH_FAILED"
 	ErrCancelled          ErrorCode = "CANCELLED"
 
+	// Local HTTP API errors.
+	ErrUnauthorized     ErrorCode = "UNAUTHORIZED"
+	ErrForbidden        ErrorCode = "FORBIDDEN"
+	ErrAPICommandDenied ErrorCode = "API_COMMAND_DENIED"
+
 	// General errors.
 	ErrInternal       ErrorCode = "INTERNAL_ERROR"
 	ErrNotImplemented ErrorCode = "NOT_IMPLEMENTED"
@@ -124,6 +129,7 @@ var knownErrorCodes = map[ErrorCode]struct{}{
 	ErrQueryNotFound: {}, ErrQueryInvalid: {}, ErrQueryFailed: {},
 	ErrSkillNotFound: {}, ErrSkillNotInstalled: {}, ErrSkillTargetUnsupported: {}, ErrSkillRenderFailed: {}, ErrSkillPathUnresolved: {}, ErrSkillReceiptInvalid: {},
 	ErrMCPClientInvalid: {}, ErrMCPConfigWrite: {}, ErrExecutableRequired: {}, ErrUnknownTool: {}, ErrExecutionFailed: {}, ErrExecutionError: {}, ErrInvalidJSON: {}, ErrToolReturnedError: {}, ErrFetchFailed: {}, ErrCancelled: {},
+	ErrUnauthorized: {}, ErrForbidden: {}, ErrAPICommandDenied: {},
 	ErrInternal: {}, ErrNotImplemented: {},
 }
 

@@ -6,7 +6,15 @@ type Caller string
 const (
 	CallerCLI Caller = "cli"
 	CallerMCP Caller = "mcp"
+	CallerAPI Caller = "api"
 )
+
+// UsesStructuredArgs reports whether the caller sends named JSON arguments
+// rather than CLI flag/positional text. MCP and the local HTTP API share this
+// shape, so handler hints and payload parsing should treat them the same.
+func (c Caller) UsesStructuredArgs() bool {
+	return c == CallerMCP || c == CallerAPI
+}
 
 // Request is the normalized execution request shared across adapters.
 type Request struct {

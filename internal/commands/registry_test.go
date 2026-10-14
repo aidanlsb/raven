@@ -126,6 +126,7 @@ func TestRequiresVaultMetadata(t *testing.T) {
 	noVaultCommands := []string{
 		"init",
 		"serve",
+		"mcp_serve",
 		"version",
 		"config",
 		"config_show",

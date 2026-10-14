@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func TestCallerUsesStructuredArgs(t *testing.T) {
+	t.Parallel()
+	if CallerCLI.UsesStructuredArgs() {
+		t.Fatal("CLI should not use structured args")
+	}
+	if !CallerMCP.UsesStructuredArgs() {
+		t.Fatal("MCP should use structured args")
+	}
+	if !CallerAPI.UsesStructuredArgs() {
+		t.Fatal("API should use structured args")
+	}
+}
+
 func TestInvokerExecuteCallsRegisteredHandler(t *testing.T) {
 	t.Parallel()
 	registry := NewHandlerRegistry()

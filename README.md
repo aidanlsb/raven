@@ -97,7 +97,7 @@ rvn mcp show
 rvn mcp show --client cursor
 ```
 
-See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
+See the full [MCP reference](docs/agents/mcp.md), [local HTTP API](docs/agents/local-api.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 
 ## Doing it by hand
 
@@ -261,6 +261,7 @@ where they're stored via `directories.daily` in `raven.yaml`. See the
 - [Bulk Operations](docs/vault-management/bulk-operations.md)
 - [Import](docs/vault-management/import.md)
 - [MCP Reference](docs/agents/mcp.md)
+- [Local HTTP API](docs/agents/local-api.md)
 
 You can also browse the docs from the CLI:
 

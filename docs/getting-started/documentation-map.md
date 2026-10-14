@@ -11,6 +11,7 @@ model, rules, and end-to-end workflows.
 | Install Raven and create a vault | [Installation](installation.md) → [First vault](first-vault.md) |
 | Learn the mental model | [Core concepts](core-concepts.md) |
 | Connect an agent | [Agent setup](agent-setup.md) → [MCP reference](../agents/mcp.md) |
+| Drive a companion UI | [Local HTTP API](../agents/local-api.md) |
 | Use everyday commands | [Common commands](../using-your-vault/common-commands.md) |
 | Design or change a schema | [Schema introduction](../types-and-traits/schema-intro.md) → [Schema reference](../types-and-traits/schema.md) |
 | Write structured Markdown | [File format](../types-and-traits/file-format.md) → [References](../types-and-traits/references.md) |
@@ -37,7 +38,8 @@ model, rules, and end-to-end workflows.
   [maintainer internals](../querying/internals.md).
 - **Vault management:** [bulk operations](../vault-management/bulk-operations.md)
   and [import](../vault-management/import.md).
-- **Agents:** [MCP reference](../agents/mcp.md). MCP clients should begin with
+- **Agents:** [MCP reference](../agents/mcp.md) and
+  [local HTTP API](../agents/local-api.md). MCP clients should begin with
   `raven://guide/index`; packaged skills are listed in
   [Agent setup](agent-setup.md).
 

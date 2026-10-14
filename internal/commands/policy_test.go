@@ -23,6 +23,18 @@ func TestPolicyForCommandID(t *testing.T) {
 			wantDiscover:  false,
 		},
 		{
+			name:          "mcp serve is not invokable",
+			commandID:     "mcp_serve",
+			wantInvokable: false,
+			wantDiscover:  false,
+		},
+		{
+			name:          "api is not invokable",
+			commandID:     "api",
+			wantInvokable: false,
+			wantDiscover:  false,
+		},
+		{
 			name:          "non-invokable grouping command",
 			commandID:     "template",
 			wantInvokable: false,

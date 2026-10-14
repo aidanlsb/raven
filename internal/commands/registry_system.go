@@ -42,8 +42,8 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 			"Initialize first-run setup before any other MCP tool calls",
 		},
 	},
-	"serve": {
-		Name:        "serve",
+	"mcp_serve": {
+		Name:        "mcp serve",
 		Description: "Run Raven as an MCP server",
 		VaultScope:  VaultScopeNone,
 		LongDesc: `Run Raven as an MCP server over stdio.
@@ -51,12 +51,50 @@ switch_back, invocable actions, and guidance. Changing the default remains an ex
 Vault-scoped calls must provide vault or vault_path unless the server is pinned
 with --vault or --vault-path.`,
 		Examples: []string{
-			"rvn serve",
-			"rvn serve --vault personal",
-			"rvn serve --vault-path /path/to/vault",
+			"rvn mcp serve",
+			"rvn mcp serve --vault personal",
+			"rvn mcp serve --vault-path /path/to/vault",
 		},
 		UseCases: []string{
 			"Launch Raven MCP server for local clients",
+		},
+	},
+	"serve": {
+		Name:        "serve",
+		Description: "Run Raven as an MCP server (deprecated alias for mcp serve)",
+		VaultScope:  VaultScopeNone,
+		LongDesc: `Deprecated alias for 'rvn mcp serve'. Prints a deprecation notice on stderr
+and runs the MCP server over stdio.`,
+		Examples: []string{
+			"rvn serve",
+			"rvn mcp serve --vault-path /path/to/vault",
+		},
+		UseCases: []string{
+			"Launch Raven MCP server for local clients that still pass args [serve]",
+		},
+	},
+	"api": {
+		Name:        "api",
+		Description: "Run Raven's local HTTP API for companion UIs",
+		VaultScope:  VaultScopeRequired,
+		LongDesc: `Run a headless HTTP API bound to 127.0.0.1 for companion UIs such as Perch.
+
+Every invoke goes through the canonical command layer. A bearer token is
+generated per run unless --token or RAVEN_API_TOKEN is set. Use --json to print
+a single-line startup object a launcher can parse.`,
+		Flags: []FlagMeta{
+			{Name: "port", Description: "Listen port (0 = OS-assigned; also RAVEN_API_PORT)", Type: FlagTypeInt, Default: "7437"},
+			{Name: "token", Description: "Bearer token (generated per run if omitted; also RAVEN_API_TOKEN)", Type: FlagTypeString},
+			{Name: "cors-origin", Description: "Allowed CORS origin (repeatable; also RAVEN_API_CORS_ORIGINS)", Type: FlagTypeStringSlice},
+		},
+		Examples: []string{
+			"rvn api --vault-path /path/to/vault",
+			"rvn api --json --port 0",
+			"rvn api --token \"$RAVEN_API_TOKEN\" --cors-origin http://localhost:5173",
+		},
+		UseCases: []string{
+			"Launch the local API for a companion UI",
+			"Print a JSON startup line a Tauri launcher can parse",
 		},
 	},
 	"lsp": {

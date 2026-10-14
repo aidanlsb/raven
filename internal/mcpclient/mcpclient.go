@@ -150,7 +150,7 @@ func resolveInvokedCommand(raw string) string {
 // configPath preserves CLI config resolution context; vaultName and vaultPath
 // are optional vault pinning args.
 func BuildServerEntry(configPath, vaultName, vaultPath string) ServerEntry {
-	args := []string{"serve"}
+	args := []string{"mcp", "serve"}
 	if configPath != "" {
 		args = append(args, "--config", configPath)
 	}

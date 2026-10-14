@@ -60,16 +60,24 @@ crafted path, reference, or symlink) are security bugs. Please report them.
 
 ### MCP server and AI agents
 
-`rvn serve` speaks JSON-RPC over stdin/stdout. There is no network listener
-and no authentication layer: **any MCP client you connect has the same power
-over the vault as you do running `rvn` yourself**, including creating,
-modifying, and deleting notes.
+`rvn mcp serve` (formerly `rvn serve`) speaks JSON-RPC over stdin/stdout. There
+is no network listener and no authentication layer: **any MCP client you
+connect has the same power over the vault as you do running `rvn` yourself**,
+including creating, modifying, and deleting notes.
 
 Treat connecting an agent to your vault as granting it full read/write access
 to that vault's contents. Raven's safety measures for agents (preview-first
 bulk operations, confirm flags, protected paths) reduce the blast radius of
 mistakes, but they are not a security boundary against a malicious or
 compromised agent.
+
+### Local HTTP API
+
+`rvn api` binds to `127.0.0.1` only and requires a per-run bearer token.
+Non-loopback `Host` headers are rejected (DNS-rebinding protection), and CORS
+is an origin allowlist. The token is a capability for the allowlisted command
+surface of that process: treat it like a local secret and do not expose the
+port or token beyond the companion UI on the same machine.
 
 ### Local configuration is trusted
 

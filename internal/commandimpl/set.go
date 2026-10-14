@@ -14,21 +14,21 @@ import (
 )
 
 func setFieldsJSONHint(caller commandexec.Caller) string {
-	if caller == commandexec.CallerMCP {
+	if caller.UsesStructuredArgs() {
 		return `Provide a JSON object under fields-json, for example {"status":"active"}`
 	}
 	return `Provide a JSON object, e.g. --fields-json '{"status":"active"}'`
 }
 
 func setMissingBulkReferences(caller commandexec.Caller) (string, string) {
-	if caller == commandexec.CallerMCP {
+	if caller.UsesStructuredArgs() {
 		return "no references provided for bulk set", "Provide references for the bulk update and retry"
 	}
 	return "no references provided via stdin", "Pipe references to stdin, one per line"
 }
 
 func setMissingFields(caller commandexec.Caller, bulk bool) string {
-	if caller == commandexec.CallerMCP {
+	if caller.UsesStructuredArgs() {
 		if bulk {
 			return "Provide fields or fields-json in args"
 		}
@@ -41,7 +41,7 @@ func setMissingFields(caller commandexec.Caller, bulk bool) string {
 }
 
 func setMissingReference(caller commandexec.Caller) (string, string) {
-	if caller == commandexec.CallerMCP {
+	if caller.UsesStructuredArgs() {
 		return "requires reference", "Provide reference and retry"
 	}
 	return "requires reference", "Usage: rvn set <reference> field=value..."
