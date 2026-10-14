@@ -250,7 +250,7 @@ func TestInstallUpdate(t *testing.T) {
 	servers := data["mcpServers"].(map[string]interface{})
 	raven := servers["raven"].(map[string]interface{})
 	args := raven["args"].([]interface{})
-	if len(args) != 3 || args[1] != "--vault" {
+	if len(args) != 4 || args[2] != "--vault" {
 		t.Fatalf("unexpected args after update: %v", args)
 	}
 }
