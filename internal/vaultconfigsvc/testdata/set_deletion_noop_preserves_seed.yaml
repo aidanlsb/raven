@@ -1,0 +1,3 @@
+deletion:
+  behavior: trash
+  trash_dir: archive/trash

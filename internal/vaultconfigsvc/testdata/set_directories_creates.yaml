@@ -1,0 +1,4 @@
+directories:
+    daily: journal/
+    type: objects/
+    template: templates/custom/
