@@ -26,6 +26,10 @@ func TestIntegration_APIServerAgainstTempVault(t *testing.T) {
 		Build()
 
 	binary := testutil.BuildCLI(t)
+	reindex := exec.Command(binary, "--vault-path", vault.Path, "--json", "reindex", "--full")
+	if out, err := reindex.CombinedOutput(); err != nil {
+		t.Fatalf("reindex: %v\n%s", err, out)
+	}
 	cmd := exec.Command(binary, "--vault-path", vault.Path, "--json", "api", "--port", "0", "--token", "integration-token")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -111,6 +115,12 @@ func TestIntegration_APIServerAgainstTempVault(t *testing.T) {
 			VaultPath  string `json:"vault_path"`
 			Editor     string `json:"editor"`
 			EditorMode string `json:"editor_mode"`
+			Daily      struct {
+				Directory   string `json:"directory"`
+				TodayID     string `json:"today_id"`
+				TodayPath   string `json:"today_path"`
+				TodayExists bool   `json:"today_exists"`
+			} `json:"daily"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(sessionResp.Body).Decode(&sessionEnvelope); err != nil {
@@ -127,6 +137,9 @@ func TestIntegration_APIServerAgainstTempVault(t *testing.T) {
 	}
 	if sessionEnvelope.Data.EditorMode == "" {
 		t.Fatal("session editor_mode is empty")
+	}
+	if sessionEnvelope.Data.Daily.Directory == "" || sessionEnvelope.Data.Daily.TodayID == "" || sessionEnvelope.Data.Daily.TodayPath == "" {
+		t.Fatalf("session daily = %#v, want directory/today_id/today_path", sessionEnvelope.Data.Daily)
 	}
 
 	schemaReq, err := http.NewRequest(http.MethodGet, envelope.Data.URL+"/v1/schema", nil)
@@ -193,6 +206,36 @@ func TestIntegration_APIServerAgainstTempVault(t *testing.T) {
 	}
 	if blockedEnvelope.OK || blockedEnvelope.Error == nil || blockedEnvelope.Error.Code != "COMMAND_NOT_ALLOWED" {
 		t.Fatalf("delete allowlist = %#v, want COMMAND_NOT_ALLOWED", blockedEnvelope)
+	}
+
+	objectsReq, err := http.NewRequest(http.MethodPost, envelope.Data.URL+"/v1/invoke", strings.NewReader(`{"command":"objects","args":{}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth(objectsReq)
+	objectsReq.Header.Set("Content-Type", "application/json")
+	objectsResp, err := client.Do(objectsReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer objectsResp.Body.Close()
+	var objectsEnvelope struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Items []struct {
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Name     string `json:"name"`
+				FilePath string `json:"file_path"`
+			} `json:"items"`
+			Total int `json:"total"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(objectsResp.Body).Decode(&objectsEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	if !objectsEnvelope.OK || objectsEnvelope.Data.Total < 1 {
+		t.Fatalf("objects invoke = %#v", objectsEnvelope)
 	}
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {

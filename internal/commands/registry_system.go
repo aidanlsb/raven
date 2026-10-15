@@ -72,9 +72,11 @@ POST /v1/invoke runs through the same command layer as the CLI and MCP.
 The MVP allowlist is read-only vault commands plus set, unset, new, and move.
 
 GET /v1/health is liveness. GET /v1/session is the attach handshake: the
-absolute vault root plus the editor command and editor_mode that rvn open
-resolves (config.toml, then $EDITOR). Companion UIs should read session
-rather than reimplementing editor resolution or invoking vault_path.
+absolute vault root, the editor command and editor_mode that rvn open
+resolves (config.toml, then $EDITOR), and today's daily-note identity
+(directory, today_id, today_path, today_exists) using the same date/timezone
+rules as rvn daily/date without creating a file. Companion UIs should read
+session rather than reimplementing editor, date, or vault_path resolution.
 
 On startup Raven prints the listen URL and token. Pass --json for a single
 startup envelope line that a launcher (for example Tauri) can parse.`,
@@ -91,7 +93,7 @@ startup envelope line that a launcher (for example Tauri) can parse.`,
 		UseCases: []string{
 			"Launch the local HTTP API for a companion UI such as Perch",
 			"Print a JSON startup line a native launcher can parse",
-			"Attach a companion UI and read the bound vault and resolved editor from GET /v1/session",
+			"Attach a companion UI and read the bound vault, resolved editor, and today's daily note from GET /v1/session",
 		},
 	},
 	"lsp": {

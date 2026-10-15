@@ -3,8 +3,6 @@ package readsvc
 import (
 	"errors"
 	"fmt"
-	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -53,7 +51,7 @@ func Date(rt *vaultruntime.Runtime, dateArg string) (*DateResult, error) {
 	result := &DateResult{
 		Date: dateStr, DayOfWeek: targetDate.Format("Monday"),
 		DailyNoteID: rt.VaultCfg.DailyNoteID(dateStr),
-		DailyPath:   filepath.ToSlash(path.Join(rt.VaultCfg.GetDailyDirectory(), dateStr+".md")),
+		DailyPath:   rt.VaultCfg.DailyNoteRelPath(dateStr),
 		Items:       []DateAssociation{}, Backlinks: []model.Reference{},
 	}
 	if err := rt.OpenDB(); err != nil {

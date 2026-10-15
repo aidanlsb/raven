@@ -62,7 +62,7 @@ type TraitSchema struct {
 type SavedQueryInfo struct {
 	Name        string   `json:"name"`
 	Query       string   `json:"query"`
-	Args        []string `json:"args,omitempty"`
+	Args        []string `json:"args"`
 	Description string   `json:"description,omitempty"`
 }
 
@@ -147,10 +147,17 @@ func FullSchema(rt *vaultruntime.Runtime) (*SchemaResult, error) {
 	if vaultCfg != nil && len(vaultCfg.Queries) > 0 {
 		result.Queries = make(map[string]SavedQueryInfo)
 		for name, q := range vaultCfg.Queries {
+			if q == nil {
+				continue
+			}
+			args := q.Args
+			if args == nil {
+				args = []string{}
+			}
 			result.Queries[name] = SavedQueryInfo{
 				Name:        name,
 				Query:       q.Query,
-				Args:        q.Args,
+				Args:        args,
 				Description: q.Description,
 			}
 		}

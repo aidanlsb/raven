@@ -18,6 +18,7 @@ var allowedReadCommands = map[string]struct{}{
 	"query":                {},
 	"query_saved_list":     {},
 	"query_saved_get":      {},
+	"objects":              {},
 	"read":                 {},
 	"backlinks":            {},
 	"outlinks":             {},

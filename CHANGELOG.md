@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `GET /v1/session` now includes `daily: { directory, today_id, today_path, today_exists }`, resolved with the same daily-note directory, object ID, and host-local "today" rules as `rvn daily` / `rvn date`. Session never creates the file.
+- Local HTTP `POST /v1/invoke` documents and tests saved-query `inputs` maps (`{{args.*}}`), matching MCP. `GET /v1/schema` and `query_saved_list` / `query_saved_get` always expose each saved query's declared `args` as an array so clients can prompt for them.
+- New read-only `objects` command (`rvn objects`, MCP, and allowlisted on `rvn api`) lists every indexed object as `id`, `type`, `name`, and `file_path` with no bodies. Pagination uses the same `limit`/`offset`/`has_more` contract as `query`. This is the picker corpus; a dedicated `GET /v1/objects` route was not added because paging arguments already live on the command spine.
+
 ## [v0.0.37] - 2026-10-14
 
 ### Added

@@ -26,6 +26,7 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 - `outlinks <reference>` — outgoing references from one object (structured equivalent: `query "... refs(...)"`).
 - `resolve <reference>` — map an accepted reference input to its canonical object ID without reading content; use that ID in authored references.
 - `read <reference>` — full file content once you have identified the object.
+- `objects` — cheap index-backed corpus of every object (`id`, `type`, `name`, `file_path`, no bodies). Page with `limit`/`offset`. Use for fuzzy pickers; do not use it as a substitute for structured `query`.
 - `date <date>` — everything for a date; in RQL use `type:date .date==<date>` for the daily-note object or `trait:due .value==<date>` for items due that day.
 - If the user asks for actual open tasks, due items, briefs, or typed items, start with `query`.
 
@@ -67,7 +68,13 @@ use structured JSON rows or `ids`. `apply` cannot be combined with `limit`,
 
 ```text
 raven_invoke(command="query", args={"query_string":"open-projects","limit":100})
+raven_invoke(command="query", args={"query_string":"project-todos","inputs":{"project":"projects/raven"}})
+raven_invoke(command="query_saved_list")
+raven_invoke(command="objects", args={"limit":200,"offset":0})
 ```
+
+Declared saved-query inputs are on each list/get entry as `args` (always an
+array). Pass values in `inputs` when invoking `query`.
 
 Sections use the bare `section` query root and return heading-derived rows with
 IDs like `file#slug`. Section rows include `line_start`, direct `line_end`, and

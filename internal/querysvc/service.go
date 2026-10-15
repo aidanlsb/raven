@@ -25,13 +25,16 @@ type SavedQueryInfo struct {
 // commands and the raven://queries/saved MCP resource, so the CLI, MCP tool, and
 // resource views of saved queries stay identical.
 func (q SavedQueryInfo) Payload() map[string]interface{} {
-	data := map[string]interface{}{
+	args := q.Args
+	if args == nil {
+		args = []string{}
+	}
+	return map[string]interface{}{
 		"name":        q.Name,
 		"query":       q.Query,
-		"args":        q.Args,
+		"args":        args,
 		"description": q.Description,
 	}
-	return data
 }
 
 type ListResult struct {

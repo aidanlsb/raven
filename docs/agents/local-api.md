@@ -77,7 +77,7 @@ Bound session for attach-only clients (a UI that did not spawn `rvn api` and
 therefore never saw the startup envelope). Requires the bearer token.
 
 ```json
-{"ok":true,"data":{"api_version":"1","vault_path":"/path/to/vault","editor":"code","editor_mode":"auto"}}
+{"ok":true,"data":{"api_version":"1","vault_path":"/path/to/vault","editor":"code","editor_mode":"auto","daily":{"directory":"daily","today_id":"2026-10-15","today_path":"daily/2026-10-15.md","today_exists":false}}}
 ```
 
 | Field | Meaning |
@@ -85,18 +85,30 @@ therefore never saw the startup envelope). Requires the bearer token.
 | `vault_path` | Absolute vault root this process is pinned to |
 | `editor` | Command `rvn open` would launch: `config.toml` `editor`, else `$EDITOR`, else `""` |
 | `editor_mode` | Canonical launch mode `rvn open` applies: `auto`, `terminal`, or `gui` (empty config is `auto`; aliases such as `tui` become `terminal`) |
+| `daily.directory` | Vault-relative daily-note directory (`directories.daily`, default `daily`) |
+| `daily.today_id` | Canonical object ID for today (bare `YYYY-MM-DD`, same as `rvn date today`) |
+| `daily.today_path` | Vault-relative path for today's note (`daily/YYYY-MM-DD.md`) |
+| `daily.today_exists` | Whether that file is already on disk. Session never creates it; call `daily` to create |
 | `api_version` | Same contract version as health and `/v1/commands` |
 
+`daily` uses Raven's existing today/timezone rules (`time.Now()` on the host,
+the same calendar date as `rvn daily` / `rvn date today`) and the vault's
+`directories.daily` layout. It does not write files.
+
 This lives on `/v1/session` rather than `/v1/health` so health stays a cheap
-liveness probe. Session is the attach handshake: which vault, and how to open
-files the way Raven itself would, without reimplementing config/`$EDITOR`
-resolution or invoking `vault_path`.
+liveness probe. Session is the attach handshake: which vault, how to open
+files the way Raven itself would, and where today's daily note lives, without
+reimplementing config/`$EDITOR`/date resolution or invoking `vault_path`.
 
 ### `GET /v1/schema`
 
 The vault schema: types, fields (including enum `values`), traits, and related
 introspection. This is the same payload as `rvn schema --json`, produced by the
-canonical `schema` command.
+canonical `schema` command. When the vault defines saved queries, `data.queries`
+includes each query's `name`, `query`, `args` (the declared `{{args.*}}` names,
+always an array, empty if none), and `description`. `POST /v1/invoke` of
+`query_saved_list` / `query_saved_get` returns the same `args` field so a client
+can prompt for them.
 
 ### `GET /v1/commands`
 
@@ -105,13 +117,40 @@ the command registry: id, summary, description, `read_only`, `destructive`,
 `preview_mode`, `args_schema`, and `schema_hash`, plus `api_version`. Type the
 UI against this document rather than a hard-coded command list. HTTP routes
 (`/v1/health`, `/v1/session`, `/v1/schema`, `/v1/commands`, `/v1/invoke`) are
-not commands; they are documented above.
+not commands; they are documented above. `objects` is a command on
+`/v1/invoke`, not a dedicated HTTP route.
 
 ### `POST /v1/invoke`
 
 ```json
 {"command":"read","args":{"reference":"people/freya"}}
 ```
+
+Saved queries take the same `inputs` map MCP uses. Pass the saved query name as
+`query_string` and bind `{{args.*}}` placeholders from `args.inputs`. Discover
+declared names from `GET /v1/schema` `data.queries[].args` or
+`query_saved_list`:
+
+```json
+{"command":"query","args":{"query_string":"project-todos","inputs":{"project":"projects/raven"}}}
+```
+
+The `objects` command is the cheap all-object corpus for fuzzy pickers. It is
+served from the index (no file bodies) and paginates like `query`
+(`limit` `0` means no limit):
+
+```json
+{"command":"objects","args":{"limit":200,"offset":0}}
+```
+
+```json
+{"ok":true,"data":{"items":[{"id":"people/freya","type":"person","name":"Freya","file_path":"people/freya.md"}],"total":1,"returned":1,"offset":0,"limit":200,"has_more":false}}
+```
+
+`objects` is an allowlisted read command rather than a dedicated `GET /v1/objects`
+route: listing needs the same `limit`/`offset` contract as `query`, and the
+command spine already exposes that to CLI, MCP, and `/v1/invoke`. `/v1/schema`
+stays a GET shortcut because it has no paging arguments.
 
 Enriched `read` JSON includes `data.links`: each `[[wikilink]]` in `data.content`
 with UTF-8 byte and UTF-16 code-unit offsets, the raw text, the target as
@@ -131,8 +170,8 @@ for about two seconds with backoff, then returns the error.
 
 MVP commands:
 
-- Read: `query`, `query_saved_list`, `query_saved_get`, `read`, `backlinks`,
-  `outlinks`, `search`, `daily`, `date`, `schema`, `schema_validate`,
+- Read: `query`, `query_saved_list`, `query_saved_get`, `objects`, `read`,
+  `backlinks`, `outlinks`, `search`, `daily`, `date`, `schema`, `schema_validate`,
   `schema_template_list`, `schema_template_get`, `vault_stats`, `resolve`,
   `check`, `trash_list`
 - Write: `set`, `unset`, `new`, `move`
@@ -154,5 +193,13 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/schema
 curl -sS -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"command":"query","args":{"query_string":"type:person"}}' \
+  http://127.0.0.1:7438/v1/invoke
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"query","args":{"query_string":"project-todos","inputs":{"project":"projects/raven"}}}' \
+  http://127.0.0.1:7438/v1/invoke
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"objects","args":{"limit":200,"offset":0}}' \
   http://127.0.0.1:7438/v1/invoke
 ```

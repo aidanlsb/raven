@@ -68,6 +68,63 @@ func (d *Database) AllObjects() ([]model.Object, error) {
 	return results, rows.Err()
 }
 
+// ObjectSummaryRow is one indexed object without parsed field values or body.
+type ObjectSummaryRow struct {
+	ID         string
+	Type       string
+	FieldsJSON string
+	FilePath   string
+}
+
+// ListObjectSummaries returns a page of indexed file-backed objects plus the
+// total object count. limit 0 means no limit (same as query). Bodies are never
+// loaded; FieldsJSON is only the frontmatter JSON needed to derive a display name.
+func (d *Database) ListObjectSummaries(limit, offset int) ([]ObjectSummaryRow, int, error) {
+	var total int
+	if err := d.db.QueryRow(`SELECT COUNT(*) FROM objects`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	sqlStr := `
+		SELECT id, type, fields, file_path
+		FROM objects
+		ORDER BY file_path, id`
+	var args []interface{}
+	switch {
+	case limit > 0 && offset > 0:
+		sqlStr += "\nLIMIT ? OFFSET ?"
+		args = []interface{}{limit, offset}
+	case limit > 0:
+		sqlStr += "\nLIMIT ?"
+		args = []interface{}{limit}
+	case offset > 0:
+		sqlStr += "\nLIMIT -1 OFFSET ?"
+		args = []interface{}{offset}
+	}
+
+	rows, err := d.db.Query(sqlStr, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var results []ObjectSummaryRow
+	for rows.Next() {
+		var row ObjectSummaryRow
+		if err := rows.Scan(&row.ID, &row.Type, &row.FieldsJSON, &row.FilePath); err != nil {
+			return nil, 0, err
+		}
+		results = append(results, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if results == nil {
+		results = []ObjectSummaryRow{}
+	}
+	return results, total, nil
+}
+
 // AllSections returns all indexed heading-derived sections.
 func (d *Database) AllSections() ([]model.Section, error) {
 	rows, err := d.db.Query(`

@@ -25,6 +25,9 @@ Each paged response includes `total`, `returned`, `offset`, `limit`, and
 Loop while `has_more` is `true`, sending the returned `next_offset` as the next
 request's `offset`; stop when `has_more` is `false`. Do not guess offsets.
 
+The `objects` command uses the same paging fields. Use it when you need every
+object's id/type/name/path without bodies; keep `query` for structured filters.
+
 ## 3. Use IDs for follow-up flows
 
 ```text

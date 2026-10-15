@@ -208,6 +208,7 @@ func TestValidateRequestRejectsEmptyVaultPathForVaultCommands(t *testing.T) {
 		"daily",
 		"date",
 		"query_saved_list",
+		"objects",
 		"reindex",
 		"vault_path",
 		"vault_stats",

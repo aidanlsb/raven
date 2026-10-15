@@ -3,21 +3,34 @@ package localapi
 import (
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/configsvc"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-// Session is the GET /v1/session payload: the bound vault and the editor
-// OpenInEditor would use for this process.
+// Session is the GET /v1/session payload: the bound vault, the editor
+// OpenInEditor would use for this process, and today's daily-note identity.
 type Session struct {
-	APIVersion string `json:"api_version"`
-	VaultPath  string `json:"vault_path"`
-	Editor     string `json:"editor"`
-	EditorMode string `json:"editor_mode"`
+	APIVersion string       `json:"api_version"`
+	VaultPath  string       `json:"vault_path"`
+	Editor     string       `json:"editor"`
+	EditorMode string       `json:"editor_mode"`
+	Daily      SessionDaily `json:"daily"`
+}
+
+// SessionDaily is today's daily-note identity for the bound vault. It uses the
+// same date argument, timezone, and directories.daily rules as `rvn daily` /
+// `rvn date`. It never creates a file.
+type SessionDaily struct {
+	Directory   string `json:"directory"`
+	TodayID     string `json:"today_id"`
+	TodayPath   string `json:"today_path"`
+	TodayExists bool   `json:"today_exists"`
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +57,27 @@ func (s *Server) session() Session {
 		VaultPath:  s.vaultPath,
 		Editor:     editor,
 		EditorMode: mode,
+		Daily:      s.sessionDaily(),
+	}
+}
+
+func (s *Server) sessionDaily() SessionDaily {
+	vaultCfg := config.DefaultVaultConfig()
+	if strings.TrimSpace(s.vaultPath) != "" {
+		loaded, err := config.LoadVaultConfig(s.vaultPath)
+		if err == nil && loaded != nil {
+			vaultCfg = loaded
+		}
+	}
+	identity, err := objectsvc.ResolveDaily(s.vaultPath, vaultCfg, "today")
+	if err != nil {
+		return SessionDaily{Directory: vaultCfg.GetDailyDirectory()}
+	}
+	return SessionDaily{
+		Directory:   identity.Directory,
+		TodayID:     identity.ID,
+		TodayPath:   identity.RelativePath,
+		TodayExists: identity.Exists,
 	}
 }
 

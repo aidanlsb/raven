@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -403,6 +404,12 @@ func SaveVaultConfig(vaultPath string, cfg *VaultConfig) error {
 // DailyNotePath returns the full path for a daily note given a date string (YYYY-MM-DD).
 func (vc *VaultConfig) DailyNotePath(vaultPath, date string) string {
 	return filepath.Join(vaultPath, vc.GetDailyDirectory(), date+".md")
+}
+
+// DailyNoteRelPath returns the vault-relative POSIX path for a daily note
+// (directories.daily + YYYY-MM-DD.md).
+func (vc *VaultConfig) DailyNoteRelPath(date string) string {
+	return filepath.ToSlash(path.Join(vc.GetDailyDirectory(), date+".md"))
 }
 
 // DailyNoteID returns the object ID for a daily note given a date string.

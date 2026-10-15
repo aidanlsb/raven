@@ -212,6 +212,13 @@ func TestVaultConfigPaths(t *testing.T) {
 		}
 	})
 
+	t.Run("DailyNoteRelPath", func(t *testing.T) {
+		got := cfg.DailyNoteRelPath("2025-02-01")
+		if got != "daily/2025-02-01.md" {
+			t.Errorf("got %q, want daily/2025-02-01.md", got)
+		}
+	})
+
 	t.Run("DailyNoteID", func(t *testing.T) {
 		// The canonical daily-note object ID is a bare ISO date.
 		id := cfg.DailyNoteID("2025-02-01")

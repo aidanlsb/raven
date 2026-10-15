@@ -125,3 +125,18 @@ type QueryCountResult struct {
 	Trait     string `json:"trait,omitempty"`
 	Total     int    `json:"total"`
 }
+
+// ObjectSummaryItem is one indexed object for fuzzy pickers: identity and a
+// display name, with no body or field map.
+type ObjectSummaryItem struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Name     string `json:"name"`
+	FilePath string `json:"file_path"`
+}
+
+// ObjectsResult is the success payload for `objects`.
+type ObjectsResult struct {
+	Items []ObjectSummaryItem `json:"items"`
+	Pagination
+}

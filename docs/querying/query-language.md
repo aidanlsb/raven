@@ -14,6 +14,7 @@
 | `rvn backlinks` | All incoming references to one specific object or section |
 | `rvn outlinks` | All outgoing references from one specific target |
 | `rvn read` | Full file content after you already identified relevant objects |
+| `rvn objects` | Cheap vault-wide corpus of every object (`id`, `type`, `name`, `file_path`; no bodies) |
 | `rvn resolve` | Map an accepted reference input to its canonical target ID (no content) |
 | `rvn date` / `rvn daily` | Everything for one date / open or create a daily note |
 
@@ -26,6 +27,7 @@ Retrieval commands overlap. When several could work, this table picks the sharpe
 | What links here (incoming refs) | `rvn backlinks <reference>` | `rvn query '... refd(...)'` for structured/bulk use; `rvn read <reference>` appends backlinks after content |
 | What does this link to (outgoing) | `rvn outlinks <reference>` | `rvn query '... refs(...)'` when you need structured filtering |
 | Resolve an alias, date, or other reference input | `rvn resolve <reference>` | Use the returned canonical ID when authoring references; `rvn read <reference>` also resolves, but returns full content |
+| Load every object id/type/name/path for a picker | `rvn objects` | `rvn query 'type:<t>'` when you already know the type; `objects` is index-backed and omits bodies |
 | Everything on a date | `rvn date <date>` / `rvn daily <date>` | `rvn query 'type:date .date==<date>'` for the daily-note object; `rvn query 'trait:due .value==<date>'` for items due that date |
 
 ### Choose query type
