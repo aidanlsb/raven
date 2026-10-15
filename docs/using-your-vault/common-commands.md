@@ -89,6 +89,21 @@ rvn open                                  # Interactive Raven picker
 
 ## Finding content
 
+### `rvn objects`
+
+List every indexed object as `id`, `type`, a display `name`, and `file_path`.
+Bodies and field maps are omitted. Use this as a cheap vault-wide corpus for
+fuzzy pickers; use `rvn query` when you need structured filters.
+
+```bash
+rvn objects --json
+rvn objects --limit 200 --offset 0 --json
+```
+
+`--limit 0` (the default) returns the complete list. JSON includes `total`,
+`returned`, `offset`, `limit`, and `has_more` (plus `next_offset` when more
+remain), the same pagination contract as `query`.
+
 ### `rvn search`
 
 Search file text by relevance. Use `rvn query` when you already know the type, trait, or link structure.

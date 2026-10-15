@@ -59,6 +59,7 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 		})
 	}
 	registry.Register("vault_stats", HandleVaultStats)
+	registry.Register("objects", HandleObjects)
 	registry.Register("search", HandleSearch)
 	registry.Register("read", HandleRead)
 	registry.Register("open", HandleOpen)

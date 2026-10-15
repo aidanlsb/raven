@@ -23,6 +23,8 @@ Choose the right retrieval tool:
   (Equivalent query: refd(...); read also appends backlinks.)
 - outlinks <reference> — all outgoing references from one specific object.
 - read <reference> — full file content after you already identified the object.
+- objects — cheap index-backed corpus of every object (id, type, name, path; no
+  bodies). Page with --limit/--offset. Use for fuzzy pickers, not structured filters.
 - resolve <reference> — turn an accepted reference input into its canonical target ID
   without reading content; use that ID when authoring references.
 - date <date> / daily <date> — everything for one date. In queries, use
@@ -185,6 +187,38 @@ For trait queries (trait:...):
 			"Page through large result sets with --limit/--offset while has_more is true",
 			"Bulk update query results with --apply",
 			"Pipe query results to other commands with --ids",
+		},
+	},
+	"objects": {
+		Name:        "objects",
+		Description: "List every indexed object as id, type, name, and path (no bodies)",
+		LongDesc: `List every file-backed object in the vault index as a cheap picker corpus.
+
+Each row is id, type, a display name, and the vault-relative file path. Bodies
+and field maps are omitted. The display name is the schema name_field for that
+type, then title, then name.
+
+Results come from the derived SQLite index, not from walking markdown files.
+Use --limit/--offset to page large vaults. --limit 0 (the default) returns the
+complete list. JSON includes total, returned, offset, limit, and has_more
+(plus next_offset when has_more is true), the same pagination contract as query.
+
+This is the general-purpose object catalog for fuzzy pickers and attach-only
+UIs. Use query when you need structured filters, search when you only have a
+text fragment, and read when you already have an id and need the body.`,
+		Flags: []FlagMeta{
+			{Name: "limit", Description: "Maximum number of objects to return (0 means no limit)", Type: FlagTypeInt},
+			{Name: "offset", Description: "Zero-based offset into the object list", Type: FlagTypeInt},
+		},
+		Examples: []string{
+			"rvn objects --json",
+			"rvn objects --limit 200 --offset 0 --json",
+			"rvn objects --limit 200 --offset 200 --json",
+		},
+		UseCases: []string{
+			"Load a vault-wide object corpus for a fuzzy picker",
+			"Page through large vaults without reading file bodies",
+			"Resolve display names for object ids from the index",
 		},
 	},
 	"query_saved_list": {

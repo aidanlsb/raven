@@ -489,7 +489,7 @@ func TestCommandsListsAllowlistAndVersion(t *testing.T) {
 			t.Errorf("commands listed disallowed %q", cmd.ID)
 		}
 	}
-	for _, id := range []string{"query", "set", "new", "move"} {
+	for _, id := range []string{"query", "objects", "set", "new", "move"} {
 		if !seen[id] {
 			t.Errorf("missing command %q", id)
 		}

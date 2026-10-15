@@ -98,7 +98,7 @@ func annotateMutationPhase(_ context.Context, req commandexec.Request, result co
 
 func surfacesIndexDirtyWarning(commandID string) bool {
 	switch commandID {
-	case "query", "search", "read", "resolve", "backlinks", "outlinks", "open", "date", "check", "vault_stats":
+	case "query", "search", "read", "resolve", "backlinks", "outlinks", "open", "date", "check", "vault_stats", "objects":
 		return true
 	default:
 		return false
@@ -119,6 +119,17 @@ func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Re
 	spec := commands.BuildInvokeParamSpec(contract)
 
 	normalized, issues := commands.ValidateArgumentsStrict(spec, req.Args)
+	if req.CommandID == "query" {
+		for i := range issues {
+			if issues[i].Code != "UNKNOWN_ARGUMENT" {
+				continue
+			}
+			switch issues[i].Field {
+			case "args", "saved":
+				issues[i].Hint = "Pass the saved query name as args.query_string and any saved-query parameters in args.inputs."
+			}
+		}
+	}
 	if len(issues) > 0 {
 		return req, commandexec.Failure(
 			"INVALID_ARGS",

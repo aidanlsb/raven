@@ -234,6 +234,7 @@ This tool list is generated from the command registry and should stay in sync wi
 - `read`
 - `search`
 - `query`
+- `objects`
 - `new`
 - `add`
 - `set`

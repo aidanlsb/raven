@@ -84,7 +84,7 @@ func defaultCategoryForCommandID(commandID string) Category {
 	commandID = strings.ReplaceAll(commandID, " ", "_")
 	switch commandID {
 	case "query", "query_saved_list", "query_saved_get", "query_saved_set", "query_saved_remove",
-		"search", "backlinks", "outlinks", "resolve":
+		"search", "backlinks", "outlinks", "resolve", "objects":
 		return CategoryQuery
 	case "new", "add", "write", "set", "unset",
 		"delete", "move", "reclassify", "import",
@@ -106,6 +106,7 @@ func defaultAccessForCommandID(commandID string) AccessMode {
 	commandID = strings.ReplaceAll(commandID, " ", "_")
 	switch commandID {
 	case "read", "search", "backlinks", "outlinks", "resolve", "query", "query_saved_list", "query_saved_get",
+		"objects",
 		"schema", "schema_validate", "schema_template_list", "schema_template_get",
 		"docs", "docs_search",
 		"version",

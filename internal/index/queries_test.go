@@ -489,6 +489,46 @@ func TestAllObjects(t *testing.T) {
 	}
 }
 
+func TestListObjectSummariesPaginates(t *testing.T) {
+	t.Parallel()
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.db.Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields)
+		VALUES
+			('people/freya', 'people/freya.md', 'person', 1, '{"name": "Freya"}'),
+			('people/thor', 'people/thor.md', 'person', 1, '{"name": "Thor"}'),
+			('projects/bifrost', 'projects/bifrost.md', 'project', 1, '{}')
+	`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	page, total, err := db.ListObjectSummaries(1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 || len(page) != 1 || page[0].ID != "people/freya" {
+		t.Fatalf("page1 = %#v total=%d", page, total)
+	}
+	page, total, err = db.ListObjectSummaries(1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 || len(page) != 1 || page[0].ID != "people/thor" {
+		t.Fatalf("page2 = %#v total=%d", page, total)
+	}
+	all, total, err := db.ListObjectSummaries(0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 || len(all) != 3 {
+		t.Fatalf("unlimited = %d items total=%d", len(all), total)
+	}
+}
+
 func TestFileLinkQueries(t *testing.T) {
 	t.Parallel()
 

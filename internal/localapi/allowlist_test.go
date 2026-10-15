@@ -4,7 +4,7 @@ import "testing"
 
 func TestCommandAllowed(t *testing.T) {
 	t.Parallel()
-	allowed := []string{"query", "query_saved_list", "query_saved_get", "read", "backlinks", "outlinks", "search", "daily", "date", "schema", "vault_stats", "set", "unset", "new", "move"}
+	allowed := []string{"query", "query_saved_list", "query_saved_get", "objects", "read", "backlinks", "outlinks", "search", "daily", "date", "schema", "vault_stats", "set", "unset", "new", "move"}
 	for _, id := range allowed {
 		if !CommandAllowed(id) {
 			t.Errorf("CommandAllowed(%q) = false, want true", id)

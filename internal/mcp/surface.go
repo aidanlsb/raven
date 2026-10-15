@@ -358,12 +358,13 @@ func withCommandArgumentHints(commandID string, rawArgs map[string]interface{}, 
 	switch commandID {
 	case "query":
 		_, hasSaved := rawArgs["saved"]
-		if !hasSaved {
+		_, hasArgs := rawArgs["args"]
+		if !hasSaved && !hasArgs {
 			return out
 		}
 		for i := range out {
 			switch {
-			case out[i].Field == "saved" && out[i].Code == "UNKNOWN_ARGUMENT":
+			case (out[i].Field == "saved" || out[i].Field == "args") && out[i].Code == "UNKNOWN_ARGUMENT":
 				out[i].Hint = "Pass the saved query name as args.query_string and any saved-query parameters in args.inputs."
 			case out[i].Field == "query_string" && out[i].Code == "MISSING_REQUIRED_ARGUMENT":
 				out[i].Hint = "Use args.query_string for either raw RQL or a saved query name."

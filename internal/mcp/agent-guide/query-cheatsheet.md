@@ -72,6 +72,8 @@ difference instead of returning several unbounded result sets.
   - `trait:todo .value == todo`
 - Text mentions of a token when structure is unknown:
   - `search "@todo pricing"`
+- Vault-wide object corpus for a picker (id, type, name, path; no bodies):
+  - `objects` with `limit`/`offset`
 - Todos under a topic section:
   - `trait:todo .value == todo within(section includes(.title, "pricing"))`
 - Path-scoped pages with open todos:
