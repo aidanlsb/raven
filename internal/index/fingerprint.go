@@ -63,28 +63,23 @@ func (d *Database) FileFingerprint(filePath string) (FileFingerprint, bool, erro
 }
 
 // FileProjectionAction compares disk state to the stored fingerprint.
-// Matching mtime skips the read. Matching content hash skips a rewrite
-// when mtime moved (touch, atomic replace of identical bytes).
+// Content hash is the source of truth so two writes in the same Unix
+// second are not skipped. Matching hash also covers touches and own
+// writes that already projected the same bytes.
 func (d *Database) FileProjectionAction(vaultPath, relPath string) (FileProjectionAction, error) {
 	if d == nil {
 		return FileProjectionIndex, fmt.Errorf("database is nil")
 	}
 	fullPath := filepath.Join(vaultPath, filepath.FromSlash(relPath))
-	stat, err := os.Stat(fullPath)
-	if os.IsNotExist(err) {
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		return FileProjectionRemove, nil
-	}
-	if err != nil {
+	} else if err != nil {
 		return FileProjectionIndex, err
 	}
 
 	fp, ok, err := d.FileFingerprint(relPath)
 	if err != nil {
 		return FileProjectionIndex, err
-	}
-	fileMtime := stat.ModTime().Unix()
-	if ok && fp.Mtime == fileMtime {
-		return FileProjectionSkip, nil
 	}
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
