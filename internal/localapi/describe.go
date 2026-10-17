@@ -1,14 +1,18 @@
 package localapi
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/configsvc"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -16,11 +20,12 @@ import (
 // Session is the GET /v1/session payload: the bound vault, the editor
 // OpenInEditor would use for this process, and today's daily-note identity.
 type Session struct {
-	APIVersion string       `json:"api_version"`
-	VaultPath  string       `json:"vault_path"`
-	Editor     string       `json:"editor"`
-	EditorMode string       `json:"editor_mode"`
-	Daily      SessionDaily `json:"daily"`
+	APIVersion string         `json:"api_version"`
+	VaultPath  string         `json:"vault_path"`
+	Editor     string         `json:"editor"`
+	EditorMode string         `json:"editor_mode"`
+	Daily      SessionDaily   `json:"daily"`
+	Revision   index.Revision `json:"revision"`
 }
 
 // SessionDaily is today's daily-note identity for the bound vault. It uses the
@@ -58,7 +63,56 @@ func (s *Server) session() Session {
 		Editor:     editor,
 		EditorMode: mode,
 		Daily:      s.sessionDaily(),
+		Revision:   s.revision(),
 	}
+}
+
+func (s *Server) handleRevision(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	rev, err := index.ReadRevision(s.vaultPath)
+	if err != nil {
+		writeResult(w, http.StatusOK, revisionError(err))
+		return
+	}
+	writeResult(w, http.StatusOK, commandexec.Success(rev, nil))
+}
+
+func (s *Server) revision() index.Revision {
+	if strings.TrimSpace(s.vaultPath) == "" {
+		return index.Revision{}
+	}
+	rev, err := index.ReadRevision(s.vaultPath)
+	if err != nil {
+		return index.Revision{}
+	}
+	return rev
+}
+
+func revisionError(err error) commandexec.Result {
+	if errors.Is(err, index.ErrIndexLocked) {
+		return commandexec.Failure(
+			codes.ErrIndexLocked,
+			"index is locked for rebuild",
+			nil,
+			"Wait for the rebuild to finish and retry",
+		)
+	}
+	if errors.Is(err, index.ErrIndexRebuildRequired) {
+		return commandexec.Failure(
+			codes.ErrDatabaseVersion,
+			"index schema is stale or a rebuild was interrupted",
+			nil,
+			"Run 'rvn reindex --full' to rebuild the index",
+		)
+	}
+	return commandexec.Failure(
+		codes.ErrDatabase,
+		fmt.Sprintf("failed to read index revision: %v", err),
+		nil,
+		"Run 'rvn reindex' to rebuild the database",
+	)
 }
 
 func (s *Server) sessionDaily() SessionDaily {

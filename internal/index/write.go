@@ -101,6 +101,12 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	if err := indexFTS(tx, doc, sch); err != nil {
 		return err
 	}
+	if err := upsertFileFingerprint(tx, doc.FilePath, mtime, FileContentHash([]byte(doc.RawContent))); err != nil {
+		return err
+	}
+	if err := bumpRevision(tx); err != nil {
+		return err
+	}
 
 	newResolverState, err := d.writeResolverFileStateLocked(tx, doc.FilePath, sch)
 	if err != nil {

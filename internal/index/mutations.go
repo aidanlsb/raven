@@ -46,6 +46,9 @@ func (d *Database) RemoveFiles(filePaths []string) error {
 			return err
 		}
 	}
+	if err := bumpRevision(tx); err != nil {
+		return err
+	}
 
 	resolverGeneration, err := bumpResolverGeneration(tx)
 	if err != nil {
@@ -78,6 +81,9 @@ func (d *Database) ClearAllData() error {
 	defer tx.Rollback()
 
 	if err := deleteAllFilePathData(tx); err != nil {
+		return err
+	}
+	if err := resetRevision(tx); err != nil {
 		return err
 	}
 
@@ -116,6 +122,9 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 
 	pattern := pathPrefix + "%"
 	if err := deleteByFilePathLike(tx, pattern); err != nil {
+		return 0, err
+	}
+	if err := bumpRevision(tx); err != nil {
 		return 0, err
 	}
 	if _, err := bumpResolverGeneration(tx); err != nil {
@@ -230,6 +239,9 @@ func (d *Database) RemoveDocument(objectID string) error {
 		return err
 	}
 	if err := deleteByFilePath(tx, filePath); err != nil {
+		return err
+	}
+	if err := bumpRevision(tx); err != nil {
 		return err
 	}
 	resolverGeneration, err := bumpResolverGeneration(tx)

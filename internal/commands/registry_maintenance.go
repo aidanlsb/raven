@@ -107,6 +107,10 @@ operation interrupted before its paths were known triggers one full vault scan.
 
 Use --full to force a complete rebuild of the entire index.
 
+JSON output includes revision {generation, counter}. Generation is minted
+when the index is built from scratch. Counter is bumped with every
+projection. A full rebuild yields a new generation.
+
 Incremental reindexing uses SQLite WAL and can run while readers such as rvn lsp
 hold the index open. Full reindexing and incompatible-schema replacement require
 exclusive access; stop the LSP or wait for the other process if the index is

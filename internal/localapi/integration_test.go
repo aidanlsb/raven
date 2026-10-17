@@ -121,6 +121,10 @@ func TestIntegration_APIServerAgainstTempVault(t *testing.T) {
 				TodayPath   string `json:"today_path"`
 				TodayExists bool   `json:"today_exists"`
 			} `json:"daily"`
+			Revision struct {
+				Generation string `json:"generation"`
+				Counter    int64  `json:"counter"`
+			} `json:"revision"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(sessionResp.Body).Decode(&sessionEnvelope); err != nil {
@@ -140,6 +144,37 @@ func TestIntegration_APIServerAgainstTempVault(t *testing.T) {
 	}
 	if sessionEnvelope.Data.Daily.Directory == "" || sessionEnvelope.Data.Daily.TodayID == "" || sessionEnvelope.Data.Daily.TodayPath == "" {
 		t.Fatalf("session daily = %#v, want directory/today_id/today_path", sessionEnvelope.Data.Daily)
+	}
+	if sessionEnvelope.Data.Revision.Generation == "" {
+		t.Fatal("session revision generation is empty")
+	}
+
+	revReq, err := http.NewRequest(http.MethodGet, envelope.Data.URL+"/v1/revision", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth(revReq)
+	revResp, err := client.Do(revReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer revResp.Body.Close()
+	if revResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(revResp.Body)
+		t.Fatalf("revision status = %d body=%s", revResp.StatusCode, body)
+	}
+	var revEnvelope struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Generation string `json:"generation"`
+			Counter    int64  `json:"counter"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(revResp.Body).Decode(&revEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	if !revEnvelope.OK || revEnvelope.Data.Generation != sessionEnvelope.Data.Revision.Generation {
+		t.Fatalf("revision envelope = %#v session revision = %#v", revEnvelope, sessionEnvelope.Data.Revision)
 	}
 
 	schemaReq, err := http.NewRequest(http.MethodGet, envelope.Data.URL+"/v1/schema", nil)

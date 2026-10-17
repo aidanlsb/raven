@@ -198,6 +198,11 @@ func apply(prep *preparedRun, plan *filePlan) (*RunResult, error) {
 		result.Objects = projected.ObjectCount
 		result.Traits = projected.TraitCount
 		result.References = projected.RefCount
+		if rev, revErr := prep.db.Revision(); revErr != nil {
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to read index revision: %v", revErr))
+		} else {
+			result.Revision = rev
+		}
 		return result, nil
 	}
 
@@ -242,6 +247,12 @@ func apply(prep *preparedRun, plan *filePlan) (*RunResult, error) {
 		if err := indexjournal.CompleteRecoveredUnknown(prep.vaultPath, plan.pending); err != nil {
 			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index journal: %v", err))
 		}
+	}
+
+	if rev, revErr := prep.db.Revision(); revErr != nil {
+		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to read index revision: %v", revErr))
+	} else {
+		result.Revision = rev
 	}
 
 	return result, nil

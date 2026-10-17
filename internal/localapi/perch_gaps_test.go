@@ -211,6 +211,7 @@ func TestPerchGapsRequireAuth(t *testing.T) {
 		name, method, path, body string
 	}{
 		{name: "session", method: "GET", path: "http://127.0.0.1/v1/session"},
+		{name: "revision", method: "GET", path: "http://127.0.0.1/v1/revision"},
 		{name: "schema", method: "GET", path: "http://127.0.0.1/v1/schema"},
 		{name: "query-inputs", method: "POST", path: "http://127.0.0.1/v1/invoke",
 			body: `{"command":"query","args":{"query_string":"project-todos","inputs":{"project":"projects/raven"}}}`},

@@ -52,8 +52,9 @@ are not listed do not receive `Access-Control-Allow-Origin`.
 ## Versioning
 
 The HTTP path prefix is `/v1/`. The same version string is advertised as
-`api_version` on `GET /v1/commands`, `GET /v1/health`, `GET /v1/session`, the
-startup envelope, and the `X-Raven-API-Version` response header.
+`api_version` on `GET /v1/commands`, `GET /v1/health`, `GET /v1/session`,
+`GET /v1/revision`, the startup envelope, and the `X-Raven-API-Version`
+response header.
 
 Breaking changes to the HTTP contract increment this version (new prefix and
 startup field). Additive fields on command envelopes follow the existing CLI/MCP
@@ -77,7 +78,7 @@ Bound session for attach-only clients (a UI that did not spawn `rvn api` and
 therefore never saw the startup envelope). Requires the bearer token.
 
 ```json
-{"ok":true,"data":{"api_version":"1","vault_path":"/path/to/vault","editor":"code","editor_mode":"auto","daily":{"directory":"daily","today_id":"2026-10-15","today_path":"daily/2026-10-15.md","today_exists":false}}}
+{"ok":true,"data":{"api_version":"1","vault_path":"/path/to/vault","editor":"code","editor_mode":"auto","daily":{"directory":"daily","today_id":"2026-10-15","today_path":"daily/2026-10-15.md","today_exists":false},"revision":{"generation":"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6","counter":12}}}
 ```
 
 | Field | Meaning |
@@ -90,6 +91,7 @@ therefore never saw the startup envelope). Requires the bearer token.
 | `daily.today_path` | Vault-relative path for today's note (`daily/YYYY-MM-DD.md`) |
 | `daily.today_exists` | Whether that file is already on disk. Session never creates it; call `daily` to create |
 | `api_version` | Same contract version as health and `/v1/commands` |
+| `revision` | Disposable index identity `{generation, counter}`. Generation is random and created when the index is built from scratch. Counter is monotonic and rises with every index projection. Deleting the index or a full rebuild yields a new generation. |
 
 `daily` uses Raven's existing today/timezone rules (`time.Now()` on the host,
 the same calendar date as `rvn daily` / `rvn date today`) and the vault's
@@ -97,8 +99,30 @@ the same calendar date as `rvn daily` / `rvn date today`) and the vault's
 
 This lives on `/v1/session` rather than `/v1/health` so health stays a cheap
 liveness probe. Session is the attach handshake: which vault, how to open
-files the way Raven itself would, and where today's daily note lives, without
-reimplementing config/`$EDITOR`/date resolution or invoking `vault_path`.
+files the way Raven itself would, where today's daily note lives, and which
+index revision the process currently serves, without reimplementing
+config/`$EDITOR`/date resolution or invoking `vault_path`.
+
+### `GET /v1/revision`
+
+Cheap poll for the same `revision` object session returns:
+
+```json
+{"ok":true,"data":{"generation":"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6","counter":12}}
+```
+
+There is no event stream. A companion UI attaches via session, then polls this
+endpoint. When `generation` changes, drop cached index state and refetch. When
+only `counter` rises, refetch whatever the UI derived from the previous
+revision.
+
+While `rvn api` runs it watches the vault (recursive, skipping `.raven/` and
+excluded paths), debounces roughly 200ms, and reindexes changed, deleted, and
+moved files through the same journal and projection path as CLI writes. Editor
+saves, `git pull`, and other `rvn` processes therefore move the revision.
+Own writes are skipped when the indexed mtime or content hash already matches.
+Watcher overflow or a large burst runs an incremental reindex instead of
+per-file projection. SIGINT and SIGTERM stop the watcher with the server.
 
 ### `GET /v1/schema`
 
@@ -116,7 +140,7 @@ Machine-readable description of commands the API will accept, generated from
 the command registry: id, summary, description, `read_only`, `destructive`,
 `preview_mode`, `args_schema`, and `schema_hash`, plus `api_version`. Type the
 UI against this document rather than a hard-coded command list. HTTP routes
-(`/v1/health`, `/v1/session`, `/v1/schema`, `/v1/commands`, `/v1/invoke`) are
+(`/v1/health`, `/v1/session`, `/v1/revision`, `/v1/schema`, `/v1/commands`, `/v1/invoke`) are
 not commands; they are documented above. `objects` is a command on
 `/v1/invoke`, not a dedicated HTTP route.
 
@@ -189,6 +213,7 @@ infer apply-vs-preview from ad-hoc data fields.
 TOKEN=...
 curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/health
 curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/session
+curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/revision
 curl -sS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7438/v1/schema
 curl -sS -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
