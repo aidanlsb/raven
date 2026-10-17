@@ -18,6 +18,13 @@ func (d *Database) initialize(isNewDB bool) error {
 		return fmt.Errorf("failed to initialize database schema: %w", err)
 	}
 
+	if _, err := d.db.Exec(fileFingerprintSQL); err != nil {
+		return fmt.Errorf("failed to initialize file fingerprints: %w", err)
+	}
+	if err := ensureRevision(d.db, isNewDB); err != nil {
+		return fmt.Errorf("failed to initialize index revision: %w", err)
+	}
+
 	if isNewDB {
 		if err := setDatabaseVersion(d.db, indexschema.CurrentDBVersion); err != nil {
 			return fmt.Errorf("failed to set database version: %w", err)

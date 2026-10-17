@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -15,12 +16,15 @@ import (
 
 	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/config"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
+	"github.com/aidanlsb/raven/internal/vaultwatch"
 )
 
 const (
 	// Version is the HTTP API contract version advertised on /v1/commands,
-	// /v1/health, /v1/session, and in the startup envelope. It matches the
-	// /v1/ URL prefix.
+	// /v1/health, /v1/session, /v1/revision, and in the startup envelope. It
+	// matches the /v1/ URL prefix.
 	Version = "1"
 
 	defaultPort     = 7438
@@ -179,6 +183,12 @@ func (s *Server) Listen() (net.Listener, Startup, error) {
 
 // Serve serves HTTP until ctx is cancelled or the listener closes.
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
+	if watcher, err := s.startWatcher(ctx); err != nil {
+		log.Printf("raven api: vault watcher not started: %v", err)
+	} else if watcher != nil {
+		defer func() { _ = watcher.Close() }()
+	}
+
 	httpServer := &http.Server{
 		Handler:           s.handler,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -208,6 +218,20 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func (s *Server) startWatcher(ctx context.Context) (*vaultwatch.Watcher, error) {
+	if strings.TrimSpace(s.vaultPath) == "" {
+		return nil, nil
+	}
+	var exclude *ravenignore.Matcher
+	if vaultCfg, err := config.LoadVaultConfig(s.vaultPath); err == nil && vaultCfg != nil {
+		exclude, _ = ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
+	}
+	return vaultwatch.Start(ctx, vaultwatch.Options{
+		VaultPath: s.vaultPath,
+		Exclude:   exclude,
+	})
 }
 
 func absoluteVaultPath(vaultPath string) string {

@@ -73,10 +73,14 @@ The MVP allowlist is read-only vault commands plus set, unset, new, and move.
 
 GET /v1/health is liveness. GET /v1/session is the attach handshake: the
 absolute vault root, the editor command and editor_mode that rvn open
-resolves (config.toml, then $EDITOR), and today's daily-note identity
+resolves (config.toml, then $EDITOR), today's daily-note identity
 (directory, today_id, today_path, today_exists) using the same date/timezone
-rules as rvn daily/date without creating a file. Companion UIs should read
-session rather than reimplementing editor, date, or vault_path resolution.
+rules as rvn daily/date without creating a file, and the disposable index
+revision {generation, counter}. GET /v1/revision is the cheap poll for that
+same revision. Companion UIs should read session rather than reimplementing
+editor, date, or vault_path resolution, then poll /v1/revision for live
+changes. The server watches the vault and reindexes editor, git, and other
+process writes so the revision moves without an event stream.
 
 On startup Raven prints the listen URL and token. Pass --json for a single
 startup envelope line that a launcher (for example Tauri) can parse.`,
@@ -93,7 +97,8 @@ startup envelope line that a launcher (for example Tauri) can parse.`,
 		UseCases: []string{
 			"Launch the local HTTP API for a companion UI such as Perch",
 			"Print a JSON startup line a native launcher can parse",
-			"Attach a companion UI and read the bound vault, resolved editor, and today's daily note from GET /v1/session",
+			"Attach a companion UI and read the bound vault, resolved editor, today's daily note, and index revision from GET /v1/session",
+			"Poll GET /v1/revision for live vault changes after editor, git, or CLI writes",
 		},
 	},
 	"lsp": {

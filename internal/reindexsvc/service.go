@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
@@ -37,6 +38,8 @@ type RunResult struct {
 	HasRefResult   bool
 
 	WarningMessages []string
+
+	Revision index.Revision
 }
 
 func (r *RunResult) Data() map[string]interface{} {
@@ -52,6 +55,9 @@ func (r *RunResult) Data() map[string]interface{} {
 		"incremental":    r.Incremental,
 		"dry_run":        r.DryRun,
 		"errors":         r.Errors,
+	}
+	if r.Revision.Generation != "" {
+		data["revision"] = r.Revision.Map()
 	}
 	if r.Incremental {
 		data["stale_files"] = r.StaleFiles

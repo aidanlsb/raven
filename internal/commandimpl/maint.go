@@ -23,10 +23,14 @@ func HandleVaultStats(_ context.Context, req commandexec.Request) commandexec.Re
 		return commandexec.FromServiceError(err)
 	}
 
-	return commandexec.Success(map[string]interface{}{
+	data := map[string]interface{}{
 		"file_count":   stats.FileCount,
 		"object_count": stats.ObjectCount,
 		"trait_count":  stats.TraitCount,
 		"ref_count":    stats.RefCount,
-	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	}
+	if stats.Revision.Generation != "" {
+		data["revision"] = stats.Revision.Map()
+	}
+	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }

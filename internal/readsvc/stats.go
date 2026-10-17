@@ -14,6 +14,7 @@ type StatsResult struct {
 	ObjectCount int
 	TraitCount  int
 	RefCount    int
+	Revision    index.Revision
 }
 
 func Stats(rt *vaultruntime.Runtime) (*StatsResult, error) {
@@ -32,8 +33,12 @@ func Stats(rt *vaultruntime.Runtime) (*StatsResult, error) {
 	if err != nil {
 		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to query stats", err)
 	}
-	return &StatsResult{
+	result := &StatsResult{
 		FileCount: stats.FileCount, ObjectCount: stats.ObjectCount,
 		TraitCount: stats.TraitCount, RefCount: stats.RefCount,
-	}, nil
+	}
+	if rev, revErr := rt.DB.Revision(); revErr == nil {
+		result.Revision = rev
+	}
+	return result, nil
 }

@@ -78,6 +78,17 @@ func LockProjection(rt *vaultruntime.Runtime, skip bool) (*ProjectionLock, error
 // Markdown files remain the durable source of truth: projection failures are
 // returned as warnings and never turn a successful write into a failed command.
 func ProjectChanges(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journalOperation string) ProjectionResult {
+	return projectChanges(rt, changes, journalOperation, false)
+}
+
+// ProjectObservedChanges projects filesystem-observed edits even when
+// auto-reindex is disabled. The vault watcher uses this so editor and git
+// writes still bump the index revision.
+func ProjectObservedChanges(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journalOperation string) ProjectionResult {
+	return projectChanges(rt, changes, journalOperation, true)
+}
+
+func projectChanges(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journalOperation string, force bool) ProjectionResult {
 	if rt == nil {
 		return ProjectionResult{}
 	}
@@ -94,10 +105,10 @@ func ProjectChanges(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journa
 		return ProjectionResult{Warnings: warnings}
 	}
 
-	autoReindexEnabled := rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled()
+	shouldProject := force || (rt.VaultCfg != nil && rt.VaultCfg.IsAutoReindexEnabled())
 	failedPaths := make(map[string]struct{})
 	requiresFullScan := false
-	if autoReindexEnabled {
+	if shouldProject {
 		canProject := true
 		if err := rt.OpenDB(); err != nil {
 			warnings = append(warnings, indexUpdateWarning(
@@ -165,7 +176,7 @@ func ProjectChanges(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journa
 		}
 	}
 
-	if len(warnings) > 0 || !autoReindexEnabled {
+	if len(warnings) > 0 || !shouldProject {
 		return ProjectionResult{Warnings: warnings}
 	}
 
