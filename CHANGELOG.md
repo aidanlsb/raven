@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.39] - 2026-10-17
+
 ### Added
 - Disposable index revision `{generation, counter}`. Generation is random and created when the index is built from scratch (fresh database or full rebuild). Counter is bumped in the same transaction as every index projection. Deleting the index discards both. Exposed as `revision` on `GET /v1/session`, on cheap `GET /v1/revision`, and in `rvn reindex --json` / `rvn vault stats --json`.
 - `rvn api` watches the vault (recursive, skipping `.raven/` and excluded paths), debounces ~200ms, and reindexes editor, git, and other-process writes through the existing journal and projection path so the revision moves. Overflow or a large burst runs incremental reindex. Own writes that already match the stored mtime or content hash are skipped.
