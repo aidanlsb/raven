@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
-- CI and release checkouts now set `persist-credentials: false`, so the default `GITHUB_TOKEN` is not written into `.git/config`. The release job has a 30-minute timeout and restates `contents: write` at job scope (Homebrew tap updates still use a dedicated `HOMEBREW_TAP_TOKEN`).
-
 ### Changed
 - Bumped the Go toolchain from 1.26.9 to 1.26.10, which adds a `crypto/x509` denylist for the compromised eMudhra/emSign intermediate certificates (CVE-2026-111943 / GO-2026-6809).
 - Bumped the `govulncheck` pin used by `make vuln` from v1.6.0 to v1.9.0.
+
+### Security
+- CI and release checkouts now set `persist-credentials: false`, so the default `GITHUB_TOKEN` is not written into `.git/config`. The release job has a 30-minute timeout and restates `contents: write` at job scope (Homebrew tap updates still use a dedicated `HOMEBREW_TAP_TOKEN`).
 
 ## [v0.0.39] - 2026-10-17
 
