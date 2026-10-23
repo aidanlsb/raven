@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- CI and release checkouts now set `persist-credentials: false`, so the default `GITHUB_TOKEN` is not written into `.git/config`. The release job has a 30-minute timeout and restates `contents: write` at job scope (Homebrew tap updates still use a dedicated `HOMEBREW_TAP_TOKEN`).
+
 ## [v0.0.39] - 2026-10-17
 
 ### Added
