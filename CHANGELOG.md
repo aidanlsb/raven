@@ -7,17 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Bumped the Go toolchain from 1.26.9 to 1.26.10, which adds a `crypto/x509` denylist for the compromised eMudhra/emSign intermediate certificates (CVE-2026-111943 / GO-2026-6809).
+- Bumped the `govulncheck` pin used by `make vuln` from v1.6.0 to v1.9.0.
+
 ### Security
+- CI and release checkouts now set `persist-credentials: false`, so the default `GITHUB_TOKEN` is not written into `.git/config`. The release job has a 30-minute timeout and restates `contents: write` at job scope (Homebrew tap updates still use a dedicated `HOMEBREW_TAP_TOKEN`).
 - Editor launch (`rvn open`, `template write --edit`) now parses `$EDITOR` / `config.toml` `editor` into argv and execs the binary directly. A compound editor such as `open -a Cursor` still works; `;`, `|`, and `$(...)` in the editor string are no longer interpreted by a shell.
 - Content mutations, permanent deletes, edits, and import body appends refuse paths that resolve outside the vault, including directory symlinks. Relative `../` destinations are rejected as `FILE_OUTSIDE_VAULT`.
 - The vault watcher uses `Lstat` and a vault-boundary check before watching a newly created directory, so a directory symlink cannot enroll an outside tree.
 - `rvn mcp serve` logs JSON-RPC method, id, and tool name only. Request bodies (note text, tokens, import JSON) stay off stderr.
 - `rvn api` sets read, write, and idle timeouts and a 1MiB header cap on the loopback server.
 - `schema.yaml`, `raven.yaml`, YAML frontmatter, import JSON, and import mapping files now have size limits (1–32MiB depending on the input).
-
-### Changed
-- Bumped the Go toolchain from 1.26.9 to 1.26.10, which adds a `crypto/x509` denylist for the compromised eMudhra/emSign intermediate certificates (CVE-2026-111943 / GO-2026-6809).
-- Bumped the `govulncheck` pin used by `make vuln` from v1.6.0 to v1.9.0.
 
 ## [v0.0.39] - 2026-10-17
 
