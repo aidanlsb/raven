@@ -9,7 +9,7 @@ COVERAGE_MIN ?= 55.0
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-GOVULNCHECK_VERSION ?= v1.6.0
+GOVULNCHECK_VERSION ?= v1.9.0
 GOVULNCHECK_MODULE := golang.org/x/vuln/cmd/govulncheck
 GO_MOD_VERSION := $(shell sed -n 's/^go //p' go.mod | head -n 1)
 GOLANGCI_LINT_TOOLCHAIN ?= go$(GO_MOD_VERSION)
