@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `rvn api` sets read, write, and idle timeouts and a 1MiB header cap on the loopback server.
 - `schema.yaml`, `raven.yaml`, YAML frontmatter, import JSON, and import mapping files now have size limits (1–32MiB depending on the input).
 
+### Changed
+- Bumped the Go toolchain from 1.26.9 to 1.26.10, which adds a `crypto/x509` denylist for the compromised eMudhra/emSign intermediate certificates (CVE-2026-111943 / GO-2026-6809).
+- Bumped the `govulncheck` pin used by `make vuln` from v1.6.0 to v1.9.0.
+
 ## [v0.0.39] - 2026-10-17
 
 ### Added
