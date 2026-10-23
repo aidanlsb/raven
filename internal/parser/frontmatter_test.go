@@ -221,6 +221,15 @@ history:
 	}
 }
 
+func TestParseFrontmatterRejectsOversizedYAML(t *testing.T) {
+	t.Parallel()
+	body := "---\nname: " + strings.Repeat("x", 1<<20+8) + "\n---\n"
+	_, err := ParseFrontmatter(body)
+	if err == nil || !strings.Contains(err.Error(), "frontmatter exceeds") {
+		t.Fatalf("ParseFrontmatter() err = %v, want size limit", err)
+	}
+}
+
 func TestFieldValueFromYAML_UnsupportedMapReturnsNull(t *testing.T) {
 	t.Parallel()
 

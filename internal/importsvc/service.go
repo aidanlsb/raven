@@ -15,10 +15,12 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/limitio"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -56,8 +58,11 @@ func BuildMappingConfig(req BuildMappingConfigRequest) (*MappingConfig, error) {
 	}
 
 	if strings.TrimSpace(req.MappingFilePath) != "" {
-		data, err := os.ReadFile(req.MappingFilePath)
+		data, err := limitio.ReadFile(req.MappingFilePath, limitio.MaxMappingBytes)
 		if err != nil {
+			if errors.Is(err, limitio.ErrTooLarge) {
+				return nil, svcerr.New(codes.ErrInvalidInput, "mapping file exceeds 2MB")
+			}
 			return nil, svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to read mapping file: %v", err), err)
 		}
 		if err := yaml.Unmarshal(data, cfg); err != nil {
@@ -96,13 +101,19 @@ func ReadJSONInput(filePath string, stdin io.Reader) ([]map[string]interface{}, 
 	var err error
 
 	if strings.TrimSpace(filePath) != "" {
-		data, err = os.ReadFile(filePath)
+		data, err = limitio.ReadFile(filePath, limitio.MaxImportBytes)
 		if err != nil {
+			if errors.Is(err, limitio.ErrTooLarge) {
+				return nil, svcerr.New(codes.ErrInvalidInput, "import file exceeds 32MB")
+			}
 			return nil, svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to read file %s: %v", filePath, err), err)
 		}
 	} else {
-		data, err = io.ReadAll(stdin)
+		data, err = limitio.ReadAll(stdin, limitio.MaxImportBytes)
 		if err != nil {
+			if errors.Is(err, limitio.ErrTooLarge) {
+				return nil, svcerr.New(codes.ErrInvalidInput, "import input exceeds 32MB")
+			}
 			return nil, svcerr.Wrap(codes.ErrInvalidInput, fmt.Sprintf("failed to read stdin: %v", err), err)
 		}
 	}
@@ -450,6 +461,14 @@ func applyObject(rt *vaultruntime.Runtime, req applyObjectRequest) (ResultItem, 
 	}
 
 	if !req.Exists && req.Content != "" {
+		if err := paths.ValidateWithinVault(rt.VaultPath, result.FilePath); err != nil {
+			return ResultItem{
+				ID:     req.TargetPath,
+				Action: "error",
+				Reason: "cannot write content outside the vault",
+				Code:   string(codes.ErrFileOutsideVault),
+			}, result.WarningMessages, result.ChangeSet
+		}
 		if err := appendContentToFile(result.FilePath, req.Content); err != nil {
 			return ResultItem{
 				ID:     req.TargetPath,

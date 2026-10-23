@@ -119,12 +119,12 @@ func editTemplateContent(pathArg string) (string, error) {
 }
 
 func runBlockingEditor(editor, filePath string) error {
-	var cmd *exec.Cmd
-	if strings.Contains(editor, " ") {
-		cmd = exec.Command("sh", "-c", editor+" "+shellquote.Quote(filePath))
-	} else {
-		cmd = exec.Command(editor, filePath)
+	parts, err := shellquote.Split(editor)
+	if err != nil {
+		return err
 	}
+	args := append(append([]string{}, parts[1:]...), filePath)
+	cmd := exec.Command(parts[0], args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

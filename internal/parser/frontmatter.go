@@ -10,6 +10,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/limitio"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
@@ -60,6 +61,9 @@ func ParseFrontmatter(content string) (*Frontmatter, error) {
 
 	// Extract frontmatter content
 	frontmatterContent := strings.Join(lines[1:endLine], "\n")
+	if len(frontmatterContent) > limitio.MaxFrontmatterBytes {
+		return nil, fmt.Errorf("frontmatter exceeds %d bytes", limitio.MaxFrontmatterBytes)
+	}
 
 	// Parse as YAML
 	var yamlData map[string]interface{}

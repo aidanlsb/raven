@@ -111,6 +111,9 @@ func DeleteFile(rt *vaultruntime.Runtime, req DeleteFileRequest) (*DeleteFileRes
 		}, nil
 
 	case "permanent":
+		if err := paths.ValidateWithinVault(rt.VaultPath, req.FilePath); err != nil {
+			return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "file path is outside the vault", err)
+		}
 		if err := os.Remove(req.FilePath); err != nil {
 			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to delete file", err)
 		}

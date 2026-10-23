@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Editor launch (`rvn open`, `template write --edit`) now parses `$EDITOR` / `config.toml` `editor` into argv and execs the binary directly. A compound editor such as `open -a Cursor` still works; `;`, `|`, and `$(...)` in the editor string are no longer interpreted by a shell.
+- Content mutations, permanent deletes, edits, and import body appends refuse paths that resolve outside the vault, including directory symlinks. Relative `../` destinations are rejected as `FILE_OUTSIDE_VAULT`.
+- The vault watcher uses `Lstat` and a vault-boundary check before watching a newly created directory, so a directory symlink cannot enroll an outside tree.
+- `rvn mcp serve` logs JSON-RPC method, id, and tool name only. Request bodies (note text, tokens, import JSON) stay off stderr.
+- `rvn api` sets read, write, and idle timeouts and a 1MiB header cap on the loopback server.
+- `schema.yaml`, `raven.yaml`, YAML frontmatter, import JSON, and import mapping files now have size limits (1–32MiB depending on the input).
+
 ## [v0.0.39] - 2026-10-17
 
 ### Added

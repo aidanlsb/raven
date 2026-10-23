@@ -201,8 +201,7 @@ func (s *Server) Run() error {
 			continue
 		}
 
-		// Debug log incoming requests to stderr
-		fmt.Fprintln(os.Stderr, "[raven-mcp] Received:", line)
+		fmt.Fprintln(os.Stderr, "[raven-mcp] Received:", requestLogSummary(line))
 
 		var req Request
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
@@ -227,6 +226,23 @@ func (s *Server) Run() error {
 
 	fmt.Fprintln(os.Stderr, "[raven-mcp] Server shutting down")
 	return nil
+}
+
+func requestLogSummary(line string) string {
+	var req Request
+	if err := json.Unmarshal([]byte(line), &req); err != nil {
+		return fmt.Sprintf("unparsed %d-byte line", len(line))
+	}
+	summary := fmt.Sprintf("id=%v method=%s", req.ID, req.Method)
+	if req.Method == "tools/call" && req.Params != nil {
+		var params struct {
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(*req.Params, &params) == nil && params.Name != "" {
+			summary += " tool=" + params.Name
+		}
+	}
+	return summary
 }
 
 func (s *Server) startupVaultModeMessage() string {

@@ -199,9 +199,12 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 	if skip {
 		return
 	}
-	info, err := os.Stat(event.Name)
+	info, err := os.Lstat(event.Name)
 	isDir := err == nil && info.IsDir()
 	if event.Has(fsnotify.Create) && isDir {
+		if err := paths.ValidateWithinVault(w.vaultPath, event.Name); err != nil {
+			return
+		}
 		if err := w.watch.Add(event.Name); err != nil {
 			w.logf("raven api: watch directory %s: %v", relPath, err)
 		}

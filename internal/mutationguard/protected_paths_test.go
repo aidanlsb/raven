@@ -1,7 +1,9 @@
 package mutationguard
 
 import (
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -40,6 +42,13 @@ func TestValidateContentMutationFilePath(t *testing.T) {
 		{
 			name:     "absolute path without vault path preserves legacy allowance",
 			filePath: filepath.Join(vaultPath, "schema.yaml"),
+		},
+		{
+			name:      "relative escape",
+			vaultPath: vaultPath,
+			vaultCfg:  &config.VaultConfig{},
+			filePath:  "../outside.md",
+			wantCode:  codes.ErrFileOutsideVault,
 		},
 	}
 
@@ -148,6 +157,14 @@ func TestValidateContentMutationRelPath(t *testing.T) {
 			relPath:  "templates/default.md",
 			vaultCfg: nil,
 		},
+		{
+			name:           "parent traversal",
+			relPath:        "../outside.md",
+			wantCode:       codes.ErrFileOutsideVault,
+			wantMessage:    "path is outside the vault",
+			wantSuggestion: "Use a path inside the vault",
+			wantPath:       "../outside.md",
+		},
 	}
 
 	for _, tt := range tests {
@@ -179,5 +196,31 @@ func TestValidateContentMutationRelPath(t *testing.T) {
 				t.Errorf("error has cause = %t, want %t", got, tt.wantCause)
 			}
 		})
+	}
+}
+
+func TestValidateContentMutationFilePath_SymlinkEscape(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink tests are not reliable on windows")
+	}
+
+	root := t.TempDir()
+	vaultPath := filepath.Join(root, "vault")
+	outside := filepath.Join(root, "outside")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(vaultPath, "link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	err := ValidateContentMutationFilePath(vaultPath, &config.VaultConfig{}, filepath.Join(link, "evil.md"))
+	if err == nil || err.Code != codes.ErrFileOutsideVault {
+		t.Fatalf("error = %#v, want FILE_OUTSIDE_VAULT", err)
 	}
 }

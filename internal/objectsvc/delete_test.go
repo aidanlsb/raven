@@ -174,6 +174,28 @@ func TestDeleteFilePermanentRemovesFile(t *testing.T) {
 	}
 }
 
+func TestDeleteFilePermanentRejectsOutsidePath(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	rt := testRuntime(t, vaultPath)
+	outside := filepath.Join(t.TempDir(), "secret.md")
+	if err := os.WriteFile(outside, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := DeleteFile(rt, DeleteFileRequest{
+		FilePath: outside,
+		Behavior: "permanent",
+	})
+	var svcErr *svcerr.Error
+	if !errors.As(err, &svcErr) || svcErr.Code != codes.ErrFileOutsideVault {
+		t.Fatalf("DeleteFile() error = %#v, want FILE_OUTSIDE_VAULT", err)
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatalf("outside file should remain: %v", err)
+	}
+}
+
 func TestDeleteFileInvalidBehavior(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()

@@ -14,6 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/mutationguard"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -93,11 +94,15 @@ func planWriteTarget(rt *vaultruntime.Runtime, typeName, targetPath string) (*wr
 	if err := mutationguard.ValidateContentMutationRelPath(rt.VaultCfg, relPath); err != nil {
 		return nil, err
 	}
+	filePath := filepath.Join(rt.VaultPath, relPath)
+	if err := paths.ValidateWithinVault(rt.VaultPath, filePath); err != nil {
+		return nil, svcerr.Wrap(codes.ErrFileOutsideVault, "cannot write outside the vault", err)
+	}
 	return &writeTargetPlan{
 		resolvedTargetPath: resolvedTargetPath,
 		resolvedSlugPath:   resolvedSlugPath,
 		relPath:            relPath,
-		filePath:           filepath.Join(rt.VaultPath, relPath),
+		filePath:           filePath,
 	}, nil
 }
 

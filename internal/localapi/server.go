@@ -192,6 +192,10 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	httpServer := &http.Server{
 		Handler:           s.handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      5 * time.Minute,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
 		},
