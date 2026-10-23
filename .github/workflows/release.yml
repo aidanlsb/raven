@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*'
 
+# GITHUB_TOKEN is limited to creating/updating the GitHub Release.
+# Homebrew formula updates use HOMEBREW_TAP_TOKEN, a dedicated PAT
+# that should be scoped to aidanlsb/homebrew-tap only.
 permissions:
   contents: write
 
@@ -12,11 +15,15 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
