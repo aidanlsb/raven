@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func TestSplitPOSIXTrailingBackslash(t *testing.T) {
+	t.Parallel()
+	if _, err := splitCommand(`vim\`, true); err == nil {
+		t.Fatal("expected error for trailing backslash in POSIX mode")
+	}
+}
+
+func TestSplitWindowsPathKeepsBackslashes(t *testing.T) {
+	t.Parallel()
+	got, err := splitCommand(`C:\Editors\vim.exe --wait`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`C:\Editors\vim.exe`, "--wait"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("splitCommand(windows) = %#v, want %#v", got, want)
+	}
+}
+
 func TestSplit(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -25,7 +44,6 @@ func TestSplit(t *testing.T) {
 		{name: "empty", input: "   ", wantErr: true},
 		{name: "unclosed single", input: "'vim", wantErr: true},
 		{name: "unclosed double", input: `"vim`, wantErr: true},
-		{name: "trailing backslash", input: `vim\`, wantErr: true},
 	}
 
 	for _, tt := range tests {

@@ -2,6 +2,7 @@ package shellquote
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"unicode"
 )
@@ -14,8 +15,13 @@ func Quote(s string) string {
 // Split tokenizes a command string with shell-style quoting. It does not
 // expand variables, substitutions, or redirects, and it does not treat
 // metacharacters such as `;`, `|`, `&`, or `$()` as syntax. Unclosed quotes
-// or a trailing backslash return an error.
+// return an error. On Windows, backslash is a path separator and is kept
+// literal so `C:\Editors\vim.exe` still launches.
 func Split(s string) ([]string, error) {
+	return splitCommand(s, runtime.GOOS != "windows")
+}
+
+func splitCommand(s string, escapeBackslash bool) ([]string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil, fmt.Errorf("empty command")
@@ -42,7 +48,7 @@ func Split(s string) ([]string, error) {
 			escaped = false
 			continue
 		}
-		if !inSingle && c == '\\' {
+		if escapeBackslash && !inSingle && c == '\\' {
 			escaped = true
 			hasToken = true
 			continue
