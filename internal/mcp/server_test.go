@@ -999,6 +999,26 @@ func TestResolveVaultForInvocationAllowsPinnedVault(t *testing.T) {
 	}
 }
 
+func TestRequestLogSummaryOmitsPayload(t *testing.T) {
+	t.Parallel()
+	line := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"raven_invoke","arguments":{"command":"write","args":{"content":"SECRET_TOKEN"}}}}`
+	got := requestLogSummary(line)
+	if strings.Contains(got, "SECRET_TOKEN") || strings.Contains(got, "write") {
+		t.Fatalf("summary leaked payload: %q", got)
+	}
+	if !strings.Contains(got, "tools/call") || !strings.Contains(got, "raven_invoke") {
+		t.Fatalf("summary = %q, want method and tool name", got)
+	}
+}
+
+func TestRequestLogSummaryUnparsed(t *testing.T) {
+	t.Parallel()
+	got := requestLogSummary("{not-json")
+	if !strings.Contains(got, "unparsed") {
+		t.Fatalf("summary = %q, want unparsed", got)
+	}
+}
+
 func TestRunCancelsInFlightToolCallAndHandlesPing(t *testing.T) {
 	t.Parallel()
 

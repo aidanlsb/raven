@@ -82,6 +82,10 @@ func Run(rt *vaultruntime.Runtime, req RunRequest) (*RunResult, error) {
 }
 
 func validateEditableContentPath(rt *vaultruntime.Runtime, filePath string) error {
+	if err := paths.ValidateWithinVault(rt.VaultPath, filePath); err != nil {
+		return svcerr.Wrap(codes.ErrFileOutsideVault, "cannot edit a path outside the vault", err).
+			WithSuggestion("Use edit for markdown content files inside the vault")
+	}
 	relPath, err := filepath.Rel(rt.VaultPath, filePath)
 	if err != nil {
 		return svcerr.New(codes.ErrValidationFailed, "edit only supports vault content files").

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -101,6 +102,63 @@ func TestWatcherIgnoresRavenDir(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for apply")
+	}
+}
+
+func TestWatcherDoesNotFollowDirectorySymlink(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink tests are not reliable on windows")
+	}
+
+	root := t.TempDir()
+	vaultPath := filepath.Join(root, "vault")
+	outside := filepath.Join(root, "outside")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	applied := make(chan Batch, 8)
+	w, err := Start(context.Background(), Options{
+		VaultPath: vaultPath,
+		Debounce:  20 * time.Millisecond,
+		Apply: func(_ context.Context, batch Batch) error {
+			applied <- batch
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = w.Close() }()
+
+	link := filepath.Join(vaultPath, "link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	if err := writeFile(filepath.Join(outside, "secret.md"), "outside\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(vaultPath, "ok.md"), "inside\n"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case batch := <-applied:
+			if containsPath(batch.Paths, "secret.md") || containsPath(batch.Paths, "link/secret.md") {
+				t.Fatalf("watcher followed directory symlink: %#v", batch.Paths)
+			}
+			if containsPath(batch.Paths, "ok.md") {
+				return
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for in-vault apply")
+		}
 	}
 }
 

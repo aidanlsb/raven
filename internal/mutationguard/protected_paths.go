@@ -19,6 +19,18 @@ func ValidateContentMutationFilePath(vaultPath string, vaultCfg *config.VaultCon
 		return svcerr.New(codes.ErrInvalidInput, "file path is required")
 	}
 
+	if strings.TrimSpace(vaultPath) != "" {
+		abs := filePath
+		if !filepath.IsAbs(filePath) {
+			abs = filepath.Join(vaultPath, filePath)
+		}
+		if err := paths.ValidateWithinVault(vaultPath, abs); err != nil {
+			return svcerr.Wrap(codes.ErrFileOutsideVault, "path is outside the vault", err).
+				WithSuggestion("Use a path inside the vault").
+				WithDetails(map[string]any{"path": filePath})
+		}
+	}
+
 	relPath := filePath
 	if filepath.IsAbs(filePath) {
 		if strings.TrimSpace(vaultPath) == "" {
@@ -40,6 +52,11 @@ func ValidateContentMutationRelPath(vaultCfg *config.VaultConfig, relPath string
 	normalized := paths.NormalizeVaultRelPath(relPath)
 	if normalized == "" {
 		return svcerr.New(codes.ErrInvalidInput, "path is required")
+	}
+	if normalized == ".." || strings.HasPrefix(normalized, "../") {
+		return svcerr.New(codes.ErrFileOutsideVault, "path is outside the vault").
+			WithSuggestion("Use a path inside the vault").
+			WithDetails(map[string]any{"path": normalized})
 	}
 
 	templateDir := ""

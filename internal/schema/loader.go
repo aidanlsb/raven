@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/limitio"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
@@ -30,7 +31,7 @@ type LoadResult struct {
 // non-nil error.
 func ReadRawSchema(vaultPath string) (string, bool, error) {
 	schemaPath := paths.SchemaPath(vaultPath)
-	data, err := os.ReadFile(schemaPath)
+	data, err := limitio.ReadFile(schemaPath, limitio.MaxSchemaBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", false, nil
@@ -61,7 +62,7 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 		}, nil
 	}
 
-	data, err := os.ReadFile(schemaPath)
+	data, err := limitio.ReadFile(schemaPath, limitio.MaxSchemaBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema file %s: %w", schemaPath, err)
 	}

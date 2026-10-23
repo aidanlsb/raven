@@ -35,15 +35,11 @@ func OpenInEditorAtLine(cfg *config.Config, filePath string, line int) bool {
 		return false
 	}
 
-	var cmd *exec.Cmd
 	args := editorOpenArgs(editor, filePath, line)
-
-	// If editor contains spaces, it's a compound command like "open -a Cursor"
-	// Execute via shell to handle this correctly
-	if strings.Contains(editor, " ") {
-		cmd = exec.Command("sh", "-c", editor+" "+quoteShellArgs(args))
-	} else {
-		cmd = exec.Command(editor, args...)
+	cmd, err := commandForEditor(editor, args)
+	if err != nil {
+		fmt.Printf("Warning: invalid editor command %q: %v\n", editor, err)
+		return false
 	}
 
 	if shouldRunEditorInTerminal(cfg, editor) {
@@ -82,12 +78,13 @@ func editorOpenArgs(editor, filePath string, line int) []string {
 	}
 }
 
-func quoteShellArgs(args []string) string {
-	quoted := make([]string, len(args))
-	for i, arg := range args {
-		quoted[i] = shellquote.Quote(arg)
+func commandForEditor(editor string, extraArgs []string) (*exec.Cmd, error) {
+	parts, err := shellquote.Split(editor)
+	if err != nil {
+		return nil, err
 	}
-	return strings.Join(quoted, " ")
+	args := append(append([]string{}, parts[1:]...), extraArgs...)
+	return exec.Command(parts[0], args...), nil
 }
 
 // OpenFilesInEditor opens multiple files in the user's configured editor.
@@ -104,18 +101,10 @@ func OpenFilesInEditor(cfg *config.Config, filePaths []string) bool {
 		return false
 	}
 
-	var cmd *exec.Cmd
-
-	// If editor contains spaces, it's a compound command like "open -a Cursor"
-	// Execute via shell to handle this correctly
-	if strings.Contains(editor, " ") {
-		quotedPaths := make([]string, len(filePaths))
-		for i, p := range filePaths {
-			quotedPaths[i] = shellquote.Quote(p)
-		}
-		cmd = exec.Command("sh", "-c", editor+" "+strings.Join(quotedPaths, " "))
-	} else {
-		cmd = exec.Command(editor, filePaths...)
+	cmd, err := commandForEditor(editor, filePaths)
+	if err != nil {
+		fmt.Printf("Warning: invalid editor command %q: %v\n", editor, err)
+		return false
 	}
 
 	if shouldRunEditorInTerminal(cfg, editor) {

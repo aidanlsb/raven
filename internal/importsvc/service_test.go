@@ -1,6 +1,7 @@
 package importsvc
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -336,4 +337,16 @@ traits: {}
 		t.Fatalf("code = %q, want %q: %#v", got, codes.ErrRequiredFieldMissing, result.Results[0])
 	}
 	v.AssertFileNotExists("tasks/write-tests.md")
+}
+
+func TestReadJSONInputRejectsOversizedPayload(t *testing.T) {
+	t.Parallel()
+	_, err := ReadJSONInput("", strings.NewReader(strings.Repeat("a", 32<<20+1)))
+	svcErr, ok := svcerr.AsError(err)
+	if !ok || svcErr.Code != codes.ErrInvalidInput {
+		t.Fatalf("ReadJSONInput() error = %#v, want INVALID_INPUT", err)
+	}
+	if !strings.Contains(svcErr.Message, "32MB") {
+		t.Fatalf("message = %q, want 32MB limit", svcErr.Message)
+	}
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
+	"github.com/aidanlsb/raven/internal/limitio"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
@@ -343,7 +344,7 @@ func LoadVaultConfig(vaultPath string) (*VaultConfig, error) {
 		return DefaultVaultConfig(), nil
 	}
 
-	data, err := os.ReadFile(configPath)
+	data, err := limitio.ReadFile(configPath, limitio.MaxConfigBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read vault config %s: %w", configPath, err)
 	}

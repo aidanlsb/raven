@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -398,6 +399,53 @@ traits: {}
 	}
 	if strings.Contains(content, "does-not-exist") {
 		t.Fatalf("template path leaked into created file:\n%s", content)
+	}
+}
+
+func TestWriteRejectsDirectorySymlinkEscape(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink tests are not reliable on windows")
+	}
+
+	root := t.TempDir()
+	vaultPath := filepath.Join(root, "vault")
+	outside := filepath.Join(root, "outside")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(vaultPath, "brief")); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	writeTestSchema(t, vaultPath, `
+types:
+  brief:
+    default_path: brief/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+traits: {}
+`)
+	rt := testRuntime(t, vaultPath)
+	_, err := Write(rt, WriteRequest{
+		TypeName:    "brief",
+		Title:       "Secret",
+		TargetPath:  "Secret",
+		ReplaceBody: true,
+		Content:     "# leaked",
+	})
+	var svcErr *svcerr.Error
+	if !errors.As(err, &svcErr) || svcErr.Code != codes.ErrFileOutsideVault {
+		t.Fatalf("Write() error = %#v, want FILE_OUTSIDE_VAULT", err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "secret.md")); err == nil {
+		t.Fatal("write escaped the vault through a directory symlink")
 	}
 }
 

@@ -152,6 +152,67 @@ func TestParseEditorMode(t *testing.T) {
 	}
 }
 
+func TestOpenInEditorDoesNotInvokeShell(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-injection fixture is POSIX")
+	}
+
+	tmpDir := t.TempDir()
+	marker := filepath.Join(tmpDir, "pwned")
+	targetPath := filepath.Join(tmpDir, "target.md")
+	if err := os.WriteFile(targetPath, []byte("note\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("EDITOR", "true; printf pwned > '"+marker+"'")
+	cfg := &config.Config{EditorMode: "terminal"}
+	_ = OpenInEditor(cfg, targetPath)
+
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("editor string with ';' ran a shell command")
+	}
+}
+
+func TestOpenInEditorPassesCompoundArgsWithoutShell(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("compound-editor fixture is POSIX")
+	}
+
+	tmpDir := t.TempDir()
+	capturePath := filepath.Join(tmpDir, "opened.txt")
+	editorPath := filepath.Join(tmpDir, "editor.sh")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$RAVEN_EDITOR_CAPTURE\"\n"
+	if err := os.WriteFile(editorPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	targetPath := filepath.Join(tmpDir, "target.md")
+	t.Setenv("EDITOR", editorPath+" --wait")
+	t.Setenv("RAVEN_EDITOR_CAPTURE", capturePath)
+
+	cfg := &config.Config{EditorMode: "terminal"}
+	if !OpenInEditor(cfg, targetPath) {
+		t.Fatal("expected editor to launch")
+	}
+
+	gotBytes, err := os.ReadFile(capturePath)
+	if err != nil {
+		t.Fatalf("read capture: %v", err)
+	}
+	got := strings.TrimSpace(string(gotBytes))
+	want := "--wait\n" + targetPath
+	if got != want {
+		t.Fatalf("editor argv = %q, want %q", got, want)
+	}
+}
+
+func TestCommandForEditorRejectsUnclosedQuote(t *testing.T) {
+	t.Parallel()
+	if _, err := commandForEditor(`"vim`, []string{"note.md"}); err == nil {
+		t.Fatal("expected error for unclosed quote")
+	}
+}
+
 func TestOpenInEditorFallsBackToEditorEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	capturePath := filepath.Join(tmpDir, "opened.txt")
