@@ -25,28 +25,28 @@ const (
 // ErrTooLarge is returned when an input exceeds the configured byte limit.
 var ErrTooLarge = errors.New("input exceeds size limit")
 
-// ReadAll reads from r up to max bytes. A single extra byte past max yields
+// ReadAll reads from r up to limit bytes. A single extra byte past limit yields
 // ErrTooLarge; the caller should not treat a truncated body as valid input.
-func ReadAll(r io.Reader, max int64) ([]byte, error) {
-	if max < 0 {
+func ReadAll(r io.Reader, limit int64) ([]byte, error) {
+	if limit < 0 {
 		return nil, fmt.Errorf("invalid size limit")
 	}
-	data, err := io.ReadAll(io.LimitReader(r, max+1))
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(data)) > max {
-		return nil, fmt.Errorf("%w (%d bytes)", ErrTooLarge, max)
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%w (%d bytes)", ErrTooLarge, limit)
 	}
 	return data, nil
 }
 
 // ReadFile reads path with the same limit as ReadAll.
-func ReadFile(path string, max int64) ([]byte, error) {
+func ReadFile(path string, limit int64) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return ReadAll(f, max)
+	return ReadAll(f, limit)
 }
