@@ -81,15 +81,10 @@ func TestSchemaSQL_Triggers(t *testing.T) {
 		t.Fatalf("failed to execute SchemaSQL: %v", err)
 	}
 
-	triggers := []string{
-		"trg_objects_resolver_generation_insert",
-		"trg_objects_resolver_generation_update",
-		"trg_objects_resolver_generation_delete",
-		"trg_sections_resolver_generation_insert",
-		"trg_sections_resolver_generation_update",
-		"trg_sections_resolver_generation_delete",
+	if len(ResolverGenerationTriggerNames) == 0 {
+		t.Fatal("ResolverGenerationTriggerNames is empty")
 	}
-	for _, trigger := range triggers {
+	for _, trigger := range ResolverGenerationTriggerNames {
 		var name string
 		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='trigger' AND name=?", trigger).Scan(&name)
 		if err != nil {

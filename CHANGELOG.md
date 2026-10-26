@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+- Full and incremental `rvn reindex` parse Markdown files in parallel, then write SQLite rows in batched transactions with prepared statements. Resolver-generation triggers are suspended for the transaction so generation bumps once per batch instead of once per object/section row.
+- Opening an existing compatible index skips `CREATE TABLE/INDEX/TRIGGER/VIRTUAL TABLE IF NOT EXISTS` (including FTS5 setup). Connection PRAGMAs still apply on every open.
+- `rvn check` inherits the parallel vault walk and folds index-staleness detection into that same pass, so it no longer stats every indexed file a second time.
+- Canonical object and section IDs on `rvn read`, `rvn resolve`, `rvn set`, and other ref-resolving commands use a targeted primary-key lookup instead of loading every object and section into the in-memory resolver.
+- Resolver construction loads aliases in one query and treats a missing `sections` table as a query error fallback instead of `PRAGMA table_info` on every build.
+- `content("...")` matches FTS rows once as a list subquery (`id IN (SELECT object_id ...)`) instead of a correlated scan per outer row.
+- Canonical object and section IDs in `[[references]]` resolve with a targeted primary-key lookup. Name-field resolver maps use `json_extract` instead of unmarshalling every object's fields JSON.
+- Paginated queries skip the extra `COUNT(*)` when the returned page cannot have been truncated.
+- `within(type:...)` on sections, traits, and links joins the containing file object directly instead of walking a recursive ancestor CTE. `within(section ...)` stays recursive.
+
 ### Fixed
 - `content("...")` and `rvn search` no longer crash SQLite FTS5 on punctuation such as `type:project`, URLs, leading hyphens, `@todo`, and similar tokens. Remaining FTS syntax errors from `rvn query` now return `QUERY_INVALID` instead of a `DATABASE_ERROR` reindex hint.
 - Unquoted decimal numbers (`4.5`, `-0.5`) and dotted values (`v0.0.40`, `.pdf`) parse as comparison values instead of a new `.field` predicate.
@@ -14,12 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nested `object:` subqueries (`within(object:...)`, `refs(object:...)`, and similar) now emit the legacy-root migration error instead of `expected ')'`. `refd(link ...)` is rejected by the validator rather than a parenthesis parse error.
 - `--apply` is rejected for section queries up front, with a pointer to `rvn section move <file#slug>`.
 - Query help no longer shows invalid `type:page matches(.path, ...)` examples, and the `| sort` shell-pipe hint uses `--json` because `--pipe` is TSV.
-
-### Performance
-- `content("...")` matches FTS rows once as a list subquery (`id IN (SELECT object_id ...)`) instead of a correlated scan per outer row.
-- Canonical object and section IDs in `[[references]]` resolve with a targeted primary-key lookup. Name-field resolver maps use `json_extract` instead of unmarshalling every object's fields JSON.
-- Paginated queries skip the extra `COUNT(*)` when the returned page cannot have been truncated.
-- `within(type:...)` on sections, traits, and links joins the containing file object directly instead of walking a recursive ancestor CTE. `within(section ...)` stays recursive.
 
 ## [v0.0.40] - 2026-10-22
 

@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/aidanlsb/raven/internal/indexschema"
 )
 
 // Database is the SQLite database handle.
@@ -135,6 +137,12 @@ func configureDatabaseConnection(db *sql.DB) error {
 	db.SetMaxIdleConns(1)
 	if _, err := db.Exec(fmt.Sprintf("PRAGMA busy_timeout = %d", sqliteBusyTimeoutMillis)); err != nil {
 		return fmt.Errorf("failed to configure database busy timeout: %w", err)
+	}
+	// journal_mode=WAL is persistent; the rest are per-connection. Apply them
+	// here so read-only CLI commands skip DDL in initialize() without losing
+	// the write/query performance settings.
+	if _, err := db.Exec(indexschema.ConnectionPragmasSQL); err != nil {
+		return fmt.Errorf("failed to configure database performance pragmas: %w", err)
 	}
 	return nil
 }

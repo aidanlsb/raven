@@ -1101,3 +1101,119 @@ owner: "[[people/freya]]"
 		}
 	})
 }
+
+func TestIndexDocumentsBatchMatchesPerFileWrites(t *testing.T) {
+	t.Parallel()
+
+	parse := func(t *testing.T, vaultPath, rel, content string) *parser.ParsedDocument {
+		t.Helper()
+		doc, err := parser.ParseDocument(content, filepath.Join(vaultPath, rel), vaultPath)
+		if err != nil {
+			t.Fatalf("parse %s: %v", rel, err)
+		}
+		return doc
+	}
+
+	vaultPath := t.TempDir()
+	docs := []DocumentIndexInput{
+		{Document: parse(t, vaultPath, "people/ada.md", "---\ntype: person\nname: Ada\n---\n\n# Ada\n\n[[people/grace]]\n"), FileMtime: 100},
+		{Document: parse(t, vaultPath, "people/grace.md", "---\ntype: person\nname: Grace\n---\n\n# Grace\n\n## Notes\n\nHello\n"), FileMtime: 101},
+	}
+
+	perFile, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("open per-file db: %v", err)
+	}
+	defer perFile.Close()
+	perFile.SetAutoResolveRefs(false)
+	for _, input := range docs {
+		if err := perFile.IndexDocumentWithMtime(input.Document, schema.New(), input.FileMtime); err != nil {
+			t.Fatalf("IndexDocumentWithMtime: %v", err)
+		}
+	}
+
+	batched, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("open batched db: %v", err)
+	}
+	defer batched.Close()
+	batched.SetAutoResolveRefs(false)
+	if err := batched.IndexDocuments(docs, schema.New(), IndexDocumentsOptions{}); err != nil {
+		t.Fatalf("IndexDocuments: %v", err)
+	}
+
+	perStats, err := perFile.Stats()
+	if err != nil {
+		t.Fatalf("per-file stats: %v", err)
+	}
+	batchStats, err := batched.Stats()
+	if err != nil {
+		t.Fatalf("batch stats: %v", err)
+	}
+	if perStats.ObjectCount != batchStats.ObjectCount || perStats.RefCount != batchStats.RefCount {
+		t.Fatalf("stats mismatch: per-file %#v batch %#v", perStats, batchStats)
+	}
+
+	for _, id := range []string{"people/ada", "people/grace"} {
+		got, err := batched.GetObject(id)
+		if err != nil {
+			t.Fatalf("GetObject(%s): %v", id, err)
+		}
+		if got == nil {
+			t.Fatalf("missing object %s", id)
+		}
+	}
+	section, err := batched.GetSection("people/grace#notes")
+	if err != nil {
+		t.Fatalf("GetSection: %v", err)
+	}
+	if section == nil {
+		t.Fatal("missing section people/grace#notes")
+	}
+
+	var triggerCount int
+	if err := batched.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_%resolver_generation%'`).Scan(&triggerCount); err != nil {
+		t.Fatalf("count resolver triggers: %v", err)
+	}
+	if triggerCount != len(indexschema.ResolverGenerationTriggerNames) {
+		t.Fatalf("resolver triggers after batch = %d, want %d", triggerCount, len(indexschema.ResolverGenerationTriggerNames))
+	}
+}
+
+func TestIndexDocumentRestoresResolverGenerationTriggers(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("OpenInMemory: %v", err)
+	}
+	defer db.Close()
+
+	doc := &parser.ParsedDocument{
+		FilePath: "note.md",
+		Objects: []*model.Object{{
+			ID:        "note",
+			Type:      "page",
+			Fields:    map[string]fieldvalue.FieldValue{},
+			LineStart: 1,
+		}},
+	}
+	if err := db.IndexDocument(doc, schema.New()); err != nil {
+		t.Fatalf("IndexDocument: %v", err)
+	}
+
+	before, err := db.ResolverGeneration()
+	if err != nil {
+		t.Fatalf("ResolverGeneration: %v", err)
+	}
+	if _, err := db.db.Exec(`INSERT INTO objects (id, file_path, type, line_start) VALUES ('other', 'other.md', 'page', 1)`); err != nil {
+		t.Fatalf("raw insert: %v", err)
+	}
+	after, err := db.ResolverGeneration()
+	if err != nil {
+		t.Fatalf("ResolverGeneration after raw insert: %v", err)
+	}
+	if after <= before {
+		t.Fatalf("resolver generation did not bump after raw insert: before=%d after=%d", before, after)
+	}
+}

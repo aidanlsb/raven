@@ -263,6 +263,55 @@ func TestWalkMarkdownFilesWithOptionsSkipsParseBeforeRead(t *testing.T) {
 	}
 }
 
+func TestWalkMarkdownFilesParallelMatchesSequential(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	for _, name := range []string{"a.md", "b.md", "c.md", "sub/d.md"} {
+		dir := filepath.Join(tmpDir, filepath.Dir(name))
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+		content := "---\ntype: page\n---\n\n# " + name + "\n\nHello [[other]]\n"
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	collect := func(workers int) []string {
+		t.Helper()
+		var ids []string
+		err := WalkMarkdownFilesWithOptions(tmpDir, &WalkOptions{ParseWorkers: workers}, func(result WalkResult) error {
+			if result.Error != nil {
+				t.Fatalf("walk error for %s: %v", result.RelativePath, result.Error)
+			}
+			if result.Document == nil || len(result.Document.Objects) == 0 {
+				t.Fatalf("missing document for %s", result.RelativePath)
+			}
+			ids = append(ids, result.RelativePath+"|"+result.Document.Objects[0].ID)
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk workers=%d: %v", workers, err)
+		}
+		return ids
+	}
+
+	sequential := collect(1)
+	parallel := collect(4)
+	if len(sequential) != 4 {
+		t.Fatalf("sequential files = %d, want 4: %v", len(sequential), sequential)
+	}
+	if len(sequential) != len(parallel) {
+		t.Fatalf("parallel files = %d, sequential = %d", len(parallel), len(sequential))
+	}
+	for i := range sequential {
+		if sequential[i] != parallel[i] {
+			t.Fatalf("order mismatch at %d: sequential=%q parallel=%q\nseq=%v\npar=%v", i, sequential[i], parallel[i], sequential, parallel)
+		}
+	}
+}
+
 func TestCollectDocuments(t *testing.T) {
 	t.Parallel()
 	// Create a temp directory with test files

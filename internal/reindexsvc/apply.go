@@ -25,13 +25,46 @@ type writerSink struct {
 	result *RunResult
 }
 
+const indexWriteBatchSize = 256
+
 func (s *writerSink) indexParsed(walkResult vault.WalkResult) bool {
-	if idxErr := s.db.IndexDocumentWithMtime(walkResult.Document, s.schema, walkResult.FileMtime); idxErr != nil {
-		s.result.Errors = append(s.result.Errors, fmt.Sprintf("%s: %v", walkResult.RelativePath, idxErr))
+	return s.indexParsedBatch([]vault.WalkResult{walkResult}, false)
+}
+
+func (s *writerSink) indexParsedBatch(walkResults []vault.WalkResult, skipExistingDelete bool) bool {
+	inputs := make([]index.DocumentIndexInput, 0, len(walkResults))
+	for _, walkResult := range walkResults {
+		if walkResult.Document == nil {
+			continue
+		}
+		inputs = append(inputs, index.DocumentIndexInput{
+			Document:  walkResult.Document,
+			FileMtime: walkResult.FileMtime,
+		})
+	}
+	if len(inputs) == 0 {
+		return true
+	}
+	idxErr := s.db.IndexDocuments(inputs, s.schema, index.IndexDocumentsOptions{
+		SkipExistingDelete: skipExistingDelete,
+	})
+	if idxErr != nil && len(inputs) > 1 {
+		ok := true
+		for _, walkResult := range walkResults {
+			if !s.indexParsed(walkResult) {
+				ok = false
+			}
+		}
+		return ok
+	}
+	if idxErr != nil {
+		s.result.Errors = append(s.result.Errors, fmt.Sprintf("%s: %v", walkResults[0].RelativePath, idxErr))
 		return false
 	}
-	s.result.WarningMessages = append(s.result.WarningMessages, index.UnknownFrontmatterWarnings(walkResult.Document, s.schema)...)
-	s.result.FilesIndexed++
+	for _, walkResult := range walkResults {
+		s.result.WarningMessages = append(s.result.WarningMessages, index.UnknownFrontmatterWarnings(walkResult.Document, s.schema)...)
+	}
+	s.result.FilesIndexed += len(inputs)
 	return true
 }
 
@@ -132,10 +165,38 @@ func apply(prep *preparedRun, plan *filePlan) (*RunResult, error) {
 		sink = &writerSink{db: prep.db, schema: prep.schema, result: result}
 	}
 
-	walkOpts := &vault.WalkOptions{ParseOptions: prep.parseOptions, ExcludeMatcher: prep.excludeMatcher}
+	walkOpts := &vault.WalkOptions{
+		ParseOptions:   prep.parseOptions,
+		ExcludeMatcher: prep.excludeMatcher,
+		Context:        prep.ctx,
+	}
 	if prep.incremental {
 		walkOpts.ShouldParse = plan.shouldParse
 	}
+
+	var pending []vault.WalkResult
+	flush := func() {
+		if len(pending) == 0 {
+			return
+		}
+		if writer, ok := sink.(*writerSink); ok {
+			writer.indexParsedBatch(pending, !prep.incremental)
+		} else {
+			for _, walkResult := range pending {
+				sink.indexParsed(walkResult)
+			}
+		}
+		if prep.incremental && !prep.dryRun {
+			for _, walkResult := range pending {
+				if clearErr := indexjournal.ClearRecoveredPath(prep.vaultPath, plan.pending, walkResult.RelativePath); clearErr != nil {
+					result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index path %s: %v", walkResult.RelativePath, clearErr))
+					recoveryComplete = false
+				}
+			}
+		}
+		pending = pending[:0]
+	}
+
 	walkErr := vault.WalkMarkdownFilesWithOptions(prep.vaultPath, walkOpts, func(walkResult vault.WalkResult) error {
 		select {
 		case <-prep.ctx.Done():
@@ -157,18 +218,13 @@ func apply(prep *preparedRun, plan *filePlan) (*RunResult, error) {
 			result.StaleFiles = append(result.StaleFiles, walkResult.RelativePath)
 		}
 
-		if !sink.indexParsed(walkResult) {
-			return nil
-		}
-
-		if prep.incremental && !prep.dryRun {
-			if clearErr := indexjournal.ClearRecoveredPath(prep.vaultPath, plan.pending, walkResult.RelativePath); clearErr != nil {
-				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("failed to clear recovered index path %s: %v", walkResult.RelativePath, clearErr))
-				recoveryComplete = false
-			}
+		pending = append(pending, walkResult)
+		if len(pending) >= indexWriteBatchSize {
+			flush()
 		}
 		return nil
 	})
+	flush()
 	if walkErr != nil {
 		return nil, svcerr.Wrap(codes.ErrFileRead, fmt.Sprintf("error walking vault: %v", walkErr), walkErr)
 	}

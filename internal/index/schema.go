@@ -13,6 +13,27 @@ import (
 
 // initialize creates the database schema.
 func (d *Database) initialize(isNewDB bool) error {
+	if !isNewDB {
+		compatible, err := d.SchemaCompatible()
+		if err != nil {
+			return fmt.Errorf("failed to read database version: %w", err)
+		}
+		if compatible {
+			// CREATE TABLE/INDEX/TRIGGER/VIRTUAL TABLE IF NOT EXISTS on every
+			// CLI open is dominated by FTS5 virtual-table setup. The version
+			// row is the compatibility contract; skip that DDL when it matches.
+			// Fingerprints are a side table added without a version bump, so
+			// keep the cheap IF NOT EXISTS create.
+			if _, err := d.db.Exec(fileFingerprintSQL); err != nil {
+				return fmt.Errorf("failed to initialize file fingerprints: %w", err)
+			}
+			if err := ensureRevision(d.db, false); err != nil {
+				return fmt.Errorf("failed to initialize index revision: %w", err)
+			}
+			return nil
+		}
+	}
+
 	_, err := d.db.Exec(indexschema.SchemaSQL)
 	if err != nil {
 		return fmt.Errorf("failed to initialize database schema: %w", err)

@@ -23,6 +23,11 @@ type ParsedDocument struct {
 	Refs          []*model.Reference // All references in this document
 	MarkdownLinks []MarkdownLink     // All direct Markdown links/images before target classification
 	Links         []*model.Link      // Markdown links to non-Raven targets
+
+	// HasFrontmatter and FrontmatterEndLine avoid re-parsing YAML during index
+	// writes. EndLine is the 1-indexed closing '---' line, matching Frontmatter.EndLine.
+	HasFrontmatter     bool
+	FrontmatterEndLine int
 }
 
 // ParseOptions contains options for parsing documents.
@@ -195,16 +200,24 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 
 	computeSectionLineEnds(sections)
 
+	hasFrontmatter := frontmatter != nil && frontmatter.Raw != ""
+	frontmatterEndLine := 0
+	if frontmatter != nil {
+		frontmatterEndLine = frontmatter.EndLine
+	}
+
 	return &ParsedDocument{
-		FilePath:      relativePath,
-		RawContent:    content,
-		Body:          bodyContent,
-		Objects:       objects,
-		Sections:      sections,
-		Traits:        traits,
-		Refs:          refs,
-		MarkdownLinks: astContent.Links,
-		Links:         links,
+		FilePath:           relativePath,
+		RawContent:         content,
+		Body:               bodyContent,
+		Objects:            objects,
+		Sections:           sections,
+		Traits:             traits,
+		Refs:               refs,
+		MarkdownLinks:      astContent.Links,
+		Links:              links,
+		HasFrontmatter:     hasFrontmatter,
+		FrontmatterEndLine: frontmatterEndLine,
 	}, nil
 }
 

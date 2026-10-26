@@ -18,16 +18,21 @@ type scopedWalk struct {
 	docs        []*parser.ParsedDocument
 	objectInfos []check.ObjectInfo
 	parseErrors []check.Issue
+	staleFiles  []string
 	fileCount   int
 	walkPath    string
 	targetFiles map[string]bool
 }
 
-func walkScopedDocuments(rt *vaultruntime.Runtime, scope *Scope, excludeMatcher *ravenignore.Matcher) (scopedWalk, error) {
+func walkScopedDocuments(rt *vaultruntime.Runtime, scope *Scope, excludeMatcher *ravenignore.Matcher, indexedMtimes map[string]int64) (scopedWalk, error) {
 	setup := prepareScopeWalkSetup(rt.VaultPath, scope)
 	walked := scopedWalk{
 		walkPath:    setup.walkPath,
 		targetFiles: setup.targetFileSet,
+	}
+	remaining := make(map[string]struct{}, len(indexedMtimes))
+	for filePath := range indexedMtimes {
+		remaining[filePath] = struct{}{}
 	}
 
 	walkOpts := &vault.WalkOptions{
@@ -35,13 +40,21 @@ func walkScopedDocuments(rt *vaultruntime.Runtime, scope *Scope, excludeMatcher 
 		ExcludeMatcher: excludeMatcher,
 	}
 	walkErr := vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(walkResult vault.WalkResult) error {
+		relPath := walkResult.RelativePath
+		if indexed, ok := indexedMtimes[relPath]; ok {
+			delete(remaining, relPath)
+			if indexed <= 0 || walkResult.FileMtime > indexed {
+				walked.staleFiles = append(walked.staleFiles, relPath)
+			}
+		}
+
 		if walkResult.Error != nil {
 			if isFileInScope(walkResult.Path, scope, walked.walkPath, walked.targetFiles) {
 				walked.fileCount++
 				walked.parseErrors = append(walked.parseErrors, check.Issue{
 					Level:    check.LevelError,
 					Type:     check.IssueParseError,
-					FilePath: walkResult.RelativePath,
+					FilePath: relPath,
 					Line:     1,
 					Message:  walkResult.Error.Error(),
 					FixHint:  "Fix the YAML frontmatter or markdown syntax",
@@ -63,6 +76,9 @@ func walkScopedDocuments(rt *vaultruntime.Runtime, scope *Scope, excludeMatcher 
 	})
 	if walkErr != nil {
 		return scopedWalk{}, svcerr.ValidationError(fmt.Errorf("error walking vault: %w", walkErr))
+	}
+	for filePath := range remaining {
+		walked.staleFiles = append(walked.staleFiles, filePath)
 	}
 	return walked, nil
 }

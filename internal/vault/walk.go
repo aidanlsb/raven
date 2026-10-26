@@ -1,12 +1,15 @@
 package vault
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/aidanlsb/raven/internal/config"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
@@ -35,6 +38,11 @@ type WalkOptions struct {
 	// is read. Returning false skips parsing while still calling the handler
 	// with ParseSkipped set. When nil, all discovered markdown files are parsed.
 	ShouldParse func(relativePath string, fileMtime int64) bool
+	// Context cancels discovery and parsing when cancelled.
+	Context context.Context
+	// ParseWorkers is the number of parallel parse workers. 0 means GOMAXPROCS.
+	// 1 forces sequential parse (useful for tests).
+	ParseWorkers int
 }
 
 // WalkMarkdownFiles walks all markdown files in a vault and calls the handler for each.
@@ -47,27 +55,69 @@ func WalkMarkdownFiles(vaultPath string, handler func(result WalkResult) error) 
 	return WalkMarkdownFilesWithOptions(vaultPath, nil, handler)
 }
 
+type discoveredFile struct {
+	path         string
+	relativePath string
+	fileMtime    int64
+	parseSkipped bool
+	err          error
+}
+
 // WalkMarkdownFilesWithOptions walks all markdown files with custom options.
 func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler func(result WalkResult) error) error {
 	var parseOpts *parser.ParseOptions
+	ctx := context.Background()
 	if opts != nil {
 		parseOpts = opts.ParseOptions
+		if opts.Context != nil {
+			ctx = opts.Context
+		}
 	}
 
-	return filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
+	files, err := collectMarkdownFiles(ctx, vaultPath, opts)
+	if err != nil {
+		return err
+	}
+
+	results := parseDiscoveredFiles(ctx, vaultPath, parseOpts, files, parseWorkerCount(opts))
+	for _, result := range results {
+		if err := handler(result); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func parseWorkerCount(opts *WalkOptions) int {
+	if opts != nil && opts.ParseWorkers > 0 {
+		return opts.ParseWorkers
+	}
+	n := runtime.GOMAXPROCS(0)
+	if n < 1 {
+		return 1
+	}
+	return n
+}
+
+func collectMarkdownFiles(ctx context.Context, vaultPath string, opts *WalkOptions) ([]discoveredFile, error) {
+	var files []discoveredFile
+	err := filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err != nil {
 			relativePath, _ := filepath.Rel(vaultPath, path)
-			return handler(WalkResult{
-				Path:         path,
-				RelativePath: relativePath,
-				Error:        err,
+			files = append(files, discoveredFile{
+				path:         path,
+				relativePath: relativePath,
+				err:          err,
 			})
+			return nil //nolint:nilerr // keep walking to collect all per-file errors
 		}
 
 		relativePath, _ := filepath.Rel(vaultPath, path)
 		relativePath = filepath.ToSlash(relativePath)
 
-		// Skip directories, but skip .raven, .trash, and excluded directories entirely
 		if d.IsDir() {
 			name := d.Name()
 			if name == ".raven" || name == ".trash" || name == ".git" {
@@ -79,75 +129,121 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 			return nil
 		}
 
-		// Only process .md files
 		if !strings.HasSuffix(path, ".md") {
 			return nil
 		}
 
-		// Security: verify file is within vault
 		if err := paths.ValidateWithinVault(vaultPath, path); err != nil {
 			if errors.Is(err, paths.ErrPathOutsideVault) {
 				return nil
 			}
 			relativePath, _ := filepath.Rel(vaultPath, path)
-			return handler(WalkResult{
-				Path:         path,
-				RelativePath: relativePath,
-				Error:        err,
+			files = append(files, discoveredFile{
+				path:         path,
+				relativePath: relativePath,
+				err:          err,
 			})
+			return nil
 		}
 
 		if opts != nil && opts.ExcludeMatcher.Match(relativePath, false) {
 			return nil
 		}
 
-		// Get file mtime
 		info, err := d.Info()
 		if err != nil {
-			return handler(WalkResult{
-				Path:         path,
-				RelativePath: relativePath,
-				Error:        err,
+			files = append(files, discoveredFile{
+				path:         path,
+				relativePath: relativePath,
+				err:          err,
 			})
+			return nil //nolint:nilerr // keep walking to collect all per-file errors
 		}
 		fileMtime := info.ModTime().Unix()
 
 		if opts != nil && opts.ShouldParse != nil && !opts.ShouldParse(relativePath, fileMtime) {
-			return handler(WalkResult{
-				Path:         path,
-				RelativePath: relativePath,
-				FileMtime:    fileMtime,
-				ParseSkipped: true,
+			files = append(files, discoveredFile{
+				path:         path,
+				relativePath: relativePath,
+				fileMtime:    fileMtime,
+				parseSkipped: true,
 			})
+			return nil
 		}
 
-		// Read file
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return handler(WalkResult{
-				Path:         path,
-				RelativePath: relativePath,
-				Error:        err,
-			})
-		}
-
-		// Parse document with options
-		doc, err := parser.ParseDocumentWithOptions(string(content), path, vaultPath, parseOpts)
-		if err != nil {
-			return handler(WalkResult{
-				Path:         path,
-				RelativePath: relativePath,
-				Error:        err,
-			})
-		}
-
-		return handler(WalkResult{
-			Path:         path,
-			RelativePath: relativePath,
-			Document:     doc,
-			FileMtime:    fileMtime,
+		files = append(files, discoveredFile{
+			path:         path,
+			relativePath: relativePath,
+			fileMtime:    fileMtime,
 		})
+		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+
+func parseDiscoveredFiles(ctx context.Context, vaultPath string, parseOpts *parser.ParseOptions, files []discoveredFile, workers int) []WalkResult {
+	results := make([]WalkResult, len(files))
+	if len(files) == 0 {
+		return results
+	}
+	if workers < 1 {
+		workers = 1
+	}
+	if workers > len(files) {
+		workers = len(files)
+	}
+
+	var wg sync.WaitGroup
+	jobs := make(chan int)
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				results[i] = parseDiscoveredFile(ctx, vaultPath, parseOpts, files[i])
+			}
+		}()
+	}
+	for i := range files {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+	return results
+}
+
+func parseDiscoveredFile(ctx context.Context, vaultPath string, parseOpts *parser.ParseOptions, file discoveredFile) WalkResult {
+	result := WalkResult{
+		Path:         file.path,
+		RelativePath: file.relativePath,
+		FileMtime:    file.fileMtime,
+		ParseSkipped: file.parseSkipped,
+		Error:        file.err,
+	}
+	if file.err != nil || file.parseSkipped {
+		return result
+	}
+	if err := ctx.Err(); err != nil {
+		result.Error = err
+		return result
+	}
+
+	content, err := os.ReadFile(file.path)
+	if err != nil {
+		result.Error = err
+		return result
+	}
+
+	doc, err := parser.ParseDocumentWithOptions(string(content), file.path, vaultPath, parseOpts)
+	if err != nil {
+		result.Error = err
+		return result
+	}
+	result.Document = doc
+	return result
 }
 
 // CollectDocuments walks all markdown files and returns parsed documents.
