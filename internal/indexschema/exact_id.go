@@ -77,10 +77,7 @@ func lookupExactID(db ResolverQuerier, id string) (string, bool, error) {
 }
 
 func exactIDHasCollisions(db ResolverQuerier, sch *schema.Schema, raw, normalized, id string) (bool, error) {
-	if hit, err := aliasCollides(db, raw, normalized, id); err != nil || hit {
-		return hit, err
-	}
-	if hit, err := nameFieldCollides(db, sch, raw, normalized, id); err != nil || hit {
+	if hit, err := aliasOrNameFieldCollides(db, sch, raw, normalized, id); err != nil || hit {
 		return hit, err
 	}
 	matchRef := normalized
@@ -106,24 +103,56 @@ func normalizeExactIDRef(ref string) string {
 	return baseRef + "#" + fragment
 }
 
-func aliasCollides(db ResolverQuerier, raw, normalized, id string) (bool, error) {
-	candidates := uniqueNonEmpty(raw, normalized, slugs.ComponentSlug(raw), slugs.ComponentSlug(normalized))
-	if len(candidates) == 0 {
+func aliasOrNameFieldCollides(db ResolverQuerier, sch *schema.Schema, raw, normalized, id string) (bool, error) {
+	aliasValues := uniqueNonEmpty(raw, normalized, slugs.ComponentSlug(raw), slugs.ComponentSlug(normalized))
+	nameValues := uniqueNonEmpty(raw, normalized, strings.ToLower(raw), strings.ToLower(normalized),
+		slugs.ComponentSlug(raw), slugs.ComponentSlug(normalized))
+
+	var typeNameFields map[string]string
+	if sch != nil {
+		typeNameFields = BuildTypeNameFields(sch)
+	}
+	if len(aliasValues) == 0 && len(typeNameFields) == 0 {
 		return false, nil
 	}
-	placeholders := strings.Repeat("?,", len(candidates))
-	placeholders = placeholders[:len(placeholders)-1]
-	args := make([]any, 0, len(candidates)+1)
-	for _, c := range candidates {
-		args = append(args, c)
+
+	var b strings.Builder
+	args := []any{id}
+	b.WriteString(`SELECT id FROM objects WHERE id != ? AND (`)
+	part := 0
+	if len(aliasValues) > 0 {
+		b.WriteString(`(alias IS NOT NULL AND alias != '' AND alias IN (`)
+		writePlaceholders(&b, len(aliasValues))
+		b.WriteString(`))`)
+		for _, v := range aliasValues {
+			args = append(args, v)
+		}
+		part++
 	}
-	args = append(args, id)
+	for objType, nameField := range typeNameFields {
+		if len(nameValues) == 0 {
+			continue
+		}
+		if part > 0 {
+			b.WriteString(` OR `)
+		}
+		jsonPath := "$." + nameField
+		b.WriteString(`(type = ? AND json_type(fields, ?) = 'text' AND json_extract(fields, ?) IN (`)
+		args = append(args, objType, jsonPath, jsonPath)
+		writePlaceholders(&b, len(nameValues))
+		b.WriteString(`))`)
+		for _, v := range nameValues {
+			args = append(args, v)
+		}
+		part++
+	}
+	if part == 0 {
+		return false, nil
+	}
+	b.WriteString(`) LIMIT 1`)
 
 	var other string
-	err := db.QueryRow(
-		`SELECT id FROM objects WHERE alias IS NOT NULL AND alias != '' AND alias IN (`+placeholders+`) AND id != ? LIMIT 1`,
-		args...,
-	).Scan(&other)
+	err := db.QueryRow(b.String(), args...).Scan(&other)
 	if err == nil {
 		return true, nil
 	}
@@ -133,33 +162,13 @@ func aliasCollides(db ResolverQuerier, raw, normalized, id string) (bool, error)
 	return false, err
 }
 
-func nameFieldCollides(db ResolverQuerier, sch *schema.Schema, raw, normalized, id string) (bool, error) {
-	if sch == nil {
-		return false, nil
-	}
-	typeNameFields := BuildTypeNameFields(sch)
-	if len(typeNameFields) == 0 {
-		return false, nil
-	}
-	values := uniqueNonEmpty(raw, normalized, strings.ToLower(raw), strings.ToLower(normalized),
-		slugs.ComponentSlug(raw), slugs.ComponentSlug(normalized))
-	for objType, nameField := range typeNameFields {
-		jsonPath := "$." + nameField
-		for _, value := range values {
-			var other string
-			err := db.QueryRow(
-				`SELECT id FROM objects WHERE type = ? AND json_type(fields, ?) = 'text' AND json_extract(fields, ?) = ? AND id != ? LIMIT 1`,
-				objType, jsonPath, jsonPath, value, id,
-			).Scan(&other)
-			if err == nil {
-				return true, nil
-			}
-			if err != sql.ErrNoRows && !isMissingRelationError(err, "objects") {
-				return false, err
-			}
+func writePlaceholders(b *strings.Builder, n int) {
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteByte(',')
 		}
+		b.WriteByte('?')
 	}
-	return false, nil
 }
 
 func shortNameCollides(db ResolverQuerier, ref, id string) (bool, error) {

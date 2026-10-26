@@ -56,6 +56,22 @@ func TestTryResolveExactID(t *testing.T) {
 			t.Fatal("missing id should not resolve")
 		}
 	})
+
+	t.Run("name field collision falls back", func(t *testing.T) {
+		if _, err := db.Exec(
+			`INSERT INTO objects (id, file_path, type, fields, line_start) VALUES (?, ?, ?, ?, ?)`,
+			"people/other", "people/other.md", "person", `{"name":"people/ada"}`, 1,
+		); err != nil {
+			t.Fatalf("insert name-field collision: %v", err)
+		}
+		_, ok, err := TryResolveExactID(db, sch, "daily", "people/ada")
+		if err != nil {
+			t.Fatalf("TryResolveExactID: %v", err)
+		}
+		if ok {
+			t.Fatal("name-field collision should not take the exact-id fast path")
+		}
+	})
 }
 
 func TestAllAliasDataSingleQuery(t *testing.T) {

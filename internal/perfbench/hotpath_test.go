@@ -208,10 +208,23 @@ func BenchmarkHotPathSetCanonicalID(b *testing.B) {
 func BenchmarkHotPathReindexIncrementalOneFile(b *testing.B) {
 	vaultPath := testutil.BuildSynthVault(b, benchVaultOptions())
 	fullReindex(b, vaultPath)
-	note := filepath.Join(vaultPath, "people", "p0002.md")
+	rel := "people/p0002.md"
+	note := filepath.Join(vaultPath, filepath.FromSlash(rel))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
+		db, err := index.Open(vaultPath)
+		if err != nil {
+			b.Fatalf("open index: %v", err)
+		}
+		mtimes, err := db.GetFileMtimes()
+		if err != nil {
+			_ = db.Close()
+			b.Fatalf("GetFileMtimes: %v", err)
+		}
+		if err := db.Close(); err != nil {
+			b.Fatalf("close index: %v", err)
+		}
 		content, err := os.ReadFile(note)
 		if err != nil {
 			b.Fatalf("read note: %v", err)
@@ -219,7 +232,12 @@ func BenchmarkHotPathReindexIncrementalOneFile(b *testing.B) {
 		if err := os.WriteFile(note, append(content, []byte("\n- extra line\n")...), 0o644); err != nil {
 			b.Fatalf("touch note: %v", err)
 		}
-		later := time.Now().Add(2 * time.Second)
+		laterUnix := mtimes[rel] + 5
+		nowUnix := time.Now().Unix()
+		if laterUnix <= nowUnix {
+			laterUnix = nowUnix + 5
+		}
+		later := time.Unix(laterUnix, 0)
 		if err := os.Chtimes(note, later, later); err != nil {
 			b.Fatalf("chtimes note: %v", err)
 		}
@@ -231,7 +249,7 @@ func BenchmarkHotPathReindexIncrementalOneFile(b *testing.B) {
 			b.Fatalf("incremental reindex: %v", err)
 		}
 		if result.FilesIndexed != 1 {
-			b.Fatalf("incremental indexed %d files, want 1", result.FilesIndexed)
+			b.Fatalf("incremental indexed %d files, want 1 (skipped=%d errors=%v indexed_mtime=%d)", result.FilesIndexed, result.FilesSkipped, result.Errors, mtimes[rel])
 		}
 	}
 }

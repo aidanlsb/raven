@@ -123,9 +123,11 @@ func NormalizeServiceError(err error, reference string) error {
 // Operation reuses the index resolver across a related group of lookups.
 // It borrows its runtime and does not own or close the runtime's database.
 type Operation struct {
-	rt       *vaultruntime.Runtime
-	db       *index.Database
-	resolver *resolver.Resolver
+	rt           *vaultruntime.Runtime
+	db           *index.Database
+	resolver     *resolver.Resolver
+	indexedCache map[string]resolver.ResolveResult
+	filePathByID map[string]string
 }
 
 func New(rt *vaultruntime.Runtime) (*Operation, error) {
@@ -223,23 +225,35 @@ func (op *Operation) getResolver() (*resolver.Resolver, error) {
 }
 
 func (op *Operation) resolveIndexed(ref string) (resolver.ResolveResult, error) {
+	if op.indexedCache != nil {
+		if cached, ok := op.indexedCache[ref]; ok {
+			return cached, nil
+		}
+	}
 	db, err := op.getDB()
 	if err != nil {
 		return resolver.ResolveResult{}, err
 	}
+	var result resolver.ResolveResult
 	if id, ok, err := indexschema.TryResolveExactID(db.DB(), op.rt.Schema, op.dailyDirectory(), ref); err != nil {
 		return resolver.ResolveResult{}, err
 	} else if ok {
-		return resolver.ResolveResult{
+		result = resolver.ResolveResult{
 			TargetID:     id,
 			MatchSources: map[string]string{id: "id"},
-		}, nil
+		}
+	} else {
+		res, err := op.getResolver()
+		if err != nil {
+			return resolver.ResolveResult{}, err
+		}
+		result = res.Resolve(ref)
 	}
-	res, err := op.getResolver()
-	if err != nil {
-		return resolver.ResolveResult{}, err
+	if op.indexedCache == nil {
+		op.indexedCache = make(map[string]resolver.ResolveResult)
 	}
-	return res.Resolve(ref), nil
+	op.indexedCache[ref] = result
+	return result, nil
 }
 
 func (op *Operation) Resolve(reference string, allowMissing bool) (*ResolveResult, error) {
@@ -303,7 +317,7 @@ func (op *Operation) Resolve(reference string, allowMissing bool) (*ResolveResul
 		result.FileObjectID = resolved.TargetID
 	}
 
-	filePath, err := vault.ResolveObjectToFileWithConfig(op.rt.VaultPath, result.FileObjectID, op.rt.VaultCfg)
+	filePath, err := op.filePathForObjectID(result.FileObjectID)
 	if err != nil {
 		if allowMissing {
 			// Daily notes have a bare-date object ID but live under the configured
@@ -329,6 +343,23 @@ func (op *Operation) Resolve(reference string, allowMissing bool) (*ResolveResul
 		return nil, err
 	}
 	return result, nil
+}
+
+func (op *Operation) filePathForObjectID(objectID string) (string, error) {
+	if op.filePathByID != nil {
+		if filePath, ok := op.filePathByID[objectID]; ok {
+			return filePath, nil
+		}
+	}
+	filePath, err := vault.ResolveObjectToFileWithConfig(op.rt.VaultPath, objectID, op.rt.VaultCfg)
+	if err != nil {
+		return "", err
+	}
+	if op.filePathByID == nil {
+		op.filePathByID = make(map[string]string)
+	}
+	op.filePathByID[objectID] = filePath
+	return filePath, nil
 }
 
 func (op *Operation) addSectionMetadata(result *ResolveResult) error {
