@@ -260,6 +260,10 @@ func executeError(queryString string, err error) error {
 		return svcerr.Wrap(codes.ErrQueryInvalid, fmt.Sprintf("parse error: %v", parseErr), err).
 			WithSuggestion(queryParseSuggestion(queryString))
 	}
+	if query.IsFTSQuerySyntaxError(err) {
+		return svcerr.Wrap(codes.ErrQueryInvalid, "invalid full-text search query", err).
+			WithSuggestion("Quote special characters or simplify the content() query and retry.")
+	}
 	return svcerr.Wrap(codes.ErrDatabase, err.Error(), err).
 		WithSuggestion("Run 'rvn reindex' to rebuild the database")
 }
@@ -322,12 +326,13 @@ func planApply(result *ExecuteResult, applyArgs []string) (*ApplyPlan, error) {
 	if result.QueryKind == "link" {
 		return nil, unsupportedApplyError(result.QueryKind)
 	}
+	if result.QueryKind == "section" {
+		return nil, svcerr.New(codes.ErrInvalidInput, "--apply is not supported for section queries").
+			WithSuggestion("Use 'rvn section move <file#slug>' to move a section")
+	}
 	rawApply, err := bulkops.ParseRawApply(applyArgs)
 	if err != nil {
 		return nil, bulkopsError(err)
-	}
-	if result.QueryKind == "section" && rawApply.Command != string(bulkops.ObjectApplyMove) {
-		return nil, unsupportedApplyError(result.QueryKind)
 	}
 	if result.QueryKind == "trait" {
 		plan, err := bulkops.PlanTraitApply(rawApply, result.Traits)

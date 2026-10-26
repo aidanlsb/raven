@@ -33,7 +33,7 @@ rvn query "<query>" --apply "<command> [args...]" [--confirm]
 |------------|--------------------|
 | `type:...` | `set field=value...`, `add <text...>`, `delete`, `move <destination/>` |
 | `trait:...` | `update <new_value>` |
-| `section` | No effective bulk mutation: only `move` parses, then file-level bulk `move` rejects section IDs |
+| `section` | None; use `rvn section move <file#slug>` |
 | `link` | None |
 
 ### Preview vs apply

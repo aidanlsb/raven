@@ -190,7 +190,7 @@ link within(section .title==Resources)
 | Array quantifiers | `any()` / `all()` / `none()` | `any(.tags, _ == "urgent")` |
 | String functions | `includes()`, `startswith()`, `endswith()`, `matches()` | `includes(.name, "website")` |
 | References | `[[...]]` | `[[person/freya]]` |
-| Raw string | `r"..."` | `matches(.path, r"C:\Users\.*")` |
+| Raw string | `r"..."` | `matches(.file_path, r"C:\Users\.*")` |
 
 Notes:
 - `.field==*` / `!.field==*` are not supported. Use `exists(.field)` / `!exists(.field)`.
@@ -448,9 +448,8 @@ Use `rvn pick` when you want Raven-native interactive selection in a pipeline. I
 
 Section query IDs are stable `file#slug` IDs. Link rows have no durable edge ID,
 so `link --ids` emits the source object ID once per edge. Link queries do not
-support `--apply`. A section query accepts only an `--apply "move ..."` plan,
-but the delegated file-level bulk `move` command rejects section sources; use
-`rvn section move <file#slug>` for each intended section instead.
+support `--apply`. Section queries also reject `--apply`; use
+`rvn section move <file#slug>` to move a section.
 
 ### Counting and pagination
 
@@ -539,9 +538,8 @@ Flags such as `--refresh`, `--ids`, `--limit`, `--offset`, `--count-only`, `--ap
 
 - Object query `--apply` supports: `set`, `add`, `delete`, `move`.
 - Trait query `--apply` supports only: `update <new_value>`.
-- Link queries do not support `--apply`. Section queries accept only a `move`
-  plan, which then fails safely because file-level bulk `move` rejects section
-  IDs; use `rvn section move` explicitly.
+- Link queries and section queries do not support `--apply`. Use
+  `rvn section move <file#slug>` to move a section.
 - All `--apply` operations preview by default; use `--confirm` to apply.
 
 Examples:

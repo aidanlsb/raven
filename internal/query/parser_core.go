@@ -31,7 +31,7 @@ var commonShellPipeCommands = map[string]struct{}{
 
 func shellPipeQueryError(pos int) error {
 	return fmt.Errorf(
-		"at col %d: '|' (pipe) is not a shell pipe inside Raven queries. Use '|' only as OR between predicates, or run the query as one shell argument and pipe the command output instead, e.g. rvn query 'type:experiment_review' --pipe | jq 'sort_by(.created_at) | .[0]'",
+		"at col %d: '|' (pipe) is not a shell pipe inside Raven queries. Use '|' only as OR between predicates, or run the query as one shell argument and pipe the command output instead, e.g. rvn query 'type:experiment_review' --json | jq 'sort_by(.created_at) | .[0]'",
 		pos+1,
 	)
 }
@@ -55,7 +55,10 @@ func startsQueryRoot(curr, peek Token) bool {
 	switch strings.ToLower(curr.Value) {
 	case "section", "link":
 		return true
-	case "type", "trait":
+	case "type", "trait", "object":
+		// `object:` is recognized so nested calls such as within(object:project)
+		// reach parseQuery and emit the legacy-root migration error instead of
+		// a generic "expected ')'" parse failure.
 		return peek.Type == TokenColon
 	default:
 		return false
@@ -345,6 +348,10 @@ func (p *Parser) parseAtomicPredicate(negated bool) (Predicate, error) {
 			return nil, fmt.Errorf("keyword-style predicates are invalid; use function-call predicates (e.g., has(...), refs(...), content(...))")
 		}
 
+		if keyword == "order" || keyword == "sort" || keyword == "limit" {
+			return nil, fmt.Errorf("RQL has no %s clause; page with --limit/--offset, or sort results with rvn query '...' --json | jq '...'", keyword)
+		}
+
 		return nil, fmt.Errorf("unexpected identifier '%s': expected a function call like has(...), refs(...), content(...), or a field predicate like .field==value", keyword)
 	}
 
@@ -593,8 +600,7 @@ func (p *Parser) parseRefdFuncPredicate(negated bool) (Predicate, error) {
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected source or subquery in refd()")
 	}
-	ident := strings.ToLower(p.curr.Value)
-	if ident != "section" && (ident != "type" && ident != "trait" || p.peek.Type != TokenColon) {
+	if !startsQueryRoot(p.curr, p.peek) {
 		target := p.curr.Value
 		p.advance()
 		if err := p.expect(TokenRParen); err != nil {

@@ -365,7 +365,10 @@ func isIdentStart(ch byte) bool {
 }
 
 func isIdentChar(ch byte) bool {
-	return isIdentStart(ch) || ch == '/' || ch == '#'
+	// '.' is allowed inside identifiers so unquoted values such as 4.5 and
+	// v0.0.40 stay one token. It is not an identifier start, so `.field` at
+	// predicate start still lexes as TokenDot plus a field name.
+	return isIdentStart(ch) || ch == '/' || ch == '#' || ch == '.'
 }
 
 // isIdentCharAfterUnderscore returns true if ch would make a leading underscore

@@ -99,7 +99,7 @@ Common agent patterns:
 - Open todos under a section/topic heading: trait:todo .value==todo within(section includes(.title, "pricing"))
 - Open todos in a daily-note range: trait:todo .value==todo within(type:date .date>=2026-05-01 .date<=2026-05-31)
 - Projects that contain open todos anywhere: type:project contains(trait:todo .value==todo)
-- Path + structure together: type:page matches(.path, "^pages/work/") contains(trait:todo .value==todo)
+- Path + structure together: section matches(.file_path, "^pages/work/") contains(trait:todo .value==todo)
 
 Special date values for trait, type:date .date, and date-target ref field comparisons:
 - today, tomorrow, yesterday
@@ -129,8 +129,8 @@ Use --no-links to disable clickable terminal hyperlinks in human-readable
 results.
 Use --apply to run a bulk operation directly on query results.
 Do not combine --apply with --limit, --offset, or --count-only.
-Section queries return stable IDs, but file-level bulk move rejects section
-sources; use rvn section move for each intended section instead of --apply.
+Section queries return stable IDs but do not support --apply; use
+rvn section move <file#slug> to move a section.
 Link queries return edge rows and do not support --apply.
 For sections, pipe IDs to add instead: query "section ..." --ids | rvn add <text> --stdin.
 

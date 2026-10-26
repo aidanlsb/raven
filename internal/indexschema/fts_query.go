@@ -1,6 +1,9 @@
 package indexschema
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // BuildFTSSearchQuery builds a safe FTS5 MATCH query that searches both the
 // `title` and `content` columns. It is intended for rvn search (the general
@@ -35,23 +38,73 @@ func BuildFTSContentQuery(userQuery string) string {
 	return "content: (" + sanitizeFTSQuery(q) + ")"
 }
 
-// sanitizeFTSQuery quotes unquoted tokens containing FTS-special punctuation
-// to prevent SQLite FTS from interpreting them as query syntax.
+type ftsEmitKind int
+
+const (
+	ftsEmitNone ftsEmitKind = iota
+	ftsEmitTerm
+	ftsEmitOpen
+	ftsEmitClose
+	ftsEmitOperator
+)
+
+// sanitizeFTSQuery quotes unquoted literal tokens so SQLite FTS5 cannot treat
+// them as query syntax.
 //
-// This keeps quoted phrases intact and preserves boolean operators/parentheses.
+// Callers already wrap the expression in a column scope (`content: (...)` or
+// `{title content}: (...)`). Unquoted tokens such as `type:project`,
+// `https://github.com`, `-todo`, and `@todo` would otherwise be column
+// filters, unary NOT, or other special forms. Bare words are quoted too, and
+// a term that would otherwise sit against `(` is joined with explicit AND:
+// FTS5 parses `foo (bar)` as a function call, while `"foo" AND ("bar")` is a
+// safe implicit AND of two phrases.
+//
+// Quoted phrases stay intact. Boolean operators, NEAR, grouping parentheses,
+// and clean prefix queries (`foo*`) are preserved.
 func sanitizeFTSQuery(q string) string {
 	var b strings.Builder
-	b.Grow(len(q) + 8)
+	b.Grow(len(q) + 16)
 
+	last := ftsEmitNone
+	pendingWS := ""
 	inQuotes := false
 	i := 0
+
+	needAND := func(next ftsEmitKind) bool {
+		switch next {
+		case ftsEmitOpen:
+			return last == ftsEmitTerm || last == ftsEmitClose
+		case ftsEmitTerm:
+			return last == ftsEmitClose
+		default:
+			return false
+		}
+	}
+	emit := func(kind ftsEmitKind, text string) {
+		if needAND(kind) {
+			b.WriteString(" AND ")
+			pendingWS = ""
+		} else {
+			b.WriteString(pendingWS)
+			pendingWS = ""
+		}
+		b.WriteString(text)
+		last = kind
+	}
+
 	for i < len(q) {
 		c := q[i]
 
-		// Toggle quoted phrase state; keep the quote.
 		if c == '"' {
-			inQuotes = !inQuotes
-			b.WriteByte(c)
+			if inQuotes {
+				b.WriteByte(c)
+				inQuotes = false
+				last = ftsEmitTerm
+				i++
+				continue
+			}
+			emit(ftsEmitTerm, `"`)
+			inQuotes = true
 			i++
 			continue
 		}
@@ -62,16 +115,19 @@ func sanitizeFTSQuery(q string) string {
 			continue
 		}
 
-		// Preserve whitespace as-is.
 		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
-			b.WriteByte(c)
+			pendingWS += string(c)
 			i++
 			continue
 		}
 
-		// Preserve grouping punctuation.
-		if c == '(' || c == ')' {
-			b.WriteByte(c)
+		if c == '(' {
+			emit(ftsEmitOpen, "(")
+			i++
+			continue
+		}
+		if c == ')' {
+			emit(ftsEmitClose, ")")
 			i++
 			continue
 		}
@@ -105,40 +161,67 @@ func sanitizeFTSQuery(q string) string {
 		}
 		tok := q[start:i]
 
-		upper := strings.ToUpper(tok)
-		switch upper {
-		case "AND", "OR", "NOT", "NEAR":
-			b.WriteString(tok)
+		if isFTSOperatorToken(tok) {
+			emit(ftsEmitOperator, tok)
 			continue
 		}
 
-		// Don't rewrite column-scoped tokens like `content:foo`.
-		if strings.Contains(tok, ":") {
-			b.WriteString(tok)
-			continue
-		}
-
-		// Quote punctuation-bearing literal tokens (but avoid treating unary NOT
-		// `-foo` as a phrase).
 		if shouldQuoteFTSLiteralToken(tok) {
-			b.WriteByte('"')
-			b.WriteString(strings.ReplaceAll(tok, `"`, `""`))
-			b.WriteByte('"')
+			emit(ftsEmitTerm, `"`+strings.ReplaceAll(tok, `"`, `""`)+`"`)
 			continue
 		}
 
-		b.WriteString(tok)
+		emit(ftsEmitTerm, tok)
 	}
 
+	b.WriteString(pendingWS)
 	return b.String()
 }
 
+func isFTSOperatorToken(tok string) bool {
+	upper := strings.ToUpper(tok)
+	switch upper {
+	case "AND", "OR", "NOT", "NEAR":
+		return true
+	}
+	if strings.HasPrefix(upper, "NEAR/") {
+		n := upper[len("NEAR/"):]
+		if n != "" && isAllDigits(n) {
+			return true
+		}
+	}
+	return false
+}
+
 func shouldQuoteFTSLiteralToken(tok string) bool {
-	if strings.Contains(tok, ".") {
-		return true
+	if tok == "" {
+		return false
 	}
-	if strings.Contains(tok, "/") || strings.Contains(tok, "(") || strings.Contains(tok, ")") {
-		return true
+	// Prefix queries (`foo*`) are intentional FTS5 syntax. Quote only when the
+	// rest of the token still contains non-word characters.
+	if strings.HasSuffix(tok, "*") && len(tok) > 1 {
+		body := tok[:len(tok)-1]
+		for _, r := range body {
+			if !unicode.IsLetter(r) && !unicode.IsNumber(r) && r != '_' {
+				return true
+			}
+		}
+		return false
 	}
-	return strings.Contains(tok, "-") && !strings.HasPrefix(tok, "-")
+	// Quote every other literal token, including bare words. FTS5 treats
+	// `foo (bar)` as a function call; sanitizeFTSQuery quotes the words and
+	// inserts AND so the MATCH expression is `"foo" AND ("bar")`.
+	return true
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }

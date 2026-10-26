@@ -226,9 +226,8 @@ type:date .date>=2026-05-01 .date<=today
 
 - Object queries support `--apply "set ..."`, `add`, `delete`, and `move`.
 - Trait queries support only `--apply "update <new_value>"`.
-- Link queries do not support `--apply`. Section queries accept only a `move`
-  plan, which is then rejected because file-level bulk `move` does not accept
-  section IDs; use `rvn section move <file#slug>` explicitly.
+- Link queries and section queries do not support `--apply`. Use
+  `rvn section move <file#slug>` to move a section.
 - All apply flows preview first; add `--confirm` to execute.
 
 ## Related guidance

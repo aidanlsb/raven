@@ -76,7 +76,7 @@ func TestMCPIntegration_QueryParseErrorsIncludeSuggestion(t *testing.T) {
 	}
 }
 
-func TestMCPIntegration_SearchSyntaxErrorsReturnInvalidInput(t *testing.T) {
+func TestMCPIntegration_SearchPunctuationIsQuoted(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -87,6 +87,23 @@ func TestMCPIntegration_SearchSyntaxErrorsReturnInvalidInput(t *testing.T) {
 
 	result := server.callTool("search", map[string]interface{}{
 		"query": "@broken",
+	})
+	if result.IsError {
+		t.Fatalf("punctuation search should be quoted, got error: %s", result.Text)
+	}
+}
+
+func TestMCPIntegration_SearchSyntaxErrorsReturnInvalidInput(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	result := server.callTool("search", map[string]interface{}{
+		"query": `"unterminated`,
 	})
 	if !result.IsError {
 		t.Fatalf("expected search syntax failure, got success: %s", result.Text)

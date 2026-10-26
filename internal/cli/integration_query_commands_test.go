@@ -418,3 +418,77 @@ func TestIntegration_QueryAmbiguousReferenceReturnsQueryInvalid(t *testing.T) {
 	result.MustFail(t, "QUERY_INVALID")
 	result.MustFailWithMessage(t, "Use a full object ID/path to disambiguate")
 }
+
+func TestIntegration_QueryFTSPunctuationAndDecimals(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  note:
+    default_path: notes/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      rating:
+        type: number
+      category:
+        type: string
+`).
+		WithFile("notes/search.md", `---
+type: note
+title: Search Notes
+rating: 4.8
+category: error
+---
+Look at type:project and https://github.com plus -todo, foo (bar), and @todo.
+`).
+		WithFile("notes/other.md", `---
+type: note
+title: Other Notes
+rating: 4.1
+---
+Plain prose.
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	for _, q := range []string{
+		`type:note content("type:project")`,
+		`type:note content("https://github.com")`,
+		`type:note content("-todo")`,
+		`type:note content("foo (bar)")`,
+		`type:note content("@todo")`,
+	} {
+		result := v.RunCLI("query", q)
+		result.MustSucceed(t)
+		result.AssertResultCount(t, "items", 1)
+	}
+
+	search := v.RunCLI("search", "@todo")
+	search.MustSucceed(t)
+
+	decimal := v.RunCLI("query", "type:note .rating > 4.5")
+	decimal.MustSucceed(t)
+	decimal.AssertResultCount(t, "items", 1)
+
+	matching := v.RunCLI("query", "type:note .category == error")
+	matching.MustSucceed(t)
+	negated := v.RunCLI("query", "type:note !(.category == error)")
+	negated.MustSucceed(t)
+	all := v.RunCLI("query", "type:note")
+	all.MustSucceed(t)
+	if matching.Data["total"].(float64)+negated.Data["total"].(float64) != all.Data["total"].(float64) {
+		t.Fatalf("P + !P != all: matching=%v negated=%v all=%v", matching.Data["total"], negated.Data["total"], all.Data["total"])
+	}
+
+	legacy := v.RunCLI("query", "section within(object:project)")
+	legacy.MustFail(t, "QUERY_INVALID")
+	legacy.MustFailWithMessage(t, "legacy 'object:' queries are no longer supported")
+
+	refdLink := v.RunCLI("query", "type:note refd(link .ext==pdf)")
+	refdLink.MustFail(t, "QUERY_INVALID")
+	refdLink.MustFailWithMessage(t, "refd() only supports type:..., trait:..., or section subqueries")
+}

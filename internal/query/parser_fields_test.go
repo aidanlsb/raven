@@ -52,6 +52,30 @@ func TestParseFieldPredicates(t *testing.T) {
 			wantField: "attendees",
 			wantValue: "people/freya",
 		},
+		{
+			name:      "decimal number",
+			input:     "type:beer .rating > 4.5",
+			wantField: "rating",
+			wantValue: "4.5",
+		},
+		{
+			name:      "negative decimal",
+			input:     "type:metric .mom_pct < -0.5",
+			wantField: "mom_pct",
+			wantValue: "-0.5",
+		},
+		{
+			name:      "dotted version value",
+			input:     "type:release .version == v0.0.40",
+			wantField: "version",
+			wantValue: "v0.0.40",
+		},
+		{
+			name:      "value starting with dot",
+			input:     "link .ext == .pdf",
+			wantField: "ext",
+			wantValue: ".pdf",
+		},
 	}
 
 	for _, tt := range tests {

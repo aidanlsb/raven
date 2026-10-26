@@ -16,6 +16,15 @@ func wrapNot(cond string, negated bool) string {
 	return cond
 }
 
+// wrapBooleanComplement is the SQL for `!(...)`. SQLite three-valued logic
+// makes `NOT (json_extract(...) = ?)` NULL when the field is unset, which
+// drops those rows from both P and !P. `NOT ((...) IS TRUE)` is the boolean
+// complement: NULL and false both become true. Direct `.field != value`
+// still uses wrapNot so it stays restricted to rows where the field is present.
+func wrapBooleanComplement(cond string) string {
+	return "NOT ((" + cond + ") IS TRUE)"
+}
+
 func compileBooleanPredicate(pred Predicate, leaf func(Predicate) (string, []interface{}, error)) (string, []interface{}, error) {
 	switch p := pred.(type) {
 	case *OrPredicate:
@@ -35,7 +44,7 @@ func compileBooleanPredicate(pred Predicate, leaf func(Predicate) (string, []int
 		if err != nil {
 			return "", nil, err
 		}
-		return "NOT (" + cond + ")", args, nil
+		return wrapBooleanComplement(cond), args, nil
 	case *GroupPredicate:
 		var conditions []string
 		var args []interface{}

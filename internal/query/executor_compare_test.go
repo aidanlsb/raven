@@ -468,7 +468,7 @@ func TestBuildWithinPredicateSQL_AddsDepthGuard(t *testing.T) {
 
 	e := &Executor{}
 	p := &WithinPredicate{
-		SubQuery: &Query{Type: QueryTypeObject, TypeName: "project"},
+		SubQuery: &Query{Type: QueryTypeSection},
 	}
 
 	cond, args, err := e.buildWithinPredicateSQL(p, "t", QueryTypeTrait)
@@ -487,22 +487,40 @@ func TestBuildWithinPredicateSQL_RootScopeSemantics(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		root      QueryType
-		alias     string
-		wantDepth string
+		name           string
+		root           QueryType
+		alias          string
+		subQueryType   QueryType
+		wantDepth      string
+		wantFileObject bool
 	}{
 		{
-			name:      "trait includes attachment scope",
-			root:      QueryTypeTrait,
-			alias:     "t",
-			wantDepth: "anc.depth >= 0",
+			name:           "trait within type joins the file object",
+			root:           QueryTypeTrait,
+			alias:          "t",
+			subQueryType:   QueryTypeObject,
+			wantFileObject: true,
 		},
 		{
-			name:      "section excludes itself",
-			root:      QueryTypeSection,
-			alias:     "s",
-			wantDepth: "anc.depth > 0",
+			name:           "section within type joins file_object_id",
+			root:           QueryTypeSection,
+			alias:          "s",
+			subQueryType:   QueryTypeObject,
+			wantFileObject: true,
+		},
+		{
+			name:         "trait within section includes attachment scope",
+			root:         QueryTypeTrait,
+			alias:        "t",
+			subQueryType: QueryTypeSection,
+			wantDepth:    "anc.depth >= 0",
+		},
+		{
+			name:         "section within section excludes itself",
+			root:         QueryTypeSection,
+			alias:        "s",
+			subQueryType: QueryTypeSection,
+			wantDepth:    "anc.depth > 0",
 		},
 	}
 
@@ -510,12 +528,21 @@ func TestBuildWithinPredicateSQL_RootScopeSemantics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &Executor{}
 			p := &WithinPredicate{
-				SubQuery: &Query{Type: QueryTypeObject, TypeName: "project"},
+				SubQuery: &Query{Type: tt.subQueryType, TypeName: "project"},
 			}
 
 			cond, _, err := e.buildWithinPredicateSQL(p, tt.alias, tt.root)
 			if err != nil {
 				t.Fatalf("unexpected err: %v", err)
+			}
+			if tt.wantFileObject {
+				if strings.Contains(strings.ToUpper(cond), "RECURSIVE") {
+					t.Fatalf("within(type:...) still uses a recursive CTE: %s", cond)
+				}
+				if !strings.Contains(cond, "file_object_id") {
+					t.Fatalf("cond = %q, want file_object_id", cond)
+				}
+				return
 			}
 			if !strings.Contains(cond, tt.wantDepth) {
 				t.Fatalf("cond = %q, want depth condition %q", cond, tt.wantDepth)

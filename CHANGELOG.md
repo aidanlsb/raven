@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `content("...")` and `rvn search` no longer crash SQLite FTS5 on punctuation such as `type:project`, URLs, leading hyphens, `@todo`, and similar tokens. Remaining FTS syntax errors from `rvn query` now return `QUERY_INVALID` instead of a `DATABASE_ERROR` reindex hint.
+- Unquoted decimal numbers (`4.5`, `-0.5`) and dotted values (`v0.0.40`, `.pdf`) parse as comparison values instead of a new `.field` predicate.
+- `!(...)` is a true boolean complement: rows with an unset scalar field no longer vanish from both `P` and `!P`. Direct `.field != value` still requires the field to be present.
+- Nested `object:` subqueries (`within(object:...)`, `refs(object:...)`, and similar) now emit the legacy-root migration error instead of `expected ')'`. `refd(link ...)` is rejected by the validator rather than a parenthesis parse error.
+- `--apply` is rejected for section queries up front, with a pointer to `rvn section move <file#slug>`.
+- Query help no longer shows invalid `type:page matches(.path, ...)` examples, and the `| sort` shell-pipe hint uses `--json` because `--pipe` is TSV.
+
+### Performance
+- `content("...")` matches FTS rows once as a list subquery (`id IN (SELECT object_id ...)`) instead of a correlated scan per outer row.
+- Canonical object and section IDs in `[[references]]` resolve with a targeted primary-key lookup. Name-field resolver maps use `json_extract` instead of unmarshalling every object's fields JSON.
+- Paginated queries skip the extra `COUNT(*)` when the returned page cannot have been truncated.
+- `within(type:...)` on sections, traits, and links joins the containing file object directly instead of walking a recursive ancestor CTE. `within(section ...)` stays recursive.
+
 ## [v0.0.40] - 2026-10-22
 
 ### Changed

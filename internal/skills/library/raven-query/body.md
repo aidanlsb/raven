@@ -46,8 +46,7 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 6. For bulk changes, preview with `rvn query --apply ...`, inspect the results, then add `--confirm` only after approval. Follow with a verification query or `rvn check`.
 
 Section queries can feed `--ids` into `rvn add --stdin` for bulk appends.
-`query --apply move` is not a section-move primitive: file-level bulk `move`
-rejects section IDs. Use `rvn section move <file#slug>` for each section.
+Section queries reject `--apply`. Use `rvn section move <file#slug>` for each section.
 
 ## Saved queries
 

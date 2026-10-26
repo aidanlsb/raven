@@ -108,6 +108,10 @@ func (e *Executor) buildInPredicateSQL(p *InPredicate, alias string, root QueryT
 }
 
 func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string, root QueryType) (string, []interface{}, error) {
+	if e.withinTargetIsFileObject(p) {
+		return e.buildWithinFileObjectSQL(p, alias, root)
+	}
+
 	scopeID := currentScopeExpr(alias, root)
 	if scopeID == "" {
 		return "", nil, fmt.Errorf("within() is not valid for this query")
@@ -139,6 +143,61 @@ func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string, roo
 		sql = "NOT " + sql
 	}
 	return sql, args, nil
+}
+
+// withinTargetIsFileObject reports whether within() can join the containing
+// file object directly. Objects are file-backed and every section/trait/link
+// row already stores that file identity, so within(type:...) does not need a
+// recursive ancestor walk. within(section ...) still uses the recursive CTE.
+func (e *Executor) withinTargetIsFileObject(p *WithinPredicate) bool {
+	if p.SubQuery != nil {
+		return p.SubQuery.Type == QueryTypeObject
+	}
+	if p.Target == "" {
+		return false
+	}
+	resolved, err := e.resolveTarget(p.Target)
+	if err != nil || resolved == "" {
+		return false
+	}
+	return e.objectIDExists(resolved)
+}
+
+func (e *Executor) objectIDExists(id string) bool {
+	var found int
+	err := e.db.QueryRow(`SELECT 1 FROM objects WHERE id = ?`, id).Scan(&found)
+	return err == nil
+}
+
+func (e *Executor) buildWithinFileObjectSQL(p *WithinPredicate, alias string, root QueryType) (string, []interface{}, error) {
+	fileObjectExpr := fileObjectExpr(alias, root)
+	if fileObjectExpr == "" {
+		return "", nil, fmt.Errorf("within() is not valid for this query")
+	}
+	targetCond, args, err := e.scopeMatcherCondition(p.Target, p.SubQuery, "anc")
+	if err != nil {
+		return "", nil, err
+	}
+	cond := fmt.Sprintf(`EXISTS (
+		WITH anc AS (SELECT %s AS id)
+		SELECT 1 FROM anc
+		WHERE %s
+	)`, fileObjectExpr, targetCond)
+	if p.Negated() {
+		cond = "NOT " + cond
+	}
+	return cond, args, nil
+}
+
+func fileObjectExpr(alias string, root QueryType) string {
+	switch root {
+	case QueryTypeSection:
+		return alias + ".file_object_id"
+	case QueryTypeTrait:
+		return fmt.Sprintf("COALESCE((SELECT sec.file_object_id FROM sections sec WHERE sec.id = %[1]s.parent_object_id), %[1]s.parent_object_id)", alias)
+	default:
+		return ""
+	}
 }
 
 func (e *Executor) buildScopeMatchPredicate(target string, subQuery *Query, candidateExpr string, negated bool) (string, []interface{}, error) {
@@ -324,18 +383,20 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root Qu
 }
 
 // buildContentPredicateSQL builds SQL for content("search terms") predicates.
-// Uses FTS5 full-text search to filter objects by their content.
+// Uses FTS5 full-text search to filter objects and sections by their content.
+//
+// The match is written as `id IN (SELECT object_id FROM fts_content WHERE MATCH)`
+// rather than a correlated `EXISTS (... object_id = outer.id AND MATCH)`. FTS5
+// virtual tables have no B-tree index on `object_id`, so the correlated form
+// re-scans matching FTS rows once per outer row.
 func (e *Executor) buildContentPredicateSQL(p *ContentPredicate, alias string) (string, []interface{}, error) {
-	// Use FTS5 to search content
-	// The fts_content table has: object_id, title, content, file_path
-	cond := fmt.Sprintf(`EXISTS (
-		SELECT 1 FROM fts_content
-		WHERE fts_content.object_id = %s.id
-		  AND fts_content MATCH ?
+	cond := fmt.Sprintf(`%s.id IN (
+		SELECT object_id FROM fts_content
+		WHERE fts_content MATCH ?
 	)`, alias)
 
 	if p.Negated() {
-		cond = "NOT " + cond
+		cond = "NOT (" + cond + ")"
 	}
 
 	return cond, []interface{}{indexschema.BuildFTSContentQuery(p.SearchTerm)}, nil

@@ -336,6 +336,11 @@ func TestParseRefdPredicate(t *testing.T) {
 			input:    "type:person refd(type:project .status==active)",
 			wantSubQ: true,
 		},
+		{
+			name:     "refd with link subquery parses for the validator",
+			input:    "type:project refd(link .ext==pdf)",
+			wantSubQ: true,
+		},
 	}
 
 	for _, tt := range tests {

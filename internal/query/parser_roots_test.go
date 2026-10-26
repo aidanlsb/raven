@@ -99,6 +99,51 @@ func TestParseRejectsLegacyObjectRoot(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestParseRejectsLegacyObjectRootInSubqueries(t *testing.T) {
+	t.Parallel()
+
+	tests := []string{
+		"section within(object:project)",
+		"section in(object:project)",
+		"type:project refs(object:project)",
+		"type:project refd(object:project)",
+		"type:project has(object:project)",
+	}
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			_, err := Parse(input)
+			if err == nil {
+				t.Fatal("expected parse error, got nil")
+			}
+			if !strings.Contains(err.Error(), "legacy 'object:' queries are no longer supported; use 'type:'") {
+				t.Fatalf("error = %q, want legacy object: migration hint", err)
+			}
+			if strings.Contains(err.Error(), "expected ')'") {
+				t.Fatalf("error = %q, should not be a generic parenthesis error", err)
+			}
+		})
+	}
+}
+
+func TestParseReportsUnsupportedOrderSortLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, keyword := range []string{"order", "sort", "limit"} {
+		input := "type:project " + keyword
+		_, err := Parse(input)
+		if err == nil {
+			t.Fatalf("Parse(%q) succeeded", input)
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "RQL has no "+keyword+" clause") {
+			t.Fatalf("error = %q, want %s-clause hint", msg, keyword)
+		}
+		if !strings.Contains(msg, "--json | jq") {
+			t.Fatalf("error = %q, want --json | jq hint", msg)
+		}
+	}
+}
 func TestParseRejectsUnterminatedLiterals(t *testing.T) {
 	t.Parallel()
 
@@ -164,8 +209,11 @@ func TestParseReportsShellPipeGuidance(t *testing.T) {
 	if !strings.Contains(msg, "'|' (pipe) is not a shell pipe") {
 		t.Fatalf("expected pipe guidance, got %q", msg)
 	}
-	if !strings.Contains(msg, "--pipe | jq") {
-		t.Fatalf("expected shell pipeline example, got %q", msg)
+	if !strings.Contains(msg, "--json | jq") {
+		t.Fatalf("expected JSON pipeline example, got %q", msg)
+	}
+	if strings.Contains(msg, "--pipe | jq") {
+		t.Fatalf("pipe example should use --json because --pipe is TSV, got %q", msg)
 	}
 }
 func TestParseReportsShellPipeGuidanceAfterPredicate(t *testing.T) {
