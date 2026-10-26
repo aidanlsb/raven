@@ -278,25 +278,35 @@ func AllNameFieldValues(db ResolverQuerier, sch *schema.Schema) (map[string][]st
 		return nameFieldMap, nil
 	}
 
-	rows, err := db.Query(`SELECT id, type, fields FROM objects WHERE type != '' AND fields != '{}' ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		id, objType, fieldsJSON, ok := scanNameFieldRow(rows)
-		if !ok {
-			continue
+	for objType, nameField := range typeNameFields {
+		jsonPath := "$." + nameField
+		rows, err := db.Query(
+			`SELECT id, json_extract(fields, ?) FROM objects WHERE type = ? AND json_type(fields, ?) = 'text' ORDER BY id`,
+			jsonPath, objType, jsonPath,
+		)
+		if err != nil {
+			return nil, err
 		}
-		nameStr, ok := ExtractNameFieldValue(typeNameFields, objType, fieldsJSON)
-		if !ok {
-			continue
+		for rows.Next() {
+			var id string
+			var name sql.NullString
+			if err := rows.Scan(&id, &name); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			if !name.Valid || name.String == "" {
+				continue
+			}
+			nameFieldMap[name.String] = append(nameFieldMap[name.String], id)
 		}
-		nameFieldMap[nameStr] = append(nameFieldMap[nameStr], id)
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
 	}
 
-	return nameFieldMap, rows.Err()
+	return nameFieldMap, nil
 }
 
 // BuildTypeNameFields maps object types to their configured name fields.
@@ -311,13 +321,6 @@ func BuildTypeNameFields(sch *schema.Schema) map[string]string {
 		}
 	}
 	return typeNameFields
-}
-
-func scanNameFieldRow(rows *sql.Rows) (id string, objType string, fieldsJSON string, ok bool) {
-	if err := rows.Scan(&id, &objType, &fieldsJSON); err != nil {
-		return "", "", "", false
-	}
-	return id, objType, fieldsJSON, true
 }
 
 // ExtractNameFieldValue extracts an object's configured name-field value.

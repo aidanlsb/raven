@@ -258,7 +258,10 @@ status: active
 
 	result := v.RunCLI("query", "section .title==Tasks", "--apply", "move archive/")
 	result.MustFail(t, "INVALID_INPUT")
-	result.MustFailWithMessage(t, "does not accept section sources")
+	result.MustFailWithMessage(t, "--apply is not supported for section queries")
+	if result.Error == nil || !strings.Contains(result.Error.Suggestion, "rvn section move") {
+		t.Fatalf("expected section move suggestion, got %#v", result.Error)
+	}
 	if strings.Contains(result.RawJSON, "SECTION_SKIPPED") {
 		t.Fatalf("query --apply move silently skipped section source: %s", result.RawJSON)
 	}

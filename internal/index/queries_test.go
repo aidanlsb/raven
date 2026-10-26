@@ -48,7 +48,7 @@ func TestBuildFTSContentQuery_SanitizesSlashAndFunctionLikeTokens(t *testing.T) 
 func TestBuildFTSSearchQuery_ScopesTitleAndContent(t *testing.T) {
 	t.Parallel()
 	q := indexschema.BuildFTSSearchQuery("hello world")
-	want := `{title content}: (hello world)`
+	want := `{title content}: ("hello" "world")`
 	if q != want {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
 	}
@@ -142,6 +142,39 @@ func TestSearch_AllowsDottedToken(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Fatalf("expected at least one result")
+	}
+}
+
+func TestSearch_AllowsPunctuationTokens(t *testing.T) {
+	t.Parallel()
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.db.Exec(`INSERT INTO objects (id, file_path, type, line_start, fields) VALUES ('notes/search', 'notes/search.md', 'note', 1, '{}')`)
+	if err != nil {
+		t.Fatalf("failed to insert object: %v", err)
+	}
+	_, err = db.db.Exec(`INSERT INTO fts_content (object_id, title, content, file_path) VALUES (?, ?, ?, ?)`,
+		"notes/search",
+		"Search Notes",
+		"Mentions type:project, https://github.com, -todo, foo (bar), and @todo in the body.",
+		"notes/search.md",
+	)
+	if err != nil {
+		t.Fatalf("failed to insert fts row: %v", err)
+	}
+
+	for _, query := range []string{"type:project", "https://github.com", "-todo", "foo (bar)", "@todo"} {
+		results, searchErr := db.Search(query, 10)
+		if searchErr != nil {
+			t.Fatalf("search %q failed: %v", query, searchErr)
+		}
+		if len(results) == 0 {
+			t.Fatalf("expected at least one result for %q", query)
+		}
 	}
 }
 

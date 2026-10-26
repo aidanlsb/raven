@@ -3,6 +3,7 @@ package query
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
@@ -14,7 +15,30 @@ import (
 // user/agent-facing DATABASE_ERROR messages; the underlying DB error is
 // preserved via %w for programmatic inspection.
 func wrapQueryExecError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if IsFTSQuerySyntaxError(err) {
+		return newExecutionError(
+			"invalid full-text search query",
+			"Quote special characters or simplify the content() query and retry.",
+			err,
+		)
+	}
 	return fmt.Errorf("query failed: %w", err)
+}
+
+// IsFTSQuerySyntaxError reports whether err is an SQLite FTS MATCH syntax
+// failure rather than a corrupt index.
+func IsFTSQuerySyntaxError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(message, "fts5: syntax error") ||
+		strings.Contains(message, "malformed match expression") ||
+		strings.Contains(message, "unterminated string") ||
+		strings.Contains(message, "no such column:")
 }
 
 func scanObjectRows(rows *sql.Rows) ([]model.Object, error) {

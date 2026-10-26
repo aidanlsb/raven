@@ -226,6 +226,23 @@ func (v *Validator) validateScopeSubquery(root QueryType, kind string, sub *Quer
 	}
 }
 
+func (v *Validator) validateRefdSubquery(sub *Query) error {
+	if sub == nil {
+		return nil
+	}
+	switch sub.Type {
+	case QueryTypeObject, QueryTypeTrait, QueryTypeSection:
+		return v.validateSubquery(sub)
+	case QueryTypeLink:
+		return &ValidationError{
+			Message:    "refd() only supports type:..., trait:..., or section subqueries",
+			Suggestion: "Link rows are outgoing edges and cannot be refd() sources",
+		}
+	default:
+		return &ValidationError{Message: "refd() expects a type, trait, or section query"}
+	}
+}
+
 func (v *Validator) validateRefsSubquery(sub *Query) error {
 	if sub == nil {
 		return nil
@@ -265,7 +282,7 @@ func (v *Validator) validateLegalObjectPredicate(typeName string, typeDef *schem
 	case *LinksPredicate:
 		return validateLinkPredicate(p.LinkPredicate)
 	case *RefdPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateRefdSubquery(p.SubQuery)
 	case *ContentPredicate:
 		return validateContentTerm(p)
 	}
@@ -366,7 +383,7 @@ func (v *Validator) validateLegalSectionPredicate(pred Predicate) error {
 	case *LinksPredicate:
 		return validateLinkPredicate(p.LinkPredicate)
 	case *RefdPredicate:
-		return v.validateSubquery(p.SubQuery)
+		return v.validateRefdSubquery(p.SubQuery)
 	case *ContentPredicate:
 		return validateContentTerm(p)
 	}

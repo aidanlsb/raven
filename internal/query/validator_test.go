@@ -163,6 +163,7 @@ func TestValidator_StructuralWithoutSchema(t *testing.T) {
 		{"trait:todo .other==x", "field predicates other than .value are only valid for type queries"},
 		{"section any(.tags, _ == z)", "array predicates are not valid for section queries"},
 		{"section .bogus==1", "section has no field 'bogus'"},
+		{"type:project refd(link .ext==pdf)", "refd() only supports type:..., trait:..., or section subqueries"},
 	}
 	for _, tt := range structurallyIllegal {
 		t.Run("illegal/"+tt.query, func(t *testing.T) {

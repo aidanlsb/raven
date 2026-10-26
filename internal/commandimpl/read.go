@@ -73,7 +73,8 @@ func isSearchSyntaxError(err error) bool {
 	message := strings.ToLower(strings.TrimSpace(err.Error()))
 	return strings.Contains(message, "fts5: syntax error") ||
 		strings.Contains(message, "malformed match expression") ||
-		strings.Contains(message, "unterminated string")
+		strings.Contains(message, "unterminated string") ||
+		strings.Contains(message, "no such column:")
 }
 
 // HandleBacklinks executes the canonical `backlinks` command.

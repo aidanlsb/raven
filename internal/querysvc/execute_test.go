@@ -7,10 +7,45 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
+
+func TestPlanApplyRejectsSectionQueries(t *testing.T) {
+	_, err := planApply(&ExecuteResult{
+		QueryKind: "section",
+		Sections:  []model.Section{{ID: "projects/site#tasks"}},
+	}, []string{"move", "archive/"})
+	svcErr, ok := svcerr.AsError(err)
+	if !ok {
+		t.Fatalf("error = %#v, want svcerr", err)
+	}
+	if svcErr.Code != "INVALID_INPUT" {
+		t.Fatalf("code = %q", svcErr.Code)
+	}
+	if !strings.Contains(svcErr.Message, "section queries") {
+		t.Fatalf("message = %q", svcErr.Message)
+	}
+	if !strings.Contains(svcErr.Suggestion, "rvn section move") {
+		t.Fatalf("suggestion = %q", svcErr.Suggestion)
+	}
+}
+
+func TestExecuteErrorClassifiesFTSSyntaxAsQueryInvalid(t *testing.T) {
+	err := executeError(`type:doc content("type:project")`, errors.New("no such column: type"))
+	svcErr, ok := svcerr.AsError(err)
+	if !ok {
+		t.Fatalf("error = %#v, want svcerr", err)
+	}
+	if svcErr.Code != "QUERY_INVALID" {
+		t.Fatalf("code = %q, want QUERY_INVALID", svcErr.Code)
+	}
+	if strings.Contains(svcErr.Suggestion, "reindex") {
+		t.Fatalf("suggestion = %q, should not tell the user to reindex", svcErr.Suggestion)
+	}
+}
 
 func TestExecuteErrorAddsParseSuggestion(t *testing.T) {
 	err := executeError(`type:issue .status=='open'`, errors.New("query execution failed"))

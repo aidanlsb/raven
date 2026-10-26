@@ -85,9 +85,8 @@ run the section query with `ids=true`, then pass those IDs as `object_ids` to
 `add` with `confirm=true`. `stdin=true` is CLI-only. `read` with
 `sections=true` returns a file's outline directly.
 
-Do not use query `apply` to move sections. Only a `move` plan parses for section
-results, and the delegated file-level bulk move rejects section IDs. Invoke
-`section_move` separately for each intended `file#slug`.
+Do not use query `apply` on section results. Invoke `section_move` separately
+for each intended `file#slug`.
 
 Use `links(...)` on type, section, or trait roots to filter by outgoing non-Raven
 links, for example `type:project links(.ext==pdf)` or
@@ -142,7 +141,7 @@ raven_invoke(command="query", args={"query_string":"trait:todo .value==todo with
 Open todos in a path plus structured filter:
 
 ```text
-raven_invoke(command="query", args={"query_string":"type:page matches(.path, \"^pages/work/\") contains(trait:todo .value==todo)"})
+raven_invoke(command="query", args={"query_string":"section matches(.file_path, \"^pages/work/\") contains(trait:todo .value==todo)"})
 ```
 
 Text mentions instead of real traits:

@@ -30,7 +30,7 @@ func (e *Executor) buildNotPredicateSQL(p *NotPredicate, alias string,
 	if err != nil {
 		return "", nil, err
 	}
-	return "NOT (" + cond + ")", args, nil
+	return wrapBooleanComplement(cond), args, nil
 }
 
 // buildGroupPredicateSQL builds SQL for grouped predicates.

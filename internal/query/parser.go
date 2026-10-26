@@ -41,24 +41,9 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		return nil, fmt.Errorf("expected comparison operator (==, !=, <, >, <=, >=) after field name; for string matching use includes(), startswith(), endswith(), or matches()")
 	}
 
-	var value string
-	isRefValue := false
-
-	switch p.curr.Type {
-	case TokenStar:
-		return nil, fmt.Errorf(".field==* is no longer supported; use exists(.field) or !exists(.field) instead")
-	case TokenIdent:
-		value = p.curr.Value
-		p.advance()
-	case TokenRef:
-		value = p.curr.Value
-		isRefValue = true
-		p.advance()
-	case TokenString:
-		value = p.curr.Value
-		p.advance()
-	default:
-		return nil, fmt.Errorf("expected field value or quoted string; for field presence use exists(.field)")
+	value, isRefValue, err := p.parseFieldValue()
+	if err != nil {
+		return nil, err
 	}
 
 	return &FieldPredicate{
@@ -69,6 +54,39 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		CompareOp:     compareOp,
 		IsRefValue:    isRefValue,
 	}, nil
+}
+
+func (p *Parser) parseFieldValue() (string, bool, error) {
+	switch p.curr.Type {
+	case TokenStar:
+		return "", false, fmt.Errorf(".field==* is no longer supported; use exists(.field) or !exists(.field) instead")
+	case TokenIdent:
+		value := p.curr.Value
+		p.advance()
+		return value, false, nil
+	case TokenDot:
+		// Unquoted values may start with '.' after a comparison operator
+		// (for example `.ext == .pdf`). `.field` at predicate start is still
+		// TokenDot plus a field name because parseAtomicPredicate consumes
+		// that leading dot before parseFieldPredicate runs.
+		p.advance()
+		if p.curr.Type != TokenIdent {
+			return "", false, fmt.Errorf("expected field value or quoted string; for field presence use exists(.field)")
+		}
+		value := "." + p.curr.Value
+		p.advance()
+		return value, false, nil
+	case TokenRef:
+		value := p.curr.Value
+		p.advance()
+		return value, true, nil
+	case TokenString:
+		value := p.curr.Value
+		p.advance()
+		return value, false, nil
+	default:
+		return "", false, fmt.Errorf("expected field value or quoted string; for field presence use exists(.field)")
+	}
 }
 
 type parsedValue struct {
@@ -98,6 +116,13 @@ func (p *Parser) parseValueList() ([]parsedValue, error) {
 		switch p.curr.Type {
 		case TokenIdent:
 			v.Value = p.curr.Value
+			p.advance()
+		case TokenDot:
+			p.advance()
+			if p.curr.Type != TokenIdent {
+				return nil, fmt.Errorf("expected list value (identifier, string, or reference), got %v", p.curr.Type)
+			}
+			v.Value = "." + p.curr.Value
 			p.advance()
 		case TokenString:
 			v.Value = p.curr.Value
@@ -436,20 +461,10 @@ func (p *Parser) parseElementUnderscoreEquality(negated bool) (Predicate, error)
 	}
 	p.advance()
 
-	var value string
-	isRefValue := false
-	switch p.curr.Type {
-	case TokenIdent:
-		value = p.curr.Value
-	case TokenString:
-		value = p.curr.Value
-	case TokenRef:
-		value = p.curr.Value
-		isRefValue = true
-	default:
-		return nil, fmt.Errorf("expected value after comparison operator (identifier, string, or reference)")
+	value, isRefValue, err := p.parseComparisonRHS()
+	if err != nil {
+		return nil, err
 	}
-	p.advance()
 
 	return &ElementEqualityPredicate{
 		basePredicate: basePredicate{negated: negated},
@@ -457,6 +472,33 @@ func (p *Parser) parseElementUnderscoreEquality(negated bool) (Predicate, error)
 		CompareOp:     compareOp,
 		IsRefValue:    isRefValue,
 	}, nil
+}
+
+func (p *Parser) parseComparisonRHS() (string, bool, error) {
+	switch p.curr.Type {
+	case TokenIdent:
+		value := p.curr.Value
+		p.advance()
+		return value, false, nil
+	case TokenDot:
+		p.advance()
+		if p.curr.Type != TokenIdent {
+			return "", false, fmt.Errorf("expected value after comparison operator (identifier, string, or reference)")
+		}
+		value := "." + p.curr.Value
+		p.advance()
+		return value, false, nil
+	case TokenString:
+		value := p.curr.Value
+		p.advance()
+		return value, false, nil
+	case TokenRef:
+		value := p.curr.Value
+		p.advance()
+		return value, true, nil
+	default:
+		return "", false, fmt.Errorf("expected value after comparison operator (identifier, string, or reference)")
+	}
 }
 
 func (p *Parser) tryParseElementFuncPredicate(negated bool) (Predicate, bool, error) {

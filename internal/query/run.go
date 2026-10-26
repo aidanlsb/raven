@@ -30,16 +30,15 @@ type RunResult struct {
 // being copy-pasted per root. Production callers (querysvc, schema instance
 // checks) and tests all go through Run.
 //
-// Pagination semantics match the previous per-root code exactly:
+// Pagination semantics:
 //   - count-only returns Total only.
-//   - ids-only returns IDs and Returned; Total is a COUNT(*) when paginated,
-//     otherwise len(IDs).
-//   - row modes return the rows and Returned; Total is a COUNT(*) when
-//     paginated, otherwise len(rows).
+//   - ids-only and row modes return the page plus Total. Total is inferred
+//     from the page when it cannot have been truncated (no limit/offset, or
+//     a short page); COUNT(*) runs only when the page is full or an offset
+//     skipped past every remaining row.
 func (e *Executor) Run(q *Query, req RunRequest) (*RunResult, error) {
 	scoped := e.withExecutionNow()
 	result := &RunResult{}
-	paginated := req.Limit > 0 || req.Offset > 0
 
 	if req.CountOnly {
 		total, err := scoped.entityCount(q)
@@ -57,15 +56,11 @@ func (e *Executor) Run(q *Query, req RunRequest) (*RunResult, error) {
 		}
 		result.IDs = ids
 		result.Returned = len(ids)
-		if paginated {
-			total, err := scoped.entityCount(q)
-			if err != nil {
-				return nil, err
-			}
-			result.Total = total
-		} else {
-			result.Total = len(ids)
+		total, err := scoped.pageTotal(q, req.Limit, req.Offset, len(ids))
+		if err != nil {
+			return nil, err
 		}
+		result.Total = total
 		return result, nil
 	}
 
@@ -74,16 +69,35 @@ func (e *Executor) Run(q *Query, req RunRequest) (*RunResult, error) {
 		return nil, err
 	}
 	result.Returned = returned
-	if paginated {
-		total, err := scoped.entityCount(q)
-		if err != nil {
-			return nil, err
-		}
-		result.Total = total
-	} else {
-		result.Total = returned
+	total, err := scoped.pageTotal(q, req.Limit, req.Offset, returned)
+	if err != nil {
+		return nil, err
 	}
+	result.Total = total
 	return result, nil
+}
+
+// pageTotal infers the match count from a page of results when the page cannot
+// have been truncated. A second COUNT(*) query is required only when the page
+// is full (or an offset skipped past every remaining row).
+func (e *Executor) pageTotal(q *Query, limit, offset, returned int) (int, error) {
+	if total, ok := inferredPageTotal(limit, offset, returned); ok {
+		return total, nil
+	}
+	return e.entityCount(q)
+}
+
+func inferredPageTotal(limit, offset, returned int) (int, bool) {
+	if limit <= 0 && offset <= 0 {
+		return returned, true
+	}
+	if offset > 0 && returned == 0 {
+		return 0, false
+	}
+	if limit <= 0 || returned < limit {
+		return offset + returned, true
+	}
+	return 0, false
 }
 
 func (e *Executor) entityCount(q *Query) (int, error) {

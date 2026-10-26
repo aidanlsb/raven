@@ -77,7 +77,7 @@ difference instead of returning several unbounded result sets.
 - Todos under a topic section:
   - `trait:todo .value == todo within(section includes(.title, "pricing"))`
 - Path-scoped pages with open todos:
-  - `type:page matches(.path, "^pages/work/") contains(trait:todo .value == todo)`
+  - `section matches(.file_path, "^pages/work/") contains(trait:todo .value == todo)`
 - Due tomorrow:
   - `trait:due .value == tomorrow`
 - Meetings with an attendee:

@@ -32,8 +32,7 @@ Use this page to diagnose empty, broad, ambiguous, or rejected queries.
 - Confirm query type:
   - type query: `set`, `add`, `delete`, `move`
   - trait query: `update <value>`
-  - section query: a `move` plan parses but file-level bulk `move` rejects
-    section IDs; use `rvn section move <file#slug>`
+  - section query: `--apply` is rejected; use `rvn section move <file#slug>`
   - link query: no `--apply` support
 - Re-run without `--confirm` first to inspect preview.
 
