@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
@@ -237,6 +238,99 @@ func TestRun_IgnoresExcludedMarkdown(t *testing.T) {
 	}
 	if len(result.Issues) != 0 {
 		t.Fatalf("issues = %#v, want none", result.Issues)
+	}
+}
+
+func TestRun_ReportsStaleIndexFromWalkMtimes(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/ada.md", "---\ntype: person\nname: Ada\n---\nbody\n").
+		WithFile("people/grace.md", "---\ntype: person\nname: Grace\n---\nbody\n").
+		Build()
+
+	sch, err := schema.Load(vault.Path)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+
+	indexVaultFiles(t, vault, sch, []string{"people/ada.md", "people/grace.md"})
+
+	result, err := runCheckTest(t, vault.Path, &config.VaultConfig{}, sch, Options{})
+	if err != nil {
+		t.Fatalf("fresh check: %v", err)
+	}
+	if result.StaleWarningShown || hasIssue(result.Issues, check.IssueStaleIndex) {
+		t.Fatalf("fresh index reported stale: %#v", result.Issues)
+	}
+
+	adaPath := filepath.Join(vault.Path, "people", "ada.md")
+	later := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(adaPath, later, later); err != nil {
+		t.Fatalf("chtimes ada.md: %v", err)
+	}
+
+	stale, err := runCheckTest(t, vault.Path, &config.VaultConfig{}, sch, Options{})
+	if err != nil {
+		t.Fatalf("stale check: %v", err)
+	}
+	if !stale.StaleWarningShown || !hasIssue(stale.Issues, check.IssueStaleIndex) {
+		t.Fatalf("touched file did not report stale_index: %#v", stale.Issues)
+	}
+
+	if err := os.Remove(filepath.Join(vault.Path, "people", "grace.md")); err != nil {
+		t.Fatalf("remove grace.md: %v", err)
+	}
+	deleted, err := runCheckTest(t, vault.Path, &config.VaultConfig{}, sch, Options{})
+	if err != nil {
+		t.Fatalf("deleted-file check: %v", err)
+	}
+	if !deleted.StaleWarningShown || !hasIssue(deleted.Issues, check.IssueStaleIndex) {
+		t.Fatalf("deleted indexed file did not report stale_index: %#v", deleted.Issues)
+	}
+
+	unindexed := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/new.md", "---\ntype: person\nname: New\n---\nbody\n").
+		Build()
+	unindexedSch, err := schema.Load(unindexed.Path)
+	if err != nil {
+		t.Fatalf("load unindexed schema: %v", err)
+	}
+	freshEmpty, err := runCheckTest(t, unindexed.Path, &config.VaultConfig{}, unindexedSch, Options{})
+	if err != nil {
+		t.Fatalf("unindexed check: %v", err)
+	}
+	if freshEmpty.StaleWarningShown || hasIssue(freshEmpty.Issues, check.IssueStaleIndex) {
+		t.Fatalf("new unindexed file reported stale_index: %#v", freshEmpty.Issues)
+	}
+}
+
+func indexVaultFiles(t *testing.T, vault *testutil.TestVault, sch *schema.Schema, relPaths []string) {
+	t.Helper()
+	db, err := index.Open(vault.Path)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("close index: %v", err)
+		}
+	}()
+	for _, relPath := range relPaths {
+		fullPath := filepath.Join(vault.Path, filepath.FromSlash(relPath))
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			t.Fatalf("stat %s: %v", relPath, err)
+		}
+		doc, parseErr := parser.ParseDocument(vault.ReadFile(relPath), fullPath, vault.Path)
+		if parseErr != nil {
+			t.Fatalf("parse %s: %v", relPath, parseErr)
+		}
+		if err := db.IndexDocumentWithMtime(doc, sch, info.ModTime().Unix()); err != nil {
+			t.Fatalf("index %s: %v", relPath, err)
+		}
 	}
 }
 

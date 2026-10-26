@@ -76,13 +76,9 @@ func BuildResolverFromQuerier(db ResolverQuerier, opts ResolverOptions) (*resolv
 		return nil, fmt.Errorf("failed to get object IDs: %w", err)
 	}
 
-	aliases, err := AllAliases(db)
+	aliases, aliasMatches, err := AllAliasData(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get aliases: %w", err)
-	}
-	aliasMatches, err := AllAliasMatches(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get alias matches: %w", err)
 	}
 
 	objectIDs = appendExtraIDs(objectIDs, opts.ExtraIDs)
@@ -157,16 +153,11 @@ func ResolverGeneration(db ResolverQuerier) (int64, error) {
 
 // AllObjectIDs returns all object and section IDs available to the resolver.
 func AllObjectIDs(db ResolverQuerier) ([]string, error) {
-	query := "SELECT id FROM objects"
-	hasSections, err := TableHasColumn(db, "sections", "id")
+	rows, err := db.Query("SELECT id FROM objects UNION SELECT id FROM sections")
 	if err != nil {
-		return nil, err
-	}
-	if hasSections {
-		query += "\nUNION\nSELECT id FROM sections"
-	}
-	rows, err := db.Query(query)
-	if err != nil {
+		if isMissingRelationError(err, "sections") {
+			return queryIDs(db, "SELECT id FROM objects")
+		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -183,62 +174,79 @@ func AllObjectIDs(db ResolverQuerier) ([]string, error) {
 	return ids, rows.Err()
 }
 
-// AllAliases returns the deterministic first object ID for each alias.
-func AllAliases(db ResolverQuerier) (map[string]string, error) {
-	hasAliasColumn, err := TableHasColumn(db, "objects", "alias")
+func queryIDs(db ResolverQuerier, query string) ([]string, error) {
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
-	if !hasAliasColumn {
-		return map[string]string{}, nil
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
 	}
+	return ids, rows.Err()
+}
 
+// AllAliasData returns the deterministic first object ID per alias and the
+// full multi-map used for ambiguity, from a single query.
+func AllAliasData(db ResolverQuerier) (map[string]string, map[string][]string, error) {
 	rows, err := db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
 	if err != nil {
-		return nil, err
+		if isMissingRelationError(err, "objects") || isMissingColumnError(err, "alias") {
+			return map[string]string{}, map[string][]string{}, nil
+		}
+		return nil, nil, err
 	}
 	defer rows.Close()
 
 	aliases := make(map[string]string)
-	for rows.Next() {
-		var alias, id string
-		if err := rows.Scan(&alias, &id); err != nil {
-			return nil, err
-		}
-		if _, exists := aliases[alias]; !exists {
-			aliases[alias] = id
-		}
-	}
-
-	return aliases, rows.Err()
-}
-
-// AllAliasMatches returns every object ID for each alias.
-func AllAliasMatches(db ResolverQuerier) (map[string][]string, error) {
-	hasAliasColumn, err := TableHasColumn(db, "objects", "alias")
-	if err != nil {
-		return nil, err
-	}
-	if !hasAliasColumn {
-		return map[string][]string{}, nil
-	}
-
-	rows, err := db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	aliasMatches := make(map[string][]string)
 	for rows.Next() {
 		var alias, id string
 		if err := rows.Scan(&alias, &id); err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if _, exists := aliases[alias]; !exists {
+			aliases[alias] = id
 		}
 		aliasMatches[alias] = append(aliasMatches[alias], id)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	return aliases, aliasMatches, nil
+}
 
-	return aliasMatches, rows.Err()
+// AllAliases returns the deterministic first object ID for each alias.
+func AllAliases(db ResolverQuerier) (map[string]string, error) {
+	aliases, _, err := AllAliasData(db)
+	return aliases, err
+}
+
+// AllAliasMatches returns every object ID for each alias.
+func AllAliasMatches(db ResolverQuerier) (map[string][]string, error) {
+	_, matches, err := AllAliasData(db)
+	return matches, err
+}
+
+func isMissingRelationError(err error, name string) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") && strings.Contains(msg, strings.ToLower(name))
+}
+
+func isMissingColumnError(err error, column string) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such column") && strings.Contains(msg, strings.ToLower(column))
 }
 
 // TableHasColumn reports whether a SQLite table exposes a column.

@@ -133,12 +133,29 @@ type indexResources struct {
 	canonicalResolver *resolver.Resolver
 }
 
+func recordStaleIndex(collector *issueCollector, result *RunResult, scope *Scope, excludeMatcher *ravenignore.Matcher, staleFiles []string) {
+	if collector == nil || result == nil {
+		return
+	}
+	staleFiles = filterIncludedPaths(staleFiles, excludeMatcher)
+	staleCount := len(staleFiles)
+	if staleCount > 0 && scope != nil && scope.Type == "full" {
+		collector.add(check.Issue{
+			Level:      check.LevelWarning,
+			Type:       check.IssueStaleIndex,
+			FilePath:   "",
+			Line:       0,
+			Message:    fmt.Sprintf("Index may be stale (%d file(s) modified since last reindex)", staleCount),
+			FixCommand: "rvn reindex",
+			FixHint:    "Run 'rvn reindex' to update the index",
+		})
+	}
+	result.StaleWarningShown = staleCount > 0
+}
+
 func loadIndexResources(
 	rt *vaultruntime.Runtime,
-	scope *Scope,
-	excludeMatcher *ravenignore.Matcher,
 	collector *issueCollector,
-	result *RunResult,
 ) *indexResources {
 	resources := &indexResources{}
 
@@ -148,25 +165,6 @@ func loadIndexResources(
 	}
 
 	resources.db = rt.DB
-	stalenessInfo, stalenessErr := rt.DB.CheckStaleness(rt.VaultPath)
-	if stalenessErr != nil {
-		collector.recordIncomplete("index staleness", stalenessErr)
-	} else if stalenessInfo.IsStale {
-		staleFiles := filterIncludedPaths(stalenessInfo.StaleFiles, excludeMatcher)
-		staleCount := len(staleFiles)
-		if staleCount > 0 && scope.Type == "full" {
-			collector.add(check.Issue{
-				Level:      check.LevelWarning,
-				Type:       check.IssueStaleIndex,
-				FilePath:   "",
-				Line:       0,
-				Message:    fmt.Sprintf("Index may be stale (%d file(s) modified since last reindex)", staleCount),
-				FixCommand: "rvn reindex",
-				FixHint:    "Run 'rvn reindex' to update the index",
-			})
-		}
-		result.StaleWarningShown = staleCount > 0
-	}
 
 	var aliasesErr error
 	resources.aliases, aliasesErr = rt.DB.AllAliases()
@@ -215,15 +213,26 @@ func Run(rt *vaultruntime.Runtime, opts Options) (*RunResult, error) {
 	}
 	collector := newIssueCollector(result, includeIssues, excludeIssues, opts.ErrorsOnly, scope)
 
-	indexRes := loadIndexResources(rt, scope, excludeMatcher, collector, result)
+	indexRes := loadIndexResources(rt, collector)
 
-	walked, walkErr := walkScopedDocuments(rt, scope, excludeMatcher)
+	var indexedMtimes map[string]int64
+	if indexRes.db != nil {
+		mtimes, mtimeErr := indexRes.db.GetFileMtimes()
+		if mtimeErr != nil {
+			collector.recordIncomplete("index staleness", mtimeErr)
+		} else {
+			indexedMtimes = mtimes
+		}
+	}
+
+	walked, walkErr := walkScopedDocuments(rt, scope, excludeMatcher, indexedMtimes)
 	if walkErr != nil {
 		return nil, walkErr
 	}
 	result.FileCount = walked.fileCount
 	collector.setDocs(walked.docs)
 	collector.addAll(walked.parseErrors)
+	recordStaleIndex(collector, result, scope, excludeMatcher, walked.staleFiles)
 
 	validator := newCheckValidator(rt, walked.objectInfos, indexRes)
 	collector.addAll(detectDocumentIssues(walked.docs, validator))

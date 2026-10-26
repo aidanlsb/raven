@@ -1,8 +1,6 @@
 package index
 
 import (
-	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -53,6 +51,35 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schema.Schema, fileMtime int64) error {
 	d.resolverMu.Lock()
 	defer d.resolverMu.Unlock()
+	return d.indexDocumentsLocked([]DocumentIndexInput{{Document: doc, FileMtime: fileMtime}}, sch, IndexDocumentsOptions{})
+}
+
+// DocumentIndexInput is one parsed vault file ready to write into the index.
+type DocumentIndexInput struct {
+	Document  *parser.ParsedDocument
+	FileMtime int64
+}
+
+// IndexDocumentsOptions controls a batched index write.
+type IndexDocumentsOptions struct {
+	// SkipExistingDelete skips DELETE-by-file-path before insert. Full reindex
+	// uses this after ClearAllData so empty deletes are not issued per file.
+	SkipExistingDelete bool
+}
+
+// IndexDocuments writes many parsed documents in one SQLite transaction with
+// prepared statements reused across files. Resolver-generation triggers are
+// suspended for the transaction and generation is bumped once at the end.
+func (d *Database) IndexDocuments(docs []DocumentIndexInput, sch *schema.Schema, opts IndexDocumentsOptions) error {
+	d.resolverMu.Lock()
+	defer d.resolverMu.Unlock()
+	return d.indexDocumentsLocked(docs, sch, opts)
+}
+
+func (d *Database) indexDocumentsLocked(docs []DocumentIndexInput, sch *schema.Schema, opts IndexDocumentsOptions) error {
+	if len(docs) == 0 {
+		return nil
+	}
 
 	d.prepareReferenceResolverCacheLocked(sch)
 
@@ -65,52 +92,48 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	if err := d.ensureReferenceResolverCacheCurrentLocked(tx); err != nil {
 		return err
 	}
-	oldResolverState, err := d.writeResolverFileStateLocked(tx, doc.FilePath, sch)
-	if err != nil {
-		return err
-	}
 
-	// Delete existing data for this file
-	if err := deleteByFilePath(tx, doc.FilePath); err != nil {
-		return err
+	singleFile := len(docs) == 1
+	var oldResolverState *resolverFileState
+	if singleFile {
+		oldResolverState, err = d.writeResolverFileStateLocked(tx, docs[0].Document.FilePath, sch)
+		if err != nil {
+			return err
+		}
 	}
 
 	now := time.Now().Unix()
+	replaceExisting := !opts.SkipExistingDelete
+	if err := withSuspendedResolverTriggers(tx, func() error {
+		writer, err := newDocumentWriter(tx)
+		if err != nil {
+			return err
+		}
+		defer writer.close()
+		for _, input := range docs {
+			if input.Document == nil {
+				continue
+			}
+			mtime := indexedMtime(now, input.FileMtime)
+			if err := writer.write(input.Document, sch, mtime, now, replaceExisting); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
 
-	// Use provided mtime or fall back to current time
-	mtime := indexedMtime(now, fileMtime)
-
-	if err := indexObjects(tx, doc, sch, mtime, now); err != nil {
-		return err
-	}
-	if err := indexSections(tx, doc, now); err != nil {
-		return err
-	}
-	if err := indexInlineTraits(tx, doc, sch, now); err != nil {
-		return err
-	}
-	if err := indexRefs(tx, doc, sch); err != nil {
-		return err
-	}
-	if err := indexLinks(tx, doc); err != nil {
-		return err
-	}
-	if err := indexDates(tx, doc, sch); err != nil {
-		return err
-	}
-	if err := indexFTS(tx, doc, sch); err != nil {
-		return err
-	}
-	if err := upsertFileFingerprint(tx, doc.FilePath, mtime, FileContentHash([]byte(doc.RawContent))); err != nil {
-		return err
-	}
 	if err := bumpRevision(tx); err != nil {
 		return err
 	}
 
-	newResolverState, err := d.writeResolverFileStateLocked(tx, doc.FilePath, sch)
-	if err != nil {
-		return err
+	var newResolverState *resolverFileState
+	if singleFile {
+		newResolverState, err = d.writeResolverFileStateLocked(tx, docs[0].Document.FilePath, sch)
+		if err != nil {
+			return err
+		}
 	}
 
 	resolverGeneration, err := bumpResolverGeneration(tx)
@@ -122,29 +145,36 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	}
 
 	if d.autoResolveRefs && d.dailyDirectory != "" {
-		d.updateReferenceResolverCacheLocked(oldResolverState, newResolverState)
-		d.setReferenceResolverGenerationLocked(resolverGeneration)
-		resolveScope := &doc.FilePath
-		if resolverStateAddsCandidates(oldResolverState, newResolverState) {
-			// The write introduced new resolution candidates, so refs in
-			// other files that previously failed to resolve may now succeed.
-			// A vault-wide pass is a cheap existence probe when nothing is
-			// unresolved.
-			resolveScope = nil
+		if singleFile {
+			d.updateReferenceResolverCacheLocked(oldResolverState, newResolverState)
+			d.setReferenceResolverGenerationLocked(resolverGeneration)
+			resolveScope := &docs[0].Document.FilePath
+			if resolverStateAddsCandidates(oldResolverState, newResolverState) {
+				resolveScope = nil
+			}
+			if _, err := d.resolveReferencesWithSchemaLocked(resolveScope, d.dailyDirectory, sch); err != nil {
+				return &PostCommitReferenceResolutionError{
+					FilePath:  docs[0].Document.FilePath,
+					VaultWide: resolveScope == nil,
+					Err:       err,
+				}
+			}
+			return nil
 		}
-		if _, err := d.resolveReferencesWithSchemaLocked(resolveScope, d.dailyDirectory, sch); err != nil {
+		d.referenceResolverCache = nil
+		if _, err := d.resolveReferencesWithSchemaLocked(nil, d.dailyDirectory, sch); err != nil {
 			return &PostCommitReferenceResolutionError{
-				FilePath:  doc.FilePath,
-				VaultWide: resolveScope == nil,
+				FilePath:  docs[0].Document.FilePath,
+				VaultWide: true,
 				Err:       err,
 			}
 		}
-	} else {
-		// Bulk indexing deliberately keeps the cache cold and builds one resolver
-		// from the completed index during the final resolution pass.
-		d.referenceResolverCache = nil
+		return nil
 	}
 
+	// Bulk indexing deliberately keeps the cache cold and builds one resolver
+	// from the completed index during the final resolution pass.
+	d.referenceResolverCache = nil
 	return nil
 }
 
@@ -156,57 +186,6 @@ func indexedMtime(now, fileMtime int64) int64 {
 	return mtime
 }
 
-func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema, mtime, indexedAt int64) error {
-	objStmt, err := tx.Prepare(`
-		INSERT INTO objects (id, file_path, type, fields, line_start, alias, file_mtime, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer objStmt.Close()
-
-	for _, obj := range doc.Objects {
-		fields := obj.Fields
-		if sch != nil {
-			if typeDef := sch.Types[obj.Type]; typeDef != nil {
-				fields = schema.IndexableFields(obj.Fields, typeDef.Fields)
-			}
-		}
-		fieldsJSON, err := json.Marshal(fields)
-		if err != nil {
-			return err
-		}
-
-		// Extract alias from fields if present
-		var alias *string
-		if aliasField, ok := obj.Fields["alias"]; ok {
-			if s, ok := aliasField.AsString(); ok && s != "" {
-				alias = &s
-			}
-		}
-
-		_, err = objStmt.Exec(
-			obj.ID,
-			doc.FilePath,
-			obj.Type,
-			string(fieldsJSON),
-			obj.LineStart,
-			alias,
-			mtime,
-			indexedAt,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// UnknownFrontmatterWarnings returns non-fatal messages for unknown frontmatter
-// keys found while indexing. Callers surface these; indexing still proceeds and
-// stores only schema-known fields for typed objects.
 func UnknownFrontmatterWarnings(doc *parser.ParsedDocument, sch *schema.Schema) []string {
 	if doc == nil || sch == nil {
 		return nil
@@ -229,83 +208,6 @@ func UnknownFrontmatterWarnings(doc *parser.ParsedDocument, sch *schema.Schema) 
 		}
 	}
 	return warnings
-}
-
-func indexSections(tx *sql.Tx, doc *parser.ParsedDocument, indexedAt int64) error {
-	stmt, err := tx.Prepare(`
-		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, line_end, subtree_line_end, parent_section_id, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	for _, section := range doc.Sections {
-		filePath := section.FilePath
-		if filePath == "" {
-			filePath = doc.FilePath
-		}
-		_, err := stmt.Exec(
-			section.ID,
-			section.FileObjectID,
-			filePath,
-			section.Slug,
-			section.Title,
-			section.Level,
-			section.LineStart,
-			section.LineEnd,
-			section.SubtreeLineEnd,
-			section.ParentSectionID,
-			indexedAt,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema, indexedAt int64) error {
-	traitStmt, err := tx.Prepare(`
-		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer traitStmt.Close()
-
-	for _, indexedTrait := range indexedTraits(doc, sch) {
-		trait := indexedTrait.Trait
-
-		// Get value as string, applying schema defaults for bare traits
-		var valueStr interface{}
-		if trait.Value != nil {
-			if s := traitValueForIndex(*trait.Value); s != "" {
-				valueStr = s
-			}
-		} else {
-			// Bare trait with no value - check schema for default
-			valueStr = getTraitDefault(sch, trait.TraitType)
-		}
-
-		_, execErr := traitStmt.Exec(
-			indexedTrait.ID,
-			doc.FilePath,
-			trait.ParentScopeID,
-			trait.TraitType,
-			valueStr,
-			trait.Content,
-			trait.Line,
-			indexedAt,
-		)
-		if execErr != nil {
-			return execErr
-		}
-	}
-
-	return nil
 }
 
 func traitValueForIndex(value fieldvalue.FieldValue) string {
@@ -333,37 +235,6 @@ func indexedTraits(doc *parser.ParsedDocument, sch *schema.Schema) []indexedTrai
 	return indexed
 }
 
-func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
-	refStmt, err := tx.Prepare(`
-		INSERT INTO refs (source_id, target_id, target_raw, display_text, field_name, resolution_status, file_path, line_number, position_start, position_end)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer refStmt.Close()
-
-	for _, ref := range collectIndexedRefs(doc, sch) {
-		_, err = refStmt.Exec(
-			ref.sourceID,
-			nil, // target_id resolved later
-			ref.targetRaw,
-			ref.displayText,
-			ref.fieldName,
-			resolutionStatusMissing,
-			doc.FilePath,
-			ref.line,
-			ref.positionStart,
-			ref.positionEnd,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 type indexedRef struct {
 	sourceID      string
 	targetRaw     string
@@ -387,7 +258,7 @@ func collectIndexedRefs(doc *parser.ParsedDocument, sch *schema.Schema) []indexe
 		remainingByKey[key] = append(remainingByKey[key], i)
 	}
 
-	fmStart, fmEnd, hasFrontmatter := frontmatterContentLineRange(doc.RawContent)
+	fmStart, fmEnd, hasFrontmatter := frontmatterContentLineRangeFromDoc(doc)
 	out := make([]indexedRef, 0, len(doc.Refs)+len(schemaRefs))
 
 	for _, ref := range doc.Refs {
@@ -433,6 +304,25 @@ func collectIndexedRefs(doc *parser.ParsedDocument, sch *schema.Schema) []indexe
 	return out
 }
 
+func frontmatterContentLineRangeFromDoc(doc *parser.ParsedDocument) (start, end int, ok bool) {
+	if doc == nil || !doc.HasFrontmatter {
+		return frontmatterContentLineRange(docRawContent(doc))
+	}
+	start = 2
+	end = doc.FrontmatterEndLine - 1
+	if end < start {
+		return 0, 0, false
+	}
+	return start, end, true
+}
+
+func docRawContent(doc *parser.ParsedDocument) string {
+	if doc == nil {
+		return ""
+	}
+	return doc.RawContent
+}
+
 func frontmatterContentLineRange(raw string) (start, end int, ok bool) {
 	if raw == "" {
 		return 0, 0, false
@@ -447,102 +337,6 @@ func frontmatterContentLineRange(raw string) (start, end int, ok bool) {
 		return 0, 0, false
 	}
 	return start, end, true
-}
-
-func indexLinks(tx *sql.Tx, doc *parser.ParsedDocument) error {
-	stmt, err := tx.Prepare(`
-		INSERT INTO links (
-			source_id, source_type, file_path, line_number, position_start, position_end,
-			raw_target, display, is_image, scheme, ext, normalized_key
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	for _, link := range doc.Links {
-		if link == nil {
-			continue
-		}
-		_, err = stmt.Exec(
-			link.SourceID,
-			link.SourceType,
-			doc.FilePath,
-			link.Line,
-			link.PositionStart,
-			link.PositionEnd,
-			link.RawTarget,
-			link.Display,
-			link.IsImage,
-			link.Scheme,
-			link.Ext,
-			link.NormalizedKey,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
-	dateStmt, err := tx.Prepare(`
-		INSERT OR REPLACE INTO date_index (date, source_type, source_id, field_name, file_path)
-		VALUES (?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer dateStmt.Close()
-
-	for _, obj := range doc.Objects {
-		generatedDate := generatedDateObjectDate(obj)
-		if generatedDate != "" {
-			_, err = dateStmt.Exec(generatedDate, "object", obj.ID, "date", doc.FilePath)
-			if err != nil {
-				return err
-			}
-		}
-
-		var fieldDefs map[string]*schema.FieldDefinition
-		if sch != nil {
-			if typeDef := sch.Types[obj.Type]; typeDef != nil {
-				fieldDefs = typeDef.Fields
-			}
-		}
-		for fieldName, fieldValue := range obj.Fields {
-			if obj.Type == "date" && fieldName == "date" {
-				continue
-			}
-			for _, dateStr := range extractDateStringsForField(fieldValue, fieldDefs[fieldName], sch == nil) {
-				_, err = dateStmt.Exec(dateStr, "object", obj.ID, fieldName, doc.FilePath)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	for _, indexedTrait := range indexedTraits(doc, sch) {
-		trait := indexedTrait.Trait
-		var traitDef *schema.TraitDefinition
-		if sch != nil {
-			traitDef = sch.Traits[trait.TraitType]
-		}
-		if trait.Value != nil {
-			for _, dateStr := range extractDateStringsForTrait(*trait.Value, traitDef, sch == nil) {
-				_, err = dateStmt.Exec(dateStr, "trait", indexedTrait.ID, trait.TraitType, doc.FilePath)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	return nil
 }
 
 func extractDateStringsForField(fv fieldvalue.FieldValue, def *schema.FieldDefinition, allowHeuristic bool) []string {
@@ -628,61 +422,6 @@ func extractDateRefString(fv fieldvalue.FieldValue) string {
 	return ""
 }
 
-func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
-	ftsStmt, err := tx.Prepare(`
-		INSERT INTO fts_content (object_id, title, content, file_path)
-		VALUES (?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer ftsStmt.Close()
-
-	// Pre-split content into lines for section extraction
-	lines := strings.Split(doc.RawContent, "\n")
-
-	for _, obj := range doc.Objects {
-		// Get title: check schema name_field first, then "title" field, then object ID
-		title := ""
-		if sch != nil && obj.Type != "" {
-			if typeDef, ok := sch.Types[obj.Type]; ok && typeDef.NameField != "" {
-				if nameVal, ok := obj.Fields[typeDef.NameField]; ok {
-					if s, ok := nameVal.AsString(); ok {
-						title = s
-					}
-				}
-			}
-		}
-		if title == "" {
-			if titleField, ok := obj.Fields["title"]; ok {
-				if s, ok := titleField.AsString(); ok {
-					title = s
-				}
-			}
-		}
-		if title == "" {
-			title = obj.ID
-		}
-
-		_, err = ftsStmt.Exec(obj.ID, title, doc.Body, doc.FilePath)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, section := range doc.Sections {
-		content := extractSectionContent(lines, section.LineStart, section.LineEnd)
-		_, err = ftsStmt.Exec(section.ID, section.Title, content, doc.FilePath)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// extractSectionContent extracts direct content for a section from the given line range.
-// lineStart and lineEnd are 1-indexed. If lineEnd is nil, extracts to end of file.
 func extractSectionContent(lines []string, lineStart int, lineEnd *int) string {
 	if lineStart < 1 || lineStart > len(lines) {
 		return ""

@@ -168,16 +168,34 @@ func (op *Operation) Lookup(target string) (LookupResult, error) {
 	if op == nil || op.rt == nil {
 		return LookupResult{}, fmt.Errorf("runtime is required")
 	}
+	target = strings.TrimSpace(target)
+	if result, ok, err := op.tryExactLookup(target); err != nil {
+		return LookupResult{}, err
+	} else if ok {
+		return result, nil
+	}
 	res, err := op.getResolver()
 	if err != nil {
 		return LookupResult{}, err
 	}
-	resolved := res.Resolve(strings.TrimSpace(target))
+	resolved := res.Resolve(target)
 	return LookupResult{
 		ObjectID:  resolved.TargetID,
 		Ambiguous: resolved.Ambiguous,
 		Matches:   append([]string{}, resolved.Matches...),
 	}, nil
+}
+
+func (op *Operation) tryExactLookup(target string) (LookupResult, bool, error) {
+	db, err := op.getDB()
+	if err != nil {
+		return LookupResult{}, false, err
+	}
+	id, ok, err := indexschema.TryResolveExactID(db.DB(), op.rt.Schema, op.dailyDirectory(), target)
+	if err != nil || !ok {
+		return LookupResult{}, false, err
+	}
+	return LookupResult{ObjectID: id}, true, nil
 }
 
 func (op *Operation) getResolver() (*resolver.Resolver, error) {
@@ -204,6 +222,26 @@ func (op *Operation) getResolver() (*resolver.Resolver, error) {
 	return op.resolver, nil
 }
 
+func (op *Operation) resolveIndexed(ref string) (resolver.ResolveResult, error) {
+	db, err := op.getDB()
+	if err != nil {
+		return resolver.ResolveResult{}, err
+	}
+	if id, ok, err := indexschema.TryResolveExactID(db.DB(), op.rt.Schema, op.dailyDirectory(), ref); err != nil {
+		return resolver.ResolveResult{}, err
+	} else if ok {
+		return resolver.ResolveResult{
+			TargetID:     id,
+			MatchSources: map[string]string{id: "id"},
+		}, nil
+	}
+	res, err := op.getResolver()
+	if err != nil {
+		return resolver.ResolveResult{}, err
+	}
+	return res.Resolve(ref), nil
+}
+
 func (op *Operation) Resolve(reference string, allowMissing bool) (*ResolveResult, error) {
 	if op == nil || op.rt == nil {
 		return nil, fmt.Errorf("runtime is required")
@@ -215,7 +253,7 @@ func (op *Operation) Resolve(reference string, allowMissing bool) (*ResolveResul
 		return nil, err
 	}
 
-	res, err := op.getResolver()
+	resolved, err := op.resolveIndexed(ref)
 	if err != nil {
 		// When the resolver cannot be built (e.g. the index is unavailable) but a
 		// Markdown object exists at the literal path, fall back to it rather than failing.
@@ -224,8 +262,6 @@ func (op *Operation) Resolve(reference string, allowMissing bool) (*ResolveResul
 		}
 		return nil, err
 	}
-
-	resolved := res.Resolve(ref)
 
 	// A Markdown object at the literal path participates as a resolution candidate
 	// alongside the index. We never silently prefer the on-disk file over

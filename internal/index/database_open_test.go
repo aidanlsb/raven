@@ -65,6 +65,52 @@ func TestLinksTableSchema(t *testing.T) {
 	}
 }
 
+func TestOpenExistingCompatibleSkipsSchemaRebuild(t *testing.T) {
+	t.Parallel()
+
+	vaultDir := t.TempDir()
+	first, err := Open(vaultDir)
+	if err != nil {
+		t.Fatalf("first Open: %v", err)
+	}
+	doc := &parser.ParsedDocument{
+		FilePath: "note.md",
+		Objects: []*model.Object{{
+			ID:        "note",
+			Type:      "page",
+			Fields:    map[string]fieldvalue.FieldValue{},
+			LineStart: 1,
+		}},
+	}
+	if err := first.IndexDocument(doc, schema.New()); err != nil {
+		t.Fatalf("IndexDocument: %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatalf("close first: %v", err)
+	}
+
+	second, err := Open(vaultDir)
+	if err != nil {
+		t.Fatalf("second Open: %v", err)
+	}
+	defer second.Close()
+
+	got, err := second.GetObject("note")
+	if err != nil {
+		t.Fatalf("GetObject after reopen: %v", err)
+	}
+	if got == nil || got.ID != "note" {
+		t.Fatalf("reopened index missing object: %#v", got)
+	}
+	compatible, err := second.SchemaCompatible()
+	if err != nil {
+		t.Fatalf("SchemaCompatible: %v", err)
+	}
+	if !compatible {
+		t.Fatal("reopened database is not schema-compatible")
+	}
+}
+
 func TestDatabaseConfiguresSQLiteConcurrency(t *testing.T) {
 	t.Parallel()
 

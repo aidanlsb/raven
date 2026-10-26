@@ -17,99 +17,42 @@ package indexschema
 // v17: Folded field_refs into refs with nullable field_name and shared resolution_status
 const CurrentDBVersion = 17
 
-// SchemaSQL is the authoritative SQLite schema shared by the index writer and
-// SQL-generating consumers.
-const SchemaSQL = `
-	-- Enable WAL mode for better concurrency
+// ConnectionPragmasSQL applies SQLite performance settings. journal_mode=WAL
+// is persistent; the rest are per-connection and must be reapplied on every open.
+const ConnectionPragmasSQL = `
 	PRAGMA journal_mode = WAL;
+	PRAGMA synchronous = NORMAL;
+	PRAGMA temp_store = MEMORY;
+	PRAGMA cache_size = -64000;
+	PRAGMA mmap_size = 268435456;
+`
 
-	-- Performance optimizations
-	PRAGMA synchronous = NORMAL;      -- Faster writes (safe with WAL)
-	PRAGMA temp_store = MEMORY;       -- Keep temp tables in memory
-	PRAGMA cache_size = -64000;       -- 64MB cache (negative = KB)
-	PRAGMA mmap_size = 268435456;     -- 256MB memory-mapped I/O
+// ResolverGenerationTriggerNames is the set of triggers that bump
+// resolver_generation on object and section mutations.
+var ResolverGenerationTriggerNames = []string{
+	"trg_objects_resolver_generation_insert",
+	"trg_objects_resolver_generation_update",
+	"trg_objects_resolver_generation_delete",
+	"trg_sections_resolver_generation_insert",
+	"trg_sections_resolver_generation_update",
+	"trg_sections_resolver_generation_delete",
+}
 
-	-- Metadata table for version tracking
-	CREATE TABLE IF NOT EXISTS meta (
-		key TEXT PRIMARY KEY,
-		value TEXT NOT NULL
-	);
+// DropResolverGenerationTriggersSQL removes resolver-generation triggers so a
+// bulk write can bump generation once instead of once per row.
+const DropResolverGenerationTriggersSQL = `
+	DROP TRIGGER IF EXISTS trg_objects_resolver_generation_insert;
+	DROP TRIGGER IF EXISTS trg_objects_resolver_generation_update;
+	DROP TRIGGER IF EXISTS trg_objects_resolver_generation_delete;
+	DROP TRIGGER IF EXISTS trg_sections_resolver_generation_insert;
+	DROP TRIGGER IF EXISTS trg_sections_resolver_generation_update;
+	DROP TRIGGER IF EXISTS trg_sections_resolver_generation_delete;
+`
 
-	-- File-backed typed objects
-	CREATE TABLE IF NOT EXISTS objects (
-		id TEXT PRIMARY KEY,
-		file_path TEXT NOT NULL,
-		type TEXT NOT NULL,
-		fields TEXT NOT NULL DEFAULT '{}',
-		line_start INTEGER NOT NULL,
-		alias TEXT,                 -- Optional alias for reference resolution
-		file_mtime INTEGER,         -- File modification time from filesystem (Unix timestamp)
-		indexed_at INTEGER          -- When this row was written to the index
-	);
-
-	-- Markdown heading-derived sections. Sections are addressable scopes, not objects.
-	CREATE TABLE IF NOT EXISTS sections (
-		id TEXT PRIMARY KEY,
-		file_object_id TEXT NOT NULL,
-		file_path TEXT NOT NULL,
-		slug TEXT NOT NULL,
-		title TEXT NOT NULL,
-		level INTEGER NOT NULL,
-		line_start INTEGER NOT NULL,
-		line_end INTEGER,
-		subtree_line_end INTEGER,
-		parent_section_id TEXT,
-		indexed_at INTEGER
-	);
-
-	-- All trait annotations (single-valued)
-	CREATE TABLE IF NOT EXISTS traits (
-		id TEXT PRIMARY KEY,
-		file_path TEXT NOT NULL,
-		parent_object_id TEXT NOT NULL,       -- Compatibility name; contains a file object or section scope ID
-		trait_type TEXT NOT NULL,
-		value TEXT,                          -- Single trait value (NULL for boolean traits)
-		content TEXT NOT NULL,
-		line_number INTEGER NOT NULL,
-		indexed_at INTEGER          -- When this row was written to the index
-	);
-
-	-- References between objects.
-	-- Markdown wikilinks leave field_name NULL. Schema-backed frontmatter
-	-- ref/ref[] fields set field_name. resolution_status is shared.
-	CREATE TABLE IF NOT EXISTS refs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		source_id TEXT NOT NULL,
-		target_id TEXT,
-		target_raw TEXT NOT NULL,
-		display_text TEXT,
-		field_name TEXT,
-		resolution_status TEXT NOT NULL DEFAULT 'missing', -- resolved | ambiguous | missing
-		file_path TEXT NOT NULL,
-		line_number INTEGER,
-		position_start INTEGER,
-		position_end INTEGER
-	);
-
-	-- Outgoing Markdown links to non-Raven file and URL targets
-	CREATE TABLE IF NOT EXISTS links (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		source_id TEXT NOT NULL,
-		source_type TEXT NOT NULL,
-		file_path TEXT NOT NULL,
-		line_number INTEGER NOT NULL,
-		position_start INTEGER NOT NULL,
-		position_end INTEGER NOT NULL,
-		raw_target TEXT NOT NULL,
-		display TEXT NOT NULL,
-		is_image INTEGER NOT NULL,
-		scheme TEXT NOT NULL,
-		ext TEXT NOT NULL,
-		normalized_key TEXT NOT NULL
-	);
-
-	-- Keep resolver caches on other database handles/processes coherent,
-	-- including when callers mutate resolver inputs through DB().Exec.
+// ResolverGenerationTriggersSQL keeps resolver caches on other database
+// handles/processes coherent, including when callers mutate resolver inputs
+// through DB().Exec.
+const ResolverGenerationTriggersSQL = `
 	CREATE TRIGGER IF NOT EXISTS trg_objects_resolver_generation_insert
 	AFTER INSERT ON objects BEGIN
 		INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
@@ -141,8 +84,82 @@ const SchemaSQL = `
 		INSERT INTO meta (key, value) VALUES ('resolver_generation', '1')
 		ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
 	END;
+`
 
-	-- Indexes for fast queries
+const schemaTablesSQL = `
+	CREATE TABLE IF NOT EXISTS meta (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS objects (
+		id TEXT PRIMARY KEY,
+		file_path TEXT NOT NULL,
+		type TEXT NOT NULL,
+		fields TEXT NOT NULL DEFAULT '{}',
+		line_start INTEGER NOT NULL,
+		alias TEXT,
+		file_mtime INTEGER,
+		indexed_at INTEGER
+	);
+
+	CREATE TABLE IF NOT EXISTS sections (
+		id TEXT PRIMARY KEY,
+		file_object_id TEXT NOT NULL,
+		file_path TEXT NOT NULL,
+		slug TEXT NOT NULL,
+		title TEXT NOT NULL,
+		level INTEGER NOT NULL,
+		line_start INTEGER NOT NULL,
+		line_end INTEGER,
+		subtree_line_end INTEGER,
+		parent_section_id TEXT,
+		indexed_at INTEGER
+	);
+
+	CREATE TABLE IF NOT EXISTS traits (
+		id TEXT PRIMARY KEY,
+		file_path TEXT NOT NULL,
+		parent_object_id TEXT NOT NULL,
+		trait_type TEXT NOT NULL,
+		value TEXT,
+		content TEXT NOT NULL,
+		line_number INTEGER NOT NULL,
+		indexed_at INTEGER
+	);
+
+	CREATE TABLE IF NOT EXISTS refs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		source_id TEXT NOT NULL,
+		target_id TEXT,
+		target_raw TEXT NOT NULL,
+		display_text TEXT,
+		field_name TEXT,
+		resolution_status TEXT NOT NULL DEFAULT 'missing',
+		file_path TEXT NOT NULL,
+		line_number INTEGER,
+		position_start INTEGER,
+		position_end INTEGER
+	);
+
+	CREATE TABLE IF NOT EXISTS links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		source_id TEXT NOT NULL,
+		source_type TEXT NOT NULL,
+		file_path TEXT NOT NULL,
+		line_number INTEGER NOT NULL,
+		position_start INTEGER NOT NULL,
+		position_end INTEGER NOT NULL,
+		raw_target TEXT NOT NULL,
+		display TEXT NOT NULL,
+		is_image INTEGER NOT NULL,
+		scheme TEXT NOT NULL,
+		ext TEXT NOT NULL,
+		normalized_key TEXT NOT NULL
+	);
+`
+
+const schemaIndexesSQL = `
 	CREATE INDEX IF NOT EXISTS idx_objects_file ON objects(file_path);
 	CREATE INDEX IF NOT EXISTS idx_objects_type ON objects(type);
 	CREATE INDEX IF NOT EXISTS idx_objects_alias ON objects(alias) WHERE alias IS NOT NULL;
@@ -167,20 +184,15 @@ const SchemaSQL = `
 	CREATE INDEX IF NOT EXISTS idx_links_file ON links(file_path);
 	CREATE INDEX IF NOT EXISTS idx_links_normalized_key ON links(normalized_key);
 
-	-- Composite indexes for trait refs matching (content scope rule)
 	CREATE INDEX IF NOT EXISTS idx_traits_file_line ON traits(file_path, line_number);
 	CREATE INDEX IF NOT EXISTS idx_refs_file_line ON refs(file_path, line_number);
-
-	-- Index for faster trait value queries
 	CREATE INDEX IF NOT EXISTS idx_traits_type_value ON traits(trait_type, value);
 
-	-- Date index for temporal queries
-	-- Links dates to objects/traits that have date fields
 	CREATE TABLE IF NOT EXISTS date_index (
-		date TEXT NOT NULL,              -- YYYY-MM-DD
-		source_type TEXT NOT NULL,       -- 'object' or 'trait'
-		source_id TEXT NOT NULL,         -- Object or trait ID
-		field_name TEXT NOT NULL,        -- Which field (due, date, start, etc.)
+		date TEXT NOT NULL,
+		source_type TEXT NOT NULL,
+		source_id TEXT NOT NULL,
+		field_name TEXT NOT NULL,
 		file_path TEXT NOT NULL,
 		PRIMARY KEY (date, source_type, source_id, field_name)
 	);
@@ -188,7 +200,6 @@ const SchemaSQL = `
 	CREATE INDEX IF NOT EXISTS idx_date_index_date ON date_index(date);
 	CREATE INDEX IF NOT EXISTS idx_date_index_file ON date_index(file_path);
 
-	-- Full-text search index for content search
 	CREATE VIRTUAL TABLE IF NOT EXISTS fts_content USING fts5(
 		object_id,
 		title,
@@ -197,3 +208,7 @@ const SchemaSQL = `
 		tokenize='porter unicode61'
 	);
 `
+
+// SchemaSQL is the authoritative SQLite schema shared by the index writer and
+// SQL-generating consumers.
+const SchemaSQL = ConnectionPragmasSQL + schemaTablesSQL + ResolverGenerationTriggersSQL + schemaIndexesSQL
