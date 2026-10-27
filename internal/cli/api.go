@@ -31,8 +31,9 @@ var apiCmd = &cobra.Command{
 
 The server binds 127.0.0.1 only. Every request except CORS preflight requires
 a bearer token (generated per run, or set with --token / RAVEN_API_TOKEN).
-POST /v1/invoke runs through the same command layer as the CLI and MCP.
-The MVP allowlist is read-only vault commands plus set, unset, new, and move.
+POST /v1/invoke runs through the same command layer as the CLI and MCP
+and exposes the full invokable command registry. Companion clients choose
+which commands to call.
 
 GET /v1/health is liveness. GET /v1/session is the attach handshake: the
 absolute vault root, the editor command and editor_mode that rvn open

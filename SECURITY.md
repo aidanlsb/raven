@@ -76,7 +76,7 @@ compromised agent.
 `rvn api` listens on 127.0.0.1 only and requires a per-run bearer token. It
 rejects non-loopback `Host` headers (DNS rebinding) and restricts CORS to
 configured localhost origins. Possession of the token is equivalent to running
-the allowlisted vault commands as you. Do not expose the port or token beyond
+the invokable vault commands as you. Do not expose the port or token beyond
 the local machine.
 
 ### Local configuration is trusted

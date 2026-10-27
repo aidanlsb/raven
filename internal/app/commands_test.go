@@ -210,7 +210,6 @@ func TestValidateRequestRejectsEmptyVaultPathForVaultCommands(t *testing.T) {
 		"query_saved_list",
 		"objects",
 		"reindex",
-		"vault_path",
 		"vault_stats",
 	}
 

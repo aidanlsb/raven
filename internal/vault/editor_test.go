@@ -109,19 +109,19 @@ func TestResolvedEditor(t *testing.T) {
 		}
 	})
 
-	t.Run("canonicalizes mode aliases", func(t *testing.T) {
+	t.Run("unknown mode falls back to auto", func(t *testing.T) {
 		t.Setenv("EDITOR", "")
 		editor, mode := ResolvedEditor(&config.Config{EditorMode: "tui"})
-		if editor != "" || mode != "terminal" {
-			t.Fatalf("ResolvedEditor(tui) = %q, %q; want \"\", terminal", editor, mode)
+		if editor != "" || mode != "auto" {
+			t.Fatalf("ResolvedEditor(tui) = %q, %q; want \"\", auto", editor, mode)
 		}
 		_, mode = ResolvedEditor(&config.Config{EditorMode: "background"})
-		if mode != "gui" {
-			t.Fatalf("ResolvedEditor(background) mode = %q, want gui", mode)
-		}
-		_, mode = ResolvedEditor(&config.Config{EditorMode: "whatever"})
 		if mode != "auto" {
-			t.Fatalf("ResolvedEditor(whatever) mode = %q, want auto", mode)
+			t.Fatalf("ResolvedEditor(background) mode = %q, want auto", mode)
+		}
+		_, mode = ResolvedEditor(&config.Config{EditorMode: "terminal"})
+		if mode != "terminal" {
+			t.Fatalf("ResolvedEditor(terminal) mode = %q, want terminal", mode)
 		}
 	})
 }
@@ -136,9 +136,9 @@ func TestParseEditorMode(t *testing.T) {
 		{name: "default", mode: "", want: editorModeAuto},
 		{name: "auto", mode: "auto", want: editorModeAuto},
 		{name: "terminal", mode: "terminal", want: editorModeTerminal},
-		{name: "terminal alias", mode: "tui", want: editorModeTerminal},
+		{name: "former terminal alias", mode: "tui", want: editorModeAuto},
 		{name: "gui", mode: "gui", want: editorModeGUI},
-		{name: "background alias", mode: "background", want: editorModeGUI},
+		{name: "former gui alias", mode: "background", want: editorModeAuto},
 		{name: "unknown", mode: "whatever", want: editorModeAuto},
 	}
 

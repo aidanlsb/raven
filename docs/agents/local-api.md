@@ -85,7 +85,7 @@ therefore never saw the startup envelope). Requires the bearer token.
 | --- | --- |
 | `vault_path` | Absolute vault root this process is pinned to |
 | `editor` | Command `rvn open` would launch: `config.toml` `editor`, else `$EDITOR`, else `""` |
-| `editor_mode` | Canonical launch mode `rvn open` applies: `auto`, `terminal`, or `gui` (empty config is `auto`; aliases such as `tui` become `terminal`) |
+| `editor_mode` | Canonical launch mode `rvn open` applies: `auto`, `terminal`, or `gui` (empty or unrecognized config is `auto`) |
 | `daily.directory` | Vault-relative daily-note directory (`directories.daily`, default `daily`) |
 | `daily.today_id` | Canonical object ID for today (bare `YYYY-MM-DD`, same as `rvn date today`) |
 | `daily.today_path` | Vault-relative path for today's note (`daily/YYYY-MM-DD.md`) |
@@ -136,10 +136,11 @@ can prompt for them.
 
 ### `GET /v1/commands`
 
-Machine-readable description of commands the API will accept, generated from
-the command registry: id, summary, description, `read_only`, `destructive`,
-`preview_mode`, `args_schema`, and `schema_hash`, plus `api_version`. Type the
-UI against this document rather than a hard-coded command list. HTTP routes
+Machine-readable description of every invokable command, generated from the
+command registry (the same catalog MCP discovery returns): id, summary,
+description, `read_only`, `destructive`, `preview_mode`, `args_schema`, and
+`schema_hash`, plus `api_version`. Type the UI against this document rather
+than a hard-coded command list. HTTP routes
 (`/v1/health`, `/v1/session`, `/v1/revision`, `/v1/schema`, `/v1/commands`, `/v1/invoke`) are
 not commands; they are documented above. `objects` is a command on
 `/v1/invoke`, not a dedicated HTTP route.
@@ -171,7 +172,7 @@ served from the index (no file bodies) and paginates like `query`
 {"ok":true,"data":{"items":[{"id":"people/freya","type":"person","name":"Freya","file_path":"people/freya.md"}],"total":1,"returned":1,"offset":0,"limit":200,"has_more":false}}
 ```
 
-`objects` is an allowlisted read command rather than a dedicated `GET /v1/objects`
+`objects` is a command on `/v1/invoke` rather than a dedicated `GET /v1/objects`
 route: listing needs the same `limit`/`offset` contract as `query`, and the
 command spine already exposes that to CLI, MCP, and `/v1/invoke`. `/v1/schema`
 stays a GET shortcut because it has no paging arguments.
@@ -185,23 +186,28 @@ metadata stays on `GET /v1/commands`.
 
 Runs `commandexec.Invoker.Execute` with `caller=api`, the same path as CLI and
 MCP. The response envelope is unchanged, including `meta.mutation.phase`
-(`preview` or `applied`) on writes.
+(`preview` or `applied`) on writes. Mutating commands that update the index
+advance `GET /v1/revision` the same way CLI and MCP writes do.
 
 If the index is locked for rebuild (`INDEX_LOCKED`), the API waits and retries
 for about two seconds with backoff, then returns the error.
 
-## Allowlist
+## Command surface
 
-MVP commands:
+`GET /v1/commands` lists every discoverable invokable registry command — the
+same catalog MCP discovery returns. `POST /v1/invoke` accepts any command the
+registry policy marks invokable. Companion clients such as Perch choose which
+commands to call; Raven does not keep a parallel subset.
 
-- Read: `query`, `query_saved_list`, `query_saved_get`, `objects`, `read`,
-  `backlinks`, `outlinks`, `search`, `daily`, `date`, `schema`, `schema_validate`,
-  `schema_template_list`, `schema_template_get`, `vault_stats`, `resolve`,
-  `check`, `trash_list`
-- Write: `set`, `unset`, `new`, `move`
+Runtime, bootstrap, and grouping commands (`api`, `mcp_serve`, `lsp`, `config`,
+`vault`, `template`, and the `mcp install/remove/status/show` helpers) return
+`ok: false` with `COMMAND_NOT_INVOKABLE`. Unknown command IDs return
+`COMMAND_NOT_FOUND`.
 
-Anything else returns `ok: false` with `COMMAND_NOT_ALLOWED`. Use the CLI or
-`rvn mcp serve` for commands outside this list.
+`open` launches the configured editor in this process. `init` creates a vault
+at `args.path` and does not use the API's pinned vault. Vault-scoped commands
+run against the pinned vault; `VaultScopeNone` commands (for example `version`,
+`config_show`, `vault_list` without `--path-only`) omit that path.
 
 Bulk writes still preview unless `confirm` is set. Single-object `set` / `move`
 apply immediately unless `dry-run` is set. Read `meta.mutation.phase`; do not

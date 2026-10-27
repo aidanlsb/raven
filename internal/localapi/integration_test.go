@@ -218,7 +218,7 @@ func TestIntegration_APIServerAgainstTempVault(t *testing.T) {
 		t.Fatalf("invoke read failed: %#v", invokeEnvelope)
 	}
 
-	blocked := `{"command":"delete","args":{"reference":"people/freya"}}`
+	blocked := `{"command":"mcp_serve","args":{}}`
 	blockReq, err := http.NewRequest(http.MethodPost, envelope.Data.URL+"/v1/invoke", strings.NewReader(blocked))
 	if err != nil {
 		t.Fatal(err)
@@ -239,8 +239,41 @@ func TestIntegration_APIServerAgainstTempVault(t *testing.T) {
 	if err := json.NewDecoder(blockResp.Body).Decode(&blockedEnvelope); err != nil {
 		t.Fatal(err)
 	}
-	if blockedEnvelope.OK || blockedEnvelope.Error == nil || blockedEnvelope.Error.Code != "COMMAND_NOT_ALLOWED" {
-		t.Fatalf("delete allowlist = %#v, want COMMAND_NOT_ALLOWED", blockedEnvelope)
+	if blockedEnvelope.OK || blockedEnvelope.Error == nil || blockedEnvelope.Error.Code != "COMMAND_NOT_INVOKABLE" {
+		t.Fatalf("mcp_serve invoke = %#v, want COMMAND_NOT_INVOKABLE", blockedEnvelope)
+	}
+
+	deleteBody := `{"command":"delete","args":{"reference":"people/freya","dry-run":true}}`
+	deleteReq, err := http.NewRequest(http.MethodPost, envelope.Data.URL+"/v1/invoke", strings.NewReader(deleteBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth(deleteReq)
+	deleteReq.Header.Set("Content-Type", "application/json")
+	deleteResp, err := client.Do(deleteReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer deleteResp.Body.Close()
+	var deleteEnvelope struct {
+		OK   bool `json:"ok"`
+		Meta *struct {
+			Mutation *struct {
+				Phase string `json:"phase"`
+			} `json:"mutation"`
+		} `json:"meta"`
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(deleteResp.Body).Decode(&deleteEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	if !deleteEnvelope.OK {
+		t.Fatalf("delete dry-run failed: %#v", deleteEnvelope)
+	}
+	if deleteEnvelope.Meta == nil || deleteEnvelope.Meta.Mutation == nil || deleteEnvelope.Meta.Mutation.Phase != "preview" {
+		t.Fatalf("delete dry-run meta = %#v, want preview", deleteEnvelope.Meta)
 	}
 
 	objectsReq, err := http.NewRequest(http.MethodPost, envelope.Data.URL+"/v1/invoke", strings.NewReader(`{"command":"objects","args":{}}`))

@@ -256,8 +256,7 @@ Use `vault_list` to inspect the machine-level vault registry and its
 `default_vault`, `active_vault`, and `current_vault` selection in one result.
 For a path-only response, invoke `vault_list` with
 `args={"path-only":true}`; that mode is vault-scoped and follows the explicit
-MCP resolution rules above. The compatibility IDs `vault_current` and
-`vault_path` remain invokable but are not returned by discovery.
+MCP resolution rules above.
 
 - `VAULT_AMBIGUOUS` error: the call lacked an explicit `vault`/`vault_path` and
   the server has neither session focus nor a launch pin. Retry with an explicit

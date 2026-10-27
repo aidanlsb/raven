@@ -179,9 +179,9 @@ func parseEditorMode(cfg *config.Config) editorMode {
 	switch mode {
 	case "", "auto":
 		return editorModeAuto
-	case "terminal", "tty", "tui", "cli":
+	case "terminal":
 		return editorModeTerminal
-	case "gui", "background", "nonblocking", "non-blocking":
+	case "gui":
 		return editorModeGUI
 	default:
 		return editorModeAuto

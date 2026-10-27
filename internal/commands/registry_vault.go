@@ -104,8 +104,7 @@ The default vault is stored in config.toml and used when no active vault is set.
 If the active vault name is not configured, CLI vault resolution fails until it
 is switched or cleared.
 
-Use 'rvn vault list' as the single inspection surface. The legacy 'current' and
-'path' subcommands remain compatibility aliases.`,
+Use 'rvn vault list' as the single inspection surface.`,
 		Examples: []string{
 			"rvn vault --json",
 			"rvn vault list --json",
@@ -153,23 +152,6 @@ normal CLI/MCP vault routing and fails when no vault can be resolved.`,
 		UseCases: []string{
 			"Inspect configured vaults and active/default/current selection in one response",
 			"Resolve only the selected vault path for a script",
-		},
-	},
-	"vault_current": {
-		Name:        "vault current",
-		Description: "Compatibility alias for vault list",
-		VaultScope:  VaultScopeNone,
-		LongDesc:    "Compatibility alias for 'rvn vault list'. Use vault_list for new CLI and MCP integrations.",
-		Examples: []string{
-			"rvn vault current --json",
-		},
-	},
-	"vault_path": {
-		Name:        "vault path",
-		Description: "Compatibility alias for vault list --path-only",
-		LongDesc:    "Compatibility alias for 'rvn vault list --path-only'. Use vault_list with path-only for new CLI and MCP integrations.",
-		Examples: []string{
-			"rvn vault path --json",
 		},
 	},
 	"vault_stats": {

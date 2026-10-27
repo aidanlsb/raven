@@ -17,6 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -258,13 +259,13 @@ func TestSessionFallsBackToEditorEnv(t *testing.T) {
 	}
 }
 
-func TestSessionCanonicalizesEditorModeAliases(t *testing.T) {
+func TestSessionUnknownEditorModeFallsBackToAuto(t *testing.T) {
 	t.Setenv("EDITOR", "")
 	configPath := writeTestConfig(t, "editor_mode = \"tui\"\n")
 	server := newTestServer(t, Options{ConfigPath: configPath})
 	session := getSession(t, server)
-	if session.EditorMode != "terminal" {
-		t.Fatalf("editor_mode = %q, want terminal", session.EditorMode)
+	if session.EditorMode != "auto" {
+		t.Fatalf("editor_mode = %q, want auto", session.EditorMode)
 	}
 }
 
@@ -292,17 +293,31 @@ func TestLoopbackHostsAllowed(t *testing.T) {
 	}
 }
 
-func TestAllowlistRejectsDelete(t *testing.T) {
+func TestInvokeRejectsNonInvokableCommands(t *testing.T) {
 	t.Parallel()
 	server := newTestServer(t, Options{})
 	rec := doJSON(t, server.Handler(), http.MethodPost, "http://127.0.0.1/v1/invoke", testToken, "127.0.0.1", "",
-		`{"command":"delete","args":{"reference":"people/freya"}}`)
+		`{"command":"mcp_serve","args":{}}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
 	result := decodeResult(t, rec)
-	if result.OK || result.Error == nil || result.Error.Code != codes.ErrCommandNotAllowed {
-		t.Fatalf("result = %#v, want COMMAND_NOT_ALLOWED", result)
+	if result.OK || result.Error == nil || result.Error.Code != codes.ErrCommandNotInvokable {
+		t.Fatalf("result = %#v, want COMMAND_NOT_INVOKABLE", result)
+	}
+}
+
+func TestInvokeUnknownCommandIsNotFound(t *testing.T) {
+	t.Parallel()
+	server := newTestServer(t, Options{Invoker: app.CommandInvoker()})
+	rec := doJSON(t, server.Handler(), http.MethodPost, "http://127.0.0.1/v1/invoke", testToken, "127.0.0.1", "",
+		`{"command":"vault_current","args":{}}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	result := decodeResult(t, rec)
+	if result.OK || result.Error == nil || result.Error.Code != "COMMAND_NOT_FOUND" {
+		t.Fatalf("result = %#v, want COMMAND_NOT_FOUND", result)
 	}
 }
 
@@ -356,6 +371,32 @@ func TestIndexLockRetryThenSuccess(t *testing.T) {
 	}
 }
 
+func TestIndexLockRetryForWriteCommand(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	registry := commandexec.NewHandlerRegistry()
+	registry.Register("delete", func(context.Context, commandexec.Request) commandexec.Result {
+		n := calls.Add(1)
+		if n < 2 {
+			return commandexec.Failure(codes.ErrIndexLocked, "index is locked for rebuild", nil, "retry")
+		}
+		return commandexec.Success(map[string]interface{}{"deleted": true}, nil)
+	})
+	server := newTestServer(t, Options{
+		Invoker:      commandexec.NewInvoker(registry, nil),
+		RetryBackoff: []time.Duration{time.Millisecond},
+	})
+	rec := doJSON(t, server.Handler(), http.MethodPost, "http://127.0.0.1/v1/invoke", testToken, "127.0.0.1", "",
+		`{"command":"delete","args":{"reference":"people/freya"}}`)
+	result := decodeResult(t, rec)
+	if !result.OK {
+		t.Fatalf("expected success after retry, got %#v", result)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("calls = %d, want 2", calls.Load())
+	}
+}
+
 func TestIndexLockRetryExhausted(t *testing.T) {
 	t.Parallel()
 	registry := commandexec.NewHandlerRegistry()
@@ -394,6 +435,7 @@ func TestEnvelopeParityWithCLI(t *testing.T) {
 		{name: "schema", command: "schema", args: map[string]interface{}{}},
 		{name: "read", command: "read", args: map[string]interface{}{"reference": "people/freya", "raw": true}},
 		{name: "query", command: "query", args: map[string]interface{}{"query_string": "type:person"}},
+		{name: "delete-preview", command: "delete", args: map[string]interface{}{"reference": "people/freya", "dry-run": true}},
 	}
 
 	for _, tc := range cases {
@@ -453,7 +495,7 @@ func TestSchemaIncludesEnumValues(t *testing.T) {
 	}
 }
 
-func TestCommandsListsAllowlistAndVersion(t *testing.T) {
+func TestCommandsListsInvokableSurfaceAndVersion(t *testing.T) {
 	t.Parallel()
 	server := newTestServer(t, Options{})
 	rec := doJSON(t, server.Handler(), http.MethodGet, "http://127.0.0.1/v1/commands", testToken, "127.0.0.1", "", "")
@@ -479,23 +521,37 @@ func TestCommandsListsAllowlistAndVersion(t *testing.T) {
 	if data.APIVersion != Version {
 		t.Fatalf("api_version = %q, want %q", data.APIVersion, Version)
 	}
+
+	contracts := commands.DiscoverableContracts()
+	if len(data.Commands) != len(contracts) {
+		t.Fatalf("listed %d commands, want %d discoverable contracts", len(data.Commands), len(contracts))
+	}
+
 	seen := map[string]bool{}
-	for _, cmd := range data.Commands {
+	for i, cmd := range data.Commands {
 		seen[cmd.ID] = true
 		if cmd.ArgsSchema == nil {
 			t.Errorf("command %q missing args_schema", cmd.ID)
 		}
 		if !CommandAllowed(cmd.ID) {
-			t.Errorf("commands listed disallowed %q", cmd.ID)
+			t.Errorf("commands listed non-invokable %q", cmd.ID)
+		}
+		if cmd.ID != contracts[i].CommandID {
+			t.Errorf("commands[%d] = %q, want %q", i, cmd.ID, contracts[i].CommandID)
+		}
+		if cmd.ReadOnly != contracts[i].ReadOnly {
+			t.Errorf("command %q read_only = %v, want %v", cmd.ID, cmd.ReadOnly, contracts[i].ReadOnly)
 		}
 	}
-	for _, id := range []string{"query", "objects", "set", "new", "move"} {
+	for _, id := range []string{"query", "objects", "set", "new", "move", "delete", "write", "add", "edit", "reindex", "open", "init", "vault_list"} {
 		if !seen[id] {
 			t.Errorf("missing command %q", id)
 		}
 	}
-	if seen["delete"] {
-		t.Fatal("delete should not be listed")
+	for _, id := range []string{"mcp_serve", "api", "vault", "vault_current", "vault_path"} {
+		if seen[id] {
+			t.Errorf("command %q should not be listed", id)
+		}
 	}
 }
 
@@ -517,6 +573,96 @@ func TestSetPreviewPhaseInMeta(t *testing.T) {
 	}
 	if result.Meta == nil || result.Meta.Mutation == nil || result.Meta.Mutation.Phase != commandexec.MutationPhasePreview {
 		t.Fatalf("meta.mutation = %#v, want preview", result.Meta)
+	}
+}
+
+func TestInvokeVersionDoesNotRequireVault(t *testing.T) {
+	t.Parallel()
+	server := newTestServer(t, Options{
+		Invoker:    app.CommandInvoker(),
+		ConfigPath: isolatedConfigPath(t),
+	})
+	rec := doJSON(t, server.Handler(), http.MethodPost, "http://127.0.0.1/v1/invoke", testToken, "127.0.0.1", "",
+		`{"command":"version","args":{}}`)
+	result := decodeResult(t, rec)
+	if !result.OK {
+		t.Fatalf("version failed: %#v", result)
+	}
+	data := decodeDataMap(t, result)
+	if data["version"] == nil || data["version"] == "" {
+		t.Fatalf("version payload = %#v", data)
+	}
+}
+
+func TestInvokeOpenIsAllowedWithoutSpawningEditor(t *testing.T) {
+	t.Parallel()
+	vault := testutil.NewTestVault(t).Build()
+	server := newTestServer(t, Options{
+		VaultPath:  vault.Path,
+		Invoker:    app.CommandInvoker(),
+		ConfigPath: isolatedConfigPath(t),
+	})
+	rec := doJSON(t, server.Handler(), http.MethodPost, "http://127.0.0.1/v1/invoke", testToken, "127.0.0.1", "",
+		`{"command":"open","args":{}}`)
+	result := decodeResult(t, rec)
+	if result.OK || result.Error == nil || result.Error.Code != codes.ErrMissingArgument {
+		t.Fatalf("result = %#v, want MISSING_ARGUMENT", result)
+	}
+}
+
+func TestInvokeWriteAndQuerySavedSet(t *testing.T) {
+	t.Parallel()
+	vault := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+	reindexVault(t, vault.Path)
+	server := newTestServer(t, Options{
+		VaultPath:  vault.Path,
+		Invoker:    app.CommandInvoker(),
+		ConfigPath: isolatedConfigPath(t),
+	})
+
+	writeRec := doJSON(t, server.Handler(), http.MethodPost, "http://127.0.0.1/v1/invoke", testToken, "127.0.0.1", "",
+		`{"command":"write","args":{"type":"person","title":"Thor","field":{"name":"Thor"}}}`)
+	writeResult := decodeResult(t, writeRec)
+	if !writeResult.OK {
+		t.Fatalf("write failed: %#v", writeResult)
+	}
+
+	savedRec := doJSON(t, server.Handler(), http.MethodPost, "http://127.0.0.1/v1/invoke", testToken, "127.0.0.1", "",
+		`{"command":"query_saved_set","args":{"name":"people","query_string":"type:person"}}`)
+	savedResult := decodeResult(t, savedRec)
+	if !savedResult.OK {
+		t.Fatalf("query_saved_set failed: %#v", savedResult)
+	}
+}
+
+func TestInvokeInitUsesArgsPathNotPinnedVault(t *testing.T) {
+	t.Parallel()
+	pinned := t.TempDir()
+	newVault := filepath.Join(t.TempDir(), "fresh")
+	payload, err := json.Marshal(invokeRequest{
+		Command: "init",
+		Args:    map[string]interface{}{"path": newVault},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := newTestServer(t, Options{
+		VaultPath:  pinned,
+		Invoker:    app.CommandInvoker(),
+		ConfigPath: isolatedConfigPath(t),
+	})
+	rec := doJSON(t, server.Handler(), http.MethodPost, "http://127.0.0.1/v1/invoke", testToken, "127.0.0.1", "", string(payload))
+	result := decodeResult(t, rec)
+	if !result.OK {
+		t.Fatalf("init failed: %#v", result)
+	}
+	if _, err := os.Stat(filepath.Join(newVault, "schema.yaml")); err != nil {
+		t.Fatalf("init did not create schema.yaml: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(pinned, "schema.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("init mutated pinned vault: %v", err)
 	}
 }
 

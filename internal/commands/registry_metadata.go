@@ -110,7 +110,7 @@ func defaultAccessForCommandID(commandID string) AccessMode {
 		"schema", "schema_validate", "schema_template_list", "schema_template_get",
 		"docs", "docs_search",
 		"version",
-		"vault", "vault_list", "vault_current", "vault_path", "vault_stats",
+		"vault", "vault_list", "vault_stats",
 		"config", "config_show":
 		return AccessRead
 	default:

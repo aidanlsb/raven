@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -157,21 +156,14 @@ func (s *Server) handleCommands(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ids := allowedCommandIDs()
-	sort.Strings(ids)
-
-	items := make([]map[string]interface{}, 0, len(ids))
-	for _, id := range ids {
-		contract, ok := commands.BuildCommandContract(id)
-		if !ok {
-			continue
-		}
-		_, write := allowedWriteCommands[id]
+	contracts := commands.DiscoverableContracts()
+	items := make([]map[string]interface{}, 0, len(contracts))
+	for _, contract := range contracts {
 		items = append(items, map[string]interface{}{
 			"id":           contract.CommandID,
 			"summary":      contract.Summary,
 			"description":  contract.Description,
-			"read_only":    !write,
+			"read_only":    contract.ReadOnly,
 			"destructive":  contract.Destructive,
 			"preview_mode": contract.PreviewMode,
 			"args_schema":  commands.CompactArgsSchema(contract),

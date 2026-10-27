@@ -64,10 +64,9 @@ func HandleConfigUnset(_ context.Context, req commandexec.Request) commandexec.R
 	return commandexec.Success(data, nil)
 }
 
-// HandleVaultList executes the canonical `vault_list` command and its
-// compatibility aliases, `vault_current` and `vault_path`.
+// HandleVaultList executes the canonical `vault_list` command.
 func HandleVaultList(_ context.Context, req commandexec.Request) commandexec.Result {
-	if boolArg(req.Args, "path-only") || req.CommandID == "vault_path" {
+	if boolArg(req.Args, "path-only") {
 		return commandexec.Success(map[string]interface{}{
 			"path": filepath.Clean(strings.TrimSpace(req.VaultPath)),
 		}, nil)
