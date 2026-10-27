@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.41] - 2026-10-26
+
 ### Changed
 - `rvn api` is a fully featured command API. `GET /v1/commands` lists the same invokable registry catalog as MCP discovery, and `POST /v1/invoke` accepts any command the registry policy marks invokable. Companion clients choose which commands to call. Runtime, bootstrap, and grouping commands return `COMMAND_NOT_INVOKABLE`; unknown IDs return `COMMAND_NOT_FOUND`. Writes, schema and template mutations, saved-query edits, and `reindex` go through the same invoker, index, and revision path as CLI and MCP.
 - Command policy no longer distinguishes discoverable-from-invokable: after removing the hidden vault aliases, those flags are the same. `GET /v1/commands` and MCP discovery both list invokable commands.
