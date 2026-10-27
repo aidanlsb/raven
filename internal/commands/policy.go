@@ -2,11 +2,10 @@ package commands
 
 // Policy defines execution/discovery behavior for a command.
 //
-// These defaults are intentionally permissive for canonical leaf commands, with
-// explicit deny overrides for runtime/bootstrap paths.
+// Canonical leaf commands are invokable (and therefore discoverable). Runtime,
+// bootstrap, and grouping commands are not.
 type Policy struct {
-	Invokable    bool
-	Discoverable bool
+	Invokable bool
 }
 
 // PreviewMode describes whether a command previews changes by default.
@@ -20,25 +19,15 @@ const (
 
 // DefaultPolicy returns the default policy for canonical commands.
 func DefaultPolicy() Policy {
-	return Policy{
-		Invokable:    true,
-		Discoverable: true,
-	}
+	return Policy{Invokable: true}
 }
 
 // PolicyForCommandID resolves effective policy for a canonical registry command ID.
 func PolicyForCommandID(commandID string) Policy {
-	policy := DefaultPolicy()
-
 	if _, blocked := nonInvokableCommandIDs[commandID]; blocked {
-		policy.Invokable = false
-		policy.Discoverable = false
+		return Policy{Invokable: false}
 	}
-	if _, compatibilityAlias := compatibilityAliasCommandIDs[commandID]; compatibilityAlias {
-		policy.Discoverable = false
-	}
-
-	return policy
+	return DefaultPolicy()
 }
 
 func IsInvokableCommandID(commandID string) bool {
@@ -79,14 +68,6 @@ var nonInvokableCommandIDs = map[string]struct{}{
 	"config":   {},
 	"vault":    {},
 	"template": {},
-}
-
-// compatibilityAliasCommandIDs remain directly invokable for existing clients
-// but are omitted from discovery so new integrations see only canonical
-// command surfaces.
-var compatibilityAliasCommandIDs = map[string]struct{}{
-	"vault_current": {},
-	"vault_path":    {},
 }
 
 // previewModeByCommandID controls default preview behavior.

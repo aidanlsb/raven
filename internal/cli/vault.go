@@ -49,10 +49,6 @@ var vaultListCmd = newCanonicalLeafCommand("vault_list", canonicalLeafOptions{
 	RenderHuman: renderVaultList,
 })
 
-var vaultCurrentCmd = newCanonicalLeafCommand("vault_current", canonicalLeafOptions{
-	RenderHuman: renderVaultList,
-})
-
 var vaultUseCmd = newCanonicalLeafCommand("vault_use", canonicalLeafOptions{
 	RenderHuman: renderVaultUse,
 })
@@ -77,14 +73,8 @@ var vaultRemoveCmd = newCanonicalLeafCommand("vault_remove", canonicalLeafOption
 	RenderHuman: renderVaultRemove,
 })
 
-var vaultPathCmd = newCanonicalLeafCommand("vault_path", canonicalLeafOptions{
-	RenderHuman: renderVaultList,
-})
-
 func init() {
 	vaultCmd.AddCommand(vaultListCmd)
-	vaultCmd.AddCommand(vaultCurrentCmd)
-	vaultCmd.AddCommand(vaultPathCmd)
 	vaultCmd.AddCommand(vaultStatsCmd)
 	vaultCmd.AddCommand(vaultUseCmd)
 	vaultCmd.AddCommand(vaultFocusCmd)

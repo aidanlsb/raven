@@ -65,6 +65,85 @@ func TestSessionAndRevisionExposeIndexRevision(t *testing.T) {
 	}
 }
 
+func TestInvokeMutationsAdvanceRevision(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		command     string
+		args        map[string]interface{}
+		fullRebuild bool
+	}{
+		{
+			name:    "delete",
+			command: "delete",
+			args:    map[string]interface{}{"reference": "people/alice"},
+		},
+		{
+			name:    "write",
+			command: "write",
+			args: map[string]interface{}{
+				"type":  "person",
+				"title": "Thor",
+				"field": map[string]interface{}{"name": "Thor"},
+			},
+		},
+		{
+			name:    "schema_add_type",
+			command: "schema_add_type",
+			args: map[string]interface{}{
+				"name":       "company",
+				"name-field": "name",
+			},
+		},
+		{
+			name:        "reindex",
+			command:     "reindex",
+			args:        map[string]interface{}{"full": true},
+			fullRebuild: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			vault := testutil.NewTestVault(t).
+				WithSchema(testutil.PersonProjectSchema()).
+				WithFile("people/alice.md", "---\ntype: person\nname: Alice\n---\n").
+				Build()
+			reindexVault(t, vault.Path)
+			server := newTestServer(t, Options{
+				VaultPath:  vault.Path,
+				Invoker:    app.CommandInvoker(),
+				ConfigPath: isolatedConfigPath(t),
+			})
+			before := getRevision(t, server)
+			payload, err := json.Marshal(invokeRequest{Command: tc.command, Args: tc.args})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec := doJSON(t, server.Handler(), http.MethodPost, "http://127.0.0.1/v1/invoke", testToken, "127.0.0.1", "", string(payload))
+			result := decodeResult(t, rec)
+			if rec.Code != 200 || !result.OK {
+				t.Fatalf("%s failed: status=%d result=%#v", tc.command, rec.Code, result)
+			}
+			after := getRevision(t, server)
+			if tc.fullRebuild {
+				if after.Generation == "" || after.Generation == before.Generation {
+					t.Fatalf("generation after %s = %q, want a new value (was %q)", tc.command, after.Generation, before.Generation)
+				}
+				return
+			}
+			if after.Generation != before.Generation {
+				t.Fatalf("generation changed on %s: %q -> %q", tc.command, before.Generation, after.Generation)
+			}
+			if after.Counter <= before.Counter {
+				t.Fatalf("counter after %s = %d, want > %d", tc.command, after.Counter, before.Counter)
+			}
+		})
+	}
+}
+
 func getRevision(t *testing.T, server *Server) index.Revision {
 	t.Helper()
 	rec := doJSON(t, server.Handler(), http.MethodGet, "http://127.0.0.1/v1/revision", testToken, "127.0.0.1", "", "")

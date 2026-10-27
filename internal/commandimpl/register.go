@@ -43,8 +43,6 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("config_set", HandleConfigSet)
 	registry.Register("config_unset", HandleConfigUnset)
 	registry.Register("vault_list", HandleVaultList)
-	registry.Register("vault_current", HandleVaultList)
-	registry.Register("vault_path", HandleVaultList)
 	registry.Register("vault_use", HandleVaultUse)
 	registry.Register("vault_focus", HandleVaultFocus)
 	registry.Register("vault_add", HandleVaultAdd)

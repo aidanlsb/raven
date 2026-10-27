@@ -154,10 +154,6 @@ vault clear`. `rvn vault focus` invoked directly in a shell only validates and
 describes an MCP focus target. To change a running server's in-memory focus,
 invoke the `vault_focus` command through that server's `raven_invoke`.
 
-The older `rvn vault current` and `rvn vault path` forms remain compatibility
-aliases for `rvn vault list` and `rvn vault list --path-only`, respectively.
-New scripts and integrations should use `vault list`.
-
 ### Manage global config fields via CLI
 
 Use dotted `config.toml` keys with `rvn config set key=value` and

@@ -6,23 +6,22 @@ package commands
 // Meta defines metadata for a CLI command that can be used to
 // generate both Cobra commands and MCP tool schemas.
 type Meta struct {
-	Name                string     // Command name (e.g., "trait", "add", "new")
-	CLIPath             []string   // Optional explicit CLI invocation path segments (e.g., ["vault", "config", "show"]); falls back to Name when empty
-	Use                 string     // Cobra-style usage string for this command (local, not full invocation)
-	Description         string     // Short description
-	LongDesc            string     // Long description (for --help)
-	Category            Category   // Command grouping for discovery surfaces
-	Access              AccessMode // Read/write classification for discovery surfaces
-	Risk                RiskLevel  // Safe/mutating/destructive classification
-	VaultScope          VaultScope // Whether the command requires a resolved vault path
-	Args                []ArgMeta  // Positional arguments
-	Flags               []FlagMeta // Command flags
-	BulkStdinArgName    string     // Canonical args key used for bulk IDs when --stdin is available
-	BulkStdinArgAliases []string   // Backward-compatible aliases accepted for the bulk ID arg
-	VariadicJoin        bool       // When true, join variadic args with spaces (e.g., docs search)
-	MutexGroups         [][]string // Mutually exclusive flag groups (e.g., [["type", "core"], ["content", "content-file"]])
-	Examples            []string   // Usage examples
-	UseCases            []string   // Agent use cases (for MCP hints)
+	Name             string     // Command name (e.g., "trait", "add", "new")
+	CLIPath          []string   // Optional explicit CLI invocation path segments (e.g., ["vault", "config", "show"]); falls back to Name when empty
+	Use              string     // Cobra-style usage string for this command (local, not full invocation)
+	Description      string     // Short description
+	LongDesc         string     // Long description (for --help)
+	Category         Category   // Command grouping for discovery surfaces
+	Access           AccessMode // Read/write classification for discovery surfaces
+	Risk             RiskLevel  // Safe/mutating/destructive classification
+	VaultScope       VaultScope // Whether the command requires a resolved vault path
+	Args             []ArgMeta  // Positional arguments
+	Flags            []FlagMeta // Command flags
+	BulkStdinArgName string     // Canonical args key used for bulk IDs when --stdin is available
+	VariadicJoin     bool       // When true, join variadic args with spaces (e.g., docs search)
+	MutexGroups      [][]string // Mutually exclusive flag groups (e.g., [["type", "core"], ["content", "content-file"]])
+	Examples         []string   // Usage examples
+	UseCases         []string   // Agent use cases (for MCP hints)
 }
 
 // ArgMeta defines a positional argument.

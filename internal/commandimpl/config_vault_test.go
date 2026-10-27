@@ -68,7 +68,7 @@ func TestHandleVaultListSurfacesMissingActiveVault(t *testing.T) {
 	}
 
 	result := HandleVaultList(context.Background(), commandexec.Request{
-		CommandID:  "vault_current",
+		CommandID:  "vault_list",
 		ConfigPath: configPath,
 		StatePath:  statePath,
 	})
@@ -90,33 +90,25 @@ func TestHandleVaultListSurfacesMissingActiveVault(t *testing.T) {
 	}
 }
 
-func TestHandleVaultListPathOnlyAndPathAliasShareOutput(t *testing.T) {
+func TestHandleVaultListPathOnly(t *testing.T) {
 	t.Parallel()
 
 	rawPath := filepath.Join(t.TempDir(), "parent", "..", "vault")
 	wantPath := filepath.Clean(rawPath)
-	for _, req := range []commandexec.Request{
-		{
-			CommandID: "vault_list",
-			VaultPath: rawPath,
-			Args:      map[string]interface{}{"path-only": true},
-		},
-		{
-			CommandID: "vault_path",
-			VaultPath: rawPath,
-		},
-	} {
-		result := HandleVaultList(context.Background(), req)
-		if !result.OK {
-			t.Fatalf("HandleVaultList(%s) failed: %+v", req.CommandID, result.Error)
-		}
-		data, ok := result.Data.(map[string]interface{})
-		if !ok {
-			t.Fatalf("data = %#v, want map", result.Data)
-		}
-		if data["path"] != wantPath || len(data) != 1 {
-			t.Fatalf("HandleVaultList(%s) data = %#v, want only path %q", req.CommandID, data, wantPath)
-		}
+	result := HandleVaultList(context.Background(), commandexec.Request{
+		CommandID: "vault_list",
+		VaultPath: rawPath,
+		Args:      map[string]interface{}{"path-only": true},
+	})
+	if !result.OK {
+		t.Fatalf("HandleVaultList() failed: %+v", result.Error)
+	}
+	data, ok := result.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("data = %#v, want map", result.Data)
+	}
+	if data["path"] != wantPath || len(data) != 1 {
+		t.Fatalf("HandleVaultList() data = %#v, want only path %q", data, wantPath)
 	}
 }
 

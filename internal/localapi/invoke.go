@@ -71,10 +71,10 @@ func (s *Server) handleInvoke(w http.ResponseWriter, r *http.Request) {
 
 	if !CommandAllowed(commandID) {
 		writeResult(w, http.StatusOK, commandexec.Failure(
-			codes.ErrCommandNotAllowed,
-			"command is not available on the local API: "+commandID,
+			codes.ErrCommandNotInvokable,
+			"command cannot be invoked via the local API: "+commandID,
 			map[string]interface{}{"command": commandID},
-			"GET /v1/commands for the MVP allowlist; use the CLI or MCP for other commands",
+			"GET /v1/commands for the invokable command surface",
 		))
 		return
 	}

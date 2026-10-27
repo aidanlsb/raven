@@ -205,7 +205,7 @@ func TestCompactDiscoverHidesVaultInspectAliases(t *testing.T) {
 		case "vault_list":
 			foundList = true
 		case "vault_current", "vault_path":
-			t.Fatalf("compatibility alias %q should not be discoverable", item.Command)
+			t.Fatalf("removed compatibility alias %q should not be discoverable", item.Command)
 		}
 	}
 	if !foundList {

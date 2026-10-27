@@ -401,7 +401,7 @@ func TestCompactInvokeUsesWrapperVaultNameOverride(t *testing.T) {
 	}
 }
 
-func TestCompactInvokeVaultInspectAliasesRemainCompatible(t *testing.T) {
+func TestCompactInvokeVaultListAndPathOnly(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -436,28 +436,44 @@ func TestCompactInvokeVaultInspectAliasesRemainCompatible(t *testing.T) {
 		return envelope.Data
 	}
 
-	currentOut, currentErr := server.callCompactInvoke(map[string]interface{}{
-		"command": "vault_current",
+	listOut, listErr := server.callCompactInvoke(map[string]interface{}{
+		"command": "vault_list",
 	})
-	if currentErr {
-		t.Fatalf("vault_current alias failed: %s", currentOut)
+	if listErr {
+		t.Fatalf("vault_list failed: %s", listOut)
 	}
-	current, ok := parseData(currentOut)["current_vault"].(map[string]interface{})
+	current, ok := parseData(listOut)["current_vault"].(map[string]interface{})
 	if !ok || current["name"] != "work" || current["path"] != vaultPath {
-		t.Fatalf("vault_current alias result = %s", currentOut)
+		t.Fatalf("vault_list result = %s", listOut)
 	}
 
-	for _, invocation := range []map[string]interface{}{
-		{"command": "vault_path"},
-		{"command": "vault_list", "args": map[string]interface{}{"path-only": true}},
-	} {
-		out, isErr := server.callCompactInvoke(invocation)
-		if isErr {
-			t.Fatalf("%s failed: %s", invocation["command"], out)
+	pathOut, pathErr := server.callCompactInvoke(map[string]interface{}{
+		"command": "vault_list",
+		"args":    map[string]interface{}{"path-only": true},
+	})
+	if pathErr {
+		t.Fatalf("vault_list path-only failed: %s", pathOut)
+	}
+	if got := parseData(pathOut)["path"]; got != vaultPath {
+		t.Fatalf("vault_list path-only = %#v, want %q", got, vaultPath)
+	}
+
+	for _, commandID := range []string{"vault_current", "vault_path"} {
+		out, isErr := server.callCompactInvoke(map[string]interface{}{"command": commandID})
+		if !isErr {
+			t.Fatalf("expected %s to fail, got: %s", commandID, out)
 		}
-		data := parseData(out)
-		if data["path"] != vaultPath {
-			t.Fatalf("%s path = %#v, want %q", invocation["command"], data["path"], vaultPath)
+		var envelope struct {
+			OK    bool `json:"ok"`
+			Error *struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+			t.Fatalf("unmarshal %s error: %v\n%s", commandID, err, out)
+		}
+		if envelope.Error == nil || envelope.Error.Code != "COMMAND_NOT_FOUND" {
+			t.Fatalf("%s error = %#v, want COMMAND_NOT_FOUND; response=%s", commandID, envelope.Error, out)
 		}
 	}
 }

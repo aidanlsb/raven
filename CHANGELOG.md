@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `rvn api` is a fully featured command API. `GET /v1/commands` lists the same invokable registry catalog as MCP discovery, and `POST /v1/invoke` accepts any command the registry policy marks invokable. Companion clients choose which commands to call. Runtime, bootstrap, and grouping commands return `COMMAND_NOT_INVOKABLE`; unknown IDs return `COMMAND_NOT_FOUND`. Writes, schema and template mutations, saved-query edits, and `reindex` go through the same invoker, index, and revision path as CLI and MCP.
+- Command policy no longer distinguishes discoverable-from-invokable: after removing the hidden vault aliases, those flags are the same. `GET /v1/commands` and MCP discovery both list invokable commands.
+
+### Removed
+- The Perch MVP command allowlist on `rvn api`. Previously only 18 read commands plus `set`, `unset`, `new`, and `move` were accepted, and everything else returned `COMMAND_NOT_ALLOWED`.
+- Compatibility aliases `vault current` / `vault_current` and `vault path` / `vault_path`. Use `rvn vault list` and `rvn vault list --path-only` (`vault_list` with `path-only`).
+- Unused `BulkStdinArgAliases` registry field for bulk stdin argument compatibility names.
+- `editor_mode` config aliases (`tui`, `tty`, `cli`, `background`, `nonblocking`, `non-blocking`). Only `auto`, `terminal`, and `gui` are recognized; other values behave as `auto`.
+
 ### Performance
 - Full and incremental `rvn reindex` parse Markdown files in parallel, then write SQLite rows in batched transactions with prepared statements. Resolver-generation triggers are suspended for the transaction so generation bumps once per batch instead of once per object/section row.
 - Opening an existing compatible index skips `CREATE TABLE/INDEX/TRIGGER/VIRTUAL TABLE IF NOT EXISTS` (including FTS5 setup). Connection PRAGMAs still apply on every open.

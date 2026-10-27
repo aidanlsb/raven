@@ -61,11 +61,13 @@ type ValidationIssue struct {
 	Hint     string `json:"hint,omitempty"`
 }
 
+// DiscoverableContracts returns registry commands that callers may list and
+// invoke. Invokable and discoverable are the same set: runtime, bootstrap, and
+// grouping commands are omitted.
 func DiscoverableContracts() []CommandContract {
 	ids := make([]string, 0, len(Registry))
 	for commandID := range Registry {
-		policy := PolicyForCommandID(commandID)
-		if !policy.Discoverable {
+		if !IsInvokableCommandID(commandID) {
 			continue
 		}
 		ids = append(ids, commandID)
@@ -569,7 +571,6 @@ func stdinReplacementParameter(meta Meta) (string, ParameterSpec) {
 		Type:        ParameterTypeStringArray,
 		Required:    false,
 		Description: stdinReplacementDescription(name),
-		Aliases:     sanitizeParameterAliases(meta.BulkStdinArgAliases, name),
 	}
 }
 
@@ -582,26 +583,6 @@ func stdinReplacementDescription(name string) string {
 	default:
 		return "Object IDs used as MCP stdin replacement for bulk mode"
 	}
-}
-
-func sanitizeParameterAliases(aliases []string, canonical string) []string {
-	seen := map[string]struct{}{
-		normalizeArgumentName(canonical): {},
-	}
-	out := make([]string, 0, len(aliases))
-	for _, alias := range aliases {
-		alias = strings.TrimSpace(alias)
-		if alias == "" {
-			continue
-		}
-		normalized := normalizeArgumentName(alias)
-		if _, ok := seen[normalized]; ok {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		out = append(out, alias)
-	}
-	return out
 }
 
 func normalizeArgumentName(name string) string {
