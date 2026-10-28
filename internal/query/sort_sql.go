@@ -99,7 +99,7 @@ func buildLinkSortExpr(sf SortField) (string, []interface{}, error) {
 	if !ok {
 		return "", nil, fmt.Errorf("unsupported link sort field: .%s", sf.Field)
 	}
-	fieldType, _ := linkFieldTypes[sf.Field]
+	fieldType := linkFieldTypes[sf.Field]
 	switch fieldType {
 	case schema.FieldTypeNumber, schema.FieldTypeBool:
 		return column, nil, nil
