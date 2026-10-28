@@ -311,7 +311,7 @@ type:project none(.tags, _ == "deprecated")
 | `contains(section...)` | Object recursively contains matching section in its section tree |
 | `refs(...)` | Object references a target or query match |
 | `links(...)` | Object has an outgoing non-Raven link matching link fields |
-| `refd(...)` | Object is referenced by a source or query match |
+| `refd(...)` | Object is referenced by a source or query match (`type:<t>` and `section` roots; not `trait:` or `link`) |
 | `content("term")` | Full-text term in object content |
 
 `refs` accepts direct targets or nested object/section queries.
@@ -334,6 +334,8 @@ type:meeting refs([[project/website]])
 type:meeting refs(type:project .status==active)
 type:project links(.ext==pdf)
 type:project refd(type:meeting)
+type:project refd(trait:todo)
+section refd([[person/freya]])
 ```
 
 ## Link query predicates
@@ -446,7 +448,18 @@ trait:tags any(.value, _ == "raven")
 trait:reviewers any(.value, _ == [[person/freya]])
 ```
 
-`refd(...)` is available on type queries, not trait queries.
+## `refd(...)`
+
+`refd(...)` is supported on `type:<t>` and `section` roots, not on `trait:` or
+`link`. It matches items that are referenced by a source. The source argument
+can be a wikilink, a type query, a trait query, or a section query:
+
+```text
+type:project refd([[person/freya]])
+type:project refd(type:meeting)
+type:project refd(trait:todo)
+section refd(section .title==Tasks)
+```
 
 ## Boolean composition
 
@@ -598,6 +611,18 @@ rvn query 'type:project has(trait:due .value<today)' --apply 'set status=overdue
 # Trait query bulk update
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 ```
+
+## Quick Reference
+
+| Construct | Syntax |
+|-----------|--------|
+| Object root | `type:<t> ...` |
+| Section root | `section ...` |
+| Trait root | `trait:<name> ...` |
+| Link root | `link ...` |
+| Result sort | `sort(.field)` / `sort(.field, asc\|desc)` |
+| Incoming refs | `refd([[target]])`, `refd(type:...)`, `refd(trait:...)`, `refd(section ...)` |
+| Outgoing file/URL links | `links(.ext==pdf)` (on `type:`, `section`, `trait:`) |
 
 ## Related docs
 

@@ -22,9 +22,9 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Create a brand-new object identity: `rvn new`
 - Append a log entry or capture text: `rvn add`
 - Idempotent generated output (briefs, reports): `rvn write`
-- Update frontmatter fields only: `rvn set <reference> --field field=value --json`
+- Update frontmatter fields only: `rvn set <reference> key=value --json` or `rvn set <reference> --field key=value --json`
 - Exact body text replacement: `rvn edit`
-- Update a trait value by trait ID: `rvn update`
+- Update a trait value by trait ID: `rvn update` (repeat `--trait-id` for an explicit list without `--stdin`)
 - Copy an external non-Markdown file into the vault, then run `rvn reindex`
 - Relocate a non-Markdown file already in the vault: `rvn move` (updates file links)
 - Create/reorder/rename/delete headings: `rvn section create` / `rvn section move` / `rvn section rename` / `rvn section delete`
@@ -32,7 +32,9 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 Key distinctions:
 - `write` vs `add`: use `write` when reruns should converge to one canonical state. Use `add` when history should accumulate.
 - `set` vs `edit`: use `set` for structured metadata (frontmatter). Use `edit` for body content changes.
-- `set` arguments use `field=value` pairs, for example `rvn set project/raven --field status=active --json`.
+- `set` accepts positional `key=value` pairs and `--field key=value`, for
+  example `rvn set project/raven status=active --json`. `new`, `write`, and
+  `reclassify` require `--field` or `--fields-json`.
 - Use `--fields-json '{...}'` on `new`, `write`, `set`, and `reclassify` when
   exact JSON typing matters.
 - `new` vs `write`: use `new` only when creating a genuinely new object identity (it fails if the target exists). Use `write` when the same agent action might run again.

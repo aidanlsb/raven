@@ -37,6 +37,10 @@ If an explicit reference is ambiguous, interactive `rvn read`, `rvn open`, `rvn 
 
 `rvn docs` uses the same Raven picker for section and topic navigation. In the docs picker, use `l` to move forward into a section/topic and `h` to go back.
 
+`rvn query ... --browse` opens this picker on query results and opens the
+selection in your editor. For pipeline selection, use
+`rvn query ... --pipe | rvn pick [--multi]`.
+
 ---
 
 ## Reading content
@@ -103,6 +107,23 @@ rvn objects --limit 200 --offset 0 --json
 `--limit 0` (the default) returns the complete list. JSON includes `total`,
 `returned`, `offset`, `limit`, and `has_more` (plus `next_offset` when more
 remain), the same pagination contract as `query`.
+
+### `rvn query`
+
+Structured filtering by type, section, trait, or link. See
+[Query language](../querying/query-language.md) for RQL syntax.
+
+```bash
+rvn query 'type:project .status==active'
+rvn query 'type:issue .status==open' --browse
+rvn query 'trait:todo .value==todo' --pipe | rvn pick --multi | rvn update --stdin done --confirm
+```
+
+Key flags:
+- `--browse`: open results in the interactive picker and open the selection in your editor
+- `--pipe`: emit tab-separated rows for `rvn pick` and other pipe workflows
+- `--ids`: emit one ID per row for `--stdin` bulk commands
+- `--json`: structured JSON envelope (use this in scripts and agents)
 
 ### `rvn search`
 
@@ -187,11 +208,17 @@ Key flags:
 Set frontmatter fields on an existing object. Values are validated against the schema.
 
 ```bash
+rvn set project/website status=published
+rvn set person/freya email=freya@example.com role=lead
 rvn set project/website --field status=published
 rvn set person/freya --field email=freya@example.com --field role=lead
 rvn set person/freya --fields-json '{"email":"true"}'
 rvn set project/website --field status=published --dry-run   # Preview without writing
 ```
+
+> **Tip:** `rvn set` accepts both positional `key=value` arguments and
+> `--field key=value`. `rvn new`, `rvn write`, and `rvn reclassify` require
+> `--field` or `--fields-json`.
 
 Single-object updates apply immediately; pass `--dry-run` to preview the result without writing. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
 
@@ -494,7 +521,9 @@ rvn check                                       # Entire vault
 rvn check project/website                       # One file or directory
 rvn check --type project                         # Only project-type objects
 rvn check --issues missing_reference,unknown_type  # Specific issue types
+rvn check --errors-only                          # Errors only, skip warnings
 rvn check --by-file                              # Group output by file
+rvn check --verbose                              # Full details for every issue
 ```
 
 Auto-fix capabilities:
@@ -517,6 +546,8 @@ Key flags:
 - `--type` / `-t`: check only objects of a specific type
 - `--issues`: only report specific issue types (comma-separated)
 - `--exclude`: exclude specific issue types
+- `--errors-only`: only report errors, skip warnings
+- `--by-file`: group issues by file path
 - `--strict`: treat warnings as errors
 - `--verbose` / `-V`: full details for every issue
 
@@ -611,7 +642,7 @@ rvn docs getting-started                         # List topics in a section
 rvn docs search "saved query"                    # Full-text search across docs
 rvn docs search "exclude" --section using-your-vault --limit 10
 rvn docs fetch                                   # Force-refresh the global docs cache
-rvn docs fetch --ref vX.Y.Z                      # Pin docs to a release tag
+rvn docs fetch --ref v0.5.0                      # Pin docs to a release tag
 ```
 
 Docs are cached in a global directory (fetched during `rvn init`). After an

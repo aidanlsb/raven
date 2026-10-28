@@ -198,6 +198,32 @@ rvn query "type:person .role==contractor" --apply "move contractor/" --confirm
 
 ---
 
+## Interactive selection
+
+Open query results in the Raven picker and open the selection in your editor:
+
+```bash
+rvn query "type:project .status==active" --browse
+```
+
+Or select interactively in a pipeline. `--pipe` emits tab-separated rows;
+`rvn pick` opens the picker and writes selected IDs to stdout:
+
+```bash
+rvn query "trait:todo .value==todo" --pipe | rvn pick --multi | rvn update --stdin done --confirm
+rvn query "type:project .status==archived" --pipe | rvn pick | rvn delete --stdin --confirm
+```
+
+`--multi` allows more than one selection. Cancelling `rvn pick` exits 130.
+
+Update several traits from an explicit ID list (no stdin):
+
+```bash
+rvn update --trait-id daily/2026-03-15.md:trait:0 --trait-id daily/2026-03-16.md:trait:0 done --confirm
+```
+
+---
+
 ## Piping with `--ids`
 
 For complex operations, get IDs and pipe to other commands.

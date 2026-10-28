@@ -11,14 +11,21 @@ Use this page as the compact CLI chooser for day-to-day Raven work.
 ## Reading content
 
 - Inspect exact file text before editing: `rvn read <reference> --raw --json`
+- List indexed objects (`id`, `type`, `name`, `file_path`; no bodies):
+  `rvn objects --json` (page with `--limit` / `--offset`)
 - Resolve any accepted reference input to its canonical object ID:
   `rvn resolve <reference> --json`. Use the returned ID when authoring links.
 
 ## Updating content
 
-- Update frontmatter fields: `rvn set <reference> --field key=value --json` (applies immediately; add `--dry-run` to preview)
+- Update frontmatter fields: `rvn set <reference> key=value --json` or
+  `rvn set <reference> --field key=value --json` (applies immediately; add
+  `--dry-run` to preview). `--fields-json` is also accepted. `new` / `write` /
+  `reclassify` require `--field` or `--fields-json`.
 - Surgical body replacement: `rvn edit <reference> <old> <new> --json` (applies immediately; add `--dry-run` to preview)
-- Update a trait value by trait ID: `rvn update <trait_id> <new_value> --json` (applies immediately; add `--dry-run` to preview)
+- Update a trait value by trait ID: `rvn update <trait_id> <new_value> --json`
+  (applies immediately; add `--dry-run` to preview). Repeat `--trait-id <id>`
+  for an explicit list without `--stdin`.
 
 ## Organizing content
 

@@ -93,6 +93,41 @@ name = "markdown"
 language-servers = ["raven"]
 ```
 
+## Interactive CLI Pickers
+
+The same Raven picker used by `rvn read` / `rvn open` can browse query results
+and select IDs for a pipeline.
+
+Open matching notes in your editor:
+
+```bash
+rvn query 'type:project .status==active' --browse
+```
+
+`--browse` opens the interactive picker on the query results, then opens the
+selected item in the configured editor.
+
+Select IDs in a pipeline without `--browse`:
+
+```bash
+rvn query 'trait:todo .value==todo' --pipe | rvn pick --multi | rvn update --stdin done --confirm
+rvn query 'type:project .status==archived' --pipe | rvn pick | rvn delete --stdin --confirm
+```
+
+`rvn query --pipe` emits tab-separated rows. `rvn pick` reads those rows from
+stdin, opens the picker on the terminal, and writes selected IDs to stdout.
+`--multi` allows more than one selection. Cancelling the picker exits 130.
+
+Update several traits without piping stdin:
+
+```bash
+rvn update --trait-id daily/2026-03-15.md:trait:0 --trait-id daily/2026-03-16.md:trait:0 done --confirm
+```
+
+Bare `rvn read`, `rvn open`, and `rvn search` also open this picker when you
+omit the target in an interactive terminal. See
+[Common commands](common-commands.md#interactive-pickers).
+
 ## Notes
 
 - The server holds a shared handle on the SQLite index (`.raven/index.db`) in

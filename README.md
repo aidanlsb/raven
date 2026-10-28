@@ -118,7 +118,7 @@ notes/
 └── schema.yaml   # types, fields, and traits
 ```
 
-On a fresh machine, this first `rvn init` registers `~/notes` in global config and sets it as your default and active vault, so the CLI can find it right away. Additional vaults are registered too, but you switch between them explicitly with `rvn vault use` or `rvn vault pin`. See [Vault Creation & Management](docs/getting-started/first-vault.md).
+On a fresh machine, this first `rvn init` registers `~/notes` in global config and sets it as your default and active vault, so the CLI can find it right away. When another vault already exists, `rvn init` registers and activates the new vault immediately while leaving `default_vault` unchanged. JSON `post_init` reports `switch_back` (the exact `rvn vault use ...` command) to return to the previous vault; use `rvn vault pin` to change the default. See [Vault Creation & Management](docs/getting-started/first-vault.md).
 
 ### 1. Extend the schema
 
@@ -245,12 +245,14 @@ where they're stored via `directories.daily` in `raven.yaml`. See the
 
 ## Documentation
 
+- [Documentation Map](docs/getting-started/documentation-map.md)
 - [Installation](docs/getting-started/installation.md)
 - [First Vault](docs/getting-started/first-vault.md)
 - [Core Concepts](docs/getting-started/core-concepts.md)
 - [Agent Setup](docs/getting-started/agent-setup.md)
 - [Daily Notes](docs/using-your-vault/daily-notes.md)
 - [Common Commands](docs/using-your-vault/common-commands.md)
+- [File Links](docs/using-your-vault/file-links.md)
 - [Configuration](docs/using-your-vault/configuration.md)
 - [Schema Introduction](docs/types-and-traits/schema-intro.md)
 - [Schema Reference](docs/types-and-traits/schema.md)
@@ -258,6 +260,7 @@ where they're stored via `directories.daily` in `raven.yaml`. See the
 - [References](docs/types-and-traits/references.md)
 - [Templates](docs/types-and-traits/templates.md)
 - [Query Language](docs/querying/query-language.md)
+- [RQL Internals](docs/querying/internals.md)
 - [Bulk Operations](docs/vault-management/bulk-operations.md)
 - [Import](docs/vault-management/import.md)
 - [MCP Reference](docs/agents/mcp.md)

@@ -49,6 +49,55 @@ Core-type template bindings (for built-ins like `date`) are managed via
 `rvn schema template ... --core ...` rather than under a user-defined
 `types.<name>` block.
 
+## Template variables
+
+Templates are Markdown body files that may contain `{{...}}` placeholders.
+Raven expands those placeholders once at creation time (`rvn new`, `rvn write`,
+`rvn daily`), then copies the result into the new note. Editing a template
+later does not retroactively change existing notes.
+
+### Built-in variables
+
+| Variable | Value |
+|----------|-------|
+| `{{title}}` | Title passed to `rvn new` / `rvn write` |
+| `{{slug}}` | Slugified title |
+| `{{type}}` | Type name |
+| `{{date}}` | Today's date (`YYYY-MM-DD`) |
+| `{{datetime}}` | Current datetime (`YYYY-MM-DDTHH:MM`) |
+| `{{year}}` | Current year |
+| `{{month}}` | Current month (`01`–`12`) |
+| `{{day}}` | Current day (`01`–`31`) |
+| `{{weekday}}` | Weekday name (`Monday`, `Tuesday`, ...) |
+
+On `rvn daily [<date>]`, `{{title}}`, `{{slug}}`, and `{{date}}` are the target
+note's `YYYY-MM-DD` date. `{{year}}`, `{{month}}`, `{{day}}`, and `{{weekday}}`
+come from that same date.
+
+### Field variables
+
+`{{field.<name>}}` is filled from `--field` / `--fields-json` values at creation
+time:
+
+```markdown
+# {{title}}
+
+Owner: {{field.owner}}
+Status: {{field.status}}
+```
+
+```bash
+rvn new meeting "Weekly standup" --field owner=person/freya --field status=scheduled
+```
+
+`rvn schema rename field <type> <old> <new> --confirm` rewrites
+`{{field.<old>}}` to `{{field.<new>}}` in bound template files.
+
+### Escaping
+
+`\{{name}}` renders as the literal `{{name}}`. Unknown `{{...}}` placeholders
+are left unchanged.
+
 ## Quick start: type template
 
 Use this flow when you want structure for a type like `meeting`.
@@ -172,7 +221,9 @@ rvn daily tomorrow
 
 - If a type has no `default_template`, `rvn new` creates the object without template content.
 - `--template <template_id>` on `rvn new` can override the default for that create call.
-- Template content is static file content at creation time.
+- Templates are applied once at creation time, after expanding `{{...}}`
+  variables. Editing a template later does not retroactively modify existing
+  notes.
 - Template files cannot contain YAML frontmatter. Put metadata in schema fields
   and provide values with creation flags; keep templates focused on body content.
 - Template file lifecycle and schema binding lifecycle are intentionally separate.

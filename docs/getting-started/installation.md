@@ -124,7 +124,7 @@ Use `rvn docs fetch` to force a refresh or pin another ref:
 
 ```bash
 rvn docs fetch                       # Force-refresh from the default ref
-rvn docs fetch --ref vX.Y.Z          # Pin a specific release tag
+rvn docs fetch --ref v0.5.0          # Pin a specific release tag
 ```
 
 A missing cache is not fetched implicitly; run `rvn docs fetch` to create it.
