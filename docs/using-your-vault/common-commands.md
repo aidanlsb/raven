@@ -616,10 +616,13 @@ rvn docs fetch --ref vX.Y.Z                      # Pin docs to a release tag
 
 Docs are cached in a global directory (fetched during `rvn init`). After an
 upgrade, the next docs read lazily refreshes an existing older cache from the
-installed CLI version tag. If that fetch fails, Raven emits
-`DOCS_FETCH_FAILED` and continues serving the existing cache. Missing caches
-still require `rvn docs fetch`; use that command explicitly to force a refresh
-or pin `--ref`.
+installed CLI version tag, including caches whose `cli_version` is missing,
+`dev`, `(devel)`, `unknown`, or a Go pseudo-version. If that fetch fails, Raven
+emits `DOCS_FETCH_FAILED` and continues serving the existing cache. Development
+builds cannot pick a source tag; if the cache was not fetched for the running
+CLI version, Raven emits `DOCS_CACHE_STALE` and continues serving the cache.
+Missing caches still require `rvn docs fetch`; use that command explicitly to
+force a refresh or pin `--ref`.
 
 Key flags (`docs search`):
 - `--limit` / `-n`: maximum matches (default 20)

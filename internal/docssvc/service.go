@@ -154,8 +154,50 @@ func loadGlobalDocsSource(opts loadGlobalDocsOptions) (*GlobalDocsSource, error)
 		if err != nil {
 			return nil, svcerr.Wrap(codes.ErrFileRead, "failed to open refreshed docs cache", err).WithSuggestion("Run 'rvn docs fetch' to refresh docs")
 		}
+		return &GlobalDocsSource{FS: docsFS}, nil
 	}
-	return &GlobalDocsSource{FS: docsFS}, nil
+
+	source := &GlobalDocsSource{FS: docsFS}
+	if warning, ok := docsCacheStaleWarning(opts.cliVersion, configPath); ok {
+		source.Warnings = append(source.Warnings, warning)
+	}
+	return source, nil
+}
+
+func docsCacheStaleWarning(cliVersion, configPath string) (Warning, bool) {
+	manifest, err := docsync.ReadManifest(configPath)
+	if err != nil {
+		return Warning{}, false
+	}
+	running := strings.TrimSpace(cliVersion)
+	cached := ""
+	fetchedAt := ""
+	if manifest != nil {
+		cached = strings.TrimSpace(manifest.CLIVersion)
+		fetchedAt = strings.TrimSpace(manifest.FetchedAt)
+	}
+	if cached == running {
+		return Warning{}, false
+	}
+
+	cachedLabel := cached
+	if cachedLabel == "" {
+		cachedLabel = "(missing)"
+	}
+	message := fmt.Sprintf(
+		"Docs cache was fetched for CLI %s, but this process is running %s. Serving the existing cache; run 'rvn docs fetch' to refresh.",
+		cachedLabel,
+		running,
+	)
+	if fetchedAt != "" {
+		message = fmt.Sprintf(
+			"Docs cache was fetched for CLI %s at %s, but this process is running %s. Serving the existing cache; run 'rvn docs fetch' to refresh.",
+			cachedLabel,
+			fetchedAt,
+			running,
+		)
+	}
+	return Warning{Code: codes.WarnDocsCacheStale, Message: message}, true
 }
 
 func ListSectionsFS(docsFS fs.FS, docsRoot string) ([]SectionView, error) {

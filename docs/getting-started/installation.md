@@ -114,8 +114,11 @@ go install github.com/aidanlsb/raven/cmd/rvn@latest
 
 After upgrading, the next docs read (`rvn docs` or `rvn docs search`) checks an
 existing global docs cache and lazily refreshes it from the installed Raven
-version tag. If the refresh cannot reach the network, Raven warns and continues
-serving the existing cache.
+version tag, including caches recorded as development or pseudo-versions. If
+the refresh cannot reach the network, Raven warns with `DOCS_FETCH_FAILED` and
+continues serving the existing cache. Non-release builds skip that fetch and
+warn with `DOCS_CACHE_STALE` when the cache was recorded for a different CLI
+version.
 
 Use `rvn docs fetch` to force a refresh or pin another ref:
 

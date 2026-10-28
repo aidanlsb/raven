@@ -107,6 +107,7 @@ const (
 	WarnIndexUpdateFailed       WarningCode = "INDEX_UPDATE_FAILED"
 	WarnRefResolutionIncomplete WarningCode = "REFERENCE_RESOLUTION_INCOMPLETE"
 	WarnDocsFetchFailed         WarningCode = "DOCS_FETCH_FAILED"
+	WarnDocsCacheStale          WarningCode = "DOCS_CACHE_STALE"
 	WarnWrongCommand            WarningCode = "WRONG_COMMAND"
 	WarnMissingField            WarningCode = "MISSING_REQUIRED_FIELD"
 	WarnBacklinks               WarningCode = "HAS_BACKLINKS"
@@ -135,7 +136,7 @@ var knownErrorCodes = map[ErrorCode]struct{}{
 }
 
 var knownWarningCodes = map[WarningCode]struct{}{
-	WarnRefTargetMissing: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnSchemaLoadFailed: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnRefResolutionIncomplete: {}, WarnDocsFetchFailed: {},
+	WarnRefTargetMissing: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnSchemaLoadFailed: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnRefResolutionIncomplete: {}, WarnDocsFetchFailed: {}, WarnDocsCacheStale: {},
 	WarnWrongCommand: {}, WarnMissingField: {}, WarnBacklinks: {}, WarnSectionSkipped: {}, WarnUnknownField: {}, WarnTypeMismatch: {},
 	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {}, WarnCheckRunIncomplete: {}, WarnVaultFallback: {},
 	WarnVaultRegisterFailed: {},

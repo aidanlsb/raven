@@ -84,6 +84,156 @@ func TestLoadGlobalDocsSourceWarnsAndServesCacheWhenRefreshFails(t *testing.T) {
 	}
 }
 
+func TestLoadGlobalDocsSourceWarnsWhenNonReleaseCLIServesMismatchedCache(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		cliVersion  string
+		cachedCLI   string
+		fetchedAt   string
+		wantCached  string
+		wantFetched string
+	}{
+		{
+			name:        "dev build with older release cache",
+			cliVersion:  "dev",
+			cachedCLI:   "v0.0.32",
+			fetchedAt:   "2026-04-01T00:00:00Z",
+			wantCached:  "v0.0.32",
+			wantFetched: "2026-04-01T00:00:00Z",
+		},
+		{
+			name:       "pseudo-version with older release cache",
+			cliVersion: "v0.0.38-0.20260721000000-deadbeef",
+			cachedCLI:  "v0.0.32",
+			wantCached: "v0.0.32",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			globalDir := t.TempDir()
+			configPath := filepath.Join(globalDir, "config.toml")
+			docsPath := filepath.Join(globalDir, "docs")
+			writeTestFile(t, filepath.Join(docsPath, "index.yaml"), `sections:
+  guide:
+    topics:
+      old:
+        path: old.md
+`)
+			writeTestFile(t, filepath.Join(docsPath, "guide", "old.md"), "# Cached docs\n")
+			manifest := `{"cli_version":"` + tc.cachedCLI + `"`
+			if tc.fetchedAt != "" {
+				manifest += `,"fetched_at":"` + tc.fetchedAt + `"`
+			}
+			manifest += `}`
+			writeTestFile(t, filepath.Join(docsPath, "manifest.json"), manifest)
+
+			requests := 0
+			source, err := loadGlobalDocsSource(loadGlobalDocsOptions{
+				configPath: configPath,
+				cliVersion: tc.cliVersion,
+				httpClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+					requests++
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewReader(nil)),
+						Header:     make(http.Header),
+					}, nil
+				})},
+			})
+			if err != nil {
+				t.Fatalf("loadGlobalDocsSource() error = %v", err)
+			}
+			if requests != 0 {
+				t.Fatalf("refresh requests = %d, want 0", requests)
+			}
+			if len(source.Warnings) != 1 || source.Warnings[0].Code != codes.WarnDocsCacheStale {
+				t.Fatalf("warnings = %#v, want DOCS_CACHE_STALE", source.Warnings)
+			}
+			if !strings.Contains(source.Warnings[0].Message, "rvn docs fetch") {
+				t.Fatalf("warning message = %q, want rvn docs fetch hint", source.Warnings[0].Message)
+			}
+			if !strings.Contains(source.Warnings[0].Message, tc.wantCached) {
+				t.Fatalf("warning message = %q, want cached version %s", source.Warnings[0].Message, tc.wantCached)
+			}
+			if !strings.Contains(source.Warnings[0].Message, tc.cliVersion) {
+				t.Fatalf("warning message = %q, want running version %s", source.Warnings[0].Message, tc.cliVersion)
+			}
+			if tc.wantFetched != "" && !strings.Contains(source.Warnings[0].Message, tc.wantFetched) {
+				t.Fatalf("warning message = %q, want fetched_at %s", source.Warnings[0].Message, tc.wantFetched)
+			}
+
+			content, err := fs.ReadFile(source.FS, "guide/old.md")
+			if err != nil {
+				t.Fatalf("read cached docs: %v", err)
+			}
+			if string(content) != "# Cached docs\n" {
+				t.Fatalf("cached content = %q", content)
+			}
+		})
+	}
+}
+
+func TestLoadGlobalDocsSourceWarnsWhenPreviousRefreshAttemptFailed(t *testing.T) {
+	t.Parallel()
+
+	globalDir := t.TempDir()
+	configPath := filepath.Join(globalDir, "config.toml")
+	docsPath := filepath.Join(globalDir, "docs")
+	writeTestFile(t, filepath.Join(docsPath, "index.yaml"), `sections:
+  guide:
+    topics:
+      old:
+        path: old.md
+`)
+	writeTestFile(t, filepath.Join(docsPath, "guide", "old.md"), "# Cached docs\n")
+	writeTestFile(t, filepath.Join(docsPath, "manifest.json"), `{"cli_version":"v1.0.0","fetched_at":"2026-01-02T03:04:05Z"}`)
+
+	failingClient := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusServiceUnavailable,
+			Body:       io.NopCloser(bytes.NewReader(nil)),
+			Header:     make(http.Header),
+		}, nil
+	})}
+
+	first, err := loadGlobalDocsSource(loadGlobalDocsOptions{
+		configPath:    configPath,
+		cliVersion:    "v1.1.0",
+		sourceBaseURL: "https://example.invalid/archive",
+		httpClient:    failingClient,
+	})
+	if err != nil {
+		t.Fatalf("first loadGlobalDocsSource() error = %v", err)
+	}
+	if len(first.Warnings) != 1 || first.Warnings[0].Code != codes.WarnDocsFetchFailed {
+		t.Fatalf("first warnings = %#v, want DOCS_FETCH_FAILED", first.Warnings)
+	}
+
+	second, err := loadGlobalDocsSource(loadGlobalDocsOptions{
+		configPath:    configPath,
+		cliVersion:    "v1.1.0",
+		sourceBaseURL: "https://example.invalid/archive",
+		httpClient:    failingClient,
+	})
+	if err != nil {
+		t.Fatalf("second loadGlobalDocsSource() error = %v", err)
+	}
+	if len(second.Warnings) != 1 || second.Warnings[0].Code != codes.WarnDocsCacheStale {
+		t.Fatalf("second warnings = %#v, want DOCS_CACHE_STALE", second.Warnings)
+	}
+	if !strings.Contains(second.Warnings[0].Message, "rvn docs fetch") {
+		t.Fatalf("warning message = %q, want rvn docs fetch hint", second.Warnings[0].Message)
+	}
+	if !strings.Contains(second.Warnings[0].Message, "v1.0.0") || !strings.Contains(second.Warnings[0].Message, "2026-01-02T03:04:05Z") {
+		t.Fatalf("warning message = %q, want cached cli_version and fetched_at", second.Warnings[0].Message)
+	}
+}
+
 func TestListSectionsFromRootLoadsRepositoryDocs(t *testing.T) {
 	t.Parallel()
 

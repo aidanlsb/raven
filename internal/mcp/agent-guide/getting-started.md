@@ -25,6 +25,9 @@ Use this guide after quickstart when you need an operational first pass through 
    `raven_invoke(command="docs")`
    Existing caches from older releases refresh lazily on this read. If refresh
    fails, `DOCS_FETCH_FAILED` warns that Raven served the existing cache.
+   Development builds and other non-release CLIs cannot pick a source tag, so
+   a cache recorded for a different `cli_version` returns `DOCS_CACHE_STALE`
+   and continues serving the existing cache until you run `docs_fetch`.
    If this returns `FILE_NOT_FOUND`, fetch the missing cache:
    `raven_invoke(command="docs_fetch")`
 
