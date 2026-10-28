@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- RQL `sort(.field)` / `sort(.field, asc|desc)` orders query results. Repeat
+  `sort(...)` for multi-field priority. Sort is top-level only, type-aware
+  (numeric vs case-insensitive string), and places missing values last in both
+  directions. `--limit`/`--offset` pages through the sort order.
+
 ## [v0.0.41] - 2026-10-26
 
 ### Changed

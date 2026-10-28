@@ -48,6 +48,7 @@ For the complete root/predicate capability matrix, invoke
 
 ```text
 raven_invoke(command="query", args={"query_string":"type:project .status==active"})
+raven_invoke(command="query", args={"query_string":"type:project sort(.title, desc)"})
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
 raven_invoke(command="query", args={"query_string":"type:meeting refs([[project/website]])"})
 raven_invoke(command="query", args={"query_string":"link .ext==pdf within(type:project)"})

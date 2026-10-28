@@ -129,18 +129,26 @@ func TestParseRejectsLegacyObjectRootInSubqueries(t *testing.T) {
 func TestParseReportsUnsupportedOrderSortLimit(t *testing.T) {
 	t.Parallel()
 
-	for _, keyword := range []string{"order", "sort", "limit"} {
-		input := "type:project " + keyword
+	tests := []struct {
+		keyword string
+		want    string
+	}{
+		{keyword: "order", want: "use sort(.field) or sort(.field, desc)"},
+		{keyword: "sort", want: "use sort(.field) or sort(.field, desc)"},
+		{keyword: "limit", want: "RQL has no limit clause; page with --limit/--offset"},
+	}
+	for _, tt := range tests {
+		input := "type:project " + tt.keyword
 		_, err := Parse(input)
 		if err == nil {
 			t.Fatalf("Parse(%q) succeeded", input)
 		}
 		msg := err.Error()
-		if !strings.Contains(msg, "RQL has no "+keyword+" clause") {
-			t.Fatalf("error = %q, want %s-clause hint", msg, keyword)
+		if !strings.Contains(msg, tt.want) {
+			t.Fatalf("error = %q, want %q", msg, tt.want)
 		}
-		if !strings.Contains(msg, "--json | jq") {
-			t.Fatalf("error = %q, want --json | jq hint", msg)
+		if strings.Contains(msg, "--json | jq") {
+			t.Fatalf("error = %q, should not suggest jq for %s", msg, tt.keyword)
 		}
 	}
 }

@@ -325,7 +325,9 @@ func (p *Parser) parseArrayQuantifierPredicate(negated bool, quantifier ArrayQua
 	}
 
 	// Parse second argument: element predicate (supports AND/OR)
+	restore := p.disableSort()
 	elementPred, err := p.parseElementOrPredicate()
+	restore()
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +358,7 @@ func (p *Parser) parseElementOrPredicate() (Predicate, error) {
 	for p.curr.Type == TokenPipe {
 		pipePos := p.curr.Pos
 		p.advance()
-		if looksLikeShellPipeCommand(p.curr) {
+		if looksLikeShellPipeCommand(p.curr, p.peek) {
 			return nil, shellPipeQueryError(pipePos)
 		}
 		next, err := p.parseElementAndPredicate()
@@ -431,6 +433,9 @@ func (p *Parser) parseElementUnaryPredicate() (Predicate, error) {
 	}
 
 	if p.curr.Type == TokenIdent {
+		if p.isSortCall() {
+			return nil, sortTopLevelError()
+		}
 		if pred, ok, err := p.tryParseElementFuncPredicate(negated); ok || err != nil {
 			return pred, err
 		}

@@ -19,6 +19,7 @@ Quick reference for common Raven Query Language (RQL) patterns.
 - List membership: `oneof(.field, [a, b, c])` (this is set membership, NOT the scope predicate `in(...)`)
 - String matching: `includes(.field, "text")`, `startswith(...)`, `endswith(...)`, `matches(...)`. On `ref` / `ref[]`, these search resolved target ID and stored raw target, not frontmatter JSON.
 - Text search: `content("phrase")`
+- Result sort (top-level only, repeatable): `sort(.field)`, `sort(.field, desc)`. Strings are case-insensitive; missing values sort last. Example: `type:issue .status==open sort(.priority, desc) sort(.title)`
 - References:
   - `refs([[target]])` (objects/traits that reference target)
   - `refs(type:project .status==active)`

@@ -7,6 +7,7 @@ Use these as templates and adapt predicates to the local schema.
 ```bash
 rvn query 'type:project' --count-only --json
 rvn query 'type:project .status==active' --limit 20 --json
+rvn query 'type:project sort(.title, desc)' --limit 20 --json
 rvn query 'type:project .status==active' --ids --json
 ```
 

@@ -42,6 +42,11 @@ Query syntax:
   Examples: trait:due .value<today, trait:highlight in(type:book)
 - Link queries: link [predicates...]
   Examples: link .ext==pdf within(type:project), link .is_image==true
+- Result sorting: sort(.field) or sort(.field, desc). Repeatable in priority
+  order, top-level only (not inside |, groups, negation, or subqueries).
+  Examples: type:project sort(.title), type:issue .status==open
+  sort(.priority, desc) sort(.title, asc). Strings are case-insensitive;
+  missing values sort last in both directions. Page with --limit/--offset.
 
 Common predicates:
 - .field==value — Filter by field (.status==active, .priority==high)
@@ -161,6 +166,8 @@ For trait queries (trait:...):
 		},
 		Examples: []string{
 			"rvn query 'type:project .status==active' --json",
+			"rvn query 'type:project sort(.title, desc)' --json",
+			"rvn query 'type:issue .status==open sort(.priority, desc) sort(.title)' --json",
 			"rvn query 'type:project contains(trait:todo .value==todo)' --json",
 			"rvn query 'type:meeting has(trait:due)' --json",
 			"rvn query 'type:brief .date==today' --json",

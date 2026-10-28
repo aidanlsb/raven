@@ -41,6 +41,7 @@ Scope/structural predicates are root-dependent. Predicates rejected for a root p
 | `links(...)` | yes | yes | yes | no |
 | `refd(...)` | yes | yes | no | no |
 | `content("term")` | yes | yes | yes | no |
+| `sort(.field)` / `sort(.field, desc)` (top-level only) | yes (scalar fields; `.date` on `type:date`) | yes (built-in fields) | yes (`.value` only) | yes (built-in fields) |
 
 Scope shortcuts: downward (`has`/`contains`) live on container roots (`type:`/`section`); upward (`in`/`within`) live on contained roots (`trait:`/`section`). `has`/`in` are direct-only; `contains`/`within` are recursive.
 
@@ -189,6 +190,22 @@ section subtree. Link rows are outgoing-only and do not support `in()`,
 `link --ids` projects `source_id` once per matching edge, and link queries do
 not support `--apply`. Use `trait:<name> links(...)` to find trait lines with
 matching links, not `link within(trait:<name>)`.
+
+## Sorting
+
+`sort(.field)` orders the top-level result set (`asc` by default). Repeat
+`sort(...)` for multi-field priority. It is not a predicate: do not negate it,
+put it in `(...)` / `|` branches, or nest it in subqueries.
+
+```text
+type:project sort(.title, desc)
+type:issue .status==open sort(.priority, desc) sort(.title, asc)
+trait:due sort(.value)
+```
+
+Strings sort case-insensitively. Missing values sort last in both directions.
+Array fields are not sortable. `--limit`/`--offset` pages through the sort
+order.
 
 ## Boolean composition
 

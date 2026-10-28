@@ -11,11 +11,26 @@ const (
 	QueryTypeLink
 )
 
+// SortDirection is the direction of a sort() clause.
+type SortDirection string
+
+const (
+	SortAsc  SortDirection = "asc"
+	SortDesc SortDirection = "desc"
+)
+
+// SortField is one sort(.field) / sort(.field, asc|desc) clause.
+type SortField struct {
+	Field     string
+	Direction SortDirection
+}
+
 // Query represents a parsed query.
 type Query struct {
 	Type      QueryType
-	TypeName  string    // Type name or trait name; empty for bare roots
-	Predicate Predicate // Filter to apply (may be nil)
+	TypeName  string      // Type name or trait name; empty for bare roots
+	Predicate Predicate   // Filter to apply (may be nil)
+	OrderBy   []SortField // Top-level sort() clauses in priority order
 }
 
 // Predicate represents a filter condition in a query.

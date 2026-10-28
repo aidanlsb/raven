@@ -7,9 +7,11 @@ import (
 
 // Parser parses query strings into Query ASTs.
 type Parser struct {
-	lexer *Lexer
-	curr  Token
-	peek  Token
+	lexer     *Lexer
+	curr      Token
+	peek      Token
+	allowSort bool
+	orderBy   []SortField
 }
 
 var commonShellPipeCommands = map[string]struct{}{
@@ -40,12 +42,31 @@ func unsupportedSelfReferenceError() error {
 	return fmt.Errorf("self-reference '_' is no longer supported; write an explicit target or subquery instead")
 }
 
-func looksLikeShellPipeCommand(tok Token) bool {
+func looksLikeShellPipeCommand(tok, next Token) bool {
 	if tok.Type != TokenIdent {
 		return false
 	}
-	_, ok := commonShellPipeCommands[strings.ToLower(tok.Value)]
+	name := strings.ToLower(tok.Value)
+	// sort(...) is RQL; bare `| sort` without '(' is still a shell-pipe mistake.
+	if name == "sort" && next.Type == TokenLParen {
+		return false
+	}
+	_, ok := commonShellPipeCommands[name]
 	return ok
+}
+
+func (p *Parser) isSortCall() bool {
+	return p.curr.Type == TokenIdent && strings.EqualFold(p.curr.Value, "sort") && p.peek.Type == TokenLParen
+}
+
+func (p *Parser) disableSort() func() {
+	saved := p.allowSort
+	p.allowSort = false
+	return func() { p.allowSort = saved }
+}
+
+func sortTopLevelError() error {
+	return fmt.Errorf("sort() is only allowed at the top level of a query, not inside OR branches, groups, or subqueries")
 }
 
 func startsQueryRoot(curr, peek Token) bool {
@@ -67,7 +88,7 @@ func startsQueryRoot(curr, peek Token) bool {
 
 // Parse parses a query string and returns a Query AST.
 func Parse(input string) (*Query, error) {
-	p := &Parser{lexer: NewLexer(input)}
+	p := &Parser{lexer: NewLexer(input), allowSort: true}
 	p.advance()
 	p.advance()
 	if p.curr.Type == TokenError {
@@ -89,6 +110,7 @@ func Parse(input string) (*Query, error) {
 		}
 		return nil, fmt.Errorf("unexpected token %v at pos %d", p.curr.Type, p.curr.Pos)
 	}
+	q.OrderBy = p.orderBy
 	return q, nil
 }
 
@@ -186,6 +208,9 @@ func (p *Parser) parseOrPredicate() (Predicate, error) {
 		return nil, err
 	}
 	if first == nil {
+		if p.curr.Type == TokenPipe && len(p.orderBy) > 0 {
+			return nil, sortTopLevelError()
+		}
 		return nil, nil
 	}
 
@@ -193,11 +218,17 @@ func (p *Parser) parseOrPredicate() (Predicate, error) {
 		return first, nil
 	}
 
+	if len(p.orderBy) > 0 {
+		return nil, sortTopLevelError()
+	}
+	restore := p.disableSort()
+	defer restore()
+
 	preds := []Predicate{first}
 	for p.curr.Type == TokenPipe {
 		pipePos := p.curr.Pos
 		p.advance()
-		if looksLikeShellPipeCommand(p.curr) {
+		if looksLikeShellPipeCommand(p.curr, p.peek) {
 			return nil, shellPipeQueryError(pipePos)
 		}
 		next, err := p.parseAndPredicate()
@@ -221,6 +252,18 @@ func (p *Parser) parseAndPredicate() (Predicate, error) {
 		// Stop at EOF, closing parens, or OR operator
 		if p.curr.Type == TokenEOF || p.curr.Type == TokenRParen || p.curr.Type == TokenPipe {
 			break
+		}
+
+		if p.isSortCall() {
+			if !p.allowSort {
+				return nil, sortTopLevelError()
+			}
+			sf, err := p.parseSortClause()
+			if err != nil {
+				return nil, err
+			}
+			p.orderBy = append(p.orderBy, sf)
+			continue
 		}
 
 		pred, err := p.parseUnaryPredicate()
@@ -255,7 +298,9 @@ func (p *Parser) parseUnaryPredicate() (Predicate, error) {
 
 	if p.curr.Type == TokenLParen {
 		p.advance()
+		restore := p.disableSort()
 		pred, err := p.parseOrPredicate()
+		restore()
 		if err != nil {
 			return nil, err
 		}
@@ -269,6 +314,13 @@ func (p *Parser) parseUnaryPredicate() (Predicate, error) {
 			return pred, nil
 		}
 		return &NotPredicate{Inner: pred}, nil
+	}
+
+	if p.isSortCall() {
+		if negated {
+			return nil, fmt.Errorf("sort() cannot be negated")
+		}
+		return nil, sortTopLevelError()
 	}
 
 	return p.parseAtomicPredicate(negated)
@@ -348,8 +400,14 @@ func (p *Parser) parseAtomicPredicate(negated bool) (Predicate, error) {
 			return nil, fmt.Errorf("keyword-style predicates are invalid; use function-call predicates (e.g., has(...), refs(...), content(...))")
 		}
 
-		if keyword == "order" || keyword == "sort" || keyword == "limit" {
-			return nil, fmt.Errorf("RQL has no %s clause; page with --limit/--offset, or sort results with rvn query '...' --json | jq '...'", keyword)
+		if keyword == "sort" {
+			return nil, fmt.Errorf("use sort(.field) or sort(.field, desc)")
+		}
+		if keyword == "order" {
+			return nil, fmt.Errorf("RQL has no order clause; use sort(.field) or sort(.field, desc)")
+		}
+		if keyword == "limit" {
+			return nil, fmt.Errorf("RQL has no limit clause; page with --limit/--offset")
 		}
 
 		return nil, fmt.Errorf("unexpected identifier '%s': expected a function call like has(...), refs(...), content(...), or a field predicate like .field==value", keyword)
@@ -473,7 +531,7 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 	if p.curr.Type != TokenIdent {
 		return navFuncArgument{}, fmt.Errorf("expected scope query or target in %s()", kind)
 	}
-	subq, err := p.parseQuery()
+	subq, err := p.parseNestedQuery()
 	if err != nil {
 		return navFuncArgument{}, err
 	}
@@ -538,7 +596,7 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 		}
 		return &RefsPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
 	}
-	subq, err := p.parseQuery()
+	subq, err := p.parseNestedQuery()
 	if err != nil {
 		return nil, err
 	}
@@ -562,7 +620,9 @@ func (p *Parser) parseLinksFuncPredicate(negated bool) (Predicate, error) {
 	if p.curr.Type == TokenRParen {
 		return nil, fmt.Errorf("links() requires a link field predicate")
 	}
+	restore := p.disableSort()
 	linkPred, err := p.parseLinkPredicateExpression()
+	restore()
 	if err != nil {
 		return nil, err
 	}
@@ -608,7 +668,7 @@ func (p *Parser) parseRefdFuncPredicate(negated bool) (Predicate, error) {
 		}
 		return &RefdPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
 	}
-	subq, err := p.parseQuery()
+	subq, err := p.parseNestedQuery()
 	if err != nil {
 		return nil, err
 	}
@@ -641,7 +701,7 @@ func (p *Parser) parseQueryArg(expected QueryType, expectedKind string) (*Query,
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected %s query in argument", expectedKind)
 	}
-	subq, err := p.parseQuery()
+	subq, err := p.parseNestedQuery()
 	if err != nil {
 		return nil, err
 	}
@@ -667,7 +727,7 @@ func (p *Parser) parseAnyQueryArg(expectedKind string) (*Query, error) {
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected %s query in argument", expectedKind)
 	}
-	subq, err := p.parseQuery()
+	subq, err := p.parseNestedQuery()
 	if err != nil {
 		return nil, err
 	}
@@ -675,4 +735,59 @@ func (p *Parser) parseAnyQueryArg(expectedKind string) (*Query, error) {
 		return nil, err
 	}
 	return subq, nil
+}
+
+func (p *Parser) parseNestedQuery() (*Query, error) {
+	restore := p.disableSort()
+	defer restore()
+	return p.parseQuery()
+}
+
+func (p *Parser) parseSortClause() (SortField, error) {
+	// curr is the "sort" identifier.
+	p.advance()
+	if err := p.expect(TokenLParen); err != nil {
+		return SortField{}, err
+	}
+	if p.curr.Type != TokenDot {
+		return SortField{}, fmt.Errorf("expected .field as first argument to sort()")
+	}
+	p.advance()
+	if p.curr.Type != TokenIdent {
+		return SortField{}, fmt.Errorf("expected .field as first argument to sort()")
+	}
+	field := p.curr.Value
+	p.advance()
+
+	dir := SortAsc
+	if p.curr.Type == TokenComma {
+		p.advance()
+		if p.curr.Type != TokenIdent {
+			return SortField{}, fmt.Errorf("expected 'asc' or 'desc' as second argument to sort(), got %s", sortArgDisplay(p.curr))
+		}
+		switch strings.ToLower(p.curr.Value) {
+		case "asc":
+			dir = SortAsc
+		case "desc":
+			dir = SortDesc
+		default:
+			return SortField{}, fmt.Errorf("expected 'asc' or 'desc' as second argument to sort(), got %s", p.curr.Value)
+		}
+		p.advance()
+		if p.curr.Type == TokenComma {
+			p.advance()
+			return SortField{}, fmt.Errorf("expected 'asc' or 'desc' as second argument to sort(), got %s", sortArgDisplay(p.curr))
+		}
+	}
+	if err := p.expect(TokenRParen); err != nil {
+		return SortField{}, err
+	}
+	return SortField{Field: field, Direction: dir}, nil
+}
+
+func sortArgDisplay(tok Token) string {
+	if tok.Value != "" {
+		return tok.Value
+	}
+	return tok.Type.String()
 }
