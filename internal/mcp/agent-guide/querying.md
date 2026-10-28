@@ -4,6 +4,17 @@ Use this guide when composing Raven Query Language (RQL) expressions.
 
 ## Start with structure
 
+Every query starts with one root:
+
+- `type:<t>` — file-backed objects
+- `section` — Markdown heading sections
+- `trait:<name>` — trait instances
+- `link` — outgoing Markdown file/URL link edges
+
+Use `links(...)` on `type:`, `section`, or `trait:` to filter source rows by
+outgoing non-Raven links. Use `sort(.field)` or `sort(.field, asc|desc)` at
+the top level to order results (repeatable).
+
 If you are unsure what types or traits exist:
 
 ```text

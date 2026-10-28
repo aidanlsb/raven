@@ -98,7 +98,9 @@ Type queries support field predicates plus:
 - `contains(section...)`: matching section recursively in the section tree
 - `refs(...)`: object references a target or matching type query
 - `links(...)`: object has an outgoing non-Raven link matching the shared link fields
-- `refd(...)`: object is referenced by a target, matching type query, or matching trait query
+- `refd(...)`: object is referenced by `[[target]]`, `type:...`, `trait:...`,
+  or `section ...`. The same predicate is valid on `section` roots. Not valid
+  on `trait:` or `link`.
 - `content("term")`: full-text content search within objects
 
 Direct `refs([[target]])` and field-ref equality match a resolved refs row on

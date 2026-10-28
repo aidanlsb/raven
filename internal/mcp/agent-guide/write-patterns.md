@@ -73,11 +73,11 @@ Metadata update:
 ```text
 raven_invoke(command="set", args={
   "reference":"project/website-redesign",
-  "fields":{"status":"active"}
+  "field":{"status":"active"}
 })
 ```
 
-Use `fields` for ordinary literal-style updates. Use `fields-json` when exact JSON typing matters, such as preserving the string `"true"` instead of a boolean or sending arrays/nulls explicitly.
+Use `field` for ordinary literal-style updates. Use `fields-json` when exact JSON typing matters, such as preserving the string `"true"` instead of a boolean or sending arrays/nulls explicitly.
 
 Edit applies immediately; preview only when you need to verify the diff first:
 

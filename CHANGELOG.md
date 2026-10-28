@@ -17,6 +17,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bumped shipped skill `version` values whose library content has drifted:
   `raven-core` to 4, and `raven-maintenance`, `raven-onboarding`,
   `raven-query`, `raven-schema`, `raven-templates`, and `raven-vault-admin` to 2.
+- Documented template variable substitution (`{{title}}`, `{{slug}}`,
+  `{{type}}`, `{{date}}`, `{{datetime}}`, `{{year}}`, `{{month}}`, `{{day}}`,
+  `{{weekday}}`, `{{field.<name>}}`, and `\{{...}}` escaping) and corrected the
+  claim that template content is static.
+- Documented positional `rvn set <ref> key=value` alongside `--field` /
+  `--fields-json`. MCP agent guides now use the canonical `field` parameter
+  on `set` (legacy `fields` still works).
+- Completed the `rvn check` issue table and flags (`--errors-only`,
+  `--by-file`, `--verbose`) in the schema reference.
+- Documented `rvn objects`, `rvn query --browse` / `--pipe` with `rvn pick`,
+  and `rvn update --trait-id`.
+- Aligned `refd(...)` docs (`type:` and `section` roots; `[[target]]`,
+  `type:...`, `trait:...`, or `section ...` sources) and added `sort(...)` /
+  `link` / `links(...)` to query quick references.
+- Clarified multi-vault `rvn init`: additional vaults are registered and
+  activated immediately while `default_vault` is left unchanged (`switch_back`
+  / `rvn vault pin`). README documentation index now includes the
+  documentation map, file links, and RQL internals pages.
 
 ### Fixed
 - `rvn docs` now treats a cached `cli_version` that is missing, empty, `dev`,

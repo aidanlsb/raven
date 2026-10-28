@@ -635,9 +635,9 @@ Use `schema convert` when existing data must move with the schema:
 
 ```bash
 rvn schema convert trait priority \
-  --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"} # Preview
+  --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"}' # Preview
 rvn schema convert trait priority \
-  --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"} \
+  --map-json '{"urgent":"critical","high":"high","medium":"medium","low":"low"}' \
   --confirm
 ```
 
@@ -729,30 +729,76 @@ Checks schema.yaml for internal consistency:
 
 ### `rvn check`
 
-Validates managed vault files against the schema. Paths matched by `raven.yaml` `exclude` patterns are outside Raven management and are not checked. Reports issues like:
+Validates managed vault files against the schema. Paths matched by
+`raven.yaml` `exclude` patterns are outside Raven management and are not
+checked.
+
+```bash
+rvn check
+rvn check --errors-only
+rvn check --by-file
+rvn check --verbose
+rvn check --issues missing_reference,unknown_type
+rvn check --exclude unused_type,unused_trait
+rvn check fix                  # Preview unambiguous auto-fixes
+rvn check fix --confirm        # Apply them
+rvn check create-missing       # Preview pages for missing references
+rvn check create-missing --confirm
+```
+
+Key flags:
+- `--errors-only`: report errors only, skip warnings
+- `--by-file`: group issues by file path
+- `--verbose` / `-V`: show every issue with full details
+- `--issues`: only these issue types (comma-separated)
+- `--exclude`: skip these issue types
+- `--strict`: treat warnings as errors
+- `--type` / `-t`: check only objects of a specific type
+- `--trait`: check only usages of a specific trait
+
+`rvn check fix --confirm` auto-fixes `short_ref_could_be_full_path`,
+`invalid_enum_value` (unnecessary quotes), `non_canonical_ref`, and
+`non_canonical_path`. `rvn check create-missing --confirm` creates
+deterministic typed targets for `missing_reference`.
 
 | Issue Type | Description | Fix |
 |------------|-------------|-----|
-| `unknown_type` | File uses undefined type | Add type to schema |
-| `unknown_frontmatter_key` | Field not defined for type | Add field to type |
-| `missing_required_field` | Required field not set | Set the field value |
-| `invalid_enum_value` | Enum trait value not in allowed list | Use a valid value; `rvn check fix --confirm` can remove unnecessary quotes |
-| `undefined_trait` | Trait not in schema | Add trait to schema |
-| `missing_reference` | Link to non-existent object or section | Create the target or update the link |
-| `broken_file_link` | Markdown file link/image target is missing on disk | Restore the target file or update/remove the link; URLs are not checked |
-| `ambiguous_reference` | Reference matches multiple objects or sections | Use a canonical object ID (e.g., `[[person/freya]]`) |
-| `short_ref_could_be_full_path` | Short ref can be written with its canonical object ID | Run `rvn check fix --confirm` to rewrite it |
-| `id_collision` | Same short name maps to multiple object IDs | Use canonical object IDs or rename objects |
-| `duplicate_alias` | Multiple objects use the same alias | Make aliases unique |
-| `alias_collision` | Alias conflicts with object ID or short name | Rename alias or use the canonical object ID |
-| `non_canonical_path` | File lives outside the configured directory root for its type | Run `rvn check fix --confirm` to move the file |
+| `unknown_type` | File uses a type not in schema | Add/rename the type, or change the file type |
+| `missing_reference` | Link points to a missing object or section | Preview `rvn check create-missing`, then confirm, or update/remove the reference |
+| `markdown_link_to_vault_note` | Inline Markdown link/image targets a `.md` note in the vault | Convert it to a Raven `[[wikilink]]` |
+| `broken_file_link` | Markdown file link/image target is missing on disk | Restore the target or update/remove the link; URLs are not checked |
+| `local_fragment_ref` | Wikilink uses unsupported `[[#fragment]]` syntax | Rewrite as a global section ref (`[[object#fragment]]`) |
+| `stale_fragment` | Link points at an existing object but a missing section fragment | Update the fragment, or rename the heading with `rvn section rename` |
+| `ambiguous_reference` | Link matches multiple objects, aliases, or short names | Use a canonical object ID |
+| `duplicate_object_id` | A file defines the same object ID more than once | Rename one of the duplicates |
+| `missing_required_field` | Required type field is missing | Set the field |
+| `missing_required_trait` | Required trait is missing | Add the trait or change the schema requirement |
+| `unknown_frontmatter_key` | Field is not defined for the object type | Add the schema field or remove the key |
+| `invalid_field_value` | Field value violates schema | Correct the value |
+| `invalid_enum_value` | Enum trait value is not allowed | Use a valid value; `rvn check fix --confirm` can remove unnecessary quotes |
+| `invalid_trait_value` | Trait value is missing, invalid, or the trait schema is invalid | Add/fix the value, or fix the schema definition |
+| `invalid_date_format` | Date or datetime trait value has the wrong format | Use `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM`, or `YYYY-MM-DDTHH:MM:SS` |
+| `wrong_target_type` | Ref points to an object of the wrong type | Replace with a ref targeting the correct type |
+| `missing_target_type` | Schema ref field targets a type that does not exist | Add the target type or change the field target |
+| `parse_error` | File could not be parsed as valid Raven markdown/frontmatter | Fix the YAML frontmatter or markdown syntax |
+| `duplicate_alias` | Multiple objects define the same alias | Rename one of the conflicting aliases |
+| `alias_collision` | Alias conflicts with an object ID or short name | Rename the alias or use canonical object IDs |
+| `non_canonical_path` | File lives outside the configured directory root for its type | `rvn check fix --confirm` moves it |
 | `directory_type_mismatch` | File lives in a directory that implies a different type | Reclassify the object to the expected type |
-| `non_canonical_ref` | Wikilink target includes the configured root prefix | Run `rvn check fix --confirm` to strip the prefix |
+| `undefined_trait` | Trait used but not in schema | Add the trait definition or remove the usage |
+| `unused_type` | Type defined but unused | Remove the type or create instances |
+| `unused_trait` | Trait defined but unused | Remove the trait or start using it |
 | `stale_index` | Index may be stale | Run `rvn reindex` |
 | `check_incomplete` | An index-backed check subsystem failed | Fix the named subsystem (often `rvn reindex`) and re-run check |
+| `unknown_field_type` | Schema field has an unrecognized field type | Change the schema field to a supported type |
+| `self_referential_required` | Required ref field points at the same type | Make the field optional or add a default |
+| `id_collision` | Short name matches multiple objects and is used in a reference | Use canonical object IDs |
+| `short_ref_could_be_full_path` | Short ref is not the preferred canonical authoring form | `rvn check fix --confirm` rewrites it |
+| `non_canonical_ref` | Wikilink target includes the configured root prefix | `rvn check fix --confirm` strips the prefix |
 
 For reference resolution details and ambiguity behavior, see
-[File format: References](file-format.md#references).
+[File format: References](file-format.md#references). Full issue-type triage
+for agents is in `raven://guide/issue-types`.
 
 ---
 

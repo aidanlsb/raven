@@ -200,7 +200,10 @@ rvn query 'trait:todo refs([[person/freya]])'
 | Predicate | Meaning |
 |-----------|---------|
 | `refs(...)` | Item/trait references a target or query match |
-| `refd(...)` | Item is referenced by a source or query match (type queries only) |
+| `refd(...)` | Item is referenced by a source or query match (`type:<t>` and `section` roots only; not `trait:` or `link`) |
+
+`refd(...)` accepts `[[target]]`, `type:...`, `trait:...`, or `section ...` as
+the referencing source.
 
 `refs()` accepts nested queries, wiki-links, or bare target shorthand. Prefer
 canonical IDs in direct targets, especially in saved queries; bare shorthand is

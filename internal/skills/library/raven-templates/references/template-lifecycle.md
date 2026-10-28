@@ -28,7 +28,15 @@ rvn daily tomorrow --json
 - `rvn template write meeting/standard.md ...` writes under `directories.template`, producing `templates/meeting/standard.md` by default.
 - `rvn schema template set ... --file ...` resolves and stores the vault-relative template file path, for example `templates/meeting/standard.md`.
 - Template writes replace the full file body.
-- Template content is copied when an object is created; changing a template does not update existing notes.
+- Templates are applied once at creation time after expanding `{{...}}`
+  variables; changing a template does not update existing notes.
+- Built-in variables: `{{title}}`, `{{slug}}`, `{{type}}`, `{{date}}`,
+  `{{datetime}}`, `{{year}}`, `{{month}}`, `{{day}}`, `{{weekday}}`.
+  `{{field.<name>}}` comes from `--field` / `--fields-json` at creation (and is
+  rewritten by `rvn schema rename field ... --confirm` in bound template files).
+  On `rvn daily`, `{{title}}`, `{{slug}}`, and `{{date}}` are the target
+  `YYYY-MM-DD`. `\{{name}}` renders as literal `{{name}}`; unknown placeholders
+  are left unchanged.
 
 ## Inspect current template state
 

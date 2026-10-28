@@ -41,7 +41,7 @@ Raven management.
 create = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
 notes = raven_invoke(command="section_create", args={"file":create.data.id, "title":"Notes", "level":2})
 raven_invoke(command="add", args={"text":"- Kickoff next week", "to":notes.data.section})
-raven_invoke(command="set", args={"reference":"project/website-redesign", "fields":{"status":"active"}})
+raven_invoke(command="set", args={"reference":"project/website-redesign", "field":{"status":"active"}})
 ```
 
 ## 3. Edit safely

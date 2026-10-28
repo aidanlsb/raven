@@ -10,7 +10,14 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Use `rvn ... --json` for all template and schema-template operations.
 - Keep template files under `directories.template` (default `templates/`).
 - `rvn template write` replaces the full template file body.
-- Template content is copied at object creation time; editing a template does not update existing notes.
+- Templates are applied once at creation time after expanding `{{...}}`
+  variables; editing a template later does not update existing notes.
+- Built-in variables: `{{title}}`, `{{slug}}`, `{{type}}`, `{{date}}`,
+  `{{datetime}}`, `{{year}}`, `{{month}}`, `{{day}}`, `{{weekday}}`.
+  `{{field.<name>}}` is filled from `--field` / `--fields-json` at creation.
+  On `rvn daily`, date variables use the target note's `YYYY-MM-DD`.
+  `\{{name}}` renders as literal `{{name}}`; unknown placeholders are left
+  unchanged.
 - Prefer explicit type/core bindings over implicit assumptions.
 - Inspect current bindings before changing defaults or removing templates.
 
