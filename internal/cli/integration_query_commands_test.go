@@ -96,6 +96,126 @@ func TestIntegration_QueryPaging(t *testing.T) {
 	}
 }
 
+func TestIntegration_QuerySort(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  project:
+    default_path: projects/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      status:
+        type: enum
+        values: [active, paused, done]
+      count:
+        type: number
+      tags:
+        type: string[]
+traits:
+  due:
+    type: date
+`).
+		Build()
+
+	v.RunCLI("new", "project", "Zebra", "--field", "status=paused", "--field", "count=10").MustSucceed(t)
+	v.RunCLI("new", "project", "Alpha", "--field", "status=active", "--field", "count=2").MustSucceed(t)
+	v.RunCLI("new", "project", "Beta", "--field", "status=active").MustSucceed(t)
+
+	byTitle := v.RunCLI("query", "type:project sort(.title)").MustSucceed(t)
+	if got := itemIDs(t, byTitle); !equalStringSlice(got, []string{"projects/alpha", "projects/beta", "projects/zebra"}) {
+		t.Fatalf("sort(.title) ids = %v", got)
+	}
+
+	byTitleDesc := v.RunCLI("query", "type:project sort(.title, desc)").MustSucceed(t)
+	if got := itemIDs(t, byTitleDesc); !equalStringSlice(got, []string{"projects/zebra", "projects/beta", "projects/alpha"}) {
+		t.Fatalf("sort(.title, desc) ids = %v", got)
+	}
+
+	numeric := v.RunCLI("query", "type:project sort(.count, asc)").MustSucceed(t)
+	got := itemIDs(t, numeric)
+	if len(got) != 3 || got[0] != "projects/alpha" || got[1] != "projects/zebra" || got[2] != "projects/beta" {
+		t.Fatalf("sort(.count) should be 2, 10, then missing last, got %v", got)
+	}
+
+	numericDesc := v.RunCLI("query", "type:project sort(.count, desc)").MustSucceed(t)
+	got = itemIDs(t, numericDesc)
+	if got[len(got)-1] != "projects/beta" {
+		t.Fatalf("missing count should sort last in desc, got %v", got)
+	}
+
+	multi := v.RunCLI("query", "type:project sort(.status, desc) sort(.title, asc)").MustSucceed(t)
+	if got := itemIDs(t, multi); !equalStringSlice(got, []string{"projects/zebra", "projects/alpha", "projects/beta"}) {
+		t.Fatalf("multi-field sort ids = %v", got)
+	}
+
+	page := v.RunCLI("query", "type:project sort(.title)", "--limit", "1", "--offset", "1").MustSucceed(t)
+	if got := itemIDs(t, page); !equalStringSlice(got, []string{"projects/beta"}) {
+		t.Fatalf("paged sort ids = %v", got)
+	}
+	if got := page.Data["has_more"]; got != true {
+		t.Fatalf("paged has_more = %#v, want true", got)
+	}
+
+	ids := v.RunCLI("query", "type:project sort(.title, desc)", "--ids", "--limit", "2").MustSucceed(t)
+	idList := stringList(t, ids, "ids")
+	if !equalStringSlice(idList, []string{"projects/zebra", "projects/beta"}) {
+		t.Fatalf("--ids sorted page = %v", idList)
+	}
+
+	arrayField := v.RunCLI("query", "type:project sort(.tags)")
+	arrayField.MustFail(t, "QUERY_INVALID")
+	arrayField.MustFailWithMessage(t, "cannot sort by array field '.tags'")
+
+	nested := v.RunCLI("query", "type:project has(trait:due sort(.value))")
+	nested.MustFail(t, "QUERY_INVALID")
+	nested.MustFailWithMessage(t, "sort() is only allowed at the top level")
+}
+
+func itemIDs(t *testing.T, result *testutil.CLIResult) []string {
+	t.Helper()
+	items := result.DataList("items")
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		row, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("item = %#v, want object", item)
+		}
+		id, _ := row["id"].(string)
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func stringList(t *testing.T, result *testutil.CLIResult, key string) []string {
+	t.Helper()
+	list := result.DataList(key)
+	out := make([]string, 0, len(list))
+	for _, v := range list {
+		s, ok := v.(string)
+		if !ok {
+			t.Fatalf("%s entry = %#v, want string", key, v)
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func equalStringSlice(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestIntegration_SavedQueryIgnoresLegacyRuntimeOptions(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

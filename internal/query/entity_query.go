@@ -159,8 +159,13 @@ func (e *Executor) buildEntityPageSQL(q *Query, spec entitySQLSpec, limit, offse
 	if err != nil {
 		return "", nil, err
 	}
+	orderBy, orderArgs, err := e.buildOrderByClause(q, spec)
+	if err != nil {
+		return "", nil, err
+	}
 	sqlStr := fmt.Sprintf("SELECT %s\nFROM %s %s\nWHERE %s\nORDER BY %s",
-		spec.rowColumns, spec.table, spec.alias, where, spec.orderBy)
+		spec.rowColumns, spec.table, spec.alias, where, orderBy)
+	args = append(args, orderArgs...)
 	sqlStr, args = appendLimitOffset(sqlStr, args, limit, offset)
 	return sqlStr, args, nil
 }
@@ -170,8 +175,13 @@ func (e *Executor) buildEntityIDSQL(q *Query, spec entitySQLSpec, limit, offset 
 	if err != nil {
 		return "", nil, err
 	}
+	orderBy, orderArgs, err := e.buildOrderByClause(q, spec)
+	if err != nil {
+		return "", nil, err
+	}
 	sqlStr := fmt.Sprintf("SELECT %s\nFROM %s %s\nWHERE %s\nORDER BY %s",
-		spec.idColumn, spec.table, spec.alias, where, spec.orderBy)
+		spec.idColumn, spec.table, spec.alias, where, orderBy)
+	args = append(args, orderArgs...)
 	sqlStr, args = appendLimitOffset(sqlStr, args, limit, offset)
 	return sqlStr, args, nil
 }

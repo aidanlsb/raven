@@ -18,6 +18,9 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
   bare `link` root when the result should be edge rows. Both share the same
   complete link-field grammar.
 - Count or sample before pulling large result sets into context.
+- Use `sort(.field)` / `sort(.field, desc)` on the top-level query when result
+  order matters. Repeat for multi-field sorts. Do not put `sort()` inside
+  subqueries, `|` branches, or parentheses.
 - For `--apply`, always preview first, then add `--confirm` only when the user approves.
 
 ## Choosing query vs search

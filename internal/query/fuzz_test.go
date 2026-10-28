@@ -16,6 +16,8 @@ func FuzzLexer(f *testing.F) {
 	f.Add("object:task.status = done")
 	f.Add("trait:due < 2026-08-25")
 	f.Add("object:task |> count")
+	f.Add("type:project sort(.title, desc)")
+	f.Add("type:issue .status==open sort(.priority, desc) sort(.title)")
 	f.Add("")
 	f.Add("   ")
 	f.Add("[[unclosed")

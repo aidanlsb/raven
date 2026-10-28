@@ -24,6 +24,8 @@ Each paged response includes `total`, `returned`, `offset`, `limit`, and
 `has_more`. When `has_more` is `true` the response also includes `next_offset`.
 Loop while `has_more` is `true`, sending the returned `next_offset` as the next
 request's `offset`; stop when `has_more` is `false`. Do not guess offsets.
+Add `sort(.field)` / `sort(.field, desc)` when pages should follow a field
+order; paging is deterministic even when sort values tie or are missing.
 
 The `objects` command uses the same paging fields. Use it when you need every
 object's id/type/name/path without bodies; keep `query` for structured filters.

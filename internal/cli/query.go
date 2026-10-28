@@ -86,6 +86,12 @@ Boolean operators:
   pred1 pred2      AND (space-separated)
   pred1 | pred2    OR
 
+Result sorting (top-level only; repeatable):
+  sort(.field)           Ascending (default)
+  sort(.field, desc)     Descending
+  sort(.priority, desc) sort(.title)  Multi-field priority
+  Missing values sort last. Page with --limit/--offset.
+
 Saved query inputs must be declared with args: in raven.yaml when using {{args.<name>}}.
 You can then pass inputs either by position (following args order) or as key=value pairs.
 Saved queries store only their RQL definition, declared args, and description.

@@ -65,6 +65,17 @@ subject to schema field types; the per-root sections on this page give details.
 | `links(...)`: outgoing external/file/URL link | yes | yes | yes | no |
 | `refd(...)`: incoming reference | yes | yes | no | no |
 | `content("term")`: full-text | yes | yes | yes | no |
+| `sort(.field)` / `sort(.field, desc)` (repeatable, top-level only) | yes (schema scalar fields; `.date` on `type:date`) | yes (built-in section fields) | yes (`.value` only; not array-valued traits) | yes (built-in link fields) |
+
+`sort()` is not a predicate. It orders the top-level result set and cannot be
+negated, grouped, ORed, or nested inside subqueries (`has`, `contains`, `in`,
+`within`, `refs`, `refd`, `at`, `links`, `any`/`all`/`none`). Repeat
+`sort(...)` clauses in priority order, for example
+`sort(.priority, desc) sort(.title, asc)`. Strings sort case-insensitively.
+Missing or JSON-null values sort last (`NULLS LAST`) in both `asc` and `desc`.
+Array fields are not sortable. Pagination with `--limit`/`--offset` follows
+the same order, with the root's canonical identity columns as a final
+tie-breaker.
 
 Reading the scope rows:
 
@@ -127,6 +138,7 @@ Examples:
 ```text
 type:project
 type:project .status==active
+type:project sort(.title)
 type:meeting has(trait:due .value<today)
 type:project contains(trait:todo .value==todo)
 ```
@@ -191,11 +203,42 @@ link within(section .title==Resources)
 | String functions | `includes()`, `startswith()`, `endswith()`, `matches()` | `includes(.name, "website")` |
 | References | `[[...]]` | `[[person/freya]]` |
 | Raw string | `r"..."` | `matches(.file_path, r"C:\Users\.*")` |
+| Result sort | `sort(.field)` / `sort(.field, asc\|desc)` | `sort(.title, desc)`, `sort(.priority, desc) sort(.title)` |
 
 Notes:
 - `.field==*` / `!.field==*` are not supported. Use `exists(.field)` / `!exists(.field)`.
 - String functions are case-insensitive by default. Pass `true` as a third argument for case-sensitive matching.
 - `matches()` accepts either a quoted pattern or regex literal (`/pattern/`).
+
+## Sorting results
+
+`sort(.field)` orders the top-level result set. Direction defaults to `asc`;
+pass `desc` as a second argument. Repeat `sort(...)` for a stable multi-field
+order. `sort()` may appear anywhere among top-level clauses, most often at the
+end:
+
+```text
+type:project sort(.title)
+type:project sort(.title, asc)
+type:date sort(.date, desc)
+type:issue .status==open sort(.priority, desc) sort(.title, asc)
+section sort(.level, desc) sort(.title)
+trait:due sort(.value, desc)
+link .ext==pdf sort(.line)
+```
+
+Rules:
+
+- Top-level only. `!sort(...)`, `(sort(...))`, `... | sort(...)`, and
+  `sort(...)` inside subqueries are parse errors.
+- Type-aware: numbers sort numerically, strings/enums/refs/urls
+  case-insensitively, and `type:date` `.date` uses the virtual daily-note date.
+- Missing values are last in both directions (`NULLS LAST`).
+- Duplicate sort fields are rejected. Array fields and array-valued traits
+  cannot be sorted.
+- `--limit`/`--offset` pages through this order. When sort values tie or are
+  missing, the root's canonical file/line identity order breaks the tie so
+  paging stays deterministic.
 
 ## Object query predicates
 
@@ -461,12 +504,16 @@ Use `--count-only` to return just the total match count, with no items or IDs. T
 rvn query 'type:project' --count-only --json           # Just the total count
 ```
 
-Use `--limit` and `--offset` to page through large result sets:
+Use `--limit` and `--offset` to page through large result sets. Add
+`sort(.field)` when you need a field order instead of the default
+file-path/line identity order; paging follows the sort, with identity columns
+as the final tie-breaker:
 
 ```bash
 rvn query 'type:project' --limit 20                   # First 20 results
 rvn query 'type:project' --limit 20 --offset 20       # Next 20
 rvn query 'trait:todo' --limit 50 --json                 # Cap results at 50
+rvn query 'type:project sort(.title, desc)' --limit 20 --json
 ```
 
 The JSON response includes `total`, `returned`, `offset`, and `limit`, plus the fields you need to page without guessing:

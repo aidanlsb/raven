@@ -32,6 +32,18 @@ Every parsed query has exactly one root kind:
 
 The root kind determines which predicates are legal, which SQL builder runs, and what the command response contains. `link` is an outgoing-only leaf root: its rows are edges rather than file entities, and source scoping uses indexed source IDs/positions. Avoid adding predicates that silently change the result kind; compose them through nested queries instead.
 
+`sort(.field)` / `sort(.field, asc|desc)` is not a predicate. The parser
+collects repeatable top-level clauses onto `Query.OrderBy` (`[]SortField` in
+`ast.go`) and rejects negation, parenthesized groups, `|` branches, and
+nested subqueries. The validator checks each sort field against the root
+(schema scalars vs arrays, trait `.value`, section/link built-ins, duplicate
+fields). The executor compiles `OrderBy` into type-aware `ORDER BY`
+expressions with `NULLS LAST` in `entity_query.go` / `sort_sql.go`, then
+appends the root's canonical `spec.orderBy` as a deterministic tie-breaker so
+`--limit`/`--offset` paging is stable. `buildEntityCountSQL` does not emit
+`ORDER BY`. When `OrderBy` is empty, the existing identity `ORDER BY` is
+unchanged.
+
 The `link` root and `links(...)` predicate must consume the single link-field
 vocabulary and SQL compiler in `link_fields.go` / `sql_predicates_link.go`.
 That vocabulary includes target, source, and numeric location columns.
@@ -59,7 +71,7 @@ Most predicates need changes in several places:
 | AST node | `internal/query/ast.go` |
 | Lexer/parser support | `internal/query/lexer.go`, `internal/query/parser*.go` |
 | Schema validation | `internal/query/validator.go` |
-| SQL generation | `internal/query/sql_predicates_*.go` |
+| SQL generation | `internal/query/sql_predicates_*.go`, `internal/query/sort_sql.go` |
 | Execution coverage | `internal/query/*_test.go` |
 | User docs | `docs/querying/query-language.md` |
 

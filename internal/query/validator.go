@@ -94,7 +94,10 @@ func (v *Validator) validateObjectQuery(q *Query) error {
 		typeDef = td
 	}
 
-	return v.validatePredicate(QueryTypeObject, q.TypeName, typeDef, q.Predicate)
+	if err := v.validatePredicate(QueryTypeObject, q.TypeName, typeDef, q.Predicate); err != nil {
+		return err
+	}
+	return v.validateOrderBy(q, typeDef)
 }
 
 func (v *Validator) validateTraitQuery(q *Query) error {
@@ -108,15 +111,100 @@ func (v *Validator) validateTraitQuery(q *Query) error {
 		}
 	}
 
-	return v.validatePredicate(QueryTypeTrait, q.TypeName, nil, q.Predicate)
+	if err := v.validatePredicate(QueryTypeTrait, q.TypeName, nil, q.Predicate); err != nil {
+		return err
+	}
+	return v.validateOrderBy(q, nil)
 }
 
 func (v *Validator) validateSectionQuery(q *Query) error {
-	return v.validatePredicate(QueryTypeSection, "", nil, q.Predicate)
+	if err := v.validatePredicate(QueryTypeSection, "", nil, q.Predicate); err != nil {
+		return err
+	}
+	return v.validateOrderBy(q, nil)
 }
 
 func (v *Validator) validateLinkQuery(q *Query) error {
-	return v.validatePredicate(QueryTypeLink, "", nil, q.Predicate)
+	if err := v.validatePredicate(QueryTypeLink, "", nil, q.Predicate); err != nil {
+		return err
+	}
+	return v.validateOrderBy(q, nil)
+}
+
+func (v *Validator) validateOrderBy(q *Query, typeDef *schema.TypeDefinition) error {
+	if len(q.OrderBy) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(q.OrderBy))
+	for _, sf := range q.OrderBy {
+		if _, dup := seen[sf.Field]; dup {
+			return &ValidationError{Message: fmt.Sprintf("duplicate sort field '.%s'", sf.Field)}
+		}
+		seen[sf.Field] = struct{}{}
+
+		switch q.Type {
+		case QueryTypeObject:
+			if err := v.validateObjectSortField(q.TypeName, typeDef, sf); err != nil {
+				return err
+			}
+		case QueryTypeTrait:
+			if err := v.validateTraitSortField(q.TypeName, sf); err != nil {
+				return err
+			}
+		case QueryTypeSection:
+			if _, ok := sectionFieldColumn("s", sf.Field); !ok {
+				return &ValidationError{
+					Message:    fmt.Sprintf("section has no field '%s'", sf.Field),
+					Suggestion: fmt.Sprintf("Available section fields: %s", strings.Join(availableSectionFields(), ", ")),
+				}
+			}
+		case QueryTypeLink:
+			if _, ok := linkColumnExpr("l", sf.Field); !ok {
+				return unknownLinkFieldError(sf.Field)
+			}
+		}
+	}
+	return nil
+}
+
+func (v *Validator) validateObjectSortField(typeName string, typeDef *schema.TypeDefinition, sf SortField) error {
+	if isDateVirtualField(typeName, sf.Field) {
+		return nil
+	}
+	if !v.hasSchema() {
+		return nil
+	}
+	fieldDef, err := v.fieldDefinitionForType(typeName, typeDef, sf.Field)
+	if err != nil {
+		return err
+	}
+	if fieldDef.Type.IsArray() {
+		return &ValidationError{
+			Message:    fmt.Sprintf("cannot sort by array field '.%s' of type %s", sf.Field, fieldDef.Type),
+			Suggestion: "Sort by a scalar field instead",
+		}
+	}
+	return nil
+}
+
+func (v *Validator) validateTraitSortField(traitName string, sf SortField) error {
+	if sf.Field != "value" {
+		return &ValidationError{
+			Message:    fmt.Sprintf("sort() on trait queries only supports .value, got .%s", sf.Field),
+			Suggestion: "Use sort(.value) or sort(.value, desc)",
+		}
+	}
+	if !v.hasSchema() {
+		return nil
+	}
+	traitDef := v.schema.Traits[traitName]
+	if traitDef != nil && traitDef.Type.IsArray() {
+		return &ValidationError{
+			Message: fmt.Sprintf("cannot sort by array-valued trait '%s'", traitName),
+		}
+	}
+	return nil
 }
 
 // validatePredicate is the single validation entry point for predicate nodes.
