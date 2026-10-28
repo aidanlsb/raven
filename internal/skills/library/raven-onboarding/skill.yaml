@@ -1,6 +1,6 @@
 id: raven-onboarding
 title: Raven Onboarding
-version: 1
+version: 2
 summary: Intent-first onboarding that detects vault state, creates the first vault when none exists, then designs a small personalized schema from the user's real goals and seeds it with their own content.
 entry: body.md
 references:

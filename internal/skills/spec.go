@@ -49,6 +49,7 @@ type Summary struct {
 	Summary   string `json:"summary"`
 	Installed bool   `json:"installed,omitempty"`
 	Path      string `json:"path,omitempty"`
+	Status    string `json:"status,omitempty"`
 }
 
 func (s *Spec) validate() error {

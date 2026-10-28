@@ -1,6 +1,6 @@
 id: raven-templates
 title: Raven Templates
-version: 1
+version: 2
 summary: Template file lifecycle and schema/template binding workflows.
 entry: body.md
 references:

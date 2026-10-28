@@ -95,6 +95,62 @@ func TestRefreshIfStaleRefreshesWhenManifestVersionIsMissing(t *testing.T) {
 	}
 }
 
+func TestRefreshIfStaleRefreshesInvalidCachedManifestVersions(t *testing.T) {
+	t.Parallel()
+
+	cachedVersions := []string{
+		"(devel)",
+		"dev",
+		"unknown",
+		"v0.0.33-0.20260720000000-abcdef123456",
+		"v0.0.32-0.20260726000000-abcdef123456",
+	}
+
+	archive := buildArchive(t, map[string]string{
+		"raven-v0.0.38/docs/index.yaml":       "sections:\n  guide:\n    topics:\n      current:\n        path: current.md\n",
+		"raven-v0.0.38/docs/guide/current.md": "# Current\n",
+	})
+
+	for _, cachedVersion := range cachedVersions {
+		t.Run(cachedVersion, func(t *testing.T) {
+			t.Parallel()
+
+			globalDir := t.TempDir()
+			configPath := filepath.Join(globalDir, "config.toml")
+			docsPath := filepath.Join(globalDir, StoreRelPath)
+			writeDocsTestFile(t, filepath.Join(docsPath, DocsIndexFilename), "sections: {}\n")
+			writeDocsTestManifest(t, docsPath, cachedVersion)
+
+			transport := &recordingTransport{Bodies: map[string][]byte{
+				"/archive/v0.0.38": archive,
+			}}
+			result, err := RefreshIfStale(RefreshOptions{
+				ConfigPath:    configPath,
+				CLIVersion:    "v0.0.38",
+				SourceBaseURL: "https://example.invalid/archive",
+				HTTPClient:    &http.Client{Transport: transport},
+			})
+			if err != nil {
+				t.Fatalf("RefreshIfStale() error = %v", err)
+			}
+			if !result.Refreshed {
+				t.Fatal("RefreshIfStale() Refreshed = false, want true")
+			}
+			if len(transport.Paths) != 1 || transport.Paths[0] != "/archive/v0.0.38" {
+				t.Fatalf("requested paths = %v, want [/archive/v0.0.38]", transport.Paths)
+			}
+
+			manifest, err := ReadManifest(configPath)
+			if err != nil {
+				t.Fatalf("ReadManifest() error = %v", err)
+			}
+			if manifest == nil || manifest.Ref != "v0.0.38" || manifest.CLIVersion != "v0.0.38" {
+				t.Fatalf("manifest = %#v, want ref and cli_version v0.0.38", manifest)
+			}
+		})
+	}
+}
+
 func TestRefreshIfStaleSkipsMatchingNewerAndDevelopmentVersions(t *testing.T) {
 	t.Parallel()
 

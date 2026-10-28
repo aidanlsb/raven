@@ -1,6 +1,6 @@
 id: raven-vault-admin
 title: Raven Vault Admin
-version: 1
+version: 2
 summary: Vault setup, selection, and global plus vault-local config workflows for Raven.
 entry: body.md
 references:

@@ -31,10 +31,13 @@ var docsRefreshState = struct {
 }
 
 // RefreshIfStale refreshes an existing docs cache once per cache/version pair
-// when its recorded CLI version is older than the running release.
+// when its recorded CLI version is not a current-or-newer release tag.
 //
-// Development builds and other versions that are not clean vX.Y.Z release
-// tags are skipped because there is no safe source tag to fetch.
+// When the running CLI is a clean vX.Y.Z release, any cache whose
+// cli_version is missing, empty, not a release tag (dev, (devel), unknown,
+// or a pseudo-version), or an older release is treated as stale and refreshed
+// from currentVersion. Development builds and other non-release CLI versions
+// skip fetching because there is no safe source tag to fetch.
 func RefreshIfStale(opts RefreshOptions) (RefreshResult, error) {
 	if _, err := OpenFS(opts.ConfigPath); err != nil {
 		return RefreshResult{}, err
@@ -59,13 +62,12 @@ func RefreshIfStale(opts RefreshOptions) (RefreshResult, error) {
 		return RefreshResult{}, err
 	}
 
-	needsRefresh := manifest == nil || strings.TrimSpace(manifest.CLIVersion) == ""
-	if !needsRefresh {
+	needsRefresh := true
+	if manifest != nil && strings.TrimSpace(manifest.CLIVersion) != "" {
 		_, cachedParts, valid := parseReleaseTag(manifest.CLIVersion)
-		if !valid {
-			return RefreshResult{}, nil
+		if valid {
+			needsRefresh = compareReleaseParts(cachedParts, currentParts) < 0
 		}
-		needsRefresh = compareReleaseParts(cachedParts, currentParts) < 0
 	}
 	if !needsRefresh {
 		return RefreshResult{}, nil

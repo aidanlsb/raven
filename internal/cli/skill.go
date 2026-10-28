@@ -193,6 +193,10 @@ func renderSkillDoctor(_ *cobra.Command, result commandexec.Result) error {
 		} else {
 			fmt.Println(ui.Bullet("installed:"))
 			for _, item := range report.Installed {
+				if item.Status != "" {
+					fmt.Println(ui.Indent(2, ui.Bullet(fmt.Sprintf("%s %s", item.Name, ui.Hint("["+item.Status+"]")))))
+					continue
+				}
 				fmt.Println(ui.Indent(2, ui.Bullet(item.Name)))
 			}
 		}

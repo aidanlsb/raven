@@ -77,3 +77,23 @@ func receiptMatchesRendered(receipt *Receipt, skill *Skill, scope string, render
 		receipt.Version == skill.Spec.Version &&
 		receipt.Scope == scope
 }
+
+func filesMatchReceipt(skillPath string, receipt *Receipt) bool {
+	if receipt == nil {
+		return false
+	}
+
+	onDisk := make(map[string][]byte, len(receipt.Files))
+	for _, relPath := range receipt.Files {
+		absPath, err := safeSkillPath(skillPath, relPath)
+		if err != nil {
+			return false
+		}
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			return false
+		}
+		onDisk[relPath] = data
+	}
+	return checksumForRendered(onDisk) == receipt.Checksum
+}

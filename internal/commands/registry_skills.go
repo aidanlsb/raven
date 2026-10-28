@@ -96,7 +96,10 @@ Preview is returned by default. Use --confirm to apply removal.`,
 		Name:        "skill doctor",
 		Description: "Inspect Agent Skills installation health",
 		VaultScope:  VaultScopeNone,
-		LongDesc:    `Inspect the resolved install root and installed Raven skills.`,
+		LongDesc: `Inspect the resolved install root and installed Raven skills.
+
+Compares receipt-managed installs against the shipped catalog and reports
+outdated, locally modified, unmanaged, or unshipped skill directories.`,
 		Flags: []FlagMeta{
 			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
 			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
@@ -107,6 +110,7 @@ Preview is returned by default. Use --confirm to apply removal.`,
 		},
 		UseCases: []string{
 			"Verify skill install roots and installed skill presence",
+			"Detect outdated, modified, or unshipped installed skills",
 			"Debug skill installation path resolution",
 		},
 	},

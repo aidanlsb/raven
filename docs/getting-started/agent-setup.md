@@ -100,7 +100,9 @@ specific packaged skills, name them explicitly.
 ## Inspect and remove skills
 
 `rvn skill doctor` shows the resolved install root and which Raven skills are
-installed, which is useful when a skill does not seem to be picked up:
+installed. It also reports skills that are outdated compared to the shipped
+catalog, have local modifications or missing files, exist without a Raven
+receipt, or are no longer shipped:
 
 ```bash
 rvn skill doctor --json

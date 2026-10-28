@@ -193,9 +193,11 @@ startup envelope line that a launcher (for example Tauri) can parse.`,
 		LongDesc: `Browse long-form documentation stored in Raven's global docs directory.
 
 Use this command for guides and references.
-When an existing cache was fetched by an older Raven release, docs read commands lazily
-refresh it from the installed CLI version tag. Refresh failures return a warning and keep
-serving the existing cache. A missing cache still requires 'rvn docs fetch'.
+When an existing cache was fetched by an older Raven release — or recorded as a
+development/pseudo-version — docs read commands lazily refresh it from the installed
+CLI version tag. Refresh failures return DOCS_FETCH_FAILED and keep serving the existing
+cache. Non-release CLIs skip that fetch and return DOCS_CACHE_STALE when the cache was
+not fetched for the running version. A missing cache still requires 'rvn docs fetch'.
 When run in an interactive terminal, 'rvn docs' opens Raven's picker.
 In non-interactive or JSON mode, bare 'rvn docs' lists the available sections.
 In the picker, use l to move forward into a section/topic and h to go back.

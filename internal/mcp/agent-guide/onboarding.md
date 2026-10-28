@@ -123,8 +123,10 @@ raven_invoke(command="docs")
 
 An existing cache from an older release refreshes lazily during this call. If
 that refresh fails, Raven returns `DOCS_FETCH_FAILED` and continues with the
-cached docs. If the cache is missing and the call fails with `FILE_NOT_FOUND`,
-fetch docs:
+cached docs. If the running CLI is not a release tag and the cache was fetched
+for a different version, Raven returns `DOCS_CACHE_STALE` and continues with
+the cached docs until you run `docs_fetch`. If the cache is missing and the
+call fails with `FILE_NOT_FOUND`, fetch docs:
 
 ```text
 raven_invoke(command="docs_fetch")
