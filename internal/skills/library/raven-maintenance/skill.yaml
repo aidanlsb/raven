@@ -1,6 +1,6 @@
 id: raven-maintenance
 title: Raven Maintenance
-version: 1
+version: 2
 summary: Vault health checks, reindexing, and data import.
 entry: body.md
 references:

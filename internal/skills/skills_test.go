@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -442,4 +443,155 @@ func TestWriteSkillFilesRejectsSymlinkedSkillRoot(t *testing.T) {
 	if string(got) != "outside" {
 		t.Fatalf("external file changed: %q", got)
 	}
+}
+
+func TestDoctorReportsNoIssuesForFreshInstall(t *testing.T) {
+	t.Parallel()
+
+	skill := testSkill("raven-example", 1, "# Original\n")
+	root := t.TempDir()
+	installTestSkill(t, skill, root)
+
+	report := Doctor(map[string]*Skill{skill.Spec.ID: skill}, ScopeProject, root)
+	if len(report.Issues) != 0 {
+		t.Fatalf("Doctor() issues = %v, want none", report.Issues)
+	}
+	if len(report.Installed) != 1 {
+		t.Fatalf("Doctor() installed = %d, want 1", len(report.Installed))
+	}
+	if report.Installed[0].Status != doctorStatusUpToDate {
+		t.Fatalf("Doctor() status = %q, want %s", report.Installed[0].Status, doctorStatusUpToDate)
+	}
+}
+
+func TestDoctorFlagsOutdatedSkillWhenCatalogContentChanges(t *testing.T) {
+	t.Parallel()
+
+	original := testSkill("raven-example", 1, "# Original\n")
+	root := t.TempDir()
+	installTestSkill(t, original, root)
+
+	updated := testSkill("raven-example", 1, "# Updated shipped body\n")
+	report := Doctor(map[string]*Skill{updated.Spec.ID: updated}, ScopeProject, root)
+	if !doctorIssueContains(report.Issues, "outdated compared to shipped catalog") {
+		t.Fatalf("Doctor() issues = %v, want outdated catalog issue", report.Issues)
+	}
+	if !doctorIssueContains(report.Issues, "rvn skill install") {
+		t.Fatalf("Doctor() issues = %v, want rvn skill install hint", report.Issues)
+	}
+	if len(report.Installed) != 1 || report.Installed[0].Status != doctorStatusOutdated {
+		t.Fatalf("Doctor() installed = %#v, want status %s", report.Installed, doctorStatusOutdated)
+	}
+}
+
+func TestDoctorFlagsLocallyModifiedOrMissingFiles(t *testing.T) {
+	t.Parallel()
+
+	skill := testSkill("raven-example", 1, "# Original\n")
+	root := t.TempDir()
+	installTestSkill(t, skill, root)
+	if err := os.WriteFile(filepath.Join(root, skill.Spec.ID, "SKILL.md"), []byte("locally edited"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	report := Doctor(map[string]*Skill{skill.Spec.ID: skill}, ScopeProject, root)
+	if !doctorIssueContains(report.Issues, "local modifications or missing files") {
+		t.Fatalf("Doctor() issues = %v, want modified-files issue", report.Issues)
+	}
+	if !doctorIssueContains(report.Issues, "rvn skill install") {
+		t.Fatalf("Doctor() issues = %v, want rvn skill install hint", report.Issues)
+	}
+	if len(report.Installed) != 1 || report.Installed[0].Status != doctorStatusModified {
+		t.Fatalf("Doctor() installed = %#v, want status %s", report.Installed, doctorStatusModified)
+	}
+}
+
+func TestDoctorFlagsDeletedManagedFile(t *testing.T) {
+	t.Parallel()
+
+	skill := testSkill("raven-example", 1, "# Original\n")
+	root := t.TempDir()
+	installTestSkill(t, skill, root)
+	if err := os.Remove(filepath.Join(root, skill.Spec.ID, "SKILL.md")); err != nil {
+		t.Fatalf("Remove() error = %v", err)
+	}
+
+	report := Doctor(map[string]*Skill{skill.Spec.ID: skill}, ScopeProject, root)
+	if !doctorIssueContains(report.Issues, "local modifications or missing files") {
+		t.Fatalf("Doctor() issues = %v, want missing-files issue", report.Issues)
+	}
+	if len(report.Installed) != 1 || report.Installed[0].Status != doctorStatusModified {
+		t.Fatalf("Doctor() installed = %#v, want status %s", report.Installed, doctorStatusModified)
+	}
+}
+
+func TestDoctorFlagsUnshippedReceiptManagedSkill(t *testing.T) {
+	t.Parallel()
+
+	skill := testSkill("raven-retired", 1, "# Retired\n")
+	root := t.TempDir()
+	installTestSkill(t, skill, root)
+
+	report := Doctor(map[string]*Skill{}, ScopeProject, root)
+	if !doctorIssueContains(report.Issues, "no longer in the shipped catalog") {
+		t.Fatalf("Doctor() issues = %v, want unshipped catalog issue", report.Issues)
+	}
+	if !doctorIssueContains(report.Issues, "rvn skill install --confirm") {
+		t.Fatalf("Doctor() issues = %v, want rvn skill install hint", report.Issues)
+	}
+}
+
+func TestDoctorFlagsUnmanagedSkillDirectory(t *testing.T) {
+	t.Parallel()
+
+	skill := testSkill("raven-example", 1, "# Original\n")
+	root := t.TempDir()
+	skillPath := filepath.Join(root, skill.Spec.ID)
+	if err := os.MkdirAll(skillPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillPath, "SKILL.md"), []byte("handcrafted"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	report := Doctor(map[string]*Skill{skill.Spec.ID: skill}, ScopeProject, root)
+	if !doctorIssueContains(report.Issues, "without Raven receipt") {
+		t.Fatalf("Doctor() issues = %v, want unmanaged receipt issue", report.Issues)
+	}
+	if len(report.Installed) != 1 || report.Installed[0].Status != doctorStatusUnmanaged {
+		t.Fatalf("Doctor() installed = %#v, want status %s", report.Installed, doctorStatusUnmanaged)
+	}
+}
+
+func testSkill(id string, version int, body string) *Skill {
+	return &Skill{
+		Spec: Spec{
+			ID:      id,
+			Title:   "Test " + id,
+			Version: version,
+			Summary: "test skill",
+			Entry:   "body.md",
+		},
+		EntryMarkdown: body,
+	}
+}
+
+func installTestSkill(t *testing.T, skill *Skill, root string) {
+	t.Helper()
+	plan, err := PlanInstall(skill, ScopeProject, root, false)
+	if err != nil {
+		t.Fatalf("PlanInstall() error = %v", err)
+	}
+	if _, _, err := ApplyInstall(plan); err != nil {
+		t.Fatalf("ApplyInstall() error = %v", err)
+	}
+}
+
+func doctorIssueContains(issues []string, substr string) bool {
+	for _, issue := range issues {
+		if strings.Contains(issue, substr) {
+			return true
+		}
+	}
+	return false
 }

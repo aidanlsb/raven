@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (numeric vs case-insensitive string), and places missing values last in both
   directions. `--limit`/`--offset` pages through the sort order.
 
+### Changed
+- Bumped shipped skill `version` values whose library content has drifted:
+  `raven-core` to 4, and `raven-maintenance`, `raven-onboarding`,
+  `raven-query`, `raven-schema`, `raven-templates`, and `raven-vault-admin` to 2.
+
+### Fixed
+- `rvn docs` now treats a cached `cli_version` that is missing, empty, `dev`,
+  `(devel)`, `unknown`, or a Go pseudo-version as stale when the running CLI is
+  a release tag, and refreshes from that tag. Non-release CLIs still skip the
+  fetch; if the cache was not recorded for the running version, docs reads
+  return `DOCS_CACHE_STALE` (with the cached `cli_version` and `fetched_at`
+  when present) and keep serving the cache until `rvn docs fetch`.
+- `rvn skill doctor` compares receipt-managed installs with the shipped catalog
+  and reports outdated, locally modified or missing files, unmanaged
+  directories, and skills that are no longer shipped.
+
 ## [v0.0.41] - 2026-10-26
 
 ### Changed

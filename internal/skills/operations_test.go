@@ -416,4 +416,80 @@ func TestDoctorReturnsSingleResolvedRoot(t *testing.T) {
 	if result.Reports[0].Scope != "project" {
 		t.Fatalf("Doctor() scope = %q, want project", result.Reports[0].Scope)
 	}
+	if len(result.Reports[0].Issues) != 0 {
+		t.Fatalf("Doctor() issues = %v, want none for empty install root", result.Reports[0].Issues)
+	}
+}
+
+func TestDoctorDetectsShippedCatalogDriftAfterInstall(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if _, err := Install(InstallRequest{
+		Names:   []string{"raven-core"},
+		Scope:   "project",
+		Dest:    root,
+		Confirm: true,
+	}); err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+
+	fresh, err := RunDoctor(DoctorRequest{Scope: "project", Dest: root})
+	if err != nil {
+		t.Fatalf("Doctor() error = %v", err)
+	}
+	if len(fresh.Reports) != 1 || len(fresh.Reports[0].Issues) != 0 {
+		t.Fatalf("Doctor() issues after install = %v, want none", fresh.Reports[0].Issues)
+	}
+	if status := doctorInstalledStatus(fresh.Reports[0], "raven-core"); status != doctorStatusUpToDate {
+		t.Fatalf("Doctor() raven-core status = %q, want %s", status, doctorStatusUpToDate)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "raven-core", "SKILL.md"), []byte("locally edited"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	modified, err := RunDoctor(DoctorRequest{Scope: "project", Dest: root})
+	if err != nil {
+		t.Fatalf("Doctor() after edit error = %v", err)
+	}
+	if !doctorIssueContains(modified.Reports[0].Issues, "local modifications or missing files") {
+		t.Fatalf("Doctor() issues = %v, want modified-files issue", modified.Reports[0].Issues)
+	}
+	if !doctorIssueContains(modified.Reports[0].Issues, "rvn skill install") {
+		t.Fatalf("Doctor() issues = %v, want rvn skill install hint", modified.Reports[0].Issues)
+	}
+
+	retiredPath := filepath.Join(root, "raven-retired")
+	if err := os.MkdirAll(retiredPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll() retired error = %v", err)
+	}
+	if err := writeReceipt(filepath.Join(retiredPath, receiptFileName), &Receipt{
+		Skill:    "raven-retired",
+		Version:  1,
+		Scope:    "project",
+		Checksum: "abc",
+		Files:    []string{"SKILL.md"},
+	}); err != nil {
+		t.Fatalf("writeReceipt() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(retiredPath, "SKILL.md"), []byte("retired"), 0o644); err != nil {
+		t.Fatalf("WriteFile() retired error = %v", err)
+	}
+
+	retired, err := RunDoctor(DoctorRequest{Scope: "project", Dest: root})
+	if err != nil {
+		t.Fatalf("Doctor() after retired skill error = %v", err)
+	}
+	if !doctorIssueContains(retired.Reports[0].Issues, "raven-retired: installed skill is no longer in the shipped catalog") {
+		t.Fatalf("Doctor() issues = %v, want unshipped raven-retired issue", retired.Reports[0].Issues)
+	}
+}
+
+func doctorInstalledStatus(report DoctorReport, name string) string {
+	for _, item := range report.Installed {
+		if item.Name == name {
+			return item.Status
+		}
+	}
+	return ""
 }

@@ -1,6 +1,6 @@
 id: raven-schema
 title: Raven Schema
-version: 1
+version: 2
 summary: Schema design and migration workflows for types, fields, and traits.
 entry: body.md
 references:
