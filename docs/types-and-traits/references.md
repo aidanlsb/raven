@@ -155,10 +155,10 @@ rvn backlinks person/freya
 ```
 
 ```text
-meeting/kickoff.md
+type/meeting/kickoff.md
   [[person/freya]] wants the initial scope confirmed
 
-project/website.md
+type/project/website.md
   Project lead: [[person/freya]]
 ```
 

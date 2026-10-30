@@ -170,14 +170,14 @@ Examples:
 
 ```text
 # Applies immediately (single-object):
-raven_invoke(command="edit", args={"reference":"project/website.md", "old_str":"A", "new_str":"B"})
+raven_invoke(command="edit", args={"reference":"project/website", "old_str":"A", "new_str":"B"})
 raven_invoke(command="delete", args={"reference":"project/old"})
 raven_invoke(command="section_create", args={"file":"project/website", "title":"Notes", "level":2})
 raven_invoke(command="section_move", args={"section_id":"project/website#notes", "after":"project/website#tasks"})
 raven_invoke(command="section_rename", args={"section_id":"project/website#tasks", "new_heading_text":"Completed Tasks"})
 
 # Preview a single-object write first (optional):
-raven_invoke(command="edit", args={"reference":"project/website.md", "old_str":"A", "new_str":"B", "dry-run":true})
+raven_invoke(command="edit", args={"reference":"project/website", "old_str":"A", "new_str":"B", "dry-run":true})
 
 # Preview-first; apply only after explicit approval with confirm=true:
 raven_invoke(command="section_delete", args={"reference":"project/website#old-plan"})

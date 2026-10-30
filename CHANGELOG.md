@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documentation map, file links, and RQL internals pages.
 
 ### Fixed
+- README, user docs, MCP agent guides, and the `raven-maintenance` skill now
+  match the `rvn init` vault layout (`type/<type>/`, `page/`, `daily/`,
+  `templates/`, `.gitignore`) instead of type folders at the vault root.
+  Following the old README path produced `non_canonical_path`. Bumped shipped
+  `raven-maintenance` skill version to 3.
 - `rvn docs` now treats a cached `cli_version` that is missing, empty, `dev`,
   `(devel)`, `unknown`, or a Go pseudo-version as stale when the running CLI is
   a release tag, and refreshes from that tag. Non-release CLIs still skip the

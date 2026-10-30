@@ -27,7 +27,7 @@ are intentionally absent from `rvn check`; they are not hidden check failures.
 
 ```bash
 # After editing a single file
-rvn check project/website.md --json
+rvn check type/project/website.md --json
 
 # After schema migration affecting a type
 rvn check --type project --json

@@ -17,7 +17,7 @@ Raven is plain markdown + schema + query:
 ## Core model
 
 - **Type**: category with structure (`project`, `person`, `meeting`)
-- **Object**: one file of a type (`project/website.md`)
+- **Object**: one file of a type (`type/project/website.md`, id `project/website`)
 - **Trait**: inline annotation in body content (`@todo`, `@due`)
 - **Reference**: wiki link to a Raven object or section (`[[person/freya]]`)
 - **Link edge**: outgoing Markdown file or URL link

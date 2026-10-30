@@ -198,7 +198,7 @@ Command arguments must be nested under `args`.
 {
   "command": "read",
   "args": {
-    "reference": "project/website.md",
+    "reference": "project/website",
     "raw": true
   }
 }
@@ -436,7 +436,7 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 {
   "command": "read",
   "args": {
-    "reference": "project/website.md",
+    "reference": "project/website",
     "raw": true,
     "start-line": 10,
     "end-line": 40
@@ -529,7 +529,7 @@ first invocation:
 {
   "command": "edit",
   "args": {
-    "reference": "project/website.md",
+    "reference": "project/website",
     "old_str": "Status: draft",
     "new_str": "Status: published"
   }
@@ -542,7 +542,7 @@ Pass `dry-run` to preview a single-object write without applying it:
 {
   "command": "edit",
   "args": {
-    "reference": "project/website.md",
+    "reference": "project/website",
     "old_str": "Status: draft",
     "new_str": "Status: published",
     "dry-run": true
