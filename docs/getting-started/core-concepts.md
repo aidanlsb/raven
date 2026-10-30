@@ -35,7 +35,7 @@ This defines a `project` type with a name, status (both required), and an option
 rvn new project "Midgard Security Review"
 ```
 
-This creates a file in `project/` with frontmatter populated from the schema:
+This creates a file in `type/project/` (the `rvn init` default: `directories.type` plus the type's `default_path`) with frontmatter populated from the schema:
 
 ```markdown
 ---

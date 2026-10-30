@@ -113,10 +113,19 @@ Raven creates:
 
 ```text
 notes/
+├── .gitignore    # ignores .raven/ and .trash/
 ├── .raven/       # derived cache and local metadata (rebuildable with `rvn reindex`)
-├── raven.yaml    # vault configuration
+├── daily/        # date notes (`YYYY-MM-DD.md`)
+├── page/         # untyped pages
+├── templates/    # type templates
+├── type/         # typed notes (`type/<type>/...`)
+├── raven.yaml    # vault configuration (including `directories`)
 └── schema.yaml   # types, fields, and traits
 ```
+
+Those content folders match the `directories` block in `raven.yaml`: typed notes
+live under `type/<type>/` (for example `type/project/...`), pages under `page/`,
+and daily notes under `daily/`.
 
 On a fresh machine, this first `rvn init` registers `~/notes` in global config and sets it as your default and active vault, so the CLI can find it right away. When another vault already exists, `rvn init` registers and activates the new vault immediately while leaving `default_vault` unchanged. JSON `post_init` reports `switch_back` (the exact `rvn vault use ...` command) to return to the previous vault; use `rvn vault pin` to change the default. See [Vault Creation & Management](docs/getting-started/first-vault.md).
 
@@ -142,6 +151,9 @@ types:
         target: project
 ```
 
+`default_path` is relative to `directories.type` (`type/` after `rvn init`), so
+new meetings go in `type/meeting/`.
+
 You can make the same changes from the CLI or ask your agent:
 
 ```bash
@@ -151,7 +163,8 @@ rvn schema add field meeting project --type ref --target project
 
 ### 2. Create some notes
 
-Create objects with the CLI. Each becomes a Markdown file under the directory for its type (`project/`, `person/`, and so on):
+Create objects with the CLI. Each typed note is a Markdown file under
+`type/<type>/` (`type/project/`, `type/person/`, and so on):
 
 ```bash
 rvn new project "Midgard Security Review"
@@ -159,7 +172,10 @@ rvn new person "Freya"
 rvn daily 2026-07-20
 ```
 
-The `daily` command creates a built-in date note, giving the `[[2026-07-20]]` reference in our meeting a target. Create `meeting/security-review-kickoff.md` as a Markdown file:
+That writes `type/project/midgard-security-review.md` and
+`type/person/freya.md`. The `daily` command creates a built-in date note at
+`daily/2026-07-20.md`, giving the `[[2026-07-20]]` reference in our meeting a
+target. Create `type/meeting/security-review-kickoff.md` as a Markdown file:
 
 ```markdown
 ---
@@ -173,7 +189,12 @@ Met with [[person/freya]] on [[2026-07-20]] to plan the security review. We agre
 @todo @due(2026-07-22) Send the draft scope for review
 ```
 
-> **A note on identifiers.** A note's canonical ID is usually `type/slug`, e.g. `project/midgard-security-review`; built-in date notes use the bare ISO date. Frontmatter references use canonical IDs. Inside `[[links]]`, you can also use a shorter form like `[[freya]]` when it's unambiguous.
+> **A note on identifiers.** Typed notes live under `type/<type>/`. The file
+> `type/project/midgard-security-review.md` has canonical ID
+> `project/midgard-security-review`. Built-in date notes live under `daily/` and
+> use the bare ISO date as their ID. Frontmatter references and most command
+> arguments use canonical IDs, not file paths. Inside `[[links]]`, you can also
+> use a shorter form like `[[freya]]` when it's unambiguous.
 
 ### 3. Query your vault
 
@@ -190,7 +211,7 @@ rvn query 'trait:due .value<=2026-07-22 within(type:meeting refs([[project/midga
 Read the first query as: *find `todo` traits that live within a `meeting` that references `project/midgard-security-review`.* Both queries return the task from our note:
 
 ```text
-meeting/security-review-kickoff.md
+type/meeting/security-review-kickoff.md
   @todo @due(2026-07-22) Send the draft scope for review
 ```
 
@@ -202,7 +223,7 @@ rvn backlinks 2026-07-20
 ```
 
 ```text
-meeting/security-review-kickoff.md
+type/meeting/security-review-kickoff.md
   Met with [[person/freya]] on [[2026-07-20]] to plan the security review.
 ```
 

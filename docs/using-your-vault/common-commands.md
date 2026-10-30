@@ -190,13 +190,13 @@ Use `rvn edit` for markdown content such as objects, pages, and daily notes. Do 
 
 ```bash
 # Apply a replacement
-rvn edit project/website.md "Status: draft" "Status: published"
+rvn edit project/website "Status: draft" "Status: published"
 
 # Preview without writing
-rvn edit project/website.md "Status: draft" "Status: published" --dry-run
+rvn edit project/website "Status: draft" "Status: published" --dry-run
 
 # Batch edits via JSON
-rvn edit project/website.md --edits-json '{"edits":[{"old_str":"draft","new_str":"published"}]}'
+rvn edit project/website --edits-json '{"edits":[{"old_str":"draft","new_str":"published"}]}'
 ```
 
 Key flags:

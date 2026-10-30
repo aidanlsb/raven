@@ -24,7 +24,7 @@ return `VAULT_AMBIGUOUS` again.
 
 ```text
 raven_invoke(command="check", args={"errors-only":true})
-raven_invoke(command="check", args={"reference":"project/"})
+raven_invoke(command="check", args={"reference":"type/project/"})
 raven_invoke(command="check", args={"issues":"missing_reference,broken_file_link,unknown_type"})
 ```
 
@@ -47,18 +47,18 @@ raven_invoke(command="set", args={"reference":"project/website-redesign", "field
 ## 3. Edit safely
 
 ```text
-raven_invoke(command="read", args={"reference":"project/website-redesign.md", "raw":true})
+raven_invoke(command="read", args={"reference":"project/website-redesign", "raw":true})
 
 # Applies immediately
 raven_invoke(command="edit", args={
-  "reference":"project/website-redesign.md",
+  "reference":"project/website-redesign",
   "old_str":"Status: draft",
   "new_str":"Status: active"
 })
 
 # Optional dry run to inspect the diff first
 raven_invoke(command="edit", args={
-  "reference":"project/website-redesign.md",
+  "reference":"project/website-redesign",
   "old_str":"Status: draft",
   "new_str":"Status: active",
   "dry-run":true

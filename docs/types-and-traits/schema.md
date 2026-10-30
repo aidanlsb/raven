@@ -188,7 +188,7 @@ types:
 
 2. **Reference resolution:** `[[Display Name]]` can resolve to objects by their name_field value
    ```markdown
-   [[The Prose Edda]]  # Can resolve to book/the-prose-edda.md if it has title: The Prose Edda
+   [[The Prose Edda]]  # Can resolve to book/the-prose-edda if it has title: The Prose Edda
    ```
 
 **Setting via CLI:**
@@ -209,7 +209,7 @@ types:
     default_path: person/
 ```
 
-With `directories` configured in `raven.yaml`, `default_path` is resolved relative to `directories.type` for typed objects (or `directories.page` for the built-in `page` type).
+With `directories` configured in `raven.yaml` (the `rvn init` default is `directories.type: type/`), `default_path` is resolved relative to `directories.type` for typed objects (or `directories.page` for the built-in `page` type). `default_path: person/` therefore creates files in `type/person/`.
 
 ### `templates` and `default_template`
 
@@ -823,7 +823,7 @@ These frontmatter keys are always allowed regardless of type:
 The `alias` field enables alternative reference resolution. Any object can have an alias without needing to declare it in the schema:
 
 ```yaml
-# person/freya.md
+# type/person/freya.md
 ---
 type: person
 name: Freya

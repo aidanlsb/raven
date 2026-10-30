@@ -84,14 +84,14 @@ Edit applies immediately; preview only when you need to verify the diff first:
 ```text
 # Applies on the first call:
 raven_invoke(command="edit", args={
-  "reference":"project/website-redesign.md",
+  "reference":"project/website-redesign",
   "old_str":"Status: draft",
   "new_str":"Status: active"
 })
 
 # Optional dry run to inspect the before/after without writing:
 raven_invoke(command="edit", args={
-  "reference":"project/website-redesign.md",
+  "reference":"project/website-redesign",
   "old_str":"Status: draft",
   "new_str":"Status: active",
   "dry-run":true

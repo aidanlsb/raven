@@ -380,7 +380,7 @@ git status
 git diff
 
 # Restore specific files
-git restore person/freya.md project/website.md
+git restore type/person/freya.md type/project/website.md
 
 # Restore all tracked files in the working tree (use with care)
 git restore .

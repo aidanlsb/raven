@@ -32,24 +32,24 @@ Every object in Raven has a unique ID derived from its location.
 
 ### File-level objects
 
-For file-level objects, the ID is derived from the file path (relative to vault root) without the `.md` extension:
-
-| File Path | Object ID |
-|-----------|-----------|
-| `person/freya.md` | `person/freya` |
-| `project/website.md` | `project/website` |
-| `random-note.md` | `random-note` |
-| `daily/2026-01-10.md` | `2026-01-10` |
-
-**With directory organization** (configured in `raven.yaml` via `directories.type` and `directories.page`):
+For file-level objects, the ID is derived from the file path (relative to vault root) without the `.md` extension. `rvn init` writes a `directories` block, so typed notes live under `type/` and untyped pages under `page/`. Those roots are stripped from IDs:
 
 | File Path | Object ID |
 |-----------|-----------|
 | `type/person/freya.md` | `person/freya` |
 | `type/project/website.md` | `project/website` |
 | `page/random-note.md` | `random-note` |
+| `daily/2026-01-10.md` | `2026-01-10` |
 
-The directory prefix (`type/`, `page/`) is stripped from IDs.
+**Without directory organization** (no `directories` block in `raven.yaml`):
+
+| File Path | Object ID |
+|-----------|-----------|
+| `person/freya.md` | `person/freya` |
+| `project/website.md` | `project/website` |
+| `random-note.md` | `random-note` |
+
+When `directories.type` / `directories.page` are set, those prefixes are stripped from IDs.
 
 **Daily notes** are a special case: the `directories.daily` prefix is always
 stripped so the object ID is the bare ISO date, regardless of the configured
@@ -76,7 +76,7 @@ object ID with a heading-derived fragment:
 
 | Section | ID |
 |---------|-----|
-| `## Tasks` in `project/website.md` | `project/website#tasks` |
+| `## Tasks` in `type/project/website.md` | `project/website#tasks` |
 
 ---
 
