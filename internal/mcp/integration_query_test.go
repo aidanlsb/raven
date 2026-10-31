@@ -283,10 +283,9 @@ name: Alice
 
 	result := server.callTool("query", map[string]interface{}{
 		"query_string": "type:person",
-		"refresh":      true,
 	})
 	if result.IsError {
-		t.Fatalf("expected query refresh to succeed, got error: %s", result.Text)
+		t.Fatalf("expected query auto-refresh to succeed, got error: %s", result.Text)
 	}
 
 	var resp struct {
@@ -300,7 +299,47 @@ name: Alice
 		t.Fatalf("failed to parse query refresh response: %v", err)
 	}
 	if resp.Data.Total != 0 || len(resp.Data.Items) != 0 {
-		t.Fatalf("expected deleted file to be removed from refreshed query, got total=%d items=%d", resp.Data.Total, len(resp.Data.Items))
+		t.Fatalf("expected deleted file to be removed from auto-refreshed query, got total=%d items=%d", resp.Data.Total, len(resp.Data.Items))
+	}
+}
+
+func TestMCPIntegration_QueryAutoRefreshPicksUpHandWrittenFile(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+	server.callTool("reindex", nil)
+
+	freyaPath := filepath.Join(v.Path, "people", "freya.md")
+	if err := os.MkdirAll(filepath.Dir(freyaPath), 0o755); err != nil {
+		t.Fatalf("mkdir people: %v", err)
+	}
+	if err := os.WriteFile(freyaPath, []byte("---\ntype: person\nname: Freya\n---\n"), 0o644); err != nil {
+		t.Fatalf("write freya: %v", err)
+	}
+
+	result := server.callTool("query", map[string]interface{}{
+		"query_string": "type:person",
+	})
+	if result.IsError {
+		t.Fatalf("expected query to index the hand-written file, got error: %s", result.Text)
+	}
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Items []interface{} `json:"items"`
+			Total int           `json:"total"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
+		t.Fatalf("failed to parse query response: %v", err)
+	}
+	if resp.Data.Total != 1 || len(resp.Data.Items) != 1 {
+		t.Fatalf("expected hand-written file in query results, got total=%d items=%d", resp.Data.Total, len(resp.Data.Items))
 	}
 }
 

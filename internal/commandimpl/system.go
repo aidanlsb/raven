@@ -86,7 +86,7 @@ func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result 
 
 // HandleDate executes the canonical `date` command.
 func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newConfigOnlyCommandVaultRuntime(strings.TrimSpace(req.VaultPath))
+	rt, refreshWarnings, failure := newIndexReadRuntime(strings.TrimSpace(req.VaultPath), req.Args)
 	if failure.Error != nil {
 		return failure
 	}
@@ -103,7 +103,7 @@ func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
 	if result.DailyNote != nil {
 		data["daily_note"] = result.DailyNote
 	}
-	return commandexec.Success(data, &commandexec.Meta{Count: len(result.Items)})
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(data, &commandexec.Meta{Count: len(result.Items)}))
 }
 
 // HandleVersion executes the canonical `version` command.

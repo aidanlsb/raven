@@ -33,6 +33,10 @@ func (l RetrievalLinks) vaultFile(label, key string, line int) string {
 	return label
 }
 
+func printNoResults() {
+	fmt.Println("No results")
+}
+
 func TraitTableHeaders() []string {
 	return []string{"#", "content", "trait", "location"}
 }
@@ -47,7 +51,7 @@ func LinkTableHeaders() []string {
 
 func PrintQueryObjectResults(queryStr, typeName string, results []model.Object, sch *schema.Schema, links RetrievalLinks) {
 	if len(results) == 0 {
-		fmt.Println(Starf("No objects found for: %s", queryStr))
+		printNoResults()
 		return
 	}
 
@@ -57,7 +61,7 @@ func PrintQueryObjectResults(queryStr, typeName string, results []model.Object, 
 
 func PrintQueryTraitResults(queryStr, traitName string, results []model.Trait, links RetrievalLinks) {
 	if len(results) == 0 {
-		fmt.Println(Starf("No traits found for: %s", queryStr))
+		printNoResults()
 		return
 	}
 
@@ -112,7 +116,7 @@ func PrintQueryTraitResults(queryStr, traitName string, results []model.Trait, l
 
 func PrintQuerySectionResults(queryStr string, results []model.Section, links RetrievalLinks) {
 	if len(results) == 0 {
-		fmt.Println(Starf("No sections found for: %s", queryStr))
+		printNoResults()
 		return
 	}
 
@@ -137,7 +141,7 @@ func PrintQuerySectionResults(queryStr string, results []model.Section, links Re
 
 func PrintQueryLinkResults(queryStr string, results []model.Link, links RetrievalLinks) {
 	if len(results) == 0 {
-		fmt.Println(Starf("No links found for: %s", queryStr))
+		printNoResults()
 		return
 	}
 
@@ -176,7 +180,7 @@ func PrintQueryLinkResults(queryStr string, results []model.Link, links Retrieva
 
 func PrintSearchResults(queryStr string, results []model.SearchMatch, links RetrievalLinks) {
 	if len(results) == 0 {
-		fmt.Println(Starf("No results found for: %s", queryStr))
+		printNoResults()
 		return
 	}
 

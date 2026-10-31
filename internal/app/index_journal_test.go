@@ -38,7 +38,27 @@ func TestBeginIndexJournalOperationWritesAheadOfDispatch(t *testing.T) {
 	}
 }
 
-func TestReadCommandWarnsWhenIndexJournalIsDirty(t *testing.T) {
+func TestReadCommandWarnsWhenIndexJournalIsDirtyWithoutRefresh(t *testing.T) {
+	t.Parallel()
+
+	vault := buildPhaseVault(t)
+	if _, err := indexjournal.SetPaths(vault.Path, "", []string{"projects/roadmap.md"}); err != nil {
+		t.Fatalf("record pending index path: %v", err)
+	}
+
+	result := runInvoked(t, vault.Path, "query", map[string]any{
+		"query_string": "type:project",
+		"no-refresh":   true,
+	}, nil)
+	if !result.OK {
+		t.Fatalf("query failed: %#v", result.Error)
+	}
+	if !hasWarning(result, codes.WarnDatabaseOutdated) {
+		t.Fatalf("warnings = %#v, want %q", result.Warnings, codes.WarnDatabaseOutdated)
+	}
+}
+
+func TestReadCommandRefreshClearsIndexJournal(t *testing.T) {
 	t.Parallel()
 
 	vault := buildPhaseVault(t)
@@ -50,12 +70,16 @@ func TestReadCommandWarnsWhenIndexJournalIsDirty(t *testing.T) {
 	if !result.OK {
 		t.Fatalf("query failed: %#v", result.Error)
 	}
-	for _, warning := range result.Warnings {
-		if warning.Code == codes.WarnDatabaseOutdated {
-			return
-		}
+	if hasWarning(result, codes.WarnDatabaseOutdated) {
+		t.Fatalf("warnings = %#v, want journal consumed without %q", result.Warnings, codes.WarnDatabaseOutdated)
 	}
-	t.Fatalf("warnings = %#v, want %q", result.Warnings, codes.WarnDatabaseOutdated)
+	pending, err := indexjournal.Load(vault.Path)
+	if err != nil {
+		t.Fatalf("load index journal: %v", err)
+	}
+	if pending.Dirty() {
+		t.Fatalf("journal remains dirty after auto-refresh: %#v", pending)
+	}
 }
 
 func TestBeginIndexJournalOperationFailsClosed(t *testing.T) {

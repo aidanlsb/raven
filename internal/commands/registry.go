@@ -53,6 +53,13 @@ type FlagMeta struct {
 	PositionalKeyValue bool `json:"-"`
 }
 
+// noRefreshFlag opts an index-backed read out of the default pre-read refresh.
+var noRefreshFlag = FlagMeta{
+	Name:        "no-refresh",
+	Description: "Skip incrementally reindexing changed, new, and deleted files before this read",
+	Type:        FlagTypeBool,
+}
+
 // FlagType represents the type of a flag.
 type FlagType string
 

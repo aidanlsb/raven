@@ -5,7 +5,9 @@
 - Read files only after narrowing candidates.
 
 2. Treat vault files as source of truth.
-- Index is rebuildable; use `raven_invoke(command="reindex")` when state looks stale.
+- Index is rebuildable. Index-backed reads refresh stale Markdown automatically.
+  Use `raven_invoke(command="reindex")` when `auto_reindex` is false, a
+  `DATABASE_OUTDATED` warning remains, or `check` reports `stale_index`.
 
 3. Prefer explicit, schema-safe writes.
 - Use `raven_invoke` with commands like `new`, `write`, `set`, `edit`, `move`, `section_create`, `section_move`, `section_rename`, `section_delete`, and `delete`.

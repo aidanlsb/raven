@@ -157,6 +157,9 @@ normal CLI/MCP vault routing and fails when no vault can be resolved.`,
 	"vault_stats": {
 		Name:        "vault stats",
 		Description: "Show vault statistics",
+		Flags: []FlagMeta{
+			noRefreshFlag,
+		},
 		Examples: []string{
 			"rvn vault stats --json",
 		},

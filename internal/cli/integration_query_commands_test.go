@@ -5,6 +5,7 @@ package cli_test
 import (
 	"database/sql"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -390,6 +391,118 @@ name: Alice
 	invalid.MustFailWithMessage(t, "refs() predicate is not valid for link queries")
 }
 
+func TestIntegration_QueryAutoRefreshPicksUpHandWrittenEditsAndDeletes(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+	v.AssertQueryCount("type:person", 0)
+
+	freyaPath := filepath.Join(v.Path, "people", "freya.md")
+	if err := os.MkdirAll(filepath.Dir(freyaPath), 0o755); err != nil {
+		t.Fatalf("mkdir people: %v", err)
+	}
+	if err := os.WriteFile(freyaPath, []byte("---\ntype: person\nname: Freya\n---\n"), 0o644); err != nil {
+		t.Fatalf("write freya: %v", err)
+	}
+
+	created := v.RunCLI("query", "type:person")
+	created.MustSucceed(t)
+	created.AssertResultCount(t, "items", 1)
+
+	if err := os.WriteFile(freyaPath, []byte("---\ntype: person\nname: Frigg\n---\n"), 0o644); err != nil {
+		t.Fatalf("edit freya: %v", err)
+	}
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(freyaPath, future, future); err != nil {
+		t.Fatalf("bump freya mtime: %v", err)
+	}
+
+	edited := v.RunCLI("query", "type:person")
+	edited.MustSucceed(t)
+	edited.AssertResultCount(t, "items", 1)
+	item, ok := edited.DataList("items")[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected query item map, got %#v", edited.DataList("items")[0])
+	}
+	fields, ok := item["fields"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected fields map, got %#v", item["fields"])
+	}
+	if got := fields["name"]; got != "Frigg" {
+		t.Fatalf("expected refreshed name Frigg, got %#v", got)
+	}
+
+	skipped := v.RunCLI("query", "type:person", "--no-refresh")
+	skipped.MustSucceed(t)
+	skipped.AssertResultCount(t, "items", 1)
+
+	if err := os.Remove(freyaPath); err != nil {
+		t.Fatalf("remove freya: %v", err)
+	}
+	stale := v.RunCLI("query", "type:person", "--no-refresh")
+	stale.MustSucceed(t)
+	stale.AssertResultCount(t, "items", 1)
+
+	deleted := v.RunCLI("query", "type:person")
+	deleted.MustSucceed(t)
+	deleted.AssertResultCount(t, "items", 0)
+}
+
+func TestIntegration_QueryEmptyResultsHumanJSONPipeAndIDs(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	jsonResult := v.RunCLI("query", "type:person")
+	jsonResult.MustSucceed(t)
+	jsonResult.AssertResultCount(t, "items", 0)
+	if !strings.Contains(jsonResult.RawJSON, `"items"`) {
+		t.Fatalf("JSON empty query should keep an items list, got %s", jsonResult.RawJSON)
+	}
+
+	binary := testutil.BuildCLI(t)
+	human := exec.Command(binary, "--vault-path", v.Path, "query", "type:person", "--no-pipe")
+	humanOut, err := human.CombinedOutput()
+	if err != nil {
+		t.Fatalf("human query failed: %v\noutput=%s", err, humanOut)
+	}
+	if got := strings.TrimSpace(string(humanOut)); got != "No results" {
+		t.Fatalf("human empty query = %q, want %q", got, "No results")
+	}
+
+	pipe := exec.Command(binary, "--vault-path", v.Path, "query", "type:person", "--pipe")
+	pipeOut, err := pipe.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pipe query failed: %v\noutput=%s", err, pipeOut)
+	}
+	if got := strings.TrimSpace(string(pipeOut)); got != "" {
+		t.Fatalf("pipe empty query = %q, want empty", got)
+	}
+
+	ids := exec.Command(binary, "--vault-path", v.Path, "query", "type:person", "--ids")
+	idsOut, err := ids.CombinedOutput()
+	if err != nil {
+		t.Fatalf("ids query failed: %v\noutput=%s", err, idsOut)
+	}
+	if got := strings.TrimSpace(string(idsOut)); got != "" {
+		t.Fatalf("ids empty query = %q, want empty", got)
+	}
+
+	search := exec.Command(binary, "--vault-path", v.Path, "search", "zzzz-no-such-term")
+	searchOut, err := search.CombinedOutput()
+	if err != nil {
+		t.Fatalf("human search failed: %v\noutput=%s", err, searchOut)
+	}
+	if got := strings.TrimSpace(string(searchOut)); got != "No results" {
+		t.Fatalf("human empty search = %q, want %q", got, "No results")
+	}
+}
+
 func TestIntegration_QueryRefreshRespectsDirectoryRoots(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
@@ -516,13 +629,20 @@ func TestIntegration_IndexReadsFailOnStaleIndexSchema(t *testing.T) {
 		t.Fatalf("close index: %v", err)
 	}
 
+	skipped := v.RunCLI("query", "type:project", "--no-refresh")
+	skipped.MustFail(t, "DATABASE_VERSION_MISMATCH")
+	skipped.MustFailWithMessage(t, "rvn reindex --full")
+
+	searchSkipped := v.RunCLI("search", "Stale Index", "--no-refresh")
+	searchSkipped.MustFail(t, "DATABASE_VERSION_MISMATCH")
+	searchSkipped.MustFailWithMessage(t, "rvn reindex --full")
+
 	result := v.RunCLI("query", "type:project")
-	result.MustFail(t, "DATABASE_VERSION_MISMATCH")
-	result.MustFailWithMessage(t, "rvn reindex --full")
+	result.MustSucceed(t)
+	result.AssertResultCount(t, "items", 1)
 
 	searchResult := v.RunCLI("search", "Stale Index")
-	searchResult.MustFail(t, "DATABASE_VERSION_MISMATCH")
-	searchResult.MustFailWithMessage(t, "rvn reindex --full")
+	searchResult.MustSucceed(t)
 }
 
 func TestIntegration_QueryAmbiguousReferenceReturnsQueryInvalid(t *testing.T) {

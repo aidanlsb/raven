@@ -23,7 +23,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 	result, err := querysvc.Run(rt, querysvc.ExecuteRequest{
 		QueryString: stringArg(req.Args, "query_string"),
 		Inputs:      keyValuePairs(req.Args["inputs"]),
-		Refresh:     boolArg(req.Args, "refresh"),
+		Refresh:     shouldRefreshIndex(rt, req.Args),
 		IDsOnly:     boolArg(req.Args, "ids"),
 		Limit:       limit,
 		Offset:      offset,

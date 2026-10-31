@@ -7,6 +7,9 @@ var navigationRegistry = map[string]Meta{
 		Args: []ArgMeta{
 			{Name: "date", Description: "Date (today, yesterday, YYYY-MM-DD)", Required: false},
 		},
+		Flags: []FlagMeta{
+			noRefreshFlag,
+		},
 		Examples: []string{
 			"rvn date today --json",
 			"rvn date 2025-02-01 --json",
@@ -49,6 +52,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.` + bare
 			{Name: "reference", Description: "Canonical object ID or other accepted reference input", Required: true, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
+			noRefreshFlag,
 			{Name: "raw", Description: "Output only raw file content (no backlinks, no rendered links)", Type: FlagTypeBool},
 			{Name: "no-links", Description: "Disable clickable hyperlinks in terminal output", Type: FlagTypeBool},
 			{Name: "lines", Description: "Include structured lines with line numbers (recommended for agents)", Type: FlagTypeBool},
@@ -127,6 +131,7 @@ This is useful for piping query results to open multiple files at once.` + bareP
 			{Name: "reference", Description: "Canonical object ID or other accepted reference input", Required: false},
 		},
 		Flags: []FlagMeta{
+			noRefreshFlag,
 			{Name: "stdin", Description: "Read references from stdin for bulk open", Type: FlagTypeBool},
 		},
 		BulkStdinArgName: "references",

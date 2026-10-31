@@ -72,8 +72,12 @@ rvn check --errors-only --json
 
 ## When to reindex
 
+Index-backed reads refresh hand-edited Markdown automatically. Run an
+explicit reindex when `auto_reindex` is false, after non-Markdown copies,
+or when `check` reports `stale_index`:
+
 ```bash
-# After external file changes (git pull, manual edits)
+# After unmanaged file changes (git pull of non-Markdown, auto_reindex off)
 rvn reindex --dry-run --json
 rvn reindex --json
 

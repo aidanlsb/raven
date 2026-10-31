@@ -170,6 +170,18 @@ func TestSavedQueryOptionsFromFlags(t *testing.T) {
 	}
 }
 
+func TestSavedQueryOptionsFromFlagsNoRefresh(t *testing.T) {
+	cmd := newQueryOptionsTestCommand()
+	if err := cmd.Flags().Set("no-refresh", "true"); err != nil {
+		t.Fatal(err)
+	}
+
+	options := savedQueryOptionsFromFlags(cmd)
+	if options == nil || options.NoRefresh == nil || !*options.NoRefresh {
+		t.Fatalf("NoRefresh = %#v, want true", options)
+	}
+}
+
 func TestSavedQueryOptionsFromFlagsNoPipe(t *testing.T) {
 	cmd := newQueryOptionsTestCommand()
 	if err := cmd.Flags().Set("no-pipe", "true"); err != nil {
@@ -188,6 +200,7 @@ func TestSavedQueryOptionsFromFlagsNoPipe(t *testing.T) {
 func newQueryOptionsTestCommand() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("refresh", false, "")
+	cmd.Flags().Bool("no-refresh", false, "")
 	cmd.Flags().Bool("ids", false, "")
 	cmd.Flags().Int("limit", 0, "")
 	cmd.Flags().Int("offset", 0, "")

@@ -77,8 +77,9 @@ metadata; do not treat it as vault knowledge or edit it as a recovery method.
 ## 8. Index rebuild failures
 
 `DATABASE_VERSION_MISMATCH` means the derived SQLite index has an incompatible
-schema or a required full rebuild was interrupted. Raven blocks index-backed
-reads instead of serving partial or empty results. Run:
+schema or a required full rebuild was interrupted. Index-backed reads rebuild
+automatically unless `no-refresh` is set or `auto_reindex` is false. If a read
+still returns this error, run:
 
 ```text
 raven_invoke(command="reindex", args={"full":true})

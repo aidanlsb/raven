@@ -266,9 +266,11 @@ MCP resolution rules above.
 
 - Warnings are action items, not noise.
 - Surface warnings that affect correctness or safety.
-- If warnings indicate stale state, run corrective steps such as `reindex` before continuing.
+- If warnings indicate stale state after a skipped refresh (`no-refresh` or
+  `auto_reindex: false`), run `reindex` before continuing.
 - `DATABASE_OUTDATED` means `.raven/index-dirty.json` contains pending
-  post-mutation projection work. Run `reindex`, then retry the read.
+  post-mutation projection work. Index-backed reads refresh that work unless
+  `auto_reindex` is false. Otherwise run `reindex`, then retry the read.
 - `REFERENCE_RESOLUTION_INCOMPLETE` means the changed file was indexed
   successfully, but the follow-up reference pass failed and backlinks may be
   stale. Do not retry the mutation; run `reindex` to complete resolution.

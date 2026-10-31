@@ -663,7 +663,7 @@ write it delegates to.
 4. Use `edit` only for content markdown files; use dedicated commands for `raven.yaml`, `schema.yaml`, and templates.
 5. Single-object writes apply immediately (`dry-run` to preview); bulk and query-driven mutations stay preview-first and need `confirm`. Read `meta.mutation.phase` (`applied`/`preview`) to confirm whether a write happened.
 6. Copy external non-Markdown files into the vault directly; use `move` for in-vault relocation so file links are rewritten.
-7. Reindex after schema-level structural changes or out-of-band file changes when required.
+7. Index-backed reads refresh out-of-band Markdown edits automatically. Reindex after schema-level structural changes, non-Markdown copies, or when `auto_reindex` is false.
 8. Treat `raven_describe` as the authority for argument shape.
 
 ## Related resources

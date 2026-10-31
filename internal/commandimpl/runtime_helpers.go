@@ -66,14 +66,6 @@ func newLazyConfigCommandRuntime(vaultPath string) (*vaultruntime.Runtime, comma
 	})
 }
 
-func newDatabaseCommandVaultRuntime(vaultPath string) (*vaultruntime.Runtime, commandexec.Result) {
-	return newCommandVaultRuntime(vaultPath, vaultruntime.Options{
-		OpenDB:     true,
-		SkipConfig: true,
-		SkipSchema: true,
-	})
-}
-
 func newCommandVaultRuntime(vaultPath string, opts vaultruntime.Options) (*vaultruntime.Runtime, commandexec.Result) {
 	rt, err := vaultruntime.New(strings.TrimSpace(vaultPath), opts)
 	if err == nil {

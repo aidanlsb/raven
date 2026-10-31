@@ -45,8 +45,11 @@ with `confirm=true`; pass `older-than` (for example `30d`) to limit the wipe.
 
 Copying a new non-Markdown file into the vault is intentionally a normal
 filesystem operation; run `reindex` afterward. Use `move` for files already in
-the vault so inbound file links are rewritten. For other out-of-band Markdown
-mutations, reindex and repair before continuing.
+the vault so inbound file links are rewritten. Out-of-band Markdown edits are
+picked up automatically by index-backed reads (`query`, `search`, `backlinks`,
+`objects`, and related commands). Pass `no-refresh=true` to skip that refresh,
+or run `reindex` when `auto_reindex` is false or a `DATABASE_OUTDATED` warning
+remains.
 
 ## Confirm the target vault before writing
 

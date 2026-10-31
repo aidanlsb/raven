@@ -60,8 +60,10 @@ Section queries reject `--apply`. Use `rvn section move <file#slug>` for each se
 - Remove: `rvn query saved remove <name> --json`
 - Run a saved query: `rvn query <name> [inputs...] --json`
 - Saved definitions persist only RQL, declared args, and description. Put
-  `--refresh`, pagination/output flags, `--browse`, and `--apply`/`--confirm`
-  on each `rvn query <name>` invocation.
+  `--no-refresh` / `--refresh`, pagination/output flags, `--browse`, and
+  `--apply`/`--confirm` on each `rvn query <name>` invocation. Queries refresh
+  stale Markdown files automatically unless `--no-refresh` is set or
+  `auto_reindex` is false.
 
 ## Cross-references
 

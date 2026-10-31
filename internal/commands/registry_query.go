@@ -113,8 +113,10 @@ Datetime literals compare as datetimes, for example .value>="2026-03-01T09:30".
 Saved query inputs must be declared in the saved query definition when using {{args.<name>}}.
 You can then pass inputs by position (in args order) or as key=value pairs.
 Saved query definitions contain only RQL, declared args, and a description.
-Pass runtime flags such as --refresh, --limit, --apply, and --confirm on each
+Pass runtime flags such as --no-refresh, --limit, --apply, and --confirm on each
 query invocation; they are never persisted with the saved query.
+Index-backed reads refresh stale files automatically (the same incremental
+path as rvn reindex) unless --no-refresh is set or auto_reindex is false.
 
 Use --ids to output just IDs (one per line) for piping to other commands.
 For link queries, --ids projects each matching edge's source_id.
@@ -151,7 +153,8 @@ For trait queries (trait:...):
 			{Name: "query_string", Description: "Query string (e.g., 'type:project .status==active', 'link .ext==pdf', or saved query name) optionally followed by saved-query inputs.", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "refresh", Description: "Refresh stale and journaled pending files before query", Type: FlagTypeBool},
+			{Name: "refresh", Description: "Force a refresh before querying, even when auto_reindex is false", Type: FlagTypeBool},
+			noRefreshFlag,
 			{Name: "ids", Description: "Output only result IDs; link queries output source IDs, one per edge", Type: FlagTypeBool},
 			{Name: "limit", Description: "Maximum number of query results to return (0 means no limit)", Type: FlagTypeInt},
 			{Name: "offset", Description: "Zero-based offset for query results", Type: FlagTypeInt},
@@ -164,6 +167,7 @@ For trait queries (trait:...):
 			{Name: "no-links", Description: "Disable clickable hyperlinks in terminal output", Type: FlagTypeBool},
 			{Name: "inputs", Description: "Saved query inputs as JSON object", Type: FlagTypeJSON, Examples: []string{`{"project": "projects/raven"}`}},
 		},
+		MutexGroups: [][]string{{"refresh", "no-refresh"}},
 		Examples: []string{
 			"rvn query 'type:project .status==active' --json",
 			"rvn query 'type:project sort(.title, desc)' --json",
@@ -205,8 +209,9 @@ Each row is id, type, a display name, and the vault-relative file path. Bodies
 and field maps are omitted. The display name is the schema name_field for that
 type, then title, then name.
 
-Results come from the derived SQLite index, not from walking markdown files.
-Use --limit/--offset to page large vaults. --limit 0 (the default) returns the
+Results come from the derived SQLite index after an incremental refresh of
+stale, new, and deleted Markdown files (skip with --no-refresh). Use
+--limit/--offset to page large vaults. --limit 0 (the default) returns the
 complete list. JSON includes total, returned, offset, limit, and has_more
 (plus next_offset when has_more is true), the same pagination contract as query.
 
@@ -214,6 +219,7 @@ This is the general-purpose object catalog for fuzzy pickers and attach-only
 UIs. Use query when you need structured filters, search when you only have a
 text fragment, and read when you already have an id and need the body.`,
 		Flags: []FlagMeta{
+			noRefreshFlag,
 			{Name: "limit", Description: "Maximum number of objects to return (0 means no limit)", Type: FlagTypeInt},
 			{Name: "offset", Description: "Zero-based offset into the object list", Type: FlagTypeInt},
 		},
@@ -294,6 +300,7 @@ Non-interactive use requires either a reference or --stdin input.` + barePickerI
 			{Name: "reference", Description: "Object or section reference (e.g., people/freya, projects/raven#status)", Required: false, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
+			noRefreshFlag,
 			{Name: "browse", Description: "Interactively browse backlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read references from stdin and return grouped backlinks", Type: FlagTypeBool},
 		},
@@ -328,6 +335,7 @@ Non-interactive use requires either a reference or --stdin input.` + barePickerI
 			{Name: "reference", Description: "Object reference (e.g., projects/bifrost)", Required: false, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
+			noRefreshFlag,
 			{Name: "browse", Description: "Interactively browse outlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read references from stdin and return grouped outlinks", Type: FlagTypeBool},
 		},
@@ -384,6 +392,7 @@ indexed files. Non-interactive use still requires a query string.` + barePickerI
 			{Name: "query", Description: "Search query (words, phrases, or boolean expressions)", Required: true, CLIOptional: true, Variadic: true},
 		},
 		Flags: []FlagMeta{
+			noRefreshFlag,
 			{Name: "limit", Short: "n", Description: "Maximum number of results (default: 20)", Type: FlagTypeInt, Default: "20"},
 			{Name: "type", Short: "t", Description: "Filter by object type", Type: FlagTypeString},
 		},
@@ -431,6 +440,9 @@ references. Short forms are supported as resolution sugar, not as the preferred
 authoring form.` + barePickerInsertModeHelp,
 		Args: []ArgMeta{
 			{Name: "reference", Description: "Canonical object ID or other accepted reference input to resolve", Required: true, CLIOptional: true},
+		},
+		Flags: []FlagMeta{
+			noRefreshFlag,
 		},
 		Examples: []string{
 			"rvn resolve people/freya --json",

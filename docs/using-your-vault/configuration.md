@@ -249,7 +249,9 @@ protected_prefixes:
 
 ### `auto_reindex`
 
-Automatically reindex after CLI commands that modify vault content.
+Keep the derived index in sync: incremental reindex after CLI commands that
+modify vault content, and before index-backed reads (`query`, `search`,
+`backlinks`, and related commands).
 
 | Type | Default |
 |------|---------|
@@ -257,9 +259,10 @@ Automatically reindex after CLI commands that modify vault content.
 
 When disabled, Raven still records changed paths in
 `.raven/index-dirty.json`, but it intentionally leaves their derived index work
-pending. Index-backed reads emit `DATABASE_OUTDATED` while work is pending.
-Run `rvn reindex` to project those paths and clear the journal. The journal is
-disposable cache metadata, not durable knowledge.
+pending and skips the pre-read refresh. Index-backed reads emit
+`DATABASE_OUTDATED` while work is pending. Run `rvn reindex` to project those
+paths and clear the journal, or pass `query --refresh` to refresh once. The
+journal is disposable cache metadata, not durable knowledge.
 
 ### `directories`
 

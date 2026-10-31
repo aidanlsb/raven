@@ -129,22 +129,24 @@ func Run(rt *vaultruntime.Runtime, req ExecuteRequest) (*RunResult, error) {
 		return nil, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to load schema", rt.SchemaLoadErr).
 			WithSuggestion("Fix schema.yaml and try again")
 	}
-	if err := rt.OpenDB(); err != nil {
-		if errors.Is(err, index.ErrIndexRebuildRequired) {
-			return nil, svcerr.Wrap(codes.ErrDatabaseVersion, "index schema is stale or a rebuild was interrupted", err).
-				WithSuggestion("Run 'rvn reindex --full' to rebuild the index")
+	var warnings []Warning
+	if req.Refresh {
+		report, refreshErr := readsvc.EnsureIndexFresh(rt)
+		if refreshErr != nil {
+			return nil, refreshIndexError(refreshErr)
 		}
-		if errors.Is(err, index.ErrIndexLocked) {
-			return nil, svcerr.Wrap(codes.ErrIndexLocked, "index is locked for rebuild", err).
-				WithSuggestion("Wait for the other process to finish and retry")
-		}
-		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to open database", err).
-			WithSuggestion("Run 'rvn reindex' to rebuild the database")
+		warnings = refreshWarnings(report)
+	} else if err := rt.OpenDB(); err != nil {
+		return nil, openIndexError(err)
 	}
 
 	if !isSaved && !IsFullQueryRoot(resolvedQuery) {
 		return nil, svcerr.New(codes.ErrQueryInvalid, "unknown query: "+resolvedQuery).
 			WithSuggestion(unknownQuerySuggestion(rt, resolvedQuery))
+	}
+	if rt.DB == nil {
+		return nil, svcerr.New(codes.ErrDatabase, "failed to open database").
+			WithSuggestion("Run 'rvn reindex' to rebuild the database")
 	}
 	compatible, err := rt.DB.SchemaCompatible()
 	if err != nil {
@@ -154,16 +156,6 @@ func Run(rt *vaultruntime.Runtime, req ExecuteRequest) (*RunResult, error) {
 	if !compatible {
 		return nil, svcerr.New(codes.ErrDatabaseVersion, "index schema is stale or incompatible").
 			WithSuggestion("Run 'rvn reindex --full' to rebuild the index")
-	}
-
-	var warnings []Warning
-	if req.Refresh {
-		report, refreshErr := readsvc.SmartReindex(rt)
-		if refreshErr != nil {
-			return nil, svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to refresh index: %v", refreshErr), refreshErr).
-				WithSuggestion("Run 'rvn reindex' to rebuild the database")
-		}
-		warnings = refreshWarnings(report)
 	}
 
 	result, err := ExecuteQuery(rt, ExecuteRequest{
@@ -417,86 +409,53 @@ func traitIDs(items []model.Trait) []string {
 	return out
 }
 
+func openIndexError(err error) error {
+	if mapped := mapIndexAccessError(err); mapped != nil {
+		return mapped
+	}
+	return svcerr.Wrap(codes.ErrDatabase, "failed to open database", err).
+		WithSuggestion("Run 'rvn reindex' to rebuild the database")
+}
+
+func refreshIndexError(err error) error {
+	if mapped := mapIndexAccessError(err); mapped != nil {
+		return mapped
+	}
+	return svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to refresh index: %v", err), err).
+		WithSuggestion("Run 'rvn reindex' to rebuild the database")
+}
+
+func mapIndexAccessError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := svcerr.AsError(err); ok {
+		return err
+	}
+	if errors.Is(err, index.ErrIndexRebuildRequired) {
+		return svcerr.Wrap(codes.ErrDatabaseVersion, "index schema is stale or a rebuild was interrupted", err).
+			WithSuggestion("Run 'rvn reindex --full' to rebuild the index")
+	}
+	if errors.Is(err, index.ErrIndexLocked) {
+		return svcerr.Wrap(codes.ErrIndexLocked, "index is locked for rebuild", err).
+			WithSuggestion("Wait for the other process to finish and retry")
+	}
+	var setupErr *vaultruntime.SetupError
+	if errors.As(err, &setupErr) && setupErr.Failure == vaultruntime.SetupFailureIndexRebuildRequired {
+		return svcerr.Wrap(codes.ErrDatabaseVersion, "index schema is stale or a rebuild was interrupted", err).
+			WithSuggestion("Run 'rvn reindex --full' to rebuild the index")
+	}
+	return nil
+}
+
 func refreshWarnings(report readsvc.SmartReindexReport) []Warning {
-	warnings := refreshFailureWarnings(report)
-	warnings = append(warnings, refreshUnknownFieldWarnings(report)...)
-	return append(warnings, refreshReferenceResolutionWarnings(report)...)
-}
-
-func refreshFailureWarnings(report readsvc.SmartReindexReport) []Warning {
-	if len(report.Failures) == 0 {
+	issues := readsvc.RefreshWarnings(report)
+	if len(issues) == 0 {
 		return nil
 	}
-	const maxListed = 5
-	listed := make([]string, 0, maxListed)
-	for i, failure := range report.Failures {
-		if i >= maxListed {
-			break
-		}
-		listed = append(listed, fmt.Sprintf("%s (%s: %s)", failure.Path, failure.Stage, failure.ErrMsg))
+	warnings := make([]Warning, 0, len(issues))
+	for _, issue := range issues {
+		warnings = append(warnings, Warning{Code: issue.Code, Message: issue.Message, Ref: issue.Ref})
 	}
-	message := fmt.Sprintf("refresh skipped %d file(s); index may be incomplete", len(report.Failures))
-	if len(listed) > 0 {
-		message += ": " + strings.Join(listed, "; ")
-	}
-	if len(report.Failures) > maxListed {
-		message = fmt.Sprintf("%s; and %d more", message, len(report.Failures)-maxListed)
-	}
-	return []Warning{{
-		Code: codes.WarnIndexUpdateFailed, Message: message,
-		Ref: "Run 'rvn reindex' or 'rvn check' to inspect failed files",
-	}}
-}
-
-func refreshUnknownFieldWarnings(report readsvc.SmartReindexReport) []Warning {
-	if len(report.Warnings) == 0 {
-		return nil
-	}
-	const maxListed = 5
-	listed := make([]string, 0, maxListed)
-	for i, warning := range report.Warnings {
-		if i >= maxListed {
-			break
-		}
-		listed = append(listed, warning.Message)
-	}
-	message := fmt.Sprintf("refresh found %d unknown frontmatter key(s)", len(report.Warnings))
-	if len(listed) > 0 {
-		message += ": " + strings.Join(listed, "; ")
-	}
-	if len(report.Warnings) > maxListed {
-		message = fmt.Sprintf("%s; and %d more", message, len(report.Warnings)-maxListed)
-	}
-	return []Warning{{
-		Code: codes.WarnUnknownField, Message: message,
-		Ref: "Add the field to schema.yaml or remove it; run 'rvn check' for details",
-	}}
-}
-
-func refreshReferenceResolutionWarnings(report readsvc.SmartReindexReport) []Warning {
-	if len(report.ReferenceResolutionWarnings) == 0 {
-		return nil
-	}
-	const maxListed = 5
-	listed := make([]string, 0, maxListed)
-	for i, warning := range report.ReferenceResolutionWarnings {
-		if i >= maxListed {
-			break
-		}
-		listed = append(listed, warning.Message)
-	}
-	message := fmt.Sprintf(
-		"refresh indexed %d file(s), but reference resolution did not complete",
-		len(report.ReferenceResolutionWarnings),
-	)
-	if len(listed) > 0 {
-		message += ": " + strings.Join(listed, "; ")
-	}
-	if len(report.ReferenceResolutionWarnings) > maxListed {
-		message = fmt.Sprintf("%s; and %d more", message, len(report.ReferenceResolutionWarnings)-maxListed)
-	}
-	return []Warning{{
-		Code: codes.WarnRefResolutionIncomplete, Message: message,
-		Ref: "The files were indexed successfully, but backlinks may be stale. Run 'rvn reindex' to retry reference resolution.",
-	}}
+	return warnings
 }

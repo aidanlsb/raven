@@ -14,9 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directions. `--limit`/`--offset` pages through the sort order.
 
 ### Changed
+- Index-backed reads (`query`, `search`, `backlinks`, `outlinks`, `objects`,
+  `resolve`, `read`, `open`, `date`, and `vault stats`) incrementally reindex
+  changed, new, and deleted Markdown files before running, using the same
+  staleness path as `rvn reindex`. Opt out with `--no-refresh` or
+  `auto_reindex: false`. `query --refresh` still forces a refresh when
+  auto-reindex is off. A missing or schema-mismatched index falls back to a
+  full rebuild. Empty `query` and `search` human output prints `No results`
+  (stdout, exit 0); JSON stays an empty list, and `--pipe`/`--ids` stay empty.
 - Bumped shipped skill `version` values whose library content has drifted:
-  `raven-core` to 4, and `raven-maintenance`, `raven-onboarding`,
-  `raven-query`, `raven-schema`, `raven-templates`, and `raven-vault-admin` to 2.
+  `raven-core` to 5, `raven-maintenance` to 4, `raven-query` to 3, and
+  `raven-onboarding`, `raven-schema`, `raven-templates`, and
+  `raven-vault-admin` to 2.
 - Documented template variable substitution (`{{title}}`, `{{slug}}`,
   `{{type}}`, `{{date}}`, `{{datetime}}`, `{{year}}`, `{{month}}`, `{{day}}`,
   `{{weekday}}`, `{{field.<name>}}`, and `\{{...}}` escaping) and corrected the
