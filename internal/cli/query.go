@@ -95,8 +95,9 @@ Result sorting (top-level only; repeatable):
 Saved query inputs must be declared with args: in raven.yaml when using {{args.<name>}}.
 You can then pass inputs either by position (following args order) or as key=value pairs.
 Saved queries store only their RQL definition, declared args, and description.
-Pass execution flags such as --refresh, --limit, --apply, and --confirm each time
-you invoke the saved query.
+Pass execution flags such as --no-refresh, --limit, --apply, and --confirm each time
+you invoke the saved query. Queries refresh stale files automatically unless
+--no-refresh is set or auto_reindex is false.
 
 Use --browse to open an interactive Raven picker with filtering, preview, and
 editor handoff for the selected result.
@@ -156,6 +157,8 @@ Examples:
 				overrides := savedQueryOptionsFromFlags(cmd)
 				if overrides != nil {
 					runOpts.Refresh = overrides.Refresh != nil && *overrides.Refresh
+					runOpts.RefreshExplicit = overrides.Refresh != nil
+					runOpts.NoRefresh = overrides.NoRefresh != nil && *overrides.NoRefresh
 					runOpts.IDs = overrides.IDs != nil && *overrides.IDs
 					runOpts.Limit = derefInt(overrides.Limit)
 					runOpts.Offset = derefInt(overrides.Offset)
@@ -193,25 +196,23 @@ Examples:
 
 		// --apply routes through the canonical bulk apply flow (preview + confirm).
 		if len(runOpts.Apply) > 0 {
-			return runCanonicalQuery(displayQuery, map[string]interface{}{
+			return runCanonicalQuery(displayQuery, withQueryRefreshArgs(runOpts, map[string]interface{}{
 				"query_string": rawQuery,
-				"refresh":      runOpts.Refresh,
 				"apply":        runOpts.Apply,
 				"confirm":      runOpts.Confirm,
 				"inputs":       inputs,
-			})
+			}))
 		}
 
-		return runCanonicalQuery(displayQuery, map[string]interface{}{
+		return runCanonicalQuery(displayQuery, withQueryRefreshArgs(runOpts, map[string]interface{}{
 			"query_string": rawQuery,
-			"refresh":      runOpts.Refresh,
 			"ids":          runOpts.IDs,
 			"limit":        runOpts.Limit,
 			"offset":       runOpts.Offset,
 			"count-only":   runOpts.CountOnly,
 			"browse":       browse,
 			"inputs":       inputs,
-		})
+		}))
 	},
 }
 
@@ -289,6 +290,20 @@ func hasQueryApply(args map[string]interface{}) bool {
 	return len(stringSliceFromAny(args["apply"])) > 0
 }
 
+func withQueryRefreshArgs(opts *querysvc.RunOptions, args map[string]interface{}) map[string]interface{} {
+	if opts == nil {
+		return args
+	}
+	if opts.NoRefresh {
+		args["no-refresh"] = true
+		return args
+	}
+	if opts.RefreshExplicit {
+		args["refresh"] = opts.Refresh
+	}
+	return args
+}
+
 func copyArgsMap(args map[string]interface{}) map[string]interface{} {
 	if args == nil {
 		return nil
@@ -341,6 +356,10 @@ func savedQueryOptionsFromFlags(cmd *cobra.Command) *querysvc.RunOptionOverrides
 		value, _ := cmd.Flags().GetBool("refresh")
 		options.Refresh = &value
 	}
+	if cmd.Flags().Changed("no-refresh") {
+		value, _ := cmd.Flags().GetBool("no-refresh")
+		options.NoRefresh = &value
+	}
 	if cmd.Flags().Changed("ids") {
 		value, _ := cmd.Flags().GetBool("ids")
 		options.IDs = &value
@@ -386,7 +405,9 @@ func savedQueryOptionsFromFlags(cmd *cobra.Command) *querysvc.RunOptionOverrides
 }
 
 func init() {
-	queryCmd.Flags().Bool("refresh", false, "Refresh stale files before query")
+	queryCmd.Flags().Bool("refresh", false, "Force a refresh before querying, even when auto_reindex is false")
+	queryCmd.Flags().Bool("no-refresh", false, "Skip incrementally reindexing changed, new, and deleted files before this query")
+	queryCmd.MarkFlagsMutuallyExclusive("refresh", "no-refresh")
 	queryCmd.Flags().Bool("ids", false, "Output only result IDs; link queries output source IDs, one per edge")
 	queryCmd.Flags().Int("limit", 0, "Maximum number of query results to return (0 means no limit)")
 	queryCmd.Flags().Int("offset", 0, "Zero-based offset for query results")

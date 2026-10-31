@@ -212,3 +212,31 @@ Current note
 		t.Fatalf("expected archived daily note to remain unchanged, got:\n%s", archivedDaily)
 	}
 }
+
+func TestIntegration_SearchAutoRefreshPicksUpHandWrittenFile(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	missing := v.RunCLI("search", "xylophone-unique-token")
+	missing.MustSucceed(t)
+	if len(missing.DataList("items")) != 0 {
+		t.Fatalf("expected no search hits before the file exists, got %#v", missing.DataList("items"))
+	}
+
+	notePath := filepath.Join(v.Path, "notes", "unique.md")
+	if err := os.MkdirAll(filepath.Dir(notePath), 0o755); err != nil {
+		t.Fatalf("mkdir notes: %v", err)
+	}
+	if err := os.WriteFile(notePath, []byte("---\ntype: page\n---\nxylophone-unique-token in the body\n"), 0o644); err != nil {
+		t.Fatalf("write unique note: %v", err)
+	}
+
+	found := v.RunCLI("search", "xylophone-unique-token")
+	found.MustSucceed(t)
+	if len(found.DataList("items")) == 0 {
+		t.Fatal("expected search to index the hand-written file without a manual reindex")
+	}
+}

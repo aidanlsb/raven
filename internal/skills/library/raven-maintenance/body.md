@@ -44,7 +44,10 @@ Each issue includes `fix_command` and `fix_hint` when available. Use `rvn check 
 
 ## Reindex
 
-The SQLite index is a derived cache. Rebuild it when queries return stale results or after external file changes.
+The SQLite index is a derived cache. Index-backed reads refresh changed,
+new, and deleted Markdown automatically. Rebuild it explicitly when
+`auto_reindex` is false, after non-Markdown file copies, after schema
+renames, or when `check` reports `stale_index`.
 
 - Incremental reindex (changed files only): `rvn reindex --json`
 - Full rebuild: `rvn reindex --full --json`

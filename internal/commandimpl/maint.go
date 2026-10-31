@@ -12,7 +12,7 @@ import (
 func HandleVaultStats(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 
-	rt, failure := newDatabaseCommandVaultRuntime(req.VaultPath)
+	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
 	if failure.Error != nil {
 		return failure
 	}
@@ -32,5 +32,5 @@ func HandleVaultStats(_ context.Context, req commandexec.Request) commandexec.Re
 	if stats.Revision.Generation != "" {
 		data["revision"] = stats.Revision.Map()
 	}
-	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
 }

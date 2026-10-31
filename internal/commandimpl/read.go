@@ -32,7 +32,7 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("MISSING_ARGUMENT", "requires search query", nil, "Usage: rvn search <query>")
 	}
 
-	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: true})
+	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
 	if failure.Error != nil {
 		return failure
 	}
@@ -43,10 +43,10 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 		return mapSearchFailure(err)
 	}
 
-	return commandexec.Success(commandpayload.SearchResult{
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(commandpayload.SearchResult{
 		Query: query,
 		Items: searchMatchItems(results),
-	}, &commandexec.Meta{Count: len(results), QueryTimeMs: time.Since(start).Milliseconds()})
+	}, &commandexec.Meta{Count: len(results), QueryTimeMs: time.Since(start).Milliseconds()}))
 }
 
 func mapSearchFailure(err error) commandexec.Result {
@@ -81,14 +81,14 @@ func isSearchSyntaxError(err error) bool {
 func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 
-	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: true})
+	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
 	if failure.Error != nil {
 		return failure
 	}
 	defer rt.Close()
 
 	if backlinksStdinMode(req.Args) {
-		return handleBacklinksStdin(rt, req, start)
+		return withIndexRefreshWarnings(refreshWarnings, handleBacklinksStdin(rt, req, start))
 	}
 
 	reference := stringArg(req.Args, "reference")
@@ -101,24 +101,24 @@ func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Res
 	}
 	group := result.Groups[0]
 
-	return commandexec.Success(map[string]interface{}{
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
 		"target": group.Target,
 		"items":  referenceItems(group.Items),
-	}, &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()})
+	}, &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()}))
 }
 
 // HandleOutlinks executes the canonical `outlinks` command.
 func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 
-	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: true})
+	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
 	if failure.Error != nil {
 		return failure
 	}
 	defer rt.Close()
 
 	if outlinksStdinMode(req.Args) {
-		return handleOutlinksStdin(rt, req, start)
+		return withIndexRefreshWarnings(refreshWarnings, handleOutlinksStdin(rt, req, start))
 	}
 
 	reference := stringArg(req.Args, "reference")
@@ -131,10 +131,10 @@ func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Resu
 	}
 	group := result.Groups[0]
 
-	return commandexec.Success(map[string]interface{}{
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
 		"source": group.Source,
 		"items":  referenceItems(group.Items),
-	}, &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()})
+	}, &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()}))
 }
 
 func handleBacklinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
@@ -210,7 +210,7 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 	start := time.Now()
 	reference := stringArg(req.Args, "reference")
 
-	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: true})
+	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
 	if failure.Error != nil {
 		return failure
 	}
@@ -218,10 +218,10 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 
 	result, err := readsvc.ResolveReference(rt, reference)
 	if err != nil {
-		return commandexec.Success(map[string]interface{}{
+		return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
 			"resolved":  false,
 			"reference": reference,
-		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
 	}
 	if result.Ambiguous {
 		matches := make([]map[string]interface{}, 0, len(result.Matches))
@@ -235,12 +235,12 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 			matches = append(matches, entry)
 		}
 
-		return commandexec.Success(map[string]interface{}{
+		return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
 			"resolved":  false,
 			"ambiguous": true,
 			"reference": reference,
 			"items":     matches,
-		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
 	}
 
 	resolved := result.Resolved
@@ -275,7 +275,7 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 		}
 	}
 
-	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
 }
 
 // HandleRead executes the canonical `read` command.
@@ -292,17 +292,21 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 		return failure
 	}
 	defer rt.Close()
+	refreshWarnings, refreshFailure := refreshIndexIfNeeded(rt, req.Args)
+	if refreshFailure.Error != nil {
+		return refreshFailure
+	}
 
 	if boolArg(req.Args, "sections") {
 		outline, err := readsvc.ReadSections(rt, reference)
 		if err != nil {
 			return mapReadFailure(err)
 		}
-		return withSchemaLoadWarning(rt, commandexec.Success(commandpayload.ReadSectionsResult{
+		return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, commandexec.Success(commandpayload.ReadSectionsResult{
 			ObjectID: outline.ObjectID,
 			Path:     outline.Path,
 			Sections: sectionOutlineItems(outline.Sections),
-		}, &commandexec.Meta{Count: len(outline.Sections), QueryTimeMs: time.Since(start).Milliseconds()}))
+		}, &commandexec.Meta{Count: len(outline.Sections), QueryTimeMs: time.Since(start).Milliseconds()})))
 	}
 
 	result, err := readsvc.Read(rt, readsvc.ReadRequest{
@@ -332,7 +336,7 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 		if len(result.Lines) > 0 {
 			payload.Lines = result.Lines
 		}
-		return withSchemaLoadWarning(rt, commandexec.Success(payload, meta))
+		return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, commandexec.Success(payload, meta)))
 	}
 
 	meta.Count = result.BacklinksCount
@@ -340,7 +344,7 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	if links == nil {
 		links = []readsvc.ReadLink{}
 	}
-	return withSchemaLoadWarning(rt, commandexec.Success(commandpayload.ReadContentResult{
+	return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, commandexec.Success(commandpayload.ReadContentResult{
 		ObjectID:   result.ObjectID,
 		Path:       result.Path,
 		Content:    result.Content,
@@ -348,7 +352,7 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 		References: result.References,
 		Backlinks:  result.Backlinks,
 		Links:      links,
-	}, meta))
+	}, meta)))
 }
 
 // withSchemaLoadWarning appends a stable SCHEMA_LOAD_FAILED warning to a
@@ -386,7 +390,7 @@ func sectionOutlineItems(sections []model.Section) []commandpayload.ReadSectionI
 // HandleOpen executes the canonical `open` command.
 func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	rt, failure := newReadRuntime(vaultPath, vaultruntime.Options{OpenDB: false})
+	rt, refreshWarnings, failure := newIndexReadRuntime(vaultPath, req.Args)
 	if failure.Error != nil {
 		return failure
 	}
@@ -422,13 +426,13 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 			errs = append(errs, fmt.Sprintf("%s: %s", failure.Reference, failure.Message))
 		}
 
-		return commandexec.Success(map[string]interface{}{
+		return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
 			"files":   relPaths,
 			"targets": result.Targets,
 			"opened":  result.Opened,
 			"editor":  result.Editor,
 			"errors":  errs,
-		}, &commandexec.Meta{Count: len(relPaths)})
+		}, &commandexec.Meta{Count: len(relPaths)}))
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
@@ -454,7 +458,7 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 			data["line_start"] = target.LineStart
 		}
 	}
-	return commandexec.Success(data, nil)
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(data, nil))
 }
 
 func mapResolveFailure(err error, reference string) commandexec.Result {

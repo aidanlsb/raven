@@ -13,7 +13,7 @@ import (
 // listing of every file-backed object without bodies.
 func HandleObjects(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
 	if failure.Error != nil {
 		return failure
 	}
@@ -52,5 +52,5 @@ func HandleObjects(_ context.Context, req commandexec.Request) commandexec.Resul
 		Items:      items,
 		Pagination: paging,
 	}, &commandexec.Meta{Count: returned, QueryTimeMs: time.Since(start).Milliseconds()})
-	return withSchemaLoadWarning(rt, out)
+	return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, out))
 }

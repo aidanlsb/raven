@@ -45,8 +45,10 @@ Use this page to diagnose empty, broad, ambiguous, or rejected queries.
 
 ## Stale index suspicion
 
-- Use `rvn query ... --refresh --json`.
-- If needed after broader file changes: `rvn reindex --json`.
+- Index-backed reads refresh changed Markdown automatically. Retry the query
+  without `--no-refresh`.
+- If `auto_reindex` is false: `rvn query ... --refresh --json`.
+- If needed after broader file or schema changes: `rvn reindex --json`.
 
 ## Related guidance
 

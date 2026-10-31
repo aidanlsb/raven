@@ -582,12 +582,18 @@ sugar but are not the preferred authoring form.
 Rebuild the SQLite index from managed Markdown files. Paths matched by
 `raven.yaml` `exclude` patterns are skipped and removed from the index during
 incremental reindexing. Normally Raven reindexes automatically after commands
-(`auto_reindex: true` in `raven.yaml`). Manual reindexing is needed after:
+(`auto_reindex: true` in `raven.yaml`). Index-backed reads (`query`, `search`,
+`backlinks`, `objects`, and related commands) also refresh those pending files
+before they run, so a note you saved in your editor shows up without a manual
+`rvn reindex`. Opt out of that pre-read refresh with `--no-refresh`, or set
+`auto_reindex: false` to manage the index yourself.
 
-- Editing files outside of Raven (e.g., in your editor or with git)
-- Editing Markdown links after copying, moving, or deleting non-Markdown files
-- Schema changes that affect indexing
-- Recovering from index corruption
+Manual `rvn reindex` is still the right tool after:
+
+- Copying, moving, or deleting non-Markdown files that Markdown links point at
+- Schema changes that affect indexing, if you did not use `rvn schema ...`
+- Recovering from index corruption (`--full`)
+- `DATABASE_OUTDATED` warnings when `auto_reindex` is disabled
 
 ```bash
 rvn reindex                                      # Incremental (changed files only)

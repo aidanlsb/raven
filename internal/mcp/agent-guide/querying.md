@@ -71,8 +71,10 @@ For text search inside typed queries, use `content("term")`.
 
 Saved queries are named RQL definitions with optional declared inputs and a
 description. They do not store runtime execution policy. When invoking one,
-pass `refresh`, `ids`, `limit`, `offset`, `count-only`, `apply`, `confirm`,
-`pipe`, or `browse` in the current `query` call as needed.
+pass `no-refresh`, `refresh`, `ids`, `limit`, `offset`, `count-only`, `apply`,
+`confirm`, `pipe`, or `browse` in the current `query` call as needed.
+Queries refresh stale Markdown files automatically; set `no-refresh` to skip
+that, or `refresh` to force it when `auto_reindex` is false.
 
 `pipe` and `browse` are interactive CLI presentation choices; MCP agents should
 use structured JSON rows or `ids`. `apply` cannot be combined with `limit`,

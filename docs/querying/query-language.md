@@ -486,7 +486,7 @@ type:meeting (has(trait:due .value<today) | has(trait:remind .value<today))
 rvn query 'type:project .status==active' --json
 rvn query 'trait:due .value<today' --ids
 rvn query 'link .ext==pdf within(type:project)' --json
-rvn query 'type:project refs([[company/acme]])' --refresh --json
+rvn query 'type:project refs([[company/acme]])' --json
 rvn query 'type:project .status==active' --browse
 rvn query 'trait:todo .value==todo' --pipe | rvn pick --multi | rvn update --stdin done --confirm
 ```
@@ -497,7 +497,8 @@ Key flags:
 - `--count-only`: return only the total match count (no items or IDs)
 - `--limit` / `--offset`: page through results (see [Counting and pagination](#counting-and-pagination); unlimited by default)
 - `--pipe`: output tab-separated rows for pipe workflows, including `rvn pick`
-- `--refresh`: reindex changed files before running the query (useful after editing files outside Raven)
+- `--refresh`: force a refresh before the query, even when `auto_reindex` is false
+- `--no-refresh`: skip the default pre-query refresh of changed, new, and deleted files
 - `--browse`: open an interactive Raven picker and open the selected result in your configured editor
 
 Use `rvn pick` when you want Raven-native interactive selection in a pipeline. It reads `--pipe` output, opens a picker on the terminal, and writes selected IDs to stdout. Cancelling the picker exits with code 130 (and prints nothing), so scripts can distinguish cancellation from a selection.
@@ -592,7 +593,7 @@ rvn query open-projects --limit 100 --json
 rvn query open-projects --apply 'set status=done' --confirm --json
 ```
 
-Flags such as `--refresh`, `--ids`, `--limit`, `--offset`, `--count-only`, `--apply`, `--confirm`, `--pipe`, `--no-pipe`, and `--browse` are runtime policy and are never stored by `query saved set`.
+Flags such as `--refresh`, `--no-refresh`, `--ids`, `--limit`, `--offset`, `--count-only`, `--apply`, `--confirm`, `--pipe`, `--no-pipe`, and `--browse` are runtime policy and are never stored by `query saved set`.
 
 ### Bulk operations by query type
 

@@ -31,7 +31,8 @@ type VaultConfig struct {
 	// Object IDs strip the directory prefix, keeping references short.
 	Directories *DirectoriesConfig `yaml:"directories,omitempty"`
 
-	// AutoReindex triggers an incremental reindex after CLI operations that modify files (default: true)
+	// AutoReindex keeps the derived index in sync (default: true): incremental
+	// reindex after commands that modify files, and before index-backed reads.
 	AutoReindex *bool `yaml:"auto_reindex,omitempty"`
 
 	// Queries defines saved queries that can be run with `rvn query <name>`

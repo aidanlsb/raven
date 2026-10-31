@@ -71,6 +71,7 @@ func MatchInvocation(vaultCfg *config.VaultConfig, rawQueryString string) (name 
 // `rvn query` invocation. Saved query definitions never populate these fields.
 type RunOptionOverrides struct {
 	Refresh   *bool
+	NoRefresh *bool
 	IDs       *bool
 	Limit     *int
 	Offset    *int
@@ -87,6 +88,7 @@ func (o *RunOptionOverrides) IsEmpty() bool {
 		return true
 	}
 	return o.Refresh == nil &&
+		o.NoRefresh == nil &&
 		o.IDs == nil &&
 		o.Limit == nil &&
 		o.Offset == nil &&
@@ -108,14 +110,16 @@ type RunOptions struct {
 	// SavedName is the saved query name when IsSaved is true.
 	SavedName string
 
-	Refresh   bool
-	IDs       bool
-	Limit     int
-	Offset    int
-	CountOnly bool
-	Apply     []string
-	Confirm   bool
-	Browse    bool
+	Refresh         bool
+	RefreshExplicit bool
+	NoRefresh       bool
+	IDs             bool
+	Limit           int
+	Offset          int
+	CountOnly       bool
+	Apply           []string
+	Confirm         bool
+	Browse          bool
 	// Pipe carries the explicit pipe override (nil means auto-detect).
 	Pipe *bool
 }
@@ -142,18 +146,20 @@ func ResolveRunOptions(rt *vaultruntime.Runtime, rawQueryString string, explicit
 	}
 
 	return &RunOptions{
-		ResolvedQuery: resolved,
-		IsSaved:       matched,
-		SavedName:     name,
-		Refresh:       derefBool(explicit.Refresh),
-		IDs:           derefBool(explicit.IDs),
-		Limit:         derefInt(explicit.Limit),
-		Offset:        derefInt(explicit.Offset),
-		CountOnly:     derefBool(explicit.CountOnly),
-		Apply:         append([]string(nil), explicit.Apply...),
-		Confirm:       derefBool(explicit.Confirm),
-		Browse:        derefBool(explicit.Browse),
-		Pipe:          explicit.Pipe,
+		ResolvedQuery:   resolved,
+		IsSaved:         matched,
+		SavedName:       name,
+		Refresh:         derefBool(explicit.Refresh),
+		RefreshExplicit: explicit.Refresh != nil,
+		NoRefresh:       derefBool(explicit.NoRefresh),
+		IDs:             derefBool(explicit.IDs),
+		Limit:           derefInt(explicit.Limit),
+		Offset:          derefInt(explicit.Offset),
+		CountOnly:       derefBool(explicit.CountOnly),
+		Apply:           append([]string(nil), explicit.Apply...),
+		Confirm:         derefBool(explicit.Confirm),
+		Browse:          derefBool(explicit.Browse),
+		Pipe:            explicit.Pipe,
 	}, nil
 }
 

@@ -12,6 +12,38 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
+func TestEmptyQueryAndSearchPrintNoResults(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = false
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	cases := []struct {
+		name string
+		fn   func()
+	}{
+		{name: "objects", fn: func() { printQueryObjectResults("type:person", "person", nil, nil) }},
+		{name: "traits", fn: func() { printQueryTraitResults("trait:todo", "todo", nil) }},
+		{name: "sections", fn: func() { printQuerySectionResults("section", nil) }},
+		{name: "links", fn: func() { printQueryLinkResults("link", nil) }},
+		{name: "search", fn: func() { printSearchResults("missing", nil) }},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			out := captureStdout(t, tt.fn)
+			if got := strings.TrimSpace(out); got != "No results" {
+				t.Fatalf("empty %s output = %q, want %q", tt.name, got, "No results")
+			}
+		})
+	}
+}
+
 func TestPrintSearchResultsIncludesLocation(t *testing.T) {
 	prevJSON := jsonOutput
 	prevHyperlinksDisabled := hyperlinksDisabled
