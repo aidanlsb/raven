@@ -5,11 +5,16 @@ on:
     tags:
       - 'v*.*.*'
 
-# GITHUB_TOKEN is limited to creating/updating the GitHub Release.
-# Homebrew formula updates use HOMEBREW_TAP_TOKEN, a dedicated PAT
-# that should be scoped to aidanlsb/homebrew-tap only.
-permissions:
-  contents: write
+# GITHUB_TOKEN is limited to creating/updating the GitHub Release on the
+# release job only. Homebrew formula updates use HOMEBREW_TAP_TOKEN, a
+# dedicated PAT that should be scoped to aidanlsb/homebrew-tap only and is
+# passed only to the GoReleaser step.
+#
+# Do not add `environment:` here yet. After Aidan creates a GitHub Environment
+# (suggested name: `release`) and moves HOMEBREW_TAP_TOKEN onto it, the
+# release job should set `environment: release` so environment protection
+# rules gate publishing. See RELEASING.md.
+permissions: {}
 
 jobs:
   release:
@@ -20,20 +25,22 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
 
       - name: Validate tag
         shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="${TAG}"
           git fetch origin main --quiet
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release tag: $tag"
@@ -53,8 +60,10 @@ jobs:
 
       - name: Validate changelog entry
         shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="${TAG}"
           if ! grep -Eq "^## \[${tag}\]" CHANGELOG.md; then
             echo "CHANGELOG.md is missing a section for ${tag}."
             echo "Add a heading like: ## [${tag}] - YYYY-MM-DD"
@@ -62,7 +71,7 @@ jobs:
           fi
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        uses: goreleaser/goreleaser-action@v7.3.0
         with:
           distribution: goreleaser
           version: v2.9.0
@@ -70,3 +79,52 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  verify-release:
+    name: Verify release assets
+    needs: [release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download and verify published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "${workdir}"' EXIT
+          cd "${workdir}"
+
+          gh release download "${TAG}"
+          sha256sum --strict -c checksums.txt
+
+          version="${TAG#v}"
+          archive="raven_${version}_linux_x86_64.tar.gz"
+          if [[ ! -f "${archive}" ]]; then
+            echo "Missing expected linux/amd64 archive: ${archive}"
+            exit 1
+          fi
+
+          mkdir extracted
+          tar -xzf "${archive}" -C extracted
+          bin="$(find extracted -type f -name rvn -print -quit)"
+          if [[ -z "${bin}" ]]; then
+            echo "rvn binary not found in ${archive}"
+            exit 1
+          fi
+          chmod +x "${bin}"
+
+          # The CLI exposes `rvn version` (not --version; -v is --vault).
+          got="$("${bin}" version)"
+          printf '%s\n' "${got}"
+          first_line="${got%%$'\n'*}"
+          expected="rvn ${TAG}"
+          if [[ "${first_line}" != "${expected}" ]]; then
+            echo "version mismatch: got '${first_line}', want '${expected}'"
+            exit 1
+          fi

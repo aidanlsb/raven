@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- GitHub Actions workflow lockfile (`.github/workflows/actions.lock`) pins
+  reviewed actions and their transitive dependencies to exact commits.
+  Workflows use empty top-level `permissions` with per-job `contents`
+  grants; `HOMEBREW_TAP_TOKEN` remains scoped to the GoReleaser step.
+  After publishing, a read-only job verifies `checksums.txt` and that the
+  linux/amd64 archive's `rvn version` matches the tag. CODEOWNERS covers
+  agent/editor config, GitHub automation, bundled skills, and GoReleaser
+  config. Dependabot version updates wait 7 days (`cooldown.default-days`).
+
 ### Added
 - RQL `sort(.field)` / `sort(.field, asc|desc)` orders query results. Repeat
   `sort(...)` for multi-field priority. Sort is top-level only, type-aware

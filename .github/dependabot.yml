@@ -8,6 +8,9 @@ updates:
       time: "18:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 10
+    # Version updates only; security updates are not delayed.
+    cooldown:
+      default-days: 7
     labels:
       - "dependencies"
     groups:
@@ -30,6 +33,9 @@ updates:
       time: "18:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 10
+    # Version updates only; security updates are not delayed.
+    cooldown:
+      default-days: 7
     labels:
       - "dependencies"
       - "ci"
