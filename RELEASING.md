@@ -14,8 +14,15 @@ Raven uses a tag-driven release flow:
 - `origin` points to `aidanlsb/raven`.
 - `CHANGELOG.md` includes a heading for the release tag (for example, `## [v0.2.0] - 2026-03-02`).
 - GitHub Actions secrets:
-  - `GITHUB_TOKEN` (provided automatically by Actions)
-  - `HOMEBREW_TAP_TOKEN` (required only for Homebrew formula publishing)
+  - `GITHUB_TOKEN` (provided automatically by Actions; release job uses
+    `contents: write`, verify job uses `contents: read`)
+  - `HOMEBREW_TAP_TOKEN` (repo secret today; required only for Homebrew
+    formula publishing). Do not add `environment:` to the release job until
+    Aidan creates a GitHub Environment (suggested name: `release`), moves
+    this secret onto it, and restricts it to tag deployments (`v*.*.*`).
+    The job would then set `environment: release` so protection rules gate
+    publishing. `GITHUB_TOKEN` stays a job permission, not an environment
+    secret.
 
 ## Homebrew One-Time Setup
 
@@ -80,6 +87,9 @@ Supported bump values: `patch`, `minor`, `major`.
 3. Verifies the tagged commit is already reachable from `origin/main`.
 4. Runs GoReleaser to publish release artifacts and GitHub release notes.
 5. Updates `aidanlsb/homebrew-tap/Formula/rvn.rb` when `HOMEBREW_TAP_TOKEN` is available.
+6. Downloads the published assets, checks `checksums.txt`, and confirms the
+   linux/amd64 archive's `rvn version` matches the tag (read-only job; no
+   tap token).
 
 The full test/lint preflight still runs locally via `make release`, `make release-tag`, or `make release-preflight` before the tag is created. The tag-push workflow intentionally does not rerun the entire suite.
 

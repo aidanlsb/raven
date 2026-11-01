@@ -1,0 +1,14 @@
+# Treat agent/editor config, GitHub automation, and release config as code.
+# Bundled agent skills live in internal/skills/ (shipped library) and
+# .codex/skills/ (repo-local Codex skills).
+
+.cursor/ @aidanlsb
+.github/ @aidanlsb
+.claude/ @aidanlsb
+.vscode/ @aidanlsb
+.mcp.json @aidanlsb
+CLAUDE.md @aidanlsb
+AGENTS.md @aidanlsb
+internal/skills/ @aidanlsb
+.codex/ @aidanlsb
+.goreleaser.yaml @aidanlsb
