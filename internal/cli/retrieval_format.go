@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -20,24 +19,24 @@ func retrievalLinks() ui.RetrievalLinks {
 	}
 }
 
-func printQueryObjectResults(queryStr, typeName string, results []model.Object, sch *schema.Schema) {
-	ui.PrintQueryObjectResults(queryStr, typeName, results, sch, retrievalLinks())
+func printQueryObjectResults(queryStr, typeName string, results []model.Object, sch *schema.Schema, total int) {
+	ui.PrintQueryObjectResults(queryStr, typeName, results, sch, retrievalLinks(), total)
 }
 
-func printQueryTraitResults(queryStr, traitName string, results []model.Trait) {
-	ui.PrintQueryTraitResults(queryStr, traitName, results, retrievalLinks())
+func printQueryTraitResults(queryStr, traitName string, results []model.Trait, total int) {
+	ui.PrintQueryTraitResults(queryStr, traitName, results, retrievalLinks(), total)
 }
 
-func printQuerySectionResults(queryStr string, results []model.Section) {
-	ui.PrintQuerySectionResults(queryStr, results, retrievalLinks())
+func printQuerySectionResults(queryStr string, results []model.Section, total int) {
+	ui.PrintQuerySectionResults(queryStr, results, retrievalLinks(), total)
 }
 
-func printQueryLinkResults(queryStr string, results []model.Link) {
-	ui.PrintQueryLinkResults(queryStr, results, retrievalLinks())
+func printQueryLinkResults(queryStr string, results []model.Link, total int) {
+	ui.PrintQueryLinkResults(queryStr, results, retrievalLinks(), total)
 }
 
-func printSearchResults(queryStr string, results []model.SearchMatch) {
-	ui.PrintSearchResults(queryStr, results, retrievalLinks())
+func printSearchResults(queryStr string, results []model.SearchMatch, total int) {
+	ui.PrintSearchResults(queryStr, results, retrievalLinks(), total)
 }
 
 func printObjectTable(results []model.Object, sch *schema.Schema) {
@@ -60,13 +59,14 @@ func printOutlinksGroups(groups []model.OutlinksGroup, errors []model.ReferenceI
 	ui.PrintOutlinksGroups(groups, errors, retrievalLinks())
 }
 
-func pipeItemsForObjectResults(results []model.Object) []PipeableItem {
+func pipeItemsForObjectResults(results []model.Object, sch *schema.Schema) []PipeableItem {
+	nameField, _ := ui.ObjectTableColumns(results, sch)
 	pipeItems := make([]PipeableItem, len(results))
 	for i, r := range results {
 		pipeItems[i] = PipeableItem{
 			Num:      i + 1,
 			ID:       r.ID,
-			Content:  filepath.Base(r.ID),
+			Content:  ui.ObjectTableName(r, nameField),
 			Location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
 		}
 	}

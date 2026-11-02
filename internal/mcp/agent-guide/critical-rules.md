@@ -35,8 +35,10 @@ Why:
 - `new` applies schema and templates.
 - `edit` is for content markdown only; use `vault config`, `schema`, and `template` for control-plane files.
 
-Single-object `delete` applies immediately when invoked (both CLI and MCP). Only
-use it after clear user intent; if deletion impact is uncertain, inspect the
+Single-object `delete` applies immediately in JSON/MCP. Interactive terminals
+preview then prompt; without a TTY the human CLI returns `CONFIRMATION_REQUIRED`
+unless `--force` is set. Never treat a missing TTY as a successful cancel. Only
+use delete after clear user intent; if deletion impact is uncertain, inspect the
 object, run `backlinks`, or call with `dry-run=true` first. Bulk delete still
 previews unless `confirm=true`. To recover, invoke `trash_list`, preview
 `restore` with its returned `reference` or `trash_path`, then repeat with

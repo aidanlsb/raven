@@ -41,7 +41,7 @@ func invokeReclassify(cmd *cobra.Command, commandID, vaultPath string, args map[
 			Args:      fieldValues,
 		})
 		if !result.OK {
-			if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredFieldMissing {
+			if shouldPromptForConfirm() && result.Error != nil && result.Error.Code == ErrRequiredFieldMissing {
 				details, _ := result.Error.Details.(map[string]interface{})
 				prompted, promptErr := promptMissingReclassifyFields(stringValue(fieldValues["new-type"]), details)
 				if promptErr != nil {
@@ -69,15 +69,8 @@ func invokeReclassify(cmd *cobra.Command, commandID, vaultPath string, args map[
 			for _, f := range data.DroppedFields {
 				fmt.Fprintf(os.Stderr, "  - %s\n", f)
 			}
-			fmt.Fprint(os.Stderr, "\nProceed? [y/N]: ")
-			reader := bufio.NewReader(os.Stdin)
-			response, readErr := reader.ReadString('\n')
-			if readErr != nil {
-				return commandexec.Failure(ErrInternal, readErr.Error(), nil, "")
-			}
-			response = strings.TrimSpace(strings.ToLower(response))
-			if response != "y" && response != "yes" {
-				return commandexec.Success(commandpayload.CancelledResult{Cancelled: true}, nil)
+			if ok, confirmResult := confirmDestructive("Proceed?", "--force"); !ok {
+				return confirmResult
 			}
 			fieldValues["force"] = true
 			continue

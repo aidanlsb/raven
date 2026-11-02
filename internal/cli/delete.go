@@ -42,7 +42,8 @@ func invokeDelete(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 		})
 	}
 
-	// Non-interactive (JSON) or forced runs apply without prompting.
+	// JSON and --force apply without prompting. Human non-TTY requires --force
+	// instead of silently canceling.
 	if isJSONOutput() || force {
 		confirmArgs := make(map[string]interface{}, len(args))
 		for k, v := range args {
@@ -52,7 +53,6 @@ func invokeDelete(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 		return executeCanonicalCommand(commandID, vaultPath, confirmArgs)
 	}
 
-	// Interactive terminals still preview and prompt before deleting.
 	previewArgs := make(map[string]interface{}, len(args))
 	for k, v := range args {
 		previewArgs[k] = v
@@ -69,8 +69,11 @@ func invokeDelete(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 	if !preview.OK {
 		return preview
 	}
-	if !renderDeletePreviewPrompt(preview) {
-		return commandexec.Success(commandpayload.CancelledResult{Cancelled: true}, nil)
+	if data, ok := preview.Data.(commandpayload.DeletePreviewResult); ok {
+		printDeletePreview(data)
+	}
+	if ok, result := confirmDestructive("Confirm?", "--force"); !ok {
+		return result
 	}
 
 	confirmArgs := make(map[string]interface{}, len(args))
@@ -102,15 +105,6 @@ func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
 	default:
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
-}
-
-func renderDeletePreviewPrompt(result commandexec.Result) bool {
-	data, ok := result.Data.(commandpayload.DeletePreviewResult)
-	if !ok {
-		return false
-	}
-	printDeletePreview(data)
-	return promptForConfirm("Confirm?")
 }
 
 func printDeletePreview(data commandpayload.DeletePreviewResult) {

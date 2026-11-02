@@ -113,5 +113,11 @@ func TestIntegration_JSONFlagParseErrorsUseEnvelope(t *testing.T) {
 		if strings.Contains(strings.TrimSpace(stdout), `"ok": false`) {
 			t.Fatalf("human mode should not emit a JSON envelope, got stdout=%q", stdout)
 		}
+		if strings.Contains(combined, "Available Commands:") || len(combined) > 800 {
+			t.Fatalf("expected short human flag error without usage dump, got stdout=%q stderr=%q", stdout, stderr)
+		}
+		if !strings.Contains(combined, "rvn add --help") && !strings.Contains(combined, "starts with a dash") {
+			t.Fatalf("expected help or dash-terminator guidance, got stdout=%q stderr=%q", stdout, stderr)
+		}
 	})
 }

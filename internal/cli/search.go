@@ -55,7 +55,7 @@ func renderSearch(_ *cobra.Command, result commandexec.Result) error {
 	if !ok {
 		return handleErrorMsg(ErrInternal, "unexpected search result shape", "")
 	}
-	printSearchResults(payload.Query, searchMatchesFromItems(payload.Items))
+	printSearchResults(payload.Query, searchMatchesFromItems(payload.Items), payload.Total)
 	return nil
 }
 

@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -140,6 +141,55 @@ func findProjectRoot() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+// HumanCLIResult is stdout/stderr from a non-JSON CLI invocation.
+type HumanCLIResult struct {
+	Stdout   string
+	Stderr   string
+	ExitCode int
+}
+
+// RunCLIHuman executes a CLI command without --json so tests can cover TTY-less
+// human output, confirmation errors, and compact-vs-pretty JSON separately.
+func (v *TestVault) RunCLIHuman(args ...string) *HumanCLIResult {
+	v.t.Helper()
+	return v.runCLIHumanWithStdin(nil, args...)
+}
+
+// RunCLIHumanWithStdin is RunCLIHuman with an explicit stdin payload.
+func (v *TestVault) RunCLIHumanWithStdin(stdin string, args ...string) *HumanCLIResult {
+	v.t.Helper()
+	return v.runCLIHumanWithStdin(&stdin, args...)
+}
+
+func (v *TestVault) runCLIHumanWithStdin(stdin *string, args ...string) *HumanCLIResult {
+	v.t.Helper()
+	binary := BuildCLI(v.t)
+	cmdArgs := append([]string{"--vault-path", v.Path}, args...)
+	cmd := exec.Command(binary, cmdArgs...)
+	if stdin != nil {
+		cmd.Stdin = strings.NewReader(*stdin)
+	} else {
+		cmd.Stdin = bytes.NewReader(nil)
+	}
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+	err := cmd.Run()
+	result := &HumanCLIResult{
+		Stdout: stdoutBuf.String(),
+		Stderr: stderrBuf.String(),
+	}
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			result.ExitCode = -1
+		}
+	}
+	return result
 }
 
 // RunCLI executes a CLI command against the vault and returns the parsed result.

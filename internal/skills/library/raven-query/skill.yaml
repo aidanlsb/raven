@@ -1,6 +1,6 @@
 id: raven-query
 title: Raven Query
-version: 3
+version: 4
 summary: Raven query language, saved queries, search, and link traversal.
 entry: body.md
 references:

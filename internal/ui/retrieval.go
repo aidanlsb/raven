@@ -49,23 +49,34 @@ func LinkTableHeaders() []string {
 	return []string{"#", "target", "kind", "location"}
 }
 
-func PrintQueryObjectResults(queryStr, typeName string, results []model.Object, sch *schema.Schema, links RetrievalLinks) {
+func CountBadge(returned, total int, suffix string) string {
+	label := fmt.Sprintf("%d", returned)
+	if total > returned {
+		label = fmt.Sprintf("%d of %d", returned, total)
+	}
+	if suffix != "" {
+		label += " " + suffix
+	}
+	return Badge(label)
+}
+
+func PrintQueryObjectResults(queryStr, typeName string, results []model.Object, sch *schema.Schema, links RetrievalLinks, total int) {
 	if len(results) == 0 {
 		printNoResults()
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", SectionHeader(typeName), Badge(fmt.Sprintf("%d", len(results))))
+	fmt.Printf("%s %s\n\n", SectionHeader(typeName), CountBadge(len(results), total, ""))
 	PrintObjectTable(results, sch, links)
 }
 
-func PrintQueryTraitResults(queryStr, traitName string, results []model.Trait, links RetrievalLinks) {
+func PrintQueryTraitResults(queryStr, traitName string, results []model.Trait, links RetrievalLinks, total int) {
 	if len(results) == 0 {
 		printNoResults()
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", SectionHeader("@"+traitName), Badge(fmt.Sprintf("%d", len(results))))
+	fmt.Printf("%s %s\n\n", SectionHeader("@"+traitName), CountBadge(len(results), total, ""))
 
 	display := NewDisplayContext()
 	table := NewResultsTable(display, TraitLayout())
@@ -114,13 +125,13 @@ func PrintQueryTraitResults(queryStr, traitName string, results []model.Trait, l
 	fmt.Println(table.Render())
 }
 
-func PrintQuerySectionResults(queryStr string, results []model.Section, links RetrievalLinks) {
+func PrintQuerySectionResults(queryStr string, results []model.Section, links RetrievalLinks, total int) {
 	if len(results) == 0 {
 		printNoResults()
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", SectionHeader("section"), Badge(fmt.Sprintf("%d", len(results))))
+	fmt.Printf("%s %s\n\n", SectionHeader("section"), CountBadge(len(results), total, ""))
 
 	display := NewDisplayContext()
 	table := NewResultsTable(display, SearchLayout())
@@ -139,13 +150,13 @@ func PrintQuerySectionResults(queryStr string, results []model.Section, links Re
 	fmt.Println(table.Render())
 }
 
-func PrintQueryLinkResults(queryStr string, results []model.Link, links RetrievalLinks) {
+func PrintQueryLinkResults(queryStr string, results []model.Link, links RetrievalLinks, total int) {
 	if len(results) == 0 {
 		printNoResults()
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", SectionHeader("link"), Badge(fmt.Sprintf("%d", len(results))))
+	fmt.Printf("%s %s\n\n", SectionHeader("link"), CountBadge(len(results), total, ""))
 
 	display := NewDisplayContext()
 	table := NewResultsTable(display, SearchLayout())
@@ -178,13 +189,13 @@ func PrintQueryLinkResults(queryStr string, results []model.Link, links Retrieva
 	fmt.Println(table.Render())
 }
 
-func PrintSearchResults(queryStr string, results []model.SearchMatch, links RetrievalLinks) {
+func PrintSearchResults(queryStr string, results []model.SearchMatch, links RetrievalLinks, total int) {
 	if len(results) == 0 {
 		printNoResults()
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", SectionHeader(queryStr), Badge(fmt.Sprintf("%d results", len(results))))
+	fmt.Printf("%s %s\n\n", SectionHeader(queryStr), CountBadge(len(results), total, "results"))
 
 	display := NewDisplayContext()
 	table := NewResultsTable(display, SearchLayout())

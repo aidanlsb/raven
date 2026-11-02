@@ -101,18 +101,7 @@ func shapeQueryResult(result *querysvc.ExecuteResult, options queryResultShapeOp
 // when more results remain. For unlimited queries (the default) total equals
 // returned, so has_more is false and no next_offset is emitted.
 func queryPagination(result *querysvc.ExecuteResult) commandpayload.Pagination {
-	paging := commandpayload.Pagination{
-		Total:    result.Total,
-		Returned: result.Returned,
-		Offset:   result.Offset,
-		Limit:    result.Limit,
-		HasMore:  result.HasMore(),
-	}
-	if paging.HasMore {
-		next := result.NextOffset()
-		paging.NextOffset = &next
-	}
-	return paging
+	return commandpayload.NewPagination(result.Total, result.Returned, result.Offset, result.Limit)
 }
 
 func objectQueryItems(result *querysvc.ExecuteResult) []commandpayload.ObjectItem {

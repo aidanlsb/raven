@@ -102,6 +102,42 @@ func TestEmitJSONErrorEnvelopeWritesFlagParseFailure(t *testing.T) {
 	}
 }
 
+func TestOutputJSONIsCompact(t *testing.T) {
+	var outputErr error
+	out := captureStdout(t, func() {
+		outputErr = outputJSON(commandexec.Success(map[string]string{"ok": "yes"}, nil))
+	})
+	if outputErr != nil {
+		t.Fatalf("outputJSON() error = %v", outputErr)
+	}
+	if strings.Contains(out, "\n  ") || strings.Contains(out, "\n\t") {
+		t.Fatalf("expected compact JSON, got indented output:\n%s", out)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(out), "{") {
+		t.Fatalf("expected JSON object, got %q", out)
+	}
+}
+
+func TestFlagParseSuggestionUnknownFlag(t *testing.T) {
+	got := flagParseSuggestionFor(searchCmd, errors.New("unknown flag: --limt"))
+	if !strings.Contains(got, "--limit") {
+		t.Fatalf("suggestion = %q, want closest flag --limit", got)
+	}
+	if !strings.Contains(got, "rvn search --help") {
+		t.Fatalf("suggestion = %q, want help line", got)
+	}
+	if strings.Contains(got, "starts with a dash") {
+		t.Fatalf("suggestion = %q, should not mention dash terminator", got)
+	}
+}
+
+func TestFlagParseSuggestionDashPrefixedValue(t *testing.T) {
+	got := flagParseSuggestionFor(addCmd, errors.New("unknown shorthand flag: ' ' in - probe a"))
+	if !strings.Contains(got, `--json -- "- Review the rollout"`) {
+		t.Fatalf("suggestion = %q, want dash-terminator example", got)
+	}
+}
+
 func TestEmitJSONErrorEnvelopeLeavesHumanErrorsAlone(t *testing.T) {
 	parseErr := errors.New("unknown shorthand flag: ' ' in - probe a")
 	var got error

@@ -21,6 +21,23 @@ type Pagination struct {
 	NextOffset *int `json:"next_offset,omitempty"`
 }
 
+// NewPagination builds the shared paging envelope. next_offset is included
+// only when more results remain after this window.
+func NewPagination(total, returned, offset, limit int) Pagination {
+	paging := Pagination{
+		Total:    total,
+		Returned: returned,
+		Offset:   offset,
+		Limit:    limit,
+		HasMore:  offset+returned < total,
+	}
+	if paging.HasMore {
+		next := offset + returned
+		paging.NextOffset = &next
+	}
+	return paging
+}
+
 // ObjectItem is a single row in a `type:` query result.
 type ObjectItem struct {
 	Num      int                              `json:"num"`

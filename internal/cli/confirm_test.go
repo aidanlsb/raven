@@ -1,31 +1,66 @@
 package cli
 
-import "testing"
+import (
+	"strings"
+	"testing"
 
-func TestConfirmResponseIsYes(t *testing.T) {
-	t.Parallel()
+	"github.com/aidanlsb/raven/internal/codes"
+)
 
-	tests := []struct {
-		name     string
-		response string
-		want     bool
-	}{
-		{name: "y applies", response: "y\n", want: true},
-		{name: "yes applies", response: "yes\n", want: true},
-		{name: "uppercase Y applies", response: "Y\n", want: true},
-		{name: "mixed-case Yes applies", response: "  Yes  \n", want: true},
-		{name: "empty aborts", response: "\n", want: false},
-		{name: "n aborts", response: "n\n", want: false},
-		{name: "no aborts", response: "no\n", want: false},
-		{name: "other aborts", response: "maybe\n", want: false},
+func TestShouldPromptForConfirmUsesTTYSeams(t *testing.T) {
+	prevJSON := jsonOutput
+	prevStdin := interactiveStdinIsTerminal
+	prevStdout := interactiveStdoutIsTerminal
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		interactiveStdinIsTerminal = prevStdin
+		interactiveStdoutIsTerminal = prevStdout
+	})
+
+	jsonOutput = false
+	interactiveStdinIsTerminal = func() bool { return true }
+	interactiveStdoutIsTerminal = func() bool { return true }
+	if !shouldPromptForConfirm() {
+		t.Fatal("expected prompt when both stdio streams are TTYs")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := confirmResponseIsYes(tt.response); got != tt.want {
-				t.Fatalf("confirmResponseIsYes(%q) = %v, want %v", tt.response, got, tt.want)
-			}
-		})
+	interactiveStdinIsTerminal = func() bool { return false }
+	if shouldPromptForConfirm() {
+		t.Fatal("expected no prompt without a stdin TTY")
+	}
+
+	interactiveStdinIsTerminal = func() bool { return true }
+	jsonOutput = true
+	if shouldPromptForConfirm() {
+		t.Fatal("expected no prompt in --json mode")
+	}
+}
+
+func TestConfirmDestructiveWithoutTTYReturnsConfirmationRequired(t *testing.T) {
+	prevJSON := jsonOutput
+	prevStdin := interactiveStdinIsTerminal
+	prevStdout := interactiveStdoutIsTerminal
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		interactiveStdinIsTerminal = prevStdin
+		interactiveStdoutIsTerminal = prevStdout
+	})
+
+	jsonOutput = false
+	interactiveStdinIsTerminal = func() bool { return false }
+	interactiveStdoutIsTerminal = func() bool { return true }
+
+	ok, result := confirmDestructive("Confirm?", "--force")
+	if ok {
+		t.Fatal("expected confirmDestructive to refuse without a TTY")
+	}
+	if result.OK || result.Error == nil {
+		t.Fatalf("result = %#v, want CONFIRMATION_REQUIRED failure", result)
+	}
+	if result.Error.Code != codes.ErrConfirmationRequired {
+		t.Fatalf("code = %s, want CONFIRMATION_REQUIRED", result.Error.Code)
+	}
+	if !strings.Contains(result.Error.Suggestion, "--force") {
+		t.Fatalf("suggestion = %q, want --force", result.Error.Suggestion)
 	}
 }

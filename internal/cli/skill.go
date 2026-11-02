@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/skills"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -77,8 +78,8 @@ func invokeSkillInstall(cmd *cobra.Command, commandID, _ string, args map[string
 	}
 
 	printSkillInstallPlan(data)
-	if !promptForConfirm("Apply these skill changes?") {
-		return commandexec.Success(map[string]interface{}{"mode": "cancelled"}, nil)
+	if ok, confirmResult := confirmDestructive("Apply these skill changes?", "--confirm"); !ok {
+		return confirmResult
 	}
 
 	return executeCanonicalRequest(commandexec.Request{
@@ -110,14 +111,15 @@ func renderSkillList(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderSkillInstall(_ *cobra.Command, result commandexec.Result) error {
+	if _, ok := result.Data.(commandpayload.CancelledResult); ok {
+		fmt.Println(ui.Star("Cancelled."))
+		return nil
+	}
 	data := canonicalDataMap(result)
 	mode := stringValue(data["mode"])
 	root := stringValue(data["root"])
 
 	switch mode {
-	case "cancelled":
-		fmt.Println(ui.Star("Cancelled. No skill changes were applied."))
-		return nil
 	case "applied":
 		fmt.Println(ui.Checkf("Reconciled Raven skills at %s", ui.FilePath(root)))
 		fmt.Println(ui.Hint(fmt.Sprintf("Applied %d file changes", intValue(data["actions_applied"]))))

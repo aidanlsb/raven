@@ -26,6 +26,11 @@ If there is no Raven JSON payload at all:
 CLI `--json` is not a silent transport: flag-parse failures (including a
 markdown bullet that starts with `-`) return `ok=false` with `INVALID_INPUT`.
 An empty stdout on a non-zero exit is a bug, not a successful no-op.
+Unknown flags suggest the closest valid flag and `rvn <cmd> --help`. The
+`--` dash-terminator advice is only for dash-prefixed values, not typos.
+Without a TTY, confirmation prompts fail with `CONFIRMATION_REQUIRED` (exit 1)
+instead of printing "Cancelled." and exiting 0. Pass the named skip flag
+(`--force`, `--confirm`, or `--skip-type-check`).
 
 ## 4. Schema validation failures
 

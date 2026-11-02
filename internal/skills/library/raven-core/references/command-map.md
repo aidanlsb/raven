@@ -36,7 +36,7 @@ Use this page as the compact CLI chooser for day-to-day Raven work.
 - Reorder/reparent a complete section subtree: `rvn section move <file#section> [--after|--before|--under <section>] --json`.
 - Rename a section heading with ref updates: `rvn section rename <file#section> "<new heading text>" --json`.
 - Delete a complete section subtree: `rvn section delete <file#section> --json` previews exact bounds/content and affected backlinks; add `--confirm` to apply.
-- Safe delete with backlink warnings: `rvn delete <reference> --json` (applies immediately; add `--dry-run` to preview). Bulk `--stdin` deletes require `--confirm`.
+- Safe delete with backlink warnings: `rvn delete <reference> --json` (applies immediately; add `--dry-run` to preview). Human delete without a TTY requires `--force`. Bulk `--stdin` deletes require `--confirm`.
 - Recover a trashed file: `rvn trash list --json`, then preview-first `rvn restore <reference> --json` and `--confirm` to apply.
 - Permanently empty trash: `rvn trash empty --json` previews matching entries; add `--confirm` to delete. `--older-than 7d` limits the wipe.
 

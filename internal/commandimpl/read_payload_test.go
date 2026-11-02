@@ -81,7 +81,7 @@ func TestHandleSearchTypedResult(t *testing.T) {
 	}
 
 	wire := marshalToMap(t, payload)
-	assertKeys(t, wire, []string{"query", "items"})
+	assertKeys(t, wire, []string{"query", "items", "total", "returned", "offset", "limit", "has_more"})
 	item := wire["items"].([]interface{})[0].(map[string]interface{})
 	// Object matches carry only the core columns; section-only fields are absent.
 	assertKeys(t, item, []string{"object_id", "title", "file_path", "snippet", "rank"})

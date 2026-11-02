@@ -9,10 +9,13 @@ results, see [Bulk operations](../vault-management/bulk-operations.md).
 
 ## JSON and exit status
 
-With `--json`, Raven still writes the standard response envelope. An
-`ok=false` response exits with status 1, including config, vault-resolution, and
+With `--json`, Raven writes a compact (unindented) standard response envelope.
+An `ok=false` response exits with status 1, including config, vault-resolution, and
 fatal schema failures; successful commands exit 0. Scripts should check the
-exit status and parse `error.code` for the specific failure.
+exit status and parse `error.code` for the specific failure. Without a TTY,
+confirmation prompts are never treated as a successful no-op: they fail with
+`CONFIRMATION_REQUIRED` (exit 1) unless you pass the command's confirm-skip
+flag (`--force`, `--confirm`, or `--skip-type-check`).
 
 `rvn check` follows lint-style conventions and can exit 1 with `ok=true` when it
 finds issues (or warnings with `--strict`). Cancelling `rvn pick` exits 130.
@@ -147,9 +150,13 @@ Search syntax:
 | `A OR B` | Either term | `design OR redesign` |
 | `NOT A` | Exclude term | `meeting NOT standup` |
 
+JSON includes `total`, `returned`, `offset`, `limit`, and `has_more` (plus
+`next_offset` when more matches remain). Page with `--limit` / `--offset`.
+
 Key flags:
 - `--type` / `-t`: filter results to a specific type
 - `--limit` / `-n`: maximum results (default 20)
+- `--offset`: number of matches to skip
 
 ### `rvn backlinks`
 
@@ -441,8 +448,8 @@ permanently removes trash entries. Use those commands instead of moving or
 deleting vault files by hand.
 
 ```bash
-rvn delete project/old-project                 # Interactive: preview, then confirm prompt
-rvn delete project/old-project --force         # Skip the confirmation prompt
+rvn delete project/old-project                 # Interactive TTY: preview, then confirm prompt
+rvn delete project/old-project --force         # Skip the confirmation prompt (required without a TTY)
 rvn delete project/old-project --dry-run       # Preview without deleting
 rvn delete project/old-project --json          # Applies immediately (non-interactive)
 rvn delete files/old-paper.pdf --dry-run --json

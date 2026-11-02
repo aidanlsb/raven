@@ -253,7 +253,7 @@ By default, docs are fetched from the "main" ref.`,
 			{Name: "query", Description: "Search query text", Required: true, Variadic: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "limit", Short: "n", Description: "Maximum number of matches (default: 20)", Type: FlagTypeInt, Default: "20"},
+			{Name: "limit", Short: "n", Description: "Maximum number of matches", Type: FlagTypeInt, Default: "20"},
 			{Name: "offset", Description: "Number of matches to skip before returning results", Type: FlagTypeInt},
 			{Name: "section", Short: "s", Description: "Filter search to one docs section", Type: FlagTypeString},
 		},

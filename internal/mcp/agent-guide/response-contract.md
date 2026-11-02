@@ -5,7 +5,8 @@ Use this guide to interpret Raven MCP results safely and consistently.
 ## Standard JSON envelope
 
 Every command returns `ok`. Other envelope fields are present only when
-applicable (`omitempty` on the wire). A typical success is:
+applicable (`omitempty` on the wire). CLI `--json`, MCP, and `rvn api` all
+emit compact (unindented) JSON. A typical success is:
 
 ```json
 {
@@ -207,9 +208,9 @@ user intent is clear. When unsure about a `delete`/`move`, inspect the object
 Commands that return result windows expose paging affordances in `data` so you
 can loop without guessing:
 
-- `query` and `docs search` include `total`/`returned`/`offset`/`limit` and a
+- `query`, `search`, and `docs search` include `total`/`returned`/`offset`/`limit` and a
   `has_more` boolean.
-- When `has_more` is `true`, `query` also returns `next_offset` — use it as the
+- When `has_more` is `true`, `query` and `search` also return `next_offset` — use it as the
   next request's `offset`. Loop while `has_more` is `true`; stop when it is
   `false`.
 

@@ -28,11 +28,11 @@ func TestEmptyQueryAndSearchPrintNoResults(t *testing.T) {
 		name string
 		fn   func()
 	}{
-		{name: "objects", fn: func() { printQueryObjectResults("type:person", "person", nil, nil) }},
-		{name: "traits", fn: func() { printQueryTraitResults("trait:todo", "todo", nil) }},
-		{name: "sections", fn: func() { printQuerySectionResults("section", nil) }},
-		{name: "links", fn: func() { printQueryLinkResults("link", nil) }},
-		{name: "search", fn: func() { printSearchResults("missing", nil) }},
+		{name: "objects", fn: func() { printQueryObjectResults("type:person", "person", nil, nil, 0) }},
+		{name: "traits", fn: func() { printQueryTraitResults("trait:todo", "todo", nil, 0) }},
+		{name: "sections", fn: func() { printQuerySectionResults("section", nil, 0) }},
+		{name: "links", fn: func() { printQueryLinkResults("link", nil, 0) }},
+		{name: "search", fn: func() { printSearchResults("missing", nil, 0) }},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -64,7 +64,7 @@ func TestPrintSearchResultsIncludesLocation(t *testing.T) {
 				FilePath: "notes/meeting.md",
 				Snippet:  "Discussed the »quarterly« roadmap.",
 			},
-		})
+		}, 1)
 	})
 
 	if !strings.Contains(out, "notes/meeting.md:1") {
@@ -236,7 +236,7 @@ func TestPrintQuerySectionResultsIncludesColumnHeaders(t *testing.T) {
 				Level:     2,
 				LineStart: 17,
 			},
-		})
+		}, 1)
 	})
 
 	for _, want := range []string{"title", "heading", "location", "Section query results", "h2 #section-query-results", "page/raven.md:17"} {
@@ -267,7 +267,7 @@ func TestPrintQueryTraitResultsIncludesColumnHeaders(t *testing.T) {
 			Line:      23,
 		}
 		trait.SetIndexValueString(&value)
-		printQueryTraitResults("trait:status", "status", []model.Trait{trait})
+		printQueryTraitResults("trait:status", "status", []model.Trait{trait}, 1)
 	})
 
 	for _, want := range []string{"content", "trait", "location", "Review section query output", "@status(open)", "page/raven.md:23"} {
@@ -308,7 +308,7 @@ func TestPrintQueryLinkResultsHyperlinksVaultFileTarget(t *testing.T) {
 		NormalizedKey: "files/spec.pdf",
 	}
 	out := captureStdout(t, func() {
-		printQueryLinkResults("link .ext==pdf", []model.Link{link})
+		printQueryLinkResults("link .ext==pdf", []model.Link{link}, 1)
 	})
 
 	targetURL := buildEditorURL(cfg, filepath.Join(resolvedVaultPath, filepath.FromSlash(link.NormalizedKey)), 1)
@@ -344,7 +344,7 @@ func TestPrintQueryLinkResultsNoLinksDisablesHyperlinks(t *testing.T) {
 			Display:       "Spec",
 			Scheme:        "file",
 			NormalizedKey: "files/spec.pdf",
-		}})
+		}}, 1)
 	})
 
 	if strings.Contains(out, "\x1b]8;;") {
@@ -395,5 +395,64 @@ func TestRenderCanonicalQueryHumanLinkPipeHasNoHyperlinks(t *testing.T) {
 	}
 	if !strings.Contains(out, "projects/raven\tSpec (../files/spec.pdf)\tprojects/raven.md:12") {
 		t.Fatalf("expected plain pipe row, got: %q", out)
+	}
+}
+
+func TestPrintQueryObjectResultsShowsCappedCount(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = false
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	sch := schema.New()
+	sch.Types["person"] = &schema.TypeDefinition{
+		NameField: "name",
+		Fields: map[string]*schema.FieldDefinition{
+			"name": {Type: schema.FieldTypeString},
+		},
+	}
+	out := captureStdout(t, func() {
+		printQueryObjectResults("type:person", "person", []model.Object{{
+			ID:        "people/odin",
+			Type:      "person",
+			FilePath:  "people/odin.md",
+			LineStart: 1,
+			Fields:    map[string]fieldvalue.FieldValue{"name": fieldvalue.String("Odin")},
+		}}, sch, 31)
+	})
+	if !strings.Contains(out, "3 of 31") && !strings.Contains(out, "1 of 31") {
+		t.Fatalf("expected capped count in header, got: %q", out)
+	}
+}
+
+func TestPipeItemsForObjectResultsUseDisplayName(t *testing.T) {
+	sch := schema.New()
+	sch.Types["person"] = &schema.TypeDefinition{
+		NameField: "name",
+		Fields: map[string]*schema.FieldDefinition{
+			"name": {Type: schema.FieldTypeString},
+		},
+	}
+	items := pipeItemsForObjectResults([]model.Object{{
+		ID:        "people/odin",
+		Type:      "person",
+		FilePath:  "people/odin.md",
+		LineStart: 1,
+		Fields:    map[string]fieldvalue.FieldValue{"name": fieldvalue.String("Odin")},
+	}}, sch)
+	if len(items) != 1 {
+		t.Fatalf("items = %d, want 1", len(items))
+	}
+	if items[0].ID != "people/odin" {
+		t.Fatalf("ID = %q, want people/odin", items[0].ID)
+	}
+	if items[0].Content != "Odin" {
+		t.Fatalf("Content = %q, want Odin", items[0].Content)
 	}
 }

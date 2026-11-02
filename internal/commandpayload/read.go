@@ -51,6 +51,7 @@ func (m SearchMatchItem) MarshalJSON() ([]byte, error) {
 type SearchResult struct {
 	Query string            `json:"query"`
 	Items []SearchMatchItem `json:"items"`
+	Pagination
 }
 
 // ReadContentResult is the success payload for an enriched (non-raw) `read`.

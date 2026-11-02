@@ -11,10 +11,13 @@ but it never replaces an existing object: if the target already exists, it fails
 with FILE_EXISTS. Agents doing create-or-replace on reruns should call write
 instead.
 
-The type is required. If title is not provided in interactive CLI mode, you will
-be prompted for it. Interactive CLI mode prompts for schema fields; optional
-fields can be skipped with a blank response. Field values can also be provided
-via --field flags or --fields-json.
+The type is required. If title is not provided in an interactive TTY, you will
+be prompted for it. Without a TTY, title is required and optional schema fields
+are not prompted — the object is created with the fields that were given.
+Missing required fields fail with REQUIRED_FIELD_MISSING; pass them with
+--field name=value (repeatable) or --fields-json. new does not accept
+positional field=value arguments. Interactive TTYs prompt for
+schema fields; optional fields can be skipped with a blank response.
 
 Use --field for shell-friendly literal values. Use --fields-json when exact type
 control matters, such as preserving the string "true" instead of a boolean or
@@ -50,8 +53,8 @@ data.missing_ref_items, and a REF_TARGET_MISSING warning per missing target. Int
 CLI offers to create the missing pages; agents can run 'rvn check create-missing'.`,
 		Args: []ArgMeta{
 			{Name: "type", Description: "Object type (e.g., person, project)", Required: true, DynamicComp: "types"},
-			// NOTE: Title is optional in interactive CLI mode, but required in --json (MCP) mode.
-			{Name: "title", Description: "Title/name for the object (auto-populates name_field if configured)", Required: true},
+			// NOTE: Title is optional in interactive CLI mode, but required without a TTY / in --json (MCP) mode.
+			{Name: "title", Description: "Title/name for the object (auto-populates name_field if configured)", Required: true, CLIOptional: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set field value (can be repeated): --field name=value", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
@@ -220,8 +223,10 @@ broken_file_link in 'rvn check'.
 Single-file delete:
 Applies immediately when invoked (CLI JSON and MCP). Pass --dry-run to preview the
 deletion (and its backlink impact) without applying. Interactive CLI terminals still
-show a confirmation prompt unless --force is set. Only call delete after user intent
-is clear; when unsure, inspect the object and run backlinks first.
+show a confirmation prompt unless --force is set. Without a TTY, human CLI
+returns CONFIRMATION_REQUIRED unless --force is set (it never silently
+cancels). Only call delete after user intent is clear; when unsure, inspect the
+object and run backlinks first.
 
 Bulk operations:
 Use --stdin to read object references or explicit file paths from stdin (one per line).`,

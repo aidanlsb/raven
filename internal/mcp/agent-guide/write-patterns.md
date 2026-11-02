@@ -27,6 +27,7 @@ Rules:
 - Use `write` when reruns should produce one current canonical output.
 - Use `add` when history should accumulate.
 - Use `new` only when you intend to create a new object identity and must not replace an existing one.
+- `new` does not prompt for optional fields without a TTY. Missing required fields fail with `REQUIRED_FIELD_MISSING`; retry with `--field name=value` or the `field` argument.
 
 ## Section-targeted writes
 
