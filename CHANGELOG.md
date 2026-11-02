@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.1.0] - 2026-11-01
+
+First 0.1 release. Raven is still pre-1.0 and minor releases may include
+breaking changes, which are always marked **Breaking** here.
+
 ### Security
 - GitHub Actions workflow lockfile (`.github/workflows/actions.lock`) pins
   reviewed actions and their transitive dependencies to exact commits.
@@ -654,7 +659,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.36...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.1.0...HEAD
+[v0.1.0]: https://github.com/aidanlsb/raven/compare/v0.0.41...v0.1.0
 [v0.0.36]: https://github.com/aidanlsb/raven/compare/v0.0.35...v0.0.36
 [v0.0.35]: https://github.com/aidanlsb/raven/compare/v0.0.34...v0.0.35
 [v0.0.34]: https://github.com/aidanlsb/raven/compare/v0.0.33...v0.0.34
