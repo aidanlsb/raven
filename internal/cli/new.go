@@ -24,20 +24,27 @@ var newCmd = newExceptionLeafCommand("new", exceptionLeafOptions{
 })
 
 func prepareNewArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
-	// If title is missing and not JSON mode, prompt for it
-	if len(args) < 2 && !isJSONOutput() {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Fprintf(os.Stderr, "Title: ")
-		value, err := reader.ReadString('\n')
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to read input: %w", err)
-		}
-		title := strings.TrimSpace(value)
-		if title == "" {
-			return nil, false, handleErrorMsg(ErrMissingArgument, "title cannot be empty", "")
-		}
-		args = append(args, title)
+	if len(args) >= 2 {
+		return args, false, nil
 	}
+	if !shouldPromptForConfirm() {
+		return nil, false, handleErrorMsg(
+			ErrMissingArgument,
+			"title cannot be empty",
+			`Pass a title: rvn new <type> "Title"`,
+		)
+	}
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Fprintf(os.Stderr, "Title: ")
+	value, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to read input: %w", err)
+	}
+	title := strings.TrimSpace(value)
+	if title == "" {
+		return nil, false, handleErrorMsg(ErrMissingArgument, "title cannot be empty", `Pass a title: rvn new <type> "Title"`)
+	}
+	args = append(args, title)
 	return args, false, nil
 }
 
@@ -56,8 +63,9 @@ func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]in
 		}
 	}
 
-	// Interactive field prompts in non-JSON mode
-	if !isJSONOutput() {
+	// Interactive field prompts only on a TTY. Without a TTY, create with
+	// the fields that were given; missing required fields fail below.
+	if shouldPromptForConfirm() {
 		// Convert field map[string]interface{} to map[string]string for prompting
 		fieldValuesRaw, _ := args["field"].(map[string]interface{})
 		fieldValues := make(map[string]string)
@@ -95,7 +103,7 @@ func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]in
 			Args:      args,
 		})
 		if !result.OK {
-			if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredFieldMissing {
+			if shouldPromptForConfirm() && result.Error != nil && result.Error.Code == ErrRequiredFieldMissing {
 				fieldValues := map[string]string{}
 				for key, value := range stringMapValue(args["field"]) {
 					fieldValues[key] = value

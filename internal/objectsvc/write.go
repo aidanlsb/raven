@@ -251,13 +251,24 @@ func requiredFieldsMissingError(rt *vaultruntime.Runtime, req WriteRequest, miss
 			details["name_field_hint"] = fmt.Sprintf("The title argument auto-populates the '%s' field", typeDef.NameField)
 		}
 		return svcerr.New(codes.ErrRequiredFieldMissing, msg).
-			WithSuggestion(fmt.Sprintf("Retry the same call with: field: {%s}", buildFieldTemplateExample(missingNames))).
+			WithSuggestion(requiredFieldCLISuggestion(missingNames)).
 			WithDetails(details)
 	}
 	details["missing_fields"] = missingNames
 	return svcerr.New(codes.ErrRequiredFieldMissing, msg).
-		WithSuggestion("Provide missing fields with --field").
+		WithSuggestion(requiredFieldCLISuggestion(missingNames)).
 		WithDetails(details)
+}
+
+func requiredFieldCLISuggestion(missingNames []string) string {
+	if len(missingNames) == 0 {
+		return "Provide missing fields with --field name=value (repeatable) or --fields-json"
+	}
+	parts := make([]string, 0, len(missingNames))
+	for _, name := range missingNames {
+		parts = append(parts, fmt.Sprintf("--field %s=<value>", name))
+	}
+	return "Provide missing fields with " + strings.Join(parts, " ") + " or --fields-json"
 }
 
 func replaceBodyContent(fileContent, newBody string) string {
@@ -289,12 +300,4 @@ func buildFieldTemplate(missingFields []string) map[string]string {
 		out[field] = "<value>"
 	}
 	return out
-}
-
-func buildFieldTemplateExample(missingFields []string) string {
-	parts := make([]string, 0, len(missingFields))
-	for _, f := range missingFields {
-		parts = append(parts, fmt.Sprintf(`"%s": "<value>"`, f))
-	}
-	return strings.Join(parts, ", ")
 }

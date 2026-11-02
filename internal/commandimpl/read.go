@@ -28,6 +28,7 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 	if !ok {
 		limit = 20
 	}
+	offset, _ := intArg(req.Args, "offset")
 	if query == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires search query", nil, "Usage: rvn search <query>")
 	}
@@ -38,15 +39,17 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 	}
 	defer rt.Close()
 
-	results, err := readsvc.Search(rt, query, searchType, limit)
+	results, total, err := readsvc.Search(rt, query, searchType, limit, offset)
 	if err != nil {
 		return mapSearchFailure(err)
 	}
 
+	items := searchMatchItems(results)
 	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(commandpayload.SearchResult{
-		Query: query,
-		Items: searchMatchItems(results),
-	}, &commandexec.Meta{Count: len(results), QueryTimeMs: time.Since(start).Milliseconds()}))
+		Query:      query,
+		Items:      items,
+		Pagination: commandpayload.NewPagination(total, len(items), offset, limit),
+	}, &commandexec.Meta{Count: len(items), QueryTimeMs: time.Since(start).Milliseconds()}))
 }
 
 func mapSearchFailure(err error) commandexec.Result {

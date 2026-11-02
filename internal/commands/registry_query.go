@@ -385,6 +385,9 @@ Uses full-text search with relevance ranking. Supports:
 
 Results are ranked by relevance with snippets showing matched content.
 Use --type to filter results to specific object types.
+JSON includes total, returned, offset, limit, and has_more (plus next_offset
+when has_more is true), the same pagination contract as query. Page with
+--limit/--offset.
 
 In an interactive terminal, bare 'rvn search' launches Raven's picker over
 indexed files. Non-interactive use still requires a query string.` + barePickerInsertModeHelp,
@@ -393,14 +396,15 @@ indexed files. Non-interactive use still requires a query string.` + barePickerI
 		},
 		Flags: []FlagMeta{
 			noRefreshFlag,
-			{Name: "limit", Short: "n", Description: "Maximum number of results (default: 20)", Type: FlagTypeInt, Default: "20"},
+			{Name: "limit", Short: "n", Description: "Maximum number of results", Type: FlagTypeInt, Default: "20"},
+			{Name: "offset", Description: "Number of matches to skip before returning results", Type: FlagTypeInt},
 			{Name: "type", Short: "t", Description: "Filter by object type", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn search \"meeting notes\" --json",
 			"rvn search \"project*\" --type project --json",
 			"rvn search '\"world tree\"' --limit 5 --json",
-			"rvn search \"freya OR thor\" --json",
+			"rvn search \"freya OR thor\" --limit 20 --offset 20 --json",
 		},
 		UseCases: []string{
 			"Find pages mentioning specific topics",

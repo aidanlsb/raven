@@ -132,7 +132,7 @@ func Reclassify(rt *vaultruntime.Runtime, req ReclassifyRequest) (*ReclassifyRes
 			},
 		}
 
-		return nil, svcerr.New(codes.ErrRequiredFieldMissing, fmt.Sprintf("Missing required fields for type '%s': %s", req.NewTypeName, strings.Join(missingFieldNames, ", "))).WithSuggestion(fmt.Sprintf("Retry with: field: {%s}", buildFieldTemplateExample(missingFieldNames))).WithDetails(details)
+		return nil, svcerr.New(codes.ErrRequiredFieldMissing, fmt.Sprintf("Missing required fields for type '%s': %s", req.NewTypeName, strings.Join(missingFieldNames, ", "))).WithSuggestion(requiredFieldCLISuggestion(missingFieldNames)).WithDetails(details)
 	}
 
 	droppedFields := collectDroppedFieldsForReclassify(fm, newTypeDef)

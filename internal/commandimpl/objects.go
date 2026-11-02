@@ -36,17 +36,7 @@ func HandleObjects(_ context.Context, req commandexec.Request) commandexec.Resul
 		})
 	}
 	returned := len(items)
-	paging := commandpayload.Pagination{
-		Total:    result.Total,
-		Returned: returned,
-		Offset:   result.Offset,
-		Limit:    result.Limit,
-		HasMore:  result.Offset+returned < result.Total,
-	}
-	if paging.HasMore {
-		next := result.Offset + returned
-		paging.NextOffset = &next
-	}
+	paging := commandpayload.NewPagination(result.Total, returned, result.Offset, result.Limit)
 
 	out := commandexec.Success(commandpayload.ObjectsResult{
 		Items:      items,

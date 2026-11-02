@@ -31,7 +31,7 @@ func renderAddResult(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func init() {
-	addCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+	addCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		message := err.Error()
 		if strings.Contains(message, "unknown flag: --heading") || strings.Contains(message, "unknown flag: --create-heading") {
 			return handleErrorMsg(
@@ -40,7 +40,7 @@ func init() {
 				`Create the heading with 'rvn section create <file> "<title>" --level N', then append content with 'rvn add <text> --to <file#section>'`,
 			)
 		}
-		return err
+		return flagUsageError(cmd, err)
 	})
 	if err := addCmd.RegisterFlagCompletionFunc("to", completeReferenceFlag(true)); err != nil {
 		panic(err)

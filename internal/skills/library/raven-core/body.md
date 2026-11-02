@@ -15,7 +15,8 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Author `[[references]]` and `ref` fields with canonical object IDs. After
   `new`/`write`/`daily`, use the returned `data.id` (the human CLI's
   `link as <id>` value); do not generate bare short forms.
-- Single-object writes (`rvn set`/`add`/`update`/`edit`, `rvn section create`/`move`/`rename`, and single `rvn move`/`rvn delete`) apply immediately; pass `--dry-run` to preview without writing. `rvn section delete`, `rvn restore`, and `rvn trash empty` are preview-first and require `--confirm`. Bulk operations (`--stdin`), `query --apply`, `schema rename`, `rvn check fix`, and `rvn check create-missing` also stay preview-first and require `--confirm`.
+- Single-object writes (`rvn set`/`add`/`update`/`edit`, `rvn section create`/`move`/`rename`, and single `rvn move`/`rvn delete`) apply immediately in `--json`; pass `--dry-run` to preview without writing. Human `rvn delete` without a TTY returns `CONFIRMATION_REQUIRED` unless `--force` is set. Human type-mismatch `rvn move` without a TTY returns `CONFIRMATION_REQUIRED` unless `--skip-type-check` is set. `rvn section delete`, `rvn restore`, and `rvn trash empty` are preview-first and require `--confirm`. Bulk operations (`--stdin`), `query --apply`, `schema rename`, `rvn check fix`, and `rvn check create-missing` also stay preview-first and require `--confirm`.
+- `rvn new` without a TTY never prompts for optional fields; missing required fields fail with `REQUIRED_FIELD_MISSING`. Pass `--field name=value` (repeatable).
 
 ## Choose the right write command
 

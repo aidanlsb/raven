@@ -126,18 +126,45 @@ who gathered knowledge from across the world.`,
 func Execute() error {
 	syncRegistryMetadata(rootCmd)
 	jsonRequested := argsRequestJSON(os.Args[1:])
-	prevSilenceErrors := rootCmd.SilenceErrors
-	prevSilenceUsage := rootCmd.SilenceUsage
-	if jsonRequested {
-		rootCmd.SilenceErrors = true
-		rootCmd.SilenceUsage = true
-	}
-	defer func() {
-		rootCmd.SilenceErrors = prevSilenceErrors
-		rootCmd.SilenceUsage = prevSilenceUsage
-	}()
+	restoreSilence := applyCommandSilence(rootCmd, jsonRequested)
+	defer restoreSilence()
 
 	return emitJSONErrorEnvelope(jsonRequested, rootCmd.Execute())
+}
+
+func applyCommandSilence(cmd *cobra.Command, jsonRequested bool) func() {
+	type silenceState struct {
+		cmd           *cobra.Command
+		silenceErrors bool
+		silenceUsage  bool
+	}
+	var previous []silenceState
+	var walk func(*cobra.Command)
+	walk = func(c *cobra.Command) {
+		if c == nil {
+			return
+		}
+		previous = append(previous, silenceState{
+			cmd:           c,
+			silenceErrors: c.SilenceErrors,
+			silenceUsage:  c.SilenceUsage,
+		})
+		c.SilenceUsage = true
+		if jsonRequested {
+			c.SilenceErrors = true
+		}
+		for _, child := range c.Commands() {
+			walk(child)
+		}
+	}
+	walk(cmd)
+	return func() {
+		for i := len(previous) - 1; i >= 0; i-- {
+			state := previous[i]
+			state.cmd.SilenceErrors = state.silenceErrors
+			state.cmd.SilenceUsage = state.silenceUsage
+		}
+	}
 }
 
 // ExitCode maps an error returned by Execute to the process exit code.
@@ -152,6 +179,8 @@ func ExitCode(err error) int {
 }
 
 func init() {
+	rootCmd.SilenceUsage = true
+	rootCmd.SetFlagErrorFunc(flagUsageError)
 	rootCmd.PersistentFlags().StringVarP(&vaultName, "vault", "v", "", "Named vault from config")
 	rootCmd.PersistentFlags().StringVar(&vaultPathFlag, "vault-path", "", "Explicit path to vault directory")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to config file")

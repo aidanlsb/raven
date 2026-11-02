@@ -24,6 +24,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directions. `--limit`/`--offset` pages through the sort order.
 
 ### Changed
+- **Breaking:** CLI `--json` output is compact (no indentation), matching MCP
+  and `rvn api`. Pretty-printed JSON is no longer emitted.
+- **Breaking:** Without a TTY, confirmation prompts no longer print "Cancelled."
+  and exit 0. They fail with `CONFIRMATION_REQUIRED` (exit 1) and name the skip
+  flag (`--force`, `--confirm`, or `--skip-type-check`). Interactive TTYs still
+  prompt; JSON `delete` still applies immediately.
+- **Breaking:** `rvn new` without a TTY never prompts for optional schema
+  fields. Missing required fields fail with `REQUIRED_FIELD_MISSING` and suggest
+  `--field name=value`.
+- CLI usage errors no longer dump full help. A bad flag prints a short error,
+  the closest valid flag when one is close, and `Run 'rvn <cmd> --help'`.
+  Dash-terminator advice is only shown for dash-prefixed values.
+- `rvn search --json` includes `total`, `returned`, `offset`, `limit`, and
+  `has_more` (plus `next_offset` when more matches remain). Human query/search
+  headers show `N of TOTAL` when results are capped.
+- Pipe-mode `query` object rows show the object's display name in the content
+  column (IDs stay IDs for `| rvn pick`).
+- Deduped `(default 20)` in `search` / `docs search` `--help`.
+- Bumped shipped skill `raven-core` to 6 and `raven-query` to 4 for the agent
+  ergonomics contract above.
 - Index-backed reads (`query`, `search`, `backlinks`, `outlinks`, `objects`,
   `resolve`, `read`, `open`, `date`, and `vault stats`) incrementally reindex
   changed, new, and deleted Markdown files before running, using the same

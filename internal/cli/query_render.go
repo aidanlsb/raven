@@ -31,28 +31,26 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 	case commandpayload.QueryObjectResult:
 		objects := objectsFromItems(payload.Items)
 		label := queryLabelOrParse(payload.Type, queryStr)
+		sch, _ := loadSchemaSafe(getVaultPath())
 		if browse {
 			if len(objects) == 0 {
-				sch, _ := loadSchemaSafe(getVaultPath())
-				printQueryObjectResults(queryStr, label, objects, sch)
+				printQueryObjectResults(queryStr, label, objects, sch, payload.Total)
 				return nil
 			}
-			sch, _ := loadSchemaSafe(getVaultPath())
 			return browseQueryResults(browseItemsForObjectResults(objects, sch), objectBrowseHeaders(objects, sch), objectBrowseLayout(objects, sch))
 		}
 		if ShouldUsePipeFormat() {
-			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects))
+			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects, sch))
 			return nil
 		}
-		sch, _ := loadSchemaSafe(getVaultPath())
-		printQueryObjectResults(queryStr, label, objects, sch)
+		printQueryObjectResults(queryStr, label, objects, sch, payload.Total)
 		return nil
 	case commandpayload.QueryTraitResult:
 		traits := traitsFromItems(payload.Items)
 		label := queryLabelOrParse(payload.Trait, queryStr)
 		if browse {
 			if len(traits) == 0 {
-				printQueryTraitResults(queryStr, label, traits)
+				printQueryTraitResults(queryStr, label, traits, payload.Total)
 				return nil
 			}
 			return browseQueryResults(browseItemsForTraitResults(traits), traitBrowseHeaders(), ui.TraitLayout())
@@ -61,13 +59,13 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 			WritePipeableList(os.Stdout, pipeItemsForTraitResults(traits))
 			return nil
 		}
-		printQueryTraitResults(queryStr, label, traits)
+		printQueryTraitResults(queryStr, label, traits, payload.Total)
 		return nil
 	case commandpayload.QuerySectionResult:
 		sections := sectionsFromItems(payload.Items)
 		if browse {
 			if len(sections) == 0 {
-				printQuerySectionResults(queryStr, sections)
+				printQuerySectionResults(queryStr, sections, payload.Total)
 				return nil
 			}
 			return browseQueryResults(browseItemsForSectionResults(sections), sectionBrowseHeaders(), ui.SearchLayout())
@@ -76,13 +74,13 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 			WritePipeableList(os.Stdout, pipeItemsForSectionResults(sections))
 			return nil
 		}
-		printQuerySectionResults(queryStr, sections)
+		printQuerySectionResults(queryStr, sections, payload.Total)
 		return nil
 	case commandpayload.QueryLinkResult:
 		links := linksFromItems(payload.Items)
 		if browse {
 			if len(links) == 0 {
-				printQueryLinkResults(queryStr, links)
+				printQueryLinkResults(queryStr, links, payload.Total)
 				return nil
 			}
 			return browseQueryResults(browseItemsForLinkResults(links), linkBrowseHeaders(), ui.SearchLayout())
@@ -91,7 +89,7 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 			WritePipeableList(os.Stdout, pipeItemsForLinkResults(links))
 			return nil
 		}
-		printQueryLinkResults(queryStr, links)
+		printQueryLinkResults(queryStr, links, payload.Total)
 		return nil
 	default:
 		return handleErrorMsg(ErrInternal, "unexpected query result shape", "")

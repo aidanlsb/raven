@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/x/term"
-
+	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -15,7 +15,7 @@ func shouldPromptForConfirm() bool {
 	if isJSONOutput() {
 		return false
 	}
-	return term.IsTerminal(os.Stdout.Fd()) && term.IsTerminal(os.Stdin.Fd())
+	return canUseInteractiveTerminal()
 }
 
 func promptForConfirm(message string) bool {
@@ -29,6 +29,28 @@ func promptForConfirm(message string) bool {
 	reader := bufio.NewReader(os.Stdin)
 	response, _ := reader.ReadString('\n')
 	return confirmResponseIsYes(response)
+}
+
+func confirmationRequiredResult(skipFlag string) commandexec.Result {
+	return commandexec.Failure(
+		ErrConfirmationRequired,
+		"confirmation required",
+		nil,
+		fmt.Sprintf("Re-run with %s", skipFlag),
+	)
+}
+
+// confirmDestructive prompts on a TTY. An interactive "no" still reports
+// cancelled (exit 0, "Cancelled."). Without a TTY it returns
+// CONFIRMATION_REQUIRED instead of treating silence as a successful cancel.
+func confirmDestructive(message, skipFlag string) (bool, commandexec.Result) {
+	if shouldPromptForConfirm() {
+		if promptForConfirm(message) {
+			return true, commandexec.Result{}
+		}
+		return false, commandexec.Success(commandpayload.CancelledResult{Cancelled: true}, nil)
+	}
+	return false, confirmationRequiredResult(skipFlag)
 }
 
 // confirmResponseIsYes reports whether a raw [y/N] prompt response is

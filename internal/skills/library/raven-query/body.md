@@ -33,7 +33,8 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
   don't yet know the right type or structural context. A search for `@todo`
   matches literal prose too; use `rvn query 'trait:todo ...'` when you need real
   trait instances. Search supports prefix matching, phrases, and boolean
-  operators.
+  operators. JSON includes the same paging fields as query (`total`, `has_more`,
+  `next_offset`); page with `--limit` / `--offset`.
 - `rvn backlinks`/`rvn outlinks`: direct Raven-reference traversal by object or
   section ID. Use when you need the reference graph around one specific target.
 

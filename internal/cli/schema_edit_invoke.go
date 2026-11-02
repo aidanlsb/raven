@@ -13,7 +13,7 @@ import (
 )
 
 func buildSchemaAddTypeArgs(cmd *cobra.Command, positional []string, argsMap map[string]interface{}) error {
-	if !cmd.Flags().Changed("name-field") && !isJSONOutput() {
+	if !cmd.Flags().Changed("name-field") && shouldPromptForConfirm() {
 		fmt.Print("Which field should be the display name? (common: name, title; leave blank for none): ")
 		var input string
 		fmt.Scanln(&input)
@@ -48,8 +48,8 @@ func invokeSchemaRemoveType(_ *cobra.Command, commandID, vaultPath string, args 
 			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("... and %d more", remaining)))
 		}
 	}
-	if !promptForConfirm("Continue?") {
-		return commandexec.Failure(ErrConfirmationRequired, "operation cancelled", nil, "Use --force to skip confirmation")
+	if ok, confirmResult := confirmDestructive("Continue?", "--force"); !ok {
+		return confirmResult
 	}
 
 	retry := cloneArgsMap(args)
@@ -69,8 +69,8 @@ func invokeSchemaRemoveTrait(_ *cobra.Command, commandID, vaultPath string, args
 	if count > 0 {
 		fmt.Println(ui.Warningf("%d instances of @%s will remain in files (no longer indexed)", count, traitName))
 	}
-	if !promptForConfirm("Continue?") {
-		return commandexec.Failure(ErrConfirmationRequired, "operation cancelled", nil, "Use --force to skip confirmation")
+	if ok, confirmResult := confirmDestructive("Continue?", "--force"); !ok {
+		return confirmResult
 	}
 
 	retry := cloneArgsMap(args)

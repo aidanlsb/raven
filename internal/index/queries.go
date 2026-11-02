@@ -452,35 +452,75 @@ func (d *Database) UntypedPages() ([]string, error) {
 //
 // Results are ranked by relevance (best matches first).
 func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) {
+	results, _, err := d.SearchPage(query, "", limit, 0)
+	return results, err
+}
+
+// SearchWithType performs a full-text search filtered by object type.
+func (d *Database) SearchWithType(query string, objectType string, limit int) ([]model.SearchMatch, error) {
+	results, _, err := d.SearchPage(query, objectType, limit, 0)
+	return results, err
+}
+
+// SearchPage returns a window of FTS matches plus the total match count.
+func (d *Database) SearchPage(query, objectType string, limit, offset int) ([]model.SearchMatch, int, error) {
 	if limit <= 0 {
 		limit = 20
 	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	ftsQuery := indexschema.BuildFTSSearchQuery(query)
+	objectType = strings.TrimSpace(objectType)
 
-	// Use FTS5 match query with BM25 ranking
-	// Search both title and content columns
-	// The snippet function extracts matching content with context
-	rows, err := d.db.Query(`
-		SELECT 
-			f.object_id,
-			f.title,
-			f.file_path,
-			CASE WHEN s.id IS NULL THEN 0 ELSE 1 END AS is_section,
-			s.file_object_id,
-			s.line_start,
-			s.line_end,
-			s.subtree_line_end,
-			snippet(fts_content, 2, '»', '«', '...', 32) as snippet,
-			bm25(fts_content) as rank
-		FROM fts_content f
-		LEFT JOIN sections s ON f.object_id = s.id
-		WHERE fts_content MATCH ?
-		ORDER BY rank
-		LIMIT ?
-	`, ftsQuery, limit)
+	total, err := d.searchCount(ftsQuery, objectType)
 	if err != nil {
-		return nil, fmt.Errorf("search failed: %w", err)
+		return nil, 0, err
+	}
+
+	var rows *sql.Rows
+	if objectType != "" {
+		rows, err = d.db.Query(`
+			SELECT
+				f.object_id,
+				f.title,
+				f.file_path,
+				0 AS is_section,
+				CAST(NULL AS TEXT) AS file_object_id,
+				CAST(NULL AS INTEGER) AS line_start,
+				CAST(NULL AS INTEGER) AS line_end,
+				CAST(NULL AS INTEGER) AS subtree_line_end,
+				snippet(fts_content, 2, '»', '«', '...', 32) as snippet,
+				bm25(fts_content) as rank
+			FROM fts_content f
+			JOIN objects o ON f.object_id = o.id
+			WHERE fts_content MATCH ? AND o.type = ?
+			ORDER BY rank
+			LIMIT ? OFFSET ?
+		`, ftsQuery, objectType, limit, offset)
+	} else {
+		rows, err = d.db.Query(`
+			SELECT
+				f.object_id,
+				f.title,
+				f.file_path,
+				CASE WHEN s.id IS NULL THEN 0 ELSE 1 END AS is_section,
+				s.file_object_id,
+				s.line_start,
+				s.line_end,
+				s.subtree_line_end,
+				snippet(fts_content, 2, '»', '«', '...', 32) as snippet,
+				bm25(fts_content) as rank
+			FROM fts_content f
+			LEFT JOIN sections s ON f.object_id = s.id
+			WHERE fts_content MATCH ?
+			ORDER BY rank
+			LIMIT ? OFFSET ?
+		`, ftsQuery, limit, offset)
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("search failed: %w", err)
 	}
 	defer rows.Close()
 
@@ -504,7 +544,7 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 			&result.Snippet,
 			&result.Rank,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		result.IsSection = isSection != 0
 		if fileObjectID.Valid {
@@ -524,43 +564,28 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 		results = append(results, result)
 	}
 
-	return results, rows.Err()
+	return results, total, rows.Err()
 }
 
-// SearchWithType performs a full-text search filtered by object type.
-func (d *Database) SearchWithType(query string, objectType string, limit int) ([]model.SearchMatch, error) {
-	if limit <= 0 {
-		limit = 20
+func (d *Database) searchCount(ftsQuery, objectType string) (int, error) {
+	var total int
+	var err error
+	if objectType != "" {
+		err = d.db.QueryRow(`
+			SELECT COUNT(*)
+			FROM fts_content f
+			JOIN objects o ON f.object_id = o.id
+			WHERE fts_content MATCH ? AND o.type = ?
+		`, ftsQuery, objectType).Scan(&total)
+	} else {
+		err = d.db.QueryRow(`
+			SELECT COUNT(*)
+			FROM fts_content f
+			WHERE fts_content MATCH ?
+		`, ftsQuery).Scan(&total)
 	}
-
-	ftsQuery := indexschema.BuildFTSSearchQuery(query)
-
-	rows, err := d.db.Query(`
-		SELECT 
-			f.object_id,
-			f.title,
-			f.file_path,
-			snippet(fts_content, 2, '»', '«', '...', 32) as snippet,
-			bm25(fts_content) as rank
-		FROM fts_content f
-		JOIN objects o ON f.object_id = o.id
-		WHERE fts_content MATCH ? AND o.type = ?
-		ORDER BY rank
-		LIMIT ?
-	`, ftsQuery, objectType, limit)
 	if err != nil {
-		return nil, fmt.Errorf("search failed: %w", err)
+		return 0, fmt.Errorf("search count failed: %w", err)
 	}
-	defer rows.Close()
-
-	var results []model.SearchMatch
-	for rows.Next() {
-		var result model.SearchMatch
-		if err := rows.Scan(&result.ObjectID, &result.Title, &result.FilePath, &result.Snippet, &result.Rank); err != nil {
-			return nil, err
-		}
-		results = append(results, result)
-	}
-
-	return results, rows.Err()
+	return total, nil
 }

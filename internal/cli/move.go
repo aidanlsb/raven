@@ -52,20 +52,21 @@ func invokeMove(cmd *cobra.Command, commandID, vaultPath string, args map[string
 		return result
 	}
 
-	// Type-directory mismatch. Non-interactive callers get the warning and must
-	// re-run with --skip-type-check; interactive terminals prompt.
+	// Type-directory mismatch. JSON callers get the warning payload and must
+	// re-run with --skip-type-check. Human non-TTY requires --skip-type-check
+	// or --force instead of silently canceling.
 	if isJSONOutput() {
 		return result
 	}
-	if !skipTypeCheck {
+	if !skipTypeCheck && !boolValue(args["force"]) {
 		for _, warning := range result.Warnings {
 			fmt.Println(ui.Warningf("Warning: %s", warning.Message))
 			if warning.Ref != "" {
 				fmt.Printf("  %s\n\n", ui.FilePath(warning.Ref))
 			}
 		}
-		if !promptForConfirm("Proceed anyway?") {
-			return commandexec.Success(commandpayload.CancelledResult{Cancelled: true}, nil)
+		if ok, confirmResult := confirmDestructive("Proceed anyway?", "--skip-type-check"); !ok {
+			return confirmResult
 		}
 	}
 
