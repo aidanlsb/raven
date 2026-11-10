@@ -8,8 +8,10 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleReclassify executes the canonical `reclassify` command.
@@ -20,14 +22,15 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 	references := commandIDsArg(req.Args, "references")
 	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
 
-	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	sess, failure := openSession(vaultPath, vaultsession.Config())
 	if failure.Error != nil {
 		if stdinMode {
 			return failure.WithAttemptedIDs("references", references)
 		}
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	if rt.SchemaLoadErr != nil {
 		failure := commandexec.Failure("SCHEMA_NOT_FOUND", "failed to load schema", nil, "Run 'rvn init' to create a schema")
 		if stdinMode {
@@ -63,19 +66,25 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 			return commandexec.Failure("MISSING_ARGUMENT", "no target type provided", nil, "Usage: rvn reclassify <new-type> --stdin").
 				WithAttemptedIDs("references", references)
 		}
-		return runReclassifyBulk(rt, references, newTypeName, allFieldValues, req)
+		return runReclassifyBulk(sess, references, newTypeName, allFieldValues, req)
 	}
 
-	result, err := objectsvc.ReclassifyByReference(rt, objectsvc.ReclassifyByReferenceRequest{
-		Reference:   strings.TrimSpace(stringArg(req.Args, "reference")),
-		NewTypeName: newTypeName,
-		FieldValues: allFieldValues,
-		NoMove:      boolArg(req.Args, "no-move"),
-		UpdateRefs:  boolArgDefault(req.Args, "update-refs", true),
-		Force:       boolArg(req.Args, "force"),
+	result, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.ReclassifyResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.ReclassifyByReference(rt, objectsvc.ReclassifyByReferenceRequest{
+			Reference:   strings.TrimSpace(stringArg(req.Args, "reference")),
+			NewTypeName: newTypeName,
+			FieldValues: allFieldValues,
+			NoMove:      boolArg(req.Args, "no-move"),
+			UpdateRefs:  boolArgDefault(req.Args, "update-refs", true),
+			Force:       boolArg(req.Args, "force"),
+		})
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
 	})
-	if err != nil {
-		return mapContentMutationError(err)
+	if failure.Error != nil {
+		return failure
 	}
 
 	warnings := make([]commandexec.Warning, 0, len(result.WarningMessages))
@@ -85,8 +94,7 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 			Message: warning,
 		})
 	}
-	missingRefs, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
-	warnings = appendCommandWarnings(warnings, postWarnings)
+	warnings = appendCommandWarnings(warnings, proj.Warnings)
 	data := commandpayload.ReclassifyResult{
 		ObjectID:          result.ObjectID,
 		OldType:           result.OldType,
@@ -100,7 +108,7 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		DroppedFields:     result.DroppedFields,
 		NeedsConfirm:      result.NeedsConfirm,
 		Reason:            result.Reason,
-		MissingReferences: missingRefs,
+		MissingReferences: missingRefsOf(proj),
 	}
 
 	res := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
@@ -113,7 +121,7 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 }
 
 func runReclassifyBulk(
-	rt *vaultruntime.Runtime,
+	sess *vaultsession.Session,
 	ids []string,
 	newTypeName string,
 	fieldValues map[string]fieldvalue.FieldValue,
@@ -129,7 +137,7 @@ func runReclassifyBulk(
 	}
 
 	if !req.Confirm {
-		preview, err := objectsvc.PreviewReclassifyBulk(rt, request)
+		preview, err := objectsvc.PreviewReclassifyBulk(sess.Runtime(), request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
@@ -144,12 +152,17 @@ func runReclassifyBulk(
 		}, warnings, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplyReclassifyBulk(rt, request, nil)
-	if err != nil {
-		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
+	summary, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.ReclassifyBulkSummary, mutation.ChangeSet, error) {
+		summary, err := objectsvc.ApplyReclassifyBulk(rt, request, nil)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return summary, summary.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure.WithAttemptedIDs("references", ids)
 	}
 
-	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, req.IndexJournalOperation)
 	data := commandpayload.ReclassifyBulkResult{
 		OK:                summary.Errors == 0,
 		Action:            summary.Action,
@@ -159,10 +172,10 @@ func runReclassifyBulk(
 		Skipped:           summary.Skipped,
 		Errors:            summary.Errors,
 		Reclassified:      summary.Reclassified,
-		MissingReferences: missingRefs,
+		MissingReferences: missingRefsOf(proj),
 	}
 	warnings := warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)
-	warnings = appendCommandWarnings(warnings, postWarnings)
+	warnings = appendCommandWarnings(warnings, proj.Warnings)
 
 	result := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Reclassified})
 	if summary.Reclassified == 0 {

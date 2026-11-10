@@ -9,7 +9,10 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/importsvc"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleImport executes the canonical `import` command.
@@ -35,21 +38,42 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("INVALID_INPUT", "no items to import", nil, "Provide a non-empty JSON array")
 	}
 
-	rt, failure := newSchemaFirstCommandVaultRuntime(vaultPath)
+	sess, failure := openSession(vaultPath, vaultsession.SchemaFirst())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
-	serviceResult, err := importsvc.Run(rt, importsvc.RunRequest{
+	runReq := importsvc.RunRequest{
 		MappingConfig: mappingCfg,
 		Items:         items,
 		DryRun:        boolArg(req.Args, "dry-run"),
 		CreateOnly:    boolArg(req.Args, "create-only"),
 		UpdateOnly:    boolArg(req.Args, "update-only"),
-	})
-	if err != nil {
-		return mapImportFailure(err, "")
+	}
+	var (
+		serviceResult *importsvc.RunResult
+		proj          vaultsession.MutationResult
+	)
+	if runReq.DryRun {
+		var err error
+		serviceResult, err = importsvc.Run(rt, runReq)
+		if err != nil {
+			return mapImportFailure(err, "")
+		}
+	} else {
+		var failure commandexec.Result
+		serviceResult, proj, failure = mutateMapped(sess, func(rt *vaultruntime.Runtime) (*importsvc.RunResult, mutation.ChangeSet, error) {
+			result, err := importsvc.Run(rt, runReq)
+			if err != nil {
+				return nil, mutation.ChangeSet{}, err
+			}
+			return result, result.ChangeSet, nil
+		}, func(err error) commandexec.Result { return mapImportFailure(err, "") })
+		if failure.Error != nil {
+			return failure
+		}
 	}
 
 	var created, updated, skipped, errored int
@@ -74,14 +98,12 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		Errors:  errored,
 		Items:   serviceResult.Results,
 	}
-	if !boolArg(req.Args, "dry-run") {
-		missingRefs, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
-		data.MissingReferences = missingRefs
-		serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField)
-		return commandexec.SuccessWithWarnings(data, appendCommandWarnings(serviceWarnings, postWarnings), nil)
+	serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField)
+	if runReq.DryRun {
+		return commandexec.SuccessWithWarnings(data, serviceWarnings, nil)
 	}
-
-	return commandexec.SuccessWithWarnings(data, warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField), nil)
+	data.MissingReferences = missingRefsOf(proj)
+	return commandexec.SuccessWithWarnings(data, appendCommandWarnings(serviceWarnings, proj.Warnings), nil)
 }
 
 func mapImportFailure(err error, fallbackSuggestion string) commandexec.Result {

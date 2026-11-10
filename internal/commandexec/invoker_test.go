@@ -78,10 +78,10 @@ func TestInvokerExecuteRunsBeforeDispatch(t *testing.T) {
 
 	registry := NewHandlerRegistry()
 	registry.Register("new", func(_ context.Context, req Request) Result {
-		return Success(req.IndexJournalOperation, nil)
+		return Success(req.Args["marker"], nil)
 	})
 	invoker := NewInvoker(registry, nil).WithBeforeDispatch(func(_ context.Context, req Request) (Request, Result, bool) {
-		req.IndexJournalOperation = "operation-id"
+		req.Args = map[string]any{"marker": "operation-id"}
 		return req, Result{}, true
 	})
 

@@ -1,9 +1,6 @@
 package app
 
 import (
-	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/codes"
@@ -11,32 +8,6 @@ import (
 	"github.com/aidanlsb/raven/internal/indexjournal"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
-
-func TestBeginIndexJournalOperationWritesAheadOfDispatch(t *testing.T) {
-	t.Parallel()
-
-	vault := testutil.NewTestVault(t).Build()
-	req, result, ok := beginIndexJournalOperation(context.Background(), commandexec.Request{
-		CommandID: "edit",
-		VaultPath: vault.Path,
-	})
-	if !ok || result.Error != nil {
-		t.Fatalf("begin result = %#v, ok=%v", result, ok)
-	}
-	if req.IndexJournalOperation == "" {
-		t.Fatal("journal operation ID is empty")
-	}
-	t.Cleanup(func() {
-		_ = indexjournal.CancelUnknown(vault.Path, req.IndexJournalOperation)
-	})
-	snapshot, err := indexjournal.Load(vault.Path)
-	if err != nil {
-		t.Fatalf("load index journal: %v", err)
-	}
-	if !snapshot.Dirty() || !snapshot.RequiresFullScan() {
-		t.Fatalf("snapshot = %#v, want unknown write-ahead operation", snapshot)
-	}
-}
 
 func TestReadCommandWarnsWhenIndexJournalIsDirtyWithoutRefresh(t *testing.T) {
 	t.Parallel()
@@ -79,55 +50,6 @@ func TestReadCommandRefreshClearsIndexJournal(t *testing.T) {
 	}
 	if pending.Dirty() {
 		t.Fatalf("journal remains dirty after auto-refresh: %#v", pending)
-	}
-}
-
-func TestBeginIndexJournalOperationFailsClosed(t *testing.T) {
-	t.Parallel()
-
-	vaultPath := t.TempDir()
-	if err := os.WriteFile(filepath.Join(vaultPath, ".raven"), []byte("not a directory"), 0o644); err != nil {
-		t.Fatalf("write blocking .raven file: %v", err)
-	}
-	_, result, ok := beginIndexJournalOperation(context.Background(), commandexec.Request{
-		CommandID: "edit",
-		VaultPath: vaultPath,
-	})
-	if ok || result.Error == nil || result.Error.Code != codes.ErrDatabase {
-		t.Fatalf("result = %#v, ok=%v; want DATABASE_ERROR rejection", result, ok)
-	}
-}
-
-func TestFailedMutationPreservesRecoverableUnknownGuard(t *testing.T) {
-	t.Parallel()
-
-	vault := testutil.NewTestVault(t).Build()
-	req, result, ok := beginIndexJournalOperation(context.Background(), commandexec.Request{
-		CommandID: "edit",
-		VaultPath: vault.Path,
-	})
-	if !ok || result.Error != nil {
-		t.Fatalf("begin result = %#v, ok=%v", result, ok)
-	}
-
-	failure := annotateMutationPhase(context.Background(), req, commandexec.Failure("TEST_FAILURE", "failed", nil, ""))
-	if failure.OK {
-		t.Fatal("failed result became successful")
-	}
-	snapshot, err := indexjournal.Load(vault.Path)
-	if err != nil {
-		t.Fatalf("load index journal: %v", err)
-	}
-	if !snapshot.Dirty() || !snapshot.RequiresFullScan() {
-		t.Fatalf("snapshot = %#v, want recoverable unknown guard", snapshot)
-	}
-	if err := indexjournal.CompleteRecoveredUnknown(vault.Path, snapshot); err != nil {
-		t.Fatalf("complete abandoned guard: %v", err)
-	}
-	if pending, err := indexjournal.Load(vault.Path); err != nil {
-		t.Fatalf("reload index journal: %v", err)
-	} else if pending.Dirty() {
-		t.Fatalf("abandoned guard remains after recovery: %#v", pending)
 	}
 }
 

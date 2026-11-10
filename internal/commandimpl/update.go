@@ -7,7 +7,10 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/traitsvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 func updateMissingBulkTraitIDs(caller commandexec.Caller) (string, string) {
@@ -51,25 +54,24 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("MISSING_ARGUMENT", message, nil, suggestion)
 	}
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, true)
+	sess, failure := openSession(vaultPath, vaultsession.RequiredDB())
 	if failure.Error != nil {
 		if stdinMode {
 			return failure.WithAttemptedIDs("trait_ids", traitIDs)
 		}
 		return failure
 	}
-	defer rt.Close()
-
-	result, err := traitsvc.Update(rt, traitIDs, newValue, confirm, stdinMode)
-	if err != nil {
-		failure := mapTraitMutationError(err)
-		if stdinMode {
-			return failure.WithAttemptedIDs("trait_ids", traitIDs)
-		}
-		return failure
-	}
+	defer sess.Close()
 
 	if !confirm {
+		result, err := traitsvc.Update(sess.Runtime(), traitIDs, newValue, confirm, stdinMode)
+		if err != nil {
+			failure := mapTraitMutationError(err)
+			if stdinMode {
+				return failure.WithAttemptedIDs("trait_ids", traitIDs)
+			}
+			return failure
+		}
 		preview := result.Preview
 		return commandexec.Success(commandpayload.TraitUpdatePreviewResult{
 			Preview: true,
@@ -80,9 +82,21 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary := result.Summary
+	result, proj, failure := mutateMapped(sess, func(rt *vaultruntime.Runtime) (*traitsvc.UpdateResult, mutation.ChangeSet, error) {
+		result, err := traitsvc.Update(rt, traitIDs, newValue, true, stdinMode)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.Summary.ChangeSet, nil
+	}, mapTraitMutationError)
+	if failure.Error != nil {
+		if stdinMode {
+			return failure.WithAttemptedIDs("trait_ids", traitIDs)
+		}
+		return failure
+	}
 
-	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, req.IndexJournalOperation)
+	summary := result.Summary
 	data := commandpayload.TraitUpdateResult{
 		Action:            summary.Action,
 		Items:             summary.Results,
@@ -90,9 +104,9 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		Modified:          summary.Modified,
 		Skipped:           summary.Skipped,
 		Errors:            summary.Errors,
-		MissingReferences: missingRefs,
+		MissingReferences: missingRefsOf(proj),
 	}
-	return commandexec.SuccessWithWarnings(data, postWarnings, &commandexec.Meta{Count: summary.Modified})
+	return commandexec.SuccessWithWarnings(data, proj.Warnings, &commandexec.Meta{Count: summary.Modified})
 }
 
 func mapTraitMutationError(err error) commandexec.Result {

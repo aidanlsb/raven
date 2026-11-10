@@ -8,19 +8,22 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleWrite executes the canonical `write` command (create-or-replace).
 func HandleWrite(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
-	vaultCfg := rt.VaultCfg
+	defer sess.Close()
+	vaultCfg := sess.Runtime().VaultCfg
 
 	typeName := strings.TrimSpace(stringArg(req.Args, "type"))
 	title := strings.TrimSpace(stringArg(req.Args, "title"))
@@ -44,20 +47,26 @@ func HandleWrite(_ context.Context, req commandexec.Request) commandexec.Result 
 		return *contentErr
 	}
 
-	result, err := objectsvc.Write(rt, objectsvc.WriteRequest{
+	writeReq := objectsvc.WriteRequest{
 		TypeName:    typeName,
 		Title:       title,
 		TargetPath:  targetPath,
 		ReplaceBody: hasContent,
 		Content:     content,
 		FieldValues: allFieldValues,
+	}
+	result, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.WriteResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.Write(rt, writeReq)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
 	})
-	if err != nil {
-		return mapContentMutationError(err)
+	if failure.Error != nil {
+		return failure
 	}
 
 	warnings := warningMessagesToCommandWarnings(result.WarningMessages, codes.WarnUnknownField)
-	missingRefs, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
 	data := commandpayload.WriteResult{
 		Status: result.Status,
 		ObjectMutation: commandpayload.ObjectMutation{
@@ -66,9 +75,9 @@ func HandleWrite(_ context.Context, req commandexec.Request) commandexec.Result 
 			Type:  typeName,
 			Title: title,
 		},
-		MissingReferences: missingRefs,
+		MissingReferences: missingRefsOf(proj),
 	}
-	warnings = appendCommandWarnings(warnings, postWarnings)
+	warnings = appendCommandWarnings(warnings, proj.Warnings)
 
 	return commandexec.SuccessWithWarnings(
 		data,

@@ -6,14 +6,16 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/vaultconfigsvc"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.Lazy())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	result, err := vaultconfigsvc.Show(rt)
 	if err != nil {
 		return commandexec.FromServiceError(err)

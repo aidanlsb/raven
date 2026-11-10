@@ -13,20 +13,23 @@ import (
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleNew executes the canonical `new` command.
 func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
-	vaultCfg := rt.VaultCfg
+	defer sess.Close()
+	vaultCfg := sess.Runtime().VaultCfg
 
 	typeName := strings.TrimSpace(stringArg(req.Args, "type"))
 	title := strings.TrimSpace(stringArg(req.Args, "title"))
@@ -45,19 +48,24 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 
-	result, err := objectsvc.Write(rt, objectsvc.WriteRequest{
+	writeReq := objectsvc.WriteRequest{
 		TypeName:    typeName,
 		Title:       title,
 		TargetPath:  targetPath,
 		FieldValues: allFieldValues,
 		TemplateID:  stringArg(req.Args, "template"),
 		CreateOnly:  true,
-	})
-	if err != nil {
-		return mapContentMutationError(err)
 	}
-
-	missingRefs, postWarnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
+	result, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.WriteResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.Write(rt, writeReq)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure
+	}
 	data := commandpayload.NewResult{
 		ObjectMutation: commandpayload.ObjectMutation{
 			File:  result.RelativePath,
@@ -65,10 +73,10 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 			Title: title,
 			Type:  typeName,
 		},
-		MissingReferences: missingRefs,
+		MissingReferences: missingRefsOf(proj),
 	}
 
-	return commandexec.SuccessWithWarnings(data, postWarnings, nil)
+	return commandexec.SuccessWithWarnings(data, proj.Warnings, nil)
 }
 
 func mapContentMutationError(err error) commandexec.Result {

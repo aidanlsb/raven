@@ -10,6 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schemamigratesvc"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // schemaOpKind identifies the category of schema operation.
@@ -436,11 +437,12 @@ func handleSchemaMutation(_ context.Context, req commandexec.Request, commandID 
 	}
 
 	start := time.Now()
-	rt, failure := newSchemaMutationCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.SchemaMutation())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	return op.Execute(rt, req, start)
 }

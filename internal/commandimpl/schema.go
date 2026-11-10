@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/templatesvc"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleSchema executes the canonical `schema` command.
@@ -18,15 +19,16 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 	start := time.Now()
 	subcommand := strings.TrimSpace(stringArg(req.Args, "subcommand"))
 	name := strings.TrimSpace(stringArg(req.Args, "name"))
-	runtimeBuilder := newSchemaMutationCommandVaultRuntime
+	mode := vaultsession.SchemaMutation()
 	if subcommand == "" {
-		runtimeBuilder = newSchemaFirstCommandVaultRuntime
+		mode = vaultsession.SchemaFirst()
 	}
-	rt, failure := runtimeBuilder(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, mode)
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	if subcommand == "" {
 		result, err := schemasvc.FullSchema(rt)
@@ -107,11 +109,12 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 // HandleSchemaValidate executes the canonical `schema_validate` command.
 func HandleSchemaValidate(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newSchemaMutationCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.SchemaMutation())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	result, err := schemasvc.Validate(rt)
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -127,11 +130,12 @@ func HandleSchemaValidate(_ context.Context, req commandexec.Request) commandexe
 // HandleSchemaTemplateList executes the canonical `schema_template_list` command.
 func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newSchemaMutationCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.SchemaMutation())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	targetKind, scopeKey, scopeValue, hasTarget, failure := schemaTemplateTarget(req.Args, false)
 	if failure.Error != nil {
 		return failure
@@ -169,11 +173,12 @@ func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) comman
 // HandleSchemaTemplateGet executes the canonical `schema_template_get` command.
 func HandleSchemaTemplateGet(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newSchemaMutationCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.SchemaMutation())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	item, err := schemasvc.GetTemplate(rt, stringArg(req.Args, "template_id"))
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -185,11 +190,12 @@ func HandleSchemaTemplateGet(_ context.Context, req commandexec.Request) command
 func HandleSchemaTemplateSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 	description := stringArg(req.Args, "description")
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.Config())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	item, warnings, err := schemasvc.SetTemplate(rt, schemasvc.SetTemplateRequest{
 		TemplateID:  stringArg(req.Args, "template_id"),
 		File:        stringArg(req.Args, "file"),
@@ -205,11 +211,12 @@ func HandleSchemaTemplateSet(_ context.Context, req commandexec.Request) command
 func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 	templateID := strings.TrimSpace(stringArg(req.Args, "template_id"))
-	rt, failure := newSchemaMutationCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.SchemaMutation())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	warnings, err := schemasvc.RemoveTemplate(rt, templateID)
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -223,11 +230,12 @@ func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) comm
 // HandleSchemaTemplateBind executes the canonical `schema_template_bind` command.
 func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, runtimeFailure := newSchemaMutationCommandVaultRuntime(req.VaultPath)
+	sess, runtimeFailure := openSession(req.VaultPath, vaultsession.SchemaMutation())
 	if runtimeFailure.Error != nil {
 		return runtimeFailure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	targetKind, _, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
 	if failure.Error != nil {
 		return failure
@@ -287,11 +295,12 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 // HandleSchemaTemplateUnbind executes the canonical `schema_template_unbind` command.
 func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, runtimeFailure := newSchemaMutationCommandVaultRuntime(req.VaultPath)
+	sess, runtimeFailure := openSession(req.VaultPath, vaultsession.SchemaMutation())
 	if runtimeFailure.Error != nil {
 		return runtimeFailure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	targetKind, _, scopeValue, _, failure := schemaTemplateTarget(req.Args, true)
 	if failure.Error != nil {
 		return failure
@@ -333,11 +342,12 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 // HandleTemplateList executes the canonical `template_list` command.
 func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigOnlyCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.ConfigOnly())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	vaultCfg := rt.VaultCfg
 
 	result, err := templatesvc.List(rt, templatesvc.ListRequest{
@@ -356,11 +366,12 @@ func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.
 // HandleTemplateWrite executes the canonical `template_write` command.
 func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.Config())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	vaultCfg := rt.VaultCfg
 	if boolArg(req.Args, "edit") {
 		if _, ok := req.Args["content"]; !ok {
@@ -386,11 +397,12 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 // HandleTemplateDelete executes the canonical `template_delete` command.
 func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.Config())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	vaultCfg := rt.VaultCfg
 	result, err := templatesvc.Delete(rt, templatesvc.DeleteRequest{
 		TemplateDir: vaultCfg.GetTemplateDirectory(),

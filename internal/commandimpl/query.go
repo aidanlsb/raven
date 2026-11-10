@@ -6,16 +6,18 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/querysvc"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleQuery executes the canonical `query` command path.
 func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.Result) {
 	start := time.Now()
-	rt, failure := newConfigCommandVaultRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.Read(refreshPolicy(req.Args)))
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	applyArgs := keyValuePairs(req.Args["apply"])
 	limit, _ := intArg(req.Args, "limit")
@@ -23,7 +25,6 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 	result, err := querysvc.Run(rt, querysvc.ExecuteRequest{
 		QueryString: stringArg(req.Args, "query_string"),
 		Inputs:      keyValuePairs(req.Args["inputs"]),
-		Refresh:     shouldRefreshIndex(rt, req.Args),
 		IDsOnly:     boolArg(req.Args, "ids"),
 		Limit:       limit,
 		Offset:      offset,
@@ -47,12 +48,15 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 		})
 	}
 	if out.OK {
-		out.Warnings = append(queryCommandWarnings(result.Warnings), out.Warnings...)
+		out.Warnings = append(append(sess.RefreshWarnings(), queryCommandWarnings(result.Warnings)...), out.Warnings...)
 	}
 	return out
 }
 
 func queryCommandWarnings(serviceWarnings []querysvc.Warning) []commandexec.Warning {
+	if len(serviceWarnings) == 0 {
+		return nil
+	}
 	warnings := make([]commandexec.Warning, 0, len(serviceWarnings))
 	for _, warning := range serviceWarnings {
 		warnings = append(warnings, commandexec.Warning{

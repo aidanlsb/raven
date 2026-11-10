@@ -17,6 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleSearch executes the canonical `search` command.
@@ -33,11 +34,13 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("MISSING_ARGUMENT", "requires search query", nil, "Usage: rvn search <query>")
 	}
 
-	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
+	sess, failure := openSession(req.VaultPath, vaultsession.Read(refreshPolicy(req.Args)))
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
+	refreshWarnings := sess.RefreshWarnings()
 
 	results, total, err := readsvc.Search(rt, query, searchType, limit, offset)
 	if err != nil {
@@ -84,11 +87,13 @@ func isSearchSyntaxError(err error) bool {
 func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 
-	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
+	sess, failure := openSession(req.VaultPath, vaultsession.Read(refreshPolicy(req.Args)))
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
+	refreshWarnings := sess.RefreshWarnings()
 
 	if backlinksStdinMode(req.Args) {
 		return withIndexRefreshWarnings(refreshWarnings, handleBacklinksStdin(rt, req, start))
@@ -114,11 +119,13 @@ func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Res
 func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 
-	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
+	sess, failure := openSession(req.VaultPath, vaultsession.Read(refreshPolicy(req.Args)))
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
+	refreshWarnings := sess.RefreshWarnings()
 
 	if outlinksStdinMode(req.Args) {
 		return withIndexRefreshWarnings(refreshWarnings, handleOutlinksStdin(rt, req, start))
@@ -213,11 +220,13 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 	start := time.Now()
 	reference := stringArg(req.Args, "reference")
 
-	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
+	sess, failure := openSession(req.VaultPath, vaultsession.Read(refreshPolicy(req.Args)))
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
+	refreshWarnings := sess.RefreshWarnings()
 
 	result, err := readsvc.ResolveReference(rt, reference)
 	if err != nil {
@@ -290,15 +299,16 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	startLine, _ := intArg(req.Args, "start-line")
 	endLine, _ := intArg(req.Args, "end-line")
 
-	rt, failure := newReadRuntime(req.VaultPath, vaultruntime.Options{OpenDB: false})
+	sess, failure := openSession(req.VaultPath, vaultsession.Config())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
-	refreshWarnings, refreshFailure := refreshIndexIfNeeded(rt, req.Args)
-	if refreshFailure.Error != nil {
-		return refreshFailure
+	defer sess.Close()
+	if err := sess.Refresh(refreshPolicy(req.Args)); err != nil {
+		return commandexec.FromServiceError(err)
 	}
+	rt := sess.Runtime()
+	refreshWarnings := sess.RefreshWarnings()
 
 	if boolArg(req.Args, "sections") {
 		outline, err := readsvc.ReadSections(rt, reference)
@@ -393,11 +403,13 @@ func sectionOutlineItems(sections []model.Section) []commandpayload.ReadSectionI
 // HandleOpen executes the canonical `open` command.
 func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	rt, refreshWarnings, failure := newIndexReadRuntime(vaultPath, req.Args)
+	sess, failure := openSession(vaultPath, vaultsession.Read(refreshPolicy(req.Args)))
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
+	refreshWarnings := sess.RefreshWarnings()
 
 	cfgCtx, err := configsvc.ShowContext(configContextOptions(req))
 	if err != nil {
@@ -517,14 +529,6 @@ func mapOpenFailure(err error) commandexec.Result {
 		return commandexec.FromServiceErrorWithFallback(err, "Check the reference and try again")
 	}
 	return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-}
-
-func newReadRuntime(vaultPath string, opts vaultruntime.Options) (*vaultruntime.Runtime, commandexec.Result) {
-	rt, err := vaultruntime.New(strings.TrimSpace(vaultPath), opts)
-	if err != nil {
-		return nil, mapVaultRuntimeSetupFailure(err)
-	}
-	return rt, commandexec.Result{}
 }
 
 func mapIndexRebuildRequired(err error) (commandexec.Result, bool) {

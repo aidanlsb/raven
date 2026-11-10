@@ -9,8 +9,10 @@ import (
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 func setFieldsJSONHint(caller commandexec.Caller) string {
@@ -54,14 +56,14 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	references := commandIDsArg(req.Args, "references")
 	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		if stdinMode {
 			return failure.WithAttemptedIDs("references", references)
 		}
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
 
 	// Accept both "field" (new canonical) and "fields" (legacy MCP) for backward compat
 	fieldArg := req.Args["field"]
@@ -96,7 +98,7 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, true)).
 				WithAttemptedIDs("references", references)
 		}
-		return runSetBulk(rt, references, allUpdates, req.Confirm, req.IndexJournalOperation)
+		return runSetBulk(sess, references, allUpdates, req.Confirm)
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
@@ -108,27 +110,26 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, false))
 	}
 
-	serviceResult, err := objectsvc.SetByReference(rt, objectsvc.SetByReferenceRequest{
+	setReq := objectsvc.SetByReferenceRequest{
 		Reference:    reference,
 		TypedUpdates: allUpdates,
 		Preview:      req.Preview,
-	})
-	if err != nil {
-		return mapContentMutationError(err)
 	}
-
-	data := commandpayload.SetResult{
-		File:          serviceResult.RelativePath,
-		ObjectID:      serviceResult.ObjectID,
-		Type:          serviceResult.ObjectType,
-		UpdatedFields: serviceResult.ResolvedUpdates,
-	}
-	if len(serviceResult.PreviousFields) > 0 {
-		data.PreviousFields = serviceResult.PreviousFields
-	}
-
 	if req.Preview {
-		data.Preview = true
+		serviceResult, err := objectsvc.SetByReference(sess.Runtime(), setReq)
+		if err != nil {
+			return mapContentMutationError(err)
+		}
+		data := commandpayload.SetResult{
+			File:          serviceResult.RelativePath,
+			ObjectID:      serviceResult.ObjectID,
+			Type:          serviceResult.ObjectType,
+			UpdatedFields: serviceResult.ResolvedUpdates,
+			Preview:       true,
+		}
+		if len(serviceResult.PreviousFields) > 0 {
+			data.PreviousFields = serviceResult.PreviousFields
+		}
 		return commandexec.SuccessWithWarnings(
 			data,
 			warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
@@ -136,13 +137,32 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		)
 	}
 
+	setReq.Preview = false
+	serviceResult, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.SetByReferenceResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.SetByReference(rt, setReq)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure
+	}
+
+	data := commandpayload.SetResult{
+		File:              serviceResult.RelativePath,
+		ObjectID:          serviceResult.ObjectID,
+		Type:              serviceResult.ObjectType,
+		UpdatedFields:     serviceResult.ResolvedUpdates,
+		MissingReferences: missingRefsOf(proj),
+	}
+	if len(serviceResult.PreviousFields) > 0 {
+		data.PreviousFields = serviceResult.PreviousFields
+	}
 	warnings := appendCommandWarnings(
 		warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
+		proj.Warnings,
 	)
-
-	missingRefs, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
-	data.MissingReferences = missingRefs
-	warnings = appendCommandWarnings(warnings, postWarnings)
 
 	return commandexec.SuccessWithWarnings(
 		data,
@@ -155,11 +175,11 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
 
 	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
 	if reference == "" {
@@ -171,15 +191,19 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		return commandexec.Failure("MISSING_ARGUMENT", "no fields to unset", nil, "Usage: rvn unset <reference> <field>...")
 	}
 
-	serviceResult, err := objectsvc.UnsetByReference(rt, objectsvc.UnsetByReferenceRequest{
-		Reference: reference,
-		Fields:    fields,
+	serviceResult, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.UnsetByReferenceResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.UnsetByReference(rt, objectsvc.UnsetByReferenceRequest{
+			Reference: reference,
+			Fields:    fields,
+		})
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
 	})
-	if err != nil {
-		return mapContentMutationError(err)
+	if failure.Error != nil {
+		return failure
 	}
-
-	missingRefs, warnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 
 	data := commandpayload.UnsetResult{
 		File:              serviceResult.RelativePath,
@@ -189,12 +213,12 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		MissingFields:     serviceResult.MissingFields,
 		Modified:          serviceResult.Modified,
 		PreviousFields:    serviceResult.PreviousFields,
-		MissingReferences: missingRefs,
+		MissingReferences: missingRefsOf(proj),
 	}
-	return commandexec.SuccessWithWarnings(data, warnings, nil)
+	return commandexec.SuccessWithWarnings(data, proj.Warnings, nil)
 }
 
-func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]fieldvalue.FieldValue, confirm bool, journalOperation string) commandexec.Result {
+func runSetBulk(sess *vaultsession.Session, ids []string, updates map[string]fieldvalue.FieldValue, confirm bool) commandexec.Result {
 	fileIDs, sectionIDs := splitSectionIDs(ids)
 	warnings := sectionSkipWarnings(sectionIDs)
 	request := objectsvc.SetBulkRequest{
@@ -204,7 +228,7 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 	serializedUpdates := fieldmutation.SerializeFieldValueMap(updates)
 
 	if !confirm {
-		preview, err := objectsvc.PreviewSetBulk(rt, request)
+		preview, err := objectsvc.PreviewSetBulk(sess.Runtime(), request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
@@ -221,12 +245,16 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplySetBulk(rt, request)
-	if err != nil {
-		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
+	summary, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.SetBulkSummary, mutation.ChangeSet, error) {
+		summary, err := objectsvc.ApplySetBulk(rt, request)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return summary, summary.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure.WithAttemptedIDs("references", ids)
 	}
-
-	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
 	data := commandpayload.SetBulkResult{
 		BulkSummaryResult: commandpayload.BulkSummaryResult{
 			OK:                summary.Errors == 0,
@@ -235,12 +263,12 @@ func runSetBulk(rt *vaultruntime.Runtime, ids []string, updates map[string]field
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,
-			MissingReferences: missingRefs,
+			MissingReferences: missingRefsOf(proj),
 		},
 		Modified: summary.Modified,
 		Fields:   serializedUpdates,
 	}
-	warnings = appendCommandWarnings(warnings, postWarnings)
+	warnings = appendCommandWarnings(warnings, proj.Warnings)
 
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }

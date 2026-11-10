@@ -6,17 +6,20 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleVaultStats executes the canonical `vault_stats` command.
 func HandleVaultStats(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
 
-	rt, refreshWarnings, failure := newIndexReadRuntime(req.VaultPath, req.Args)
+	sess, failure := openSession(req.VaultPath, vaultsession.Read(refreshPolicy(req.Args)))
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
+	refreshWarnings := sess.RefreshWarnings()
 
 	stats, err := readsvc.Stats(rt)
 	if err != nil {

@@ -9,17 +9,18 @@ import (
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/sectionsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleSectionCreate executes the canonical `section create` command.
 func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
 
 	fileReference := strings.TrimSpace(stringArg(req.Args, "file"))
 	title := strings.TrimSpace(stringArg(req.Args, "title"))
@@ -35,54 +36,64 @@ func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec
 	if !hasLevel {
 		return commandexec.Failure("MISSING_ARGUMENT", "--level is required", nil, `Usage: rvn section create <file> "<title>" --level N`)
 	}
-	result, err := sectionsvc.Create(rt, sectionsvc.CreateRequest{
+	createReq := sectionsvc.CreateRequest{
 		FileReference:  fileReference,
 		Title:          title,
 		Level:          level,
 		Placement:      sectionPlacementArg(req.Args),
 		Preview:        req.Preview,
 		FailOnIndexErr: true,
+	}
+	result, warnings, failure := sectionWrite(sess, req.Preview, func(rt *vaultruntime.Runtime) (*sectionsvc.CreateResult, []string, mutation.ChangeSet, error) {
+		result, err := sectionsvc.Create(rt, createReq)
+		if err != nil {
+			return nil, nil, mutation.ChangeSet{}, err
+		}
+		return result, result.WarningMessages, result.ChangeSet, nil
 	})
-	if err != nil {
-		return commandexec.FromServiceError(err)
+	if failure.Error != nil {
+		return failure
 	}
 
 	data := sectionLifecycleData(result.SectionID, result.FileRelative, result.Placement, result.AnchorID, req.Preview)
 	data.Level = result.Level
-	return commandexec.SuccessWithWarnings(
-		data,
-		sectionMutationWarnings(rt, result.WarningMessages, result.ChangeSet, req.Preview, req.IndexJournalOperation),
-		nil,
-	)
+	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
 // HandleSectionMove executes the canonical `section move` command.
 func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
 
 	sectionID := strings.TrimSpace(stringArg(req.Args, "section_id"))
 	if sectionID == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires section ID argument", nil, "Usage: rvn section move <file#section>")
 	}
-	result, err := sectionsvc.Move(rt, sectionsvc.MoveRequest{
+	moveReq := sectionsvc.MoveRequest{
 		Reference:      sectionID,
 		Placement:      sectionPlacementArg(req.Args),
 		Preview:        req.Preview,
 		FailOnIndexErr: true,
+	}
+	result, warnings, failure := sectionWrite(sess, req.Preview, func(rt *vaultruntime.Runtime) (*sectionsvc.MoveResult, []string, mutation.ChangeSet, error) {
+		result, err := sectionsvc.Move(rt, moveReq)
+		if err != nil {
+			return nil, nil, mutation.ChangeSet{}, err
+		}
+		return result, result.WarningMessages, result.ChangeSet, nil
 	})
-	if err != nil {
-		return commandexec.FromServiceError(err)
+	if failure.Error != nil {
+		return failure
 	}
 
 	return commandexec.SuccessWithWarnings(
 		sectionLifecycleData(result.SectionID, result.FileRelative, result.Placement, result.AnchorID, req.Preview),
-		sectionMutationWarnings(rt, result.WarningMessages, result.ChangeSet, req.Preview, req.IndexJournalOperation),
+		warnings,
 		nil,
 	)
 }
@@ -91,11 +102,11 @@ func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.R
 func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
 
 	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
 	if reference == "" {
@@ -106,13 +117,20 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 			"Usage: rvn section delete <file#section> [--confirm]",
 		)
 	}
-	result, err := sectionsvc.Delete(rt, sectionsvc.DeleteRequest{
+	deleteReq := sectionsvc.DeleteRequest{
 		Reference:      reference,
 		Preview:        req.Preview,
 		FailOnIndexErr: true,
+	}
+	result, postWarnings, failure := sectionWrite(sess, req.Preview, func(rt *vaultruntime.Runtime) (*sectionsvc.DeleteResult, []string, mutation.ChangeSet, error) {
+		result, err := sectionsvc.Delete(rt, deleteReq)
+		if err != nil {
+			return nil, nil, mutation.ChangeSet{}, err
+		}
+		return result, result.WarningMessages, result.ChangeSet, nil
 	})
-	if err != nil {
-		return commandexec.FromServiceError(err)
+	if failure.Error != nil {
+		return failure
 	}
 
 	data := commandpayload.SectionDeleteResult{
@@ -132,7 +150,7 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 	}
 
 	warnings := deleteBacklinkCommandWarnings(result.Backlinks)
-	warnings = appendCommandWarnings(warnings, sectionMutationWarnings(rt, result.WarningMessages, result.ChangeSet, req.Preview, req.IndexJournalOperation))
+	warnings = appendCommandWarnings(warnings, postWarnings)
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
@@ -140,11 +158,11 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
 
 	sectionID := strings.TrimSpace(stringArg(req.Args, "section_id"))
 	newHeadingText := strings.TrimSpace(stringArg(req.Args, "new_heading_text"))
@@ -156,14 +174,21 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 			`Usage: rvn section rename <file#section> "<new heading text>"`,
 		)
 	}
-	result, err := sectionsvc.Rename(rt, sectionsvc.RenameRequest{
+	renameReq := sectionsvc.RenameRequest{
 		Reference:      sectionID,
 		NewHeadingText: newHeadingText,
 		Preview:        req.Preview,
 		FailOnIndexErr: true,
+	}
+	result, warnings, failure := sectionWrite(sess, req.Preview, func(rt *vaultruntime.Runtime) (*sectionsvc.RenameResult, []string, mutation.ChangeSet, error) {
+		result, err := sectionsvc.Rename(rt, renameReq)
+		if err != nil {
+			return nil, nil, mutation.ChangeSet{}, err
+		}
+		return result, result.WarningMessages, result.ChangeSet, nil
 	})
-	if err != nil {
-		return commandexec.FromServiceError(err)
+	if failure.Error != nil {
+		return failure
 	}
 
 	data := commandpayload.SectionRenameResult{
@@ -178,20 +203,25 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 		data.UpdatedRefs = result.UpdatedRefs
 	}
 
-	return commandexec.SuccessWithWarnings(
-		data,
-		sectionMutationWarnings(rt, result.WarningMessages, result.ChangeSet, req.Preview, req.IndexJournalOperation),
-		nil,
-	)
+	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
-func sectionMutationWarnings(rt *vaultruntime.Runtime, warningMessages []string, changes mutation.ChangeSet, preview bool, journalOperation string) []commandexec.Warning {
-	warnings := warningMessagesToCommandWarnings(warningMessages, indexUpdateFailedWarningCode)
+func sectionWrite[T any](sess *vaultsession.Session, preview bool, fn func(*vaultruntime.Runtime) (T, []string, mutation.ChangeSet, error)) (T, []commandexec.Warning, commandexec.Result) {
 	if preview {
-		return warnings
+		value, messages, _, err := fn(sess.Runtime())
+		if err != nil {
+			var zero T
+			return zero, nil, commandexec.FromServiceError(err)
+		}
+		return value, warningMessagesToCommandWarnings(messages, indexUpdateFailedWarningCode), commandexec.Result{}
 	}
-	_, postWarnings := applyChangeSet(rt, changes, journalOperation)
-	return appendCommandWarnings(warnings, postWarnings)
+	var messages []string
+	value, proj, failure := mutateMapped(sess, func(rt *vaultruntime.Runtime) (T, mutation.ChangeSet, error) {
+		v, msgs, cs, err := fn(rt)
+		messages = msgs
+		return v, cs, err
+	}, commandexec.FromServiceError)
+	return value, appendCommandWarnings(warningMessagesToCommandWarnings(messages, indexUpdateFailedWarningCode), proj.Warnings), failure
 }
 
 func sectionPlacementArg(args map[string]any) sectionsvc.Placement {

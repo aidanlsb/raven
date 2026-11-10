@@ -10,8 +10,10 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleDelete executes the canonical `delete` command.
@@ -21,21 +23,22 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 	references := commandIDsArg(req.Args, "references")
 	stdinMode := boolArg(req.Args, "stdin") || len(references) > 0
 
-	rt, failure := newConfigCommandVaultRuntime(vaultPath)
+	sess, failure := openSession(vaultPath, vaultsession.Config())
 	if failure.Error != nil {
 		if stdinMode {
 			return failure.WithAttemptedIDs("references", references)
 		}
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	vaultCfg := rt.VaultCfg
 
 	if stdinMode {
 		if len(references) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no references provided via stdin", nil, "Pipe object references or file paths to stdin, one per line")
 		}
-		return runDeleteBulk(rt, references, req.Confirm, req.IndexJournalOperation)
+		return runDeleteBulk(sess, references, req.Confirm)
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
@@ -70,21 +73,29 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		}, warnings, nil)
 	}
 
-	serviceResult, err := objectsvc.DeleteByReference(rt, objectsvc.DeleteByReferenceRequest{
+	deleteReq := objectsvc.DeleteByReferenceRequest{
 		Reference: reference,
 		Behavior:  deletionCfg.Behavior,
 		TrashDir:  deletionCfg.TrashDir,
+	}
+	serviceResult, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.DeleteByReferenceResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.DeleteByReference(rt, deleteReq)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
 	})
-	if err != nil {
-		return mapContentMutationError(err)
+	if failure.Error != nil {
+		return failure
 	}
 
 	warnings := make([]commandexec.Warning, 0, 1)
 	warnings = append(warnings, deleteBacklinkCommandWarnings(serviceResult.Backlinks)...)
 
 	data := commandpayload.DeleteResult{
-		Deleted:  serviceResult.ObjectID,
-		Behavior: serviceResult.Behavior,
+		Deleted:           serviceResult.ObjectID,
+		Behavior:          serviceResult.Behavior,
+		MissingReferences: missingRefsOf(proj),
 	}
 	if serviceResult.TrashPath != "" {
 		relDest, relErr := filepath.Rel(vaultPath, serviceResult.TrashPath)
@@ -92,15 +103,13 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 			data.TrashPath = filepath.ToSlash(relDest)
 		}
 	}
-	missingRefs, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
-	data.MissingReferences = missingRefs
-	warnings = appendCommandWarnings(warnings, postWarnings)
+	warnings = appendCommandWarnings(warnings, proj.Warnings)
 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
-func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journalOperation string) commandexec.Result {
-	vaultCfg := rt.VaultCfg
+func runDeleteBulk(sess *vaultsession.Session, ids []string, confirm bool) commandexec.Result {
+	vaultCfg := sess.Runtime().VaultCfg
 	fileIDs, sectionIDs := splitSectionIDs(ids)
 	warnings := sectionSkipWarnings(sectionIDs)
 	deletionCfg := vaultCfg.GetDeletionConfig()
@@ -111,7 +120,7 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 	}
 
 	if !confirm {
-		preview, err := objectsvc.PreviewDeleteBulk(rt, request)
+		preview, err := objectsvc.PreviewDeleteBulk(sess.Runtime(), request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
@@ -128,12 +137,16 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplyDeleteBulk(rt, request)
-	if err != nil {
-		return mapContentMutationError(err).WithAttemptedIDs("references", ids)
+	summary, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.DeleteBulkSummary, mutation.ChangeSet, error) {
+		summary, err := objectsvc.ApplyDeleteBulk(rt, request)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return summary, summary.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure.WithAttemptedIDs("references", ids)
 	}
-
-	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
 	data := commandpayload.DeleteBulkResult{
 		BulkSummaryResult: commandpayload.BulkSummaryResult{
 			OK:                summary.Errors == 0,
@@ -142,12 +155,12 @@ func runDeleteBulk(rt *vaultruntime.Runtime, ids []string, confirm bool, journal
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,
-			MissingReferences: missingRefs,
+			MissingReferences: missingRefsOf(proj),
 		},
 		Deleted:  summary.Deleted,
 		Behavior: summary.Behavior,
 	}
-	allWarnings := appendCommandWarnings(warnings, postWarnings)
+	allWarnings := appendCommandWarnings(warnings, proj.Warnings)
 	return commandexec.SuccessWithWarnings(data, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
-	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 func TestHandleCheckFix_WarnsWhenPlannedFixIsSkipped(t *testing.T) {
@@ -23,8 +23,12 @@ owner: "[[people/freya]]"
 ---`).
 		Build()
 
-	rt := testutil.NewVaultRuntime(t, vault.Path, vaultruntime.Options{})
-	result := handleCheckFix(rt, nil, nil, &checksvc.RunResult{
+	sess, err := vaultsession.Open(vault.Path, vaultsession.Required())
+	if err != nil {
+		t.Fatalf("open session: %v", err)
+	}
+	t.Cleanup(sess.Close)
+	result := handleCheckFix(sess, nil, nil, &checksvc.RunResult{
 		Issues: []check.Issue{
 			{
 				Type:     check.IssueShortRefCouldBeFullPath,
@@ -34,7 +38,7 @@ owner: "[[people/freya]]"
 			},
 		},
 		ShortRefs: map[string]string{"freya": "people/freya"},
-	}, true, "")
+	}, true)
 
 	if !result.OK {
 		t.Fatalf("expected success envelope, got failure: %#v", result.Error)

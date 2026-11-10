@@ -11,7 +11,6 @@ import (
 	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
-	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/shellquote"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -20,7 +19,6 @@ import (
 type ExecuteRequest struct {
 	QueryString string
 	Inputs      []string
-	Refresh     bool
 	IDsOnly     bool
 	Limit       int
 	Offset      int
@@ -130,14 +128,10 @@ func Run(rt *vaultruntime.Runtime, req ExecuteRequest) (*RunResult, error) {
 			WithSuggestion("Fix schema.yaml and try again")
 	}
 	var warnings []Warning
-	if req.Refresh {
-		report, refreshErr := readsvc.EnsureIndexFresh(rt)
-		if refreshErr != nil {
-			return nil, refreshIndexError(refreshErr)
+	if rt.DB == nil {
+		if err := rt.OpenDB(); err != nil {
+			return nil, openIndexError(err)
 		}
-		warnings = refreshWarnings(report)
-	} else if err := rt.OpenDB(); err != nil {
-		return nil, openIndexError(err)
 	}
 
 	if !isSaved && !IsFullQueryRoot(resolvedQuery) {
@@ -417,14 +411,6 @@ func openIndexError(err error) error {
 		WithSuggestion("Run 'rvn reindex' to rebuild the database")
 }
 
-func refreshIndexError(err error) error {
-	if mapped := mapIndexAccessError(err); mapped != nil {
-		return mapped
-	}
-	return svcerr.Wrap(codes.ErrDatabase, fmt.Sprintf("failed to refresh index: %v", err), err).
-		WithSuggestion("Run 'rvn reindex' to rebuild the database")
-}
-
 func mapIndexAccessError(err error) error {
 	if err == nil {
 		return nil
@@ -446,16 +432,4 @@ func mapIndexAccessError(err error) error {
 			WithSuggestion("Run 'rvn reindex --full' to rebuild the index")
 	}
 	return nil
-}
-
-func refreshWarnings(report readsvc.SmartReindexReport) []Warning {
-	issues := readsvc.RefreshWarnings(report)
-	if len(issues) == 0 {
-		return nil
-	}
-	warnings := make([]Warning, 0, len(issues))
-	for _, issue := range issues {
-		warnings = append(warnings, Warning{Code: issue.Code, Message: issue.Message, Ref: issue.Ref})
-	}
-	return warnings
 }
