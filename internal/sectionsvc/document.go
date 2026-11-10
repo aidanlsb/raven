@@ -262,7 +262,7 @@ func openSectionIndex(rt *vaultruntime.Runtime, failOnIndexErr bool, operation s
 }
 
 // writeDocument applies one durable section-file write and records it on a
-// ChangeSet. Callers project the ChangeSet through commandimpl.applyChangeSet;
+// ChangeSet. Callers project the ChangeSet through vaultsession.Mutate;
 // this helper does not reindex.
 func writeDocument(rt *vaultruntime.Runtime, filePath, content string) (mutation.ChangeSet, []string, error) {
 	return writePendingFiles(rt, []pendingWrite{{
@@ -273,7 +273,7 @@ func writeDocument(rt *vaultruntime.Runtime, filePath, content string) (mutation
 
 // writePendingFiles applies planned durable writes and records each successful
 // path on a ChangeSet. Optional inbound-ref writes warn instead of failing the
-// mutation. Index projection is the caller's job via applyChangeSet.
+// mutation. Index projection is the caller's job via vaultsession.Mutate.
 func writePendingFiles(rt *vaultruntime.Runtime, writes []pendingWrite) (mutation.ChangeSet, []string, error) {
 	changes := mutation.NewChangeSet()
 	var warnings []string

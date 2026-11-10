@@ -6,17 +6,19 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/querysvc"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleQuerySavedList executes the canonical `query_saved_list` command.
 func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newLazyConfigCommandRuntime(vaultPath)
+	sess, failure := openSession(vaultPath, vaultsession.Lazy())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	result, err := querysvc.List(rt)
 	if err != nil {
@@ -36,11 +38,12 @@ func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexe
 func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newLazyConfigCommandRuntime(vaultPath)
+	sess, failure := openSession(vaultPath, vaultsession.Lazy())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	result, err := querysvc.Get(rt, querysvc.GetRequest{
 		Name: strings.TrimSpace(stringArg(req.Args, "name")),
@@ -56,11 +59,12 @@ func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec
 func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newLazyConfigCommandRuntime(vaultPath)
+	sess, failure := openSession(vaultPath, vaultsession.Lazy())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	result, err := querysvc.Set(rt, querysvc.SetRequest{
 		Name:        strings.TrimSpace(stringArg(req.Args, "name")),
@@ -81,11 +85,12 @@ func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec
 func HandleQuerySavedRemove(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 
-	rt, failure := newLazyConfigCommandRuntime(vaultPath)
+	sess, failure := openSession(vaultPath, vaultsession.Lazy())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	result, err := querysvc.Remove(rt, querysvc.RemoveRequest{
 		Name: strings.TrimSpace(stringArg(req.Args, "name")),

@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
@@ -41,11 +42,12 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 
 // HandleReindex executes the canonical `reindex` command.
 func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newSchemaFirstCommandVaultRuntime(strings.TrimSpace(req.VaultPath))
+	sess, failure := openSession(strings.TrimSpace(req.VaultPath), vaultsession.SchemaFirst())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	start := time.Now()
 	result, err := reindexsvc.Run(rt, reindexsvc.RunRequest{
@@ -69,11 +71,12 @@ func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Res
 
 // HandleDaily executes the canonical `daily` command.
 func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newConfigCommandVaultRuntime(strings.TrimSpace(req.VaultPath))
+	sess, failure := openSession(strings.TrimSpace(req.VaultPath), vaultsession.Config())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	result, err := objectsvc.EnsureDaily(rt, stringArg(req.Args, "date"), stringArg(req.Args, "template"))
 	if err != nil {
 		return commandexec.FromServiceError(err)
@@ -86,11 +89,13 @@ func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result 
 
 // HandleDate executes the canonical `date` command.
 func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, refreshWarnings, failure := newIndexReadRuntime(strings.TrimSpace(req.VaultPath), req.Args)
+	sess, failure := openSession(strings.TrimSpace(req.VaultPath), vaultsession.Read(refreshPolicy(req.Args)))
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
+	refreshWarnings := sess.RefreshWarnings()
 	result, err := readsvc.Date(rt, stringArg(req.Args, "date"))
 	if err != nil {
 		return commandexec.FromServiceError(err)

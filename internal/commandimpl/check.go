@@ -12,8 +12,10 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 const checkApplyIncompleteWarningCode = codes.WarnCheckIncomplete
@@ -25,11 +27,12 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 		return commandexec.Failure("INVALID_INPUT", "cannot combine --fix with --create-missing", nil, "Use one action at a time")
 	}
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 	vaultCfg := rt.VaultCfg
 	sch := rt.Schema
 
@@ -47,7 +50,7 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 
 	switch {
 	case boolArg(req.Args, "fix"):
-		return handleCheckFix(rt, vaultCfg, sch, result, req.Confirm, req.IndexJournalOperation)
+		return handleCheckFix(sess, vaultCfg, sch, result, req.Confirm)
 	case boolArg(req.Args, "create-missing"):
 		return handleCheckCreateMissing(vaultPath, vaultCfg, sch, result, req.Confirm)
 	default:
@@ -71,7 +74,7 @@ func HandleCheckCreateMissing(ctx context.Context, req commandexec.Request) comm
 	return HandleCheck(ctx, req)
 }
 
-func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool, journalOperation string) commandexec.Result {
+func handleCheckFix(sess *vaultsession.Session, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
 	fixes := checkfixsvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch, vaultCfg)
 	grouped := checkfixsvc.GroupFixesByFile(fixes)
 
@@ -87,12 +90,17 @@ func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch 
 		}, nil)
 	}
 
-	applied, err := checkfixsvc.ApplyFixes(rt, fixes)
-	if err != nil {
-		return commandexec.FromServiceError(err)
+	applied, proj, failure := mutateMapped(sess, func(rt *vaultruntime.Runtime) (checkfixsvc.FixResult, mutation.ChangeSet, error) {
+		applied, err := checkfixsvc.ApplyFixes(rt, fixes)
+		if err != nil {
+			return checkfixsvc.FixResult{}, mutation.ChangeSet{}, err
+		}
+		return applied, applied.ChangeSet, nil
+	}, commandexec.FromServiceError)
+	if failure.Error != nil {
+		return failure
 	}
-
-	missingRefs, postWarnings := applyChangeSet(rt, applied.ChangeSet, journalOperation)
+	postWarnings := proj.Warnings
 	data := commandpayload.CheckFixResult{
 		Preview:           false,
 		OK:                len(applied.Skipped) == 0,
@@ -105,7 +113,7 @@ func handleCheckFix(rt *vaultruntime.Runtime, vaultCfg *config.VaultConfig, sch 
 		FileCount:         result.FileCount,
 		ErrorCount:        result.ErrorCount,
 		WarningCount:      result.WarningCount,
-		MissingReferences: missingRefs,
+		MissingReferences: missingRefsOf(proj),
 	}
 	if len(applied.Skipped) > 0 {
 		postWarnings = appendCommandWarnings(postWarnings, []commandexec.Warning{

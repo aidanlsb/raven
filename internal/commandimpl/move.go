@@ -8,8 +8,10 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleMove executes the canonical `move` command.
@@ -21,14 +23,14 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	// Move resolves references and rewrites backlinks using the schema, so
 	// require a valid schema on this safety-sensitive path.
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		if stdinMode {
 			return failure.WithAttemptedIDs("object_ids", objectIDs)
 		}
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
 
 	if stdinMode {
 		destination := strings.TrimSpace(stringArg(req.Args, "destination"))
@@ -38,7 +40,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		if len(objectIDs) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Provide object IDs when using bulk move")
 		}
-		return runMoveBulk(rt, objectIDs, destination, boolArgDefault(req.Args, "update-refs", true), req.Confirm, req.IndexJournalOperation)
+		return runMoveBulk(sess, objectIDs, destination, boolArgDefault(req.Args, "update-refs", true), req.Confirm)
 	}
 
 	source := strings.TrimSpace(stringArg(req.Args, "source"))
@@ -47,26 +49,44 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires source and destination arguments", nil, "Usage: rvn move <source> <destination>")
 	}
 
-	serviceResult, err := objectsvc.MoveByReference(rt, objectsvc.MoveByReferenceRequest{
+	moveReq := objectsvc.MoveByReferenceRequest{
 		Reference:     source,
 		Destination:   destination,
 		UpdateRefs:    boolArgDefault(req.Args, "update-refs", true),
 		SkipTypeCheck: boolArg(req.Args, "skip-type-check"),
 		Preview:       req.Preview,
-	})
-	if err != nil {
-		return mapContentMutationError(err)
+	}
+	if req.Preview {
+		serviceResult, err := objectsvc.MoveByReference(sess.Runtime(), moveReq)
+		if err != nil {
+			return mapContentMutationError(err)
+		}
+		return shapeMoveResult(serviceResult, req.Preview, vaultsession.MutationResult{})
 	}
 
+	moveReq.Preview = false
+	serviceResult, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.MoveByReferenceResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.MoveByReference(rt, moveReq)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure
+	}
+	return shapeMoveResult(serviceResult, false, proj)
+}
+
+func shapeMoveResult(serviceResult *objectsvc.MoveByReferenceResult, preview bool, proj vaultsession.MutationResult) commandexec.Result {
 	if serviceResult.NeedsConfirm && serviceResult.TypeMismatch != nil {
 		mismatch := serviceResult.TypeMismatch
-		_, journalWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
 		// Nothing was written: the move is blocked pending confirmation, so
 		// report a preview phase regardless of the normalized apply resolution.
 		return commandexec.SuccessWithWarnings(commandpayload.MoveConfirmationResult{
 			Source:       serviceResult.SourceID,
 			Destination:  serviceResult.DestinationID,
-			Preview:      req.Preview,
+			Preview:      preview,
 			NeedsConfirm: true,
 			Reason:       serviceResult.Reason,
 		}, appendCommandWarnings([]commandexec.Warning{{
@@ -74,7 +94,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 			Message: fmt.Sprintf("Moving to '%s/' which is the default directory for type '%s', but file has type '%s'",
 				mismatch.DestinationDir, mismatch.ExpectedType, mismatch.ActualType),
 			Ref: fmt.Sprintf("Use --skip-type-check to proceed, or change the file's type to '%s'", mismatch.ExpectedType),
-		}}, journalWarnings), nil).WithMutationPhase(commandexec.MutationPhasePreview)
+		}}, proj.Warnings), nil).WithMutationPhase(commandexec.MutationPhasePreview)
 	}
 
 	warnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, indexUpdateFailedWarningCode)
@@ -82,7 +102,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		Source:      serviceResult.SourceID,
 		Destination: serviceResult.DestinationID,
 	}
-	if req.Preview {
+	if preview {
 		data.Preview = true
 		data.Status = "preview"
 	}
@@ -92,10 +112,9 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	if len(serviceResult.UpdatedRefFields) > 0 {
 		data.UpdatedRefFields = canonicalMoveRefFieldUpdates(serviceResult.UpdatedRefFields)
 	}
-	if !req.Preview {
-		missingRefs, postWarnings := applyChangeSet(rt, serviceResult.ChangeSet, req.IndexJournalOperation)
-		data.MissingReferences = missingRefs
-		warnings = appendCommandWarnings(warnings, postWarnings)
+	if !preview {
+		data.MissingReferences = missingRefsOf(proj)
+		warnings = appendCommandWarnings(warnings, proj.Warnings)
 	}
 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
@@ -113,7 +132,7 @@ func canonicalMoveRefFieldUpdates(updates []objectsvc.RefFieldUpdate) []commandp
 	return items
 }
 
-func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, updateRefs bool, confirm bool, journalOperation string) commandexec.Result {
+func runMoveBulk(sess *vaultsession.Session, ids []string, destination string, updateRefs bool, confirm bool) commandexec.Result {
 	if strings.TrimSpace(destination) == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "no destination provided", nil, "Usage: rvn move --stdin <destination-directory/>").
 			WithAttemptedIDs("object_ids", ids)
@@ -134,7 +153,7 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 	}
 
 	if !confirm {
-		preview, err := objectsvc.PreviewMoveBulk(rt, request)
+		preview, err := objectsvc.PreviewMoveBulk(sess.Runtime(), request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
@@ -150,12 +169,17 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplyMoveBulk(rt, request)
-	if err != nil {
-		return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
+	summary, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.MoveBulkSummary, mutation.ChangeSet, error) {
+		summary, err := objectsvc.ApplyMoveBulk(rt, request)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return summary, summary.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure.WithAttemptedIDs("object_ids", ids)
 	}
 
-	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
 	data := commandpayload.MoveBulkResult{
 		BulkSummaryResult: commandpayload.BulkSummaryResult{
 			OK:                summary.Errors == 0,
@@ -164,14 +188,14 @@ func runMoveBulk(rt *vaultruntime.Runtime, ids []string, destination string, upd
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,
-			MissingReferences: missingRefs,
+			MissingReferences: missingRefsOf(proj),
 		},
 		Moved:       summary.Moved,
 		Destination: summary.Destination,
 	}
 	allWarnings := appendCommandWarnings(
 		warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode),
-		postWarnings,
+		proj.Warnings,
 	)
 	return commandexec.SuccessWithWarnings(data, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }

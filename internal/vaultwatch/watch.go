@@ -19,7 +19,7 @@ import (
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
-	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 const (
@@ -147,12 +147,12 @@ func (w *Watcher) Close() error {
 
 func defaultApply(vaultPath string, burstLimit int) func(context.Context, Batch) error {
 	return func(ctx context.Context, batch Batch) error {
-		rt, err := vaultruntime.New(vaultPath, vaultruntime.Options{OpenDB: true, RequireSchema: true})
+		sess, err := vaultsession.Open(vaultPath, vaultsession.RequiredDB())
 		if err != nil {
 			return err
 		}
-		defer rt.Close()
-		return reindexsvc.ObserveFiles(rt, reindexsvc.ObserveRequest{
+		defer sess.Close()
+		return reindexsvc.ObserveFiles(sess.Runtime(), reindexsvc.ObserveRequest{
 			Paths:      batch.Paths,
 			Overflow:   batch.Overflow,
 			BurstLimit: burstLimit,

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal / Refactor
+- Vault command setup, read-time index refresh, mutation journal begin/abandon,
+  and post-mutation projection now live in `internal/vaultsession`. Command
+  handlers open a session instead of the previous runtime constructors; there
+  is no user-visible CLI/MCP/JSON change.
+
 ## [v0.1.0] - 2026-11-01
 
 First 0.1 release. Raven is still pre-1.0 and minor releases may include

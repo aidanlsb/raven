@@ -6,8 +6,10 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleAdd executes the canonical `add` command.
@@ -47,26 +49,26 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 		return failure
 	}
 
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		if stdinMode {
 			return failure.WithAttemptedIDs("object_ids", objectIDs)
 		}
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
 
 	if !stdinMode {
-		return runAddSingle(rt, text, strings.TrimSpace(stringArg(req.Args, "to")), req.IndexJournalOperation)
+		return runAddSingle(sess, text, strings.TrimSpace(stringArg(req.Args, "to")))
 	}
 	if len(objectIDs) == 0 {
 		return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
 	}
 
-	return runAddBulk(rt, objectIDs, text, req.Confirm, req.IndexJournalOperation)
+	return runAddBulk(sess, objectIDs, text, req.Confirm)
 }
 
-func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm bool, journalOperation string) commandexec.Result {
+func runAddBulk(sess *vaultsession.Session, ids []string, text string, confirm bool) commandexec.Result {
 	// Section IDs (file#slug) are passed through: bulk add appends within the
 	// targeted section instead of at the end of the file.
 	var warnings []commandexec.Warning
@@ -76,7 +78,7 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 	}
 
 	if !confirm {
-		preview, err := objectsvc.PreviewAddBulk(rt, request)
+		preview, err := objectsvc.PreviewAddBulk(sess.Runtime(), request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
@@ -93,12 +95,17 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
-	summary, err := objectsvc.ApplyAddBulk(rt, request)
-	if err != nil {
-		return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
+	summary, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.AddBulkSummary, mutation.ChangeSet, error) {
+		summary, err := objectsvc.ApplyAddBulk(rt, request)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return summary, summary.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure.WithAttemptedIDs("object_ids", ids)
 	}
 
-	missingRefs, postWarnings := applyChangeSet(rt, summary.ChangeSet, journalOperation)
 	data := commandpayload.AddBulkResult{
 		BulkSummaryResult: commandpayload.BulkSummaryResult{
 			OK:                summary.Errors == 0,
@@ -107,28 +114,33 @@ func runAddBulk(rt *vaultruntime.Runtime, ids []string, text string, confirm boo
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,
-			MissingReferences: missingRefs,
+			MissingReferences: missingRefsOf(proj),
 		},
 		Added:   summary.Added,
 		Content: text,
 	}
-	warnings = appendCommandWarnings(warnings, postWarnings)
+	warnings = appendCommandWarnings(warnings, proj.Warnings)
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 
-func runAddSingle(rt *vaultruntime.Runtime, text, toRef, journalOperation string) commandexec.Result {
-	result, err := objectsvc.Add(rt, objectsvc.AddRequest{Text: text, ToReference: toRef})
-	if err != nil {
-		return mapContentMutationError(err)
+func runAddSingle(sess *vaultsession.Session, text, toRef string) commandexec.Result {
+	result, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.AddResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.Add(rt, objectsvc.AddRequest{Text: text, ToReference: toRef})
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure
 	}
-	missingRefs, postWarnings := applyChangeSet(rt, result.ChangeSet, journalOperation)
 	data := commandpayload.AddResult{
 		File:              result.File,
 		Line:              result.Line,
 		Content:           text,
-		MissingReferences: missingRefs,
+		MissingReferences: missingRefsOf(proj),
 	}
-	return commandexec.SuccessWithWarnings(data, postWarnings, nil)
+	return commandexec.SuccessWithWarnings(data, proj.Warnings, nil)
 }
 
 func removedAddHeadingFailure() commandexec.Result {

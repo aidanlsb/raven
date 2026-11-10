@@ -5,16 +5,20 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleTrashList executes the canonical `trash list` command.
 func HandleTrashList(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newConfigOnlyCommandVaultRuntime(strings.TrimSpace(req.VaultPath))
+	sess, failure := openSession(strings.TrimSpace(req.VaultPath), vaultsession.ConfigOnly())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	result, err := objectsvc.ListTrash(rt, objectsvc.ListTrashRequest{
 		Reference: strings.TrimSpace(stringArg(req.Args, "reference")),
@@ -34,11 +38,12 @@ func HandleTrashList(_ context.Context, req commandexec.Request) commandexec.Res
 
 // HandleRestore executes the canonical `restore` command.
 func HandleRestore(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newRequiredCommandVaultRuntime(strings.TrimSpace(req.VaultPath), false)
+	sess, failure := openSession(strings.TrimSpace(req.VaultPath), vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	restoreReq := objectsvc.RestoreByReferenceRequest{
 		Reference: strings.TrimSpace(stringArg(req.Args, "reference")),
@@ -51,26 +56,33 @@ func HandleRestore(_ context.Context, req commandexec.Request) commandexec.Resul
 		return commandexec.Success(restoreResultData(result, true), nil)
 	}
 
-	result, err := objectsvc.RestoreByReference(rt, restoreReq)
-	if err != nil {
-		return mapContentMutationError(err)
+	result, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.RestoreByReferenceResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.RestoreByReference(rt, restoreReq)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
+	})
+	if failure.Error != nil {
+		return failure
 	}
 	data := restoreResultData(result, false)
-	missingReferences, warnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
+	missingReferences := missingRefsOf(proj)
 	if missingReferences.MissingRefs > 0 {
 		data["missing_refs"] = missingReferences.MissingRefs
 		data["missing_ref_items"] = missingReferences.MissingRefItems
 	}
-	return commandexec.SuccessWithWarnings(data, warnings, nil)
+	return commandexec.SuccessWithWarnings(data, proj.Warnings, nil)
 }
 
 // HandleTrashEmpty executes the canonical `trash empty` command.
 func HandleTrashEmpty(_ context.Context, req commandexec.Request) commandexec.Result {
-	rt, failure := newConfigOnlyCommandVaultRuntime(strings.TrimSpace(req.VaultPath))
+	sess, failure := openSession(strings.TrimSpace(req.VaultPath), vaultsession.ConfigOnly())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	emptyReq := objectsvc.EmptyTrashRequest{
 		OlderThan: strings.TrimSpace(stringArg(req.Args, "older-than")),

@@ -24,27 +24,9 @@ func CommandInvoker() *commandexec.Invoker {
 		registry := commandexec.NewHandlerRegistry()
 		commandimpl.RegisterAll(registry)
 		commandInvoker = commandexec.NewInvoker(registry, validateRequest).
-			WithBeforeDispatch(beginIndexJournalOperation).
 			WithResultAnnotator(annotateMutationPhase)
 	})
 	return commandInvoker
-}
-
-func beginIndexJournalOperation(_ context.Context, req commandexec.Request) (commandexec.Request, commandexec.Result, bool) {
-	if req.Preview || !commands.UsesPostMutationIndex(req.CommandID) {
-		return req, commandexec.Result{}, true
-	}
-	operationID, err := indexjournal.Begin(req.VaultPath)
-	if err != nil {
-		return req, commandexec.Failure(
-			codes.ErrDatabase,
-			"failed to establish index recovery guard",
-			map[string]interface{}{"cause": err.Error()},
-			"Restore write access to .raven and retry; no vault content was changed",
-		), false
-	}
-	req.IndexJournalOperation = operationID
-	return req, commandexec.Result{}, true
 }
 
 // annotateMutationPhase attaches the standard meta.mutation.phase signal to
@@ -56,13 +38,6 @@ func beginIndexJournalOperation(_ context.Context, req commandexec.Request) (com
 // move awaiting confirmation writes nothing); that explicit phase is preserved.
 func annotateMutationPhase(_ context.Context, req commandexec.Request, result commandexec.Result) commandexec.Result {
 	if !result.OK {
-		if err := indexjournal.Abandon(req.VaultPath, req.IndexJournalOperation); err != nil {
-			result.Warnings = append(result.Warnings, commandexec.Warning{
-				Code:    codes.WarnIndexUpdateFailed,
-				Message: fmt.Sprintf("failed to release index recovery guard after mutation failure: %v", err),
-				Ref:     "Run 'rvn reindex' before relying on index-backed results",
-			})
-		}
 		return result
 	}
 	if result.Meta == nil || result.Meta.Mutation == nil {

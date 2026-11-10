@@ -9,7 +9,10 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/editsvc"
+	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/svcerr"
+	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // HandleEdit executes the canonical `edit` command.
@@ -18,11 +21,11 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	// Edit resolves the target reference (schema-aware) before mutating and
 	// then reports missing-reference warnings, so require a valid schema.
-	rt, failure := newRequiredCommandVaultRuntime(vaultPath, false)
+	sess, failure := openSession(vaultPath, vaultsession.Required())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
 
 	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
 	if reference == "" {
@@ -34,16 +37,16 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.FromServiceError(err)
 	}
 
-	result, err := editsvc.Run(rt, editsvc.RunRequest{
+	runReq := editsvc.RunRequest{
 		Reference: reference,
 		Edits:     edits,
 		Preview:   req.Preview,
-	})
-	if err != nil {
-		return commandexec.FromServiceError(err)
 	}
-
 	if req.Preview {
+		result, err := editsvc.Run(sess.Runtime(), runReq)
+		if err != nil {
+			return commandexec.FromServiceError(err)
+		}
 		if batchMode {
 			editsPreview := make([]commandpayload.EditPreviewItem, 0, len(result.Edits))
 			for _, editResult := range result.Edits {
@@ -78,7 +81,19 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		}, nil)
 	}
 
-	missingRefs, warnings := applyChangeSet(rt, result.ChangeSet, req.IndexJournalOperation)
+	runReq.Preview = false
+	result, proj, failure := mutateMapped(sess, func(rt *vaultruntime.Runtime) (*editsvc.RunResult, mutation.ChangeSet, error) {
+		result, err := editsvc.Run(rt, runReq)
+		if err != nil {
+			return nil, mutation.ChangeSet{}, err
+		}
+		return result, result.ChangeSet, nil
+	}, commandexec.FromServiceError)
+	if failure.Error != nil {
+		return failure
+	}
+	missingRefs := missingRefsOf(proj)
+	warnings := proj.Warnings
 
 	if batchMode {
 		applied := make([]commandpayload.EditAppliedItem, 0, len(result.Edits))

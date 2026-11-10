@@ -7,6 +7,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/vaultconfigsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
+	"github.com/aidanlsb/raven/internal/vaultsession"
 )
 
 // vaultConfigOperation defines a single vault config operation and how to execute it.
@@ -267,11 +268,12 @@ func handleVaultConfigOperation(_ context.Context, req commandexec.Request, comm
 		return commandexec.Failure("INVALID_INPUT", "unknown vault config operation: "+commandID, nil, "")
 	}
 
-	rt, failure := newLazyConfigCommandRuntime(req.VaultPath)
+	sess, failure := openSession(req.VaultPath, vaultsession.Lazy())
 	if failure.Error != nil {
 		return failure
 	}
-	defer rt.Close()
+	defer sess.Close()
+	rt := sess.Runtime()
 
 	return op.Execute(rt, req)
 }

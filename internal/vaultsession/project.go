@@ -1,4 +1,4 @@
-package commandimpl
+package vaultsession
 
 import (
 	"fmt"
@@ -8,30 +8,27 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-// applyChangeSet maps the lower-layer projection result onto the canonical
-// command response. All index projection and missing-reference detection is
-// owned by reindexsvc.
-func applyChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journalOperations ...string) (commandpayload.MissingReferences, []commandexec.Warning) {
-	journalOperation := ""
-	if len(journalOperations) > 0 {
-		journalOperation = journalOperations[0]
-	}
+// MutationResult is the derived index projection of one applied ChangeSet.
+type MutationResult struct {
+	MissingRefs []*check.MissingRef
+	Warnings    []commandexec.Warning
+}
+
+func projectChangeSet(rt *vaultruntime.Runtime, changes mutation.ChangeSet, journalOperation string) MutationResult {
 	result := reindexsvc.ProjectChanges(rt, changes, journalOperation)
-	missing := commandpayload.MissingReferences{
-		MissingRefs:     len(result.MissingRefs),
-		MissingRefItems: result.MissingRefs,
-	}
 	warnings := projectionCommandWarnings(result.Warnings)
 	for _, ref := range result.MissingRefs {
 		warnings = append(warnings, missingRefWarning(ref))
 	}
-	return missing, warnings
+	return MutationResult{
+		MissingRefs: result.MissingRefs,
+		Warnings:    warnings,
+	}
 }
 
 func projectionCommandWarnings(serviceWarnings []reindexsvc.ProjectionWarning) []commandexec.Warning {

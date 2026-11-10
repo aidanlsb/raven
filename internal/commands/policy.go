@@ -172,9 +172,7 @@ var mutationPhaseCommandIDs = map[string]struct{}{
 }
 
 // postMutationIndexCommandIDs enumerates commands whose durable file writes
-// return a mutation.ChangeSet and are projected by commandimpl.applyChangeSet.
-// The shared invoker uses this policy to install a write-ahead journal guard
-// before dispatch.
+// return a mutation.ChangeSet and are projected by vaultsession.Mutate.
 var postMutationIndexCommandIDs = map[string]struct{}{
 	"new":            {},
 	"write":          {},
