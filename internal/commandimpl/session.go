@@ -1,9 +1,9 @@
 package commandimpl
 
 import (
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 	"github.com/aidanlsb/raven/internal/vaultsession"
@@ -28,11 +28,8 @@ func refreshPolicy(args map[string]any) vaultsession.RefreshPolicy {
 	return policy
 }
 
-func missingRefsOf(proj vaultsession.MutationResult) commandpayload.MissingReferences {
-	return commandpayload.MissingReferences{
-		MissingRefs:     len(proj.MissingRefs),
-		MissingRefItems: proj.MissingRefs,
-	}
+func missingRefsOf(proj vaultsession.MutationResult) check.MissingReferences {
+	return check.PackMissingRefs(proj.MissingRefs)
 }
 
 func mutateResult[T any](sess *vaultsession.Session, fn func(*vaultruntime.Runtime) (T, mutation.ChangeSet, error)) (T, vaultsession.MutationResult, commandexec.Result) {

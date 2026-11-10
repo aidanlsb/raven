@@ -1,0 +1,1 @@
+{"ok":false,"error":{"code":"INVALID_INPUT","message":"title is required","suggestion":"Usage: rvn new \u003ctype\u003e \u003ctitle\u003e --json"}}

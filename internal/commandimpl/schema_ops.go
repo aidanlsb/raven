@@ -6,7 +6,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/schemamigratesvc"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -53,30 +52,11 @@ func schemaConversionMapping(raw interface{}) (map[string]interface{}, bool) {
 
 // schemaConvertCommandResult builds the command result for convert operations.
 func schemaConvertCommandResult(result *schemamigratesvc.ConvertResult, start time.Time) commandexec.Result {
-	meta := &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}
+	payload := result.Payload()
 	if result.Preview {
-		return commandexec.Success(commandpayload.SchemaConvertPreviewResult{
-			Kind:         result.Kind,
-			Name:         result.Name,
-			Type:         result.TypeName,
-			SourceType:   result.SourceType,
-			TargetType:   result.TargetType,
-			Hint:         result.Hint,
-			Preview:      true,
-			TotalChanges: result.TotalChanges,
-			Changes:      result.Changes,
-		}, meta)
+		return commandexec.Success(payload, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	}
-	return schemaCommandSuccess(commandpayload.SchemaConvertResult{
-		Kind:           result.Kind,
-		Name:           result.Name,
-		Type:           result.TypeName,
-		SourceType:     result.SourceType,
-		TargetType:     result.TargetType,
-		Hint:           result.Hint,
-		Converted:      true,
-		ChangesApplied: result.ChangesApplied,
-	}, result.Warnings, start)
+	return schemaCommandSuccess(payload, result.Warnings, start)
 }
 
 // schemaOperation defines a single schema mutation operation and how to execute it.
@@ -104,17 +84,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			data := commandpayload.SchemaAddTypeResult{
-				Added:       "type",
-				Name:        result.Name,
-				DefaultPath: result.DefaultPath,
-				Description: result.Description,
-				NameField:   result.NameField,
-			}
-			if result.NameField != "" {
-				data.AutoCreatedField = &result.AutoCreatedField
-			}
-			return schemaCommandSuccess(data, result.Warnings, start)
+			return schemaCommandSuccess(*result, result.Warnings, start)
 		},
 	},
 
@@ -131,12 +101,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			return schemaCommandSuccess(commandpayload.SchemaAddTraitResult{
-				Added:  "trait",
-				Name:   result.Name,
-				Type:   result.Type,
-				Values: result.Values,
-			}, result.Warnings, start)
+			return schemaCommandSuccess(*result, result.Warnings, start)
 		},
 	},
 
@@ -157,14 +122,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			return schemaCommandSuccess(commandpayload.SchemaAddFieldResult{
-				Added:       "field",
-				Type:        result.TypeName,
-				Field:       result.FieldName,
-				FieldType:   result.FieldType,
-				Required:    result.Required,
-				Description: result.Description,
-			}, result.Warnings, start)
+			return schemaCommandSuccess(*result, result.Warnings, start)
 		},
 	},
 
@@ -184,11 +142,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			return schemaCommandSuccess(commandpayload.SchemaUpdateResult{
-				Updated: "type",
-				Changes: result.Changes,
-				Name:    name,
-			}, result.Warnings, start)
+			return schemaCommandSuccess(*result, result.Warnings, start)
 		},
 	},
 
@@ -206,11 +160,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			return schemaCommandSuccess(commandpayload.SchemaUpdateResult{
-				Updated: "trait",
-				Changes: result.Changes,
-				Name:    name,
-			}, result.Warnings, start)
+			return schemaCommandSuccess(*result, result.Warnings, start)
 		},
 	},
 
@@ -233,12 +183,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			return schemaCommandSuccess(commandpayload.SchemaUpdateResult{
-				Updated: "field",
-				Changes: result.Changes,
-				Type:    typeName,
-				Field:   fieldName,
-			}, result.Warnings, start)
+			return schemaCommandSuccess(*result, result.Warnings, start)
 		},
 	},
 
@@ -254,8 +199,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			data := commandpayload.SchemaRemoveResult{Removed: "type", Name: stringArg(req.Args, "name")}
-			return schemaCommandSuccess(data, result.Warnings, start)
+			return schemaCommandSuccess(*result, result.Warnings, start)
 		},
 	},
 
@@ -271,8 +215,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			data := commandpayload.SchemaRemoveResult{Removed: "trait", Name: stringArg(req.Args, "name")}
-			return schemaCommandSuccess(data, result.Warnings, start)
+			return schemaCommandSuccess(*result, result.Warnings, start)
 		},
 	},
 
@@ -289,11 +232,7 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			return schemaCommandSuccess(commandpayload.SchemaRemoveResult{
-				Removed: "field",
-				Type:    typeName,
-				Field:   fieldName,
-			}, result.Warnings, start)
+			return schemaCommandSuccess(*result, result.Warnings, start)
 		},
 	},
 
@@ -311,41 +250,11 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
+			payload := result.Payload()
 			if result.Preview {
-				data := commandpayload.SchemaRenameTypePreviewResult{
-					Preview:      true,
-					OldName:      result.OldName,
-					NewName:      result.NewName,
-					TotalChanges: result.TotalChanges,
-					Changes:      result.Changes,
-					Hint:         result.Hint,
-				}
-				if result.DefaultPathRenameAvailable {
-					data.DefaultPathRenameAvailable = &result.DefaultPathRenameAvailable
-					data.DefaultPathOld = &result.DefaultPathOld
-					data.DefaultPathNew = &result.DefaultPathNew
-					data.OptionalTotalChanges = &result.OptionalTotalChanges
-					data.OptionalChanges = &result.OptionalChanges
-					data.FilesToMove = &result.FilesToMove
-				}
-				return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+				return commandexec.Success(payload, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 			}
-			data := commandpayload.SchemaRenameTypeResult{
-				Renamed:        true,
-				OldName:        result.OldName,
-				NewName:        result.NewName,
-				ChangesApplied: result.ChangesApplied,
-				Hint:           result.Hint,
-			}
-			if result.DefaultPathRenameAvailable {
-				data.DefaultPathRenameAvailable = &result.DefaultPathRenameAvailable
-				data.DefaultPathRenamed = &result.DefaultPathRenamed
-				data.DefaultPathOld = &result.DefaultPathOld
-				data.DefaultPathNew = &result.DefaultPathNew
-				data.FilesMoved = &result.FilesMoved
-				data.ReferenceFilesUpdated = &result.ReferenceFilesUpdated
-			}
-			return schemaCommandSuccess(data, result.Warnings, start)
+			return schemaCommandSuccess(payload, result.Warnings, start)
 		},
 	},
 
@@ -362,25 +271,11 @@ var schemaOperationTable = map[string]schemaOperation{
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
+			payload := result.Payload()
 			if result.Preview {
-				return commandexec.Success(commandpayload.SchemaRenameFieldPreviewResult{
-					Preview:      true,
-					Type:         result.TypeName,
-					OldField:     result.OldField,
-					NewField:     result.NewField,
-					TotalChanges: result.TotalChanges,
-					Changes:      result.Changes,
-					Hint:         result.Hint,
-				}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+				return commandexec.Success(payload, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 			}
-			return schemaCommandSuccess(commandpayload.SchemaRenameFieldResult{
-				Renamed:        true,
-				Type:           result.TypeName,
-				OldField:       result.OldField,
-				NewField:       result.NewField,
-				ChangesApplied: result.ChangesApplied,
-				Hint:           result.Hint,
-			}, result.Warnings, start)
+			return schemaCommandSuccess(payload, result.Warnings, start)
 		},
 	},
 

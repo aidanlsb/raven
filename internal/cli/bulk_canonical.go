@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/traitsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -16,43 +16,43 @@ func renderCanonicalBulkResult(result commandexec.Result) error {
 	}
 
 	switch data := result.Data.(type) {
-	case commandpayload.AddBulkPreviewResult:
-		printObjectBulkPreview(data.BulkPreviewResult, data.Warnings)
-	case commandpayload.SetBulkPreviewResult:
-		printObjectBulkPreview(data.BulkPreviewResult, data.Warnings)
-	case commandpayload.DeleteBulkPreviewResult:
-		printObjectBulkPreview(data.BulkPreviewResult, data.Warnings)
-	case commandpayload.MoveBulkPreviewResult:
-		printObjectBulkPreview(data.BulkPreviewResult, nil)
-	case commandpayload.ReclassifyBulkPreviewResult:
+	case objectsvc.AddBulkPreviewResult:
+		printObjectBulkPreview(data.BulkPreviewResult)
+	case objectsvc.SetBulkPreviewResult:
+		printObjectBulkPreview(data.BulkPreviewResult)
+	case objectsvc.DeleteBulkPreviewResult:
+		printObjectBulkPreview(data.BulkPreviewResult)
+	case objectsvc.MoveBulkPreviewResult:
+		printObjectBulkPreview(data.BulkPreviewResult)
+	case objectsvc.ReclassifyBulkPreviewResult:
 		PrintBulkPreview(&BulkPreview{
 			Action:  data.Action,
 			Items:   reclassifyPreviewItems(data.Items),
 			Skipped: reclassifyBulkResults(data.Skipped),
 			Total:   data.Total,
 		})
-	case commandpayload.QueryApplyEmptyResult:
+	case querysvc.QueryApplyEmptyResult:
 		if data.Preview {
 			PrintBulkPreview(&BulkPreview{Action: data.Action, Total: data.Total})
 		} else {
 			PrintBulkSummary(&BulkSummary{Action: data.Action, Total: data.Total})
 		}
-	case commandpayload.TraitUpdatePreviewResult:
+	case traitsvc.UpdatePreviewResult:
 		printTraitBulkPreview(&traitsvc.BulkPreview{
 			Action:  data.Action,
 			Items:   data.Items,
 			Skipped: data.Skipped,
 			Total:   data.Total,
 		})
-	case commandpayload.AddBulkResult:
+	case objectsvc.AddBulkResult:
 		printObjectBulkSummary(data.BulkSummaryResult, BulkSummary{Added: data.Added})
-	case commandpayload.SetBulkResult:
+	case objectsvc.SetBulkResult:
 		printObjectBulkSummary(data.BulkSummaryResult, BulkSummary{Modified: data.Modified})
-	case commandpayload.DeleteBulkResult:
+	case objectsvc.DeleteBulkResult:
 		printObjectBulkSummary(data.BulkSummaryResult, BulkSummary{Deleted: data.Deleted})
-	case commandpayload.MoveBulkResult:
+	case objectsvc.MoveBulkResult:
 		printObjectBulkSummary(data.BulkSummaryResult, BulkSummary{Moved: data.Moved})
-	case commandpayload.ReclassifyBulkResult:
+	case objectsvc.ReclassifyBulkAppliedResult:
 		PrintBulkSummary(&BulkSummary{
 			Action:       data.Action,
 			Total:        data.Total,
@@ -60,7 +60,7 @@ func renderCanonicalBulkResult(result commandexec.Result) error {
 			Skipped:      data.Skipped,
 			Errors:       data.Errors,
 		})
-	case commandpayload.TraitUpdateResult:
+	case traitsvc.UpdateAppliedResult:
 		printTraitBulkSummary(&traitsvc.BulkSummary{
 			Action:   data.Action,
 			Results:  data.Items,
@@ -82,7 +82,7 @@ func renderCanonicalBulkResult(result commandexec.Result) error {
 	return nil
 }
 
-func printObjectBulkPreview(data commandpayload.BulkPreviewResult, warnings []commandexec.Warning) {
+func printObjectBulkPreview(data objectsvc.BulkPreviewResult) {
 	items := make([]BulkPreviewItem, len(data.Items))
 	for i, item := range data.Items {
 		items[i] = BulkPreviewItem{
@@ -97,11 +97,11 @@ func printObjectBulkPreview(data commandpayload.BulkPreviewResult, warnings []co
 		Items:    items,
 		Skipped:  data.Skipped,
 		Total:    data.Total,
-		Warnings: warnings,
+		Warnings: data.Warnings,
 	})
 }
 
-func printObjectBulkSummary(data commandpayload.BulkSummaryResult, counts BulkSummary) {
+func printObjectBulkSummary(data objectsvc.BulkSummaryResult, counts BulkSummary) {
 	counts.Action = data.Action
 	counts.Results = data.Items
 	counts.Total = data.Total

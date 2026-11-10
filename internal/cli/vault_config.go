@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
+	"github.com/aidanlsb/raven/internal/vaultconfigsvc"
 )
 
 // vaultConfigCmd is the "vault config" subtree. Its command hierarchy is
@@ -86,7 +86,7 @@ func buildVaultConfigCommand() *cobra.Command {
 }
 
 func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigShowResult](result)
+	data, err := commandResultData[vaultconfigsvc.ShowResult](result)
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderVaultConfigAutoReindexSet(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigAutoReindexResult](result)
+	data, err := commandResultData[vaultconfigsvc.AutoReindexResult](result)
 	if err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func renderVaultConfigAutoReindexSet(_ *cobra.Command, result commandexec.Result
 }
 
 func renderVaultConfigAutoReindexUnset(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigAutoReindexResult](result)
+	data, err := commandResultData[vaultconfigsvc.AutoReindexResult](result)
 	if err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func renderVaultConfigAutoReindexUnset(_ *cobra.Command, result commandexec.Resu
 }
 
 func renderVaultConfigProtectedPrefixesList(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigProtectedPrefixesListResult](result)
+	data, err := commandResultData[vaultconfigsvc.ProtectedPrefixesListResult](result)
 	if err != nil {
 		return err
 	}
@@ -190,7 +190,7 @@ func renderVaultConfigProtectedPrefixesList(_ *cobra.Command, result commandexec
 }
 
 func renderVaultConfigProtectedPrefixesAdd(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigProtectedPrefixAddResult](result)
+	data, err := commandResultData[vaultconfigsvc.ProtectedPrefixAddResult](result)
 	if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func renderVaultConfigProtectedPrefixesAdd(_ *cobra.Command, result commandexec.
 }
 
 func renderVaultConfigProtectedPrefixesRemove(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigProtectedPrefixRemoveResult](result)
+	data, err := commandResultData[vaultconfigsvc.ProtectedPrefixRemoveResult](result)
 	if err != nil {
 		return err
 	}
@@ -214,7 +214,7 @@ func renderVaultConfigProtectedPrefixesRemove(_ *cobra.Command, result commandex
 }
 
 func renderVaultConfigExcludeList(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigExcludeListResult](result)
+	data, err := commandResultData[vaultconfigsvc.ExcludeListResult](result)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func renderVaultConfigExcludeList(_ *cobra.Command, result commandexec.Result) e
 }
 
 func renderVaultConfigExcludeAdd(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigExcludeAddResult](result)
+	data, err := commandResultData[vaultconfigsvc.ExcludeAddResult](result)
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func renderVaultConfigExcludeAdd(_ *cobra.Command, result commandexec.Result) er
 }
 
 func renderVaultConfigExcludeRemove(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigExcludeRemoveResult](result)
+	data, err := commandResultData[vaultconfigsvc.ExcludeRemoveResult](result)
 	if err != nil {
 		return err
 	}
@@ -254,7 +254,7 @@ func renderVaultConfigExcludeRemove(_ *cobra.Command, result commandexec.Result)
 }
 
 func renderVaultConfigDirectoriesGet(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigDirectoriesResult](result)
+	data, err := commandResultData[vaultconfigsvc.DirectoriesResult](result)
 	if err != nil {
 		return err
 	}
@@ -274,7 +274,7 @@ func renderVaultConfigDirectoriesGet(_ *cobra.Command, result commandexec.Result
 }
 
 func renderVaultConfigDirectoriesSet(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigDirectoriesResult](result)
+	data, err := commandResultData[vaultconfigsvc.DirectoriesResult](result)
 	if err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ func renderVaultConfigDirectoriesSet(_ *cobra.Command, result commandexec.Result
 }
 
 func renderVaultConfigDirectoriesUnset(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigDirectoriesResult](result)
+	data, err := commandResultData[vaultconfigsvc.DirectoriesResult](result)
 	if err != nil {
 		return err
 	}
@@ -300,7 +300,7 @@ func renderVaultConfigDirectoriesUnset(_ *cobra.Command, result commandexec.Resu
 }
 
 func renderVaultConfigCaptureGet(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigCaptureResult](result)
+	data, err := commandResultData[vaultconfigsvc.CaptureResult](result)
 	if err != nil {
 		return err
 	}
@@ -316,7 +316,7 @@ func renderVaultConfigCaptureGet(_ *cobra.Command, result commandexec.Result) er
 }
 
 func renderVaultConfigCaptureSet(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigCaptureResult](result)
+	data, err := commandResultData[vaultconfigsvc.CaptureResult](result)
 	if err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func renderVaultConfigCaptureSet(_ *cobra.Command, result commandexec.Result) er
 }
 
 func renderVaultConfigCaptureUnset(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigCaptureResult](result)
+	data, err := commandResultData[vaultconfigsvc.CaptureResult](result)
 	if err != nil {
 		return err
 	}
@@ -342,7 +342,7 @@ func renderVaultConfigCaptureUnset(_ *cobra.Command, result commandexec.Result) 
 }
 
 func renderVaultConfigDeletionGet(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigDeletionResult](result)
+	data, err := commandResultData[vaultconfigsvc.DeletionResult](result)
 	if err != nil {
 		return err
 	}
@@ -356,7 +356,7 @@ func renderVaultConfigDeletionGet(_ *cobra.Command, result commandexec.Result) e
 }
 
 func renderVaultConfigDeletionSet(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigDeletionResult](result)
+	data, err := commandResultData[vaultconfigsvc.DeletionResult](result)
 	if err != nil {
 		return err
 	}
@@ -369,7 +369,7 @@ func renderVaultConfigDeletionSet(_ *cobra.Command, result commandexec.Result) e
 }
 
 func renderVaultConfigDeletionUnset(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.VaultConfigDeletionResult](result)
+	data, err := commandResultData[vaultconfigsvc.DeletionResult](result)
 	if err != nil {
 		return err
 	}

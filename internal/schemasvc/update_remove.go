@@ -42,11 +42,12 @@ type UpdateFieldRequest struct {
 }
 
 type UpdateResult struct {
-	Name     string
-	Type     string
-	Field    string
-	Changes  []string
-	Warnings []Warning
+	Updated  string    `json:"updated"`
+	Changes  []string  `json:"changes"`
+	Name     string    `json:"name,omitempty"`
+	Type     string    `json:"type,omitempty"`
+	Field    string    `json:"field,omitempty"`
+	Warnings []Warning `json:"-"`
 }
 
 type RemoveTypeRequest struct {
@@ -73,10 +74,11 @@ type Warning struct {
 }
 
 type RemoveResult struct {
-	Name     string
-	Type     string
-	Field    string
-	Warnings []Warning
+	Removed  string    `json:"removed"`
+	Name     string    `json:"name,omitempty"`
+	Type     string    `json:"type,omitempty"`
+	Field    string    `json:"field,omitempty"`
+	Warnings []Warning `json:"-"`
 }
 
 func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult, error) {
@@ -187,6 +189,7 @@ func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult,
 	}
 
 	return &UpdateResult{
+		Updated:  "type",
 		Name:     typeName,
 		Changes:  changes,
 		Warnings: warnings,
@@ -230,6 +233,7 @@ func UpdateTrait(rt *vaultruntime.Runtime, req UpdateTraitRequest) (*UpdateResul
 	}
 
 	return &UpdateResult{
+		Updated:  "trait",
 		Name:     traitName,
 		Changes:  changes,
 		Warnings: warnings,
@@ -373,6 +377,7 @@ func UpdateField(rt *vaultruntime.Runtime, req UpdateFieldRequest) (*UpdateResul
 	}
 
 	return &UpdateResult{
+		Updated:  "field",
 		Type:     typeName,
 		Field:    fieldName,
 		Changes:  changes,
@@ -480,6 +485,7 @@ func RemoveType(rt *vaultruntime.Runtime, req RemoveTypeRequest) (*RemoveResult,
 	}
 
 	return &RemoveResult{
+		Removed:  "type",
 		Name:     typeName,
 		Warnings: append(warnings, editWarnings...),
 	}, nil
@@ -526,6 +532,7 @@ func RemoveTrait(rt *vaultruntime.Runtime, req RemoveTraitRequest) (*RemoveResul
 	}
 
 	return &RemoveResult{
+		Removed:  "trait",
 		Name:     traitName,
 		Warnings: append(warnings, editWarnings...),
 	}, nil
@@ -597,6 +604,7 @@ func RemoveField(rt *vaultruntime.Runtime, req RemoveFieldRequest) (*RemoveResul
 	}
 
 	return &RemoveResult{
+		Removed:  "field",
 		Type:     typeName,
 		Field:    fieldName,
 		Warnings: warnings,

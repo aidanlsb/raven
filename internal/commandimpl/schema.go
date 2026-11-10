@@ -8,7 +8,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/templatesvc"
 	"github.com/aidanlsb/raven/internal/vaultsession"
@@ -119,7 +118,7 @@ func HandleSchemaValidate(_ context.Context, req commandexec.Request) commandexe
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(commandpayload.SchemaValidateResult{
+	return commandexec.Success(schemasvc.ValidateResult{
 		Valid:  result.Valid,
 		Issues: result.Issues,
 		Types:  result.Types,
@@ -221,7 +220,7 @@ func HandleSchemaTemplateRemove(_ context.Context, req commandexec.Request) comm
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return schemaCommandSuccess(commandpayload.SchemaTemplateRemoveResult{
+	return schemaCommandSuccess(schemasvc.TemplateRemoveResult{
 		Removed: true,
 		ID:      templateID,
 	}, warnings, start)
@@ -274,7 +273,7 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 		warnings = append(result.Warnings, warnings...)
 	}
 
-	data := commandpayload.SchemaTemplateBindResult{
+	data := schemasvc.TemplateBindResult{
 		TemplateID: templateID,
 	}
 	if targetKind == "type" {
@@ -324,7 +323,7 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 		return commandexec.FromServiceError(err)
 	}
 
-	data := commandpayload.SchemaTemplateUnbindResult{
+	data := schemasvc.TemplateUnbindResult{
 		TemplateID: templateID,
 		Removed:    true,
 	}
@@ -357,10 +356,7 @@ func HandleTemplateList(_ context.Context, req commandexec.Request) commandexec.
 		return commandexec.FromServiceError(err)
 	}
 
-	return commandexec.Success(map[string]interface{}{
-		"template_dir": result.TemplateDir,
-		"templates":    result.Templates,
-	}, &commandexec.Meta{Count: len(result.Templates), QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(*result, &commandexec.Meta{Count: len(result.Templates), QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleTemplateWrite executes the canonical `template_write` command.
@@ -387,11 +383,7 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.FromServiceError(err)
 	}
 
-	return commandexec.SuccessWithWarnings(commandpayload.TemplateWriteResult{
-		Path:        result.Path,
-		Status:      result.Status,
-		TemplateDir: result.TemplateDir,
-	}, canonicalTemplateWarnings(result.Warnings), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.SuccessWithWarnings(*result, canonicalTemplateWarnings(result.Warnings), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleTemplateDelete executes the canonical `template_delete` command.
@@ -413,17 +405,7 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 		return commandexec.FromServiceError(err)
 	}
 
-	data := commandpayload.TemplateDeleteResult{
-		Deleted:     result.DeletedPath,
-		TrashPath:   result.TrashPath,
-		Forced:      result.Forced,
-		TemplateIDs: result.TemplateIDs,
-	}
-	warnings := canonicalTemplateWarnings(result.Warnings)
-	if len(warnings) > 0 {
-		return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
-	}
-	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.SuccessWithWarnings(*result, canonicalTemplateWarnings(result.Warnings), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 func canonicalSchemaWarnings(serviceWarnings []schemasvc.Warning) []commandexec.Warning {
@@ -482,8 +464,8 @@ func schemaTemplateTarget(args map[string]interface{}, requireTarget bool) (stri
 	}
 }
 
-func schemaTemplateDefinitionPayload(id, file, description string) commandpayload.SchemaTemplateDefinitionResult {
-	return commandpayload.SchemaTemplateDefinitionResult{
+func schemaTemplateDefinitionPayload(id, file, description string) schemasvc.TemplateDefinitionResult {
+	return schemasvc.TemplateDefinitionResult{
 		ID:          id,
 		File:        file,
 		Description: description,

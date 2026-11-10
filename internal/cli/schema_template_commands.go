@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -145,7 +144,7 @@ func renderSchemaTemplateBindingTarget(kind, name string, templates []string, de
 }
 
 func renderSchemaTemplateGet(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaTemplateDefinitionResult](result)
+	data, err := commandResultData[schemasvc.TemplateDefinitionResult](result)
 	if err != nil {
 		return err
 	}
@@ -158,7 +157,7 @@ func renderSchemaTemplateGet(_ *cobra.Command, result commandexec.Result) error 
 }
 
 func renderSchemaTemplateSet(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaTemplateDefinitionResult](result)
+	data, err := commandResultData[schemasvc.TemplateDefinitionResult](result)
 	if err != nil {
 		return err
 	}
@@ -167,7 +166,7 @@ func renderSchemaTemplateSet(_ *cobra.Command, result commandexec.Result) error 
 }
 
 func renderSchemaTemplateRemove(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaTemplateRemoveResult](result)
+	data, err := commandResultData[schemasvc.TemplateRemoveResult](result)
 	if err != nil {
 		return err
 	}
@@ -189,7 +188,7 @@ func invokeSchemaTemplateBind(cmd *cobra.Command, commandID, vaultPath string, a
 }
 
 func renderSchemaTemplateBind(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaTemplateBindResult](result)
+	data, err := commandResultData[schemasvc.TemplateBindResult](result)
 	if err != nil {
 		return err
 	}
@@ -225,7 +224,7 @@ func invokeSchemaTemplateUnbind(cmd *cobra.Command, commandID, vaultPath string,
 }
 
 func renderSchemaTemplateUnbind(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaTemplateUnbindResult](result)
+	data, err := commandResultData[schemasvc.TemplateUnbindResult](result)
 	if err != nil {
 		return err
 	}

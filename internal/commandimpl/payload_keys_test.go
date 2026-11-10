@@ -1,10 +1,17 @@
-package commandpayload
+package commandimpl
 
 import (
 	"encoding/json"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/editsvc"
+	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/querysvc"
+	"github.com/aidanlsb/raven/internal/schemasvc"
+	"github.com/aidanlsb/raven/internal/sectionsvc"
+	"github.com/aidanlsb/raven/internal/vaultconfigsvc"
 )
 
 func TestMutationPayloadJSONKeysRemainStable(t *testing.T) {
@@ -18,14 +25,14 @@ func TestMutationPayloadJSONKeysRemainStable(t *testing.T) {
 	}{
 		{
 			name: "new without missing refs",
-			data: NewResult{ObjectMutation: ObjectMutation{
+			data: objectsvc.CreateResult{
 				ID: "project/raven", File: "projects/raven.md", Title: "Raven", Type: "project",
-			}},
+			},
 			keys: []string{"file", "id", "title", "type"},
 		},
 		{
 			name: "set omits optional preview fields",
-			data: SetResult{
+			data: objectsvc.SetByReferenceResult{
 				File: "projects/raven.md", ObjectID: "project/raven", Type: "project",
 				UpdatedFields: map[string]string{"status": "done"},
 			},
@@ -33,7 +40,7 @@ func TestMutationPayloadJSONKeysRemainStable(t *testing.T) {
 		},
 		{
 			name: "unset retains empty collection fields",
-			data: UnsetResult{
+			data: objectsvc.UnsetByReferenceResult{
 				File: "projects/raven.md", ObjectID: "project/raven", Type: "project",
 				RemovedFields: map[string]string{},
 			},
@@ -41,23 +48,23 @@ func TestMutationPayloadJSONKeysRemainStable(t *testing.T) {
 		},
 		{
 			name: "move confirmation retains false preview",
-			data: MoveConfirmationResult{
+			data: objectsvc.MoveConfirmationResult{
 				Source: "note/a", Destination: "projects/a", NeedsConfirm: true,
 			},
 			keys: []string{"destination", "needs_confirm", "preview", "reason", "source"},
 		},
 		{
 			name: "edit retains empty replacement",
-			data: EditSingleResult{
+			data: editsvc.EditSingleResult{
 				Status: "applied", Path: "note/a.md", Line: 3, OldStr: "remove", NewStr: "",
 			},
 			keys: []string{"context", "line", "new_str", "old_str", "path", "status"},
 		},
 		{
 			name: "bulk preview retains warnings",
-			data: SetBulkPreviewResult{
-				BulkPreviewResult: BulkPreviewResult{
-					Preview: true, Action: "set", Items: []BulkPreviewItem{}, Skipped: []BulkResult{},
+			data: objectsvc.SetBulkPreviewResult{
+				BulkPreviewResult: objectsvc.BulkPreviewResult{
+					Preview: true, Action: "set", Items: []objectsvc.BulkPreviewItem{}, Skipped: []objectsvc.BulkResult{},
 				},
 				Fields: map[string]string{},
 			},
@@ -65,28 +72,28 @@ func TestMutationPayloadJSONKeysRemainStable(t *testing.T) {
 		},
 		{
 			name: "empty query apply retains minimal bulk shape",
-			data: QueryApplyEmptyResult{
+			data: querysvc.QueryApplyEmptyResult{
 				Preview: true, Action: "delete", Items: []interface{}{},
 			},
 			keys: []string{"action", "items", "preview", "total"},
 		},
 		{
 			name: "section delete retains subtree details",
-			data: SectionDeleteResult{
+			data: sectionsvc.DeletePayload{
 				Section: "project/raven#tasks", File: "projects/raven.md", Status: "deleted",
 			},
 			keys: []string{"backlinks", "deleted_sections", "file", "line_end", "line_start", "removed_content", "section", "status"},
 		},
 		{
 			name: "vault unset omits set-only created",
-			data: VaultConfigAutoReindexResult{
+			data: vaultconfigsvc.AutoReindexResult{
 				ConfigPath: "raven.yaml", Changed: false, AutoReindex: true,
 			},
 			keys: []string{"auto_reindex", "auto_reindex_explicit", "changed", "config_path"},
 		},
 		{
 			name: "schema bind retains false default match",
-			data: SchemaTemplateBindResult{
+			data: schemasvc.TemplateBindResult{
 				Type: "project", TemplateID: "brief", AlreadySet: true, DefaultMatch: &falseValue,
 			},
 			keys: []string{"already_set", "default_match", "template_id", "type"},

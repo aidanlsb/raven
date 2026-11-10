@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/editsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -19,7 +19,7 @@ var editCmd = newCanonicalLeafCommand("edit", canonicalLeafOptions{
 
 func renderCanonicalEditResult(result commandexec.Result) error {
 	switch data := result.Data.(type) {
-	case commandpayload.EditBatchPreviewResult:
+	case editsvc.EditBatchPreviewResult:
 		fmt.Printf("%s %s\n\n", ui.SectionHeader("Preview edits"), ui.FilePath(data.Path))
 		for _, edit := range data.Edits {
 			fmt.Println(ui.Muted.Render(fmt.Sprintf("EDIT %d (line %d):", edit.Index, edit.Line)))
@@ -32,7 +32,7 @@ func renderCanonicalEditResult(result commandexec.Result) error {
 		}
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply this edit"))
 		return nil
-	case commandpayload.EditSinglePreviewResult:
+	case editsvc.EditSinglePreviewResult:
 		fmt.Printf("%s %s\n\n", ui.SectionHeader("Preview edit"), ui.FilePath(fmt.Sprintf("%s:%d", data.Path, data.Line)))
 		fmt.Println(ui.Muted.Render("BEFORE:"))
 		fmt.Println(indent(data.Preview.Before, "  "))
@@ -42,7 +42,7 @@ func renderCanonicalEditResult(result commandexec.Result) error {
 		fmt.Println()
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to apply this edit"))
 		return nil
-	case commandpayload.EditBatchResult:
+	case editsvc.EditBatchResult:
 		fmt.Println(ui.Checkf("Applied %d edits in %s", len(data.Edits), ui.FilePath(data.Path)))
 		fmt.Println()
 		for _, edit := range data.Edits {
@@ -52,7 +52,7 @@ func renderCanonicalEditResult(result commandexec.Result) error {
 		}
 		promptCreateMissingRefsFromResult(getVaultPath(), result)
 		return nil
-	case commandpayload.EditSingleResult:
+	case editsvc.EditSingleResult:
 		fmt.Println(ui.Checkf("Applied edit in %s", ui.FilePath(fmt.Sprintf("%s:%d", data.Path, data.Line))))
 		fmt.Println()
 		fmt.Println(ui.Muted.Render("Context:"))

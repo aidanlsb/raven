@@ -11,10 +11,10 @@ import (
 )
 
 type ValidateResult struct {
-	Valid  bool
-	Issues []string
-	Types  int
-	Traits int
+	Valid  bool     `json:"valid"`
+	Issues []string `json:"issues"`
+	Types  int      `json:"types"`
+	Traits int      `json:"traits"`
 }
 
 func Validate(rt *vaultruntime.Runtime) (*ValidateResult, error) {

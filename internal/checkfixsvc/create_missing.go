@@ -7,9 +7,9 @@ import (
 	"github.com/aidanlsb/raven/internal/slugs"
 )
 
-type CreateMissingResult struct {
-	Created  int                    `json:"created"`
-	Failures []CreateMissingFailure `json:"failures,omitempty"`
+type CreateMissingApplyResult struct {
+	Created  int
+	Failures []CreateMissingFailure
 }
 
 type CreateMissingFailure struct {
@@ -27,8 +27,8 @@ func CreateMissingRefsNonInteractive(
 	dailyDir string,
 	templateDir string,
 	protectedPrefixes []string,
-) CreateMissingResult {
-	result := CreateMissingResult{}
+) CreateMissingApplyResult {
+	result := CreateMissingApplyResult{}
 	seen := make(map[string]struct{})
 
 	for _, ref := range refs {

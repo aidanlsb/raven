@@ -7,7 +7,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/editsvc"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -48,20 +47,20 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 			return commandexec.FromServiceError(err)
 		}
 		if batchMode {
-			editsPreview := make([]commandpayload.EditPreviewItem, 0, len(result.Edits))
+			editsPreview := make([]editsvc.EditPreviewItem, 0, len(result.Edits))
 			for _, editResult := range result.Edits {
-				editsPreview = append(editsPreview, commandpayload.EditPreviewItem{
+				editsPreview = append(editsPreview, editsvc.EditPreviewItem{
 					Index:  editResult.Index,
 					Line:   editResult.Line,
 					OldStr: editResult.OldStr,
 					NewStr: editResult.NewStr,
-					Preview: commandpayload.EditPreview{
+					Preview: editsvc.EditPreview{
 						Before: editResult.Before,
 						After:  editResult.After,
 					},
 				})
 			}
-			return commandexec.Success(commandpayload.EditBatchPreviewResult{
+			return commandexec.Success(editsvc.EditBatchPreviewResult{
 				Status: "preview",
 				Path:   result.Path,
 				Count:  len(editsPreview),
@@ -70,11 +69,11 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		}
 
 		editResult := result.Edits[0]
-		return commandexec.Success(commandpayload.EditSinglePreviewResult{
+		return commandexec.Success(editsvc.EditSinglePreviewResult{
 			Status: "preview",
 			Path:   result.Path,
 			Line:   editResult.Line,
-			Preview: commandpayload.EditPreview{
+			Preview: editsvc.EditPreview{
 				Before: editResult.Before,
 				After:  editResult.After,
 			},
@@ -96,9 +95,9 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	warnings := proj.Warnings
 
 	if batchMode {
-		applied := make([]commandpayload.EditAppliedItem, 0, len(result.Edits))
+		applied := make([]editsvc.EditAppliedItem, 0, len(result.Edits))
 		for _, editResult := range result.Edits {
-			applied = append(applied, commandpayload.EditAppliedItem{
+			applied = append(applied, editsvc.EditAppliedItem{
 				Index:   editResult.Index,
 				Line:    editResult.Line,
 				OldStr:  editResult.OldStr,
@@ -106,7 +105,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 				Context: editResult.Context,
 			})
 		}
-		data := commandpayload.EditBatchResult{
+		data := editsvc.EditBatchResult{
 			Status:            "applied",
 			Path:              result.Path,
 			Count:             len(applied),
@@ -117,7 +116,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	editResult := result.Edits[0]
-	data := commandpayload.EditSingleResult{
+	data := editsvc.EditSingleResult{
 		Status:            "applied",
 		Path:              result.Path,
 		Line:              editResult.Line,

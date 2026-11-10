@@ -1,0 +1,1 @@
+{"ok":true,"data":{"query_kind":"type","type":"project","items":[{"num":1,"id":"projects/raven","type":"project","fields":{"owner":"people/alice","status":"active","title":"Raven"},"file_path":"projects/raven.md","line":1}],"total":1,"returned":1,"offset":0,"limit":0,"has_more":false},"meta":{"count":1}}

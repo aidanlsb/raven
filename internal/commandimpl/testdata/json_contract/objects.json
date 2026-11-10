@@ -1,0 +1,1 @@
+{"ok":true,"data":{"items":[{"id":"people/alice","type":"person","name":"Alice","file_path":"people/alice.md"},{"id":"projects/raven","type":"project","name":"Raven","file_path":"projects/raven.md"}],"total":2,"returned":2,"offset":0,"limit":0,"has_more":false},"meta":{"count":2}}

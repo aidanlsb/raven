@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -15,7 +15,7 @@ var objectsCmd = newCanonicalLeafCommand("objects", canonicalLeafOptions{
 })
 
 func renderObjects(_ *cobra.Command, result commandexec.Result) error {
-	payload, ok := result.Data.(commandpayload.ObjectsResult)
+	payload, ok := result.Data.(readsvc.ObjectsResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "unexpected objects result shape", "")
 	}

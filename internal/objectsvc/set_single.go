@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -20,14 +21,19 @@ type SetByReferenceRequest struct {
 }
 
 type SetByReferenceResult struct {
-	FilePath        string
-	RelativePath    string
-	ObjectID        string
-	ObjectType      string
-	ResolvedUpdates map[string]string
-	WarningMessages []string
-	PreviousFields  map[string]fieldvalue.FieldValue
-	ChangeSet       mutation.ChangeSet
+	File           string                           `json:"file"`
+	ObjectID       string                           `json:"object_id"`
+	Type           string                           `json:"type"`
+	UpdatedFields  map[string]string                `json:"updated_fields"`
+	PreviousFields map[string]fieldvalue.FieldValue `json:"previous_fields,omitempty"`
+	Preview        bool                             `json:"preview,omitempty"`
+	check.MissingReferences
+	FilePath        string             `json:"-"`
+	RelativePath    string             `json:"-"`
+	ObjectType      string             `json:"-"`
+	ResolvedUpdates map[string]string  `json:"-"`
+	WarningMessages []string           `json:"-"`
+	ChangeSet       mutation.ChangeSet `json:"-"`
 }
 
 func SetByReference(rt *vaultruntime.Runtime, req SetByReferenceRequest) (*SetByReferenceResult, error) {
@@ -68,13 +74,17 @@ func SetByReference(rt *vaultruntime.Runtime, req SetByReferenceRequest) (*SetBy
 		changes.AddChanged(relPath)
 	}
 	return &SetByReferenceResult{
+		File:            relPath,
+		ObjectID:        resolved.ObjectID,
+		Type:            result.ObjectType,
+		UpdatedFields:   result.ResolvedUpdates,
+		PreviousFields:  result.PreviousFields,
+		Preview:         req.Preview,
 		FilePath:        resolved.FilePath,
 		RelativePath:    relPath,
-		ObjectID:        resolved.ObjectID,
 		ObjectType:      result.ObjectType,
 		ResolvedUpdates: result.ResolvedUpdates,
 		WarningMessages: result.WarningMessages,
-		PreviousFields:  result.PreviousFields,
 		ChangeSet:       changes,
 	}, nil
 }

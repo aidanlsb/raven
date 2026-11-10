@@ -10,7 +10,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/querysvc"
 )
 
 func TestJoinQueryArgs(t *testing.T) {
@@ -111,9 +111,9 @@ func TestRenderCanonicalQueryLinkJSONHasNoHyperlinks(t *testing.T) {
 		hyperlinkEnabled = prevHyperlinkEnabled
 	})
 
-	result := commandexec.Success(commandpayload.QueryLinkResult{
+	result := commandexec.Success(querysvc.QueryLinkResult{
 		QueryKind: "link",
-		Items: []commandpayload.LinkItem{{
+		Items: []querysvc.LinkItem{{
 			SourceID:      "projects/raven",
 			FilePath:      "projects/raven.md",
 			Line:          12,

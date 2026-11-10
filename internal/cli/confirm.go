@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -48,7 +47,7 @@ func confirmDestructive(message, skipFlag string) (bool, commandexec.Result) {
 		if promptForConfirm(message) {
 			return true, commandexec.Result{}
 		}
-		return false, commandexec.Success(commandpayload.CancelledResult{Cancelled: true}, nil)
+		return false, commandexec.Success(commandexec.CancelledResult{Cancelled: true}, nil)
 	}
 	return false, confirmationRequiredResult(skipFlag)
 }

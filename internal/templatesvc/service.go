@@ -36,8 +36,8 @@ type ListRequest struct {
 }
 
 type ListResult struct {
-	TemplateDir string
-	Templates   []TemplateFileInfo
+	TemplateDir string             `json:"template_dir"`
+	Templates   []TemplateFileInfo `json:"templates"`
 }
 
 type WriteRequest struct {
@@ -59,12 +59,12 @@ type ReadResult struct {
 }
 
 type WriteResult struct {
-	Path        string
-	Status      string
-	TemplateDir string
-	Changed     bool
-	ChangedPath string
-	Warnings    []Warning
+	Path        string    `json:"path"`
+	Status      string    `json:"status"`
+	TemplateDir string    `json:"template_dir"`
+	Changed     bool      `json:"-"`
+	ChangedPath string    `json:"-"`
+	Warnings    []Warning `json:"-"`
 }
 
 type DeleteRequest struct {
@@ -74,11 +74,12 @@ type DeleteRequest struct {
 }
 
 type DeleteResult struct {
-	DeletedPath string
-	TrashPath   string
-	Forced      bool
-	TemplateIDs []string
-	Warnings    []Warning
+	Deleted     string    `json:"deleted"`
+	TrashPath   string    `json:"trash_path"`
+	Forced      bool      `json:"forced"`
+	TemplateIDs []string  `json:"template_ids"`
+	Warnings    []Warning `json:"-"`
+	DeletedPath string    `json:"-"`
 }
 
 func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
@@ -273,6 +274,7 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 	}
 
 	return &DeleteResult{
+		Deleted:     fileRef,
 		DeletedPath: fileRef,
 		TrashPath:   trashRef,
 		Forced:      req.Force,

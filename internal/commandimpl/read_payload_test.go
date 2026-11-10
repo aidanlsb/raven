@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -69,9 +69,9 @@ func TestHandleSearchTypedResult(t *testing.T) {
 		t.Fatalf("HandleSearch failed: %#v", result.Error)
 	}
 
-	payload, ok := result.Data.(commandpayload.SearchResult)
+	payload, ok := result.Data.(readsvc.SearchResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.SearchResult", result.Data)
+		t.Fatalf("Data type = %T, want readsvc.SearchResult", result.Data)
 	}
 	if payload.Query != "roadmap" {
 		t.Fatalf("query = %q, want roadmap", payload.Query)
@@ -93,9 +93,9 @@ func TestHandleReadTypedContentResult(t *testing.T) {
 
 	result := runReadHandler(t, v.Path, map[string]any{"reference": "projects/raven"})
 
-	payload, ok := result.Data.(commandpayload.ReadContentResult)
+	payload, ok := result.Data.(readsvc.ReadContentResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.ReadContentResult", result.Data)
+		t.Fatalf("Data type = %T, want readsvc.ReadContentResult", result.Data)
 	}
 	if payload.ObjectID != "projects/raven" {
 		t.Fatalf("object_id = %q, want projects/raven", payload.ObjectID)
@@ -130,9 +130,9 @@ func TestHandleReadTypedRawResult(t *testing.T) {
 		"end-line":   5,
 	})
 
-	payload, ok := result.Data.(commandpayload.ReadRawResult)
+	payload, ok := result.Data.(readsvc.ReadRawResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.ReadRawResult", result.Data)
+		t.Fatalf("Data type = %T, want readsvc.ReadRawResult", result.Data)
 	}
 	if payload.StartLine != 1 || payload.EndLine != 5 {
 		t.Fatalf("range = %d-%d, want 1-5", payload.StartLine, payload.EndLine)
@@ -154,9 +154,9 @@ func TestHandleReadTypedRawResultFullFile(t *testing.T) {
 		"raw":       true,
 	})
 
-	payload, ok := result.Data.(commandpayload.ReadRawResult)
+	payload, ok := result.Data.(readsvc.ReadRawResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.ReadRawResult", result.Data)
+		t.Fatalf("Data type = %T, want readsvc.ReadRawResult", result.Data)
 	}
 
 	// A full-file raw read omits the range and structured-line fields.
@@ -173,9 +173,9 @@ func TestHandleReadTypedSectionsResult(t *testing.T) {
 		"sections":  true,
 	})
 
-	payload, ok := result.Data.(commandpayload.ReadSectionsResult)
+	payload, ok := result.Data.(readsvc.ReadSectionsResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.ReadSectionsResult", result.Data)
+		t.Fatalf("Data type = %T, want readsvc.ReadSectionsResult", result.Data)
 	}
 	if len(payload.Sections) == 0 {
 		t.Fatalf("sections = %#v, want at least one section", payload.Sections)

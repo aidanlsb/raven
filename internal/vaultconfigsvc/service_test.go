@@ -47,7 +47,7 @@ func TestSetAutoReindexCreatesExplicitValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetAutoReindex() error = %v", err)
 	}
-	if !result.Created {
+	if result.Created == nil || !*result.Created {
 		t.Fatalf("expected Created=true")
 	}
 	if !result.Changed {
@@ -56,7 +56,7 @@ func TestSetAutoReindexCreatesExplicitValue(t *testing.T) {
 	if result.AutoReindex {
 		t.Fatalf("expected AutoReindex=false")
 	}
-	if !result.Explicit {
+	if !result.AutoReindexExplicit {
 		t.Fatalf("expected explicit=true")
 	}
 
@@ -85,7 +85,7 @@ func TestUnsetAutoReindexClearsExplicitValue(t *testing.T) {
 	if !result.AutoReindex {
 		t.Fatalf("expected AutoReindex=true after unset")
 	}
-	if result.Explicit {
+	if result.AutoReindexExplicit {
 		t.Fatalf("expected explicit=false")
 	}
 
@@ -149,8 +149,8 @@ func TestProtectedPrefixesRemoveRequiresExistingPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RemoveProtectedPrefix() error = %v", err)
 	}
-	if result.Prefix != "private/" {
-		t.Fatalf("expected removed private/, got %q", result.Prefix)
+	if result.Removed != "private/" {
+		t.Fatalf("expected removed private/, got %q", result.Removed)
 	}
 
 	_, err = RemoveProtectedPrefix(configTestRuntime(t, tmp), "missing")
@@ -190,7 +190,7 @@ func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetDirectories() error = %v", err)
 	}
-	if !result.Changed {
+	if result.Changed == nil || !*result.Changed {
 		t.Fatalf("expected Changed=true")
 	}
 	if result.Directories.Daily != "journal/" {
@@ -212,7 +212,7 @@ func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UnsetDirectories() error = %v", err)
 	}
-	if !result.Changed {
+	if result.Changed == nil || !*result.Changed {
 		t.Fatalf("expected Changed=true")
 	}
 
@@ -314,8 +314,8 @@ func TestExcludeList(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ListExclude() error = %v", err)
 			}
-			if result.Exists != tt.wantExists || !reflect.DeepEqual(result.Patterns, tt.want) {
-				t.Fatalf("ListExclude() = Exists=%v Exclude=%#v, want Exists=%v Exclude=%#v", result.Exists, result.Patterns, tt.wantExists, tt.want)
+			if result.Exists != tt.wantExists || !reflect.DeepEqual(result.Exclude, tt.want) {
+				t.Fatalf("ListExclude() = Exists=%v Exclude=%#v, want Exists=%v Exclude=%#v", result.Exists, result.Exclude, tt.wantExists, tt.want)
 			}
 			if result.ConfigPath != filepath.Join(vaultPath, "raven.yaml") {
 				t.Fatalf("ConfigPath = %q, want vault raven.yaml", result.ConfigPath)
@@ -392,9 +392,9 @@ func TestExcludeAdd(t *testing.T) {
 				t.Fatalf("AddExclude() error = %v", err)
 			}
 			if result.Created != tt.wantCreated || result.Changed != tt.wantChanged ||
-				result.Pattern != tt.wantPattern || !reflect.DeepEqual(result.Patterns, tt.wantExclude) {
+				result.Pattern != tt.wantPattern || !reflect.DeepEqual(result.Exclude, tt.wantExclude) {
 				t.Fatalf("AddExclude() = Created=%v Changed=%v Pattern=%q Exclude=%#v, want Created=%v Changed=%v Pattern=%q Exclude=%#v",
-					result.Created, result.Changed, result.Pattern, result.Patterns, tt.wantCreated, tt.wantChanged, tt.wantPattern, tt.wantExclude)
+					result.Created, result.Changed, result.Pattern, result.Exclude, tt.wantCreated, tt.wantChanged, tt.wantPattern, tt.wantExclude)
 			}
 
 			cfg, err := config.LoadVaultConfig(vaultPath)
@@ -456,8 +456,8 @@ func TestExcludeRemove(t *testing.T) {
 			if err != nil {
 				t.Fatalf("RemoveExclude() error = %v", err)
 			}
-			if !result.Changed || result.Pattern != tt.wantRemoved || !reflect.DeepEqual(result.Patterns, tt.wantExclude) {
-				t.Fatalf("RemoveExclude() = Changed=%v Removed=%q Exclude=%#v, want Removed=%q Exclude=%#v", result.Changed, result.Pattern, result.Patterns, tt.wantRemoved, tt.wantExclude)
+			if !result.Changed || result.Removed != tt.wantRemoved || !reflect.DeepEqual(result.Exclude, tt.wantExclude) {
+				t.Fatalf("RemoveExclude() = Changed=%v Removed=%q Exclude=%#v, want Removed=%q Exclude=%#v", result.Changed, result.Removed, result.Exclude, tt.wantRemoved, tt.wantExclude)
 			}
 
 			cfg, err := config.LoadVaultConfig(vaultPath)

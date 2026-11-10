@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
@@ -33,11 +34,16 @@ type WriteRequest struct {
 }
 
 type WriteResult struct {
-	Status          string
-	FilePath        string
-	RelativePath    string
-	WarningMessages []string
-	ChangeSet       mutation.ChangeSet
+	Status string `json:"status,omitempty"`
+	ID     string `json:"id"`
+	File   string `json:"file"`
+	Title  string `json:"title"`
+	Type   string `json:"type"`
+	check.MissingReferences
+	FilePath        string             `json:"-"`
+	RelativePath    string             `json:"-"`
+	WarningMessages []string           `json:"-"`
+	ChangeSet       mutation.ChangeSet `json:"-"`
 }
 
 func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
@@ -168,7 +174,7 @@ func writeExistingObject(rt *vaultruntime.Runtime, req WriteRequest, plan *write
 		}
 		status = "updated"
 	}
-	return writeResult(status, plan.filePath, plan.relPath, warningMessages), nil
+	return writeResult(rt, req, status, plan.filePath, plan.relPath, warningMessages), nil
 }
 
 func writeNewObject(rt *vaultruntime.Runtime, req WriteRequest, typeDef *schema.TypeDefinition, targetPath string, fieldValues map[string]fieldvalue.FieldValue) (*WriteResult, error) {
@@ -215,16 +221,27 @@ func writeNewObject(rt *vaultruntime.Runtime, req WriteRequest, typeDef *schema.
 	if err != nil {
 		return nil, err
 	}
-	return writeResult("created", createResult.FilePath, createResult.RelativePath, createWarnings), nil
+	return writeResult(rt, req, "created", createResult.FilePath, createResult.RelativePath, createWarnings), nil
 }
 
-func writeResult(status, filePath, relPath string, warningMessages []string) *WriteResult {
+func writeResult(rt *vaultruntime.Runtime, req WriteRequest, status, filePath, relPath string, warningMessages []string) *WriteResult {
 	changes := mutation.NewChangeSet()
 	if status == "created" || status == "updated" {
 		changes.AddChanged(relPath)
 	}
+	id := relPath
+	if rt != nil && rt.VaultCfg != nil {
+		id = rt.VaultCfg.FilePathToObjectID(relPath)
+	}
+	if req.CreateOnly {
+		status = ""
+	}
 	return &WriteResult{
 		Status:          status,
+		ID:              id,
+		File:            relPath,
+		Title:           req.Title,
+		Type:            req.TypeName,
 		FilePath:        filePath,
 		RelativePath:    relPath,
 		WarningMessages: warningMessages,

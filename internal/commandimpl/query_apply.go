@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/querysvc"
 )
 
@@ -16,7 +15,7 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, plan *querys
 		if !req.Confirm {
 			phase = commandexec.MutationPhasePreview
 		}
-		return commandexec.Success(commandpayload.QueryApplyEmptyResult{
+		return commandexec.Success(querysvc.QueryApplyEmptyResult{
 			Preview: !req.Confirm,
 			Action:  plan.Command,
 			Items:   []interface{}{},

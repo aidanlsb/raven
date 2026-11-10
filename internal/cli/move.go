@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -48,7 +48,7 @@ func invokeMove(cmd *cobra.Command, commandID, vaultPath string, args map[string
 	if !result.OK {
 		return result
 	}
-	if _, needsConfirm := result.Data.(commandpayload.MoveConfirmationResult); !needsConfirm {
+	if _, needsConfirm := result.Data.(objectsvc.MoveConfirmationResult); !needsConfirm {
 		return result
 	}
 
@@ -90,15 +90,15 @@ func init() {
 
 func renderMoveResult(_ *cobra.Command, result commandexec.Result) error {
 	switch data := result.Data.(type) {
-	case commandpayload.CancelledResult:
+	case commandexec.CancelledResult:
 		fmt.Println(ui.Star("Cancelled."))
 		return nil
-	case commandpayload.MoveBulkPreviewResult, commandpayload.MoveBulkResult:
+	case objectsvc.MoveBulkPreviewResult, objectsvc.MoveBulkResult:
 		return renderCanonicalBulkResult(result)
-	case commandpayload.MoveConfirmationResult:
+	case objectsvc.MoveConfirmationResult:
 		fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(data.Source), ui.FilePath(data.Destination)))
 		return nil
-	case commandpayload.MoveResult:
+	case objectsvc.MoveResult:
 		if data.Preview {
 			fmt.Println(ui.Star(fmt.Sprintf("Would move %s → %s", ui.FilePath(data.Source), ui.FilePath(data.Destination))))
 			if len(data.UpdatedRefs) > 0 {
@@ -119,16 +119,16 @@ func renderMoveResult(_ *cobra.Command, result commandexec.Result) error {
 	}
 }
 
-func renderMoveRefFieldUpdates(updates []commandpayload.MoveRefFieldUpdate, preview bool) {
+func renderMoveRefFieldUpdates(updates []objectsvc.RefFieldUpdate, preview bool) {
 	for _, update := range updates {
-		if update.File == "" || update.Field == "" {
+		if update.FilePath == "" || update.Field == "" {
 			continue
 		}
 		action := "Updated"
 		if preview {
 			action = "Would update"
 		}
-		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("%s ref field %s: %s", action, update.File, update.Field)))
+		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("%s ref field %s: %s", action, update.FilePath, update.Field)))
 	}
 }
 

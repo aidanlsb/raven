@@ -4,7 +4,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -17,15 +19,19 @@ type UnsetByReferenceRequest struct {
 }
 
 type UnsetByReferenceResult struct {
-	FilePath       string
-	RelativePath   string
-	ObjectID       string
-	ObjectType     string
-	RemovedFields  map[string]fieldvalue.FieldValue
-	MissingFields  []string
-	Modified       bool
-	PreviousFields map[string]fieldvalue.FieldValue
-	ChangeSet      mutation.ChangeSet
+	File           string                           `json:"file"`
+	ObjectID       string                           `json:"object_id"`
+	Type           string                           `json:"type"`
+	RemovedFields  map[string]string                `json:"removed_fields"`
+	MissingFields  []string                         `json:"missing_fields"`
+	Modified       bool                             `json:"modified"`
+	PreviousFields map[string]fieldvalue.FieldValue `json:"previous_fields"`
+	check.MissingReferences
+	FilePath         string                           `json:"-"`
+	RelativePath     string                           `json:"-"`
+	ObjectType       string                           `json:"-"`
+	RemovedFieldVals map[string]fieldvalue.FieldValue `json:"-"`
+	ChangeSet        mutation.ChangeSet               `json:"-"`
 }
 
 func UnsetByReference(rt *vaultruntime.Runtime, req UnsetByReferenceRequest) (*UnsetByReferenceResult, error) {
@@ -63,14 +69,17 @@ func UnsetByReference(rt *vaultruntime.Runtime, req UnsetByReferenceRequest) (*U
 		changes.AddChanged(relPath)
 	}
 	return &UnsetByReferenceResult{
-		FilePath:       resolved.FilePath,
-		RelativePath:   relPath,
-		ObjectID:       resolved.ObjectID,
-		ObjectType:     result.ObjectType,
-		RemovedFields:  result.RemovedFields,
-		MissingFields:  result.MissingFields,
-		Modified:       result.Modified,
-		PreviousFields: result.PreviousFields,
-		ChangeSet:      changes,
+		File:             relPath,
+		ObjectID:         resolved.ObjectID,
+		Type:             result.ObjectType,
+		RemovedFields:    fieldmutation.SerializeFieldValueMap(result.RemovedFields),
+		MissingFields:    result.MissingFields,
+		Modified:         result.Modified,
+		PreviousFields:   result.PreviousFields,
+		FilePath:         resolved.FilePath,
+		RelativePath:     relPath,
+		ObjectType:       result.ObjectType,
+		RemovedFieldVals: result.RemovedFields,
+		ChangeSet:        changes,
 	}, nil
 }

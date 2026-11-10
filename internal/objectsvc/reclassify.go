@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
@@ -52,14 +53,15 @@ type ReclassifyResult struct {
 	OldType       string   `json:"old_type"`
 	NewType       string   `json:"new_type"`
 	File          string   `json:"file"`
-	Moved         bool     `json:"moved,omitempty"`
-	OldPath       string   `json:"old_path,omitempty"`
-	NewPath       string   `json:"new_path,omitempty"`
-	UpdatedRefs   []string `json:"updated_refs,omitempty"`
-	AddedFields   []string `json:"added_fields,omitempty"`
-	DroppedFields []string `json:"dropped_fields,omitempty"`
-	NeedsConfirm  bool     `json:"needs_confirm,omitempty"`
-	Reason        string   `json:"reason,omitempty"`
+	Moved         bool     `json:"moved"`
+	OldPath       string   `json:"old_path"`
+	NewPath       string   `json:"new_path"`
+	UpdatedRefs   []string `json:"updated_refs"`
+	AddedFields   []string `json:"added_fields"`
+	DroppedFields []string `json:"dropped_fields"`
+	NeedsConfirm  bool     `json:"needs_confirm"`
+	Reason        string   `json:"reason"`
+	check.MissingReferences
 
 	ChangeSet       mutation.ChangeSet `json:"-"`
 	WarningMessages []string           `json:"-"`

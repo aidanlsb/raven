@@ -6,8 +6,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
-	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
@@ -107,30 +105,4 @@ func sectionSkipWarnings(sectionIDs []string) []commandexec.Warning {
 		Message: fmt.Sprintf("Skipped %d section ID(s) - bulk operations only support file-level objects", len(sectionIDs)),
 		Ref:     strings.Join(sectionIDs, ", "),
 	}}
-}
-
-func canonicalBulkPreviewItems(items []objectsvc.BulkPreviewItem) []commandpayload.BulkPreviewItem {
-	out := make([]commandpayload.BulkPreviewItem, 0, len(items))
-	for _, item := range items {
-		out = append(out, commandpayload.BulkPreviewItem{
-			ID:      item.ID,
-			Action:  item.Action,
-			Details: item.Details,
-			Changes: item.Changes,
-		})
-	}
-	return out
-}
-
-func canonicalBulkResults(items []objectsvc.BulkResult) []commandpayload.BulkResult {
-	out := make([]commandpayload.BulkResult, 0, len(items))
-	for _, item := range items {
-		out = append(out, commandpayload.BulkResult{
-			ID:      item.ID,
-			Status:  item.Status,
-			Reason:  item.Reason,
-			Details: item.Details,
-		})
-	}
-	return out
 }

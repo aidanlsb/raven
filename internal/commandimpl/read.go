@@ -11,7 +11,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/readsvc"
@@ -46,13 +45,8 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 	if err != nil {
 		return mapSearchFailure(err)
 	}
-
-	items := searchMatchItems(results)
-	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(commandpayload.SearchResult{
-		Query:      query,
-		Items:      items,
-		Pagination: commandpayload.NewPagination(total, len(items), offset, limit),
-	}, &commandexec.Meta{Count: len(items), QueryTimeMs: time.Since(start).Milliseconds()}))
+	payload := readsvc.SearchPayload(query, results, total, offset, limit)
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(payload, &commandexec.Meta{Count: len(payload.Items), QueryTimeMs: time.Since(start).Milliseconds()}))
 }
 
 func mapSearchFailure(err error) commandexec.Result {
@@ -315,11 +309,8 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 		if err != nil {
 			return mapReadFailure(err)
 		}
-		return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, commandexec.Success(commandpayload.ReadSectionsResult{
-			ObjectID: outline.ObjectID,
-			Path:     outline.Path,
-			Sections: sectionOutlineItems(outline.Sections),
-		}, &commandexec.Meta{Count: len(outline.Sections), QueryTimeMs: time.Since(start).Milliseconds()})))
+		payload := outline.SectionsPayload()
+		return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, commandexec.Success(payload, &commandexec.Meta{Count: len(payload.Sections), QueryTimeMs: time.Since(start).Milliseconds()})))
 	}
 
 	result, err := readsvc.Read(rt, readsvc.ReadRequest{
@@ -336,36 +327,11 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	rawMode := raw || lines || startLine > 0 || endLine > 0
 	meta := &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}
 	if rawMode {
-		payload := commandpayload.ReadRawResult{
-			ObjectID:  result.ObjectID,
-			Path:      result.Path,
-			Content:   result.Content,
-			LineCount: result.LineCount,
-		}
-		if result.StartLine > 0 {
-			payload.StartLine = result.StartLine
-			payload.EndLine = result.EndLine
-		}
-		if len(result.Lines) > 0 {
-			payload.Lines = result.Lines
-		}
-		return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, commandexec.Success(payload, meta)))
+		return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, commandexec.Success(result.RawPayload(), meta)))
 	}
 
 	meta.Count = result.BacklinksCount
-	links := result.Links
-	if links == nil {
-		links = []readsvc.ReadLink{}
-	}
-	return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, commandexec.Success(commandpayload.ReadContentResult{
-		ObjectID:   result.ObjectID,
-		Path:       result.Path,
-		Content:    result.Content,
-		LineCount:  result.LineCount,
-		References: result.References,
-		Backlinks:  result.Backlinks,
-		Links:      links,
-	}, meta)))
+	return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, commandexec.Success(result.ContentPayload(), meta)))
 }
 
 // withSchemaLoadWarning appends a stable SCHEMA_LOAD_FAILED warning to a
@@ -381,23 +347,6 @@ func withSchemaLoadWarning(rt *vaultruntime.Runtime, result commandexec.Result) 
 		Message: fmt.Sprintf("schema failed to load; type-aware output may be incomplete: %v", rt.SchemaLoadErr),
 	})
 	return result
-}
-
-func sectionOutlineItems(sections []model.Section) []commandpayload.ReadSectionItem {
-	out := make([]commandpayload.ReadSectionItem, 0, len(sections))
-	for _, section := range sections {
-		out = append(out, commandpayload.ReadSectionItem{
-			ID:              section.ID,
-			Slug:            section.Slug,
-			Title:           section.Title,
-			Level:           section.Level,
-			LineStart:       section.LineStart,
-			LineEnd:         section.LineEnd,
-			SubtreeLineEnd:  section.SubtreeLineEnd,
-			ParentSectionID: section.ParentSectionID,
-		})
-	}
-	return out
 }
 
 // HandleOpen executes the canonical `open` command.
@@ -542,28 +491,6 @@ func mapIndexRebuildRequired(err error) (commandexec.Result, bool) {
 		nil,
 		"Run 'rvn reindex --full' to rebuild the index",
 	), true
-}
-
-func searchMatchItems(results []model.SearchMatch) []commandpayload.SearchMatchItem {
-	items := make([]commandpayload.SearchMatchItem, len(results))
-	for i, r := range results {
-		items[i] = commandpayload.SearchMatchItem{
-			ObjectID:  r.ObjectID,
-			Title:     r.Title,
-			FilePath:  r.FilePath,
-			Snippet:   r.Snippet,
-			Rank:      r.Rank,
-			IsSection: r.IsSection,
-		}
-		if r.IsSection {
-			items[i].FileObjectID = r.FileObjectID
-			items[i].LineStart = r.LineStart
-			items[i].LineEnd = r.LineEnd
-			items[i].DirectLineEnd = r.LineEnd
-			items[i].SubtreeLineEnd = r.SubtreeLineEnd
-		}
-	}
-	return items
 }
 
 func referenceItems(references []model.Reference) []model.Reference {

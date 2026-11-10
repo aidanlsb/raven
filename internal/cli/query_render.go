@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/querysvc"
@@ -14,21 +13,21 @@ import (
 
 // renderCanonicalQueryHuman renders a successful canonical query response as
 // human-readable output (tables, IDs, counts, or an interactive picker). The
-// canonical handler emits a typed commandpayload result, so this dispatcher
+// canonical handler emits a typed service result, so this dispatcher
 // type-asserts the payload rather than rehydrating a generic map envelope. The
 // canonical handler already loaded and validated the schema; the schema.Load
 // calls here are best-effort display enrichment.
 func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) error {
 	switch payload := data.(type) {
-	case commandpayload.QueryCountResult:
+	case querysvc.QueryCountResult:
 		fmt.Println(payload.Total)
 		return nil
-	case commandpayload.QueryIDsResult:
+	case querysvc.QueryIDsResult:
 		for _, id := range payload.IDs {
 			fmt.Println(id)
 		}
 		return nil
-	case commandpayload.QueryObjectResult:
+	case querysvc.QueryObjectResult:
 		objects := objectsFromItems(payload.Items)
 		label := queryLabelOrParse(payload.Type, queryStr)
 		sch, _ := loadSchemaSafe(getVaultPath())
@@ -45,7 +44,7 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 		}
 		printQueryObjectResults(queryStr, label, objects, sch, payload.Total)
 		return nil
-	case commandpayload.QueryTraitResult:
+	case querysvc.QueryTraitResult:
 		traits := traitsFromItems(payload.Items)
 		label := queryLabelOrParse(payload.Trait, queryStr)
 		if browse {
@@ -61,7 +60,7 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 		}
 		printQueryTraitResults(queryStr, label, traits, payload.Total)
 		return nil
-	case commandpayload.QuerySectionResult:
+	case querysvc.QuerySectionResult:
 		sections := sectionsFromItems(payload.Items)
 		if browse {
 			if len(sections) == 0 {
@@ -76,7 +75,7 @@ func renderCanonicalQueryHuman(queryStr string, data interface{}, browse bool) e
 		}
 		printQuerySectionResults(queryStr, sections, payload.Total)
 		return nil
-	case commandpayload.QueryLinkResult:
+	case querysvc.QueryLinkResult:
 		links := linksFromItems(payload.Items)
 		if browse {
 			if len(links) == 0 {
@@ -169,8 +168,8 @@ func savedQueriesFromResult(raw interface{}) []querysvc.SavedQueryInfo {
 
 // objectsFromItems adapts the typed query payload items into the model rows the
 // shared retrieval renderers consume. It is a thin field copy with no map
-// decoding: the canonical handler emits typed commandpayload items in-process.
-func objectsFromItems(items []commandpayload.ObjectItem) []model.Object {
+// decoding: the canonical handler emits typed service items in-process.
+func objectsFromItems(items []querysvc.ObjectItem) []model.Object {
 	results := make([]model.Object, 0, len(items))
 	for _, item := range items {
 		results = append(results, model.Object{
@@ -184,7 +183,7 @@ func objectsFromItems(items []commandpayload.ObjectItem) []model.Object {
 	return results
 }
 
-func traitsFromItems(items []commandpayload.TraitItem) []model.Trait {
+func traitsFromItems(items []querysvc.TraitItem) []model.Trait {
 	results := make([]model.Trait, 0, len(items))
 	for _, item := range items {
 		trait := model.Trait{
@@ -201,7 +200,7 @@ func traitsFromItems(items []commandpayload.TraitItem) []model.Trait {
 	return results
 }
 
-func sectionsFromItems(items []commandpayload.SectionItem) []model.Section {
+func sectionsFromItems(items []querysvc.SectionItem) []model.Section {
 	results := make([]model.Section, 0, len(items))
 	for _, item := range items {
 		results = append(results, model.Section{
@@ -220,7 +219,7 @@ func sectionsFromItems(items []commandpayload.SectionItem) []model.Section {
 	return results
 }
 
-func linksFromItems(items []commandpayload.LinkItem) []model.Link {
+func linksFromItems(items []querysvc.LinkItem) []model.Link {
 	results := make([]model.Link, 0, len(items))
 	for _, item := range items {
 		results = append(results, model.Link{

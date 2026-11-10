@@ -1,6 +1,7 @@
 package objectsvc
 
 import (
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -15,9 +16,14 @@ type CreateRequest struct {
 }
 
 type CreateResult struct {
-	FilePath     string
-	RelativePath string
-	ChangeSet    mutation.ChangeSet
+	ID    string `json:"id"`
+	File  string `json:"file"`
+	Title string `json:"title"`
+	Type  string `json:"type"`
+	check.MissingReferences
+	FilePath     string             `json:"-"`
+	RelativePath string             `json:"-"`
+	ChangeSet    mutation.ChangeSet `json:"-"`
 }
 
 // Create is the create-only path used by tests and callers that want Write's
@@ -35,6 +41,10 @@ func Create(rt *vaultruntime.Runtime, req CreateRequest) (*CreateResult, error) 
 		return nil, err
 	}
 	return &CreateResult{
+		ID:           result.ID,
+		File:         result.File,
+		Title:        result.Title,
+		Type:         result.Type,
 		FilePath:     result.FilePath,
 		RelativePath: result.RelativePath,
 		ChangeSet:    result.ChangeSet,

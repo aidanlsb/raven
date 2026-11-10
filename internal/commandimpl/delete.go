@@ -8,7 +8,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
@@ -64,7 +63,7 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		}
 
 		warnings := deleteBacklinkCommandWarnings(preview.Backlinks)
-		return commandexec.SuccessWithWarnings(commandpayload.DeletePreviewResult{
+		return commandexec.SuccessWithWarnings(objectsvc.DeletePreviewResult{
 			Preview:   true,
 			ObjectID:  preview.ObjectID,
 			Behavior:  preview.Behavior,
@@ -92,7 +91,7 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 	warnings := make([]commandexec.Warning, 0, 1)
 	warnings = append(warnings, deleteBacklinkCommandWarnings(serviceResult.Backlinks)...)
 
-	data := commandpayload.DeleteResult{
+	data := objectsvc.DeleteResult{
 		Deleted:           serviceResult.ObjectID,
 		Behavior:          serviceResult.Behavior,
 		MissingReferences: missingRefsOf(proj),
@@ -124,15 +123,15 @@ func runDeleteBulk(sess *vaultsession.Session, ids []string, confirm bool) comma
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
-		return commandexec.Success(commandpayload.DeleteBulkPreviewResult{
-			BulkPreviewResult: commandpayload.BulkPreviewResult{
-				Preview: true,
-				Action:  preview.Action,
-				Items:   canonicalBulkPreviewItems(preview.Items),
-				Skipped: canonicalBulkResults(preview.Skipped),
-				Total:   preview.Total,
+		return commandexec.Success(objectsvc.DeleteBulkPreviewResult{
+			BulkPreviewResult: objectsvc.BulkPreviewResult{
+				Preview:  true,
+				Action:   preview.Action,
+				Items:    preview.Items,
+				Skipped:  preview.Skipped,
+				Total:    preview.Total,
+				Warnings: warnings,
 			},
-			Warnings: warnings,
 			Behavior: preview.Behavior,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
@@ -147,11 +146,11 @@ func runDeleteBulk(sess *vaultsession.Session, ids []string, confirm bool) comma
 	if failure.Error != nil {
 		return failure.WithAttemptedIDs("references", ids)
 	}
-	data := commandpayload.DeleteBulkResult{
-		BulkSummaryResult: commandpayload.BulkSummaryResult{
+	data := objectsvc.DeleteBulkResult{
+		BulkSummaryResult: objectsvc.BulkSummaryResult{
 			OK:                summary.Errors == 0,
 			Action:            summary.Action,
-			Items:             canonicalBulkResults(summary.Results),
+			Items:             summary.Results,
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,

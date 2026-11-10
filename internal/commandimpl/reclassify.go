@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
@@ -95,7 +94,7 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		})
 	}
 	warnings = appendCommandWarnings(warnings, proj.Warnings)
-	data := commandpayload.ReclassifyResult{
+	data := objectsvc.ReclassifyResult{
 		ObjectID:          result.ObjectID,
 		OldType:           result.OldType,
 		NewType:           result.NewType,
@@ -142,7 +141,7 @@ func runReclassifyBulk(
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
 		warnings := warningMessagesToCommandWarnings(preview.WarningMessages, indexUpdateFailedWarningCode)
-		return commandexec.SuccessWithWarnings(commandpayload.ReclassifyBulkPreviewResult{
+		return commandexec.SuccessWithWarnings(objectsvc.ReclassifyBulkPreviewResult{
 			Preview: true,
 			Action:  preview.Action,
 			NewType: preview.NewType,
@@ -163,7 +162,7 @@ func runReclassifyBulk(
 		return failure.WithAttemptedIDs("references", ids)
 	}
 
-	data := commandpayload.ReclassifyBulkResult{
+	data := objectsvc.ReclassifyBulkAppliedResult{
 		OK:                summary.Errors == 0,
 		Action:            summary.Action,
 		NewType:           summary.NewType,

@@ -41,7 +41,7 @@ type MoveFileResult struct {
 // a move. FilePath is vault-relative and reflects any move of the source file.
 type RefFieldUpdate struct {
 	SourceID string `json:"source_id"`
-	FilePath string `json:"file_path"`
+	FilePath string `json:"file"`
 	Field    string `json:"field"`
 }
 

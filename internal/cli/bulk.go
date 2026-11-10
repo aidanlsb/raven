@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -24,7 +24,7 @@ const (
 )
 
 // BulkResult represents the result of one canonical object bulk operation.
-type BulkResult = commandpayload.BulkResult
+type BulkResult = objectsvc.BulkResult
 
 // BulkPreviewItem is the CLI presentation shape for object bulk previews.
 type BulkPreviewItem struct {

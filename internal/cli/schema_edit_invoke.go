@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/schemamigratesvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -96,7 +96,7 @@ func invokeSchemaRenameType(_ *cobra.Command, commandID, vaultPath string, args 
 		return preview
 	}
 
-	previewData, ok := preview.Data.(commandpayload.SchemaRenameTypePreviewResult)
+	previewData, ok := preview.Data.(schemamigratesvc.RenameTypePreviewResult)
 	if !ok {
 		return commandexec.Failure(ErrInternal, fmt.Sprintf("unexpected schema rename preview payload %T", preview.Data), nil, "")
 	}
@@ -121,7 +121,7 @@ func invokeSchemaRenameType(_ *cobra.Command, commandID, vaultPath string, args 
 	return executeCanonicalCommand(commandID, vaultPath, applyArgs)
 }
 
-func schemaRenameDefaultPathPreview(data commandpayload.SchemaRenameTypePreviewResult) (oldPath, newPath string, filesToMove int, available bool) {
+func schemaRenameDefaultPathPreview(data schemamigratesvc.RenameTypePreviewResult) (oldPath, newPath string, filesToMove int, available bool) {
 	if data.DefaultPathRenameAvailable == nil || !*data.DefaultPathRenameAvailable {
 		return "", "", 0, false
 	}

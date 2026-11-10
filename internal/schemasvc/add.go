@@ -20,12 +20,13 @@ type AddTypeRequest struct {
 }
 
 type AddTypeResult struct {
-	Name             string
-	DefaultPath      string
-	Description      string
-	NameField        string
-	AutoCreatedField string
-	Warnings         []Warning
+	Added            string    `json:"added"`
+	Name             string    `json:"name"`
+	DefaultPath      string    `json:"default_path"`
+	Description      string    `json:"description,omitempty"`
+	NameField        string    `json:"name_field,omitempty"`
+	AutoCreatedField *string   `json:"auto_created_field,omitempty"`
+	Warnings         []Warning `json:"-"`
 }
 
 type AddTraitRequest struct {
@@ -36,10 +37,11 @@ type AddTraitRequest struct {
 }
 
 type AddTraitResult struct {
-	Name     string
-	Type     string
-	Values   []string
-	Warnings []Warning
+	Added    string    `json:"added"`
+	Name     string    `json:"name"`
+	Type     string    `json:"type"`
+	Values   []string  `json:"values,omitempty"`
+	Warnings []Warning `json:"-"`
 }
 
 type AddFieldRequest struct {
@@ -54,12 +56,15 @@ type AddFieldRequest struct {
 }
 
 type AddFieldResult struct {
-	TypeName    string
-	FieldName   string
-	FieldType   string
-	Required    bool
-	Description string
-	Warnings    []Warning
+	Added       string    `json:"added"`
+	Type        string    `json:"type"`
+	Field       string    `json:"field"`
+	FieldType   string    `json:"field_type"`
+	Required    bool      `json:"required"`
+	Description string    `json:"description,omitempty"`
+	TypeName    string    `json:"-"`
+	FieldName   string    `json:"-"`
+	Warnings    []Warning `json:"-"`
 }
 
 func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, error) {
@@ -109,14 +114,18 @@ func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, erro
 		return nil, err
 	}
 
-	return &AddTypeResult{
-		Name:             typeName,
-		DefaultPath:      defaultPath,
-		Description:      description,
-		NameField:        nameField,
-		AutoCreatedField: autoCreatedField,
-		Warnings:         warnings,
-	}, nil
+	result := &AddTypeResult{
+		Added:       "type",
+		Name:        typeName,
+		DefaultPath: defaultPath,
+		Description: description,
+		NameField:   nameField,
+		Warnings:    warnings,
+	}
+	if autoCreatedField != "" {
+		result.AutoCreatedField = &autoCreatedField
+	}
+	return result, nil
 }
 
 func AddTrait(rt *vaultruntime.Runtime, req AddTraitRequest) (*AddTraitResult, error) {
@@ -151,6 +160,7 @@ func AddTrait(rt *vaultruntime.Runtime, req AddTraitRequest) (*AddTraitResult, e
 	}
 
 	result := &AddTraitResult{
+		Added:    "trait",
 		Name:     traitName,
 		Type:     traitType,
 		Warnings: warnings,
@@ -241,11 +251,14 @@ func AddField(rt *vaultruntime.Runtime, req AddFieldRequest) (*AddFieldResult, e
 	}
 
 	return &AddFieldResult{
-		TypeName:    typeName,
-		FieldName:   fieldName,
+		Added:       "field",
+		Type:        typeName,
+		Field:       fieldName,
 		FieldType:   fieldType,
 		Required:    req.Required,
 		Description: req.Description,
+		TypeName:    typeName,
+		FieldName:   fieldName,
 		Warnings:    warnings,
 	}, nil
 }

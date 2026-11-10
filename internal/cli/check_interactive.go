@@ -9,7 +9,6 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -20,7 +19,7 @@ import (
 // delegated to checkfixsvc appliers via collectMissingRefDecisions +
 // checkfixsvc.ApplyMissingRefResolutions (and the trait equivalents).
 func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.CheckCreateMissingResult)
+	data, ok := result.Data.(checkfixsvc.CreateMissingResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
@@ -70,7 +69,7 @@ func promptCreateMissingRefsFromResult(vaultPath string, result commandexec.Resu
 	if jsonOutput || !canUseInteractiveTerminal() {
 		return
 	}
-	payload, ok := result.Data.(commandpayload.MissingReferencePayload)
+	payload, ok := result.Data.(check.MissingReferencePayload)
 	if !ok {
 		return
 	}

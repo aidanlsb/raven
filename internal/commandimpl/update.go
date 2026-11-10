@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/traitsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -73,7 +72,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 			return failure
 		}
 		preview := result.Preview
-		return commandexec.Success(commandpayload.TraitUpdatePreviewResult{
+		return commandexec.Success(traitsvc.UpdatePreviewResult{
 			Preview: true,
 			Action:  preview.Action,
 			Items:   preview.Items,
@@ -97,7 +96,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 	}
 
 	summary := result.Summary
-	data := commandpayload.TraitUpdateResult{
+	data := traitsvc.UpdateAppliedResult{
 		Action:            summary.Action,
 		Items:             summary.Results,
 		Total:             summary.Total,
