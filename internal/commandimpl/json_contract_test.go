@@ -10,13 +10,14 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
 // TestJSONContractPinsEnvelopeData snapshots the JSON envelope for representative
 // commands. UPDATE_GOLDEN=1 rewrites testdata/json_contract/*.json after an
 // intentional wire-format change. Volatile fields (meta.query_time_ms, absolute
-// vault paths) are normalized so the files stay portable.
+// vault paths, and FTS ranks) are normalized so the files stay portable.
 func TestJSONContractPinsEnvelopeData(t *testing.T) {
 	t.Parallel()
 
@@ -149,6 +150,7 @@ func TestJSONContractPinsEnvelopeData(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read golden %s: %v (run UPDATE_GOLDEN=1)", path, err)
 			}
+			want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
 			if !bytes.Equal(got, want) {
 				t.Fatalf("JSON contract mismatch for %s\ngot:\n%s\nwant:\n%s", tc.name, got, want)
 			}
@@ -189,6 +191,13 @@ func marshalNormalizedEnvelope(t *testing.T, result commandexec.Result, vaultPat
 	t.Helper()
 	if result.Meta != nil {
 		result.Meta.QueryTimeMs = 0
+	}
+	// FTS rank bits differ across GOARCH; pin the field, not the float.
+	if search, ok := result.Data.(readsvc.SearchResult); ok {
+		for i := range search.Items {
+			search.Items[i].Rank = 0
+		}
+		result.Data = search
 	}
 	raw, err := json.Marshal(result)
 	if err != nil {
