@@ -65,7 +65,7 @@ func showDirectories(cfg *config.VaultConfig) DirectoriesInfo {
 		Template:   cfg.GetTemplateDirectory(),
 	}
 	if dirs != nil {
-		info.Object = dirs.Object
+		info.Type = dirs.Object
 		info.Page = dirs.Page
 		if dirs.Template != "" {
 			info.Template = dirs.Template

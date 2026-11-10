@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
@@ -25,9 +26,11 @@ type AddRequest struct {
 }
 
 type AddResult struct {
-	File      string
-	Line      int
-	ChangeSet mutation.ChangeSet
+	File    string `json:"file"`
+	Line    int    `json:"line"`
+	Content string `json:"content"`
+	check.MissingReferences
+	ChangeSet mutation.ChangeSet `json:"-"`
 }
 
 func Add(rt *vaultruntime.Runtime, req AddRequest) (*AddResult, error) {
@@ -80,7 +83,7 @@ func Add(rt *vaultruntime.Runtime, req AddRequest) (*AddResult, error) {
 	}
 	relPath, _ := filepath.Rel(vaultPath, destPath)
 	return &AddResult{
-		File: filepath.ToSlash(relPath), Line: appendResult.Line, ChangeSet: appendResult.ChangeSet,
+		File: filepath.ToSlash(relPath), Line: appendResult.Line, Content: req.Text, ChangeSet: appendResult.ChangeSet,
 	}, nil
 }
 

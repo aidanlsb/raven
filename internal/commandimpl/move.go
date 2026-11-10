@@ -7,7 +7,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -83,7 +82,7 @@ func shapeMoveResult(serviceResult *objectsvc.MoveByReferenceResult, preview boo
 		mismatch := serviceResult.TypeMismatch
 		// Nothing was written: the move is blocked pending confirmation, so
 		// report a preview phase regardless of the normalized apply resolution.
-		return commandexec.SuccessWithWarnings(commandpayload.MoveConfirmationResult{
+		return commandexec.SuccessWithWarnings(objectsvc.MoveConfirmationResult{
 			Source:       serviceResult.SourceID,
 			Destination:  serviceResult.DestinationID,
 			Preview:      preview,
@@ -98,7 +97,7 @@ func shapeMoveResult(serviceResult *objectsvc.MoveByReferenceResult, preview boo
 	}
 
 	warnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, indexUpdateFailedWarningCode)
-	data := commandpayload.MoveResult{
+	data := objectsvc.MoveResult{
 		Source:      serviceResult.SourceID,
 		Destination: serviceResult.DestinationID,
 	}
@@ -110,7 +109,7 @@ func shapeMoveResult(serviceResult *objectsvc.MoveByReferenceResult, preview boo
 		data.UpdatedRefs = serviceResult.UpdatedRefs
 	}
 	if len(serviceResult.UpdatedRefFields) > 0 {
-		data.UpdatedRefFields = canonicalMoveRefFieldUpdates(serviceResult.UpdatedRefFields)
+		data.UpdatedRefFields = serviceResult.UpdatedRefFields
 	}
 	if !preview {
 		data.MissingReferences = missingRefsOf(proj)
@@ -118,18 +117,6 @@ func shapeMoveResult(serviceResult *objectsvc.MoveByReferenceResult, preview boo
 	}
 
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
-}
-
-func canonicalMoveRefFieldUpdates(updates []objectsvc.RefFieldUpdate) []commandpayload.MoveRefFieldUpdate {
-	items := make([]commandpayload.MoveRefFieldUpdate, 0, len(updates))
-	for _, update := range updates {
-		items = append(items, commandpayload.MoveRefFieldUpdate{
-			SourceID: update.SourceID,
-			File:     update.FilePath,
-			Field:    update.Field,
-		})
-	}
-	return items
 }
 
 func runMoveBulk(sess *vaultsession.Session, ids []string, destination string, updateRefs bool, confirm bool) commandexec.Result {
@@ -157,12 +144,12 @@ func runMoveBulk(sess *vaultsession.Session, ids []string, destination string, u
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
-		return commandexec.Success(commandpayload.MoveBulkPreviewResult{
-			BulkPreviewResult: commandpayload.BulkPreviewResult{
+		return commandexec.Success(objectsvc.MoveBulkPreviewResult{
+			BulkPreviewResult: objectsvc.BulkPreviewResult{
 				Preview: true,
 				Action:  preview.Action,
-				Items:   canonicalBulkPreviewItems(preview.Items),
-				Skipped: canonicalBulkResults(preview.Skipped),
+				Items:   preview.Items,
+				Skipped: preview.Skipped,
 				Total:   preview.Total,
 			},
 			Destination: preview.Destination,
@@ -180,11 +167,11 @@ func runMoveBulk(sess *vaultsession.Session, ids []string, destination string, u
 		return failure.WithAttemptedIDs("object_ids", ids)
 	}
 
-	data := commandpayload.MoveBulkResult{
-		BulkSummaryResult: commandpayload.BulkSummaryResult{
+	data := objectsvc.MoveBulkResult{
+		BulkSummaryResult: objectsvc.BulkSummaryResult{
 			OK:                summary.Errors == 0,
 			Action:            summary.Action,
-			Items:             canonicalBulkResults(summary.Results),
+			Items:             summary.Results,
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,

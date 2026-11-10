@@ -12,7 +12,8 @@ import (
 	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/querysvc"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -121,7 +122,7 @@ func TestInvokeSavedQueryBindsInputsMap(t *testing.T) {
 	if !result.OK {
 		t.Fatalf("query with inputs failed: %#v", result)
 	}
-	typed, ok := result.Data.(commandpayload.QueryObjectResult)
+	typed, ok := result.Data.(querysvc.QueryObjectResult)
 	if !ok {
 		// HTTP JSON round-trip through encode/decode uses generic maps.
 		data := decodeDataMap(t, result)
@@ -267,7 +268,7 @@ func TestObjectsListsIndexCorpusWithoutBodies(t *testing.T) {
 	if all.Returned != 2 || all.HasMore {
 		t.Fatalf("unlimited pagination = %#v", all)
 	}
-	byID := map[string]commandpayload.ObjectSummaryItem{}
+	byID := map[string]readsvc.ObjectSummary{}
 	for _, item := range all.Items {
 		byID[item.ID] = item
 		assertNoBodyFields(t, item)
@@ -280,7 +281,7 @@ func TestObjectsListsIndexCorpusWithoutBodies(t *testing.T) {
 	}
 }
 
-func invokeObjects(t *testing.T, server *Server, args map[string]interface{}) commandpayload.ObjectsResult {
+func invokeObjects(t *testing.T, server *Server, args map[string]interface{}) readsvc.ObjectsResult {
 	t.Helper()
 	if args == nil {
 		args = map[string]interface{}{}
@@ -298,14 +299,14 @@ func invokeObjects(t *testing.T, server *Server, args map[string]interface{}) co
 	if err != nil {
 		t.Fatal(err)
 	}
-	var out commandpayload.ObjectsResult
+	var out readsvc.ObjectsResult
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatalf("decode objects payload: %v\n%s", err, raw)
 	}
 	return out
 }
 
-func assertNoBodyFields(t *testing.T, item commandpayload.ObjectSummaryItem) {
+func assertNoBodyFields(t *testing.T, item readsvc.ObjectSummary) {
 	t.Helper()
 	raw, err := json.Marshal(item)
 	if err != nil {

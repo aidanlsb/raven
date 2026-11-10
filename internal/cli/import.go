@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/importsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -135,7 +134,7 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 }
 
 func renderCanonicalImportResult(result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.ImportResult)
+	data, ok := result.Data.(importsvc.ImportResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}

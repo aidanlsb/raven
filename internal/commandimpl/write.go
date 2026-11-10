@@ -7,7 +7,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -23,8 +22,6 @@ func HandleWrite(_ context.Context, req commandexec.Request) commandexec.Result 
 		return failure
 	}
 	defer sess.Close()
-	vaultCfg := sess.Runtime().VaultCfg
-
 	typeName := strings.TrimSpace(stringArg(req.Args, "type"))
 	title := strings.TrimSpace(stringArg(req.Args, "title"))
 	// Leave targetPath empty when no explicit --object-path is given so the service
@@ -67,20 +64,11 @@ func HandleWrite(_ context.Context, req commandexec.Request) commandexec.Result 
 	}
 
 	warnings := warningMessagesToCommandWarnings(result.WarningMessages, codes.WarnUnknownField)
-	data := commandpayload.WriteResult{
-		Status: result.Status,
-		ObjectMutation: commandpayload.ObjectMutation{
-			ID:    vaultCfg.FilePathToObjectID(result.RelativePath),
-			File:  result.RelativePath,
-			Type:  typeName,
-			Title: title,
-		},
-		MissingReferences: missingRefsOf(proj),
-	}
+	result.MissingReferences = missingRefsOf(proj)
 	warnings = appendCommandWarnings(warnings, proj.Warnings)
 
 	return commandexec.SuccessWithWarnings(
-		data,
+		*result,
 		warnings,
 		nil,
 	)

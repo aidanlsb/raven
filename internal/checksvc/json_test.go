@@ -1,19 +1,19 @@
-package commandpayload
+package checksvc
 
 import (
 	"encoding/json"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/checksvc"
 )
 
 func TestBuildJSON_MissingReferenceSummarySuggestsCreateMissing(t *testing.T) {
 	t.Parallel()
 
-	result := &checksvc.RunResult{
+	result := &RunResult{
 		Issues: []check.Issue{
 			{
 				Type:       check.IssueMissingReference,
@@ -48,8 +48,8 @@ func TestBuildJSON_MissingReferenceSummarySuggestsCreateMissing(t *testing.T) {
 func TestBuildJSON_FieldNamesStayStable(t *testing.T) {
 	t.Parallel()
 
-	result := &checksvc.RunResult{
-		Scope:      checksvc.Scope{Type: "file", Value: "notes/a.md"},
+	result := &RunResult{
+		Scope:      Scope{Type: "file", Value: "notes/a.md"},
 		FileCount:  1,
 		ErrorCount: 1,
 		Issues: []check.Issue{{
@@ -92,24 +92,10 @@ func TestBuildJSON_FieldNamesStayStable(t *testing.T) {
 	}
 }
 
-func TestCheckResultScope_ValidatePayload(t *testing.T) {
-	t.Parallel()
-
-	scope, ok := CheckResultScope(CheckResultJSON{})
-	if !ok || scope.Type != "full" {
-		t.Fatalf("empty validate payload scope = %#v ok=%v, want full", scope, ok)
-	}
-
-	scope, ok = CheckResultScope(CheckResultJSON{Scope: &CheckScopeJSON{Type: "directory", Value: "notes"}})
-	if !ok || scope.Type != "directory" || scope.Value != "notes" {
-		t.Fatalf("directory scope = %#v ok=%v", scope, ok)
-	}
-}
-
 func TestBuildJSON_EmptyFilteredResult(t *testing.T) {
 	t.Parallel()
 
-	payload := BuildJSON("/vault", &checksvc.RunResult{})
+	payload := BuildJSON("/vault", &RunResult{})
 	if payload.ErrorCount != 0 || payload.WarnCount != 0 {
 		t.Fatalf("counts = %+v, want zeros", payload)
 	}
@@ -119,4 +105,22 @@ func TestBuildJSON_EmptyFilteredResult(t *testing.T) {
 	if payload.Issues == nil {
 		t.Fatal("issues must be an empty slice, not null")
 	}
+}
+
+func payloadJSONKeys(t *testing.T, value any) []string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	var object map[string]any
+	if err := json.Unmarshal(data, &object); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

@@ -5,7 +5,8 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/editsvc"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -21,7 +22,7 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 			"title": "Typed Payload",
 		},
 	})
-	requirePayloadType[commandpayload.NewResult](t, result)
+	requirePayloadType[objectsvc.CreateResult](t, result)
 
 	result = HandleWrite(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
@@ -30,7 +31,7 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 			"title": "Typed Payload",
 		},
 	})
-	requirePayloadType[commandpayload.WriteResult](t, result)
+	requirePayloadType[objectsvc.WriteResult](t, result)
 
 	result = HandleAdd(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
@@ -39,7 +40,7 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 			"text": "typed body",
 		},
 	})
-	requirePayloadType[commandpayload.AddResult](t, result)
+	requirePayloadType[objectsvc.AddResult](t, result)
 
 	result = HandleSet(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
@@ -50,7 +51,7 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 			},
 		},
 	})
-	requirePayloadType[commandpayload.SetResult](t, result)
+	requirePayloadType[objectsvc.SetByReferenceResult](t, result)
 
 	result = HandleUnset(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
@@ -59,7 +60,7 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 			"fields":    []string{"status"},
 		},
 	})
-	requirePayloadType[commandpayload.UnsetResult](t, result)
+	requirePayloadType[objectsvc.UnsetByReferenceResult](t, result)
 
 	result = HandleEdit(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
@@ -69,7 +70,7 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 			"new_str":   "updated body",
 		},
 	})
-	requirePayloadType[commandpayload.EditSingleResult](t, result)
+	requirePayloadType[editsvc.EditSingleResult](t, result)
 
 	result = HandleMove(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
@@ -79,7 +80,7 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 			"destination": "archive/typed-payload",
 		},
 	})
-	requirePayloadType[commandpayload.MoveResult](t, result)
+	requirePayloadType[objectsvc.MoveResult](t, result)
 
 	result = HandleDelete(context.Background(), commandexec.Request{
 		VaultPath: v.Path,
@@ -88,7 +89,7 @@ func TestObjectMutationHandlersReturnTypedPayloads(t *testing.T) {
 			"reference": "projects/typed-payload",
 		},
 	})
-	requirePayloadType[commandpayload.DeletePreviewResult](t, result)
+	requirePayloadType[objectsvc.DeletePreviewResult](t, result)
 }
 
 func requirePayloadType[T any](t *testing.T, result commandexec.Result) T {

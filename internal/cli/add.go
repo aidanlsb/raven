@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 )
 
 var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
@@ -14,12 +14,12 @@ var addCmd = newCanonicalLeafCommand("add", canonicalLeafOptions{
 })
 
 func renderAddResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.AddResult)
+	data, ok := result.Data.(objectsvc.AddResult)
 	if !ok {
-		if _, bulk := result.Data.(commandpayload.AddBulkPreviewResult); bulk {
+		if _, bulk := result.Data.(objectsvc.AddBulkPreviewResult); bulk {
 			return renderCanonicalBulkResult(result)
 		}
-		if _, bulk := result.Data.(commandpayload.AddBulkResult); bulk {
+		if _, bulk := result.Data.(objectsvc.AddBulkResult); bulk {
 			return renderCanonicalBulkResult(result)
 		}
 		return handleErrorMsg(ErrInternal, "command execution failed", "")

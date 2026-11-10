@@ -10,11 +10,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-type ReclassifyResult = commandpayload.ReclassifyResult
+type ReclassifyResult = objectsvc.ReclassifyResult
 
 var reclassifyCmd = newExceptionLeafCommand("reclassify", exceptionLeafOptions{
 	Invoke:      invokeReclassify,
@@ -60,7 +60,7 @@ func invokeReclassify(cmd *cobra.Command, commandID, vaultPath string, args map[
 			return result
 		}
 
-		data, typed := result.Data.(commandpayload.ReclassifyResult)
+		data, typed := result.Data.(objectsvc.ReclassifyResult)
 		if typed && data.NeedsConfirm && !boolValue(fieldValues["force"]) {
 			if isJSONOutput() {
 				return result
@@ -81,12 +81,12 @@ func invokeReclassify(cmd *cobra.Command, commandID, vaultPath string, args map[
 
 func renderReclassifyResult(_ *cobra.Command, result commandexec.Result) error {
 	switch data := result.Data.(type) {
-	case commandpayload.ReclassifyBulkPreviewResult, commandpayload.ReclassifyBulkResult:
+	case objectsvc.ReclassifyBulkPreviewResult, objectsvc.ReclassifyBulkAppliedResult:
 		return renderCanonicalBulkResult(result)
-	case commandpayload.CancelledResult:
+	case commandexec.CancelledResult:
 		fmt.Fprintln(os.Stderr, "Cancelled.")
 		return nil
-	case commandpayload.ReclassifyResult:
+	case objectsvc.ReclassifyResult:
 		fmt.Println(ui.Checkf("Reclassified %s: %s → %s", ui.FilePath(data.File), data.OldType, data.NewType))
 		if len(data.AddedFields) > 0 {
 			fmt.Printf("  %s\n", ui.Hint("Added fields: "+strings.Join(data.AddedFields, ", ")))

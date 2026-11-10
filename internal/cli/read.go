@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -84,7 +84,7 @@ func handleCanonicalReadFailureCmd(cmd *cobra.Command, result commandexec.Result
 func renderRead(cmd *cobra.Command, result commandexec.Result) error {
 	sections, _ := cmd.Flags().GetBool("sections")
 	if sections {
-		payload, ok := result.Data.(commandpayload.ReadSectionsResult)
+		payload, ok := result.Data.(readsvc.ReadSectionsResult)
 		if !ok {
 			return handleErrorMsg(ErrInternal, "unexpected read result shape", "")
 		}
@@ -92,12 +92,12 @@ func renderRead(cmd *cobra.Command, result commandexec.Result) error {
 		return nil
 	}
 
-	if payload, ok := result.Data.(commandpayload.ReadRawResult); ok {
+	if payload, ok := result.Data.(readsvc.ReadRawResult); ok {
 		fmt.Print(payload.Content)
 		return nil
 	}
 
-	payload, ok := result.Data.(commandpayload.ReadContentResult)
+	payload, ok := result.Data.(readsvc.ReadContentResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "unexpected read result shape", "")
 	}
@@ -112,7 +112,7 @@ func renderRead(cmd *cobra.Command, result commandexec.Result) error {
 	})
 }
 
-func renderReadSections(payload commandpayload.ReadSectionsResult) {
+func renderReadSections(payload readsvc.ReadSectionsResult) {
 	if payload.Path != "" {
 		fmt.Println(ui.FilePath(payload.Path))
 	}

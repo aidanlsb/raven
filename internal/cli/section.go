@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/sectionsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -44,7 +44,7 @@ func init() {
 }
 
 func renderSectionCreateResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.SectionLifecycleResult)
+	data, ok := result.Data.(sectionsvc.LifecycleResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
@@ -60,7 +60,7 @@ func renderSectionCreateResult(_ *cobra.Command, result commandexec.Result) erro
 }
 
 func renderSectionMoveResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.SectionLifecycleResult)
+	data, ok := result.Data.(sectionsvc.LifecycleResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
@@ -80,7 +80,7 @@ func renderSectionMoveResult(_ *cobra.Command, result commandexec.Result) error 
 }
 
 func renderSectionDeleteResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.SectionDeleteResult)
+	data, ok := result.Data.(sectionsvc.DeletePayload)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
@@ -118,7 +118,7 @@ func renderSectionDeleteResult(_ *cobra.Command, result commandexec.Result) erro
 }
 
 func renderSectionRenameResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.SectionRenameResult)
+	data, ok := result.Data.(sectionsvc.RenamePayload)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}

@@ -5,7 +5,8 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -234,7 +235,7 @@ func TestMutationPhaseMoveNeedsConfirmPreviews(t *testing.T) {
 		"source": "people/freya", "destination": "projects/freya",
 	}, nil)
 	requirePhase(t, res, commandexec.MutationPhasePreview)
-	data, ok := res.Data.(commandpayload.MoveConfirmationResult)
+	data, ok := res.Data.(objectsvc.MoveConfirmationResult)
 	if !ok || !data.NeedsConfirm {
 		t.Fatalf("expected needs_confirm=true, got data=%#v", data)
 	}
@@ -295,7 +296,7 @@ func TestMutationPhaseUpdateTrait(t *testing.T) {
 	if !ids.OK {
 		t.Fatalf("query ids failed: %#v", ids.Error)
 	}
-	payload, ok := ids.Data.(commandpayload.QueryIDsResult)
+	payload, ok := ids.Data.(querysvc.QueryIDsResult)
 	if !ok {
 		t.Fatalf("expected QueryIDsResult, got %#v", ids.Data)
 	}

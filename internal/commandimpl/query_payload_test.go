@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -88,9 +88,9 @@ func TestHandleQueryTypedObjectResult(t *testing.T) {
 
 	result := runQueryHandler(t, v.Path, map[string]any{"query_string": "type:project"})
 
-	payload, ok := result.Data.(commandpayload.QueryObjectResult)
+	payload, ok := result.Data.(querysvc.QueryObjectResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.QueryObjectResult", result.Data)
+		t.Fatalf("Data type = %T, want querysvc.QueryObjectResult", result.Data)
 	}
 	if payload.QueryKind != "type" || payload.Type != "project" {
 		t.Fatalf("query_kind/type = %q/%q, want type/project", payload.QueryKind, payload.Type)
@@ -111,9 +111,9 @@ func TestHandleQueryTypedTraitResult(t *testing.T) {
 
 	result := runQueryHandler(t, v.Path, map[string]any{"query_string": "trait:priority"})
 
-	payload, ok := result.Data.(commandpayload.QueryTraitResult)
+	payload, ok := result.Data.(querysvc.QueryTraitResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.QueryTraitResult", result.Data)
+		t.Fatalf("Data type = %T, want querysvc.QueryTraitResult", result.Data)
 	}
 	if payload.QueryKind != "trait" || payload.Trait != "priority" {
 		t.Fatalf("query_kind/trait = %q/%q, want trait/priority", payload.QueryKind, payload.Trait)
@@ -137,9 +137,9 @@ func TestHandleQueryTypedSectionResult(t *testing.T) {
 
 	result := runQueryHandler(t, v.Path, map[string]any{"query_string": "section .title==Tasks"})
 
-	payload, ok := result.Data.(commandpayload.QuerySectionResult)
+	payload, ok := result.Data.(querysvc.QuerySectionResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.QuerySectionResult", result.Data)
+		t.Fatalf("Data type = %T, want querysvc.QuerySectionResult", result.Data)
 	}
 	if payload.QueryKind != "section" {
 		t.Fatalf("query_kind = %q, want section", payload.QueryKind)
@@ -163,9 +163,9 @@ func TestHandleQueryTypedLinkResult(t *testing.T) {
 
 	result := runQueryHandler(t, v.Path, map[string]any{"query_string": "link .ext==pdf"})
 
-	payload, ok := result.Data.(commandpayload.QueryLinkResult)
+	payload, ok := result.Data.(querysvc.QueryLinkResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.QueryLinkResult", result.Data)
+		t.Fatalf("Data type = %T, want querysvc.QueryLinkResult", result.Data)
 	}
 	if payload.QueryKind != "link" {
 		t.Fatalf("query_kind = %q, want link", payload.QueryKind)
@@ -189,9 +189,9 @@ func TestHandleQueryTypedIDsResult(t *testing.T) {
 
 	result := runQueryHandler(t, v.Path, map[string]any{"query_string": "type:project", "ids": true})
 
-	payload, ok := result.Data.(commandpayload.QueryIDsResult)
+	payload, ok := result.Data.(querysvc.QueryIDsResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.QueryIDsResult", result.Data)
+		t.Fatalf("Data type = %T, want querysvc.QueryIDsResult", result.Data)
 	}
 	if len(payload.IDs) != 1 || payload.IDs[0] != "projects/raven" {
 		t.Fatalf("ids = %#v, want [projects/raven]", payload.IDs)
@@ -207,9 +207,9 @@ func TestHandleQueryTypedCountResult(t *testing.T) {
 
 	t.Run("type", func(t *testing.T) {
 		result := runQueryHandler(t, v.Path, map[string]any{"query_string": "type:project", "count-only": true})
-		payload, ok := result.Data.(commandpayload.QueryCountResult)
+		payload, ok := result.Data.(querysvc.QueryCountResult)
 		if !ok {
-			t.Fatalf("Data type = %T, want commandpayload.QueryCountResult", result.Data)
+			t.Fatalf("Data type = %T, want querysvc.QueryCountResult", result.Data)
 		}
 		if payload.QueryKind != "type" || payload.Type != "project" || payload.Total != 1 {
 			t.Fatalf("count payload = %#v, want type/project total=1", payload)
@@ -219,7 +219,7 @@ func TestHandleQueryTypedCountResult(t *testing.T) {
 
 	t.Run("trait", func(t *testing.T) {
 		result := runQueryHandler(t, v.Path, map[string]any{"query_string": "trait:priority", "count-only": true})
-		payload := result.Data.(commandpayload.QueryCountResult)
+		payload := result.Data.(querysvc.QueryCountResult)
 		if payload.QueryKind != "trait" || payload.Trait != "priority" {
 			t.Fatalf("count payload = %#v, want trait/priority", payload)
 		}
@@ -228,7 +228,7 @@ func TestHandleQueryTypedCountResult(t *testing.T) {
 
 	t.Run("link", func(t *testing.T) {
 		result := runQueryHandler(t, v.Path, map[string]any{"query_string": "link", "count-only": true})
-		payload := result.Data.(commandpayload.QueryCountResult)
+		payload := result.Data.(querysvc.QueryCountResult)
 		if payload.QueryKind != "link" || payload.Total != 1 {
 			t.Fatalf("count payload = %#v, want link total=1", payload)
 		}

@@ -10,7 +10,6 @@ import (
 	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -54,7 +53,7 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 	case boolArg(req.Args, "create-missing"):
 		return handleCheckCreateMissing(vaultPath, vaultCfg, sch, result, req.Confirm)
 	default:
-		data := commandpayload.BuildJSON(vaultPath, result)
+		data := checksvc.BuildJSON(vaultPath, result)
 		if warnings := checkIncompleteWarnings(result); len(warnings) > 0 {
 			return commandexec.SuccessWithWarnings(data, warnings, nil)
 		}
@@ -79,11 +78,11 @@ func handleCheckFix(sess *vaultsession.Session, vaultCfg *config.VaultConfig, sc
 	grouped := checkfixsvc.GroupFixesByFile(fixes)
 
 	if !confirm {
-		return commandexec.Success(commandpayload.CheckFixPreviewResult{
+		return commandexec.Success(checkfixsvc.FixPreviewResult{
 			Preview:       true,
 			FixableIssues: len(fixes),
 			Files:         grouped,
-			Scope:         checkScopeData(result),
+			Scope:         checkfixsvc.ScopeOf(result),
 			FileCount:     result.FileCount,
 			ErrorCount:    result.ErrorCount,
 			WarningCount:  result.WarningCount,
@@ -101,7 +100,7 @@ func handleCheckFix(sess *vaultsession.Session, vaultCfg *config.VaultConfig, sc
 		return failure
 	}
 	postWarnings := proj.Warnings
-	data := commandpayload.CheckFixResult{
+	data := checkfixsvc.FixAppliedResult{
 		Preview:           false,
 		OK:                len(applied.Skipped) == 0,
 		FixableIssues:     len(fixes),
@@ -109,7 +108,7 @@ func handleCheckFix(sess *vaultsession.Session, vaultCfg *config.VaultConfig, sc
 		FixedFiles:        applied.FileCount,
 		SkippedIssues:     len(applied.Skipped),
 		SkippedItems:      applied.Skipped,
-		Scope:             checkScopeData(result),
+		Scope:             checkfixsvc.ScopeOf(result),
 		FileCount:         result.FileCount,
 		ErrorCount:        result.ErrorCount,
 		WarningCount:      result.WarningCount,
@@ -136,13 +135,13 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		return commandexec.Failure("INVALID_INPUT", "check create-missing only supports full-vault scope", nil, "Run without path/--type/--trait filters")
 	}
 
-	data := commandpayload.CheckCreateMissingResult{
+	data := checkfixsvc.CreateMissingResult{
 		Preview:             !confirm,
 		MissingRefs:         len(result.MissingRefs),
 		UndefinedTraits:     len(result.UndefinedTraits),
 		RequiresConfirm:     true,
 		NonInteractiveOnly:  true,
-		Scope:               checkScopeData(result),
+		Scope:               checkfixsvc.ScopeOf(result),
 		MissingRefItems:     result.MissingRefs,
 		UndefinedTraitItems: result.UndefinedTraits,
 		FileCount:           result.FileCount,
@@ -186,16 +185,6 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		}, nil)
 	}
 	return commandexec.Success(data, nil)
-}
-
-func checkScopeData(result *checksvc.RunResult) commandpayload.CheckScope {
-	if result == nil {
-		return commandpayload.CheckScope{}
-	}
-	return commandpayload.CheckScope{
-		Type:  result.Scope.Type,
-		Value: result.Scope.Value,
-	}
 }
 
 func checkIncompleteWarnings(result *checksvc.RunResult) []commandexec.Warning {

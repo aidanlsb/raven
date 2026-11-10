@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -51,7 +51,7 @@ func prepareSearchArgs(_ *cobra.Command, args []string) ([]string, bool, error) 
 }
 
 func renderSearch(_ *cobra.Command, result commandexec.Result) error {
-	payload, ok := result.Data.(commandpayload.SearchResult)
+	payload, ok := result.Data.(readsvc.SearchResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "unexpected search result shape", "")
 	}
@@ -61,9 +61,9 @@ func renderSearch(_ *cobra.Command, result commandexec.Result) error {
 
 // searchMatchesFromItems adapts the typed search payload items into the model
 // rows the shared retrieval renderer consumes. It is a thin field copy with no
-// map decoding: the canonical handler emits typed commandpayload items
+// map decoding: the canonical handler emits typed service items
 // in-process.
-func searchMatchesFromItems(items []commandpayload.SearchMatchItem) []model.SearchMatch {
+func searchMatchesFromItems(items []readsvc.SearchMatchItem) []model.SearchMatch {
 	matches := make([]model.SearchMatch, 0, len(items))
 	for _, item := range items {
 		matches = append(matches, model.SearchMatch{

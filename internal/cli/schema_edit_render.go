@@ -6,13 +6,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/schemamigratesvc"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
 func renderSchemaAddType(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaAddTypeResult](result)
+	data, err := commandResultData[schemasvc.AddTypeResult](result)
 	if err != nil {
 		return err
 	}
@@ -29,7 +29,7 @@ func renderSchemaAddType(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderSchemaAddTrait(cmd *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaAddTraitResult](result)
+	data, err := commandResultData[schemasvc.AddTraitResult](result)
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func renderSchemaAddTrait(cmd *cobra.Command, result commandexec.Result) error {
 }
 
 func renderSchemaAddField(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaAddFieldResult](result)
+	data, err := commandResultData[schemasvc.AddFieldResult](result)
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func printSchemaChangeList(header string, changes []string) {
 }
 
 func renderSchemaValidate(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaValidateResult](result)
+	data, err := commandResultData[schemasvc.ValidateResult](result)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func renderSchemaValidate(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderSchemaUpdateType(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaUpdateResult](result)
+	data, err := commandResultData[schemasvc.UpdateResult](result)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func renderSchemaUpdateType(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderSchemaUpdateTrait(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaUpdateResult](result)
+	data, err := commandResultData[schemasvc.UpdateResult](result)
 	if err != nil {
 		return err
 	}
@@ -102,20 +102,20 @@ func renderSchemaUpdateTrait(_ *cobra.Command, result commandexec.Result) error 
 }
 
 func renderSchemaUpdateField(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaUpdateResult](result)
+	data, err := commandResultData[schemasvc.UpdateResult](result)
 	if err != nil {
 		return err
 	}
 	return renderSchemaUpdate(data, fmt.Sprintf("✓ Updated field '%s' on type '%s'", data.Field, data.Type))
 }
 
-func renderSchemaUpdate(data commandpayload.SchemaUpdateResult, header string) error {
+func renderSchemaUpdate(data schemasvc.UpdateResult, header string) error {
 	printSchemaChangeList(header, data.Changes)
 	return nil
 }
 
 func renderSchemaRemoveType(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaRemoveResult](result)
+	data, err := commandResultData[schemasvc.RemoveResult](result)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func renderSchemaRemoveType(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderSchemaRemoveTrait(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaRemoveResult](result)
+	data, err := commandResultData[schemasvc.RemoveResult](result)
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func renderSchemaRemoveTrait(_ *cobra.Command, result commandexec.Result) error 
 }
 
 func renderSchemaRemoveField(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.SchemaRemoveResult](result)
+	data, err := commandResultData[schemasvc.RemoveResult](result)
 	if err != nil {
 		return err
 	}
@@ -143,13 +143,13 @@ func renderSchemaRemoveField(_ *cobra.Command, result commandexec.Result) error 
 
 func renderSchemaConvert(_ *cobra.Command, result commandexec.Result) error {
 	var kind, name, typeName, sourceType, targetType, hint string
-	var preview *commandpayload.SchemaConvertPreviewResult
+	var preview *schemamigratesvc.ConvertPreviewResult
 	switch data := result.Data.(type) {
-	case commandpayload.SchemaConvertPreviewResult:
+	case schemamigratesvc.ConvertPreviewResult:
 		preview = &data
 		kind, name, typeName = data.Kind, data.Name, data.Type
 		sourceType, targetType, hint = data.SourceType, data.TargetType, data.Hint
-	case commandpayload.SchemaConvertResult:
+	case schemamigratesvc.ConvertAppliedResult:
 		kind, name, typeName = data.Kind, data.Name, data.Type
 		sourceType, targetType, hint = data.SourceType, data.TargetType, data.Hint
 	default:
@@ -168,7 +168,7 @@ func renderSchemaConvert(_ *cobra.Command, result commandexec.Result) error {
 		return nil
 	}
 
-	applied := result.Data.(commandpayload.SchemaConvertResult)
+	applied := result.Data.(schemamigratesvc.ConvertAppliedResult)
 	fmt.Println(ui.Checkf("Converted %s '%s' from %s to %s", kind, label, sourceType, targetType))
 	fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Applied %d changes", applied.ChangesApplied)))
 	fmt.Printf("\n%s.\n", ui.Hint(hint))
@@ -176,7 +176,7 @@ func renderSchemaConvert(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderSchemaRenameField(_ *cobra.Command, result commandexec.Result) error {
-	if data, ok := result.Data.(commandpayload.SchemaRenameFieldPreviewResult); ok {
+	if data, ok := result.Data.(schemamigratesvc.RenameFieldPreviewResult); ok {
 		fmt.Printf("%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: Rename field '%s.%s' to '%s.%s'", data.Type, data.OldField, data.Type, data.NewField)))
 		fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Changes to be made (%d total):", data.TotalChanges)))
 		printSchemaFileChanges(data.Changes)
@@ -184,7 +184,7 @@ func renderSchemaRenameField(_ *cobra.Command, result commandexec.Result) error 
 		return nil
 	}
 
-	data, err := commandResultData[commandpayload.SchemaRenameFieldResult](result)
+	data, err := commandResultData[schemamigratesvc.RenameFieldAppliedResult](result)
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func renderSchemaRenameField(_ *cobra.Command, result commandexec.Result) error 
 }
 
 func renderSchemaRenameType(_ *cobra.Command, result commandexec.Result) error {
-	if data, ok := result.Data.(commandpayload.SchemaRenameTypePreviewResult); ok {
+	if data, ok := result.Data.(schemamigratesvc.RenameTypePreviewResult); ok {
 		fmt.Printf("%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: Rename type '%s' to '%s'", data.OldName, data.NewName)))
 		fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Changes to be made (%d total):", data.TotalChanges)))
 		printSchemaFileChanges(data.Changes)
@@ -211,7 +211,7 @@ func renderSchemaRenameType(_ *cobra.Command, result commandexec.Result) error {
 		return nil
 	}
 
-	data, err := commandResultData[commandpayload.SchemaRenameTypeResult](result)
+	data, err := commandResultData[schemamigratesvc.RenameTypeAppliedResult](result)
 	if err != nil {
 		return err
 	}

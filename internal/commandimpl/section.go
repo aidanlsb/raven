@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/sectionsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -133,7 +132,7 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 		return failure
 	}
 
-	data := commandpayload.SectionDeleteResult{
+	data := sectionsvc.DeletePayload{
 		Section:         result.SectionID,
 		File:            result.FileRelative,
 		LineStart:       result.LineStart,
@@ -191,7 +190,7 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 		return failure
 	}
 
-	data := commandpayload.SectionRenameResult{
+	data := sectionsvc.RenamePayload{
 		Source:      result.SourceID,
 		Destination: result.DestinationID,
 	}
@@ -232,8 +231,8 @@ func sectionPlacementArg(args map[string]any) sectionsvc.Placement {
 	}
 }
 
-func sectionLifecycleData(sectionID, file, placement, anchor string, preview bool) commandpayload.SectionLifecycleResult {
-	data := commandpayload.SectionLifecycleResult{
+func sectionLifecycleData(sectionID, file, placement, anchor string, preview bool) sectionsvc.LifecycleResult {
+	data := sectionsvc.LifecycleResult{
 		Section:   sectionID,
 		File:      file,
 		Placement: placement,

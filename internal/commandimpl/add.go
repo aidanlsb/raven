@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -82,16 +81,16 @@ func runAddBulk(sess *vaultsession.Session, ids []string, text string, confirm b
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
-		return commandexec.Success(commandpayload.AddBulkPreviewResult{
-			BulkPreviewResult: commandpayload.BulkPreviewResult{
-				Preview: true,
-				Action:  "add",
-				Items:   canonicalBulkPreviewItems(preview.Items),
-				Skipped: canonicalBulkResults(preview.Skipped),
-				Total:   preview.Total,
+		return commandexec.Success(objectsvc.AddBulkPreviewResult{
+			BulkPreviewResult: objectsvc.BulkPreviewResult{
+				Preview:  true,
+				Action:   "add",
+				Items:    preview.Items,
+				Skipped:  preview.Skipped,
+				Total:    preview.Total,
+				Warnings: warnings,
 			},
-			Warnings: warnings,
-			Content:  text,
+			Content: text,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
@@ -106,11 +105,11 @@ func runAddBulk(sess *vaultsession.Session, ids []string, text string, confirm b
 		return failure.WithAttemptedIDs("object_ids", ids)
 	}
 
-	data := commandpayload.AddBulkResult{
-		BulkSummaryResult: commandpayload.BulkSummaryResult{
+	data := objectsvc.AddBulkResult{
+		BulkSummaryResult: objectsvc.BulkSummaryResult{
 			OK:                summary.Errors == 0,
 			Action:            summary.Action,
-			Items:             canonicalBulkResults(summary.Results),
+			Items:             summary.Results,
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,
@@ -134,7 +133,7 @@ func runAddSingle(sess *vaultsession.Session, text, toRef string) commandexec.Re
 	if failure.Error != nil {
 		return failure
 	}
-	data := commandpayload.AddResult{
+	data := objectsvc.AddResult{
 		File:              result.File,
 		Line:              result.Line,
 		Content:           text,

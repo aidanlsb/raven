@@ -11,40 +11,42 @@ import (
 
 // DirectoriesInfo is a view of the effective directories configuration.
 type DirectoriesInfo struct {
-	Configured bool
-	Daily      string
-	Object     string
-	Page       string
-	Template   string
+	Configured bool   `json:"configured"`
+	Daily      string `json:"daily"`
+	Type       string `json:"type"`
+	Page       string `json:"page"`
+	Template   string `json:"template"`
 }
 
 // CaptureInfo is a view of the effective capture configuration.
 type CaptureInfo struct {
-	Destination string
-	Heading     string
+	Destination string `json:"destination"`
+	Heading     string `json:"heading"`
 }
 
 // DeletionInfo is a view of the effective deletion configuration.
 type DeletionInfo struct {
-	Behavior string
-	TrashDir string
+	Behavior string `json:"behavior"`
+	TrashDir string `json:"trash_dir"`
 }
 
 // ShowResult contains the full vault configuration summary.
 type ShowResult struct {
-	ConfigPath            string
-	Exists                bool
-	AutoReindex           bool
-	AutoReindexExplicit   bool
-	DailyTemplate         string
-	Directories           DirectoriesInfo
-	Capture               CaptureInfo
-	Deletion              DeletionInfo
-	QueriesCount          int
-	ProtectedPrefixes     []string
-	ProtectedPrefixesUsed bool
-	Exclude               []string
-	ExcludeUsed           bool
+	ConfigPath             string          `json:"config_path"`
+	Exists                 bool            `json:"exists"`
+	AutoReindex            bool            `json:"auto_reindex"`
+	AutoReindexExplicit    bool            `json:"auto_reindex_explicit"`
+	DailyTemplate          string          `json:"daily_template"`
+	Directories            DirectoriesInfo `json:"directories"`
+	Capture                CaptureInfo     `json:"capture"`
+	Deletion               DeletionInfo    `json:"deletion"`
+	QueriesCount           int             `json:"queries_count"`
+	ProtectedPrefixes      []string        `json:"protected_prefixes"`
+	ProtectedPrefixesCount int             `json:"protected_prefixes_count"`
+	Exclude                []string        `json:"exclude"`
+	ExcludeCount           int             `json:"exclude_count"`
+	ProtectedPrefixesUsed  bool            `json:"-"`
+	ExcludeUsed            bool            `json:"-"`
 }
 
 // MutationResult contains common fields for all mutation operations.
@@ -54,50 +56,63 @@ type MutationResult struct {
 	Changed    bool
 }
 
+type mutationPointers int
+
+const (
+	pointersNone mutationPointers = iota
+	pointersSet
+	pointersUnset
+)
+
 // DirectoriesResult is returned by directories get/set/unset.
 type DirectoriesResult struct {
-	MutationResult
-	Exists      bool
-	Directories DirectoriesInfo
+	ConfigPath     string          `json:"config_path"`
+	Exists         bool            `json:"exists"`
+	Configured     bool            `json:"configured"`
+	Daily          string          `json:"daily"`
+	Type           string          `json:"type"`
+	Page           string          `json:"page"`
+	Template       string          `json:"template"`
+	Created        *bool           `json:"created,omitempty"`
+	Changed        *bool           `json:"changed,omitempty"`
+	Directories    DirectoriesInfo `json:"-"`
+	MutationResult `json:"-"`
 }
 
 // CaptureResult is returned by capture get/set/unset.
 type CaptureResult struct {
-	MutationResult
-	Exists     bool
-	Configured bool
-	Capture    CaptureInfo
+	ConfigPath     string      `json:"config_path"`
+	Exists         bool        `json:"exists"`
+	Configured     bool        `json:"configured"`
+	Destination    string      `json:"destination"`
+	Heading        string      `json:"heading"`
+	Created        *bool       `json:"created,omitempty"`
+	Changed        *bool       `json:"changed,omitempty"`
+	Capture        CaptureInfo `json:"-"`
+	MutationResult `json:"-"`
 }
 
 // DeletionResult is returned by deletion get/set/unset.
 type DeletionResult struct {
-	MutationResult
-	Exists     bool
-	Configured bool
-	Deletion   DeletionInfo
+	ConfigPath     string       `json:"config_path"`
+	Exists         bool         `json:"exists"`
+	Configured     bool         `json:"configured"`
+	Behavior       string       `json:"behavior"`
+	TrashDir       string       `json:"trash_dir"`
+	Created        *bool        `json:"created,omitempty"`
+	Changed        *bool        `json:"changed,omitempty"`
+	Deletion       DeletionInfo `json:"-"`
+	MutationResult `json:"-"`
 }
 
 // AutoReindexResult is returned by auto-reindex set/unset.
 type AutoReindexResult struct {
-	MutationResult
-	AutoReindex bool
-	Explicit    bool
-}
-
-// PrefixesResult is returned by protected-prefix list/add/remove.
-type PrefixesResult struct {
-	MutationResult
-	Exists   bool
-	Prefix   string
-	Prefixes []string
-}
-
-// ExcludeResult is returned by exclude list/add/remove.
-type ExcludeResult struct {
-	MutationResult
-	Exists   bool
-	Pattern  string
-	Patterns []string
+	ConfigPath          string `json:"config_path"`
+	Created             *bool  `json:"created,omitempty"`
+	Changed             bool   `json:"changed"`
+	AutoReindex         bool   `json:"auto_reindex"`
+	AutoReindexExplicit bool   `json:"auto_reindex_explicit"`
+	MutationResult      `json:"-"`
 }
 
 // Show returns the complete vault configuration summary.
@@ -113,19 +128,21 @@ func Show(rt *vaultruntime.Runtime) (*ShowResult, error) {
 	capture := cfg.GetCaptureConfig()
 	deletion := cfg.GetDeletionConfig()
 	return &ShowResult{
-		ConfigPath:            configPath,
-		Exists:                exists,
-		AutoReindex:           cfg.IsAutoReindexEnabled(),
-		AutoReindexExplicit:   cfg.AutoReindex != nil,
-		DailyTemplate:         strings.TrimSpace(cfg.DailyTemplate),
-		Directories:           directories,
-		Capture:               CaptureInfo{Destination: capture.Destination, Heading: capture.Heading},
-		Deletion:              DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir},
-		QueriesCount:          len(cfg.Queries),
-		ProtectedPrefixes:     protected,
-		ProtectedPrefixesUsed: len(protected) > 0,
-		Exclude:               exclude,
-		ExcludeUsed:           len(exclude) > 0,
+		ConfigPath:             configPath,
+		Exists:                 exists,
+		AutoReindex:            cfg.IsAutoReindexEnabled(),
+		AutoReindexExplicit:    cfg.AutoReindex != nil,
+		DailyTemplate:          strings.TrimSpace(cfg.DailyTemplate),
+		Directories:            directories,
+		Capture:                CaptureInfo{Destination: capture.Destination, Heading: capture.Heading},
+		Deletion:               DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir},
+		QueriesCount:           len(cfg.Queries),
+		ProtectedPrefixes:      protected,
+		ProtectedPrefixesCount: len(protected),
+		Exclude:                exclude,
+		ExcludeCount:           len(exclude),
+		ProtectedPrefixesUsed:  len(protected) > 0,
+		ExcludeUsed:            len(exclude) > 0,
 	}, nil
 }
 
@@ -135,11 +152,7 @@ func GetDirectories(rt *vaultruntime.Runtime) (*DirectoriesResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DirectoriesResult{
-		MutationResult: MutationResult{ConfigPath: configPath},
-		Exists:         exists,
-		Directories:    showDirectories(cfg),
-	}, nil
+	return directoriesView(showDirectories(cfg), exists, MutationResult{ConfigPath: configPath}, pointersNone), nil
 }
 
 // SetDirectories updates one or more directory fields. At least one non-nil field is required.
@@ -181,7 +194,7 @@ func SetDirectories(rt *vaultruntime.Runtime, daily, object, page, template *str
 	if err != nil {
 		return nil, err
 	}
-	return directoriesResult(rt, mutation)
+	return directoriesResult(rt, mutation, pointersSet)
 }
 
 // UnsetDirectories clears one or more directory fields. At least one true field is required.
@@ -207,7 +220,7 @@ func UnsetDirectories(rt *vaultruntime.Runtime, daily, object, page, template bo
 	if err != nil {
 		return nil, err
 	}
-	return directoriesResult(rt, mutation)
+	return directoriesResult(rt, mutation, pointersUnset)
 }
 
 // GetCapture returns the capture configuration view and metadata.
@@ -216,7 +229,7 @@ func GetCapture(rt *vaultruntime.Runtime) (*CaptureResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return captureView(cfg, exists, MutationResult{ConfigPath: configPath}), nil
+	return captureView(cfg, exists, MutationResult{ConfigPath: configPath}, pointersNone), nil
 }
 
 // SetCapture updates one or more capture fields. At least one non-nil field is required.
@@ -244,7 +257,7 @@ func SetCapture(rt *vaultruntime.Runtime, destination, heading *string) (*Captur
 	if err != nil {
 		return nil, err
 	}
-	return captureResult(rt, mutation)
+	return captureResult(rt, mutation, pointersSet)
 }
 
 // UnsetCapture clears one or more capture fields. At least one true field is required.
@@ -264,7 +277,7 @@ func UnsetCapture(rt *vaultruntime.Runtime, destination, heading bool) (*Capture
 	if err != nil {
 		return nil, err
 	}
-	return captureResult(rt, mutation)
+	return captureResult(rt, mutation, pointersUnset)
 }
 
 // GetDeletion returns the deletion configuration view and metadata.
@@ -273,7 +286,7 @@ func GetDeletion(rt *vaultruntime.Runtime) (*DeletionResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return deletionView(cfg, exists, MutationResult{ConfigPath: configPath}), nil
+	return deletionView(cfg, exists, MutationResult{ConfigPath: configPath}, pointersNone), nil
 }
 
 // SetDeletion updates one or more deletion fields. At least one non-nil field is required.
@@ -301,7 +314,7 @@ func SetDeletion(rt *vaultruntime.Runtime, behavior, trashDir *string) (*Deletio
 	if err != nil {
 		return nil, err
 	}
-	return deletionResult(rt, mutation)
+	return deletionResult(rt, mutation, pointersSet)
 }
 
 // UnsetDeletion clears one or more deletion fields. At least one true field is required.
@@ -321,7 +334,7 @@ func UnsetDeletion(rt *vaultruntime.Runtime, behavior, trashDir bool) (*Deletion
 	if err != nil {
 		return nil, err
 	}
-	return deletionResult(rt, mutation)
+	return deletionResult(rt, mutation, pointersUnset)
 }
 
 // SetAutoReindex sets the auto_reindex flag explicitly.
@@ -333,10 +346,14 @@ func SetAutoReindex(rt *vaultruntime.Runtime, value bool) (*AutoReindexResult, e
 	if err != nil {
 		return nil, err
 	}
+	created := mutation.Created
 	return &AutoReindexResult{
-		MutationResult: *mutation,
-		AutoReindex:    value,
-		Explicit:       true,
+		ConfigPath:          mutation.ConfigPath,
+		Created:             &created,
+		Changed:             mutation.Changed,
+		AutoReindex:         value,
+		AutoReindexExplicit: true,
+		MutationResult:      *mutation,
 	}, nil
 }
 
@@ -354,72 +371,74 @@ func UnsetAutoReindex(rt *vaultruntime.Runtime) (*AutoReindexResult, error) {
 		return nil, err
 	}
 	return &AutoReindexResult{
-		MutationResult: *mutation,
-		AutoReindex:    cfg.IsAutoReindexEnabled(),
-		Explicit:       false,
+		ConfigPath:          mutation.ConfigPath,
+		Changed:             mutation.Changed,
+		AutoReindex:         cfg.IsAutoReindexEnabled(),
+		AutoReindexExplicit: false,
+		MutationResult:      *mutation,
 	}, nil
 }
 
 // ListProtectedPrefixes returns the normalized list of protected prefixes.
-func ListProtectedPrefixes(rt *vaultruntime.Runtime) (*PrefixesResult, error) {
+func ListProtectedPrefixes(rt *vaultruntime.Runtime) (*ProtectedPrefixesListResult, error) {
 	configPath, exists, prefixes, err := protectedPrefixes.list(rt)
 	if err != nil {
 		return nil, err
 	}
-	return &PrefixesResult{
-		MutationResult: MutationResult{ConfigPath: configPath},
-		Exists:         exists,
-		Prefixes:       prefixes,
+	return &ProtectedPrefixesListResult{
+		ConfigPath:        configPath,
+		Exists:            exists,
+		ProtectedPrefixes: prefixes,
 	}, nil
 }
 
 // AddProtectedPrefix adds a protected prefix to the list (deduplicated).
-func AddProtectedPrefix(rt *vaultruntime.Runtime, prefix string) (*PrefixesResult, error) {
+func AddProtectedPrefix(rt *vaultruntime.Runtime, prefix string) (*ProtectedPrefixAddResult, error) {
 	change, err := protectedPrefixes.add(rt, prefix)
 	if err != nil {
 		return nil, err
 	}
-	return change.prefixes(), nil
+	return change.prefixAdd(), nil
 }
 
 // RemoveProtectedPrefix removes a protected prefix from the list.
-func RemoveProtectedPrefix(rt *vaultruntime.Runtime, prefix string) (*PrefixesResult, error) {
+func RemoveProtectedPrefix(rt *vaultruntime.Runtime, prefix string) (*ProtectedPrefixRemoveResult, error) {
 	change, err := protectedPrefixes.remove(rt, prefix)
 	if err != nil {
 		return nil, err
 	}
-	return change.prefixes(), nil
+	return change.prefixRemove(), nil
 }
 
 // ListExclude returns the normalized list of exclude patterns.
-func ListExclude(rt *vaultruntime.Runtime) (*ExcludeResult, error) {
+func ListExclude(rt *vaultruntime.Runtime) (*ExcludeListResult, error) {
 	configPath, exists, patterns, err := excludePatterns.list(rt)
 	if err != nil {
 		return nil, err
 	}
-	return &ExcludeResult{
-		MutationResult: MutationResult{ConfigPath: configPath},
-		Exists:         exists,
-		Patterns:       patterns,
+	return &ExcludeListResult{
+		ConfigPath: configPath,
+		Exists:     exists,
+		Exclude:    patterns,
 	}, nil
 }
 
 // AddExclude adds an exclude pattern to the list (deduplicated).
-func AddExclude(rt *vaultruntime.Runtime, pattern string) (*ExcludeResult, error) {
+func AddExclude(rt *vaultruntime.Runtime, pattern string) (*ExcludeAddResult, error) {
 	change, err := excludePatterns.add(rt, pattern)
 	if err != nil {
 		return nil, err
 	}
-	return change.exclude(), nil
+	return change.excludeAdd(), nil
 }
 
 // RemoveExclude removes an exclude pattern from the list.
-func RemoveExclude(rt *vaultruntime.Runtime, pattern string) (*ExcludeResult, error) {
+func RemoveExclude(rt *vaultruntime.Runtime, pattern string) (*ExcludeRemoveResult, error) {
 	change, err := excludePatterns.remove(rt, pattern)
 	if err != nil {
 		return nil, err
 	}
-	return change.exclude(), nil
+	return change.excludeRemove(), nil
 }
 
 func mutateDirectories(rt *vaultruntime.Runtime, apply func(*config.DirectoriesConfig) error) (*MutationResult, error) {
@@ -434,68 +453,124 @@ func mutateDeletion(rt *vaultruntime.Runtime, apply func(*config.DeletionConfig)
 	return mutateSection(rt, deletionConfig, setDeletionConfig, compactDeletionConfig, apply)
 }
 
-func directoriesResult(rt *vaultruntime.Runtime, mutation *MutationResult) (*DirectoriesResult, error) {
+func directoriesResult(rt *vaultruntime.Runtime, mutation *MutationResult, pointers mutationPointers) (*DirectoriesResult, error) {
 	cfg, exists, _, err := load(rt)
 	if err != nil {
 		return nil, err
 	}
-	return &DirectoriesResult{
-		MutationResult: *mutation,
+	return directoriesView(showDirectories(cfg), exists, *mutation, pointers), nil
+}
+
+func directoriesView(info DirectoriesInfo, exists bool, mutation MutationResult, pointers mutationPointers) *DirectoriesResult {
+	result := &DirectoriesResult{
+		ConfigPath:     mutation.ConfigPath,
 		Exists:         exists,
-		Directories:    showDirectories(cfg),
-	}, nil
+		Configured:     info.Configured,
+		Daily:          info.Daily,
+		Type:           info.Type,
+		Page:           info.Page,
+		Template:       info.Template,
+		Directories:    info,
+		MutationResult: mutation,
+	}
+	applyMutationPointers(&result.Created, &result.Changed, mutation, pointers)
+	return result
 }
 
-func captureResult(rt *vaultruntime.Runtime, mutation *MutationResult) (*CaptureResult, error) {
+func captureResult(rt *vaultruntime.Runtime, mutation *MutationResult, pointers mutationPointers) (*CaptureResult, error) {
 	cfg, exists, _, err := load(rt)
 	if err != nil {
 		return nil, err
 	}
-	return captureView(cfg, exists, *mutation), nil
+	return captureView(cfg, exists, *mutation, pointers), nil
 }
 
-func captureView(cfg *config.VaultConfig, exists bool, mutation MutationResult) *CaptureResult {
+func captureView(cfg *config.VaultConfig, exists bool, mutation MutationResult, pointers mutationPointers) *CaptureResult {
 	capture := cfg.GetCaptureConfig()
-	return &CaptureResult{
-		MutationResult: mutation,
+	info := CaptureInfo{Destination: capture.Destination, Heading: capture.Heading}
+	result := &CaptureResult{
+		ConfigPath:     mutation.ConfigPath,
 		Exists:         exists,
 		Configured:     cfg.Capture != nil,
-		Capture:        CaptureInfo{Destination: capture.Destination, Heading: capture.Heading},
+		Destination:    info.Destination,
+		Heading:        info.Heading,
+		Capture:        info,
+		MutationResult: mutation,
 	}
+	applyMutationPointers(&result.Created, &result.Changed, mutation, pointers)
+	return result
 }
 
-func deletionResult(rt *vaultruntime.Runtime, mutation *MutationResult) (*DeletionResult, error) {
+func deletionResult(rt *vaultruntime.Runtime, mutation *MutationResult, pointers mutationPointers) (*DeletionResult, error) {
 	cfg, exists, _, err := load(rt)
 	if err != nil {
 		return nil, err
 	}
-	return deletionView(cfg, exists, *mutation), nil
+	return deletionView(cfg, exists, *mutation, pointers), nil
 }
 
-func deletionView(cfg *config.VaultConfig, exists bool, mutation MutationResult) *DeletionResult {
+func deletionView(cfg *config.VaultConfig, exists bool, mutation MutationResult, pointers mutationPointers) *DeletionResult {
 	deletion := cfg.GetDeletionConfig()
-	return &DeletionResult{
-		MutationResult: mutation,
+	info := DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir}
+	result := &DeletionResult{
+		ConfigPath:     mutation.ConfigPath,
 		Exists:         exists,
 		Configured:     cfg.Deletion != nil,
-		Deletion:       DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir},
+		Behavior:       info.Behavior,
+		TrashDir:       info.TrashDir,
+		Deletion:       info,
+		MutationResult: mutation,
+	}
+	applyMutationPointers(&result.Created, &result.Changed, mutation, pointers)
+	return result
+}
+
+func applyMutationPointers(created, changed **bool, mutation MutationResult, pointers mutationPointers) {
+	switch pointers {
+	case pointersSet:
+		c, ch := mutation.Created, mutation.Changed
+		*created = &c
+		*changed = &ch
+	case pointersUnset:
+		ch := mutation.Changed
+		*changed = &ch
 	}
 }
 
-func (c *listChange) prefixes() *PrefixesResult {
-	return &PrefixesResult{
-		MutationResult: c.MutationResult,
-		Exists:         c.Exists,
-		Prefix:         c.Item,
-		Prefixes:       c.Values,
+func (c *listChange) prefixAdd() *ProtectedPrefixAddResult {
+	return &ProtectedPrefixAddResult{
+		ConfigPath:        c.ConfigPath,
+		Created:           c.Created,
+		Changed:           c.Changed,
+		Prefix:            c.Item,
+		ProtectedPrefixes: c.Values,
 	}
 }
 
-func (c *listChange) exclude() *ExcludeResult {
-	return &ExcludeResult{
-		MutationResult: c.MutationResult,
-		Exists:         c.Exists,
-		Pattern:        c.Item,
-		Patterns:       c.Values,
+func (c *listChange) prefixRemove() *ProtectedPrefixRemoveResult {
+	return &ProtectedPrefixRemoveResult{
+		ConfigPath:        c.ConfigPath,
+		Changed:           c.Changed,
+		Removed:           c.Item,
+		ProtectedPrefixes: c.Values,
+	}
+}
+
+func (c *listChange) excludeAdd() *ExcludeAddResult {
+	return &ExcludeAddResult{
+		ConfigPath: c.ConfigPath,
+		Created:    c.Created,
+		Changed:    c.Changed,
+		Pattern:    c.Item,
+		Exclude:    c.Values,
+	}
+}
+
+func (c *listChange) excludeRemove() *ExcludeRemoveResult {
+	return &ExcludeRemoveResult{
+		ConfigPath: c.ConfigPath,
+		Changed:    c.Changed,
+		Removed:    c.Item,
+		Exclude:    c.Values,
 	}
 }

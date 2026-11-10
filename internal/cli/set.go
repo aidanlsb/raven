@@ -7,15 +7,15 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 	RenderHuman: func(_ *cobra.Command, result commandexec.Result) error {
 		switch result.Data.(type) {
-		case commandpayload.SetBulkPreviewResult, commandpayload.SetBulkResult:
+		case objectsvc.SetBulkPreviewResult, objectsvc.SetBulkResult:
 			return renderCanonicalBulkResult(result)
 		}
 		return renderCanonicalSetSingleResult(result)
@@ -23,7 +23,7 @@ var setCmd = newCanonicalLeafCommand("set", canonicalLeafOptions{
 })
 
 func renderCanonicalSetSingleResult(result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.SetResult)
+	data, ok := result.Data.(objectsvc.SetByReferenceResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}

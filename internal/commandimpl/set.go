@@ -6,7 +6,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -120,18 +119,8 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		if err != nil {
 			return mapContentMutationError(err)
 		}
-		data := commandpayload.SetResult{
-			File:          serviceResult.RelativePath,
-			ObjectID:      serviceResult.ObjectID,
-			Type:          serviceResult.ObjectType,
-			UpdatedFields: serviceResult.ResolvedUpdates,
-			Preview:       true,
-		}
-		if len(serviceResult.PreviousFields) > 0 {
-			data.PreviousFields = serviceResult.PreviousFields
-		}
 		return commandexec.SuccessWithWarnings(
-			data,
+			*serviceResult,
 			warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
 			nil,
 		)
@@ -148,25 +137,13 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	if failure.Error != nil {
 		return failure
 	}
-
-	data := commandpayload.SetResult{
-		File:              serviceResult.RelativePath,
-		ObjectID:          serviceResult.ObjectID,
-		Type:              serviceResult.ObjectType,
-		UpdatedFields:     serviceResult.ResolvedUpdates,
-		MissingReferences: missingRefsOf(proj),
-	}
-	if len(serviceResult.PreviousFields) > 0 {
-		data.PreviousFields = serviceResult.PreviousFields
-	}
-	warnings := appendCommandWarnings(
-		warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
-		proj.Warnings,
-	)
-
+	serviceResult.MissingReferences = missingRefsOf(proj)
 	return commandexec.SuccessWithWarnings(
-		data,
-		warnings,
+		*serviceResult,
+		appendCommandWarnings(
+			warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
+			proj.Warnings,
+		),
 		nil,
 	)
 }
@@ -205,17 +182,8 @@ func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result 
 		return failure
 	}
 
-	data := commandpayload.UnsetResult{
-		File:              serviceResult.RelativePath,
-		ObjectID:          serviceResult.ObjectID,
-		Type:              serviceResult.ObjectType,
-		RemovedFields:     fieldmutation.SerializeFieldValueMap(serviceResult.RemovedFields),
-		MissingFields:     serviceResult.MissingFields,
-		Modified:          serviceResult.Modified,
-		PreviousFields:    serviceResult.PreviousFields,
-		MissingReferences: missingRefsOf(proj),
-	}
-	return commandexec.SuccessWithWarnings(data, proj.Warnings, nil)
+	serviceResult.MissingReferences = missingRefsOf(proj)
+	return commandexec.SuccessWithWarnings(*serviceResult, proj.Warnings, nil)
 }
 
 func runSetBulk(sess *vaultsession.Session, ids []string, updates map[string]fieldvalue.FieldValue, confirm bool) commandexec.Result {
@@ -232,16 +200,16 @@ func runSetBulk(sess *vaultsession.Session, ids []string, updates map[string]fie
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
-		return commandexec.Success(commandpayload.SetBulkPreviewResult{
-			BulkPreviewResult: commandpayload.BulkPreviewResult{
-				Preview: true,
-				Action:  preview.Action,
-				Items:   canonicalBulkPreviewItems(preview.Items),
-				Skipped: canonicalBulkResults(preview.Skipped),
-				Total:   preview.Total,
+		return commandexec.Success(objectsvc.SetBulkPreviewResult{
+			BulkPreviewResult: objectsvc.BulkPreviewResult{
+				Preview:  true,
+				Action:   preview.Action,
+				Items:    preview.Items,
+				Skipped:  preview.Skipped,
+				Total:    preview.Total,
+				Warnings: warnings,
 			},
-			Warnings: warnings,
-			Fields:   serializedUpdates,
+			Fields: serializedUpdates,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
@@ -255,11 +223,11 @@ func runSetBulk(sess *vaultsession.Session, ids []string, updates map[string]fie
 	if failure.Error != nil {
 		return failure.WithAttemptedIDs("references", ids)
 	}
-	data := commandpayload.SetBulkResult{
-		BulkSummaryResult: commandpayload.BulkSummaryResult{
+	data := objectsvc.SetBulkResult{
+		BulkSummaryResult: objectsvc.BulkSummaryResult{
 			OK:                summary.Errors == 0,
 			Action:            summary.Action,
-			Items:             canonicalBulkResults(summary.Results),
+			Items:             summary.Results,
 			Total:             summary.Total,
 			Skipped:           summary.Skipped,
 			Errors:            summary.Errors,

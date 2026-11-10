@@ -7,7 +7,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/importsvc"
 	"github.com/aidanlsb/raven/internal/mutation"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -90,7 +89,7 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		}
 	}
 
-	data := commandpayload.ImportResult{
+	data := importsvc.ImportResult{
 		Total:   len(serviceResult.Results),
 		Created: created,
 		Updated: updated,

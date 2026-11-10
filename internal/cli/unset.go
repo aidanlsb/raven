@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -18,7 +18,7 @@ var unsetCmd = newCanonicalLeafCommand("unset", canonicalLeafOptions{
 })
 
 func renderCanonicalUnsetResult(result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.UnsetResult)
+	data, ok := result.Data.(objectsvc.UnsetByReferenceResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}

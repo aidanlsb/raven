@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/vaultsession"
 )
@@ -28,22 +27,7 @@ func HandleObjects(_ context.Context, req commandexec.Request) commandexec.Resul
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-
-	items := make([]commandpayload.ObjectSummaryItem, 0, len(result.Items))
-	for _, item := range result.Items {
-		items = append(items, commandpayload.ObjectSummaryItem{
-			ID:       item.ID,
-			Type:     item.Type,
-			Name:     item.Name,
-			FilePath: item.FilePath,
-		})
-	}
-	returned := len(items)
-	paging := commandpayload.NewPagination(result.Total, returned, result.Offset, result.Limit)
-
-	out := commandexec.Success(commandpayload.ObjectsResult{
-		Items:      items,
-		Pagination: paging,
-	}, &commandexec.Meta{Count: returned, QueryTimeMs: time.Since(start).Milliseconds()})
+	payload := result.ObjectsPayload()
+	out := commandexec.Success(payload, &commandexec.Meta{Count: len(payload.Items), QueryTimeMs: time.Since(start).Milliseconds()})
 	return withIndexRefreshWarnings(refreshWarnings, withSchemaLoadWarning(rt, out))
 }

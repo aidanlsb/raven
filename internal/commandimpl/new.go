@@ -10,7 +10,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -29,7 +28,6 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 		return failure
 	}
 	defer sess.Close()
-	vaultCfg := sess.Runtime().VaultCfg
 
 	typeName := strings.TrimSpace(stringArg(req.Args, "type"))
 	title := strings.TrimSpace(stringArg(req.Args, "title"))
@@ -48,16 +46,15 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 
-	writeReq := objectsvc.WriteRequest{
+	createReq := objectsvc.CreateRequest{
 		TypeName:    typeName,
 		Title:       title,
 		TargetPath:  targetPath,
 		FieldValues: allFieldValues,
 		TemplateID:  stringArg(req.Args, "template"),
-		CreateOnly:  true,
 	}
-	result, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.WriteResult, mutation.ChangeSet, error) {
-		result, err := objectsvc.Write(rt, writeReq)
+	result, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.CreateResult, mutation.ChangeSet, error) {
+		result, err := objectsvc.Create(rt, createReq)
 		if err != nil {
 			return nil, mutation.ChangeSet{}, err
 		}
@@ -66,17 +63,8 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 	if failure.Error != nil {
 		return failure
 	}
-	data := commandpayload.NewResult{
-		ObjectMutation: commandpayload.ObjectMutation{
-			File:  result.RelativePath,
-			ID:    vaultCfg.FilePathToObjectID(result.RelativePath),
-			Title: title,
-			Type:  typeName,
-		},
-		MissingReferences: missingRefsOf(proj),
-	}
-
-	return commandexec.SuccessWithWarnings(data, proj.Warnings, nil)
+	result.MissingReferences = missingRefsOf(proj)
+	return commandexec.SuccessWithWarnings(*result, proj.Warnings, nil)
 }
 
 func mapContentMutationError(err error) commandexec.Result {

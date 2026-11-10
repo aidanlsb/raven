@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 )
 
 func TestHandleAddBulkAppendsWithinSection(t *testing.T) {
@@ -40,7 +40,7 @@ some notes
 	if !preview.OK {
 		t.Fatalf("HandleAdd preview failed: %#v", preview.Error)
 	}
-	previewData, _ := preview.Data.(commandpayload.AddBulkPreviewResult)
+	previewData, _ := preview.Data.(objectsvc.AddBulkPreviewResult)
 	items := previewData.Items
 	if len(items) != 1 || items[0].ID != "note/example#tasks" {
 		t.Fatalf("preview items = %#v, want one item for note/example#tasks", items)
@@ -101,7 +101,7 @@ title: Example
 	if !apply.OK {
 		t.Fatalf("HandleAdd apply failed: %#v", apply.Error)
 	}
-	data, _ := apply.Data.(commandpayload.AddBulkResult)
+	data, _ := apply.Data.(objectsvc.AddBulkResult)
 	if data.Added != 2 {
 		t.Fatalf("added = %d, want 2 (data = %#v)", data.Added, data)
 	}
@@ -221,7 +221,7 @@ title: Example
 	if !result.OK {
 		t.Fatalf("HandleSet preview failed: %#v", result.Error)
 	}
-	data, _ := result.Data.(commandpayload.SetBulkPreviewResult)
+	data, _ := result.Data.(objectsvc.SetBulkPreviewResult)
 	warnings := data.Warnings
 	if len(warnings) != 1 || warnings[0].Code != warnSectionSkipped {
 		t.Fatalf("warnings = %#v, want one SECTION_SKIPPED warning", warnings)

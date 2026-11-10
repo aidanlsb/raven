@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/skills"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -111,7 +110,7 @@ func renderSkillList(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderSkillInstall(_ *cobra.Command, result commandexec.Result) error {
-	if _, ok := result.Data.(commandpayload.CancelledResult); ok {
+	if _, ok := result.Data.(commandexec.CancelledResult); ok {
 		fmt.Println(ui.Star("Cancelled."))
 		return nil
 	}

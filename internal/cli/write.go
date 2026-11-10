@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -46,7 +46,7 @@ func invokeWrite(cmd *cobra.Command, commandID, vaultPath string, args map[strin
 }
 
 func renderWriteResult(_ *cobra.Command, result commandexec.Result) error {
-	data, ok := result.Data.(commandpayload.WriteResult)
+	data, ok := result.Data.(objectsvc.WriteResult)
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}

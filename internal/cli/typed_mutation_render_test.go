@@ -5,8 +5,9 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
+	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/schemamigratesvc"
 )
 
 func TestSchemaRenameDefaultPathPreviewUsesTypedPayload(t *testing.T) {
@@ -16,7 +17,7 @@ func TestSchemaRenameDefaultPathPreviewUsesTypedPayload(t *testing.T) {
 	oldPath := "events/"
 	newPath := "meetings/"
 	filesToMove := 3
-	gotOld, gotNew, gotFiles, gotAvailable := schemaRenameDefaultPathPreview(commandpayload.SchemaRenameTypePreviewResult{
+	gotOld, gotNew, gotFiles, gotAvailable := schemaRenameDefaultPathPreview(schemamigratesvc.RenameTypePreviewResult{
 		DefaultPathRenameAvailable: &available,
 		DefaultPathOld:             &oldPath,
 		DefaultPathNew:             &newPath,
@@ -37,7 +38,7 @@ func TestSchemaRenameDefaultPathPreviewUsesTypedPayload(t *testing.T) {
 }
 
 func TestRenderSetResultFormatsPreviousFieldValues(t *testing.T) {
-	result := commandexec.Success(commandpayload.SetResult{
+	result := commandexec.Success(objectsvc.SetByReferenceResult{
 		File:          "projects/raven.md",
 		ObjectID:      "projects/raven",
 		Type:          "project",

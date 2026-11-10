@@ -7,7 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/editsvc"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -41,9 +41,9 @@ unique phrase
 		t.Fatalf("HandleEdit() failed: %#v", result.Error)
 	}
 
-	data, ok := result.Data.(commandpayload.EditSingleResult)
+	data, ok := result.Data.(editsvc.EditSingleResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.EditSingleResult", result.Data)
+		t.Fatalf("Data type = %T, want editsvc.EditSingleResult", result.Data)
 	}
 	if got, want := data.Line, 7; got != want {
 		t.Fatalf("line = %d, want %d", got, want)

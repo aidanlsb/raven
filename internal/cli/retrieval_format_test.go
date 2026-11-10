@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -374,8 +374,8 @@ func TestRenderCanonicalQueryHumanLinkPipeHasNoHyperlinks(t *testing.T) {
 	})
 
 	out := captureStdout(t, func() {
-		err := renderCanonicalQueryHuman("link .ext==pdf", commandpayload.QueryLinkResult{
-			Items: []commandpayload.LinkItem{{
+		err := renderCanonicalQueryHuman("link .ext==pdf", querysvc.QueryLinkResult{
+			Items: []querysvc.LinkItem{{
 				SourceID:      "projects/raven",
 				FilePath:      "projects/raven.md",
 				Line:          12,

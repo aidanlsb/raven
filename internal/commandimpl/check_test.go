@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/checkfixsvc"
 	"github.com/aidanlsb/raven/internal/checksvc"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -50,7 +50,7 @@ owner: "[[people/freya]]"
 		t.Fatalf("warning code = %q, want %q", result.Warnings[0].Code, checkApplyIncompleteWarningCode)
 	}
 
-	data := result.Data.(commandpayload.CheckFixResult)
+	data := result.Data.(checkfixsvc.FixAppliedResult)
 	if data.OK {
 		t.Fatalf("data ok = true, want false")
 	}
@@ -92,7 +92,7 @@ func TestHandleCheckCreateMissing_WarnsWhenPageCreationFails(t *testing.T) {
 		t.Fatalf("warning code = %q, want %q", result.Warnings[0].Code, checkApplyIncompleteWarningCode)
 	}
 
-	data := result.Data.(commandpayload.CheckCreateMissingResult)
+	data := result.Data.(checkfixsvc.CreateMissingResult)
 	if data.OK == nil || *data.OK {
 		t.Fatalf("data ok = %#v, want false", data.OK)
 	}

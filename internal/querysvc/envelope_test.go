@@ -1,4 +1,4 @@
-package commandpayload
+package querysvc
 
 import (
 	"encoding/json"

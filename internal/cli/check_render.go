@@ -8,17 +8,17 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/checkfixsvc"
+	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-type CheckIssueJSON = commandpayload.CheckIssueJSON
-type CheckSummaryJSON = commandpayload.CheckSummaryJSON
-type CheckScopeJSON = commandpayload.CheckScopeJSON
-type CheckResultJSON = commandpayload.CheckResultJSON
+type CheckIssueJSON = checksvc.CheckIssueJSON
+type CheckSummaryJSON = checksvc.CheckSummaryJSON
+type CheckScopeJSON = checksvc.CheckScopeJSON
+type CheckResultJSON = checksvc.CheckResultJSON
 
-func printCheckScopeHeader(vaultPath string, scope commandpayload.CheckScope) {
+func printCheckScopeHeader(vaultPath string, scope checkfixsvc.CheckScope) {
 	switch scope.Type {
 	case "full":
 		fmt.Printf("Checking vault: %s\n", ui.Muted.Render(vaultPath))
@@ -33,28 +33,28 @@ func printCheckScopeHeader(vaultPath string, scope commandpayload.CheckScope) {
 	}
 }
 
-func checkScopeFromResult(result commandexec.Result) commandpayload.CheckScope {
-	if scope, ok := commandpayload.CheckResultScope(result.Data); ok {
+func checkScopeFromResult(result commandexec.Result) checkfixsvc.CheckScope {
+	if scope, ok := checkfixsvc.ResultScope(result.Data); ok {
 		return scope
 	}
 	data := canonicalDataMap(result)
 	if scopeMap, ok := data["scope"].(map[string]interface{}); ok {
-		return commandpayload.CheckScope{
+		return checkfixsvc.CheckScope{
 			Type:  stringValue(scopeMap["type"]),
 			Value: stringValue(scopeMap["value"]),
 		}
 	}
 	if decoded, ok := decodeCanonicalCheckJSON(result); ok && decoded.Scope != nil {
-		return commandpayload.CheckScope{
+		return checkfixsvc.CheckScope{
 			Type:  decoded.Scope.Type,
 			Value: decoded.Scope.Value,
 		}
 	}
-	return commandpayload.CheckScope{Type: "full"}
+	return checkfixsvc.CheckScope{Type: "full"}
 }
 
 func decodeCanonicalCheckJSON(result commandexec.Result) (CheckResultJSON, bool) {
-	if decoded, ok := result.Data.(commandpayload.CheckResultJSON); ok {
+	if decoded, ok := result.Data.(checksvc.CheckResultJSON); ok {
 		return decoded, true
 	}
 	var decoded CheckResultJSON
@@ -113,7 +113,7 @@ func printCheckIssueTotals(result CheckResultJSON) {
 
 func renderCanonicalCheckFix(result commandexec.Result) {
 	switch data := result.Data.(type) {
-	case commandpayload.CheckFixPreviewResult:
+	case checkfixsvc.FixPreviewResult:
 		if data.FixableIssues == 0 {
 			fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
 			return
@@ -122,7 +122,7 @@ func renderCanonicalCheckFix(result commandexec.Result) {
 		fmt.Println(ui.Hint("Use --confirm to apply these fixes."))
 		fmt.Println()
 		printCheckFileFixes(data.Files, data.FixableIssues)
-	case commandpayload.CheckFixResult:
+	case checkfixsvc.FixAppliedResult:
 		if data.FixableIssues == 0 {
 			fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
 			return

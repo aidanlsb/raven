@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/shellquote"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/templatesvc"
@@ -160,7 +159,7 @@ func renderTemplateList(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderTemplateWrite(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.TemplateWriteResult](result)
+	data, err := commandResultData[templatesvc.WriteResult](result)
 	if err != nil {
 		return err
 	}
@@ -169,7 +168,7 @@ func renderTemplateWrite(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderTemplateDelete(_ *cobra.Command, result commandexec.Result) error {
-	data, err := commandResultData[commandpayload.TemplateDeleteResult](result)
+	data, err := commandResultData[templatesvc.DeleteResult](result)
 	if err != nil {
 		return err
 	}

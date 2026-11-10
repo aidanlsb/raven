@@ -3,7 +3,6 @@ package commandimpl
 import (
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/commandpayload"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/querysvc"
 )
@@ -33,9 +32,9 @@ func TestShapeQueryResultPreservesSavedQueryPagination(t *testing.T) {
 	if !result.OK {
 		t.Fatalf("shapeQueryResult() failed: %#v", result.Error)
 	}
-	payload, ok := result.Data.(commandpayload.QueryObjectResult)
+	payload, ok := result.Data.(querysvc.QueryObjectResult)
 	if !ok {
-		t.Fatalf("Data type = %T, want commandpayload.QueryObjectResult", result.Data)
+		t.Fatalf("Data type = %T, want querysvc.QueryObjectResult", result.Data)
 	}
 	if payload.SavedQuery != "active-projects" || payload.Type != "" {
 		t.Fatalf("saved_query/type = %q/%q, want active-projects/empty", payload.SavedQuery, payload.Type)

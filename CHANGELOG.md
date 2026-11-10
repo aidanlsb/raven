@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Internal / Refactor
+- Removed `internal/commandpayload`. Command JSON `data` is now the `*svc`
+  result type (json tags on the service structs) instead of a field-by-field
+  copy into a parallel payload package. Wire format is unchanged; a golden
+  contract test pins representative envelopes.
 - Vault command setup, read-time index refresh, mutation journal begin/abandon,
   and post-mutation projection now live in `internal/vaultsession`. Command
   handlers open a session instead of the previous runtime constructors; there

@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandpayload"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -69,7 +69,7 @@ func invokeDelete(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 	if !preview.OK {
 		return preview
 	}
-	if data, ok := preview.Data.(commandpayload.DeletePreviewResult); ok {
+	if data, ok := preview.Data.(objectsvc.DeletePreviewResult); ok {
 		printDeletePreview(data)
 	}
 	if ok, result := confirmDestructive("Confirm?", "--force"); !ok {
@@ -86,16 +86,16 @@ func invokeDelete(cmd *cobra.Command, commandID, vaultPath string, args map[stri
 
 func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
 	switch data := result.Data.(type) {
-	case commandpayload.CancelledResult:
+	case commandexec.CancelledResult:
 		fmt.Println(ui.Star("Cancelled."))
 		return nil
-	case commandpayload.DeleteBulkPreviewResult, commandpayload.DeleteBulkResult:
+	case objectsvc.DeleteBulkPreviewResult, objectsvc.DeleteBulkResult:
 		return renderCanonicalBulkResult(result)
-	case commandpayload.DeletePreviewResult:
+	case objectsvc.DeletePreviewResult:
 		printDeletePreview(data)
 		fmt.Println(ui.Hint("Dry run: re-run without --dry-run to delete"))
 		return nil
-	case commandpayload.DeleteResult:
+	case objectsvc.DeleteResult:
 		if data.Behavior == "trash" && strings.TrimSpace(data.TrashPath) != "" {
 			renderObjectMoved(data.TrashPath)
 			return nil
@@ -107,7 +107,7 @@ func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
 	}
 }
 
-func printDeletePreview(data commandpayload.DeletePreviewResult) {
+func printDeletePreview(data objectsvc.DeletePreviewResult) {
 	fmt.Printf("%s %s?\n", ui.SectionHeader("Delete"), ui.Bold.Render(data.ObjectID))
 
 	if len(data.Backlinks) > 0 {

@@ -1,10 +1,9 @@
-package commandpayload
+package checksvc
 
 import (
 	"sort"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/checksvc"
 )
 
 // CheckIssueJSON is one issue in the `check` validate payload.
@@ -49,7 +48,7 @@ type CheckResultJSON struct {
 }
 
 // BuildJSON maps a check service result onto the stable validate payload.
-func BuildJSON(vaultPath string, result *checksvc.RunResult) CheckResultJSON {
+func BuildJSON(vaultPath string, result *RunResult) CheckResultJSON {
 	jsonResult := CheckResultJSON{
 		VaultPath:  vaultPath,
 		FileCount:  result.FileCount,

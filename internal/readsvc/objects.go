@@ -13,10 +13,10 @@ import (
 
 // ObjectSummary is a picker-safe object row: identity and a display name, no body.
 type ObjectSummary struct {
-	ID       string
-	Type     string
-	Name     string
-	FilePath string
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Name     string `json:"name"`
+	FilePath string `json:"file_path"`
 }
 
 // ListObjectsResult is one page of object summaries from the index.
