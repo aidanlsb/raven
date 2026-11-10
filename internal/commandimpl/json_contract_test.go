@@ -203,9 +203,11 @@ func marshalNormalizedEnvelope(t *testing.T, result commandexec.Result, vaultPat
 	if err != nil {
 		t.Fatalf("marshal envelope: %v", err)
 	}
-	normalized := bytes.ReplaceAll(raw, []byte(strings.ReplaceAll(vaultPath, `\`, `\\`)), []byte("VAULT"))
+	// JSON encodes Windows `\` as `\\`. Flatten those to `/` so vault-relative
+	// paths match the slash-style goldens without touching `\n` escapes.
+	normalized := bytes.ReplaceAll(raw, []byte(`\\`), []byte(`/`))
 	normalized = bytes.ReplaceAll(normalized, []byte(filepath.ToSlash(vaultPath)), []byte("VAULT"))
-	normalized = bytes.ReplaceAll(normalized, []byte(`VAULT\\`), []byte("VAULT/"))
+	normalized = bytes.ReplaceAll(normalized, []byte(vaultPath), []byte("VAULT"))
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, normalized); err != nil {
 		t.Fatalf("compact envelope: %v", err)
