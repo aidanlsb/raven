@@ -2,6 +2,7 @@ package index
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -292,6 +293,28 @@ func collectIndexedRefs(doc *parser.ParsedDocument, sch *schema.Schema) []indexe
 		if used[i] {
 			continue
 		}
+		name := sr.FieldName
+		out = append(out, indexedRef{
+			sourceID:  sr.SourceID,
+			targetRaw: sr.TargetRaw,
+			fieldName: &name,
+			line:      sr.Line,
+		})
+	}
+
+	seen := make(map[string]struct{}, len(out))
+	for _, ref := range out {
+		seen[ref.sourceID+"\x00"+ref.targetRaw+"\x00"+strconv.Itoa(ref.line)] = struct{}{}
+	}
+	for _, sr := range parser.ExtractSchemaTraitRefs(doc.Traits, sch) {
+		if sr.TargetRaw == "" || sr.SourceID == "" {
+			continue
+		}
+		key := sr.SourceID + "\x00" + sr.TargetRaw + "\x00" + strconv.Itoa(sr.Line)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
 		name := sr.FieldName
 		out = append(out, indexedRef{
 			sourceID:  sr.SourceID,

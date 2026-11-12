@@ -20,8 +20,18 @@ Quick reference for common Raven Query Language (RQL) patterns.
 - String matching: `includes(.field, "text")`, `startswith(...)`, `endswith(...)`, `matches(...)`. On `ref` / `ref[]`, these search resolved target ID and stored raw target, not frontmatter JSON.
 - Text search: `content("phrase")`
 - Result sort (top-level only, repeatable): `sort(.field)`, `sort(.field, desc)`. Strings are case-insensitive; missing values sort last. Example: `type:issue .status==open sort(.priority, desc) sort(.title)`
+- Named graph paths (`.` is the current subject; hops must be scalar refs):
+  - `type:task .project.status==active`
+  - `type:task .project.company.tier==1`
+  - `type:task any(.collaborators, .team==infra)`
+  - `type:task .due>.created` (RHS path, not the literal `".created"`)
+- `this` is the immediately enclosing query subject (nested queries only):
+  - `type:person refd(type:task .owner==this .status==open)`
+  - `type:company refd(type:task .project.company==this)` (flatten reverse)
+  - `type:person refd(type:task any(.collaborators, _==this))`
+  - Top-level `this` is an error
 - References:
-  - `refs([[target]])` (objects/traits that reference target)
+  - `refs([[target]])` (objects/traits that reference target; any edge)
   - `refs(type:project .status==active)`
   - `links(.ext==pdf)` (type/section/trait has a matching non-Raven outgoing link)
   - Upward scope (on `trait:`/`section`) — direct: `in([[target]])`, `in(type:...)`, `in(section ...)`

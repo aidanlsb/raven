@@ -22,6 +22,16 @@ Use this page to diagnose empty, broad, ambiguous, or rejected queries.
   `within(...)` are not valid on every root.
 - Use `--limit` and inspect IDs before any apply command.
 
+## Path and `this` errors
+
+- `.` is a property of the current subject. Intermediate hops must be scalar
+  `ref` fields; `.status.active` on a string is rejected.
+- `this` is the immediately enclosing query subject. It is valid only inside a
+  nested query (`type:person refd(type:task .owner==this)`). Top-level `this`
+  is an error.
+- Unquoted `.created` on the right-hand side is a path, not the string
+  `".created"`. Quote dotted literals: `.ext==".pdf"`.
+
 ## Shell parsing issues
 
 - Wrap query strings in single quotes.

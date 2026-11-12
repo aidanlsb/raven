@@ -253,6 +253,8 @@ func (e *Executor) scopeMatcherCondition(target string, subQuery *Query, alias s
 }
 
 func (e *Executor) buildObjectWhereForAlias(q *Query, alias string) (string, []interface{}, error) {
+	restore := e.pushQuerySubject(subjectFrame{alias: alias, root: QueryTypeObject, typeName: q.TypeName})
+	defer restore()
 	conditions := []string{fmt.Sprintf("%s.type = ?", alias)}
 	args := []interface{}{q.TypeName}
 	if q.Predicate != nil {
@@ -270,6 +272,8 @@ func (e *Executor) sectionSubqueryCondition(q *Query, alias string) (string, []i
 	if q.Type != QueryTypeSection {
 		return "", nil, fmt.Errorf("expected section subquery")
 	}
+	restore := e.pushQuerySubject(subjectFrame{alias: alias, root: QueryTypeSection})
+	defer restore()
 	if q.Predicate == nil {
 		return "1=1", nil, nil
 	}
@@ -280,6 +284,8 @@ func (e *Executor) traitSubqueryCondition(q *Query, alias string) (string, []int
 	if q.Type != QueryTypeTrait {
 		return "", nil, fmt.Errorf("expected trait subquery")
 	}
+	restore := e.pushQuerySubject(subjectFrame{alias: alias, root: QueryTypeTrait, typeName: q.TypeName})
+	defer restore()
 	conditions := []string{fmt.Sprintf("%s.trait_type = ?", alias)}
 	args := []interface{}{q.TypeName}
 	if q.Predicate != nil {
@@ -324,40 +330,38 @@ func scopeParentExpr(alias string, root QueryType) string {
 // include references from the trait's source line, and section roots include
 // references from the section's complete subtree.
 func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root QueryType) (string, []interface{}, error) {
-	var cond string
-	var args []interface{}
-	sourceCond, err := edgeSourceCondition("r", alias, root, "refs")
+	rAlias := e.nextAlias("r")
+	sourceCond, err := edgeSourceCondition(rAlias, alias, root, "refs")
 	if err != nil {
 		return "", nil, err
 	}
 
+	var cond string
+	var args []interface{}
+
 	if p.Target != "" {
-		// Direct reference to specific target
-		// Resolve the target to its canonical object ID (like backlinks does)
 		resolvedTarget, err := e.resolveTarget(p.Target)
 		if err != nil {
 			return "", nil, err
 		}
-		targetCond, targetArgs := refResolvedIDPreferredMatch("r", resolvedTarget, p.Target)
-
+		targetCond, targetArgs := refResolvedIDPreferredMatch(rAlias, resolvedTarget, p.Target)
 		cond = fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM refs r
+			SELECT 1 FROM refs %s
 			WHERE %s AND %s
-		)`, sourceCond, targetCond)
+		)`, rAlias, sourceCond, targetCond)
 		args = append(args, targetArgs...)
 	} else if p.SubQuery != nil {
 		var targetTable string
 		var targetAlias string
 		var targetCondition string
-		var err error
 		switch p.SubQuery.Type {
 		case QueryTypeObject:
 			targetTable = "objects"
-			targetAlias = "target_obj"
+			targetAlias = e.nextAlias("tobj")
 			targetCondition, args, err = e.buildObjectWhereForAlias(p.SubQuery, targetAlias)
 		case QueryTypeSection:
 			targetTable = "sections"
-			targetAlias = "target_section"
+			targetAlias = e.nextAlias("tsec")
 			targetCondition, args, err = e.sectionSubqueryCondition(p.SubQuery, targetAlias)
 		default:
 			return "", nil, fmt.Errorf("refs() subquery must be a type or section query")
@@ -365,12 +369,11 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root Qu
 		if err != nil {
 			return "", nil, err
 		}
-
 		cond = fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM refs r
+			SELECT 1 FROM refs %s
 			JOIN %s %s ON %s
 			WHERE %s AND %s
-		)`, targetTable, targetAlias, refResolvedIDPreferredMatchSQL("r", targetAlias+".id"), sourceCond, targetCondition)
+		)`, rAlias, targetTable, targetAlias, refResolvedIDPreferredMatchSQL(rAlias, targetAlias+".id"), sourceCond, targetCondition)
 	} else {
 		return "", nil, fmt.Errorf("refs predicate must have target or subquery")
 	}
@@ -378,7 +381,6 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string, root Qu
 	if p.Negated() {
 		cond = "NOT " + cond
 	}
-
 	return cond, args, nil
 }
 

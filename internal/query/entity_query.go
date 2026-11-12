@@ -140,9 +140,11 @@ func (e *Executor) buildEntityWhereClause(q *Query, spec entitySQLSpec) (string,
 
 	if q.Predicate != nil {
 		typeName := ""
-		if q.Type == QueryTypeObject {
+		if q.Type == QueryTypeObject || q.Type == QueryTypeTrait {
 			typeName = q.TypeName
 		}
+		restore := e.pushQuerySubject(subjectFrame{alias: spec.alias, root: q.Type, typeName: q.TypeName})
+		defer restore()
 		cond, predArgs, err := e.buildPredicateSQL(q.Type, q.Predicate, spec.alias, typeName)
 		if err != nil {
 			return "", nil, err

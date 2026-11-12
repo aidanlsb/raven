@@ -2,13 +2,19 @@ package query
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-// Executor executes queries against the database.
+type subjectFrame struct {
+	alias    string
+	root     QueryType
+	typeName string
+}
+
 type Executor struct {
 	db                         *sql.DB
 	resolver                   *resolver.Resolver // Cached resolver for target resolution
@@ -18,6 +24,8 @@ type Executor struct {
 	nowFn                      func() time.Time
 	fieldRefAmbiguityCache     map[fieldRefAmbiguityKey]fieldRefAmbiguityResult
 	ambiguousFieldRefQueryHook func()
+	aliasSeq                   int
+	queryStack                 []subjectFrame
 }
 
 // NewExecutor creates a new query executor.
@@ -48,5 +56,36 @@ func (e *Executor) withExecutionNow() *Executor {
 	scoped := *e
 	scoped.now = e.currentTime()
 	scoped.fieldRefAmbiguityCache = make(map[fieldRefAmbiguityKey]fieldRefAmbiguityResult)
+	scoped.aliasSeq = 0
+	scoped.queryStack = nil
 	return &scoped
+}
+
+func (e *Executor) nextAlias(prefix string) string {
+	e.aliasSeq++
+	return fmt.Sprintf("%s%d", prefix, e.aliasSeq)
+}
+
+func (e *Executor) pushQuerySubject(frame subjectFrame) func() {
+	e.queryStack = append(e.queryStack, frame)
+	return func() {
+		if len(e.queryStack) == 0 {
+			return
+		}
+		e.queryStack = e.queryStack[:len(e.queryStack)-1]
+	}
+}
+
+func (e *Executor) currentSubject() (subjectFrame, bool) {
+	if len(e.queryStack) == 0 {
+		return subjectFrame{}, false
+	}
+	return e.queryStack[len(e.queryStack)-1], true
+}
+
+func (e *Executor) thisSubject() (subjectFrame, error) {
+	if len(e.queryStack) < 2 {
+		return subjectFrame{}, fmt.Errorf("this is only valid in a nested query")
+	}
+	return e.queryStack[len(e.queryStack)-2], nil
 }

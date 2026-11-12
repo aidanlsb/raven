@@ -380,6 +380,10 @@ func (p *Parser) parseAtomicPredicate(negated bool) (Predicate, error) {
 		return p.parseFieldPredicate(negated)
 	}
 
+	if isThisKeyword(p.curr) {
+		return p.parseThisPredicate(negated)
+	}
+
 	if p.curr.Type == TokenIdent {
 		keyword := strings.ToLower(p.curr.Value)
 
@@ -417,25 +421,24 @@ func (p *Parser) parseAtomicPredicate(negated bool) (Predicate, error) {
 }
 
 func (p *Parser) parseExistsPredicate(negated bool) (Predicate, error) {
-	// exists(.field)
+	// exists(.field), exists(.field.hop), exists(this.field)
 	if err := p.expect(TokenLParen); err != nil {
 		return nil, err
 	}
-	if p.curr.Type != TokenDot {
+	path, err := p.parseFieldOrThisPath()
+	if err != nil {
 		return nil, fmt.Errorf("expected .field as argument to exists()")
 	}
-	p.advance()
-	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected field name after '.'")
+	if path.IsIdentity() {
+		return nil, fmt.Errorf("exists() requires a field path, not bare this")
 	}
-	field := p.curr.Value
-	p.advance()
 	if err := p.expect(TokenRParen); err != nil {
 		return nil, err
 	}
 	return &FieldPredicate{
 		basePredicate: basePredicate{negated: negated},
-		Field:         field,
+		Field:         path.first(),
+		Path:          path,
 		Value:         "*",
 		IsExists:      true,
 		CompareOp:     CompareEq,
@@ -753,11 +756,14 @@ func (p *Parser) parseSortClause() (SortField, error) {
 		return SortField{}, fmt.Errorf("expected .field as first argument to sort()")
 	}
 	p.advance()
-	if p.curr.Type != TokenIdent {
+	path, err := p.parseFieldPathFromIdent()
+	if err != nil {
 		return SortField{}, fmt.Errorf("expected .field as first argument to sort()")
 	}
-	field := p.curr.Value
-	p.advance()
+	if path.hasHops() || path.This {
+		return SortField{}, fmt.Errorf("sort() only supports a field of the query root, not a path (%s)", path.String())
+	}
+	field := path.first()
 
 	dir := SortAsc
 	if p.curr.Type == TokenComma {

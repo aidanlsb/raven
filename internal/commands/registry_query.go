@@ -54,6 +54,11 @@ Common predicates:
 - within(type:...|section...) — Any containing scope matches subquery
 - has(section...|trait:...) — Directly contains section or trait matching subquery
 - contains(section...|trait:...) — Recursively contains section or trait matching subquery
+- .field.hop — Named ref path on the current subject (type:task .project.status==active)
+- this / this.field — Immediately enclosing query subject; nested queries only
+  (type:person refd(type:task .owner==this .status==open)). Multi-hop reverse
+  flattens: type:company refd(type:task .project.company==this). Top-level this
+  is an error. Quote dotted literals (.ext==".pdf"); .due>.created compares fields.
 - refs([[target]]) — References target (refs([[people/freya]]))
 - refs(type:...) — References items matching subquery (refs(type:project .status==active))
 - links(<link-predicate>) — Contains an outgoing non-Raven file or URL link

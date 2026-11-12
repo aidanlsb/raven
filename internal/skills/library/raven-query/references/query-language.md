@@ -103,9 +103,21 @@ Type queries support field predicates plus:
   on `trait:` or `link`.
 - `content("term")`: full-text content search within objects
 
+Named refs are paths on the current subject: `type:task .project.status==active`,
+multi-hop `.project.company.tier==1`. Inside `any`/`all`/`none` the subject is
+the element (`any(.collaborators, .team==infra)`); `_` is the element
+(`_==this`). `this` is the immediately enclosing query subject, nested only,
+and a path root (`this.lead`). Reverse named edges use `this` rather than a new
+verb: `type:person refd(type:task .owner==this .status==open)`. Multi-hop
+reverse flattens: `type:company refd(type:task .project.company==this)`.
+`.due>.created` compares two fields; quote dotted literals (`.ext==".pdf"`).
+Top-level `this` and hops through non-ref fields are errors. `sort()` stays on
+the root subject's own fields.
+
 Direct `refs([[target]])` and field-ref equality match a resolved refs row on
 its canonical target id. Unresolved rows still match on the stored raw
-target. `refd()` uses the same rule.
+target. `refd()` uses the same rule. Untyped `refs()`/`refd()` remain “any
+edge.”
 
 Scope predicates accept nested type/section queries, wikilinks, or target
 shorthands. Prefer canonical object IDs in direct targets; short forms are

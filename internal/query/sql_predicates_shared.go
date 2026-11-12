@@ -102,11 +102,31 @@ func buildStringFuncCondition(funcType StringFuncType, fieldExpr string, value s
 //
 // identExpr is "?" for bound arguments in order (resolvedID, rawQuery), or a
 // SQL expression such as "o.id" when joining against another row's identity.
+// identExpr is inlined twice; when it contains placeholders, bind its args
+// twice via refResolvedIDPreferredMatchExpr.
 func refResolvedIDPreferredMatchSQL(refAlias, identExpr string) string {
 	return fmt.Sprintf(
 		"(%s.target_id = %s OR (%s.target_id IS NULL AND %s.target_raw = %s))",
 		refAlias, identExpr, refAlias, refAlias, identExpr,
 	)
+}
+
+// refResolvedIDPreferredMatchExpr is the expression form of
+// refResolvedIDPreferredMatchSQL. identArgs belong to identExpr and are
+// duplicated because that expression is inlined twice.
+func refResolvedIDPreferredMatchExpr(refAlias, identExpr string, identArgs []interface{}) (string, []interface{}) {
+	return refResolvedIDPreferredMatchSQL(refAlias, identExpr), repeatIdentExprArgs(identExpr, 2, identArgs)
+}
+
+func repeatIdentExprArgs(identExpr string, times int, args []interface{}) []interface{} {
+	if times <= 1 || len(args) == 0 || !strings.Contains(identExpr, "?") {
+		return args
+	}
+	out := make([]interface{}, 0, len(args)*times)
+	for i := 0; i < times; i++ {
+		out = append(out, args...)
+	}
+	return out
 }
 
 // refResolvedIDPreferredMatch is the bound-argument form of
@@ -133,96 +153,120 @@ func buildRefStringFuncMatchSQL(p *StringFuncPredicate, refAlias string) (string
 // Matches objects/traits that are referenced by the subquery matches.
 // isTrait indicates if we're building for a trait query (uses different columns).
 func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait bool) (string, []interface{}, error) {
+	_ = isTrait
 	if p.Target != "" {
-		// Referenced by a specific source
 		sourceID, err := e.resolveTarget(p.Target)
 		if err != nil {
 			return "", nil, err
 		}
+		rAlias := e.nextAlias("r")
 		cond := fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM refs r
-			WHERE (r.source_id = ? OR r.source_id LIKE ? || '#%%')
+			SELECT 1 FROM refs %s
+			WHERE (%s.source_id = ? OR %s.source_id LIKE ? || '#%%')
 			  AND %s
-		)`, refResolvedIDPreferredMatchSQL("r", alias+".id"))
+		)`, rAlias, rAlias, rAlias, refResolvedIDPreferredMatchSQL(rAlias, alias+".id"))
 		if p.Negated() {
 			cond = "NOT " + cond
 		}
 		return cond, []interface{}{sourceID, sourceID}, nil
 	}
 
-	// Subquery - referenced by objects/traits matching the subquery
-	var sourceConditions []string
-	var args []interface{}
+	if p.SubQuery == nil {
+		return "", nil, fmt.Errorf("refd predicate must have target or subquery")
+	}
 
-	if p.SubQuery.Type == QueryTypeObject {
-		sourceConditions = append(sourceConditions, "src.type = ?")
-		args = append(args, p.SubQuery.TypeName)
-
-		if p.SubQuery.Predicate != nil {
-			cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "src", p.SubQuery.TypeName)
-			if err != nil {
-				return "", nil, err
-			}
-			sourceConditions = append(sourceConditions, cond)
-			args = append(args, predArgs...)
+	// Named-edge reverse uses this/path correlation. Skip the untyped refs
+	// join so multi-hop reverse can flatten: type:company refd(type:task
+	// .project.company==this) does not require a direct task→company edge.
+	if queryCorrelatesViaThis(p.SubQuery) {
+		cond, args, err := e.buildCorrelatedRefdSubquerySQL(p.SubQuery)
+		if err != nil {
+			return "", nil, err
 		}
-
-		cond := fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM refs r
-			JOIN objects src ON (r.source_id = src.id OR r.source_id LIKE src.id || '#%%')
-			WHERE %s
-			  AND %s
-		)`, refResolvedIDPreferredMatchSQL("r", alias+".id"), strings.Join(sourceConditions, " AND "))
-
 		if p.Negated() {
 			cond = "NOT " + cond
 		}
 		return cond, args, nil
 	}
 
-	if p.SubQuery.Type == QueryTypeSection {
-		cond, args, err := e.sectionSubqueryCondition(p.SubQuery, "src_s")
+	rAlias := e.nextAlias("r")
+	targetMatch := refResolvedIDPreferredMatchSQL(rAlias, alias+".id")
+
+	switch p.SubQuery.Type {
+	case QueryTypeObject:
+		srcAlias := e.nextAlias("src")
+		where, args, err := e.buildObjectWhereForAlias(p.SubQuery, srcAlias)
 		if err != nil {
 			return "", nil, err
 		}
-
-		sqlCond := fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM refs r
-			JOIN sections src_s ON r.source_id = src_s.id
-			WHERE %s
-			  AND %s
-		)`, refResolvedIDPreferredMatchSQL("r", alias+".id"), cond)
-
+		cond := fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM refs %s
+			JOIN objects %s ON (%s.source_id = %s.id OR %s.source_id LIKE %s.id || '#%%')
+			WHERE %s AND %s
+		)`, rAlias, srcAlias, rAlias, srcAlias, rAlias, srcAlias, targetMatch, where)
 		if p.Negated() {
-			sqlCond = "NOT " + sqlCond
+			cond = "NOT " + cond
 		}
-		return sqlCond, args, nil
-	}
-
-	// Trait subquery - referenced by traits matching the subquery
-	sourceConditions = append(sourceConditions, "src_t.trait_type = ?")
-	args = append(args, p.SubQuery.TypeName)
-
-	if p.SubQuery.Predicate != nil {
-		cond, predArgs, err := e.buildTraitPredicateSQL(p.SubQuery.Predicate, "src_t")
+		return cond, args, nil
+	case QueryTypeSection:
+		srcAlias := e.nextAlias("srcs")
+		where, args, err := e.sectionSubqueryCondition(p.SubQuery, srcAlias)
 		if err != nil {
 			return "", nil, err
 		}
-		sourceConditions = append(sourceConditions, cond)
-		args = append(args, predArgs...)
+		cond := fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM refs %s
+			JOIN sections %s ON %s.source_id = %s.id
+			WHERE %s AND %s
+		)`, rAlias, srcAlias, rAlias, srcAlias, targetMatch, where)
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, args, nil
+	case QueryTypeTrait:
+		srcAlias := e.nextAlias("srct")
+		where, args, err := e.traitSubqueryCondition(p.SubQuery, srcAlias)
+		if err != nil {
+			return "", nil, err
+		}
+		cond := fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM refs %s
+			JOIN traits %s ON %s.file_path = %s.file_path AND %s.line_number = %s.line_number
+			WHERE %s AND %s
+		)`, rAlias, srcAlias, rAlias, srcAlias, rAlias, srcAlias, targetMatch, where)
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, args, nil
+	default:
+		return "", nil, fmt.Errorf("refd() subquery must be a type, trait, or section query")
 	}
+}
 
-	cond := fmt.Sprintf(`EXISTS (
-		SELECT 1 FROM refs r
-		JOIN traits src_t ON r.file_path = src_t.file_path 
-		                 AND r.line_number = src_t.line_number
-		WHERE %s
-		  AND %s
-	)`, refResolvedIDPreferredMatchSQL("r", alias+".id"), strings.Join(sourceConditions, " AND "))
-
-	if p.Negated() {
-		cond = "NOT " + cond
+func (e *Executor) buildCorrelatedRefdSubquerySQL(sub *Query) (string, []interface{}, error) {
+	switch sub.Type {
+	case QueryTypeObject:
+		srcAlias := e.nextAlias("src")
+		where, args, err := e.buildObjectWhereForAlias(sub, srcAlias)
+		if err != nil {
+			return "", nil, err
+		}
+		return fmt.Sprintf("EXISTS (SELECT 1 FROM objects %s WHERE %s)", srcAlias, where), args, nil
+	case QueryTypeSection:
+		srcAlias := e.nextAlias("srcs")
+		where, args, err := e.sectionSubqueryCondition(sub, srcAlias)
+		if err != nil {
+			return "", nil, err
+		}
+		return fmt.Sprintf("EXISTS (SELECT 1 FROM sections %s WHERE %s)", srcAlias, where), args, nil
+	case QueryTypeTrait:
+		srcAlias := e.nextAlias("srct")
+		where, args, err := e.traitSubqueryCondition(sub, srcAlias)
+		if err != nil {
+			return "", nil, err
+		}
+		return fmt.Sprintf("EXISTS (SELECT 1 FROM traits %s WHERE %s)", srcAlias, where), args, nil
+	default:
+		return "", nil, fmt.Errorf("refd() subquery must be a type, trait, or section query")
 	}
-
-	return cond, args, nil
 }

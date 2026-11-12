@@ -5,19 +5,97 @@ import (
 	"strings"
 )
 
-// parseFieldPredicate parses .field==value, .field!=value, .field>value, etc.
-// For string matching, use function-style predicates: includes(.field, "str"), startswith(...), etc.
-func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
+// parseFieldPathFromIdent reads one or more dotted field names. The current
+// token must already be the first identifier.
+func (p *Parser) parseFieldPathFromIdent() (FieldPath, error) {
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected field name after '.'")
+		return FieldPath{}, fmt.Errorf("expected field name after '.'")
 	}
-
-	field := p.curr.Value
+	fields, err := splitDottedIdent(p.curr.Value)
+	if err != nil {
+		return FieldPath{}, err
+	}
 	p.advance()
+	for p.curr.Type == TokenDot {
+		p.advance()
+		if p.curr.Type != TokenIdent {
+			return FieldPath{}, fmt.Errorf("expected field name after '.'")
+		}
+		more, err := splitDottedIdent(p.curr.Value)
+		if err != nil {
+			return FieldPath{}, err
+		}
+		fields = append(fields, more...)
+		p.advance()
+	}
+	return FieldPath{Fields: fields}, nil
+}
 
-	// Determine the operator
+func (p *Parser) parseThisPath() (FieldPath, error) {
+	if !isThisKeyword(p.curr) {
+		return FieldPath{}, fmt.Errorf("expected 'this'")
+	}
+	raw := p.curr.Value
+	p.advance()
+	path := FieldPath{This: true}
+	if strings.Contains(raw, ".") {
+		_, rest, ok := strings.Cut(raw, ".")
+		if !ok || rest == "" {
+			return FieldPath{}, fmt.Errorf("expected field name after 'this.'")
+		}
+		fields, err := splitDottedIdent(rest)
+		if err != nil {
+			return FieldPath{}, err
+		}
+		path.Fields = fields
+	}
+	return path, nil
+}
+
+func (p *Parser) parseFieldOrThisPath() (FieldPath, error) {
+	if isThisKeyword(p.curr) {
+		return p.parseThisPath()
+	}
+	if p.curr.Type != TokenDot {
+		return FieldPath{}, fmt.Errorf("expected .field or this")
+	}
+	p.advance()
+	return p.parseFieldPathFromIdent()
+}
+
+func fieldPredicateFromPath(negated bool, path FieldPath, compareOp CompareOp, rhs CompareRHS) *FieldPredicate {
+	pred := &FieldPredicate{
+		basePredicate: basePredicate{negated: negated},
+		Path:          path,
+		Field:         path.first(),
+		CompareOp:     compareOp,
+		RHS:           rhs,
+		Value:         rhs.Literal,
+		IsRefValue:    rhs.IsRefValue,
+	}
+	return pred
+}
+
+// parseFieldPredicate parses .field==value, .project.status==active, etc.
+// The leading '.' has already been consumed.
+func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
+	path, err := p.parseFieldPathFromIdent()
+	if err != nil {
+		return nil, err
+	}
+	return p.parseFieldPredicateAfterPath(negated, path)
+}
+
+func (p *Parser) parseThisPredicate(negated bool) (Predicate, error) {
+	path, err := p.parseThisPath()
+	if err != nil {
+		return nil, err
+	}
+	return p.parseFieldPredicateAfterPath(negated, path)
+}
+
+func (p *Parser) parseFieldPredicateAfterPath(negated bool, path FieldPath) (Predicate, error) {
 	var compareOp CompareOp
-
 	switch p.curr.Type {
 	case TokenEqEq:
 		compareOp = CompareEq
@@ -38,54 +116,47 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		compareOp = CompareGte
 		p.advance()
 	default:
-		return nil, fmt.Errorf("expected comparison operator (==, !=, <, >, <=, >=) after field name; for string matching use includes(), startswith(), endswith(), or matches()")
+		return nil, fmt.Errorf("expected comparison operator (==, !=, <, >, <=, >=) after %s; for string matching use includes(), startswith(), endswith(), or matches()", path.String())
 	}
 
-	value, isRefValue, err := p.parseFieldValue()
+	rhs, err := p.parseCompareRHS()
 	if err != nil {
 		return nil, err
 	}
-
-	return &FieldPredicate{
-		basePredicate: basePredicate{negated: negated},
-		Field:         field,
-		Value:         value,
-		IsExists:      false,
-		CompareOp:     compareOp,
-		IsRefValue:    isRefValue,
-	}, nil
+	return fieldPredicateFromPath(negated, path, compareOp, rhs), nil
 }
 
-func (p *Parser) parseFieldValue() (string, bool, error) {
-	switch p.curr.Type {
-	case TokenStar:
-		return "", false, fmt.Errorf(".field==* is no longer supported; use exists(.field) or !exists(.field) instead")
-	case TokenIdent:
-		value := p.curr.Value
-		p.advance()
-		return value, false, nil
-	case TokenDot:
-		// Unquoted values may start with '.' after a comparison operator
-		// (for example `.ext == .pdf`). `.field` at predicate start is still
-		// TokenDot plus a field name because parseAtomicPredicate consumes
-		// that leading dot before parseFieldPredicate runs.
-		p.advance()
-		if p.curr.Type != TokenIdent {
-			return "", false, fmt.Errorf("expected field value or quoted string; for field presence use exists(.field)")
+func (p *Parser) parseCompareRHS() (CompareRHS, error) {
+	switch {
+	case p.curr.Type == TokenStar:
+		return CompareRHS{}, fmt.Errorf(".field==* is no longer supported; use exists(.field) or !exists(.field) instead")
+	case isThisKeyword(p.curr):
+		path, err := p.parseThisPath()
+		if err != nil {
+			return CompareRHS{}, err
 		}
-		value := "." + p.curr.Value
+		return pathRHS(path), nil
+	case p.curr.Type == TokenDot:
 		p.advance()
-		return value, false, nil
-	case TokenRef:
+		path, err := p.parseFieldPathFromIdent()
+		if err != nil {
+			return CompareRHS{}, err
+		}
+		return pathRHS(path), nil
+	case p.curr.Type == TokenIdent:
 		value := p.curr.Value
 		p.advance()
-		return value, true, nil
-	case TokenString:
+		return literalRHS(value, false), nil
+	case p.curr.Type == TokenRef:
 		value := p.curr.Value
 		p.advance()
-		return value, false, nil
+		return literalRHS(value, true), nil
+	case p.curr.Type == TokenString:
+		value := p.curr.Value
+		p.advance()
+		return literalRHS(value, false), nil
 	default:
-		return "", false, fmt.Errorf("expected field value or quoted string; for field presence use exists(.field)")
+		return CompareRHS{}, fmt.Errorf("expected field value, path, this, or quoted string; for field presence use exists(.field)")
 	}
 }
 
@@ -118,12 +189,7 @@ func (p *Parser) parseValueList() ([]parsedValue, error) {
 			v.Value = p.curr.Value
 			p.advance()
 		case TokenDot:
-			p.advance()
-			if p.curr.Type != TokenIdent {
-				return nil, fmt.Errorf("expected list value (identifier, string, or reference), got %v", p.curr.Type)
-			}
-			v.Value = "." + p.curr.Value
-			p.advance()
+			return nil, fmt.Errorf("oneof() values must be literals; quote dotted strings, for example \".pdf\"")
 		case TokenString:
 			v.Value = p.curr.Value
 			p.advance()
@@ -162,16 +228,11 @@ func (p *Parser) parseInPredicate(negated bool) (Predicate, error) {
 		return nil, err
 	}
 
-	// First arg: .field
-	if p.curr.Type != TokenDot {
+	// First arg: .field, .field.hop, or this.field
+	path, err := p.parseFieldOrThisPath()
+	if err != nil {
 		return nil, fmt.Errorf("expected .field as first argument to oneof()")
 	}
-	p.advance()
-	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected field name after '.'")
-	}
-	field := p.curr.Value
-	p.advance()
 
 	if err := p.expect(TokenComma); err != nil {
 		return nil, err
@@ -194,26 +255,13 @@ func (p *Parser) parseInPredicate(negated bool) (Predicate, error) {
 
 	// Single value: just a field predicate.
 	if len(values) == 1 {
-		return &FieldPredicate{
-			basePredicate: basePredicate{negated: negated},
-			Field:         field,
-			Value:         values[0].Value,
-			IsExists:      false,
-			CompareOp:     CompareEq,
-			IsRefValue:    values[0].IsRef,
-		}, nil
+		return fieldPredicateFromPath(negated, path, CompareEq, literalRHS(values[0].Value, values[0].IsRef)), nil
 	}
 
 	// Multiple values: OR of == predicates.
 	var preds []Predicate
 	for _, v := range values {
-		preds = append(preds, &FieldPredicate{
-			Field:      field,
-			Value:      v.Value,
-			IsExists:   false,
-			CompareOp:  CompareEq,
-			IsRefValue: v.IsRef,
-		})
+		preds = append(preds, fieldPredicateFromPath(false, path, CompareEq, literalRHS(v.Value, v.IsRef)))
 	}
 	var result Predicate = &OrPredicate{Predicates: preds}
 	if negated {
@@ -234,19 +282,20 @@ func (p *Parser) parseStringFuncPredicate(negated bool, funcType StringFuncType)
 		FuncType:      funcType,
 	}
 
-	// Parse first argument: .field or _
-	if p.curr.Type == TokenDot {
-		p.advance()
-		if p.curr.Type != TokenIdent {
-			return nil, fmt.Errorf("expected field name after '.'")
+	// Parse first argument: .field, .field.hop, this.field, or _
+	switch {
+	case isThisKeyword(p.curr) || p.curr.Type == TokenDot:
+		path, err := p.parseFieldOrThisPath()
+		if err != nil {
+			return nil, err
 		}
-		pred.Field = p.curr.Value
-		p.advance()
-	} else if p.curr.Type == TokenUnderscore {
+		pred.Path = path
+		pred.Field = path.first()
+	case p.curr.Type == TokenUnderscore:
 		pred.Field = "_"
 		pred.IsElementRef = true
 		p.advance()
-	} else {
+	default:
 		return nil, fmt.Errorf("expected .field or _ as first argument to %s()", funcType)
 	}
 
@@ -308,16 +357,12 @@ func (p *Parser) parseArrayQuantifierPredicate(negated bool, quantifier ArrayQua
 		Quantifier:    quantifier,
 	}
 
-	// Parse first argument: .field
-	if p.curr.Type != TokenDot {
+	path, err := p.parseFieldOrThisPath()
+	if err != nil {
 		return nil, fmt.Errorf("expected .field as first argument to %s()", quantifier)
 	}
-	p.advance()
-	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected field name after '.'")
-	}
-	pred.Field = p.curr.Value
-	p.advance()
+	pred.Path = path
+	pred.Field = path.first()
 
 	// Expect comma
 	if err := p.expect(TokenComma); err != nil {
@@ -432,6 +477,15 @@ func (p *Parser) parseElementUnaryPredicate() (Predicate, error) {
 		return p.parseElementUnderscoreEquality(negated)
 	}
 
+	if p.curr.Type == TokenDot {
+		p.advance()
+		return p.parseFieldPredicate(negated)
+	}
+
+	if isThisKeyword(p.curr) {
+		return p.parseThisPredicate(negated)
+	}
+
 	if p.curr.Type == TokenIdent {
 		if p.isSortCall() {
 			return nil, sortTopLevelError()
@@ -441,7 +495,7 @@ func (p *Parser) parseElementUnaryPredicate() (Predicate, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("expected element predicate: _ == value, _ != value, or a function like includes(_, \"str\")")
+	return nil, fmt.Errorf("expected element predicate: _ == value, .field==value, this, or a function like includes(_, \"str\")")
 }
 
 func (p *Parser) parseElementUnderscoreEquality(negated bool) (Predicate, error) {
@@ -466,44 +520,18 @@ func (p *Parser) parseElementUnderscoreEquality(negated bool) (Predicate, error)
 	}
 	p.advance()
 
-	value, isRefValue, err := p.parseComparisonRHS()
+	rhs, err := p.parseCompareRHS()
 	if err != nil {
 		return nil, err
 	}
 
 	return &ElementEqualityPredicate{
 		basePredicate: basePredicate{negated: negated},
-		Value:         value,
+		Value:         rhs.Literal,
+		RHS:           rhs,
 		CompareOp:     compareOp,
-		IsRefValue:    isRefValue,
+		IsRefValue:    rhs.IsRefValue,
 	}, nil
-}
-
-func (p *Parser) parseComparisonRHS() (string, bool, error) {
-	switch p.curr.Type {
-	case TokenIdent:
-		value := p.curr.Value
-		p.advance()
-		return value, false, nil
-	case TokenDot:
-		p.advance()
-		if p.curr.Type != TokenIdent {
-			return "", false, fmt.Errorf("expected value after comparison operator (identifier, string, or reference)")
-		}
-		value := "." + p.curr.Value
-		p.advance()
-		return value, false, nil
-	case TokenString:
-		value := p.curr.Value
-		p.advance()
-		return value, false, nil
-	case TokenRef:
-		value := p.curr.Value
-		p.advance()
-		return value, true, nil
-	default:
-		return "", false, fmt.Errorf("expected value after comparison operator (identifier, string, or reference)")
-	}
 }
 
 func (p *Parser) tryParseElementFuncPredicate(negated bool) (Predicate, bool, error) {
