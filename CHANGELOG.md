@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Bumped the Go toolchain from 1.26.10 to 1.26.11, which fixes the `net/http`
+  HTTP/1 MaxBytesReader header race (GO-2026-6859).
+
 ### Added
 - RQL named-edge paths and `this` cover the vault graph. `.` is always a
   property of the current subject (`type:task .project.status==active`,
