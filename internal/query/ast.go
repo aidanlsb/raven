@@ -20,6 +20,7 @@ const (
 )
 
 // SortField is one sort(.field) / sort(.field, asc|desc) clause.
+// First cut: sort is a single field of the query root, not a multi-hop path.
 type SortField struct {
 	Field     string
 	Direction SortDirection
@@ -75,13 +76,30 @@ func (op CompareOp) String() string {
 	}
 }
 
+// FieldPath is a dotted property path rooted at the current subject (`.field`)
+// or at `this` (the immediately enclosing query subject).
+type FieldPath struct {
+	This   bool     // true if the path is rooted at `this`
+	Fields []string // empty means the root itself (`this` with no hops)
+}
+
+// CompareRHS is a comparison right-hand side: a literal, a current-subject
+// path, or a `this` path.
+type CompareRHS struct {
+	Literal    string     // set for literals and [[ref]] tokens
+	IsRefValue bool       // true if Literal came from a [[ref]] token
+	Path       *FieldPath // non-nil means a path, not a literal
+}
+
 // FieldPredicate filters by type field value.
-// Syntax: .field==value, .field>value, exists(.field)
+// Syntax: .field==value, .field>value, exists(.field), .project.status==active
 // For string matching, use StringFuncPredicate (includes, startswith, endswith, matches).
 type FieldPredicate struct {
 	basePredicate
-	Field      string
-	Value      string    // "*" means "exists"
+	Field      string    // first hop; kept populated for single-field predicates
+	Path       FieldPath // authoritative path; empty Path falls back to Field
+	Value      string    // "*" means "exists"; literal RHS (empty if RHS is a path)
+	RHS        CompareRHS
 	IsExists   bool      // true if Value is "*"
 	CompareOp  CompareOp // comparison operator (==, !=, <, >, <=, >=)
 	IsRefValue bool      // true if the value came from a [[ref]] token
@@ -204,10 +222,11 @@ func (sf StringFuncType) String() string {
 type StringFuncPredicate struct {
 	basePredicate
 	FuncType      StringFuncType
-	Field         string // Field name (without .) or "_" for array element
-	Value         string // The string to match against
-	CaseSensitive bool   // If true, match is case-sensitive (default: false)
-	IsElementRef  bool   // True if Field is "_" (array element reference)
+	Field         string    // Field name (without .) or "_" for array element
+	Path          FieldPath // authoritative path; empty Path falls back to Field
+	Value         string    // The string to match against
+	CaseSensitive bool      // If true, match is case-sensitive (default: false)
+	IsElementRef  bool      // True if Field is "_" (array element reference)
 }
 
 func (StringFuncPredicate) predicateNode() {}
@@ -239,17 +258,19 @@ func (aq ArrayQuantifierType) String() string {
 type ArrayQuantifierPredicate struct {
 	basePredicate
 	Quantifier  ArrayQuantifierType
-	Field       string    // The array field to iterate
+	Field       string    // The array field to iterate (first hop)
+	Path        FieldPath // authoritative path; empty Path falls back to Field
 	ElementPred Predicate // Predicate to test against each element (uses _ as element reference)
 }
 
 func (ArrayQuantifierPredicate) predicateNode() {}
 
 // ElementEqualityPredicate represents _ == value or _ != value within array context.
-// Syntax: _ == "urgent", _ != "deprecated"
+// Syntax: _ == "urgent", _ != "deprecated", _ == this
 type ElementEqualityPredicate struct {
 	basePredicate
 	Value      string
+	RHS        CompareRHS
 	CompareOp  CompareOp // == or !=
 	IsRefValue bool      // true if the value came from a [[ref]] token
 }

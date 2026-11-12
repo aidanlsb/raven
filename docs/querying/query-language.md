@@ -195,6 +195,8 @@ link within(section .title==Resources)
 | Element | Syntax | Example |
 |---------|--------|---------|
 | Field access | `.` prefix | `.status==active`, `.value<today` |
+| Named ref path | `.field.hop` | `type:task .project.status==active` |
+| Enclosing subject | `this` / `this.field` | `type:person refd(type:task .owner==this)` |
 | Equality / inequality | `==`, `!=` | `.status!=done` |
 | Comparison | `<`, `>`, `<=`, `>=` | `.priority>5` |
 | Presence | `exists(.field)` | `exists(.email)`, `!exists(.email)` |
@@ -209,6 +211,68 @@ Notes:
 - `.field==*` / `!.field==*` are not supported. Use `exists(.field)` / `!exists(.field)`.
 - String functions are case-insensitive by default. Pass `true` as a third argument for case-sensitive matching.
 - `matches()` accepts either a quoted pattern or regex literal (`/pattern/`).
+- `.` is always a property of the current subject. Unquoted `.created` on the
+  right-hand side is a path, not the literal string `".created"`. Quote dotted
+  literals: `.ext==".pdf"`.
+- `this` is valid only in a nested query and means the immediately enclosing
+  subject (one level), not the top-level root when more deeply nested.
+- `sort()` is a field of the query root only; multi-hop paths are rejected.
+
+## Graph paths and `this`
+
+Raven stores three relationship kinds. The document tree (`has` / `contains` /
+`in` / `within` / `at`) and external Markdown file/URL links (`links()` and
+the `link` root) are unchanged. The vault graph — frontmatter `ref`/`ref[]`,
+trait `ref`/`ref[]`, and body `[[wikilinks]]` — is queried with paths and
+`this`, plus untyped `refs()` / `refd()` for “any edge.”
+
+A query still has one root and returns that kind of thing. Nesting never
+changes the result type.
+
+`.field` is a property of the current subject. Named refs are paths:
+
+```text
+type:task .project.status==active
+type:task .project.company.tier==1
+type:task includes(.project.name, "web")
+type:task exists(.project.email)
+type:task oneof(.project.status, [active, backlog])
+```
+
+Intermediate hops must be scalar `ref` fields. `.status.active` on a string
+field is a validation error. Use `any()` / `all()` / `none()` to quantify over
+`ref[]` elements; inside those, the subject is the element, dereferenced if it
+is a ref. `_` is still the element itself:
+
+```text
+type:task any(.collaborators, .team==infra)
+type:person refd(type:task any(.collaborators, _==this))
+```
+
+`this` is the enclosing query subject, valid only in a nested query, and is
+itself a path root (`this.lead`). Top-level `this` is an error.
+
+```text
+type:person refd(type:task .owner==this .status==open)
+type:person refd(type:task .owner==this.lead)
+type:company refd(type:task .project.company==this)
+```
+
+`refs(...)` and `refd(...)` stay “any edge.” Precision on a named edge is a
+path or `this`, not a new verb. Multi-hop reverse flattens to one `refd` plus
+a forward path (`type:company refd(type:task .project.company==this)`), not a
+nested `refd` of `refd`.
+
+A comparison right-hand side can be a literal, a path on the current subject,
+or `this` / `this.field`:
+
+```text
+type:task .project==[[project/foo]]
+type:task .due>.created
+```
+
+Existing ID comparison (`.project==[[project/foo]]`) is unchanged. Quote a
+dotted literal when you mean a string rather than a path.
 
 ## Sorting results
 
@@ -623,6 +687,8 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 | Link root | `link ...` |
 | Result sort | `sort(.field)` / `sort(.field, asc\|desc)` |
 | Incoming refs | `refd([[target]])`, `refd(type:...)`, `refd(trait:...)`, `refd(section ...)` |
+| Named-edge path | `.project.status==active`, `.project.company.tier==1` |
+| Enclosing subject | `refd(type:task .owner==this)`, `this.lead` |
 | Outgoing file/URL links | `links(.ext==pdf)` (on `type:`, `section`, `trait:`) |
 
 ## Related docs

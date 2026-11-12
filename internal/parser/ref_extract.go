@@ -127,3 +127,41 @@ func ExtractSchemaFieldRefs(objects []*model.Object, sch *schema.Schema) []Schem
 
 	return refs
 }
+
+// ExtractSchemaTraitRefs extracts refs from schema-typed trait values
+// (`ref` / `ref[]`), including the bare form `@related(person/bob)` that is
+// not a wikilink. Callers (index, check) attach these to the refs table so
+// refs()/refd() see trait-authored edges.
+func ExtractSchemaTraitRefs(traits []*model.Trait, sch *schema.Schema) []SchemaFieldRef {
+	if sch == nil {
+		return nil
+	}
+
+	var refs []SchemaFieldRef
+	opts := RefExtractOptions{AllowBareStrings: true}
+
+	for _, trait := range traits {
+		if trait == nil || !trait.HasValue() {
+			continue
+		}
+		traitDef := sch.Traits[trait.TraitType]
+		if traitDef == nil || !traitDef.Type.IsRef() {
+			continue
+		}
+
+		targets := ExtractRefsFromFieldValue(*trait.Value, opts)
+		for _, target := range targets {
+			if target.TargetRaw == "" {
+				continue
+			}
+			refs = append(refs, SchemaFieldRef{
+				SourceID:  trait.ParentScopeID,
+				FieldName: trait.TraitType,
+				TargetRaw: target.TargetRaw,
+				Line:      trait.Line,
+			})
+		}
+	}
+
+	return refs
+}

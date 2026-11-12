@@ -55,6 +55,9 @@ func leafPredicateSQLBuilder(root QueryType, pred Predicate) predicateBuilderFun
 			}
 		case QueryTypeTrait:
 			return func(e *Executor, _ Predicate, alias, _ string) (string, []interface{}, error) {
+				if !p.isSimpleField() {
+					return e.buildPathFieldPredicateSQL(p, alias, "")
+				}
 				if p.Field == "value" {
 					return e.buildTraitValueFieldPredicateSQL(p, alias)
 				}
@@ -62,6 +65,9 @@ func leafPredicateSQLBuilder(root QueryType, pred Predicate) predicateBuilderFun
 			}
 		case QueryTypeObject:
 			return func(e *Executor, _ Predicate, alias, typeName string) (string, []interface{}, error) {
+				if !p.isSimpleField() {
+					return e.buildPathFieldPredicateSQL(p, alias, typeName)
+				}
 				return e.buildFieldPredicateSQL(p, alias, typeName)
 			}
 		}
@@ -82,6 +88,9 @@ func leafPredicateSQLBuilder(root QueryType, pred Predicate) predicateBuilderFun
 			}
 		case QueryTypeObject:
 			return func(e *Executor, _ Predicate, alias, typeName string) (string, []interface{}, error) {
+				if !p.isSimpleField() {
+					return e.buildPathStringFuncPredicateSQL(p, alias, typeName)
+				}
 				return e.buildStringFuncPredicateSQL(p, alias, typeName)
 			}
 		}
@@ -90,6 +99,9 @@ func leafPredicateSQLBuilder(root QueryType, pred Predicate) predicateBuilderFun
 		switch root {
 		case QueryTypeObject:
 			return func(e *Executor, _ Predicate, alias, typeName string) (string, []interface{}, error) {
+				if !p.isSimpleField() {
+					return e.buildPathArrayQuantifierPredicateSQL(p, alias, typeName)
+				}
 				return e.buildArrayQuantifierPredicateSQL(p, alias, typeName)
 			}
 		case QueryTypeTrait:

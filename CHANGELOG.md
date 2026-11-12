@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- RQL named-edge paths and `this` cover the vault graph. `.` is always a
+  property of the current subject (`type:task .project.status==active`,
+  multi-hop `.project.company.tier==1`). Inside `any`/`all`/`none` the subject
+  is the element (`any(.collaborators, .team==infra)`); `_` is still the
+  element (`_==this`). `this` is the immediately enclosing query subject, valid
+  only when nested, and is itself a path root (`this.lead`). Comparison RHS
+  values may be literals, current-subject paths (`.due>.created`), or
+  `this`/`this.field`. `refs()`/`refd()` stay “any edge”; named-edge reverse
+  uses `refd(type:task .owner==this)`, and multi-hop reverse flattens to one
+  `refd` plus a forward path. `includes`/`exists`/`oneof` walk valid paths.
+  `sort()` remains a root-subject field only. Top-level `this` and hops through
+  non-ref fields are validation errors.
+- Bumped shipped skill `raven-query` to 5 for named-edge paths and `this`.
+
+### Fixed
+- Nested `refs(...)` / `refd(...)` no longer compile with hardcoded SQL aliases
+  that shadowed the outer query and silently returned no rows.
+- `.due==.created` is a field-to-field comparison, not a comparison against the
+  literal string `".created"`. Quote dotted literals (`.ext==".pdf"`). This is
+  a bug fix, not a compatibility shim.
+- Schema `ref`/`ref[]` traits, including the bare form `@related(person/bob)`
+  without `[[...]]`, now write refs index rows so `refs()`/`refd()` see those
+  edges.
+
 ### Internal / Refactor
 - Removed `internal/commandpayload`. Command JSON `data` is now the `*svc`
   result type (json tags on the service structs) instead of a field-by-field

@@ -190,7 +190,15 @@ RQL has predicates for querying the reference graph:
 rvn query 'type:meeting refs([[person/freya]])'
 rvn query 'type:meeting refs(type:project .status==active)'
 
-# Objects referenced by a source
+# Named-edge paths (`.` is the current subject)
+rvn query 'type:task .project.status==active'
+rvn query 'type:task .project.company.tier==1'
+
+# Named-edge reverse uses this (immediately enclosing subject)
+rvn query 'type:person refd(type:task .owner==this .status==open)'
+rvn query 'type:company refd(type:task .project.company==this)'
+
+# Objects referenced by a source (any edge)
 rvn query 'type:project refd(type:meeting)'
 
 # Traits on lines that reference a target

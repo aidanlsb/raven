@@ -71,8 +71,8 @@ func TestParseFieldPredicates(t *testing.T) {
 			wantValue: "v0.0.40",
 		},
 		{
-			name:      "value starting with dot",
-			input:     "link .ext == .pdf",
+			name:      "quoted extension literal",
+			input:     `link .ext == ".pdf"`,
 			wantField: "ext",
 			wantValue: ".pdf",
 		},

@@ -87,6 +87,12 @@ func validateLinkPredicate(pred Predicate) error {
 	case *NotPredicate:
 		return validateLinkPredicate(p.Inner)
 	case *FieldPredicate:
+		if p.rhs().Path != nil {
+			return &ValidationError{
+				Message:    fmt.Sprintf("unquoted %s on the right-hand side is a path, not a literal", p.rhs().Path.String()),
+				Suggestion: `Quote dotted literals, for example .ext==".pdf"`,
+			}
+		}
 		fieldType, ok := linkFieldTypes[p.Field]
 		if !ok {
 			return unknownLinkFieldError(p.Field)

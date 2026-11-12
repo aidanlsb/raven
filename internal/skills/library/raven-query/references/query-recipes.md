@@ -17,6 +17,9 @@ Lead with the forgiving scope forms `contains(...)`/`within(...)`; traits attach
 
 ```bash
 rvn query 'type:meeting refs([[project/website]])' --json
+rvn query 'type:task .project.status==active' --json
+rvn query 'type:person refd(type:task .owner==this .status==open)' --json
+rvn query 'type:company refd(type:task .project.company==this)' --json
 rvn query 'section within(type:project .status==active)' --json
 rvn query 'type:project contains(trait:todo .value==todo)' --json
 rvn query 'trait:todo .value==todo within(type:project .status==active)' --json

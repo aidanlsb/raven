@@ -62,6 +62,9 @@ raven_invoke(command="query", args={"query_string":"type:project .status==active
 raven_invoke(command="query", args={"query_string":"type:project sort(.title, desc)"})
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
 raven_invoke(command="query", args={"query_string":"type:meeting refs([[project/website]])"})
+raven_invoke(command="query", args={"query_string":"type:task .project.status==active"})
+raven_invoke(command="query", args={"query_string":"type:person refd(type:task .owner==this .status==open)"})
+raven_invoke(command="query", args={"query_string":"type:company refd(type:task .project.company==this)"})
 raven_invoke(command="query", args={"query_string":"link .ext==pdf within(type:project)"})
 ```
 

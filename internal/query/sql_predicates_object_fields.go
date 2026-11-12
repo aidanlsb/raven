@@ -338,6 +338,9 @@ func (e *Executor) collectRefFieldAmbiguityKeys(q *Query, keys map[fieldRefAmbig
 func (e *Executor) collectRefFieldAmbiguityPredicate(queryType QueryType, typeName string, pred Predicate, keys map[fieldRefAmbiguityKey]struct{}) error {
 	switch p := pred.(type) {
 	case *FieldPredicate:
+		if p.rhs().Path != nil || p.path().This || p.path().hasHops() {
+			return nil
+		}
 		if queryType != QueryTypeObject || !e.isRefField(typeName, p.Field) {
 			return nil
 		}
@@ -395,6 +398,9 @@ func (e *Executor) collectRefFieldAmbiguityPredicate(queryType QueryType, typeNa
 func (e *Executor) collectRefArrayElementAmbiguity(typeName, fieldName string, pred Predicate, keys map[fieldRefAmbiguityKey]struct{}) error {
 	switch p := pred.(type) {
 	case *ElementEqualityPredicate:
+		if p.rhs().Path != nil {
+			return nil
+		}
 		if p.CompareOp != CompareEq && p.CompareOp != CompareNeq {
 			return nil
 		}
@@ -568,15 +574,16 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 		return "", nil, err
 	}
 
-	matchCond, matchArgs := refResolvedIDPreferredMatch("fr", resolved, p.Value)
+	fr := e.nextAlias("fr")
+	matchCond, matchArgs := refResolvedIDPreferredMatch(fr, resolved, p.Value)
 	if p.CompareOp == CompareNeq {
 		cond := fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM refs fr
-			WHERE fr.source_id = %s.id AND fr.field_name = ?
+			SELECT 1 FROM refs %s
+			WHERE %s.source_id = %s.id AND %s.field_name = ?
 		) AND NOT EXISTS (
-			SELECT 1 FROM refs fr
-			WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
-		)`, alias, alias, matchCond)
+			SELECT 1 FROM refs %s
+			WHERE %s.source_id = %s.id AND %s.field_name = ? AND %s
+		)`, fr, fr, alias, fr, fr, fr, alias, fr, matchCond)
 		args := append([]interface{}{p.Field, p.Field}, matchArgs...)
 		if p.Negated() {
 			cond = "NOT (" + cond + ")"
@@ -585,9 +592,9 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 	}
 
 	cond := fmt.Sprintf(`EXISTS (
-		SELECT 1 FROM refs fr
-		WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
-	)`, alias, matchCond)
+		SELECT 1 FROM refs %s
+		WHERE %s.source_id = %s.id AND %s.field_name = ? AND %s
+	)`, fr, fr, alias, fr, matchCond)
 	args := append([]interface{}{p.Field}, matchArgs...)
 	if p.Negated() {
 		cond = "NOT (" + cond + ")"
@@ -596,29 +603,39 @@ func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName 
 }
 
 func (e *Executor) buildRefArrayQuantifierPredicateSQL(p *ArrayQuantifierPredicate, alias, typeName string) (string, []interface{}, error) {
-	elemCond, elemArgs, err := e.buildRefArrayElementPredicateSQL(p.ElementPred, typeName, p.Field, "fr")
+	refAlias := e.nextAlias("fr")
+	elemType := e.fieldTargetType(typeName, p.Field)
+	elemAlias := e.nextAlias("elem")
+	needsObject := elementPredNeedsObject(p.ElementPred)
+
+	elemCond, elemArgs, err := e.buildRefArrayElementPredicateSQL(p.ElementPred, typeName, p.Field, refAlias, elemAlias, elemType)
 	if err != nil {
 		return "", nil, err
 	}
 
-	fieldMatch := fmt.Sprintf("fr.source_id = %s.id AND fr.field_name = ?", alias)
+	fieldMatch := fmt.Sprintf("%s.source_id = %s.id AND %s.field_name = ?", refAlias, alias, refAlias)
+	from := fmt.Sprintf("refs %s", refAlias)
+	if needsObject {
+		from = fmt.Sprintf("refs %s JOIN objects %s ON %s", refAlias, elemAlias, refResolvedIDPreferredMatchSQL(refAlias, elemAlias+".id"))
+	}
+
 	var cond string
 	switch p.Quantifier {
 	case ArrayQuantifierAny:
 		cond = fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM refs fr
+			SELECT 1 FROM %s
 			WHERE %s AND %s
-		)`, fieldMatch, elemCond)
+		)`, from, fieldMatch, elemCond)
 	case ArrayQuantifierNone:
 		cond = fmt.Sprintf(`NOT EXISTS (
-			SELECT 1 FROM refs fr
+			SELECT 1 FROM %s
 			WHERE %s AND %s
-		)`, fieldMatch, elemCond)
+		)`, from, fieldMatch, elemCond)
 	case ArrayQuantifierAll:
 		cond = fmt.Sprintf(`NOT EXISTS (
-			SELECT 1 FROM refs fr
+			SELECT 1 FROM %s
 			WHERE %s AND NOT (%s)
-		)`, fieldMatch, elemCond)
+		)`, from, fieldMatch, elemCond)
 	default:
 		return "", nil, fmt.Errorf("unknown array quantifier: %v", p.Quantifier)
 	}
@@ -627,16 +644,24 @@ func (e *Executor) buildRefArrayQuantifierPredicateSQL(p *ArrayQuantifierPredica
 	return wrapNot(cond, p.Negated()), args, nil
 }
 
-func (e *Executor) buildRefArrayElementPredicateSQL(pred Predicate, typeName, field, refAlias string) (string, []interface{}, error) {
+func (e *Executor) buildRefArrayElementPredicateSQL(pred Predicate, typeName, field, refAlias, elemAlias, elemType string) (string, []interface{}, error) {
 	return compileBooleanPredicate(pred, func(leaf Predicate) (string, []interface{}, error) {
 		switch p := leaf.(type) {
 		case *ElementEqualityPredicate:
+			if p.rhs().Path != nil {
+				return e.buildElementThisEqualitySQL(p, refAlias)
+			}
 			return e.buildRefArrayElementEqualitySQL(p, typeName, field, refAlias)
 		case *StringFuncPredicate:
-			if !p.IsElementRef {
-				return "", nil, fmt.Errorf("string function in array context must use _ as first argument")
+			if p.IsElementRef {
+				return e.buildRefArrayElementStringFuncSQL(p, refAlias)
 			}
-			return e.buildRefArrayElementStringFuncSQL(p, refAlias)
+			return e.buildPathStringFuncPredicateSQL(p, elemAlias, elemType)
+		case *FieldPredicate:
+			if p.isSimpleField() {
+				return e.buildFieldPredicateSQL(p, elemAlias, elemType)
+			}
+			return e.buildPathFieldPredicateSQL(p, elemAlias, elemType)
 		default:
 			return "", nil, fmt.Errorf("unsupported element predicate type: %T", leaf)
 		}
@@ -672,14 +697,15 @@ func (e *Executor) buildRefArrayElementStringFuncSQL(p *StringFuncPredicate, ref
 }
 
 func (e *Executor) buildRefFieldStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {
-	matchCond, matchArgs, err := buildRefStringFuncMatchSQL(p, "fr")
+	fr := e.nextAlias("fr")
+	matchCond, matchArgs, err := buildRefStringFuncMatchSQL(p, fr)
 	if err != nil {
 		return "", nil, err
 	}
 	cond := fmt.Sprintf(`EXISTS (
-		SELECT 1 FROM refs fr
-		WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
-	)`, alias, matchCond)
+		SELECT 1 FROM refs %s
+		WHERE %s.source_id = %s.id AND %s.field_name = ? AND %s
+	)`, fr, fr, alias, fr, matchCond)
 	args := append([]interface{}{p.Field}, matchArgs...)
 	return wrapNot(cond, p.Negated()), args, nil
 }

@@ -282,10 +282,10 @@ func TestBuildStringFuncPredicateSQL_ScalarRefUsesRefsTable(t *testing.T) {
 	}
 	if !containsAll(cond,
 		"EXISTS (",
-		"FROM refs fr",
-		"fr.source_id = o.id AND fr.field_name = ?",
-		"fr.target_id",
-		"fr.target_raw",
+		"FROM refs fr1",
+		"fr1.source_id = o.id AND fr1.field_name = ?",
+		"fr1.target_id",
+		"fr1.target_raw",
 	) {
 		t.Fatalf("cond = %q", cond)
 	}

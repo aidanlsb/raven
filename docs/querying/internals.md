@@ -68,9 +68,9 @@ Most predicates need changes in several places:
 
 | Concern | Typical location |
 |---------|------------------|
-| AST node | `internal/query/ast.go` |
-| Lexer/parser support | `internal/query/lexer.go`, `internal/query/parser*.go` |
-| Schema validation | `internal/query/validator.go` |
+| AST node | `internal/query/ast.go` (`FieldPath`, `CompareRHS`) |
+| Lexer/parser support | `internal/query/lexer.go`, `internal/query/parser*.go`, `internal/query/path.go` |
+| Schema validation | `internal/query/validator.go`, `internal/query/validator_path.go` |
 | SQL generation | `internal/query/sql_predicates_*.go`, `internal/query/sort_sql.go` |
 | Execution coverage | `internal/query/*_test.go` |
 | User docs | `docs/querying/query-language.md` |
@@ -87,6 +87,14 @@ or string comparison.
 source_id LIKE object.id || '#%'`. Trait roots match the source line; section
 roots match the complete subtree line range. Do not special-case object-root
 `links()` back to exact `source_id` equality.
+
+Nested `refs()` / `refd()` must use unique SQL aliases (`Executor.nextAlias`).
+Hardcoded `r` / `target_obj` aliases shadow the outer query and return empty
+instead of matching. When a `refd(...)` subquery correlates via `this`, skip
+the untyped refs join so multi-hop reverse can flatten
+(`type:company refd(type:task .project.company==this)`). Named-edge walks use
+the `field_name` column on the refs index; schema `ref` traits, including the
+bare form `@related(person/bob)`, must produce refs rows.
 
 ## Reference semantics
 
