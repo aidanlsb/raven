@@ -34,13 +34,13 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := UnsetObjectFile(rt, UnsetObjectFileRequest{
+	result, err := unsetObjectFile(rt, unsetObjectFileRequest{
 		FilePath: filePath,
 		ObjectID: "docs/cleanup",
 		Fields:   []string{"date", "missing"},
 	})
 	if err != nil {
-		t.Fatalf("UnsetObjectFile: %v", err)
+		t.Fatalf("unsetObjectFile: %v", err)
 	}
 	if !result.Modified {
 		t.Fatalf("expected modified result")
@@ -90,7 +90,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := UnsetObjectFile(rt, UnsetObjectFileRequest{
+	_, err := unsetObjectFile(rt, unsetObjectFileRequest{
 		FilePath: filePath,
 		ObjectID: "docs/cleanup",
 		Fields:   []string{"type"},

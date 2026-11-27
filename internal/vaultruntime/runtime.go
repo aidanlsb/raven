@@ -11,7 +11,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -180,7 +179,7 @@ func (r *Runtime) ReloadConfig() error {
 		return &SetupError{Stage: StageConfig, Err: err}
 	}
 	r.VaultCfg = vaultCfg
-	r.ParseOptions = parseopts.FromVaultConfig(vaultCfg)
+	r.ParseOptions = ParseOptionsFromVaultConfig(vaultCfg)
 	if r.DB != nil {
 		r.DB.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 	}
@@ -235,4 +234,22 @@ func (r *Runtime) Close() {
 	}
 	_ = r.DB.Close()
 	r.DB = nil
+}
+
+// ParseOptionsFromVaultConfig builds the canonical parser options for a vault.
+// Daily note identity always follows the configured daily root. Object and page
+// roots affect identity only when directory organization is explicitly enabled.
+func ParseOptionsFromVaultConfig(vaultCfg *config.VaultConfig) *parser.ParseOptions {
+	if vaultCfg == nil {
+		return nil
+	}
+
+	opts := &parser.ParseOptions{
+		DailyRoot: vaultCfg.GetDailyDirectory(),
+	}
+	if vaultCfg.HasDirectoriesConfig() {
+		opts.ObjectsRoot = vaultCfg.GetObjectsRoot()
+		opts.PagesRoot = vaultCfg.GetPagesRoot()
+	}
+	return opts
 }

@@ -21,6 +21,7 @@ type ReclassifyBulkRequest struct {
 	NoMove     bool
 	UpdateRefs bool
 	Force      bool
+	Preview    bool
 }
 
 type ReclassifyBulkPreviewItem struct {
@@ -86,37 +87,31 @@ type reclassifyBulkPlan struct {
 	err    error
 }
 
-func PreviewReclassifyBulk(rt *vaultruntime.Runtime, req ReclassifyBulkRequest) (*ReclassifyBulkPreview, error) {
+func ReclassifyBulk(rt *vaultruntime.Runtime, req ReclassifyBulkRequest) (*ReclassifyBulkPreview, *ReclassifyBulkSummary, error) {
 	if err := validateReclassifyBulkRequest(rt, req); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	items := make([]ReclassifyBulkPreviewItem, 0, len(req.ObjectIDs))
-	skipped := make([]ReclassifyBulkResult, 0)
-	warnings := make([]string, 0)
-
-	for _, plan := range planReclassifyBulk(rt, req) {
-		if plan.err != nil {
-			skipped = append(skipped, reclassifyBulkErrorResult(plan.id, req.NewTypeName, "skipped", plan.err))
-			continue
+	if req.Preview {
+		items := make([]ReclassifyBulkPreviewItem, 0, len(req.ObjectIDs))
+		skipped := make([]ReclassifyBulkResult, 0)
+		warnings := make([]string, 0)
+		for _, plan := range planReclassifyBulk(rt, req) {
+			if plan.err != nil {
+				skipped = append(skipped, reclassifyBulkErrorResult(plan.id, req.NewTypeName, "skipped", plan.err))
+				continue
+			}
+			items = append(items, reclassifyBulkPreviewResult(plan.id, plan.result))
+			warnings = append(warnings, plan.result.WarningMessages...)
 		}
-		items = append(items, reclassifyBulkPreviewResult(plan.id, plan.result))
-		warnings = append(warnings, plan.result.WarningMessages...)
-	}
-
-	return &ReclassifyBulkPreview{
-		Action:          "reclassify",
-		Items:           items,
-		Skipped:         skipped,
-		Total:           len(req.ObjectIDs),
-		NewType:         req.NewTypeName,
-		WarningMessages: warnings,
-	}, nil
-}
-
-func ApplyReclassifyBulk(rt *vaultruntime.Runtime, req ReclassifyBulkRequest, onReclassified func(*ReclassifyResult)) (*ReclassifyBulkSummary, error) {
-	if err := validateReclassifyBulkRequest(rt, req); err != nil {
-		return nil, err
+		return &ReclassifyBulkPreview{
+			Action:          "reclassify",
+			Items:           items,
+			Skipped:         skipped,
+			Total:           len(req.ObjectIDs),
+			NewType:         req.NewTypeName,
+			WarningMessages: warnings,
+		}, nil, nil
 	}
 
 	results := make([]ReclassifyBulkResult, 0, len(req.ObjectIDs))
@@ -161,14 +156,11 @@ func ApplyReclassifyBulk(rt *vaultruntime.Runtime, req ReclassifyBulkRequest, on
 		item.Status = "reclassified"
 		reclassifiedCount++
 		changes.Merge(result.ChangeSet)
-		if onReclassified != nil {
-			onReclassified(result)
-		}
 		results = append(results, item)
 		warnings = append(warnings, result.WarningMessages...)
 	}
 
-	return &ReclassifyBulkSummary{
+	return nil, &ReclassifyBulkSummary{
 		Action:          "reclassify",
 		Results:         results,
 		Total:           len(results),

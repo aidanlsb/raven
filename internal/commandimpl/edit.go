@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/editsvc"
@@ -46,38 +47,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 		if err != nil {
 			return commandexec.FromServiceError(err)
 		}
-		if batchMode {
-			editsPreview := make([]editsvc.EditPreviewItem, 0, len(result.Edits))
-			for _, editResult := range result.Edits {
-				editsPreview = append(editsPreview, editsvc.EditPreviewItem{
-					Index:  editResult.Index,
-					Line:   editResult.Line,
-					OldStr: editResult.OldStr,
-					NewStr: editResult.NewStr,
-					Preview: editsvc.EditPreview{
-						Before: editResult.Before,
-						After:  editResult.After,
-					},
-				})
-			}
-			return commandexec.Success(editsvc.EditBatchPreviewResult{
-				Status: "preview",
-				Path:   result.Path,
-				Count:  len(editsPreview),
-				Edits:  editsPreview,
-			}, nil)
-		}
-
-		editResult := result.Edits[0]
-		return commandexec.Success(editsvc.EditSinglePreviewResult{
-			Status: "preview",
-			Path:   result.Path,
-			Line:   editResult.Line,
-			Preview: editsvc.EditPreview{
-				Before: editResult.Before,
-				After:  editResult.After,
-			},
-		}, nil)
+		return commandexec.Success(result.Envelope(batchMode, true, check.MissingReferences{}), nil)
 	}
 
 	runReq.Preview = false
@@ -91,41 +61,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	if failure.Error != nil {
 		return failure
 	}
-	missingRefs := missingRefsOf(proj)
-	warnings := proj.Warnings
-
-	if batchMode {
-		applied := make([]editsvc.EditAppliedItem, 0, len(result.Edits))
-		for _, editResult := range result.Edits {
-			applied = append(applied, editsvc.EditAppliedItem{
-				Index:   editResult.Index,
-				Line:    editResult.Line,
-				OldStr:  editResult.OldStr,
-				NewStr:  editResult.NewStr,
-				Context: editResult.Context,
-			})
-		}
-		data := editsvc.EditBatchResult{
-			Status:            "applied",
-			Path:              result.Path,
-			Count:             len(applied),
-			Edits:             applied,
-			MissingReferences: missingRefs,
-		}
-		return commandexec.SuccessWithWarnings(data, warnings, nil)
-	}
-
-	editResult := result.Edits[0]
-	data := editsvc.EditSingleResult{
-		Status:            "applied",
-		Path:              result.Path,
-		Line:              editResult.Line,
-		OldStr:            editResult.OldStr,
-		NewStr:            editResult.NewStr,
-		Context:           editResult.Context,
-		MissingReferences: missingRefs,
-	}
-	return commandexec.SuccessWithWarnings(data, warnings, nil)
+	return commandexec.SuccessWithWarnings(result.Envelope(batchMode, false, missingRefsOf(proj)), proj.Warnings, nil)
 }
 
 func parseCanonicalEditInput(args map[string]any) ([]editsvc.EditSpec, bool, error) {

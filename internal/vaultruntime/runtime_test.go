@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/config"
 )
 
 func TestRequire(t *testing.T) {
@@ -197,5 +199,72 @@ func TestNewSchemaFirstPreservesFailurePrecedence(t *testing.T) {
 	var setupErr *SetupError
 	if !errors.As(err, &setupErr) || setupErr.Stage != StageSchema {
 		t.Fatalf("error = %v, want schema SetupError", err)
+	}
+}
+
+func TestParseOptionsFromVaultConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		vaultConfig *config.VaultConfig
+		wantNil     bool
+		wantObjects string
+		wantPages   string
+		wantDaily   string
+	}{
+		{
+			name:    "nil config",
+			wantNil: true,
+		},
+		{
+			name: "without directories config",
+			vaultConfig: &config.VaultConfig{
+				Directories: &config.DirectoriesConfig{
+					Daily:    "journal",
+					Template: "templates",
+				},
+			},
+			wantDaily: "journal",
+		},
+		{
+			name: "with directories config",
+			vaultConfig: &config.VaultConfig{
+				Directories: &config.DirectoriesConfig{
+					Object: "objects",
+					Page:   "pages",
+					Daily:  "journal",
+				},
+			},
+			wantObjects: "objects/",
+			wantPages:   "pages/",
+			wantDaily:   "journal",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := ParseOptionsFromVaultConfig(tt.vaultConfig)
+			if tt.wantNil {
+				if got != nil {
+					t.Fatalf("ParseOptionsFromVaultConfig() = %#v, want nil", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("ParseOptionsFromVaultConfig() = nil, want options")
+			}
+			if got.ObjectsRoot != tt.wantObjects || got.PagesRoot != tt.wantPages || got.DailyRoot != tt.wantDaily {
+				t.Fatalf(
+					"ParseOptionsFromVaultConfig() = %#v, want ObjectsRoot=%q PagesRoot=%q DailyRoot=%q",
+					got,
+					tt.wantObjects,
+					tt.wantPages,
+					tt.wantDaily,
+				)
+			}
+		})
 	}
 }

@@ -32,25 +32,25 @@ func ValidateAddContent(content string) error {
 	return nil
 }
 
-// AppendResult describes an applied append and its durable file changes.
-type AppendResult struct {
+// appendResult describes an applied append and its durable file changes.
+type appendResult struct {
 	Line      int
 	ChangeSet mutation.ChangeSet
 }
 
-// Append applies a capture append and returns its transport-neutral change set.
-func Append(
+// appendLine applies a capture append and returns its transport-neutral change set.
+func appendLine(
 	rt *vaultruntime.Runtime,
 	destPath string,
 	line string,
 	cfg *config.CaptureConfig,
 	isDailyNote bool,
 	targetObjectID string,
-) (*AppendResult, error) {
+) (*appendResult, error) {
 	if err := ValidateAddContent(line); err != nil {
 		return nil, err
 	}
-	insertedLine, err := AppendToFile(rt, destPath, line, cfg, isDailyNote, targetObjectID)
+	insertedLine, err := appendToFile(rt, destPath, line, cfg, isDailyNote, targetObjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -60,11 +60,11 @@ func Append(
 	}
 	changes := mutation.NewChangeSet()
 	changes.AddChanged(relPath)
-	return &AppendResult{Line: insertedLine, ChangeSet: changes}, nil
+	return &appendResult{Line: insertedLine, ChangeSet: changes}, nil
 }
 
-// AppendToFile appends a capture line to the target file, creating daily notes when needed.
-func AppendToFile(
+// appendToFile appends a capture line to the target file, creating daily notes when needed.
+func appendToFile(
 	rt *vaultruntime.Runtime,
 	destPath string,
 	line string,

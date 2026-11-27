@@ -13,7 +13,6 @@ import (
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/refresolve"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -151,7 +150,7 @@ func createRefValidationContext(rt *vaultruntime.Runtime) *fieldmutation.RefVali
 	}
 	parseOptions := rt.ParseOptions
 	if parseOptions == nil {
-		parseOptions = parseopts.FromVaultConfig(rt.VaultCfg)
+		parseOptions = vaultruntime.ParseOptionsFromVaultConfig(rt.VaultCfg)
 	}
 
 	return &fieldmutation.RefValidationContext{

@@ -29,7 +29,7 @@ const (
 )
 
 // TrashEntry describes one file in the configured trash directory. RestorePath
-// is derived from the mirrored path used by DeleteFile.
+// is derived from the mirrored path used by deleteFile.
 type TrashEntry struct {
 	Reference    string `json:"reference"`
 	TrashPath    string `json:"trash_path"`
@@ -161,6 +161,7 @@ func ListTrash(rt *vaultruntime.Runtime, req ListTrashRequest) (*ListTrashResult
 
 type RestoreByReferenceRequest struct {
 	Reference string
+	Preview   bool
 }
 
 type RestoreByReferenceResult struct {
@@ -168,18 +169,13 @@ type RestoreByReferenceResult struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewRestoreByReference(rt *vaultruntime.Runtime, req RestoreByReferenceRequest) (*RestoreByReferenceResult, error) {
-	entry, err := prepareRestoreByReference(rt, req)
-	if err != nil {
-		return nil, err
-	}
-	return &RestoreByReferenceResult{Entry: *entry}, nil
-}
-
 func RestoreByReference(rt *vaultruntime.Runtime, req RestoreByReferenceRequest) (*RestoreByReferenceResult, error) {
 	entry, err := prepareRestoreByReference(rt, req)
 	if err != nil {
 		return nil, err
+	}
+	if req.Preview {
+		return &RestoreByReferenceResult{Entry: *entry}, nil
 	}
 
 	sourcePath := filepath.Join(rt.VaultPath, filepath.FromSlash(entry.TrashPath))

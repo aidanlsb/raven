@@ -38,14 +38,14 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := SetObjectFile(rt, SetObjectFileRequest{
+	result, err := setObjectFile(rt, setObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
 		TypedUpdates:  map[string]fieldvalue.FieldValue{"email": fieldvalue.String("new@example.com")},
 		AllowedFields: map[string]bool{"alias": true},
 	})
 	if err != nil {
-		t.Fatalf("SetObjectFile: %v", err)
+		t.Fatalf("setObjectFile: %v", err)
 	}
 	if result.ObjectType != "person" {
 		t.Fatalf("expected object type person, got %s", result.ObjectType)
@@ -93,7 +93,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := SetObjectFile(rt, SetObjectFileRequest{
+	_, err := setObjectFile(rt, setObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
 		TypedUpdates:  map[string]fieldvalue.FieldValue{"status": fieldvalue.String("open")},
@@ -135,7 +135,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := SetObjectFile(rt, SetObjectFileRequest{
+	_, err := setObjectFile(rt, setObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "note",
 		TypedUpdates:  map[string]fieldvalue.FieldValue{"status": fieldvalue.String("done")},
@@ -177,7 +177,7 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	_, err := SetObjectFile(rt, SetObjectFileRequest{
+	_, err := setObjectFile(rt, setObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
 		TypedUpdates:  map[string]fieldvalue.FieldValue{"unknown": fieldvalue.String("x")},
@@ -233,7 +233,7 @@ traits: {}
 		t.Fatalf("seed person: %v", err)
 	}
 
-	_, err := SetObjectFile(rt, SetObjectFileRequest{
+	_, err := setObjectFile(rt, setObjectFileRequest{
 		FilePath: personPath,
 		ObjectID: "people/freya",
 		TypedUpdates: map[string]fieldvalue.FieldValue{

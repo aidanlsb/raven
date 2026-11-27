@@ -192,29 +192,20 @@ func runSetBulk(sess *vaultsession.Session, ids []string, updates map[string]fie
 	request := objectsvc.SetBulkRequest{
 		ObjectIDs:    fileIDs,
 		TypedUpdates: updates,
+		Preview:      !confirm,
 	}
 	serializedUpdates := fieldmutation.SerializeFieldValueMap(updates)
 
-	if !confirm {
-		preview, err := objectsvc.PreviewSetBulk(sess.Runtime(), request)
+	if request.Preview {
+		preview, _, err := objectsvc.SetBulk(sess.Runtime(), request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
-		return commandexec.Success(objectsvc.SetBulkPreviewResult{
-			BulkPreviewResult: objectsvc.BulkPreviewResult{
-				Preview:  true,
-				Action:   preview.Action,
-				Items:    preview.Items,
-				Skipped:  preview.Skipped,
-				Total:    preview.Total,
-				Warnings: warnings,
-			},
-			Fields: serializedUpdates,
-		}, &commandexec.Meta{Count: len(preview.Items)})
+		return commandexec.Success(preview.Payload(serializedUpdates, warnings), &commandexec.Meta{Count: len(preview.Items)})
 	}
 
 	summary, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.SetBulkSummary, mutation.ChangeSet, error) {
-		summary, err := objectsvc.ApplySetBulk(rt, request)
+		_, summary, err := objectsvc.SetBulk(rt, request)
 		if err != nil {
 			return nil, mutation.ChangeSet{}, err
 		}
@@ -223,20 +214,10 @@ func runSetBulk(sess *vaultsession.Session, ids []string, updates map[string]fie
 	if failure.Error != nil {
 		return failure.WithAttemptedIDs("references", ids)
 	}
-	data := objectsvc.SetBulkResult{
-		BulkSummaryResult: objectsvc.BulkSummaryResult{
-			OK:                summary.Errors == 0,
-			Action:            summary.Action,
-			Items:             summary.Results,
-			Total:             summary.Total,
-			Skipped:           summary.Skipped,
-			Errors:            summary.Errors,
-			MissingReferences: missingRefsOf(proj),
-		},
-		Modified: summary.Modified,
-		Fields:   serializedUpdates,
-	}
-	warnings = appendCommandWarnings(warnings, proj.Warnings)
 
-	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
+	return commandexec.SuccessWithWarnings(
+		summary.Payload(serializedUpdates, missingRefsOf(proj)),
+		appendCommandWarnings(warnings, proj.Warnings),
+		&commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors},
+	)
 }

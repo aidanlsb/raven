@@ -72,9 +72,10 @@ func TestDeleteByReferenceFilePreviewAndApply(t *testing.T) {
 		Behavior:  "trash",
 		TrashDir:  ".trash",
 	}
-	preview, err := PreviewDeleteByReference(rt, req)
+	req.Preview = true
+	preview, err := DeleteByReference(rt, req)
 	if err != nil {
-		t.Fatalf("PreviewDeleteByReference() error = %v", err)
+		t.Fatalf("DeleteByReference(preview) error = %v", err)
 	}
 	if preview.ObjectID != filePath {
 		t.Fatalf("ObjectID = %q, want %q", preview.ObjectID, filePath)
@@ -84,6 +85,7 @@ func TestDeleteByReferenceFilePreviewAndApply(t *testing.T) {
 	}
 	v.AssertFileExists(filePath)
 
+	req.Preview = false
 	result, err := DeleteByReference(rt, req)
 	if err != nil {
 		t.Fatalf("DeleteByReference() error = %v", err)
@@ -105,11 +107,12 @@ func TestDeleteByReferenceRejectsSection(t *testing.T) {
 	rt := testRuntime(t, v.Path)
 	indexVaultFiles(t, v.Path, rt.Schema, "notes/sectioned.md")
 
-	_, err := PreviewDeleteByReference(rt, DeleteByReferenceRequest{
+	_, err := DeleteByReference(rt, DeleteByReferenceRequest{
 		Reference: "notes/sectioned#details",
+		Preview:   true,
 	})
 	if err == nil {
-		t.Fatal("PreviewDeleteByReference() succeeded for a section ID")
+		t.Fatal("DeleteByReference(preview) succeeded for a section ID")
 	}
 	var serviceErr *svcerr.Error
 	if !errors.As(err, &serviceErr) || serviceErr.Code != codes.ErrInvalidInput {

@@ -109,9 +109,8 @@ A `*svc` package is a use-case façade that:
 Examples:
 - **Keep as service:** `objectsvc` (coordinates parser, index, mutation, references, schema validation for multi-step object operations)
 - **Keep as service:** `querysvc` (query parsing, execution, pagination, result assembly)
-- **Fold into caller:** `maintsvc.Stats` (50-line wrapper around `rt.DB.Stats()`)
-- **Fold into caller:** `initsvc.Initialize` (vault setup logic belongs in the init command handler)
-- **Fold into caller:** `datesvc` functions (date-specific operations fold into command handlers and CLI)
+- **Keep as service:** `initsvc.Initialize` (vault file creation plus post-init registration; not a pass-through)
+- **Fold into caller:** a one-function wrapper that only remaps `rt.DB.Stats()` or similar into a service package
 
 ### Error Handling
 

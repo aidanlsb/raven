@@ -23,6 +23,7 @@ var ageDayUnit = regexp.MustCompile(`(?i)([0-9]+(?:\.[0-9]*)?)d`)
 type EmptyTrashRequest struct {
 	OlderThan string
 	Now       func() time.Time
+	Preview   bool
 }
 
 type EmptyTrashResult struct {
@@ -31,18 +32,16 @@ type EmptyTrashResult struct {
 	OlderThan string
 }
 
-// PreviewEmptyTrash lists trash entries that empty would permanently delete.
-func PreviewEmptyTrash(rt *vaultruntime.Runtime, req EmptyTrashRequest) (*EmptyTrashResult, error) {
-	result, _, err := prepareEmptyTrash(rt, req)
-	return result, err
-}
-
-// EmptyTrash permanently deletes matching files from the configured trash
-// directory. It never removes live vault objects.
+// EmptyTrash lists or permanently deletes matching files from the configured
+// trash directory. Preview lists without writing. It never removes live vault
+// objects.
 func EmptyTrash(rt *vaultruntime.Runtime, req EmptyTrashRequest) (*EmptyTrashResult, error) {
 	result, trashRoot, err := prepareEmptyTrash(rt, req)
 	if err != nil {
 		return nil, err
+	}
+	if req.Preview {
+		return result, nil
 	}
 	for _, entry := range result.Entries {
 		if err := permanentlyRemoveTrashEntry(rt.VaultPath, trashRoot, entry); err != nil {

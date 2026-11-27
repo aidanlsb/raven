@@ -56,7 +56,7 @@ func SetByReference(rt *vaultruntime.Runtime, req SetByReferenceRequest) (*SetBy
 		return nil, svcerr.New(codes.ErrInvalidInput, "set only supports file-level object frontmatter").WithSuggestion("Use a file-level object ID without a section fragment")
 	}
 
-	result, err := SetObjectFile(rt, SetObjectFileRequest{
+	result, err := setObjectFile(rt, setObjectFileRequest{
 		FilePath:      resolved.FilePath,
 		ObjectID:      resolved.ObjectID,
 		TypedUpdates:  req.TypedUpdates,

@@ -71,14 +71,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 			}
 			return failure
 		}
-		preview := result.Preview
-		return commandexec.Success(traitsvc.UpdatePreviewResult{
-			Preview: true,
-			Action:  preview.Action,
-			Items:   preview.Items,
-			Skipped: preview.Skipped,
-			Total:   preview.Total,
-		}, &commandexec.Meta{Count: len(preview.Items)})
+		return commandexec.Success(result.Preview.Payload(), &commandexec.Meta{Count: len(result.Preview.Items)})
 	}
 
 	result, proj, failure := mutateMapped(sess, func(rt *vaultruntime.Runtime) (*traitsvc.UpdateResult, mutation.ChangeSet, error) {
@@ -96,16 +89,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 	}
 
 	summary := result.Summary
-	data := traitsvc.UpdateAppliedResult{
-		Action:            summary.Action,
-		Items:             summary.Results,
-		Total:             summary.Total,
-		Modified:          summary.Modified,
-		Skipped:           summary.Skipped,
-		Errors:            summary.Errors,
-		MissingReferences: missingRefsOf(proj),
-	}
-	return commandexec.SuccessWithWarnings(data, proj.Warnings, &commandexec.Meta{Count: summary.Modified})
+	return commandexec.SuccessWithWarnings(summary.Payload(missingRefsOf(proj)), proj.Warnings, &commandexec.Meta{Count: summary.Modified})
 }
 
 func mapTraitMutationError(err error) commandexec.Result {

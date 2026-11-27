@@ -75,34 +75,11 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		}
 	}
 
-	var created, updated, skipped, errored int
-	for _, item := range serviceResult.Results {
-		switch item.Action {
-		case "created", "create":
-			created++
-		case "updated", "update":
-			updated++
-		case "skipped":
-			skipped++
-		case "error":
-			errored++
-		}
-	}
-
-	data := importsvc.ImportResult{
-		Total:   len(serviceResult.Results),
-		Created: created,
-		Updated: updated,
-		Skipped: skipped,
-		Errors:  errored,
-		Items:   serviceResult.Results,
-	}
 	serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField)
 	if runReq.DryRun {
-		return commandexec.SuccessWithWarnings(data, serviceWarnings, nil)
+		return commandexec.SuccessWithWarnings(serviceResult.Payload(missingRefsOf(proj)), serviceWarnings, nil)
 	}
-	data.MissingReferences = missingRefsOf(proj)
-	return commandexec.SuccessWithWarnings(data, appendCommandWarnings(serviceWarnings, proj.Warnings), nil)
+	return commandexec.SuccessWithWarnings(serviceResult.Payload(missingRefsOf(proj)), appendCommandWarnings(serviceWarnings, proj.Warnings), nil)
 }
 
 func mapImportFailure(err error, fallbackSuggestion string) commandexec.Result {

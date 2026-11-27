@@ -75,18 +75,9 @@ func HandleCheckCreateMissing(ctx context.Context, req commandexec.Request) comm
 
 func handleCheckFix(sess *vaultsession.Session, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
 	fixes := checkfixsvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch, vaultCfg)
-	grouped := checkfixsvc.GroupFixesByFile(fixes)
 
 	if !confirm {
-		return commandexec.Success(checkfixsvc.FixPreviewResult{
-			Preview:       true,
-			FixableIssues: len(fixes),
-			Files:         grouped,
-			Scope:         checkfixsvc.ScopeOf(result),
-			FileCount:     result.FileCount,
-			ErrorCount:    result.ErrorCount,
-			WarningCount:  result.WarningCount,
-		}, nil)
+		return commandexec.Success(checkfixsvc.PreviewFixes(result, fixes), nil)
 	}
 
 	applied, proj, failure := mutateMapped(sess, func(rt *vaultruntime.Runtime) (checkfixsvc.FixResult, mutation.ChangeSet, error) {
@@ -100,20 +91,6 @@ func handleCheckFix(sess *vaultsession.Session, vaultCfg *config.VaultConfig, sc
 		return failure
 	}
 	postWarnings := proj.Warnings
-	data := checkfixsvc.FixAppliedResult{
-		Preview:           false,
-		OK:                len(applied.Skipped) == 0,
-		FixableIssues:     len(fixes),
-		FixedIssues:       applied.IssueCount,
-		FixedFiles:        applied.FileCount,
-		SkippedIssues:     len(applied.Skipped),
-		SkippedItems:      applied.Skipped,
-		Scope:             checkfixsvc.ScopeOf(result),
-		FileCount:         result.FileCount,
-		ErrorCount:        result.ErrorCount,
-		WarningCount:      result.WarningCount,
-		MissingReferences: missingRefsOf(proj),
-	}
 	if len(applied.Skipped) > 0 {
 		postWarnings = appendCommandWarnings(postWarnings, []commandexec.Warning{
 			{
@@ -127,7 +104,7 @@ func handleCheckFix(sess *vaultsession.Session, vaultCfg *config.VaultConfig, sc
 			},
 		})
 	}
-	return commandexec.SuccessWithWarnings(data, postWarnings, nil)
+	return commandexec.SuccessWithWarnings(checkfixsvc.AppliedFixes(result, fixes, applied, missingRefsOf(proj)), postWarnings, nil)
 }
 
 func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
@@ -135,22 +112,8 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		return commandexec.Failure("INVALID_INPUT", "check create-missing only supports full-vault scope", nil, "Run without path/--type/--trait filters")
 	}
 
-	data := checkfixsvc.CreateMissingResult{
-		Preview:             !confirm,
-		MissingRefs:         len(result.MissingRefs),
-		UndefinedTraits:     len(result.UndefinedTraits),
-		RequiresConfirm:     true,
-		NonInteractiveOnly:  true,
-		Scope:               checkfixsvc.ScopeOf(result),
-		MissingRefItems:     result.MissingRefs,
-		UndefinedTraitItems: result.UndefinedTraits,
-		FileCount:           result.FileCount,
-		ErrorCount:          result.ErrorCount,
-		WarningCount:        result.WarningCount,
-	}
-
 	if !confirm {
-		return commandexec.Success(data, nil)
+		return commandexec.Success(checkfixsvc.PreviewCreateMissing(result), nil)
 	}
 
 	created := checkfixsvc.CreateMissingRefsNonInteractive(
@@ -163,14 +126,7 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		vaultCfg.GetTemplateDirectory(),
 		vaultCfg.ProtectedPrefixes,
 	)
-	data.Preview = false
-	ok := len(created.Failures) == 0
-	failedPages := len(created.Failures)
-	data.OK = &ok
-	data.CreatedPages = &created.Created
-	data.FailedPages = &failedPages
-	data.FailedPageItems = &created.Failures
-	data.UndefinedTraitsNote = "undefined traits are interactive-only and were not changed in JSON mode"
+	data := checkfixsvc.AppliedCreateMissing(result, created)
 	if len(created.Failures) > 0 {
 		return commandexec.SuccessWithWarnings(data, []commandexec.Warning{
 			{

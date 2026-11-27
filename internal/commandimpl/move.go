@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/mutation"
@@ -78,17 +79,16 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 }
 
 func shapeMoveResult(serviceResult *objectsvc.MoveByReferenceResult, preview bool, proj vaultsession.MutationResult) commandexec.Result {
+	refs := check.MissingReferences{}
+	if !preview {
+		refs = missingRefsOf(proj)
+	}
+	data := serviceResult.Envelope(preview, refs)
 	if serviceResult.NeedsConfirm && serviceResult.TypeMismatch != nil {
 		mismatch := serviceResult.TypeMismatch
 		// Nothing was written: the move is blocked pending confirmation, so
 		// report a preview phase regardless of the normalized apply resolution.
-		return commandexec.SuccessWithWarnings(objectsvc.MoveConfirmationResult{
-			Source:       serviceResult.SourceID,
-			Destination:  serviceResult.DestinationID,
-			Preview:      preview,
-			NeedsConfirm: true,
-			Reason:       serviceResult.Reason,
-		}, appendCommandWarnings([]commandexec.Warning{{
+		return commandexec.SuccessWithWarnings(data, appendCommandWarnings([]commandexec.Warning{{
 			Code: codes.WarnTypeMismatch,
 			Message: fmt.Sprintf("Moving to '%s/' which is the default directory for type '%s', but file has type '%s'",
 				mismatch.DestinationDir, mismatch.ExpectedType, mismatch.ActualType),
@@ -97,25 +97,9 @@ func shapeMoveResult(serviceResult *objectsvc.MoveByReferenceResult, preview boo
 	}
 
 	warnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, indexUpdateFailedWarningCode)
-	data := objectsvc.MoveResult{
-		Source:      serviceResult.SourceID,
-		Destination: serviceResult.DestinationID,
-	}
-	if preview {
-		data.Preview = true
-		data.Status = "preview"
-	}
-	if len(serviceResult.UpdatedRefs) > 0 {
-		data.UpdatedRefs = serviceResult.UpdatedRefs
-	}
-	if len(serviceResult.UpdatedRefFields) > 0 {
-		data.UpdatedRefFields = serviceResult.UpdatedRefFields
-	}
 	if !preview {
-		data.MissingReferences = missingRefsOf(proj)
 		warnings = appendCommandWarnings(warnings, proj.Warnings)
 	}
-
 	return commandexec.SuccessWithWarnings(data, warnings, nil)
 }
 
@@ -137,27 +121,19 @@ func runMoveBulk(sess *vaultsession.Session, ids []string, destination string, u
 		ObjectIDs:      fileIDs,
 		DestinationDir: destination,
 		UpdateRefs:     updateRefs,
+		Preview:        !confirm,
 	}
 
-	if !confirm {
-		preview, err := objectsvc.PreviewMoveBulk(sess.Runtime(), request)
+	if request.Preview {
+		preview, _, err := objectsvc.MoveBulk(sess.Runtime(), request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
-		return commandexec.Success(objectsvc.MoveBulkPreviewResult{
-			BulkPreviewResult: objectsvc.BulkPreviewResult{
-				Preview: true,
-				Action:  preview.Action,
-				Items:   preview.Items,
-				Skipped: preview.Skipped,
-				Total:   preview.Total,
-			},
-			Destination: preview.Destination,
-		}, &commandexec.Meta{Count: len(preview.Items)})
+		return commandexec.Success(preview.Payload(), &commandexec.Meta{Count: len(preview.Items)})
 	}
 
 	summary, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.MoveBulkSummary, mutation.ChangeSet, error) {
-		summary, err := objectsvc.ApplyMoveBulk(rt, request)
+		_, summary, err := objectsvc.MoveBulk(rt, request)
 		if err != nil {
 			return nil, mutation.ChangeSet{}, err
 		}
@@ -167,24 +143,11 @@ func runMoveBulk(sess *vaultsession.Session, ids []string, destination string, u
 		return failure.WithAttemptedIDs("object_ids", ids)
 	}
 
-	data := objectsvc.MoveBulkResult{
-		BulkSummaryResult: objectsvc.BulkSummaryResult{
-			OK:                summary.Errors == 0,
-			Action:            summary.Action,
-			Items:             summary.Results,
-			Total:             summary.Total,
-			Skipped:           summary.Skipped,
-			Errors:            summary.Errors,
-			MissingReferences: missingRefsOf(proj),
-		},
-		Moved:       summary.Moved,
-		Destination: summary.Destination,
-	}
 	allWarnings := appendCommandWarnings(
 		warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode),
 		proj.Warnings,
 	)
-	return commandexec.SuccessWithWarnings(data, allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
+	return commandexec.SuccessWithWarnings(summary.Payload(missingRefsOf(proj)), allWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 
 func moveSectionSourceFailure(sectionIDs []string) commandexec.Result {

@@ -3,15 +3,12 @@ package objectsvc
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/mutation"
-	"github.com/aidanlsb/raven/internal/mutationguard"
-	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
@@ -20,6 +17,7 @@ import (
 type SetBulkRequest struct {
 	ObjectIDs    []string
 	TypedUpdates map[string]fieldvalue.FieldValue
+	Preview      bool
 }
 
 type SetBulkPreview struct {
@@ -39,88 +37,16 @@ type SetBulkSummary struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewSetBulk(rt *vaultruntime.Runtime, req SetBulkRequest) (*SetBulkPreview, error) {
+func SetBulk(rt *vaultruntime.Runtime, req SetBulkRequest) (*SetBulkPreview, *SetBulkSummary, error) {
 	if err := requireVaultConfig(rt); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := requireSchema(rt); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
 	skipped := make([]BulkResult, 0)
-
-	for _, id := range req.ObjectIDs {
-		if strings.Contains(id, "#") {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "set only supports file-level object frontmatter"})
-			continue
-		}
-
-		filePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, id, rt.VaultCfg)
-		if err != nil {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object not found"})
-			continue
-		}
-		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
-			continue
-		}
-
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)})
-			continue
-		}
-
-		fm, err := parser.ParseFrontmatter(string(content))
-		if err != nil || fm == nil {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "no frontmatter"})
-			continue
-		}
-
-		objectType := objectTypeOrPage(fm)
-		refCtx := createRefValidationContext(rt)
-		validatedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
-			objectType,
-			fm.Fields,
-			req.TypedUpdates,
-			rt.Schema,
-			map[string]bool{"alias": true},
-			refCtx,
-		)
-		if err != nil {
-			var validationErr *fieldmutation.ValidationError
-			if errors.As(err, &validationErr) {
-				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: validationErr.Error()})
-			} else {
-				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("validation error: %v", err)})
-			}
-			continue
-		}
-
-		items = append(items, BulkPreviewItem{
-			ID:      id,
-			Action:  "set",
-			Changes: formatSetPreviewChanges(fm.Fields, validatedUpdates),
-		})
-	}
-
-	return &SetBulkPreview{
-		Action:  "set",
-		Items:   items,
-		Skipped: skipped,
-		Total:   len(req.ObjectIDs),
-	}, nil
-}
-
-func ApplySetBulk(rt *vaultruntime.Runtime, req SetBulkRequest) (*SetBulkSummary, error) {
-	if err := requireVaultConfig(rt); err != nil {
-		return nil, err
-	}
-	if err := requireSchema(rt); err != nil {
-		return nil, err
-	}
-
 	results := make([]BulkResult, 0, len(req.ObjectIDs))
 	modifiedCount := 0
 	skippedCount := 0
@@ -128,48 +54,72 @@ func ApplySetBulk(rt *vaultruntime.Runtime, req SetBulkRequest) (*SetBulkSummary
 	changes := mutation.NewChangeSet()
 
 	for _, id := range req.ObjectIDs {
-		result := BulkResult{ID: id}
-
 		if strings.Contains(id, "#") {
-			result.Status = "skipped"
-			result.Reason = "set only supports file-level object frontmatter"
-			skippedCount++
-			results = append(results, result)
+			fail := BulkResult{ID: id, Status: "skipped", Reason: "set only supports file-level object frontmatter"}
+			if req.Preview {
+				skipped = append(skipped, fail)
+			} else {
+				skippedCount++
+				results = append(results, fail)
+			}
 			continue
 		}
 
 		filePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, id, rt.VaultCfg)
 		if err != nil {
-			result.Status = "skipped"
-			result.Reason = "object not found"
-			skippedCount++
-			results = append(results, result)
+			fail := BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
+			if req.Preview {
+				skipped = append(skipped, fail)
+			} else {
+				skippedCount++
+				results = append(results, fail)
+			}
 			continue
 		}
 
-		_, err = SetObjectFile(rt, SetObjectFileRequest{
+		fileResult, setErr := setObjectFile(rt, setObjectFileRequest{
 			FilePath:      filePath,
 			ObjectID:      id,
 			TypedUpdates:  req.TypedUpdates,
 			AllowedFields: map[string]bool{"alias": true},
+			Preview:       req.Preview,
 		})
-		if err != nil {
-			result.Status = "error"
-			result.Reason = setBulkReasonFromError(err)
-			errorCount++
-			results = append(results, result)
+		if setErr != nil {
+			fail := BulkResult{ID: id, Status: bulkFailureStatus(req.Preview), Reason: setBulkReasonFromError(setErr)}
+			if req.Preview {
+				skipped = append(skipped, fail)
+			} else {
+				countBulkFailure(false, &skippedCount, &errorCount)
+				results = append(results, fail)
+			}
 			continue
 		}
 
-		result.Status = "modified"
+		if req.Preview {
+			items = append(items, BulkPreviewItem{
+				ID:      id,
+				Action:  "set",
+				Changes: formatSetPreviewChanges(fileResult.PreviousFields, fileResult.ResolvedUpdates),
+			})
+			continue
+		}
+
 		modifiedCount++
 		if relPath, relErr := filepath.Rel(rt.VaultPath, filePath); relErr == nil {
 			changes.AddChanged(relPath)
 		}
-		results = append(results, result)
+		results = append(results, BulkResult{ID: id, Status: "modified"})
 	}
 
-	return &SetBulkSummary{
+	if req.Preview {
+		return &SetBulkPreview{
+			Action:  "set",
+			Items:   items,
+			Skipped: skipped,
+			Total:   len(req.ObjectIDs),
+		}, nil, nil
+	}
+	return nil, &SetBulkSummary{
 		Action:    "set",
 		Results:   results,
 		Total:     len(results),
@@ -197,8 +147,7 @@ func setBulkReasonFromError(err error) string {
 	}
 }
 
-func formatSetPreviewChanges(existingFields map[string]fieldvalue.FieldValue, updates map[string]fieldvalue.FieldValue) map[string]string {
-	resolvedUpdates := fieldmutation.SerializeFieldValueMap(updates)
+func formatSetPreviewChanges(existingFields map[string]fieldvalue.FieldValue, resolvedUpdates map[string]string) map[string]string {
 	changes := make(map[string]string, len(resolvedUpdates))
 	for field, resolvedVal := range resolvedUpdates {
 		oldVal := "<unset>"

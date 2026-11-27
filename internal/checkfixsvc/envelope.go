@@ -83,3 +83,61 @@ func ScopeOf(result *checksvc.RunResult) CheckScope {
 	}
 	return CheckScope{Type: result.Scope.Type, Value: result.Scope.Value}
 }
+
+func PreviewFixes(result *checksvc.RunResult, fixes []FixableIssue) FixPreviewResult {
+	return FixPreviewResult{
+		Preview:       true,
+		FixableIssues: len(fixes),
+		Files:         GroupFixesByFile(fixes),
+		Scope:         ScopeOf(result),
+		FileCount:     result.FileCount,
+		ErrorCount:    result.ErrorCount,
+		WarningCount:  result.WarningCount,
+	}
+}
+
+func AppliedFixes(result *checksvc.RunResult, fixes []FixableIssue, applied FixResult, refs check.MissingReferences) FixAppliedResult {
+	return FixAppliedResult{
+		Preview:           false,
+		OK:                len(applied.Skipped) == 0,
+		FixableIssues:     len(fixes),
+		FixedIssues:       applied.IssueCount,
+		FixedFiles:        applied.FileCount,
+		SkippedIssues:     len(applied.Skipped),
+		SkippedItems:      applied.Skipped,
+		Scope:             ScopeOf(result),
+		FileCount:         result.FileCount,
+		ErrorCount:        result.ErrorCount,
+		WarningCount:      result.WarningCount,
+		MissingReferences: refs,
+	}
+}
+
+func PreviewCreateMissing(result *checksvc.RunResult) CreateMissingResult {
+	return CreateMissingResult{
+		Preview:             true,
+		MissingRefs:         len(result.MissingRefs),
+		UndefinedTraits:     len(result.UndefinedTraits),
+		RequiresConfirm:     true,
+		NonInteractiveOnly:  true,
+		Scope:               ScopeOf(result),
+		MissingRefItems:     result.MissingRefs,
+		UndefinedTraitItems: result.UndefinedTraits,
+		FileCount:           result.FileCount,
+		ErrorCount:          result.ErrorCount,
+		WarningCount:        result.WarningCount,
+	}
+}
+
+func AppliedCreateMissing(result *checksvc.RunResult, created CreateMissingApplyResult) CreateMissingResult {
+	ok := len(created.Failures) == 0
+	failedPages := len(created.Failures)
+	data := PreviewCreateMissing(result)
+	data.Preview = false
+	data.OK = &ok
+	data.CreatedPages = &created.Created
+	data.FailedPages = &failedPages
+	data.FailedPageItems = &created.Failures
+	data.UndefinedTraitsNote = "undefined traits are interactive-only and were not changed in JSON mode"
+	return data
+}
