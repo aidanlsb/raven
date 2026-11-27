@@ -38,7 +38,7 @@ func TestAppendToFileWaitsForExclusiveLock(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := AppendToFile(&vaultruntime.Runtime{}, destPath, "appended", nil, false, "")
+		_, err := appendToFile(&vaultruntime.Runtime{}, destPath, "appended", nil, false, "")
 		done <- err
 	}()
 
@@ -87,7 +87,7 @@ func TestAppendToFileReturnsInsertedLineForSectionTarget(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	line, err := AppendToFile(&vaultruntime.Runtime{VaultPath: vaultPath}, destPath, "New bug item", nil, false, "project#bugs-fixes")
+	line, err := appendToFile(&vaultruntime.Runtime{VaultPath: vaultPath}, destPath, "New bug item", nil, false, "project#bugs-fixes")
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestAppendToFileMissingTargetReportsFileNotFound(t *testing.T) {
 	t.Parallel()
 
 	destPath := filepath.Join(t.TempDir(), "missing.md")
-	_, err := AppendToFile(&vaultruntime.Runtime{}, destPath, "appended", nil, false, "")
+	_, err := appendToFile(&vaultruntime.Runtime{}, destPath, "appended", nil, false, "")
 	if err == nil {
 		t.Fatal("expected missing target error")
 	}
@@ -213,7 +213,7 @@ func TestAppendUnderHeadingWaitsForAppendLock(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := AppendToFile(
+		_, err := appendToFile(
 			&vaultruntime.Runtime{VaultPath: vaultPath},
 			destPath,
 			"- new capture",
@@ -267,7 +267,7 @@ func TestAppendWithinObjectWaitsForAppendLock(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := AppendToFile(
+		_, err := appendToFile(
 			&vaultruntime.Runtime{VaultPath: vaultPath},
 			destPath,
 			"- new bug",
@@ -325,7 +325,7 @@ func TestAppendUnderHeadingConcurrentCapturesNoLoss(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, err := AppendToFile(
+			_, err := appendToFile(
 				&vaultruntime.Runtime{VaultPath: vaultPath},
 				destPath,
 				fmt.Sprintf("- capture %02d", i),

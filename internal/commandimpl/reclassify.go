@@ -86,31 +86,11 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		return failure
 	}
 
-	warnings := make([]commandexec.Warning, 0, len(result.WarningMessages))
-	for _, warning := range result.WarningMessages {
-		warnings = append(warnings, commandexec.Warning{
-			Code:    indexUpdateFailedWarningCode,
-			Message: warning,
-		})
-	}
+	warnings := warningMessagesToCommandWarnings(result.WarningMessages, indexUpdateFailedWarningCode)
 	warnings = appendCommandWarnings(warnings, proj.Warnings)
-	data := objectsvc.ReclassifyResult{
-		ObjectID:          result.ObjectID,
-		OldType:           result.OldType,
-		NewType:           result.NewType,
-		File:              result.File,
-		Moved:             result.Moved,
-		OldPath:           result.OldPath,
-		NewPath:           result.NewPath,
-		UpdatedRefs:       result.UpdatedRefs,
-		AddedFields:       result.AddedFields,
-		DroppedFields:     result.DroppedFields,
-		NeedsConfirm:      result.NeedsConfirm,
-		Reason:            result.Reason,
-		MissingReferences: missingRefsOf(proj),
-	}
+	result.MissingReferences = missingRefsOf(proj)
 
-	res := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	res := commandexec.SuccessWithWarnings(*result, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	if result.NeedsConfirm {
 		// Field-dropping reclassify is blocked pending --force; nothing was
 		// written, so report a preview phase.
@@ -133,26 +113,20 @@ func runReclassifyBulk(
 		NoMove:      boolArg(req.Args, "no-move"),
 		UpdateRefs:  boolArgDefault(req.Args, "update-refs", true),
 		Force:       boolArg(req.Args, "force"),
+		Preview:     !req.Confirm,
 	}
 
-	if !req.Confirm {
-		preview, err := objectsvc.PreviewReclassifyBulk(sess.Runtime(), request)
+	if request.Preview {
+		preview, _, err := objectsvc.ReclassifyBulk(sess.Runtime(), request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("references", ids)
 		}
 		warnings := warningMessagesToCommandWarnings(preview.WarningMessages, indexUpdateFailedWarningCode)
-		return commandexec.SuccessWithWarnings(objectsvc.ReclassifyBulkPreviewResult{
-			Preview: true,
-			Action:  preview.Action,
-			NewType: preview.NewType,
-			Items:   preview.Items,
-			Skipped: preview.Skipped,
-			Total:   preview.Total,
-		}, warnings, &commandexec.Meta{Count: len(preview.Items)})
+		return commandexec.SuccessWithWarnings(preview.Payload(), warnings, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
 	summary, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.ReclassifyBulkSummary, mutation.ChangeSet, error) {
-		summary, err := objectsvc.ApplyReclassifyBulk(rt, request, nil)
+		_, summary, err := objectsvc.ReclassifyBulk(rt, request)
 		if err != nil {
 			return nil, mutation.ChangeSet{}, err
 		}
@@ -162,21 +136,10 @@ func runReclassifyBulk(
 		return failure.WithAttemptedIDs("references", ids)
 	}
 
-	data := objectsvc.ReclassifyBulkAppliedResult{
-		OK:                summary.Errors == 0,
-		Action:            summary.Action,
-		NewType:           summary.NewType,
-		Items:             summary.Results,
-		Total:             summary.Total,
-		Skipped:           summary.Skipped,
-		Errors:            summary.Errors,
-		Reclassified:      summary.Reclassified,
-		MissingReferences: missingRefsOf(proj),
-	}
 	warnings := warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)
 	warnings = appendCommandWarnings(warnings, proj.Warnings)
 
-	result := commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Reclassified})
+	result := commandexec.SuccessWithWarnings(summary.Payload(missingRefsOf(proj)), warnings, &commandexec.Meta{Count: summary.Reclassified})
 	if summary.Reclassified == 0 {
 		return result.WithMutationPhase(commandexec.MutationPhasePreview)
 	}

@@ -54,9 +54,7 @@ func HandleSectionCreate(_ context.Context, req commandexec.Request) commandexec
 		return failure
 	}
 
-	data := sectionLifecycleData(result.SectionID, result.FileRelative, result.Placement, result.AnchorID, req.Preview)
-	data.Level = result.Level
-	return commandexec.SuccessWithWarnings(data, warnings, nil)
+	return commandexec.SuccessWithWarnings(result.Payload(req.Preview), warnings, nil)
 }
 
 // HandleSectionMove executes the canonical `section move` command.
@@ -90,11 +88,7 @@ func HandleSectionMove(_ context.Context, req commandexec.Request) commandexec.R
 		return failure
 	}
 
-	return commandexec.SuccessWithWarnings(
-		sectionLifecycleData(result.SectionID, result.FileRelative, result.Placement, result.AnchorID, req.Preview),
-		warnings,
-		nil,
-	)
+	return commandexec.SuccessWithWarnings(result.Payload(req.Preview), warnings, nil)
 }
 
 // HandleSectionDelete executes the canonical `section delete` command.
@@ -132,25 +126,9 @@ func HandleSectionDelete(_ context.Context, req commandexec.Request) commandexec
 		return failure
 	}
 
-	data := sectionsvc.DeletePayload{
-		Section:         result.SectionID,
-		File:            result.FileRelative,
-		LineStart:       result.LineStart,
-		LineEnd:         result.LineEnd,
-		RemovedContent:  result.RemovedContent,
-		DeletedSections: result.DeletedSections,
-		Backlinks:       result.Backlinks,
-	}
-	if req.Preview {
-		data.Preview = true
-		data.Status = "preview"
-	} else {
-		data.Status = "deleted"
-	}
-
 	warnings := deleteBacklinkCommandWarnings(result.Backlinks)
 	warnings = appendCommandWarnings(warnings, postWarnings)
-	return commandexec.SuccessWithWarnings(data, warnings, nil)
+	return commandexec.SuccessWithWarnings(result.Payload(req.Preview), warnings, nil)
 }
 
 // HandleSectionRename executes the canonical `section rename` command.
@@ -190,19 +168,7 @@ func HandleSectionRename(_ context.Context, req commandexec.Request) commandexec
 		return failure
 	}
 
-	data := sectionsvc.RenamePayload{
-		Source:      result.SourceID,
-		Destination: result.DestinationID,
-	}
-	if req.Preview {
-		data.Preview = true
-		data.Status = "preview"
-	}
-	if len(result.UpdatedRefs) > 0 {
-		data.UpdatedRefs = result.UpdatedRefs
-	}
-
-	return commandexec.SuccessWithWarnings(data, warnings, nil)
+	return commandexec.SuccessWithWarnings(result.Payload(req.Preview), warnings, nil)
 }
 
 func sectionWrite[T any](sess *vaultsession.Session, preview bool, fn func(*vaultruntime.Runtime) (T, []string, mutation.ChangeSet, error)) (T, []commandexec.Warning, commandexec.Result) {
@@ -229,20 +195,4 @@ func sectionPlacementArg(args map[string]any) sectionsvc.Placement {
 		Before: strings.TrimSpace(stringArg(args, "before")),
 		Under:  strings.TrimSpace(stringArg(args, "under")),
 	}
-}
-
-func sectionLifecycleData(sectionID, file, placement, anchor string, preview bool) sectionsvc.LifecycleResult {
-	data := sectionsvc.LifecycleResult{
-		Section:   sectionID,
-		File:      file,
-		Placement: placement,
-	}
-	if anchor != "" {
-		data.Anchor = anchor
-	}
-	if preview {
-		data.Preview = true
-		data.Status = "preview"
-	}
-	return data
 }

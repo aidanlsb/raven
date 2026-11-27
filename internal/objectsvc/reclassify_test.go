@@ -39,14 +39,14 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := Reclassify(rt, ReclassifyRequest{
+	result, err := reclassify(rt, reclassifyRequest{
 		ObjectID:    "notes/my-note",
 		FilePath:    sourcePath,
 		NewTypeName: "book",
 		Force:       true,
 	})
 	if err != nil {
-		t.Fatalf("Reclassify() error = %v", err)
+		t.Fatalf("reclassify() error = %v", err)
 	}
 	if !result.Moved {
 		t.Fatalf("expected moved result, got %#v", result)
@@ -97,14 +97,14 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	result, err := Reclassify(rt, ReclassifyRequest{
+	result, err := reclassify(rt, reclassifyRequest{
 		ObjectID:    "notes/my-note",
 		FilePath:    sourcePath,
 		NewTypeName: "book",
 		Force:       true,
 	})
 	if err != nil {
-		t.Fatalf("Reclassify() error = %v", err)
+		t.Fatalf("reclassify() error = %v", err)
 	}
 	if !result.Moved {
 		t.Fatalf("expected moved result, got %#v", result)
@@ -191,14 +191,14 @@ traits: {}
 				t.Fatalf("seed file: %v", err)
 			}
 
-			_, err := Reclassify(rt, ReclassifyRequest{
+			_, err := reclassify(rt, reclassifyRequest{
 				ObjectID:    "notes/my-note",
 				FilePath:    sourcePath,
 				NewTypeName: "book",
 				Force:       true,
 			})
 			if err == nil {
-				t.Fatalf("Reclassify() error = nil, want validation failure")
+				t.Fatalf("reclassify() error = nil, want validation failure")
 			}
 
 			var svcErr *svcerr.Error
@@ -265,14 +265,14 @@ traits: {}
 	})
 	defer restoreWriter()
 
-	_, err := Reclassify(rt, ReclassifyRequest{
+	_, err := reclassify(rt, reclassifyRequest{
 		ObjectID:    "notes/my-note",
 		FilePath:    sourcePath,
 		NewTypeName: "book",
 		Force:       true,
 	})
 	if err == nil {
-		t.Fatal("expected Reclassify() to fail")
+		t.Fatal("expected reclassify() to fail")
 	}
 
 	var svcErr *svcerr.Error

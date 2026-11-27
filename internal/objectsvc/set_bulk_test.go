@@ -41,14 +41,14 @@ traits: {}
 		}
 	}
 
-	summary, err := ApplySetBulk(rt, SetBulkRequest{
+	_, summary, err := SetBulk(rt, SetBulkRequest{
 		ObjectIDs: []string{"people/one", "people/two"},
 		TypedUpdates: map[string]fieldvalue.FieldValue{
 			"email": fieldvalue.String("true"),
 		},
 	})
 	if err != nil {
-		t.Fatalf("ApplySetBulk: %v", err)
+		t.Fatalf("SetBulk: %v", err)
 	}
 	if summary.Modified != 2 {
 		t.Fatalf("modified = %d, want 2", summary.Modified)

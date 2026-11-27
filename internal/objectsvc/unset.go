@@ -13,13 +13,13 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type UnsetObjectFileRequest struct {
+type unsetObjectFileRequest struct {
 	FilePath string
 	ObjectID string
 	Fields   []string
 }
 
-type UnsetObjectFileResult struct {
+type unsetObjectFileResult struct {
 	ObjectID       string
 	ObjectType     string
 	RemovedFields  map[string]fieldvalue.FieldValue
@@ -28,7 +28,7 @@ type UnsetObjectFileResult struct {
 	PreviousFields map[string]fieldvalue.FieldValue
 }
 
-func UnsetObjectFile(rt *vaultruntime.Runtime, req UnsetObjectFileRequest) (*UnsetObjectFileResult, error) {
+func unsetObjectFile(rt *vaultruntime.Runtime, req unsetObjectFileRequest) (*unsetObjectFileResult, error) {
 	if err := requireVaultConfig(rt); err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func UnsetObjectFile(rt *vaultruntime.Runtime, req UnsetObjectFileRequest) (*Uns
 		previousFields[key] = value
 	}
 
-	return &UnsetObjectFileResult{
+	return &unsetObjectFileResult{
 		ObjectID:       req.ObjectID,
 		ObjectType:     objectType,
 		RemovedFields:  removedFields,

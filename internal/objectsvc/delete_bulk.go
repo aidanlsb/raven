@@ -16,6 +16,7 @@ type DeleteBulkRequest struct {
 	ObjectIDs []string
 	Behavior  string
 	TrashDir  string
+	Preview   bool
 }
 
 type DeleteBulkPreview struct {
@@ -37,98 +38,76 @@ type DeleteBulkSummary struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewDeleteBulk(rt *vaultruntime.Runtime, req DeleteBulkRequest) (*DeleteBulkPreview, error) {
+func DeleteBulk(rt *vaultruntime.Runtime, req DeleteBulkRequest) (*DeleteBulkPreview, *DeleteBulkSummary, error) {
 	if err := requireVaultConfig(rt); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if err := rt.OpenDB(); err != nil {
-		return nil, svcerr.Wrap(codes.ErrDatabase, "failed to open index database", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
+	behavior, trashDir := normalizeDeletionBehavior(req.Behavior, req.TrashDir)
+	if req.Preview {
+		if err := rt.OpenDB(); err != nil {
+			return nil, nil, svcerr.Wrap(codes.ErrDatabase, "failed to open index database", err).WithSuggestion("Run 'rvn reindex' to rebuild the database")
+		}
 	}
-	db := rt.DB
 
 	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
 	skipped := make([]BulkResult, 0)
-	behavior, trashDir := normalizeDeletionBehavior(req.Behavior, req.TrashDir)
-
-	for _, id := range req.ObjectIDs {
-		target, err := resolveBulkDeleteTarget(rt.VaultPath, rt.VaultCfg, id)
-		if err != nil {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object or file not found"})
-			continue
-		}
-		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, target.FilePath); err != nil {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
-			continue
-		}
-
-		details := ""
-		if target.RavenObject {
-			backlinks, _ := db.Backlinks(target.ObjectID)
-			if len(backlinks) > 0 {
-				details = fmt.Sprintf("⚠ referenced by %d objects", len(backlinks))
-			}
-		}
-
-		changes := map[string]string{"behavior": "permanent deletion"}
-		if behavior == "trash" {
-			changes = map[string]string{"behavior": fmt.Sprintf("move to %s/", trashDir)}
-		}
-
-		if _, err := os.Stat(target.FilePath); os.IsNotExist(err) {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "file not found"})
-			continue
-		}
-
-		items = append(items, BulkPreviewItem{
-			ID:      id,
-			Action:  "delete",
-			Details: details,
-			Changes: changes,
-		})
-	}
-
-	return &DeleteBulkPreview{
-		Action:   "delete",
-		Items:    items,
-		Skipped:  skipped,
-		Total:    len(req.ObjectIDs),
-		Behavior: behavior,
-	}, nil
-}
-
-func ApplyDeleteBulk(rt *vaultruntime.Runtime, req DeleteBulkRequest) (*DeleteBulkSummary, error) {
-	if err := requireVaultConfig(rt); err != nil {
-		return nil, err
-	}
-
 	results := make([]BulkResult, 0, len(req.ObjectIDs))
 	deletedCount := 0
 	skippedCount := 0
 	errorCount := 0
 	changes := mutation.NewChangeSet()
-	behavior, trashDir := normalizeDeletionBehavior(req.Behavior, req.TrashDir)
 
 	for _, id := range req.ObjectIDs {
-		result := BulkResult{ID: id}
-
 		target, err := resolveBulkDeleteTarget(rt.VaultPath, rt.VaultCfg, id)
 		if err != nil {
-			result.Status = "skipped"
-			result.Reason = "object or file not found"
-			skippedCount++
-			results = append(results, result)
+			fail := BulkResult{ID: id, Status: "skipped", Reason: "object or file not found"}
+			if req.Preview {
+				skipped = append(skipped, fail)
+			} else {
+				skippedCount++
+				results = append(results, fail)
+			}
 			continue
 		}
 		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, target.FilePath); err != nil {
-			result.Status = "error"
-			result.Reason = err.Error()
-			errorCount++
-			results = append(results, result)
+			fail := BulkResult{ID: id, Status: bulkFailureStatus(req.Preview), Reason: err.Error()}
+			if req.Preview {
+				skipped = append(skipped, fail)
+			} else {
+				errorCount++
+				results = append(results, fail)
+			}
 			continue
 		}
 
-		_, err = DeleteFile(rt, DeleteFileRequest{
+		if req.Preview {
+			if _, err := os.Stat(target.FilePath); os.IsNotExist(err) {
+				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "file not found"})
+				continue
+			}
+			details := ""
+			if target.RavenObject {
+				backlinks, _ := rt.DB.Backlinks(target.ObjectID)
+				if len(backlinks) > 0 {
+					details = fmt.Sprintf("⚠ referenced by %d objects", len(backlinks))
+				}
+			}
+			behaviorChanges := map[string]string{"behavior": "permanent deletion"}
+			if behavior == "trash" {
+				behaviorChanges = map[string]string{"behavior": fmt.Sprintf("move to %s/", trashDir)}
+			}
+			items = append(items, BulkPreviewItem{
+				ID:      id,
+				Action:  "delete",
+				Details: details,
+				Changes: behaviorChanges,
+			})
+			continue
+		}
+
+		result := BulkResult{ID: id}
+		_, err = deleteFile(rt, deleteFileRequest{
 			FilePath: target.FilePath,
 			Behavior: behavior,
 			TrashDir: trashDir,
@@ -152,7 +131,16 @@ func ApplyDeleteBulk(rt *vaultruntime.Runtime, req DeleteBulkRequest) (*DeleteBu
 		results = append(results, result)
 	}
 
-	return &DeleteBulkSummary{
+	if req.Preview {
+		return &DeleteBulkPreview{
+			Action:   "delete",
+			Items:    items,
+			Skipped:  skipped,
+			Total:    len(req.ObjectIDs),
+			Behavior: behavior,
+		}, nil, nil
+	}
+	return nil, &DeleteBulkSummary{
 		Action:    "delete",
 		Results:   results,
 		Total:     len(results),

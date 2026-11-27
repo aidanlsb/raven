@@ -77,7 +77,7 @@ func Add(rt *vaultruntime.Runtime, req AddRequest) (*AddResult, error) {
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 		return nil, svcerr.Wrap(codes.ErrFileWrite, err.Error(), err)
 	}
-	appendResult, err := Append(rt, destPath, req.Text, captureCfg, isDailyNote, targetObjectID)
+	appendResult, err := appendLine(rt, destPath, req.Text, captureCfg, isDailyNote, targetObjectID)
 	if err != nil {
 		return nil, err
 	}

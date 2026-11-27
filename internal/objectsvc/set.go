@@ -13,7 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type SetObjectFileRequest struct {
+type setObjectFileRequest struct {
 	FilePath      string
 	ObjectID      string
 	TypedUpdates  map[string]fieldvalue.FieldValue
@@ -23,7 +23,7 @@ type SetObjectFileRequest struct {
 	Preview bool
 }
 
-type SetObjectFileResult struct {
+type setObjectFileResult struct {
 	ObjectID        string
 	ObjectType      string
 	ResolvedUpdates map[string]string
@@ -31,7 +31,7 @@ type SetObjectFileResult struct {
 	PreviousFields  map[string]fieldvalue.FieldValue
 }
 
-func SetObjectFile(rt *vaultruntime.Runtime, req SetObjectFileRequest) (*SetObjectFileResult, error) {
+func setObjectFile(rt *vaultruntime.Runtime, req setObjectFileRequest) (*setObjectFileResult, error) {
 	if err := requireVaultConfig(rt); err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func SetObjectFile(rt *vaultruntime.Runtime, req SetObjectFileRequest) (*SetObje
 		previousFields[key] = value
 	}
 
-	return &SetObjectFileResult{
+	return &setObjectFileResult{
 		ObjectID:        req.ObjectID,
 		ObjectType:      objectType,
 		ResolvedUpdates: resolvedUpdates,

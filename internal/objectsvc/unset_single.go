@@ -53,7 +53,7 @@ func UnsetByReference(rt *vaultruntime.Runtime, req UnsetByReferenceRequest) (*U
 		return nil, svcerr.New(codes.ErrInvalidInput, "unset only supports file-level object frontmatter").WithSuggestion("Use a file-level object ID without a section fragment")
 	}
 
-	result, err := UnsetObjectFile(rt, UnsetObjectFileRequest{
+	result, err := unsetObjectFile(rt, unsetObjectFileRequest{
 		FilePath: resolved.FilePath,
 		ObjectID: resolved.ObjectID,
 		Fields:   req.Fields,

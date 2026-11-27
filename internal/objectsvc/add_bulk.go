@@ -16,6 +16,7 @@ import (
 type AddBulkRequest struct {
 	ObjectIDs []string
 	Line      string
+	Preview   bool
 }
 
 type AddBulkPreview struct {
@@ -35,90 +36,16 @@ type AddBulkSummary struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewAddBulk(rt *vaultruntime.Runtime, req AddBulkRequest) (*AddBulkPreview, error) {
+func AddBulk(rt *vaultruntime.Runtime, req AddBulkRequest) (*AddBulkPreview, *AddBulkSummary, error) {
 	if err := ValidateAddContent(req.Line); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := requireVaultConfig(rt); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	items := make([]BulkPreviewItem, 0, len(req.ObjectIDs))
 	skipped := make([]BulkResult, 0)
-
-	for _, id := range req.ObjectIDs {
-		fileID := id
-		targetObjectID := ""
-		if baseID, _, isSection := paths.ParseSectionID(id); isSection {
-			fileID = baseID
-			targetObjectID = id
-		}
-
-		filePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, fileID, rt.VaultCfg)
-		if err != nil {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "object not found"})
-			continue
-		}
-		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: err.Error()})
-			continue
-		}
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "file not found"})
-			continue
-		}
-
-		if strings.Contains(id, "#") {
-			content, err := os.ReadFile(filePath)
-			if err != nil {
-				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)})
-				continue
-			}
-			doc, err := parser.ParseDocumentWithOptions(string(content), filePath, rt.VaultPath, rt.ParseOptions)
-			if err != nil {
-				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)})
-				continue
-			}
-			found := false
-			for _, section := range doc.Sections {
-				if section != nil && section.ID == id {
-					found = true
-					break
-				}
-			}
-			if !found {
-				skipped = append(skipped, BulkResult{ID: id, Status: "skipped", Reason: "section not found"})
-				continue
-			}
-		}
-
-		details := fmt.Sprintf("append: %s", req.Line)
-		if targetObjectID != "" {
-			details = fmt.Sprintf("append within %s: %s", targetObjectID, req.Line)
-		}
-		items = append(items, BulkPreviewItem{
-			ID:      id,
-			Action:  "add",
-			Details: details,
-		})
-	}
-
-	return &AddBulkPreview{
-		Action:  "add",
-		Items:   items,
-		Skipped: skipped,
-		Total:   len(req.ObjectIDs),
-	}, nil
-}
-
-func ApplyAddBulk(rt *vaultruntime.Runtime, req AddBulkRequest) (*AddBulkSummary, error) {
-	if err := ValidateAddContent(req.Line); err != nil {
-		return nil, err
-	}
-	if err := requireVaultConfig(rt); err != nil {
-		return nil, err
-	}
-
 	results := make([]BulkResult, 0, len(req.ObjectIDs))
 	addedCount := 0
 	skippedCount := 0
@@ -127,31 +54,40 @@ func ApplyAddBulk(rt *vaultruntime.Runtime, req AddBulkRequest) (*AddBulkSummary
 	captureCfg := rt.VaultCfg.GetCaptureConfig()
 
 	for _, id := range req.ObjectIDs {
+		filePath, targetObjectID, fail := resolveAddBulkItem(rt, id, req.Preview)
+		if fail != nil {
+			if req.Preview {
+				skipped = append(skipped, *fail)
+			} else {
+				if fail.Status == "skipped" {
+					skippedCount++
+				} else {
+					errorCount++
+				}
+				results = append(results, *fail)
+			}
+			continue
+		}
+
+		if req.Preview {
+			if skip := previewAddBulkItem(rt, id, filePath); skip != nil {
+				skipped = append(skipped, *skip)
+				continue
+			}
+			details := fmt.Sprintf("append: %s", req.Line)
+			if targetObjectID != "" {
+				details = fmt.Sprintf("append within %s: %s", targetObjectID, req.Line)
+			}
+			items = append(items, BulkPreviewItem{
+				ID:      id,
+				Action:  "add",
+				Details: details,
+			})
+			continue
+		}
+
 		result := BulkResult{ID: id}
-		fileID := id
-		targetObjectID := ""
-		if baseID, _, isSection := paths.ParseSectionID(id); isSection {
-			fileID = baseID
-			targetObjectID = id
-		}
-
-		filePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, fileID, rt.VaultCfg)
-		if err != nil {
-			result.Status = "skipped"
-			result.Reason = "object not found"
-			skippedCount++
-			results = append(results, result)
-			continue
-		}
-		if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
-			result.Status = "error"
-			result.Reason = err.Error()
-			errorCount++
-			results = append(results, result)
-			continue
-		}
-
-		appendResult, appendErr := Append(rt, filePath, req.Line, captureCfg, false, targetObjectID)
+		appendResult, appendErr := appendLine(rt, filePath, req.Line, captureCfg, false, targetObjectID)
 		if appendErr != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("append failed: %v", appendErr)
@@ -161,13 +97,20 @@ func ApplyAddBulk(rt *vaultruntime.Runtime, req AddBulkRequest) (*AddBulkSummary
 		}
 
 		changes.Merge(appendResult.ChangeSet)
-
 		result.Status = "added"
 		addedCount++
 		results = append(results, result)
 	}
 
-	return &AddBulkSummary{
+	if req.Preview {
+		return &AddBulkPreview{
+			Action:  "add",
+			Items:   items,
+			Skipped: skipped,
+			Total:   len(req.ObjectIDs),
+		}, nil, nil
+	}
+	return nil, &AddBulkSummary{
 		Action:    "add",
 		Results:   results,
 		Total:     len(results),
@@ -176,4 +119,44 @@ func ApplyAddBulk(rt *vaultruntime.Runtime, req AddBulkRequest) (*AddBulkSummary
 		Added:     addedCount,
 		ChangeSet: changes,
 	}, nil
+}
+
+func resolveAddBulkItem(rt *vaultruntime.Runtime, id string, preview bool) (filePath, targetObjectID string, fail *BulkResult) {
+	fileID := id
+	if baseID, _, isSection := paths.ParseSectionID(id); isSection {
+		fileID = baseID
+		targetObjectID = id
+	}
+
+	filePath, err := vault.ResolveObjectToFileWithConfig(rt.VaultPath, fileID, rt.VaultCfg)
+	if err != nil {
+		return "", "", &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
+	}
+	if err := mutationguard.ValidateContentMutationFilePath(rt.VaultPath, rt.VaultCfg, filePath); err != nil {
+		return "", "", &BulkResult{ID: id, Status: bulkFailureStatus(preview), Reason: err.Error()}
+	}
+	return filePath, targetObjectID, nil
+}
+
+func previewAddBulkItem(rt *vaultruntime.Runtime, id, filePath string) *BulkResult {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return &BulkResult{ID: id, Status: "skipped", Reason: "file not found"}
+	}
+	if !strings.Contains(id, "#") {
+		return nil
+	}
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)}
+	}
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, rt.VaultPath, rt.ParseOptions)
+	if err != nil {
+		return &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)}
+	}
+	for _, section := range doc.Sections {
+		if section != nil && section.ID == id {
+			return nil
+		}
+	}
+	return &BulkResult{ID: id, Status: "skipped", Reason: "section not found"}
 }

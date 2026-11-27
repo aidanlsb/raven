@@ -1,6 +1,8 @@
 package objectsvc
 
 import (
+	"path/filepath"
+
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/model"
@@ -139,4 +141,248 @@ type ReclassifyBulkAppliedResult struct {
 	Errors       int                    `json:"errors"`
 	Reclassified int                    `json:"reclassified"`
 	check.MissingReferences
+}
+
+// TrashListPayload is the success payload for `trash list`.
+type TrashListPayload struct {
+	Items            []TrashEntry `json:"items"`
+	Total            int          `json:"total"`
+	TrashDir         string       `json:"trash_dir"`
+	DeletionBehavior string       `json:"deletion_behavior"`
+}
+
+// RestorePayload is the success payload for `restore`.
+type RestorePayload struct {
+	Preview     bool   `json:"preview"`
+	Reference   string `json:"reference"`
+	TrashPath   string `json:"trash_path"`
+	RestorePath string `json:"restore_path"`
+	Kind        string `json:"kind"`
+	Restored    string `json:"restored,omitempty"`
+	check.MissingReferences
+}
+
+// EmptyTrashPreviewPayload is the success payload for a trash empty preview.
+type EmptyTrashPreviewPayload struct {
+	Preview   bool         `json:"preview"`
+	Items     []TrashEntry `json:"items"`
+	Total     int          `json:"total"`
+	TrashDir  string       `json:"trash_dir"`
+	OlderThan string       `json:"older_than,omitempty"`
+}
+
+// EmptyTrashAppliedPayload is the success payload for an applied trash empty.
+type EmptyTrashAppliedPayload struct {
+	Preview   bool         `json:"preview"`
+	Items     []TrashEntry `json:"items"`
+	Total     int          `json:"total"`
+	TrashDir  string       `json:"trash_dir"`
+	OlderThan string       `json:"older_than,omitempty"`
+	Removed   int          `json:"removed"`
+}
+
+func bulkPreviewPayload(action string, items []BulkPreviewItem, skipped []BulkResult, total int, warnings []commandexec.Warning) BulkPreviewResult {
+	return BulkPreviewResult{
+		Preview:  true,
+		Action:   action,
+		Items:    items,
+		Skipped:  skipped,
+		Total:    total,
+		Warnings: warnings,
+	}
+}
+
+func bulkSummaryPayload(action string, items []BulkResult, total, skipped, errors int, refs check.MissingReferences) BulkSummaryResult {
+	return BulkSummaryResult{
+		OK:                errors == 0,
+		Action:            action,
+		Items:             items,
+		Total:             total,
+		Skipped:           skipped,
+		Errors:            errors,
+		MissingReferences: refs,
+	}
+}
+
+func (p *AddBulkPreview) Payload(content string, warnings []commandexec.Warning) AddBulkPreviewResult {
+	return AddBulkPreviewResult{
+		BulkPreviewResult: bulkPreviewPayload(p.Action, p.Items, p.Skipped, p.Total, warnings),
+		Content:           content,
+	}
+}
+
+func (s *AddBulkSummary) Payload(content string, refs check.MissingReferences) AddBulkResult {
+	return AddBulkResult{
+		BulkSummaryResult: bulkSummaryPayload(s.Action, s.Results, s.Total, s.Skipped, s.Errors, refs),
+		Added:             s.Added,
+		Content:           content,
+	}
+}
+
+func (p *SetBulkPreview) Payload(fields map[string]string, warnings []commandexec.Warning) SetBulkPreviewResult {
+	return SetBulkPreviewResult{
+		BulkPreviewResult: bulkPreviewPayload(p.Action, p.Items, p.Skipped, p.Total, warnings),
+		Fields:            fields,
+	}
+}
+
+func (s *SetBulkSummary) Payload(fields map[string]string, refs check.MissingReferences) SetBulkResult {
+	return SetBulkResult{
+		BulkSummaryResult: bulkSummaryPayload(s.Action, s.Results, s.Total, s.Skipped, s.Errors, refs),
+		Modified:          s.Modified,
+		Fields:            fields,
+	}
+}
+
+func (p *DeleteBulkPreview) Payload(warnings []commandexec.Warning) DeleteBulkPreviewResult {
+	return DeleteBulkPreviewResult{
+		BulkPreviewResult: bulkPreviewPayload(p.Action, p.Items, p.Skipped, p.Total, warnings),
+		Behavior:          p.Behavior,
+	}
+}
+
+func (s *DeleteBulkSummary) Payload(refs check.MissingReferences) DeleteBulkResult {
+	return DeleteBulkResult{
+		BulkSummaryResult: bulkSummaryPayload(s.Action, s.Results, s.Total, s.Skipped, s.Errors, refs),
+		Deleted:           s.Deleted,
+		Behavior:          s.Behavior,
+	}
+}
+
+func (p *MoveBulkPreview) Payload() MoveBulkPreviewResult {
+	return MoveBulkPreviewResult{
+		BulkPreviewResult: bulkPreviewPayload(p.Action, p.Items, p.Skipped, p.Total, nil),
+		Destination:       p.Destination,
+	}
+}
+
+func (s *MoveBulkSummary) Payload(refs check.MissingReferences) MoveBulkResult {
+	return MoveBulkResult{
+		BulkSummaryResult: bulkSummaryPayload(s.Action, s.Results, s.Total, s.Skipped, s.Errors, refs),
+		Moved:             s.Moved,
+		Destination:       s.Destination,
+	}
+}
+
+func (p *ReclassifyBulkPreview) Payload() ReclassifyBulkPreviewResult {
+	return ReclassifyBulkPreviewResult{
+		Preview: true,
+		Action:  p.Action,
+		NewType: p.NewType,
+		Items:   p.Items,
+		Skipped: p.Skipped,
+		Total:   p.Total,
+	}
+}
+
+func (s *ReclassifyBulkSummary) Payload(refs check.MissingReferences) ReclassifyBulkAppliedResult {
+	return ReclassifyBulkAppliedResult{
+		OK:                s.Errors == 0,
+		Action:            s.Action,
+		NewType:           s.NewType,
+		Items:             s.Results,
+		Total:             s.Total,
+		Skipped:           s.Skipped,
+		Errors:            s.Errors,
+		Reclassified:      s.Reclassified,
+		MissingReferences: refs,
+	}
+}
+
+func (r *DeleteByReferenceResult) PreviewPayload(trashDir string) DeletePreviewResult {
+	return DeletePreviewResult{
+		Preview:   true,
+		ObjectID:  r.ObjectID,
+		Behavior:  r.Behavior,
+		TrashDir:  trashDir,
+		Backlinks: r.Backlinks,
+	}
+}
+
+func (r *DeleteByReferenceResult) AppliedPayload(vaultPath string, refs check.MissingReferences) DeleteResult {
+	data := DeleteResult{
+		Deleted:           r.ObjectID,
+		Behavior:          r.Behavior,
+		MissingReferences: refs,
+	}
+	if r.TrashPath != "" {
+		if relDest, relErr := filepath.Rel(vaultPath, r.TrashPath); relErr == nil {
+			data.TrashPath = filepath.ToSlash(relDest)
+		}
+	}
+	return data
+}
+
+func (r *MoveByReferenceResult) Envelope(preview bool, refs check.MissingReferences) any {
+	if r.NeedsConfirm && r.TypeMismatch != nil {
+		return MoveConfirmationResult{
+			Source:       r.SourceID,
+			Destination:  r.DestinationID,
+			Preview:      preview,
+			NeedsConfirm: true,
+			Reason:       r.Reason,
+		}
+	}
+	data := MoveResult{
+		Source:      r.SourceID,
+		Destination: r.DestinationID,
+	}
+	if preview {
+		data.Preview = true
+		data.Status = "preview"
+	}
+	if len(r.UpdatedRefs) > 0 {
+		data.UpdatedRefs = r.UpdatedRefs
+	}
+	if len(r.UpdatedRefFields) > 0 {
+		data.UpdatedRefFields = r.UpdatedRefFields
+	}
+	if !preview {
+		data.MissingReferences = refs
+	}
+	return data
+}
+
+func (r *ListTrashResult) Payload() TrashListPayload {
+	return TrashListPayload{
+		Items:            r.Entries,
+		Total:            len(r.Entries),
+		TrashDir:         r.TrashDir,
+		DeletionBehavior: r.DeletionBehavior,
+	}
+}
+
+func (r *RestoreByReferenceResult) Payload(preview bool, refs check.MissingReferences) RestorePayload {
+	data := RestorePayload{
+		Preview:     preview,
+		Reference:   r.Entry.Reference,
+		TrashPath:   r.Entry.TrashPath,
+		RestorePath: r.Entry.RestorePath,
+		Kind:        r.Entry.Kind,
+	}
+	if !preview {
+		data.Restored = r.Entry.Reference
+		data.MissingReferences = refs
+	}
+	return data
+}
+
+func (r *EmptyTrashResult) Payload(preview bool) any {
+	if preview {
+		return EmptyTrashPreviewPayload{
+			Preview:   true,
+			Items:     r.Entries,
+			Total:     len(r.Entries),
+			TrashDir:  r.TrashDir,
+			OlderThan: r.OlderThan,
+		}
+	}
+	return EmptyTrashAppliedPayload{
+		Preview:   false,
+		Items:     r.Entries,
+		Total:     len(r.Entries),
+		TrashDir:  r.TrashDir,
+		OlderThan: r.OlderThan,
+		Removed:   len(r.Entries),
+	}
 }

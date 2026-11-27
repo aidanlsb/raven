@@ -7,7 +7,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	ravenignore "github.com/aidanlsb/raven/internal/ignore"
-	"github.com/aidanlsb/raven/internal/parseopts"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/svcerr"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -36,7 +35,7 @@ func walkScopedDocuments(rt *vaultruntime.Runtime, scope *Scope, excludeMatcher 
 	}
 
 	walkOpts := &vault.WalkOptions{
-		ParseOptions:   parseopts.FromVaultConfig(rt.VaultCfg),
+		ParseOptions:   rt.ParseOptions,
 		ExcludeMatcher: excludeMatcher,
 	}
 	walkErr := vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(walkResult vault.WalkResult) error {

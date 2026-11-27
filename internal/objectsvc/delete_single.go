@@ -14,6 +14,7 @@ type DeleteByReferenceRequest struct {
 	Reference string
 	Behavior  string
 	TrashDir  string
+	Preview   bool
 }
 
 type DeleteByReferenceResult struct {
@@ -24,12 +25,38 @@ type DeleteByReferenceResult struct {
 	ChangeSet mutation.ChangeSet
 }
 
-func PreviewDeleteByReference(rt *vaultruntime.Runtime, req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
+func DeleteByReference(rt *vaultruntime.Runtime, req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
 	if err := requireVaultConfig(rt); err != nil {
 		return nil, err
 	}
-	result, _, err := prepareDeleteByReference(rt, req)
-	return result, err
+
+	preview, target, err := prepareDeleteByReference(rt, req)
+	if err != nil {
+		return nil, err
+	}
+	if req.Preview {
+		return preview, nil
+	}
+
+	delResult, err := deleteFile(rt, deleteFileRequest{
+		FilePath: target.FilePath,
+		Behavior: req.Behavior,
+		TrashDir: req.TrashDir,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	changes := mutation.NewChangeSet()
+	changes.AddDeleted(target.RelativePath)
+
+	return &DeleteByReferenceResult{
+		ObjectID:  preview.ObjectID,
+		Behavior:  delResult.Behavior,
+		TrashPath: delResult.TrashPath,
+		Backlinks: preview.Backlinks,
+		ChangeSet: changes,
+	}, nil
 }
 
 func prepareDeleteByReference(rt *vaultruntime.Runtime, req DeleteByReferenceRequest) (*DeleteByReferenceResult, *deleteTarget, error) {
@@ -76,35 +103,4 @@ func prepareDeleteByReference(rt *vaultruntime.Runtime, req DeleteByReferenceReq
 		Behavior:  req.Behavior,
 		Backlinks: backlinks,
 	}, target, nil
-}
-
-func DeleteByReference(rt *vaultruntime.Runtime, req DeleteByReferenceRequest) (*DeleteByReferenceResult, error) {
-	if err := requireVaultConfig(rt); err != nil {
-		return nil, err
-	}
-
-	preview, target, err := prepareDeleteByReference(rt, req)
-	if err != nil {
-		return nil, err
-	}
-
-	delResult, err := DeleteFile(rt, DeleteFileRequest{
-		FilePath: target.FilePath,
-		Behavior: req.Behavior,
-		TrashDir: req.TrashDir,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	changes := mutation.NewChangeSet()
-	changes.AddDeleted(target.RelativePath)
-
-	return &DeleteByReferenceResult{
-		ObjectID:  preview.ObjectID,
-		Behavior:  delResult.Behavior,
-		TrashPath: delResult.TrashPath,
-		Backlinks: preview.Backlinks,
-		ChangeSet: changes,
-	}, nil
 }

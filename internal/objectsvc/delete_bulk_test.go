@@ -21,9 +21,10 @@ func TestDeleteBulkFilePreviewAndApply(t *testing.T) {
 		Behavior:  "trash",
 		TrashDir:  ".trash",
 	}
-	preview, err := PreviewDeleteBulk(rt, req)
+	req.Preview = true
+	preview, _, err := DeleteBulk(rt, req)
 	if err != nil {
-		t.Fatalf("PreviewDeleteBulk() error = %v", err)
+		t.Fatalf("DeleteBulk(preview) error = %v", err)
 	}
 	if len(preview.Skipped) != 0 {
 		t.Fatalf("Skipped = %#v, want none", preview.Skipped)
@@ -36,9 +37,10 @@ func TestDeleteBulkFilePreviewAndApply(t *testing.T) {
 	}
 	v.AssertFileExists(filePath)
 
-	summary, err := ApplyDeleteBulk(rt, req)
+	req.Preview = false
+	_, summary, err := DeleteBulk(rt, req)
 	if err != nil {
-		t.Fatalf("ApplyDeleteBulk() error = %v", err)
+		t.Fatalf("DeleteBulk() error = %v", err)
 	}
 	if summary.Deleted != 1 || summary.Skipped != 0 || summary.Errors != 0 {
 		t.Fatalf("summary = %#v, want one deleted file", summary)

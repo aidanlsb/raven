@@ -22,7 +22,7 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type ReclassifyRequest struct {
+type reclassifyRequest struct {
 	ObjectRef string
 	ObjectID  string
 	FilePath  string
@@ -67,7 +67,7 @@ type ReclassifyResult struct {
 	WarningMessages []string           `json:"-"`
 }
 
-func Reclassify(rt *vaultruntime.Runtime, req ReclassifyRequest) (*ReclassifyResult, error) {
+func reclassify(rt *vaultruntime.Runtime, req reclassifyRequest) (*ReclassifyResult, error) {
 	if err := requireVaultConfig(rt); err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func ReclassifyByReference(rt *vaultruntime.Runtime, req ReclassifyByReferenceRe
 		return nil, svcerr.New(codes.ErrInvalidInput, "reclassify only supports file-level objects").WithSuggestion("Use a file-level object ID without a section fragment")
 	}
 
-	return Reclassify(rt, ReclassifyRequest{
+	return reclassify(rt, reclassifyRequest{
 		ObjectRef:   req.Reference,
 		ObjectID:    resolved.ObjectID,
 		FilePath:    resolved.FilePath,

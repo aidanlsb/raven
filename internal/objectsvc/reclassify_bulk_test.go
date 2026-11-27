@@ -53,9 +53,11 @@ traits: {}
 		UpdateRefs:  true,
 	}
 
-	preview, err := PreviewReclassifyBulk(rt, request)
+	previewReq := request
+	previewReq.Preview = true
+	preview, _, err := ReclassifyBulk(rt, previewReq)
 	if err != nil {
-		t.Fatalf("PreviewReclassifyBulk: %v", err)
+		t.Fatalf("ReclassifyBulk(preview): %v", err)
 	}
 	if len(preview.Items) != 1 || len(preview.Skipped) != 1 {
 		t.Fatalf("preview items/skipped = %d/%d, want 1/1: %#v", len(preview.Items), len(preview.Skipped), preview)
@@ -82,9 +84,9 @@ traits: {}
 		t.Fatalf("preview created destination, err=%v", err)
 	}
 
-	blocked, err := ApplyReclassifyBulk(rt, request, nil)
+	_, blocked, err := ReclassifyBulk(rt, request)
 	if err != nil {
-		t.Fatalf("ApplyReclassifyBulk without force: %v", err)
+		t.Fatalf("ReclassifyBulk without force: %v", err)
 	}
 	if blocked.Reclassified != 0 || blocked.Skipped != 1 || blocked.Errors != 1 {
 		t.Fatalf("blocked summary = %#v, want 0 reclassified, 1 skipped, 1 error", blocked)
@@ -92,9 +94,9 @@ traits: {}
 	assertReclassifyType(t, filepath.Join(vaultPath, "notes/ready.md"), "note")
 
 	request.Force = true
-	applied, err := ApplyReclassifyBulk(rt, request, nil)
+	_, applied, err := ReclassifyBulk(rt, request)
 	if err != nil {
-		t.Fatalf("ApplyReclassifyBulk with force: %v", err)
+		t.Fatalf("ReclassifyBulk with force: %v", err)
 	}
 	if applied.Reclassified != 1 || applied.Skipped != 0 || applied.Errors != 1 {
 		t.Fatalf("applied summary = %#v, want 1 reclassified, 0 skipped, 1 error", applied)
@@ -139,9 +141,11 @@ traits: {}
 		UpdateRefs:  true,
 	}
 
-	preview, err := PreviewReclassifyBulk(rt, request)
+	previewReq := request
+	previewReq.Preview = true
+	preview, _, err := ReclassifyBulk(rt, previewReq)
 	if err != nil {
-		t.Fatalf("PreviewReclassifyBulk: %v", err)
+		t.Fatalf("ReclassifyBulk(preview): %v", err)
 	}
 	if len(preview.Items) != 1 || len(preview.Skipped) != 1 {
 		t.Fatalf("preview items/skipped = %d/%d, want 1/1: %#v", len(preview.Items), len(preview.Skipped), preview)
@@ -150,9 +154,9 @@ traits: {}
 		t.Fatalf("collision destination = %#v, want docs/shared.md", got)
 	}
 
-	applied, err := ApplyReclassifyBulk(rt, request, nil)
+	_, applied, err := ReclassifyBulk(rt, request)
 	if err != nil {
-		t.Fatalf("ApplyReclassifyBulk: %v", err)
+		t.Fatalf("ReclassifyBulk: %v", err)
 	}
 	if applied.Reclassified != 1 || applied.Skipped != 1 || applied.Errors != 0 {
 		t.Fatalf("applied summary = %#v, want 1 reclassified and 1 skipped", applied)

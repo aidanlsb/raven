@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edges.
 
 ### Internal / Refactor
+- Collapsed `objectsvc` Preview/Apply entrypoints into one function per
+  operation with a `Preview` flag (delete, restore, empty trash, and bulk
+  add/set/delete/move/reclassify). File-level helpers (`setObjectFile`,
+  `deleteFile`, `reclassify`, …) are unexported; command handlers go through
+  the ByReference/`Add`/`Write` path. JSON envelopes are unchanged.
+- Mutation handlers that still assembled envelopes (`edit`, `import`,
+  `section`, bulk objects, reclassify, check fix/create-missing, trash) now
+  return `*svc` `Payload()`/`Envelope()` types. Wire format is unchanged.
+- Folded `internal/parseopts` into `vaultruntime.ParseOptionsFromVaultConfig`.
 - Removed `internal/commandpayload`. Command JSON `data` is now the `*svc`
   result type (json tags on the service structs) instead of a field-by-field
   copy into a parallel payload package. Wire format is unchanged; a golden

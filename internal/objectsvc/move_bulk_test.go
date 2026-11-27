@@ -16,11 +16,13 @@ func TestMoveBulkRejectsSectionSources(t *testing.T) {
 		DestinationDir: "archive/",
 	}
 
-	if _, err := PreviewMoveBulk(rt, request); err == nil || !strings.Contains(err.Error(), "does not accept section sources") {
-		t.Fatalf("PreviewMoveBulk() error = %v, want section-source rejection", err)
+	previewReq := request
+	previewReq.Preview = true
+	if _, _, err := MoveBulk(rt, previewReq); err == nil || !strings.Contains(err.Error(), "does not accept section sources") {
+		t.Fatalf("MoveBulk(preview) error = %v, want section-source rejection", err)
 	}
-	if _, err := ApplyMoveBulk(rt, request); err == nil || !strings.Contains(err.Error(), "does not accept section sources") {
-		t.Fatalf("ApplyMoveBulk() error = %v, want section-source rejection", err)
+	if _, _, err := MoveBulk(rt, request); err == nil || !strings.Contains(err.Error(), "does not accept section sources") {
+		t.Fatalf("MoveBulk() error = %v, want section-source rejection", err)
 	}
 }
 
@@ -35,13 +37,13 @@ func TestApplyMoveBulkRewritesRefsBetweenMovedFiles(t *testing.T) {
 	rt := testRuntime(t, v.Path)
 	indexVaultFiles(t, v.Path, rt.Schema, "people/alpha.md", "people/beta.md")
 
-	summary, err := ApplyMoveBulk(rt, MoveBulkRequest{
+	_, summary, err := MoveBulk(rt, MoveBulkRequest{
 		ObjectIDs:      []string{"people/alpha", "people/beta"},
 		DestinationDir: "archive/",
 		UpdateRefs:     true,
 	})
 	if err != nil {
-		t.Fatalf("ApplyMoveBulk() error = %v", err)
+		t.Fatalf("MoveBulk() error = %v", err)
 	}
 	if summary.Moved != 2 || summary.Errors != 0 {
 		t.Fatalf("summary = %#v, want two successful moves", summary)

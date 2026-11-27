@@ -70,32 +70,22 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 func runAddBulk(sess *vaultsession.Session, ids []string, text string, confirm bool) commandexec.Result {
 	// Section IDs (file#slug) are passed through: bulk add appends within the
 	// targeted section instead of at the end of the file.
-	var warnings []commandexec.Warning
 	request := objectsvc.AddBulkRequest{
 		ObjectIDs: ids,
 		Line:      text,
+		Preview:   !confirm,
 	}
 
-	if !confirm {
-		preview, err := objectsvc.PreviewAddBulk(sess.Runtime(), request)
+	if request.Preview {
+		preview, _, err := objectsvc.AddBulk(sess.Runtime(), request)
 		if err != nil {
 			return mapContentMutationError(err).WithAttemptedIDs("object_ids", ids)
 		}
-		return commandexec.Success(objectsvc.AddBulkPreviewResult{
-			BulkPreviewResult: objectsvc.BulkPreviewResult{
-				Preview:  true,
-				Action:   "add",
-				Items:    preview.Items,
-				Skipped:  preview.Skipped,
-				Total:    preview.Total,
-				Warnings: warnings,
-			},
-			Content: text,
-		}, &commandexec.Meta{Count: len(preview.Items)})
+		return commandexec.Success(preview.Payload(text, nil), &commandexec.Meta{Count: len(preview.Items)})
 	}
 
 	summary, proj, failure := mutateResult(sess, func(rt *vaultruntime.Runtime) (*objectsvc.AddBulkSummary, mutation.ChangeSet, error) {
-		summary, err := objectsvc.ApplyAddBulk(rt, request)
+		_, summary, err := objectsvc.AddBulk(rt, request)
 		if err != nil {
 			return nil, mutation.ChangeSet{}, err
 		}
@@ -105,21 +95,11 @@ func runAddBulk(sess *vaultsession.Session, ids []string, text string, confirm b
 		return failure.WithAttemptedIDs("object_ids", ids)
 	}
 
-	data := objectsvc.AddBulkResult{
-		BulkSummaryResult: objectsvc.BulkSummaryResult{
-			OK:                summary.Errors == 0,
-			Action:            summary.Action,
-			Items:             summary.Results,
-			Total:             summary.Total,
-			Skipped:           summary.Skipped,
-			Errors:            summary.Errors,
-			MissingReferences: missingRefsOf(proj),
-		},
-		Added:   summary.Added,
-		Content: text,
-	}
-	warnings = appendCommandWarnings(warnings, proj.Warnings)
-	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
+	return commandexec.SuccessWithWarnings(
+		summary.Payload(text, missingRefsOf(proj)),
+		proj.Warnings,
+		&commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors},
+	)
 }
 
 func runAddSingle(sess *vaultsession.Session, text, toRef string) commandexec.Result {
@@ -133,13 +113,8 @@ func runAddSingle(sess *vaultsession.Session, text, toRef string) commandexec.Re
 	if failure.Error != nil {
 		return failure
 	}
-	data := objectsvc.AddResult{
-		File:              result.File,
-		Line:              result.Line,
-		Content:           text,
-		MissingReferences: missingRefsOf(proj),
-	}
-	return commandexec.SuccessWithWarnings(data, proj.Warnings, nil)
+	result.MissingReferences = missingRefsOf(proj)
+	return commandexec.SuccessWithWarnings(*result, proj.Warnings, nil)
 }
 
 func removedAddHeadingFailure() commandexec.Result {

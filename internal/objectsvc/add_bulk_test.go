@@ -15,12 +15,13 @@ func TestPreviewAddBulk(t *testing.T) {
 		Build()
 	rt := testRuntime(t, v.Path)
 
-	preview, err := PreviewAddBulk(rt, AddBulkRequest{
+	preview, _, err := AddBulk(rt, AddBulkRequest{
 		ObjectIDs: []string{"people/alice", "people/missing"},
 		Line:      "bulk note",
+		Preview:   true,
 	})
 	if err != nil {
-		t.Fatalf("PreviewAddBulk() error = %v", err)
+		t.Fatalf("AddBulk(preview) error = %v", err)
 	}
 
 	if preview.Total != 2 {
@@ -42,12 +43,12 @@ func TestApplyAddBulk(t *testing.T) {
 		Build()
 	rt := testRuntime(t, v.Path)
 
-	summary, err := ApplyAddBulk(rt, AddBulkRequest{
+	_, summary, err := AddBulk(rt, AddBulkRequest{
 		ObjectIDs: []string{"people/alice", "people/missing"},
 		Line:      "bulk apply line",
 	})
 	if err != nil {
-		t.Fatalf("ApplyAddBulk() error = %v", err)
+		t.Fatalf("AddBulk() error = %v", err)
 	}
 
 	if summary.Added != 1 || summary.Skipped != 1 || summary.Errors != 0 {

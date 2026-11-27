@@ -14,19 +14,19 @@ import (
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-type DeleteFileRequest struct {
+type deleteFileRequest struct {
 	FilePath string
 	Behavior string
 	TrashDir string
 	Now      func() time.Time
 }
 
-type DeleteFileResult struct {
+type deleteFileResult struct {
 	Behavior  string
 	TrashPath string
 }
 
-func DeleteFile(rt *vaultruntime.Runtime, req DeleteFileRequest) (*DeleteFileResult, error) {
+func deleteFile(rt *vaultruntime.Runtime, req deleteFileRequest) (*deleteFileResult, error) {
 	if err := requireRuntime(rt); err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func DeleteFile(rt *vaultruntime.Runtime, req DeleteFileRequest) (*DeleteFileRes
 			}
 		}
 
-		return &DeleteFileResult{
+		return &deleteFileResult{
 			Behavior:  behavior,
 			TrashPath: destPath,
 		}, nil
@@ -117,7 +117,7 @@ func DeleteFile(rt *vaultruntime.Runtime, req DeleteFileRequest) (*DeleteFileRes
 		if err := os.Remove(req.FilePath); err != nil {
 			return nil, svcerr.Wrap(codes.ErrFileWrite, "failed to delete file", err)
 		}
-		return &DeleteFileResult{Behavior: behavior}, nil
+		return &deleteFileResult{Behavior: behavior}, nil
 
 	default:
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("invalid deletion behavior: %s", behavior)).WithSuggestion("Use 'trash' or 'permanent'")
