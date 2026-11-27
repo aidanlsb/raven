@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edges.
 
 ### Internal / Refactor
+- Remaining untyped command handlers (`docs`, `skills`, `config`/`vault`,
+  schema reads, `backlinks`/`outlinks`/`resolve`/`open`, `date`, `daily`,
+  `vault stats`, saved queries) now return `*svc` `Payload()` types. Duplicate
+  `Warning` structs collapse onto `commandexec.Warning`. `bulkops.Error` is
+  folded into `svcerr`. CLI/MCP/`rvn api` JSON and error codes are unchanged.
 - Collapsed `objectsvc` Preview/Apply entrypoints into one function per
   operation with a `Preview` flag (delete, restore, empty trash, and bulk
   add/set/delete/move/reclassify). File-level helpers (`setObjectFile`,
