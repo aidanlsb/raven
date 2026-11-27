@@ -103,10 +103,7 @@ func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Res
 	}
 	group := result.Groups[0]
 
-	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
-		"target": group.Target,
-		"items":  referenceItems(group.Items),
-	}, &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()}))
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(result.Payload(), &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()}))
 }
 
 // HandleOutlinks executes the canonical `outlinks` command.
@@ -135,10 +132,7 @@ func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Resu
 	}
 	group := result.Groups[0]
 
-	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
-		"source": group.Source,
-		"items":  referenceItems(group.Items),
-	}, &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()}))
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(result.Payload(), &commandexec.Meta{Count: group.Count, QueryTimeMs: time.Since(start).Milliseconds()}))
 }
 
 func handleBacklinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, start time.Time) commandexec.Result {
@@ -148,19 +142,12 @@ func handleBacklinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, sta
 	}
 
 	serviceResult := readsvc.BacklinksForReferences(rt, references)
-	groups := serviceResult.Groups
 	errors := make([]model.ReferenceInputError, 0)
 	for _, failure := range serviceResult.Failures {
 		errors = append(errors, referenceInputError(failure.Input, mapTraversalFailure(failure)))
 	}
 
-	return commandexec.Success(map[string]interface{}{
-		"stdin":           true,
-		"items_by_target": groups,
-		"errors":          errors,
-		"total_inputs":    len(references),
-		"resolved":        len(groups),
-	}, &commandexec.Meta{Count: serviceResult.Total, QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(serviceResult.StdinPayload(len(references), errors), &commandexec.Meta{Count: serviceResult.Total, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 func backlinksStdinMode(args map[string]interface{}) bool {
@@ -174,19 +161,12 @@ func handleOutlinksStdin(rt *vaultruntime.Runtime, req commandexec.Request, star
 	}
 
 	serviceResult := readsvc.OutlinksForReferences(rt, references)
-	groups := serviceResult.Groups
 	errors := make([]model.ReferenceInputError, 0)
 	for _, failure := range serviceResult.Failures {
 		errors = append(errors, referenceInputError(failure.Input, mapTraversalFailure(failure)))
 	}
 
-	return commandexec.Success(map[string]interface{}{
-		"stdin":           true,
-		"items_by_source": groups,
-		"errors":          errors,
-		"total_inputs":    len(references),
-		"resolved":        len(groups),
-	}, &commandexec.Meta{Count: serviceResult.Total, QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.Success(serviceResult.StdinPayload(len(references), errors), &commandexec.Meta{Count: serviceResult.Total, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 func outlinksStdinMode(args map[string]interface{}) bool {
@@ -224,64 +204,18 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 
 	result, err := readsvc.ResolveReference(rt, reference)
 	if err != nil {
-		return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
-			"resolved":  false,
-			"reference": reference,
-		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
+		return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(readsvc.ResolveMiss(reference), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
 	}
 	if result.Ambiguous {
-		matches := make([]map[string]interface{}, 0, len(result.Matches))
-		for _, match := range result.Matches {
-			entry := map[string]interface{}{"object_id": match}
-			if result.MatchSources != nil {
-				if source, ok := result.MatchSources[match]; ok {
-					entry["match_source"] = source
-				}
-			}
-			matches = append(matches, entry)
-		}
-
-		return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
-			"resolved":  false,
-			"ambiguous": true,
-			"reference": reference,
-			"items":     matches,
-		}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
+		return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(result.AmbiguousPayload(reference), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
 	}
 
-	resolved := result.Resolved
-	relPath := resolved.FilePath
-	if rel, relErr := filepath.Rel(req.VaultPath, resolved.FilePath); relErr == nil {
+	relPath := result.Resolved.FilePath
+	if rel, relErr := filepath.Rel(req.VaultPath, result.Resolved.FilePath); relErr == nil {
 		relPath = rel
 	}
 
-	data := map[string]interface{}{
-		"resolved":   true,
-		"object_id":  resolved.ObjectID,
-		"file_path":  relPath,
-		"is_section": resolved.IsSection,
-	}
-	if result.ObjectType != "" {
-		data["type"] = result.ObjectType
-	}
-	if resolved.MatchSource != "" {
-		data["match_source"] = resolved.MatchSource
-	}
-	if resolved.IsSection {
-		data["file_object_id"] = resolved.FileObjectID
-		if resolved.LineStart > 0 {
-			data["line_start"] = resolved.LineStart
-		}
-		if resolved.LineEnd != nil {
-			data["line_end"] = resolved.LineEnd
-			data["direct_line_end"] = resolved.LineEnd
-		}
-		if resolved.SubtreeLineEnd != nil {
-			data["subtree_line_end"] = resolved.SubtreeLineEnd
-		}
-	}
-
-	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(result.HitPayload(relPath), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}))
 }
 
 // HandleRead executes the canonical `read` command.
@@ -380,23 +314,8 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 			return commandexec.Failure("REF_NOT_FOUND", "no files to open", nil, "Check references and run 'rvn reindex' if needed")
 		}
 
-		relPaths := make([]string, 0, len(result.Targets))
-		for _, target := range result.Targets {
-			relPaths = append(relPaths, target.RelativePath)
-		}
-
-		errs := make([]string, 0, len(result.Failures))
-		for _, failure := range result.Failures {
-			errs = append(errs, fmt.Sprintf("%s: %s", failure.Reference, failure.Message))
-		}
-
-		return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(map[string]interface{}{
-			"files":   relPaths,
-			"targets": result.Targets,
-			"opened":  result.Opened,
-			"editor":  result.Editor,
-			"errors":  errs,
-		}, &commandexec.Meta{Count: len(relPaths)}))
+		payload := result.Payload()
+		return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(payload, &commandexec.Meta{Count: len(payload.Files)}))
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "reference"))
@@ -409,20 +328,7 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 		return mapOpenFailure(err)
 	}
 
-	data := map[string]interface{}{
-		"object_id": target.ObjectID,
-		"file":      target.RelativePath,
-		"opened":    opened,
-		"editor":    editor,
-	}
-	if target.IsSection {
-		data["is_section"] = true
-		data["file_object_id"] = target.FileObjectID
-		if target.LineStart > 0 {
-			data["line_start"] = target.LineStart
-		}
-	}
-	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(data, nil))
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(target.Payload(opened, editor), nil))
 }
 
 func mapResolveFailure(err error, reference string) commandexec.Result {
@@ -491,10 +397,4 @@ func mapIndexRebuildRequired(err error) (commandexec.Result, bool) {
 		nil,
 		"Run 'rvn reindex --full' to rebuild the index",
 	), true
-}
-
-func referenceItems(references []model.Reference) []model.Reference {
-	items := make([]model.Reference, len(references))
-	copy(items, references)
-	return items
 }

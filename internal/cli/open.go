@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -70,7 +71,11 @@ func handleCanonicalOpenFailure(cmd *cobra.Command, result commandexec.Result) e
 		ArgKey:    "reference",
 		Prompt:    "open/ref> ",
 		Render: func(_ *cobra.Command, retryResult commandexec.Result) error {
-			return renderSingleOpenResult(canonicalDataMap(retryResult))
+			data, err := commandResultData[readsvc.OpenHitPayload](retryResult)
+			if err != nil {
+				return handleErrorMsg(ErrInternal, err.Error(), "")
+			}
+			return renderSingleOpenResult(data)
 		},
 	})
 }
@@ -106,35 +111,38 @@ func openFileInEditorAtLine(filePath, relPath string, line int, skipOpenMessage 
 
 func handleOpenResult(cmd *cobra.Command, result commandexec.Result) error {
 	bulk, _ := cmd.Flags().GetBool("stdin")
-	data := canonicalDataMap(result)
 	if bulk {
-		files := stringSliceFromAny(data["files"])
-		errors := stringSliceFromAny(data["errors"])
-		if boolValue(data["opened"]) {
-			fmt.Println(ui.Checkf("Opening %d file(s)", len(files)))
-			for _, p := range files {
+		data, err := commandResultData[readsvc.OpenBulkPayload](result)
+		if err != nil {
+			return handleErrorMsg(ErrInternal, err.Error(), "")
+		}
+		if data.Opened {
+			fmt.Println(ui.Checkf("Opening %d file(s)", len(data.Files)))
+			for _, p := range data.Files {
 				fmt.Println(ui.Bullet(ui.FilePath(p)))
 			}
 		} else {
 			fmt.Println(ui.SectionHeader("Files"))
-			for _, p := range files {
+			for _, p := range data.Files {
 				fmt.Println(ui.Bullet(ui.FilePath(p)))
 			}
 			fmt.Println(ui.Hint("Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically."))
 		}
-		for _, e := range errors {
+		for _, e := range data.Errors {
 			fmt.Println(ui.Warning(e))
 		}
 		return nil
 	}
 
-	file := stringValue(data["file"])
-	line := intFromAny(data["line_start"])
-	if boolValue(data["opened"]) {
-		if line > 0 {
-			fmt.Println(ui.Checkf("Opening %s:%d", ui.FilePath(file), line))
+	data, err := commandResultData[readsvc.OpenHitPayload](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	if data.Opened {
+		if data.LineStart > 0 {
+			fmt.Println(ui.Checkf("Opening %s:%d", ui.FilePath(data.File), data.LineStart))
 		} else {
-			fmt.Println(ui.Checkf("Opening %s", ui.FilePath(file)))
+			fmt.Println(ui.Checkf("Opening %s", ui.FilePath(data.File)))
 		}
 		return nil
 	}
@@ -153,22 +161,20 @@ func ambiguousReferenceDetails(raw interface{}) (string, []string, map[string]st
 	return reference, matches, matchSources
 }
 
-func renderSingleOpenResult(data map[string]interface{}) error {
-	file := stringValue(data["file"])
-	line := intFromAny(data["line_start"])
-	if boolValue(data["opened"]) {
-		if line > 0 {
-			fmt.Println(ui.Checkf("Opening %s:%d", ui.FilePath(file), line))
+func renderSingleOpenResult(data readsvc.OpenHitPayload) error {
+	if data.Opened {
+		if data.LineStart > 0 {
+			fmt.Println(ui.Checkf("Opening %s:%d", ui.FilePath(data.File), data.LineStart))
 		} else {
-			fmt.Println(ui.Checkf("Opening %s", ui.FilePath(file)))
+			fmt.Println(ui.Checkf("Opening %s", ui.FilePath(data.File)))
 		}
 		return nil
 	}
 	fmt.Println(ui.SectionHeader("File"))
-	if line > 0 {
-		fmt.Println(ui.Bullet(fmt.Sprintf("%s:%d", ui.FilePath(file), line)))
+	if data.LineStart > 0 {
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s:%d", ui.FilePath(data.File), data.LineStart)))
 	} else {
-		fmt.Println(ui.Bullet(ui.FilePath(file)))
+		fmt.Println(ui.Bullet(ui.FilePath(data.File)))
 	}
 	fmt.Println(ui.Hint("Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically."))
 	return nil

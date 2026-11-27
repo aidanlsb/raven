@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -25,47 +26,37 @@ func prepareResolveArgs(_ *cobra.Command, args []string) ([]string, bool, error)
 }
 
 func renderResolve(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	reference := stringValue(data["reference"])
-	if ambiguous, _ := data["ambiguous"].(bool); ambiguous {
-		fmt.Println(ui.Warningf("Reference '%s' is ambiguous.", reference))
+	switch data := result.Data.(type) {
+	case readsvc.ResolveAmbiguousPayload:
+		fmt.Println(ui.Warningf("Reference '%s' is ambiguous.", data.Reference))
 		fmt.Println(ui.Hint("Matches:"))
-		if matches, ok := data["items"].([]map[string]interface{}); ok {
-			for _, match := range matches {
-				src := ""
-				if s, ok := match["match_source"].(string); ok {
-					src = " " + ui.Hint("("+s+")")
-				}
-				fmt.Println(ui.Bullet(fmt.Sprintf("%s%s", match["object_id"], src)))
+		for _, match := range data.Items {
+			src := ""
+			if match.MatchSource != "" {
+				src = " " + ui.Hint("("+match.MatchSource+")")
 			}
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s%s", match.ObjectID, src)))
 		}
 		return nil
-	}
-
-	if resolved, _ := data["resolved"].(bool); !resolved {
-		fmt.Println(ui.Starf("Reference '%s' not found.", reference))
+	case readsvc.ResolveMissPayload:
+		fmt.Println(ui.Starf("Reference '%s' not found.", data.Reference))
 		return nil
+	case readsvc.ResolveHitPayload:
+		fmt.Printf("%s %s\n", ui.SectionHeader("Resolved"), ui.Bold.Render(data.ObjectID))
+		if data.Type != "" {
+			fmt.Printf("  %s %s\n", ui.Hint("Type:"), data.Type)
+		}
+		fmt.Printf("  %s %s\n", ui.Hint("File:"), ui.FilePath(data.FilePath))
+		if data.IsSection {
+			fmt.Printf("  %s %s\n", ui.Hint("Parent:"), data.FileObjectID)
+		}
+		if data.MatchSource != "" {
+			fmt.Printf("  %s %s\n", ui.Hint("Matched via:"), data.MatchSource)
+		}
+		return nil
+	default:
+		return handleErrorMsg(ErrInternal, "unexpected resolve result shape", "")
 	}
-
-	objectID, _ := data["object_id"].(string)
-	objectType, _ := data["type"].(string)
-	relFilePath, _ := data["file_path"].(string)
-	isSection, _ := data["is_section"].(bool)
-	fileObjectID, _ := data["file_object_id"].(string)
-	matchSource, _ := data["match_source"].(string)
-
-	fmt.Printf("%s %s\n", ui.SectionHeader("Resolved"), ui.Bold.Render(objectID))
-	if objectType != "" {
-		fmt.Printf("  %s %s\n", ui.Hint("Type:"), objectType)
-	}
-	fmt.Printf("  %s %s\n", ui.Hint("File:"), ui.FilePath(relFilePath))
-	if isSection {
-		fmt.Printf("  %s %s\n", ui.Hint("Parent:"), fileObjectID)
-	}
-	if matchSource != "" {
-		fmt.Printf("  %s %s\n", ui.Hint("Matched via:"), matchSource)
-	}
-	return nil
 }
 
 func init() {

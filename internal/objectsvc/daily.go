@@ -22,6 +22,25 @@ type EnsureDailyResult struct {
 	Created      bool
 }
 
+// DailyPayload is the success payload for `daily`.
+type DailyPayload struct {
+	Created bool   `json:"created"`
+	Date    string `json:"date"`
+	File    string `json:"file"`
+	ID      string `json:"id"`
+	Opened  bool   `json:"opened"`
+}
+
+func (r *EnsureDailyResult) Payload() DailyPayload {
+	return DailyPayload{
+		Created: r.Created,
+		Date:    r.Date,
+		File:    r.RelativePath,
+		ID:      r.Date,
+		Opened:  false,
+	}
+}
+
 // DailyIdentity is the resolved daily-note location for a date argument. It
 // never creates a file. Exists reports whether the note is already on disk
 // (the same check `rvn daily` uses before creating).

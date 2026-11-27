@@ -23,25 +23,18 @@ func TestHandleConfigShowReturnsEffectiveDefaults(t *testing.T) {
 	if !result.OK {
 		t.Fatalf("HandleConfigShow() failed: %+v", result.Error)
 	}
-	data, ok := result.Data.(map[string]interface{})
+	data, ok := result.Data.(configsvc.ShowResult)
 	if !ok {
-		t.Fatalf("data = %#v, want map", result.Data)
+		t.Fatalf("data = %#v, want ShowResult", result.Data)
 	}
-	if data["editor_mode"] != "auto" {
-		t.Fatalf("editor_mode = %#v, want auto", data["editor_mode"])
+	if data.EditorMode != "auto" {
+		t.Fatalf("editor_mode = %#v, want auto", data.EditorMode)
 	}
-	uiData, ok := data["ui"].(map[string]interface{})
-	if !ok || uiData["markdown_style"] != "auto" || len(uiData) != 1 {
-		t.Fatalf("ui = %#v, want only markdown_style=auto", data["ui"])
+	if data.UI.MarkdownStyle != "auto" {
+		t.Fatalf("ui = %#v, want markdown_style=auto", data.UI)
 	}
-	if data["state_path"] != filepath.Join(filepath.Dir(configPath), "state.toml") {
-		t.Fatalf("state_path = %#v, want resolved sibling state.toml", data["state_path"])
-	}
-	if _, exists := data["vault"]; exists {
-		t.Fatalf("config show exposed removed vault key: %#v", data)
-	}
-	if _, exists := data["state_file"]; exists {
-		t.Fatalf("config show exposed removed state_file key: %#v", data)
+	if data.StatePath != filepath.Join(filepath.Dir(configPath), "state.toml") {
+		t.Fatalf("state_path = %#v, want resolved sibling state.toml", data.StatePath)
 	}
 }
 
@@ -75,18 +68,18 @@ func TestHandleVaultListSurfacesMissingActiveVault(t *testing.T) {
 	if !result.OK {
 		t.Fatalf("HandleVaultList() failed: %+v", result.Error)
 	}
-	data, ok := result.Data.(map[string]interface{})
+	data, ok := result.Data.(configsvc.VaultListResult)
 	if !ok {
-		t.Fatalf("data = %#v, want map", result.Data)
+		t.Fatalf("data = %#v, want VaultListResult", result.Data)
 	}
-	if data["active_missing"] != true {
-		t.Fatalf("active_missing = %#v, want true", data["active_missing"])
+	if !data.ActiveMissing {
+		t.Fatalf("active_missing = %#v, want true", data.ActiveMissing)
 	}
-	if data["active_vault"] != "personal" {
-		t.Fatalf("active_vault = %#v, want personal", data["active_vault"])
+	if data.ActiveVault != "personal" {
+		t.Fatalf("active_vault = %#v, want personal", data.ActiveVault)
 	}
-	if data["current_vault"] != (*configsvc.CurrentVaultInfo)(nil) {
-		t.Fatalf("current_vault = %#v, want nil", data["current_vault"])
+	if data.Current != nil {
+		t.Fatalf("current_vault = %#v, want nil", data.Current)
 	}
 }
 
@@ -103,11 +96,11 @@ func TestHandleVaultListPathOnly(t *testing.T) {
 	if !result.OK {
 		t.Fatalf("HandleVaultList() failed: %+v", result.Error)
 	}
-	data, ok := result.Data.(map[string]interface{})
+	data, ok := result.Data.(configsvc.VaultPathResult)
 	if !ok {
-		t.Fatalf("data = %#v, want map", result.Data)
+		t.Fatalf("data = %#v, want VaultPathResult", result.Data)
 	}
-	if data["path"] != wantPath || len(data) != 1 {
+	if data.Path != wantPath {
 		t.Fatalf("HandleVaultList() data = %#v, want only path %q", data, wantPath)
 	}
 }
@@ -141,18 +134,18 @@ func TestHandleVaultFocusDescribesCLIAndMCPApplication(t *testing.T) {
 			if !result.OK {
 				t.Fatalf("HandleVaultFocus() failed: %+v", result.Error)
 			}
-			data, ok := result.Data.(map[string]interface{})
+			data, ok := result.Data.(configsvc.VaultFocusPayload)
 			if !ok {
-				t.Fatalf("data = %#v, want map", result.Data)
+				t.Fatalf("data = %#v, want VaultFocusPayload", result.Data)
 			}
-			if data["applied"] != tt.wantApplied {
-				t.Fatalf("applied = %#v, want %v", data["applied"], tt.wantApplied)
+			if data.Applied != tt.wantApplied {
+				t.Fatalf("applied = %#v, want %v", data.Applied, tt.wantApplied)
 			}
-			_, hasHint := data["hint"]
+			hasHint := data.Hint != ""
 			if hasHint != tt.wantHint {
 				t.Fatalf("hint presence = %v, want %v", hasHint, tt.wantHint)
 			}
-			if data["path"] != vaultPath || data["scope"] != "mcp_session" || data["session_only"] != true {
+			if data.Path != vaultPath || data.Scope != "mcp_session" || !data.SessionOnly {
 				t.Fatalf("focus data = %#v", data)
 			}
 		})

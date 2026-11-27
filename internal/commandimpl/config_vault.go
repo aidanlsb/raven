@@ -17,7 +17,7 @@ func HandleConfigShow(_ context.Context, req commandexec.Request) commandexec.Re
 	if err != nil {
 		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
-	return commandexec.Success(ctx.Data(), nil)
+	return commandexec.Success(ctx.Payload(), nil)
 }
 
 // HandleConfigInit executes the canonical `config_init` command.
@@ -28,10 +28,7 @@ func HandleConfigInit(_ context.Context, req commandexec.Request) commandexec.Re
 	if err != nil {
 		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path": result.ConfigPath,
-		"created":     result.Created,
-	}, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 // HandleConfigSet executes the canonical `config_set` command.
@@ -44,9 +41,7 @@ func HandleConfigSet(_ context.Context, req commandexec.Request) commandexec.Res
 		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
 
-	data := result.Context.Data()
-	data["changed"] = result.Changed
-	return commandexec.Success(data, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 // HandleConfigUnset executes the canonical `config_unset` command.
@@ -59,16 +54,14 @@ func HandleConfigUnset(_ context.Context, req commandexec.Request) commandexec.R
 		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn config init' first")
 	}
 
-	data := result.Context.Data()
-	data["changed"] = result.Changed
-	return commandexec.Success(data, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 // HandleVaultList executes the canonical `vault_list` command.
 func HandleVaultList(_ context.Context, req commandexec.Request) commandexec.Result {
 	if boolArg(req.Args, "path-only") {
-		return commandexec.Success(map[string]interface{}{
-			"path": filepath.Clean(strings.TrimSpace(req.VaultPath)),
+		return commandexec.Success(configsvc.VaultPathResult{
+			Path: filepath.Clean(strings.TrimSpace(req.VaultPath)),
 		}, nil)
 	}
 
@@ -76,15 +69,7 @@ func HandleVaultList(_ context.Context, req commandexec.Request) commandexec.Res
 	if err != nil {
 		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
-	return commandexec.Success(map[string]interface{}{
-		"config_path":    result.ConfigPath,
-		"state_path":     result.StatePath,
-		"default_vault":  result.DefaultVault,
-		"active_vault":   result.ActiveVault,
-		"active_missing": result.ActiveMissing,
-		"current_vault":  result.Current,
-		"vaults":         result.Vaults,
-	}, &commandexec.Meta{Count: len(result.Vaults)})
+	return commandexec.Success(result.Payload(), &commandexec.Meta{Count: len(result.Vaults)})
 }
 
 // HandleVaultUse executes the canonical `vault_use` command.
@@ -93,11 +78,7 @@ func HandleVaultUse(_ context.Context, req commandexec.Request) commandexec.Resu
 	if err != nil {
 		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn vault list' to see configured vaults")
 	}
-	return commandexec.Success(map[string]interface{}{
-		"active_vault": result.ActiveVault,
-		"path":         result.Path,
-		"state_path":   result.StatePath,
-	}, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 // HandleVaultFocus validates a target for the current MCP server's in-memory
@@ -114,22 +95,11 @@ func HandleVaultFocus(_ context.Context, req commandexec.Request) commandexec.Re
 		return commandexec.FromServiceErrorWithFallback(err, "Use 'rvn vault list' to see configured vaults")
 	}
 
-	data := map[string]interface{}{
-		"applied":      req.Caller == commandexec.CallerMCP,
-		"cleared":      result.Cleared,
-		"scope":        "mcp_session",
-		"session_only": true,
-	}
-	if result.Name != "" {
-		data["name"] = result.Name
-	}
-	if result.Path != "" {
-		data["path"] = result.Path
-	}
+	hint := ""
 	if req.Caller == commandexec.CallerCLI {
-		data["hint"] = "CLI validates the target only; invoke vault_focus through raven_invoke to update a running MCP server session."
+		hint = "CLI validates the target only; invoke vault_focus through raven_invoke to update a running MCP server session."
 	}
-	return commandexec.Success(data, nil)
+	return commandexec.Success(result.Payload(req.Caller == commandexec.CallerMCP, hint), nil)
 }
 
 // HandleVaultClear executes the canonical `vault_clear` command.
@@ -138,11 +108,7 @@ func HandleVaultClear(_ context.Context, req commandexec.Request) commandexec.Re
 	if err != nil {
 		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
-	return commandexec.Success(map[string]interface{}{
-		"cleared":    result.Cleared,
-		"previous":   result.Previous,
-		"state_path": result.StatePath,
-	}, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 // HandleVaultPin executes the canonical `vault_pin` command.
@@ -151,11 +117,7 @@ func HandleVaultPin(_ context.Context, req commandexec.Request) commandexec.Resu
 	if err != nil {
 		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn vault list' to see configured vaults")
 	}
-	return commandexec.Success(map[string]interface{}{
-		"default_vault": result.DefaultVault,
-		"path":          result.Path,
-		"config_path":   result.ConfigPath,
-	}, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 // HandleVaultAdd executes the canonical `vault_add` command.
@@ -179,15 +141,7 @@ func HandleVaultAdd(_ context.Context, req commandexec.Request) commandexec.Resu
 		}
 		return commandexec.FromServiceErrorWithFallback(err, "")
 	}
-	return commandexec.Success(map[string]interface{}{
-		"name":          result.Name,
-		"path":          result.Path,
-		"config_path":   result.ConfigPath,
-		"replaced":      result.Replaced,
-		"previous_path": result.PreviousPath,
-		"pinned":        result.Pinned,
-		"default_vault": result.DefaultVault,
-	}, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 // HandleVaultRemove executes the canonical `vault_remove` command.
@@ -209,14 +163,7 @@ func HandleVaultRemove(_ context.Context, req commandexec.Request) commandexec.R
 		}
 		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn vault list' to see configured vaults")
 	}
-	return commandexec.Success(map[string]interface{}{
-		"name":            result.Name,
-		"removed_path":    result.RemovedPath,
-		"default_cleared": result.DefaultCleared,
-		"active_cleared":  result.ActiveCleared,
-		"config_path":     result.ConfigPath,
-		"state_path":      result.StatePath,
-	}, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 func configContextOptions(req commandexec.Request) configsvc.ContextOptions {

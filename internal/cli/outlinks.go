@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/picker"
+	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
 var outlinksCmd = newExceptionLeafCommand("outlinks", exceptionLeafOptions{
@@ -49,31 +50,31 @@ func handleOutlinksFailure(cmd *cobra.Command, result commandexec.Result) error 
 }
 
 func renderOutlinks(cmd *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if groups, ok := data["items_by_source"].([]model.OutlinksGroup); ok {
-		errors := referenceInputErrorsFromAny(data["errors"])
+	if grouped, ok := result.Data.(readsvc.OutlinksStdinPayload); ok {
 		browse, _ := cmd.Flags().GetBool("browse")
 		if browse {
-			if outlinksGroupItemCount(groups) == 0 {
-				printOutlinksGroups(groups, errors)
+			if outlinksGroupItemCount(grouped.ItemsBySource) == 0 {
+				printOutlinksGroups(grouped.ItemsBySource, grouped.Errors)
 				return nil
 			}
-			return browseOutlinkGroups(groups)
+			return browseOutlinkGroups(grouped.ItemsBySource)
 		}
-		printOutlinksGroups(groups, errors)
+		printOutlinksGroups(grouped.ItemsBySource, grouped.Errors)
 		return nil
 	}
-	source, _ := data["source"].(string)
-	links, _ := data["items"].([]model.Reference)
+	data, err := commandResultData[readsvc.OutlinksPayload](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
 	browse, _ := cmd.Flags().GetBool("browse")
 	if browse {
-		if len(links) == 0 {
-			printOutlinksResults(source, links)
+		if len(data.Items) == 0 {
+			printOutlinksResults(data.Source, data.Items)
 			return nil
 		}
-		return browseAndOpenReferences("Outlinks from "+source, browseItemsForOutlinkResults(links))
+		return browseAndOpenReferences("Outlinks from "+data.Source, browseItemsForOutlinkResults(data.Items))
 	}
-	printOutlinksResults(source, links)
+	printOutlinksResults(data.Source, data.Items)
 	return nil
 }
 

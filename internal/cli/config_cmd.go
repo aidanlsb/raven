@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -45,35 +46,34 @@ func init() {
 }
 
 func renderConfigShow(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	configFile := stringValue(data["config_path"])
-	statePath := stringValue(data["state_path"])
-	if !boolValue(data["exists"]) {
-		fmt.Printf("%s %s\n", ui.Warning("Config file does not exist:"), ui.FilePath(configFile))
+	data, err := commandResultData[configsvc.ShowResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	if !data.Exists {
+		fmt.Printf("%s %s\n", ui.Warning("Config file does not exist:"), ui.FilePath(data.ConfigPath))
 		fmt.Println(ui.Hint("Run 'rvn config init' to create it."))
 	}
 
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(configFile))
-	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(statePath))
-	fmt.Printf("%s %s\n", ui.Hint("default_vault:"), configDisplayValue(data["default_vault"]))
-	fmt.Printf("%s %s\n", ui.Hint("editor:"), configDisplayValue(data["editor"]))
-	fmt.Printf("%s %s\n", ui.Hint("editor_mode:"), configDisplayValue(data["editor_mode"]))
-	uiConfig, _ := data["ui"].(map[string]interface{})
-	fmt.Printf("%s %s\n", ui.Hint("ui.markdown_style:"), configDisplayValue(uiConfig["markdown_style"]))
-	vaults := stringMap(data["vaults"])
-	if len(vaults) == 0 {
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
+	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(data.StatePath))
+	fmt.Printf("%s %s\n", ui.Hint("default_vault:"), configDisplayValue(data.DefaultVault))
+	fmt.Printf("%s %s\n", ui.Hint("editor:"), configDisplayValue(data.Editor))
+	fmt.Printf("%s %s\n", ui.Hint("editor_mode:"), configDisplayValue(data.EditorMode))
+	fmt.Printf("%s %s\n", ui.Hint("ui.markdown_style:"), configDisplayValue(data.UI.MarkdownStyle))
+	if len(data.Vaults) == 0 {
 		fmt.Printf("%s %s\n", ui.Hint("vaults:"), ui.Hint("(none)"))
 		return nil
 	}
 
-	names := make([]string, 0, len(vaults))
-	for name := range vaults {
+	names := make([]string, 0, len(data.Vaults))
+	for name := range data.Vaults {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	fmt.Println(ui.SectionHeader("vaults"))
 	for _, name := range names {
-		fmt.Println(ui.Bullet(fmt.Sprintf("%s = %s", name, ui.FilePath(vaults[name]))))
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s = %s", name, ui.FilePath(data.Vaults[name]))))
 	}
 
 	return nil
@@ -88,47 +88,34 @@ func configDisplayValue(raw interface{}) string {
 }
 
 func renderConfigInit(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if !boolValue(data["created"]) {
-		fmt.Println(ui.Starf("Config already exists: %s", ui.FilePath(stringValue(data["config_path"]))))
+	data, err := commandResultData[configsvc.InitResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	if !data.Created {
+		fmt.Println(ui.Starf("Config already exists: %s", ui.FilePath(data.ConfigPath)))
 	} else {
-		fmt.Println(ui.Checkf("Created config: %s", ui.FilePath(stringValue(data["config_path"]))))
+		fmt.Println(ui.Checkf("Created config: %s", ui.FilePath(data.ConfigPath)))
 	}
 	return nil
 }
 
 func renderConfigSet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Updated config: %s", ui.FilePath(stringValue(data["config_path"]))))
-	fmt.Printf("%s %s\n", ui.Hint("changed:"), strings.Join(stringSliceFromAny(data["changed"]), ", "))
+	data, err := commandResultData[configsvc.MutateResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	fmt.Println(ui.Checkf("Updated config: %s", ui.FilePath(data.ConfigPath)))
+	fmt.Printf("%s %s\n", ui.Hint("changed:"), strings.Join(data.Changed, ", "))
 	return nil
 }
 
 func renderConfigUnset(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Updated config: %s", ui.FilePath(stringValue(data["config_path"]))))
-	fmt.Printf("%s %s\n", ui.Hint("cleared:"), strings.Join(stringSliceFromAny(data["changed"]), ", "))
-	return nil
-}
-
-func stringMap(raw interface{}) map[string]string {
-	switch value := raw.(type) {
-	case map[string]string:
-		out := make(map[string]string, len(value))
-		for key, item := range value {
-			out[key] = item
-		}
-		return out
-	case map[string]interface{}:
-		out := make(map[string]string, len(value))
-		for key, item := range value {
-			text, ok := item.(string)
-			if ok {
-				out[key] = text
-			}
-		}
-		return out
-	default:
-		return map[string]string{}
+	data, err := commandResultData[configsvc.MutateResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
+	fmt.Println(ui.Checkf("Updated config: %s", ui.FilePath(data.ConfigPath)))
+	fmt.Printf("%s %s\n", ui.Hint("cleared:"), strings.Join(data.Changed, ", "))
+	return nil
 }

@@ -25,30 +25,6 @@ type GlobalConfigContext struct {
 	ConfigExists bool
 }
 
-func (ctx *GlobalConfigContext) Data() map[string]interface{} {
-	if ctx == nil {
-		return map[string]interface{}{}
-	}
-
-	vaults := make(map[string]string)
-	for name, p := range ctx.Cfg.Vaults {
-		vaults[name] = p
-	}
-
-	return map[string]interface{}{
-		"config_path":   ctx.ConfigPath,
-		"state_path":    ctx.StatePath,
-		"exists":        ctx.ConfigExists,
-		"default_vault": DefaultVaultName(ctx.Cfg),
-		"vaults":        vaults,
-		"editor":        strings.TrimSpace(ctx.Cfg.GetEditor()),
-		"editor_mode":   effectiveValue(ctx.Cfg.EditorMode, "auto"),
-		"ui": map[string]interface{}{
-			"markdown_style": effectiveValue(ctx.Cfg.UI.MarkdownStyle, "auto"),
-		},
-	}
-}
-
 func effectiveValue(value, fallback string) string {
 	if value = strings.TrimSpace(value); value != "" {
 		return value
@@ -65,8 +41,8 @@ type InitRequest struct {
 }
 
 type InitResult struct {
-	ConfigPath string
-	Created    bool
+	ConfigPath string `json:"config_path"`
+	Created    bool   `json:"created"`
 }
 
 func Init(req InitRequest) (*InitResult, error) {
@@ -382,12 +358,12 @@ func ResolveCurrentVault(cfg *config.Config, state *config.State) (*CurrentVault
 }
 
 type VaultListResult struct {
-	ConfigPath    string            `json:"config_path"`
-	StatePath     string            `json:"state_path"`
-	DefaultVault  string            `json:"default_vault"`
-	ActiveVault   string            `json:"active_vault"`
 	ActiveMissing bool              `json:"active_missing"`
+	ActiveVault   string            `json:"active_vault"`
+	ConfigPath    string            `json:"config_path"`
 	Current       *CurrentVaultInfo `json:"current_vault"`
+	DefaultVault  string            `json:"default_vault"`
+	StatePath     string            `json:"state_path"`
 	Vaults        []VaultRow        `json:"vaults"`
 }
 
@@ -583,9 +559,9 @@ func ClearActiveVault(opts ContextOptions) (*VaultClearResult, error) {
 }
 
 type VaultPinResult struct {
+	ConfigPath   string `json:"config_path"`
 	DefaultVault string `json:"default_vault"`
 	Path         string `json:"path"`
-	ConfigPath   string `json:"config_path"`
 }
 
 func PinVault(opts ContextOptions, name string) (*VaultPinResult, error) {
@@ -621,13 +597,13 @@ type VaultAddRequest struct {
 }
 
 type VaultAddResult struct {
+	ConfigPath   string `json:"config_path"`
+	DefaultVault string `json:"default_vault"`
 	Name         string `json:"name"`
 	Path         string `json:"path"`
-	ConfigPath   string `json:"config_path"`
-	Replaced     bool   `json:"replaced"`
-	PreviousPath string `json:"previous_path"`
 	Pinned       bool   `json:"pinned"`
-	DefaultVault string `json:"default_vault"`
+	PreviousPath string `json:"previous_path"`
+	Replaced     bool   `json:"replaced"`
 }
 
 func AddVault(req VaultAddRequest) (*VaultAddResult, error) {
@@ -698,11 +674,11 @@ type VaultRemoveRequest struct {
 }
 
 type VaultRemoveResult struct {
-	Name           string `json:"name"`
-	RemovedPath    string `json:"removed_path"`
-	DefaultCleared bool   `json:"default_cleared"`
 	ActiveCleared  bool   `json:"active_cleared"`
 	ConfigPath     string `json:"config_path"`
+	DefaultCleared bool   `json:"default_cleared"`
+	Name           string `json:"name"`
+	RemovedPath    string `json:"removed_path"`
 	StatePath      string `json:"state_path"`
 }
 

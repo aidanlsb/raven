@@ -764,20 +764,20 @@ func (s *Server) setSessionVaultFocus(name, path string) {
 }
 
 func (s *Server) applyVaultFocusResult(result commandexec.Result) error {
-	data, ok := result.Data.(map[string]interface{})
+	data, ok := result.Data.(configsvc.VaultFocusPayload)
 	if !ok {
 		return fmt.Errorf("vault focus returned invalid result data")
 	}
-	if boolValue(data["cleared"]) {
+	if data.Cleared {
 		s.setSessionVaultFocus("", "")
 		return nil
 	}
 
-	path := strings.TrimSpace(toString(data["path"]))
+	path := strings.TrimSpace(data.Path)
 	if path == "" {
 		return fmt.Errorf("vault focus returned an empty path")
 	}
-	name := strings.TrimSpace(toString(data["name"]))
+	name := strings.TrimSpace(data.Name)
 	if name == "" {
 		name = s.lookupVaultName(path)
 	}

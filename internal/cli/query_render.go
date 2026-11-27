@@ -110,7 +110,7 @@ func queryLabelOrParse(label, queryStr string) string {
 	return parsed.TypeName
 }
 
-func listSavedQueries(queries []querysvc.SavedQueryInfo) error {
+func listSavedQueries(queries []querysvc.SavedQueryPayload) error {
 	fmt.Println(ui.SectionHeader("Saved queries"))
 	if len(queries) == 0 {
 		fmt.Println(ui.Bullet(ui.Hint("(none defined)")))
@@ -129,41 +129,6 @@ func listSavedQueries(queries []querysvc.SavedQueryInfo) error {
 		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(q.Name), desc)))
 	}
 	return nil
-}
-
-func savedQueriesFromResult(raw interface{}) []querysvc.SavedQueryInfo {
-	if rows, ok := raw.([]map[string]interface{}); ok {
-		queries := make([]querysvc.SavedQueryInfo, 0, len(rows))
-		for _, entry := range rows {
-			queries = append(queries, querysvc.SavedQueryInfo{
-				Name:        stringValue(entry["name"]),
-				Query:       stringValue(entry["query"]),
-				Args:        stringSliceFromAny(entry["args"]),
-				Description: stringValue(entry["description"]),
-			})
-		}
-		return queries
-	}
-
-	rows, ok := raw.([]interface{})
-	if !ok {
-		return nil
-	}
-
-	queries := make([]querysvc.SavedQueryInfo, 0, len(rows))
-	for _, row := range rows {
-		entry, ok := row.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		queries = append(queries, querysvc.SavedQueryInfo{
-			Name:        stringValue(entry["name"]),
-			Query:       stringValue(entry["query"]),
-			Args:        stringSliceFromAny(entry["args"]),
-			Description: stringValue(entry["description"]),
-		})
-	}
-	return queries
 }
 
 // objectsFromItems adapts the typed query payload items into the model rows the

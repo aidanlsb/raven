@@ -82,19 +82,20 @@ func invokeSchemaTemplateList(cmd *cobra.Command, commandID, vaultPath string, a
 }
 
 func renderSchemaTemplateList(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if _, ok := data["default_template"]; ok || data["type"] != nil || data["core"] != nil {
+	switch result.Data.(type) {
+	case schemasvc.TypeTemplateListResult, schemasvc.CoreTemplateListResult:
 		return renderSchemaTemplateBindings(result)
+	default:
+		return renderSchemaTemplateDefinitions(result)
 	}
-	return renderSchemaTemplateDefinitions(result)
 }
 
 func renderSchemaTemplateDefinitions(result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	items, err := decodeSchemaValue[[]schemasvc.TemplateSchema](data["templates"])
+	data, err := commandResultData[schemasvc.TemplateCatalogResult](result)
 	if err != nil {
-		return err
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
+	items := data.Templates
 
 	if len(items) == 0 {
 		fmt.Println(ui.Star("No schema templates configured."))
@@ -112,17 +113,14 @@ func renderSchemaTemplateDefinitions(result commandexec.Result) error {
 }
 
 func renderSchemaTemplateBindings(result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	templates, err := decodeSchemaValue[[]string](data["templates"])
-	if err != nil {
-		return err
+	switch data := result.Data.(type) {
+	case schemasvc.TypeTemplateListResult:
+		return renderSchemaTemplateBindingTarget("type", data.Type, data.Templates, data.DefaultTemplate)
+	case schemasvc.CoreTemplateListResult:
+		return renderSchemaTemplateBindingTarget("core", data.Core, data.Templates, data.DefaultTemplate)
+	default:
+		return handleErrorMsg(ErrInternal, "unexpected schema template list result shape", "")
 	}
-	defaultTemplate, _ := data["default_template"].(string)
-	kind := strings.TrimSpace(stringValue(data["type"]))
-	if kind != "" {
-		return renderSchemaTemplateBindingTarget("type", kind, templates, defaultTemplate)
-	}
-	return renderSchemaTemplateBindingTarget("core", strings.TrimSpace(stringValue(data["core"])), templates, defaultTemplate)
 }
 
 func renderSchemaTemplateBindingTarget(kind, name string, templates []string, defaultTemplate string) error {

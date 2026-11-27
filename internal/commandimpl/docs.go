@@ -31,7 +31,7 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 		if topicInput != "" {
 			return commandexec.Failure("INVALID_INPUT", "section is required when topic is provided", nil, "Provide section and topic together")
 		}
-		return commandexec.SuccessWithWarnings(docsSectionsData(sections), warnings, &commandexec.Meta{Count: len(sections)})
+		return commandexec.SuccessWithWarnings(docssvc.SectionsEnvelope(sections), warnings, &commandexec.Meta{Count: len(sections)})
 	}
 
 	section, ok := docssvc.FindSection(sections, sectionInput)
@@ -55,11 +55,7 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	if topicInput == "" {
-		return commandexec.SuccessWithWarnings(map[string]interface{}{
-			"section": section.ID,
-			"title":   section.Title,
-			"topics":  docsTopicItems(topics),
-		}, warnings, &commandexec.Meta{Count: len(topics)})
+		return commandexec.SuccessWithWarnings(docssvc.TopicListEnvelope(section, topics), warnings, &commandexec.Meta{Count: len(topics)})
 	}
 
 	topic, ok := docssvc.FindTopic(topics, topicInput)
@@ -88,13 +84,7 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs fetch' to refresh docs")
 	}
 
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
-		"section": topic.Section,
-		"topic":   topic.ID,
-		"title":   topic.Title,
-		"path":    topic.Path,
-		"content": content,
-	}, warnings, nil)
+	return commandexec.SuccessWithWarnings(docssvc.TopicContentEnvelope(topic, content), warnings, nil)
 }
 
 // HandleDocsSearch executes the canonical `docs search` command.
@@ -122,15 +112,7 @@ func HandleDocsSearch(_ context.Context, req commandexec.Request) commandexec.Re
 		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs' to list sections")
 	}
 
-	return commandexec.SuccessWithWarnings(map[string]interface{}{
-		"query":    query,
-		"count":    result.Returned,
-		"returned": result.Returned,
-		"limit":    result.Limit,
-		"offset":   result.Offset,
-		"has_more": result.HasMore,
-		"items":    result.Matches,
-	}, canonicalDocsWarnings(warnings), &commandexec.Meta{Count: result.Returned, QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.SuccessWithWarnings(result.Payload(query), canonicalDocsWarnings(warnings), &commandexec.Meta{Count: result.Returned, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleDocsFetch executes the canonical `docs fetch` command.
@@ -145,17 +127,7 @@ func HandleDocsFetch(_ context.Context, req commandexec.Request) commandexec.Res
 		return commandexec.FromServiceErrorWithFallback(err, "Check your network connection and run 'rvn docs fetch' again")
 	}
 
-	return commandexec.Success(map[string]interface{}{
-		"path":         result.Path,
-		"file_count":   result.FileCount,
-		"byte_count":   result.ByteCount,
-		"source":       result.Source,
-		"ref":          result.Ref,
-		"archive_url":  result.ArchiveURL,
-		"fetched_at":   result.FetchedAt,
-		"cli_version":  result.CLIVersion,
-		"manifest_ver": result.ManifestVer,
-	}, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 func docsCLIVersion(req commandexec.Request) string {
@@ -175,24 +147,4 @@ func canonicalDocsWarnings(warnings []docssvc.Warning) []commandexec.Warning {
 		})
 	}
 	return out
-}
-
-func docsSectionsData(sections []docssvc.SectionView) map[string]interface{} {
-	return map[string]interface{}{
-		"sections":       sections,
-		"command_docs":   "rvn help <command>",
-		"navigation_tip": "rvn docs <section> <topic>",
-	}
-}
-
-func docsTopicItems(topics []docssvc.TopicRecord) []map[string]interface{} {
-	items := make([]map[string]interface{}, 0, len(topics))
-	for _, topic := range topics {
-		items = append(items, map[string]interface{}{
-			"id":    topic.ID,
-			"title": topic.Title,
-			"path":  topic.Path,
-		})
-	}
-	return items
 }

@@ -2,6 +2,7 @@ package readsvc
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/querysvc"
@@ -195,4 +196,259 @@ func (r *ListObjectsResult) ObjectsPayload() ObjectsResult {
 		Items:      r.Items,
 		Pagination: querysvc.NewPagination(r.Total, len(r.Items), r.Offset, r.Limit),
 	}
+}
+
+// BacklinksPayload is the success payload for a single-target `backlinks`.
+type BacklinksPayload struct {
+	Items  []model.Reference `json:"items"`
+	Target string            `json:"target"`
+}
+
+// BacklinksStdinPayload is the success payload for `backlinks --stdin`.
+type BacklinksStdinPayload struct {
+	Errors        []model.ReferenceInputError `json:"errors"`
+	ItemsByTarget []model.BacklinksGroup      `json:"items_by_target"`
+	Resolved      int                         `json:"resolved"`
+	Stdin         bool                        `json:"stdin"`
+	TotalInputs   int                         `json:"total_inputs"`
+}
+
+func (r BacklinksResult) Payload() BacklinksPayload {
+	group := r.Groups[0]
+	return BacklinksPayload{Items: referenceItems(group.Items), Target: group.Target}
+}
+
+func (r BacklinksResult) StdinPayload(totalInputs int, errors []model.ReferenceInputError) BacklinksStdinPayload {
+	return BacklinksStdinPayload{
+		Errors:        errors,
+		ItemsByTarget: r.Groups,
+		Resolved:      len(r.Groups),
+		Stdin:         true,
+		TotalInputs:   totalInputs,
+	}
+}
+
+// OutlinksPayload is the success payload for a single-target `outlinks`.
+type OutlinksPayload struct {
+	Items  []model.Reference `json:"items"`
+	Source string            `json:"source"`
+}
+
+// OutlinksStdinPayload is the success payload for `outlinks --stdin`.
+type OutlinksStdinPayload struct {
+	Errors        []model.ReferenceInputError `json:"errors"`
+	ItemsBySource []model.OutlinksGroup       `json:"items_by_source"`
+	Resolved      int                         `json:"resolved"`
+	Stdin         bool                        `json:"stdin"`
+	TotalInputs   int                         `json:"total_inputs"`
+}
+
+func (r OutlinksResult) Payload() OutlinksPayload {
+	group := r.Groups[0]
+	return OutlinksPayload{Items: referenceItems(group.Items), Source: group.Source}
+}
+
+func (r OutlinksResult) StdinPayload(totalInputs int, errors []model.ReferenceInputError) OutlinksStdinPayload {
+	return OutlinksStdinPayload{
+		Errors:        errors,
+		ItemsBySource: r.Groups,
+		Resolved:      len(r.Groups),
+		Stdin:         true,
+		TotalInputs:   totalInputs,
+	}
+}
+
+func referenceItems(references []model.Reference) []model.Reference {
+	items := make([]model.Reference, len(references))
+	copy(items, references)
+	return items
+}
+
+// ResolveMatch is one candidate in an ambiguous `resolve` result.
+type ResolveMatch struct {
+	MatchSource string `json:"match_source,omitempty"`
+	ObjectID    string `json:"object_id"`
+}
+
+// ResolveMissPayload is the success payload when `resolve` finds no target.
+type ResolveMissPayload struct {
+	Reference string `json:"reference"`
+	Resolved  bool   `json:"resolved"`
+}
+
+// ResolveAmbiguousPayload is the success payload when `resolve` matches more
+// than one object.
+type ResolveAmbiguousPayload struct {
+	Ambiguous bool           `json:"ambiguous"`
+	Items     []ResolveMatch `json:"items"`
+	Reference string         `json:"reference"`
+	Resolved  bool           `json:"resolved"`
+}
+
+// ResolveHitPayload is the success payload for a unique `resolve`.
+type ResolveHitPayload struct {
+	DirectLineEnd  *int   `json:"direct_line_end,omitempty"`
+	FileObjectID   string `json:"file_object_id,omitempty"`
+	FilePath       string `json:"file_path"`
+	IsSection      bool   `json:"is_section"`
+	LineEnd        *int   `json:"line_end,omitempty"`
+	LineStart      int    `json:"line_start,omitempty"`
+	MatchSource    string `json:"match_source,omitempty"`
+	ObjectID       string `json:"object_id"`
+	Resolved       bool   `json:"resolved"`
+	SubtreeLineEnd *int   `json:"subtree_line_end,omitempty"`
+	Type           string `json:"type,omitempty"`
+}
+
+func ResolveMiss(reference string) ResolveMissPayload {
+	return ResolveMissPayload{Reference: reference, Resolved: false}
+}
+
+func (r *ResolveResult) AmbiguousPayload(reference string) ResolveAmbiguousPayload {
+	matches := make([]ResolveMatch, 0, len(r.Matches))
+	for _, match := range r.Matches {
+		entry := ResolveMatch{ObjectID: match}
+		if r.MatchSources != nil {
+			entry.MatchSource = r.MatchSources[match]
+		}
+		matches = append(matches, entry)
+	}
+	return ResolveAmbiguousPayload{
+		Ambiguous: true,
+		Items:     matches,
+		Reference: reference,
+		Resolved:  false,
+	}
+}
+
+func (r *ResolveResult) HitPayload(filePath string) ResolveHitPayload {
+	resolved := r.Resolved
+	payload := ResolveHitPayload{
+		FilePath:    filePath,
+		IsSection:   resolved.IsSection,
+		MatchSource: resolved.MatchSource,
+		ObjectID:    resolved.ObjectID,
+		Resolved:    true,
+		Type:        r.ObjectType,
+	}
+	if resolved.IsSection {
+		payload.FileObjectID = resolved.FileObjectID
+		if resolved.LineStart > 0 {
+			payload.LineStart = resolved.LineStart
+		}
+		if resolved.LineEnd != nil {
+			payload.LineEnd = resolved.LineEnd
+			payload.DirectLineEnd = resolved.LineEnd
+		}
+		payload.SubtreeLineEnd = resolved.SubtreeLineEnd
+	}
+	return payload
+}
+
+// OpenHitPayload is the success payload for a single-target `open`.
+type OpenHitPayload struct {
+	Editor       string `json:"editor"`
+	File         string `json:"file"`
+	FileObjectID string `json:"file_object_id,omitempty"`
+	IsSection    bool   `json:"is_section,omitempty"`
+	LineStart    int    `json:"line_start,omitempty"`
+	ObjectID     string `json:"object_id"`
+	Opened       bool   `json:"opened"`
+}
+
+// OpenBulkPayload is the success payload for `open --stdin`.
+type OpenBulkPayload struct {
+	Editor  string       `json:"editor"`
+	Errors  []string     `json:"errors"`
+	Files   []string     `json:"files"`
+	Opened  bool         `json:"opened"`
+	Targets []OpenTarget `json:"targets"`
+}
+
+func (t *OpenTarget) Payload(opened bool, editor string) OpenHitPayload {
+	payload := OpenHitPayload{
+		Editor:   editor,
+		File:     t.RelativePath,
+		ObjectID: t.ObjectID,
+		Opened:   opened,
+	}
+	if t.IsSection {
+		payload.IsSection = true
+		payload.FileObjectID = t.FileObjectID
+		if t.LineStart > 0 {
+			payload.LineStart = t.LineStart
+		}
+	}
+	return payload
+}
+
+func (r OpenResult) Payload() OpenBulkPayload {
+	files := make([]string, 0, len(r.Targets))
+	for _, target := range r.Targets {
+		files = append(files, target.RelativePath)
+	}
+	errs := make([]string, 0, len(r.Failures))
+	for _, failure := range r.Failures {
+		errs = append(errs, fmt.Sprintf("%s: %s", failure.Reference, failure.Message))
+	}
+	return OpenBulkPayload{
+		Editor:  r.Editor,
+		Errors:  errs,
+		Files:   files,
+		Opened:  r.Opened,
+		Targets: r.Targets,
+	}
+}
+
+// DatePayload is the success payload for `date`.
+type DatePayload struct {
+	Backlinks   []model.Reference `json:"backlinks"`
+	DailyExists bool              `json:"daily_exists"`
+	DailyNote   *model.Object     `json:"daily_note,omitempty"`
+	DailyNoteID string            `json:"daily_note_id"`
+	DailyPath   string            `json:"daily_path"`
+	Date        string            `json:"date"`
+	DayOfWeek   string            `json:"day_of_week"`
+	Items       []DateAssociation `json:"items"`
+}
+
+func (r *DateResult) Payload() DatePayload {
+	return DatePayload{
+		Backlinks:   r.Backlinks,
+		DailyExists: r.DailyExists,
+		DailyNote:   r.DailyNote,
+		DailyNoteID: r.DailyNoteID,
+		DailyPath:   r.DailyPath,
+		Date:        r.Date,
+		DayOfWeek:   r.DayOfWeek,
+		Items:       r.Items,
+	}
+}
+
+// StatsRevision is the index identity object inside `vault stats`.
+type StatsRevision struct {
+	Counter    int64  `json:"counter"`
+	Generation string `json:"generation"`
+}
+
+// StatsPayload is the success payload for `vault stats`.
+type StatsPayload struct {
+	FileCount   int            `json:"file_count"`
+	ObjectCount int            `json:"object_count"`
+	RefCount    int            `json:"ref_count"`
+	Revision    *StatsRevision `json:"revision,omitempty"`
+	TraitCount  int            `json:"trait_count"`
+}
+
+func (r *StatsResult) Payload() StatsPayload {
+	payload := StatsPayload{
+		FileCount:   r.FileCount,
+		ObjectCount: r.ObjectCount,
+		RefCount:    r.RefCount,
+		TraitCount:  r.TraitCount,
+	}
+	if r.Revision.Generation != "" {
+		payload.Revision = &StatsRevision{Counter: r.Revision.Counter, Generation: r.Revision.Generation}
+	}
+	return payload
 }

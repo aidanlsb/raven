@@ -15,8 +15,8 @@ type ListRequest struct {
 }
 
 type ListResult struct {
-	Scope  string    `json:"scope"`
 	Root   string    `json:"root"`
+	Scope  string    `json:"scope"`
 	Skills []Summary `json:"skills"`
 }
 
@@ -34,17 +34,17 @@ type InstallSkillResult struct {
 }
 
 type InstallResult struct {
+	ActionsApplied int                  `json:"actions_applied,omitempty"`
+	Deleted        int                  `json:"deleted"`
+	Installed      int                  `json:"installed"`
 	Mode           string               `json:"mode"`
-	Scope          string               `json:"scope"`
-	Root           string               `json:"root"`
 	NeedsConfirm   bool                 `json:"needs_confirm"`
 	Requested      []string             `json:"requested"`
+	Root           string               `json:"root"`
+	Scope          string               `json:"scope"`
 	Skills         []InstallSkillResult `json:"skills"`
-	Installed      int                  `json:"installed"`
-	Updated        int                  `json:"updated"`
-	Deleted        int                  `json:"deleted"`
 	Skipped        int                  `json:"skipped"`
-	ActionsApplied int                  `json:"actions_applied,omitempty"`
+	Updated        int                  `json:"updated"`
 }
 
 type RemoveRequest struct {
@@ -56,9 +56,9 @@ type RemoveRequest struct {
 
 type RemoveResult struct {
 	Mode      string      `json:"mode"`
+	Plan      *RemovePlan `json:"plan"`
 	Removed   bool        `json:"removed,omitempty"`
 	SkillName string      `json:"skill_name"`
-	Plan      *RemovePlan `json:"plan,omitempty"`
 }
 
 type DoctorRequest struct {
