@@ -35,19 +35,6 @@ func intValue(raw interface{}) int {
 	return intFromAny(raw)
 }
 
-func int64Value(raw interface{}) int64 {
-	switch value := raw.(type) {
-	case int64:
-		return value
-	case int:
-		return int64(value)
-	case float64:
-		return int64(value)
-	default:
-		return 0
-	}
-}
-
 func detailInt(details map[string]interface{}, key string) int {
 	if details == nil {
 		return 0
