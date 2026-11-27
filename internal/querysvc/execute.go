@@ -313,12 +313,12 @@ func planApply(result *ExecuteResult, applyArgs []string) (*ApplyPlan, error) {
 	}
 	rawApply, err := bulkops.ParseRawApply(applyArgs)
 	if err != nil {
-		return nil, bulkopsError(err)
+		return nil, err
 	}
 	if result.QueryKind == "trait" {
 		plan, err := bulkops.PlanTraitApply(rawApply, result.Traits)
 		if err != nil {
-			return nil, bulkopsError(err)
+			return nil, err
 		}
 		return &ApplyPlan{
 			Command:  "update",
@@ -343,7 +343,7 @@ func planApply(result *ExecuteResult, applyArgs []string) (*ApplyPlan, error) {
 	}
 	plan, err := bulkops.PlanObjectApply(rawApply, ids)
 	if err != nil {
-		return nil, bulkopsError(err)
+		return nil, err
 	}
 	switch plan.Command {
 	case bulkops.ObjectApplySet:
@@ -363,14 +363,6 @@ func planApply(result *ExecuteResult, applyArgs []string) (*ApplyPlan, error) {
 func unsupportedApplyError(queryKind string) error {
 	return svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("--apply is not supported for %s queries", queryKind)).
 		WithSuggestion("Use --ids and pass results to a compatible command")
-}
-
-func bulkopsError(err error) error {
-	bulkErr, ok := bulkops.AsError(err)
-	if !ok {
-		return svcerr.Wrap(codes.ErrInternal, err.Error(), err)
-	}
-	return svcerr.Wrap(bulkErr.Code, bulkErr.Message, err).WithSuggestion(bulkErr.Suggestion)
 }
 
 func dedupeApplyIDs(ids []string) []string {

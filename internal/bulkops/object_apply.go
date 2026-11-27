@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
@@ -28,7 +29,7 @@ type ObjectApplyPlan struct {
 
 func PlanObjectApply(raw *RawApplyCommand, ids []string) (*ObjectApplyPlan, error) {
 	if raw == nil {
-		return nil, newError(CodeInvalidInput, "no apply command specified", "Use --apply <command> [args...]")
+		return nil, applyErr(codes.ErrInvalidInput, "no apply command specified", "Use --apply <command> [args...]")
 	}
 
 	plan := &ObjectApplyPlan{
@@ -43,12 +44,12 @@ func PlanObjectApply(raw *RawApplyCommand, ids []string) (*ObjectApplyPlan, erro
 		for _, arg := range raw.Args {
 			parts := strings.SplitN(arg, "=", 2)
 			if len(parts) != 2 {
-				return nil, newError(CodeInvalidInput, fmt.Sprintf("invalid field format: %s", arg), "Use format: field=value")
+				return nil, applyErr(codes.ErrInvalidInput, fmt.Sprintf("invalid field format: %s", arg), "Use format: field=value")
 			}
 			updates[parts[0]] = parts[1]
 		}
 		if len(updates) == 0 {
-			return nil, newError(CodeMissingArgument, "no fields to set", "Usage: --apply set field=value...")
+			return nil, applyErr(codes.ErrMissingArgument, "no fields to set", "Usage: --apply set field=value...")
 		}
 		plan.SetUpdates = updates
 		return plan, nil
@@ -56,22 +57,22 @@ func PlanObjectApply(raw *RawApplyCommand, ids []string) (*ObjectApplyPlan, erro
 		return plan, nil
 	case ObjectApplyAdd:
 		if len(raw.Args) == 0 {
-			return nil, newError(CodeMissingArgument, "no text to add", "Usage: --apply add <text>")
+			return nil, applyErr(codes.ErrMissingArgument, "no text to add", "Usage: --apply add <text>")
 		}
 		plan.AddText = strings.Join(raw.Args, " ")
 		return plan, nil
 	case ObjectApplyMove:
 		if len(raw.Args) == 0 {
-			return nil, newError(CodeMissingArgument, "no destination provided", "Usage: --apply move <destination-directory/>")
+			return nil, applyErr(codes.ErrMissingArgument, "no destination provided", "Usage: --apply move <destination-directory/>")
 		}
 		destination := raw.Args[0]
 		if !strings.HasSuffix(destination, "/") {
-			return nil, newError(CodeInvalidInput, "destination must be a directory (end with /)", "Example: --apply move archive/projects/")
+			return nil, applyErr(codes.ErrInvalidInput, "destination must be a directory (end with /)", "Example: --apply move archive/projects/")
 		}
 		plan.MoveDestination = destination
 		return plan, nil
 	default:
-		return nil, newError(CodeInvalidInput, fmt.Sprintf("unknown apply command: %s", raw.Command), "Supported commands: set, delete, add, move")
+		return nil, applyErr(codes.ErrInvalidInput, fmt.Sprintf("unknown apply command: %s", raw.Command), "Supported commands: set, delete, add, move")
 	}
 }
 

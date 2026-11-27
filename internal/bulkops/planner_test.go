@@ -3,7 +3,9 @@ package bulkops
 import (
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/svcerr"
 )
 
 func TestParseRawApply(t *testing.T) {
@@ -26,12 +28,12 @@ func TestParseRawApply(t *testing.T) {
 		if err == nil {
 			t.Fatal("ParseRawApply(nil) returned nil error")
 		}
-		bulkErr, ok := AsError(err)
+		svcErr, ok := svcerr.AsError(err)
 		if !ok {
-			t.Fatalf("error = %T, want *Error", err)
+			t.Fatalf("error = %T, want *svcerr.Error", err)
 		}
-		if bulkErr.Code != CodeInvalidInput {
-			t.Fatalf("Code = %q, want %q", bulkErr.Code, CodeInvalidInput)
+		if svcErr.Code != codes.ErrInvalidInput {
+			t.Fatalf("Code = %q, want %q", svcErr.Code, codes.ErrInvalidInput)
 		}
 	})
 }
@@ -66,9 +68,9 @@ func TestPlanObjectApply(t *testing.T) {
 		if err == nil {
 			t.Fatal("PlanObjectApply returned nil error")
 		}
-		bulkErr, _ := AsError(err)
-		if bulkErr.Code != CodeMissingArgument {
-			t.Fatalf("Code = %q, want %q", bulkErr.Code, CodeMissingArgument)
+		svcErr, _ := svcerr.AsError(err)
+		if svcErr.Code != codes.ErrMissingArgument {
+			t.Fatalf("Code = %q, want %q", svcErr.Code, codes.ErrMissingArgument)
 		}
 	})
 
@@ -77,9 +79,9 @@ func TestPlanObjectApply(t *testing.T) {
 		if err == nil {
 			t.Fatal("PlanObjectApply returned nil error")
 		}
-		bulkErr, _ := AsError(err)
-		if bulkErr.Code != CodeInvalidInput {
-			t.Fatalf("Code = %q, want %q", bulkErr.Code, CodeInvalidInput)
+		svcErr, _ := svcerr.AsError(err)
+		if svcErr.Code != codes.ErrInvalidInput {
+			t.Fatalf("Code = %q, want %q", svcErr.Code, codes.ErrInvalidInput)
 		}
 	})
 }
@@ -106,9 +108,9 @@ func TestPlanTraitApply(t *testing.T) {
 		if err == nil {
 			t.Fatal("PlanTraitApply returned nil error")
 		}
-		bulkErr, _ := AsError(err)
-		if bulkErr.Code != CodeInvalidInput {
-			t.Fatalf("Code = %q, want %q", bulkErr.Code, CodeInvalidInput)
+		svcErr, _ := svcerr.AsError(err)
+		if svcErr.Code != codes.ErrInvalidInput {
+			t.Fatalf("Code = %q, want %q", svcErr.Code, codes.ErrInvalidInput)
 		}
 	})
 }

@@ -1,6 +1,10 @@
 package bulkops
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/aidanlsb/raven/internal/codes"
+)
 
 type RawApplyCommand struct {
 	Command string
@@ -11,7 +15,7 @@ func ParseRawApply(applyArgs []string) (*RawApplyCommand, error) {
 	applyStr := strings.Join(applyArgs, " ")
 	parts := strings.Fields(applyStr)
 	if len(parts) == 0 {
-		return nil, newError(CodeInvalidInput, "no apply command specified", "Use --apply <command> [args...]")
+		return nil, applyErr(codes.ErrInvalidInput, "no apply command specified", "Use --apply <command> [args...]")
 	}
 
 	return &RawApplyCommand{
