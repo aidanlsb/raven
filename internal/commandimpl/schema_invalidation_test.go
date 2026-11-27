@@ -65,9 +65,9 @@ func TestHandleSchemaAddType_SuccessfulRefreshHasNoWarning(t *testing.T) {
 func TestCanonicalSchemaWarningsIncludesIndexUpdateRef(t *testing.T) {
 	t.Parallel()
 
-	warnings := canonicalSchemaWarnings([]schemasvc.Warning{
+	warnings := []commandexec.Warning{
 		schemasvc.NewIndexUpdateFailedWarning(errForWarning("refresh failed")),
-	})
+	}
 	if len(warnings) != 1 {
 		t.Fatalf("warnings = %#v, want 1", warnings)
 	}

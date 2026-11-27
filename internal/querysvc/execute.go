@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/bulkops"
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/indexschema"
 	"github.com/aidanlsb/raven/internal/model"
@@ -54,12 +55,6 @@ func (r *ExecuteResult) NextOffset() int {
 	return r.Offset + r.Returned
 }
 
-type Warning struct {
-	Code    codes.WarningCode
-	Message string
-	Ref     string
-}
-
 type ApplyPlan struct {
 	Command         string
 	TraitIDs        []string
@@ -75,7 +70,7 @@ type RunResult struct {
 	Query     *ExecuteResult
 	IsSaved   bool
 	SavedName string
-	Warnings  []Warning
+	Warnings  []commandexec.Warning
 	ApplyPlan *ApplyPlan
 	CountOnly bool
 	IDsOnly   bool
@@ -127,7 +122,7 @@ func Run(rt *vaultruntime.Runtime, req ExecuteRequest) (*RunResult, error) {
 		return nil, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to load schema", rt.SchemaLoadErr).
 			WithSuggestion("Fix schema.yaml and try again")
 	}
-	var warnings []Warning
+	var warnings []commandexec.Warning
 	if rt.DB == nil {
 		if err := rt.OpenDB(); err != nil {
 			return nil, openIndexError(err)

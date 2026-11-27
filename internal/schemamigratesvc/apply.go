@@ -7,6 +7,7 @@ package schemamigratesvc
 import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -52,7 +53,7 @@ type stagedApply struct {
 	AfterFiles      func() (int, error)
 }
 
-func applyStagedFilesThenInvalidate(rt *vaultruntime.Runtime, apply stagedApply) (int, []schemasvc.Warning, error) {
+func applyStagedFilesThenInvalidate(rt *vaultruntime.Runtime, apply stagedApply) (int, []commandexec.Warning, error) {
 	applied := 0
 	var operationID string
 	var classification schemachange.Classification
@@ -88,7 +89,7 @@ func applyStagedFilesThenInvalidate(rt *vaultruntime.Runtime, apply stagedApply)
 		return 0, nil, svcerr.Wrap(codes.ErrSchemaInvalid, "failed to reload schema after "+apply.ReloadContext, err)
 	}
 	if applyErr := schemachange.ApplyInvalidation(rt, operationID, classification, readsvc.ReindexForSchemaChange); applyErr != nil {
-		return applied, []schemasvc.Warning{schemasvc.NewIndexUpdateFailedWarning(applyErr)}, nil
+		return applied, []commandexec.Warning{schemasvc.NewIndexUpdateFailedWarning(applyErr)}, nil
 	}
 	return applied, nil, nil
 }

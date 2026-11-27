@@ -30,11 +30,7 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	warnings := make([]commandexec.Warning, 0, len(result.Warnings))
-	for _, warning := range result.Warnings {
-		warnings = append(warnings, commandexec.Warning{Code: warning.Code, Message: warning.Message})
-	}
-	return commandexec.SuccessWithWarnings(result.Data(), warnings, nil)
+	return commandexec.SuccessWithWarnings(result.Data(), result.Warnings, nil)
 }
 
 // HandleReindex executes the canonical `reindex` command.

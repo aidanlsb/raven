@@ -20,7 +20,7 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err != nil {
 		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs fetch' to download docs")
 	}
-	warnings := canonicalDocsWarnings(source.Warnings)
+	warnings := source.Warnings
 
 	sections, err := docssvc.ListSectionsFS(source.FS, ".")
 	if err != nil {
@@ -112,7 +112,7 @@ func HandleDocsSearch(_ context.Context, req commandexec.Request) commandexec.Re
 		return commandexec.FromServiceErrorWithFallback(err, "Run 'rvn docs' to list sections")
 	}
 
-	return commandexec.SuccessWithWarnings(result.Payload(query), canonicalDocsWarnings(warnings), &commandexec.Meta{Count: result.Returned, QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.SuccessWithWarnings(result.Payload(query), warnings, &commandexec.Meta{Count: result.Returned, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleDocsFetch executes the canonical `docs fetch` command.
@@ -136,15 +136,4 @@ func docsCLIVersion(req commandexec.Request) string {
 		version = versioninfo.CurrentVersionInfoFromExecutable(req.ExecutablePath).Version
 	}
 	return version
-}
-
-func canonicalDocsWarnings(warnings []docssvc.Warning) []commandexec.Warning {
-	out := make([]commandexec.Warning, 0, len(warnings))
-	for _, warning := range warnings {
-		out = append(out, commandexec.Warning{
-			Code:    warning.Code,
-			Message: warning.Message,
-		})
-	}
-	return out
 }

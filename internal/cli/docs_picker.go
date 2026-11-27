@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/docssvc"
 	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -160,7 +161,7 @@ func findDocsTopic(topics []docsTopicRecord, raw string) (docsTopicRecord, bool)
 	return docssvc.FindTopic(topics, raw)
 }
 
-func outputDocsServiceWarnings(warnings []docssvc.Warning) {
+func outputDocsServiceWarnings(warnings []commandexec.Warning) {
 	for _, warning := range warnings {
 		fmt.Fprintln(os.Stderr, ui.Warningf("%s: %s", warning.Code, warning.Message))
 	}

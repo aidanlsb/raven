@@ -11,6 +11,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -19,12 +20,6 @@ import (
 )
 
 const WarningIndexUpdateFailed = codes.WarnIndexUpdateFailed
-
-type Warning struct {
-	Code    codes.WarningCode
-	Message string
-	Ref     string
-}
 
 type TemplateFileInfo struct {
 	Path      string `json:"path"`
@@ -59,12 +54,12 @@ type ReadResult struct {
 }
 
 type WriteResult struct {
-	Path        string    `json:"path"`
-	Status      string    `json:"status"`
-	TemplateDir string    `json:"template_dir"`
-	Changed     bool      `json:"-"`
-	ChangedPath string    `json:"-"`
-	Warnings    []Warning `json:"-"`
+	Path        string                `json:"path"`
+	Status      string                `json:"status"`
+	TemplateDir string                `json:"template_dir"`
+	Changed     bool                  `json:"-"`
+	ChangedPath string                `json:"-"`
+	Warnings    []commandexec.Warning `json:"-"`
 }
 
 type DeleteRequest struct {
@@ -74,12 +69,12 @@ type DeleteRequest struct {
 }
 
 type DeleteResult struct {
-	Deleted     string    `json:"deleted"`
-	TrashPath   string    `json:"trash_path"`
-	Forced      bool      `json:"forced"`
-	TemplateIDs []string  `json:"template_ids"`
-	Warnings    []Warning `json:"-"`
-	DeletedPath string    `json:"-"`
+	Deleted     string                `json:"deleted"`
+	TrashPath   string                `json:"trash_path"`
+	Forced      bool                  `json:"forced"`
+	TemplateIDs []string              `json:"template_ids"`
+	Warnings    []commandexec.Warning `json:"-"`
+	DeletedPath string                `json:"-"`
 }
 
 func List(rt *vaultruntime.Runtime, req ListRequest) (*ListResult, error) {
@@ -214,7 +209,7 @@ func Write(rt *vaultruntime.Runtime, req WriteRequest) (*WriteResult, error) {
 	}
 	if changed {
 		for _, warning := range reindexsvc.ProjectFileLocked(rt, fullPath) {
-			result.Warnings = append(result.Warnings, Warning{
+			result.Warnings = append(result.Warnings, commandexec.Warning{
 				Code: warning.Code, Message: warning.Message, Ref: warning.Ref,
 			})
 		}
@@ -256,16 +251,16 @@ func Delete(rt *vaultruntime.Runtime, req DeleteRequest) (*DeleteResult, error) 
 		return nil, svcerr.Wrap(codes.ErrFileWrite, "unable to move template file to .trash", err)
 	}
 
-	warnings := make([]Warning, 0, 1)
+	warnings := make([]commandexec.Warning, 0, 1)
 	if err := rt.OpenDB(); err != nil {
-		warnings = append(warnings, Warning{
+		warnings = append(warnings, commandexec.Warning{
 			Code:    WarningIndexUpdateFailed,
 			Message: fmt.Sprintf("failed to open index for cleanup: %v", err),
 			Ref:     "Run 'rvn reindex' to rebuild the index",
 		})
 	} else {
 		if err := rt.DB.RemoveFile(fileRef); err != nil {
-			warnings = append(warnings, Warning{
+			warnings = append(warnings, commandexec.Warning{
 				Code:    WarningIndexUpdateFailed,
 				Message: fmt.Sprintf("failed to remove file from index: %v", err),
 				Ref:     "Run 'rvn reindex' to rebuild the index",

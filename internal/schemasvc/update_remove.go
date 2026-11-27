@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -42,12 +43,12 @@ type UpdateFieldRequest struct {
 }
 
 type UpdateResult struct {
-	Updated  string    `json:"updated"`
-	Changes  []string  `json:"changes"`
-	Name     string    `json:"name,omitempty"`
-	Type     string    `json:"type,omitempty"`
-	Field    string    `json:"field,omitempty"`
-	Warnings []Warning `json:"-"`
+	Updated  string                `json:"updated"`
+	Changes  []string              `json:"changes"`
+	Name     string                `json:"name,omitempty"`
+	Type     string                `json:"type,omitempty"`
+	Field    string                `json:"field,omitempty"`
+	Warnings []commandexec.Warning `json:"-"`
 }
 
 type RemoveTypeRequest struct {
@@ -67,18 +68,12 @@ type RemoveFieldRequest struct {
 	FieldName string
 }
 
-type Warning struct {
-	Code    codes.WarningCode `json:"code"`
-	Message string            `json:"message"`
-	Ref     string            `json:"ref,omitempty"`
-}
-
 type RemoveResult struct {
-	Removed  string    `json:"removed"`
-	Name     string    `json:"name,omitempty"`
-	Type     string    `json:"type,omitempty"`
-	Field    string    `json:"field,omitempty"`
-	Warnings []Warning `json:"-"`
+	Removed  string                `json:"removed"`
+	Name     string                `json:"name,omitempty"`
+	Type     string                `json:"type,omitempty"`
+	Field    string                `json:"field,omitempty"`
+	Warnings []commandexec.Warning `json:"-"`
 }
 
 func UpdateType(rt *vaultruntime.Runtime, req UpdateTypeRequest) (*UpdateResult, error) {
@@ -433,7 +428,7 @@ func RemoveType(rt *vaultruntime.Runtime, req RemoveTypeRequest) (*RemoveResult,
 		return nil, svcerr.New(codes.ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be removed", typeName))
 	}
 
-	warnings := make([]Warning, 0)
+	warnings := make([]commandexec.Warning, 0)
 	editWarnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Types[typeName]; !exists {
 			return svcerr.New(codes.ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName))
@@ -446,7 +441,7 @@ func RemoveType(rt *vaultruntime.Runtime, req RemoveTypeRequest) (*RemoveResult,
 		if dbErr == nil {
 			db := rt.DB
 			if objects, objectsErr := objectsByType(db, typeName); objectsErr == nil && len(objects) > 0 {
-				warnings = append(warnings, Warning{
+				warnings = append(warnings, commandexec.Warning{
 					Code:    codes.WarnOrphanedFiles,
 					Message: fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
 				})
@@ -497,7 +492,7 @@ func RemoveTrait(rt *vaultruntime.Runtime, req RemoveTraitRequest) (*RemoveResul
 		return nil, svcerr.New(codes.ErrInvalidInput, "trait name cannot be empty")
 	}
 
-	warnings := make([]Warning, 0)
+	warnings := make([]commandexec.Warning, 0)
 	editWarnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
 		if _, exists := doc.Schema().Traits[traitName]; !exists {
 			return svcerr.New(codes.ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName))
@@ -510,7 +505,7 @@ func RemoveTrait(rt *vaultruntime.Runtime, req RemoveTraitRequest) (*RemoveResul
 		if dbErr == nil {
 			db := rt.DB
 			if instances, instancesErr := traitsByType(db, traitName); instancesErr == nil && len(instances) > 0 {
-				warnings = append(warnings, Warning{
+				warnings = append(warnings, commandexec.Warning{
 					Code:    codes.WarnOrphanedTraits,
 					Message: fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
 				})

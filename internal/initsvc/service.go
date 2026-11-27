@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/docsync"
@@ -25,11 +26,6 @@ type DocsResult struct {
 	StorePath string `json:"store_path"`
 }
 
-type Warning struct {
-	Code    codes.WarningCode
-	Message string
-}
-
 type Result struct {
 	Path           string
 	Status         string
@@ -38,7 +34,7 @@ type Result struct {
 	GitignoreState string
 	Docs           DocsResult
 	PostInit       map[string]interface{}
-	Warnings       []Warning
+	Warnings       []commandexec.Warning
 }
 
 func (r *Result) Data() map[string]interface{} {
@@ -207,7 +203,7 @@ func setupVault(path, configPathOverride, statePathOverride string) (map[string]
 
 // SetupVault applies first-run registration to an already initialized vault.
 // It is exported separately so callers can verify or recover the post-init step.
-func SetupVault(path, configPathOverride, statePathOverride string) (map[string]interface{}, []Warning, error) {
+func SetupVault(path, configPathOverride, statePathOverride string) (map[string]interface{}, []commandexec.Warning, error) {
 	data, err := setupVault(path, configPathOverride, statePathOverride)
 	return data, nil, err
 }
@@ -396,7 +392,7 @@ func initializeFiles(path, configPath, cliVersion string) (*Result, error) {
 	}
 	result := &Result{
 		Path: path, CreatedConfig: createdConfig, CreatedSchema: createdSchema,
-		GitignoreState: gitignoreState, Warnings: []Warning{},
+		GitignoreState: gitignoreState, Warnings: []commandexec.Warning{},
 	}
 	if createdConfig || createdSchema {
 		result.Status = "initialized"
@@ -408,7 +404,7 @@ func initializeFiles(path, configPath, cliVersion string) (*Result, error) {
 		HTTPClient: &http.Client{Timeout: 60 * time.Second},
 	})
 	if err != nil {
-		result.Warnings = append(result.Warnings, Warning{
+		result.Warnings = append(result.Warnings, commandexec.Warning{
 			Code:    codes.WarnDocsFetchFailed,
 			Message: fmt.Sprintf("Docs fetch failed: %v. Run 'rvn docs fetch' to retry.", err),
 		})

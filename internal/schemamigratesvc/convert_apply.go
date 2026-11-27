@@ -1,8 +1,8 @@
 package schemamigratesvc
 
 import (
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
@@ -41,7 +41,7 @@ func finishValueConversion(
 	return result, nil
 }
 
-func applyValueConvertPlan(rt *vaultruntime.Runtime, plan *valueConvertPlan) (int, []schemasvc.Warning, error) {
+func applyValueConvertPlan(rt *vaultruntime.Runtime, plan *valueConvertPlan) (int, []commandexec.Warning, error) {
 	schemaYAML := []byte(nil)
 	schemaApplied := 0
 	if plan.SchemaPlan.SchemaMutations > 0 {
