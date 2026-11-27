@@ -1,0 +1,1 @@
+{"ok":false,"error":{"code":"INVALID_INPUT","message":"unknown apply command: bogus","suggestion":"Supported commands: set, delete, add, move"}}

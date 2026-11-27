@@ -1,0 +1,1 @@
+{"ok":true,"data":{"traits":{"due":{"name":"due","type":"date"},"priority":{"name":"priority","type":"enum","values":["low","medium","high"]}}},"meta":{"count":2}}

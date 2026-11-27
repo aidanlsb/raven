@@ -1,0 +1,1 @@
+{"ok":true,"data":{"type":{"name":"project","builtin":false,"default_path":"projects/","name_field":"title","fields":{"owner":{"type":"ref","required":false,"target":"person"},"status":{"type":"enum","required":false,"values":["active","paused","done"]},"title":{"type":"string","required":true}}}},"meta":{}}
