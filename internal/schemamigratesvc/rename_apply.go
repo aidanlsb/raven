@@ -3,11 +3,11 @@ package schemamigratesvc
 import (
 	"path/filepath"
 
-	"github.com/aidanlsb/raven/internal/schemasvc"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/vaultruntime"
 )
 
-func applyFieldRenamePlan(rt *vaultruntime.Runtime, plan *fieldRenamePlan) (int, []schemasvc.Warning, error) {
+func applyFieldRenamePlan(rt *vaultruntime.Runtime, plan *fieldRenamePlan) (int, []commandexec.Warning, error) {
 	fileSets := []map[string][]byte{plan.TemplateFiles}
 	if len(plan.RavenYAML) > 0 {
 		fileSets = append(fileSets, map[string][]byte{
@@ -28,7 +28,7 @@ func applyFieldRenamePlan(rt *vaultruntime.Runtime, plan *fieldRenamePlan) (int,
 	})
 }
 
-func applyTypeRenamePlan(rt *vaultruntime.Runtime, plan *typeRenamePlan, applyDefaultPathRename bool) (int, int, int, []schemasvc.Warning, error) {
+func applyTypeRenamePlan(rt *vaultruntime.Runtime, plan *typeRenamePlan, applyDefaultPathRename bool) (int, int, int, []commandexec.Warning, error) {
 	schemaBytes := plan.SchemaPlan.SchemaYAML
 	schemaApplied := plan.SchemaPlan.CoreSchemaMutations
 	if applyDefaultPathRename && plan.SchemaPlan.SchemaYAMLWithDefaultPath != nil {

@@ -19,12 +19,7 @@ func HandleSkillList(_ context.Context, req commandexec.Request) commandexec.Res
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		"skills": result.Skills,
-		"scope":  result.Scope,
-		"root":   result.Root,
-	}
-	return commandexec.Success(data, &commandexec.Meta{Count: len(result.Skills)})
+	return commandexec.Success(*result, &commandexec.Meta{Count: len(result.Skills)})
 }
 
 // HandleSkillInstall executes the canonical `skill install` command. With no
@@ -42,22 +37,7 @@ func HandleSkillInstall(_ context.Context, req commandexec.Request) commandexec.
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		"mode":          result.Mode,
-		"scope":         result.Scope,
-		"root":          result.Root,
-		"needs_confirm": result.NeedsConfirm,
-		"requested":     result.Requested,
-		"skills":        result.Skills,
-		"installed":     result.Installed,
-		"updated":       result.Updated,
-		"deleted":       result.Deleted,
-		"skipped":       result.Skipped,
-	}
-	if result.ActionsApplied > 0 {
-		data["actions_applied"] = result.ActionsApplied
-	}
-	return commandexec.Success(data, nil)
+	return commandexec.Success(*result, nil)
 }
 
 // HandleSkillRemove executes the canonical `skill remove` command.
@@ -77,15 +57,7 @@ func HandleSkillRemove(_ context.Context, req commandexec.Request) commandexec.R
 		return commandexec.FromServiceError(err)
 	}
 
-	data := map[string]interface{}{
-		"mode":       result.Mode,
-		"skill_name": result.SkillName,
-		"plan":       result.Plan,
-	}
-	if result.Removed {
-		data["removed"] = true
-	}
-	return commandexec.Success(data, nil)
+	return commandexec.Success(*result, nil)
 }
 
 // HandleSkillDoctor executes the canonical `skill doctor` command.
@@ -98,7 +70,5 @@ func HandleSkillDoctor(_ context.Context, req commandexec.Request) commandexec.R
 		return commandexec.FromServiceError(err)
 	}
 
-	return commandexec.Success(map[string]interface{}{
-		"reports": result.Reports,
-	}, &commandexec.Meta{Count: len(result.Reports)})
+	return commandexec.Success(*result, &commandexec.Meta{Count: len(result.Reports)})
 }

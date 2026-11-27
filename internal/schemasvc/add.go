@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -20,13 +21,13 @@ type AddTypeRequest struct {
 }
 
 type AddTypeResult struct {
-	Added            string    `json:"added"`
-	Name             string    `json:"name"`
-	DefaultPath      string    `json:"default_path"`
-	Description      string    `json:"description,omitempty"`
-	NameField        string    `json:"name_field,omitempty"`
-	AutoCreatedField *string   `json:"auto_created_field,omitempty"`
-	Warnings         []Warning `json:"-"`
+	Added            string                `json:"added"`
+	Name             string                `json:"name"`
+	DefaultPath      string                `json:"default_path"`
+	Description      string                `json:"description,omitempty"`
+	NameField        string                `json:"name_field,omitempty"`
+	AutoCreatedField *string               `json:"auto_created_field,omitempty"`
+	Warnings         []commandexec.Warning `json:"-"`
 }
 
 type AddTraitRequest struct {
@@ -37,11 +38,11 @@ type AddTraitRequest struct {
 }
 
 type AddTraitResult struct {
-	Added    string    `json:"added"`
-	Name     string    `json:"name"`
-	Type     string    `json:"type"`
-	Values   []string  `json:"values,omitempty"`
-	Warnings []Warning `json:"-"`
+	Added    string                `json:"added"`
+	Name     string                `json:"name"`
+	Type     string                `json:"type"`
+	Values   []string              `json:"values,omitempty"`
+	Warnings []commandexec.Warning `json:"-"`
 }
 
 type AddFieldRequest struct {
@@ -56,15 +57,15 @@ type AddFieldRequest struct {
 }
 
 type AddFieldResult struct {
-	Added       string    `json:"added"`
-	Type        string    `json:"type"`
-	Field       string    `json:"field"`
-	FieldType   string    `json:"field_type"`
-	Required    bool      `json:"required"`
-	Description string    `json:"description,omitempty"`
-	TypeName    string    `json:"-"`
-	FieldName   string    `json:"-"`
-	Warnings    []Warning `json:"-"`
+	Added       string                `json:"added"`
+	Type        string                `json:"type"`
+	Field       string                `json:"field"`
+	FieldType   string                `json:"field_type"`
+	Required    bool                  `json:"required"`
+	Description string                `json:"description,omitempty"`
+	TypeName    string                `json:"-"`
+	FieldName   string                `json:"-"`
+	Warnings    []commandexec.Warning `json:"-"`
 }
 
 func AddType(rt *vaultruntime.Runtime, req AddTypeRequest) (*AddTypeResult, error) {

@@ -22,18 +22,21 @@ func currentVersionInfo() versionInfo {
 }
 
 func renderVersion(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Printf("rvn %s\n", stringValue(data["version"]))
-	fmt.Printf("module: %s\n", stringValue(data["module_path"]))
-	if commit := stringValue(data["commit"]); commit != "" {
-		fmt.Printf("commit: %s\n", commit)
+	data, err := commandResultData[versioninfo.VersionInfo](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
-	if commitTime := stringValue(data["commit_time"]); commitTime != "" {
-		fmt.Printf("commit_time: %s\n", commitTime)
+	fmt.Printf("rvn %s\n", data.Version)
+	fmt.Printf("module: %s\n", data.ModulePath)
+	if data.Commit != "" {
+		fmt.Printf("commit: %s\n", data.Commit)
 	}
-	fmt.Printf("go: %s\n", stringValue(data["go_version"]))
-	fmt.Printf("platform: %s/%s\n", stringValue(data["goos"]), stringValue(data["goarch"]))
-	fmt.Printf("modified: %t\n", boolValue(data["modified"]))
+	if data.CommitTime != "" {
+		fmt.Printf("commit_time: %s\n", data.CommitTime)
+	}
+	fmt.Printf("go: %s\n", data.GoVersion)
+	fmt.Printf("platform: %s/%s\n", data.GOOS, data.GOARCH)
+	fmt.Printf("modified: %t\n", data.Modified)
 	return nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/picker"
+	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
 var backlinksCmd = newExceptionLeafCommand("backlinks", exceptionLeafOptions{
@@ -49,31 +50,31 @@ func handleBacklinksFailure(cmd *cobra.Command, result commandexec.Result) error
 }
 
 func renderBacklinks(cmd *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if groups, ok := data["items_by_target"].([]model.BacklinksGroup); ok {
-		errors := referenceInputErrorsFromAny(data["errors"])
+	if grouped, ok := result.Data.(readsvc.BacklinksStdinPayload); ok {
 		browse, _ := cmd.Flags().GetBool("browse")
 		if browse {
-			if backlinksGroupItemCount(groups) == 0 {
-				printBacklinksGroups(groups, errors)
+			if backlinksGroupItemCount(grouped.ItemsByTarget) == 0 {
+				printBacklinksGroups(grouped.ItemsByTarget, grouped.Errors)
 				return nil
 			}
-			return browseBacklinkGroups(groups)
+			return browseBacklinkGroups(grouped.ItemsByTarget)
 		}
-		printBacklinksGroups(groups, errors)
+		printBacklinksGroups(grouped.ItemsByTarget, grouped.Errors)
 		return nil
 	}
-	target, _ := data["target"].(string)
-	links, _ := data["items"].([]model.Reference)
+	data, err := commandResultData[readsvc.BacklinksPayload](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
 	browse, _ := cmd.Flags().GetBool("browse")
 	if browse {
-		if len(links) == 0 {
-			printBacklinksResults(target, links)
+		if len(data.Items) == 0 {
+			printBacklinksResults(data.Target, data.Items)
 			return nil
 		}
-		return browseAndOpenReferences("Backlinks to "+target, browseItemsForBacklinkResults(links))
+		return browseAndOpenReferences("Backlinks to "+data.Target, browseItemsForBacklinkResults(data.Items))
 	}
-	printBacklinksResults(target, links)
+	printBacklinksResults(data.Target, data.Items)
 	return nil
 }
 

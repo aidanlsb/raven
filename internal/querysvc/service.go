@@ -20,21 +20,71 @@ type SavedQueryInfo struct {
 	Description string
 }
 
-// Payload returns the transport-neutral JSON representation of a saved query. It
-// is the single shaping shared by the query_saved_list / query_saved_get
-// commands and the raven://queries/saved MCP resource, so the CLI, MCP tool, and
-// resource views of saved queries stay identical.
-func (q SavedQueryInfo) Payload() map[string]interface{} {
+// SavedQueryPayload is the transport-neutral JSON representation of a saved
+// query. It is the single shaping shared by the query_saved_list /
+// query_saved_get commands and the raven://queries/saved MCP resource, so the
+// CLI, MCP tool, and resource views of saved queries stay identical.
+type SavedQueryPayload struct {
+	Args        []string `json:"args"`
+	Description string   `json:"description"`
+	Name        string   `json:"name"`
+	Query       string   `json:"query"`
+}
+
+// SavedQueryListResult is the success payload for `query saved list`.
+type SavedQueryListResult struct {
+	Queries []SavedQueryPayload `json:"queries"`
+}
+
+// SavedQuerySetResult is the success payload for `query saved set`.
+type SavedQuerySetResult struct {
+	Args        []string `json:"args"`
+	Description string   `json:"description"`
+	Name        string   `json:"name"`
+	Query       string   `json:"query"`
+	Status      string   `json:"status"`
+}
+
+// SavedQueryRemoveResult is the success payload for `query saved remove`.
+type SavedQueryRemoveResult struct {
+	Name    string `json:"name"`
+	Removed bool   `json:"removed"`
+}
+
+func (q SavedQueryInfo) Payload() SavedQueryPayload {
 	args := q.Args
 	if args == nil {
 		args = []string{}
 	}
-	return map[string]interface{}{
-		"name":        q.Name,
-		"query":       q.Query,
-		"args":        args,
-		"description": q.Description,
+	return SavedQueryPayload{
+		Args:        args,
+		Description: q.Description,
+		Name:        q.Name,
+		Query:       q.Query,
 	}
+}
+
+func (r *ListResult) Payload() SavedQueryListResult {
+	queries := make([]SavedQueryPayload, 0, len(r.Queries))
+	for _, saved := range r.Queries {
+		queries = append(queries, saved.Payload())
+	}
+	return SavedQueryListResult{Queries: queries}
+}
+
+func (r *SetResult) Payload() SavedQuerySetResult {
+	item := r.Query.Payload()
+	return SavedQuerySetResult{
+		Args:        item.Args,
+		Description: item.Description,
+		Name:        item.Name,
+		Query:       item.Query,
+		Status:      string(r.Status),
+	}
+}
+
+func (r *RemoveResult) Payload() SavedQueryRemoveResult {
+	return SavedQueryRemoveResult{Name: r.Name, Removed: r.Removed}
 }
 
 type ListResult struct {

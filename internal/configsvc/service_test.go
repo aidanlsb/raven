@@ -402,16 +402,12 @@ func TestConfigPathOverrides(t *testing.T) {
 	if ctx.ConfigExists || ctx.ConfigPath != configPath || ctx.StatePath != statePath {
 		t.Fatalf("ShowContext() = %#v, want missing override paths", ctx)
 	}
-	data := ctx.Data()
-	if data["editor_mode"] != "auto" || data["state_path"] != statePath {
-		t.Fatalf("ShowContext().Data() defaults = %#v", data)
+	data := ctx.Payload()
+	if data.EditorMode != "auto" || data.StatePath != statePath {
+		t.Fatalf("ShowContext().Payload() defaults = %#v", data)
 	}
-	if _, exists := data["state_file"]; exists {
-		t.Fatalf("ShowContext().Data() exposed removed state_file: %#v", data)
-	}
-	uiData, ok := data["ui"].(map[string]interface{})
-	if !ok || uiData["markdown_style"] != "auto" || len(uiData) != 1 {
-		t.Fatalf("ShowContext().Data().ui = %#v, want only effective markdown_style=auto", data["ui"])
+	if data.UI.MarkdownStyle != "auto" {
+		t.Fatalf("ShowContext().Payload().UI = %#v, want markdown_style=auto", data.UI)
 	}
 
 	initResult, err := Init(InitRequest{ConfigPathOverride: configPath})

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
@@ -72,7 +73,7 @@ func GetTemplate(rt *vaultruntime.Runtime, templateID string) (*TemplateDefiniti
 	}, nil
 }
 
-func SetTemplate(rt *vaultruntime.Runtime, req SetTemplateRequest) (*TemplateDefinition, []Warning, error) {
+func SetTemplate(rt *vaultruntime.Runtime, req SetTemplateRequest) (*TemplateDefinition, []commandexec.Warning, error) {
 	templateID := strings.TrimSpace(req.TemplateID)
 	if templateID == "" {
 		return nil, nil, svcerr.New(codes.ErrInvalidInput, "template_id cannot be empty")
@@ -135,7 +136,7 @@ func SetTemplate(rt *vaultruntime.Runtime, req SetTemplateRequest) (*TemplateDef
 	}, warnings, nil
 }
 
-func RemoveTemplate(rt *vaultruntime.Runtime, templateID string) ([]Warning, error) {
+func RemoveTemplate(rt *vaultruntime.Runtime, templateID string) ([]commandexec.Warning, error) {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return nil, svcerr.New(codes.ErrInvalidInput, "template_id cannot be empty")

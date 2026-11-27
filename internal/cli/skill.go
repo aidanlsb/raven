@@ -71,8 +71,8 @@ func invokeSkillInstall(cmd *cobra.Command, commandID, _ string, args map[string
 	if !preview.OK {
 		return preview
 	}
-	data := canonicalDataMap(preview)
-	if !boolValue(data["needs_confirm"]) {
+	data, err := commandResultData[skills.InstallResult](preview)
+	if err != nil || !data.NeedsConfirm {
 		return preview
 	}
 
@@ -89,17 +89,19 @@ func invokeSkillInstall(cmd *cobra.Command, commandID, _ string, args map[string
 }
 
 func renderSkillList(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	items := skillSummariesFromAny(data["skills"])
+	data, err := commandResultData[skills.ListResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
 
 	fmt.Println(ui.SectionHeader("Agent Skills"))
-	fmt.Printf("%s %s\n", ui.Hint("Scope:"), stringValue(data["scope"]))
-	fmt.Printf("%s %s\n", ui.Hint("Root:"), ui.FilePath(stringValue(data["root"])))
-	if len(items) == 0 {
+	fmt.Printf("%s %s\n", ui.Hint("Scope:"), data.Scope)
+	fmt.Printf("%s %s\n", ui.Hint("Root:"), ui.FilePath(data.Root))
+	if len(data.Skills) == 0 {
 		fmt.Println(ui.Star("No skills found."))
 		return nil
 	}
-	for _, item := range items {
+	for _, item := range data.Skills {
 		status := "available"
 		if item.Installed {
 			status = "installed"
@@ -114,36 +116,36 @@ func renderSkillInstall(_ *cobra.Command, result commandexec.Result) error {
 		fmt.Println(ui.Star("Cancelled."))
 		return nil
 	}
-	data := canonicalDataMap(result)
-	mode := stringValue(data["mode"])
-	root := stringValue(data["root"])
+	data, err := commandResultData[skills.InstallResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
 
-	switch mode {
+	switch data.Mode {
 	case "applied":
-		fmt.Println(ui.Checkf("Reconciled Raven skills at %s", ui.FilePath(root)))
-		fmt.Println(ui.Hint(fmt.Sprintf("Applied %d file changes", intValue(data["actions_applied"]))))
-		if skipped := intValue(data["skipped"]); skipped > 0 {
-			fmt.Println(ui.Warning(fmt.Sprintf("%d skill paths were skipped because Raven does not manage them.", skipped)))
+		fmt.Println(ui.Checkf("Reconciled Raven skills at %s", ui.FilePath(data.Root)))
+		fmt.Println(ui.Hint(fmt.Sprintf("Applied %d file changes", data.ActionsApplied)))
+		if data.Skipped > 0 {
+			fmt.Println(ui.Warning(fmt.Sprintf("%d skill paths were skipped because Raven does not manage them.", data.Skipped)))
 		}
 		return nil
 	}
 
 	printSkillInstallPlan(data)
-	if boolValue(data["needs_confirm"]) {
+	if data.NeedsConfirm {
 		fmt.Println(ui.Warning("Preview only — re-run with --confirm to apply."))
-	} else if skipped := intValue(data["skipped"]); skipped > 0 {
-		fmt.Println(ui.Warning(fmt.Sprintf("No managed changes are pending; %d skill paths were skipped.", skipped)))
+	} else if data.Skipped > 0 {
+		fmt.Println(ui.Warning(fmt.Sprintf("No managed changes are pending; %d skill paths were skipped.", data.Skipped)))
 	} else {
 		fmt.Println(ui.Hint("The requested Raven-managed skill set is already aligned."))
 	}
 	return nil
 }
 
-func printSkillInstallPlan(data map[string]interface{}) {
-	entries := skillInstallResultsFromAny(data["skills"])
+func printSkillInstallPlan(data skills.InstallResult) {
 	fmt.Println(ui.SectionHeader("Skill install plan"))
-	fmt.Printf("%s %s\n", ui.Hint("target:"), ui.FilePath(stringValue(data["root"])))
-	for _, entry := range entries {
+	fmt.Printf("%s %s\n", ui.Hint("target:"), ui.FilePath(data.Root))
+	for _, entry := range data.Skills {
 		status := skillInstallStatus(entry.Plan)
 		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(entry.Name), ui.Hint("("+status+")"))))
 	}
@@ -168,9 +170,15 @@ func skillInstallStatus(plan *skills.SyncPlan) string {
 }
 
 func renderSkillRemove(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	plan := skillRemovePlanFromAny(data["plan"])
-	if stringValue(data["mode"]) == "preview" {
+	data, err := commandResultData[skills.RemoveResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	plan := data.Plan
+	if plan == nil {
+		plan = &skills.RemovePlan{}
+	}
+	if data.Mode == "preview" {
 		fmt.Println(ui.SectionHeader("Preview remove"))
 		fmt.Printf("%s %s\n", ui.Hint("target:"), ui.FilePath(plan.SkillPath))
 		for _, action := range plan.Actions {
@@ -180,12 +188,16 @@ func renderSkillRemove(_ *cobra.Command, result commandexec.Result) error {
 		return nil
 	}
 
-	fmt.Println(ui.Checkf("Removed %s from %s", stringValue(data["skill_name"]), ui.FilePath(plan.SkillPath)))
+	fmt.Println(ui.Checkf("Removed %s from %s", data.SkillName, ui.FilePath(plan.SkillPath)))
 	return nil
 }
 
 func renderSkillDoctor(_ *cobra.Command, result commandexec.Result) error {
-	for _, report := range skillDoctorReportsFromAny(canonicalDataMap(result)["reports"]) {
+	data, err := commandResultData[skills.DoctorResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	for _, report := range data.Reports {
 		fmt.Println(ui.SectionHeader("Agent Skills"))
 		fmt.Printf("%s %s\n", ui.Hint("scope:"), report.Scope)
 		fmt.Printf("%s %s\n", ui.Hint("root:"), ui.FilePath(report.Root))
@@ -209,24 +221,4 @@ func renderSkillDoctor(_ *cobra.Command, result commandexec.Result) error {
 		}
 	}
 	return nil
-}
-
-func skillSummariesFromAny(raw interface{}) []skills.Summary {
-	items, _ := raw.([]skills.Summary)
-	return items
-}
-
-func skillInstallResultsFromAny(raw interface{}) []skills.InstallSkillResult {
-	entries, _ := raw.([]skills.InstallSkillResult)
-	return entries
-}
-
-func skillRemovePlanFromAny(raw interface{}) *skills.RemovePlan {
-	plan, _ := raw.(*skills.RemovePlan)
-	return plan
-}
-
-func skillDoctorReportsFromAny(raw interface{}) []skills.DoctorReport {
-	reports, _ := raw.([]skills.DoctorReport)
-	return reports
 }

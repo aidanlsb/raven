@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/fieldvalue"
 	"github.com/aidanlsb/raven/internal/frontmatter"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -41,7 +42,7 @@ type ConvertResult struct {
 	Changes        []schemasvc.SchemaChange
 	ChangesApplied int
 	Hint           string
-	Warnings       []schemasvc.Warning
+	Warnings       []commandexec.Warning
 }
 
 type valueConvertPlan struct {

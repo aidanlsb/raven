@@ -7,8 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commandimpl"
-	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -17,22 +16,22 @@ var dateCmd = newCanonicalLeafCommand("date", canonicalLeafOptions{
 })
 
 func renderDate(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
+	data, err := commandResultData[readsvc.DatePayload](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
 	display := ui.NewDisplayContext()
-	dateValue, _ := data["date"].(string)
-	dayOfWeek, _ := data["day_of_week"].(string)
-	fmt.Printf("%s %s\n\n", ui.SectionHeader(dateValue), ui.Hint(fmt.Sprintf("(%s)", dayOfWeek)))
+	fmt.Printf("%s %s\n\n", ui.SectionHeader(data.Date), ui.Hint(fmt.Sprintf("(%s)", data.DayOfWeek)))
 
 	fmt.Println(ui.Divider("Daily Note", display.TermWidth))
-	if dailyNoteRaw, ok := data["daily_note"]; ok && dailyNoteRaw != nil {
-		dailyNote := objectResultFromAny(dailyNoteRaw)
-		fmt.Printf("%s\n\n", ui.Bullet(ui.FilePath(dailyNote.FilePath)))
+	if data.DailyNote != nil {
+		fmt.Printf("%s\n\n", ui.Bullet(ui.FilePath(data.DailyNote.FilePath)))
 	} else {
-		fmt.Printf("%s\n\n", ui.Bullet(ui.Hint(fmt.Sprintf("(not created yet - use 'rvn daily %s' to create)", dateValue))))
+		fmt.Printf("%s\n\n", ui.Bullet(ui.Hint(fmt.Sprintf("(not created yet - use 'rvn daily %s' to create)", data.Date))))
 	}
 
-	byField := make(map[string][]commandimpl.DateAssociation)
-	for _, item := range dateAssociationsFromAny(data["items"]) {
+	byField := make(map[string][]readsvc.DateAssociation)
+	for _, item := range data.Items {
 		byField[item.FieldName] = append(byField[item.FieldName], item)
 	}
 
@@ -41,7 +40,7 @@ func renderDate(_ *cobra.Command, result commandexec.Result) error {
 		if prettyField != "" {
 			prettyField = strings.ToUpper(prettyField[:1]) + prettyField[1:]
 		}
-		label := fmt.Sprintf("%s: %s (%d)", prettyField, dateValue, len(fieldItems))
+		label := fmt.Sprintf("%s: %s (%d)", prettyField, data.Date, len(fieldItems))
 		fmt.Println(ui.Divider(label, display.TermWidth))
 		for _, item := range fieldItems {
 			if item.SourceType == "trait" {
@@ -71,10 +70,9 @@ func renderDate(_ *cobra.Command, result commandexec.Result) error {
 		fmt.Println()
 	}
 
-	backlinks := dateBacklinksFromAny(data["backlinks"])
-	if len(backlinks) > 0 {
-		fmt.Println(ui.Divider(fmt.Sprintf("References (%d)", len(backlinks)), display.TermWidth))
-		for _, bl := range backlinks {
+	if len(data.Backlinks) > 0 {
+		fmt.Println(ui.Divider(fmt.Sprintf("References (%d)", len(data.Backlinks)), display.TermWidth))
+		for _, bl := range data.Backlinks {
 			location := bl.FilePath
 			if bl.Line != nil {
 				location = fmt.Sprintf("%s:%d", bl.FilePath, *bl.Line)
@@ -84,24 +82,6 @@ func renderDate(_ *cobra.Command, result commandexec.Result) error {
 	}
 
 	return nil
-}
-
-func dateAssociationsFromAny(raw interface{}) []commandimpl.DateAssociation {
-	var items []commandimpl.DateAssociation
-	_ = decodeResultData(raw, &items)
-	return items
-}
-
-func dateBacklinksFromAny(raw interface{}) []model.Reference {
-	var items []model.Reference
-	_ = decodeResultData(raw, &items)
-	return items
-}
-
-func objectResultFromAny(raw interface{}) model.Object {
-	var item model.Object
-	_ = decodeResultData(raw, &item)
-	return item
 }
 
 func init() {

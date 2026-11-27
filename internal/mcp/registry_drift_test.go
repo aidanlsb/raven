@@ -317,10 +317,11 @@ func TestSavedQueriesPayloadParityBetweenServiceAndCommand(t *testing.T) {
 		t.Fatalf("expected 1 saved query, got %d", len(result.Queries))
 	}
 	payload := result.Queries[0].Payload()
-	for _, key := range []string{"name", "query", "args", "description"} {
-		if _, ok := payload[key]; !ok {
-			t.Fatalf("payload missing %q: %#v", key, payload)
-		}
+	if payload.Name == "" || payload.Query == "" {
+		t.Fatalf("payload missing name/query: %#v", payload)
+	}
+	if payload.Args == nil {
+		t.Fatalf("payload missing args: %#v", payload)
 	}
 }
 

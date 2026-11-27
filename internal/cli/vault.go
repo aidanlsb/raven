@@ -88,18 +88,22 @@ func init() {
 }
 
 func renderVaultList(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if path, ok := data["path"]; ok {
-		fmt.Println(stringValue(path))
+	if pathOnly, ok := result.Data.(configsvc.VaultPathResult); ok {
+		fmt.Println(pathOnly.Path)
 		return nil
 	}
 
-	rows := vaultRowsFromAny(data["vaults"])
-	current := currentVaultFromAny(data["current_vault"])
-	activeName := stringValue(data["active_vault"])
-	activeMissing := boolValue(data["active_missing"])
-	configFile := stringValue(data["config_path"])
-	stateFile := stringValue(data["state_path"])
+	data, err := commandResultData[configsvc.VaultListResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+
+	rows := data.Vaults
+	current := data.Current
+	activeName := data.ActiveVault
+	activeMissing := data.ActiveMissing
+	configFile := data.ConfigPath
+	stateFile := data.StatePath
 
 	if len(rows) == 0 {
 		fmt.Println(ui.Star("No vaults configured."))
@@ -150,122 +154,87 @@ func renderVaultList(_ *cobra.Command, result commandexec.Result) error {
 }
 
 func renderVaultUse(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Active vault set to '%s' -> %s", stringValue(data["active_vault"]), ui.FilePath(stringValue(data["path"]))))
-	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(stringValue(data["state_path"])))
+	data, err := commandResultData[configsvc.VaultUseResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	fmt.Println(ui.Checkf("Active vault set to '%s' -> %s", data.ActiveVault, ui.FilePath(data.Path)))
+	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(data.StatePath))
 	return nil
 }
 
 func renderVaultFocus(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["cleared"]) {
+	data, err := commandResultData[configsvc.VaultFocusPayload](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	if data.Cleared {
 		fmt.Println(ui.Check("MCP session focus clear request validated."))
-	} else if name := stringValue(data["name"]); name != "" {
-		fmt.Println(ui.Checkf("MCP session focus target validated: '%s' -> %s", name, ui.FilePath(stringValue(data["path"]))))
+	} else if data.Name != "" {
+		fmt.Println(ui.Checkf("MCP session focus target validated: '%s' -> %s", data.Name, ui.FilePath(data.Path)))
 	} else {
-		fmt.Println(ui.Checkf("MCP session focus target validated: %s", ui.FilePath(stringValue(data["path"]))))
+		fmt.Println(ui.Checkf("MCP session focus target validated: %s", ui.FilePath(data.Path)))
 	}
 	fmt.Println(ui.Hint("CLI validation does not change a running MCP server; invoke vault_focus through raven_invoke in that session."))
 	return nil
 }
 
 func renderVaultClear(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if stringValue(data["previous"]) == "" {
+	data, err := commandResultData[configsvc.VaultClearResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	if data.Previous == "" {
 		fmt.Println(ui.Star("Active vault already clear."))
 	} else {
-		fmt.Println(ui.Checkf("Cleared active vault '%s'.", stringValue(data["previous"])))
+		fmt.Println(ui.Checkf("Cleared active vault '%s'.", data.Previous))
 	}
-	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(stringValue(data["state_path"])))
+	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(data.StatePath))
 	return nil
 }
 
 func renderVaultPin(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Default vault set to '%s' -> %s", stringValue(data["default_vault"]), ui.FilePath(stringValue(data["path"]))))
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	data, err := commandResultData[configsvc.VaultPinResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	fmt.Println(ui.Checkf("Default vault set to '%s' -> %s", data.DefaultVault, ui.FilePath(data.Path)))
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
 	return nil
 }
 
 func renderVaultAdd(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	if boolValue(data["replaced"]) {
-		fmt.Println(ui.Checkf("Updated vault '%s' -> %s", stringValue(data["name"]), ui.FilePath(stringValue(data["path"]))))
+	data, err := commandResultData[configsvc.VaultAddResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	if data.Replaced {
+		fmt.Println(ui.Checkf("Updated vault '%s' -> %s", data.Name, ui.FilePath(data.Path)))
 	} else {
-		fmt.Println(ui.Checkf("Added vault '%s' -> %s", stringValue(data["name"]), ui.FilePath(stringValue(data["path"]))))
+		fmt.Println(ui.Checkf("Added vault '%s' -> %s", data.Name, ui.FilePath(data.Path)))
 	}
-	if boolValue(data["pinned"]) {
-		fmt.Println(ui.Hint(fmt.Sprintf("Default vault set to '%s'.", stringValue(data["name"]))))
+	if data.Pinned {
+		fmt.Println(ui.Hint(fmt.Sprintf("Default vault set to '%s'.", data.Name)))
 	}
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
 	return nil
 }
 
 func renderVaultRemove(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Removed vault '%s' (%s)", stringValue(data["name"]), ui.FilePath(stringValue(data["removed_path"]))))
-	if boolValue(data["default_cleared"]) {
+	data, err := commandResultData[configsvc.VaultRemoveResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	fmt.Println(ui.Checkf("Removed vault '%s' (%s)", data.Name, ui.FilePath(data.RemovedPath)))
+	if data.DefaultCleared {
 		fmt.Println(ui.Hint("Cleared default vault."))
 	}
-	if boolValue(data["active_cleared"]) {
+	if data.ActiveCleared {
 		fmt.Println(ui.Hint("Cleared active vault."))
 	}
-	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
-	if boolValue(data["active_cleared"]) {
-		fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(stringValue(data["state_path"])))
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(data.ConfigPath))
+	if data.ActiveCleared {
+		fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(data.StatePath))
 	}
 	return nil
-}
-
-func vaultRowsFromAny(raw interface{}) []vaultRow {
-	switch value := raw.(type) {
-	case []vaultRow:
-		return append([]vaultRow(nil), value...)
-	case []configsvc.VaultRow:
-		rows := make([]vaultRow, 0, len(value))
-		for _, row := range value {
-			rows = append(rows, vaultRow{
-				Name:      row.Name,
-				Path:      row.Path,
-				IsDefault: row.IsDefault,
-				IsActive:  row.IsActive,
-			})
-		}
-		return rows
-	case []interface{}:
-		rows := make([]vaultRow, 0, len(value))
-		for _, item := range value {
-			rowMap, ok := item.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			rows = append(rows, vaultRow{
-				Name:      stringValue(rowMap["name"]),
-				Path:      stringValue(rowMap["path"]),
-				IsDefault: boolValue(rowMap["is_default"]),
-				IsActive:  boolValue(rowMap["is_active"]),
-			})
-		}
-		return rows
-	default:
-		return nil
-	}
-}
-
-func currentVaultFromAny(raw interface{}) *configsvc.CurrentVaultInfo {
-	switch value := raw.(type) {
-	case *configsvc.CurrentVaultInfo:
-		return value
-	case configsvc.CurrentVaultInfo:
-		current := value
-		return &current
-	case map[string]interface{}:
-		return &configsvc.CurrentVaultInfo{
-			Name:   stringValue(value["name"]),
-			Path:   stringValue(value["path"]),
-			Source: stringValue(value["source"]),
-		}
-	default:
-		return nil
-	}
 }

@@ -19,54 +19,62 @@ var (
 
 func renderDocsCommand(_ *cobra.Command, result commandexec.Result) error {
 	outputCanonicalDocsWarnings(result.Warnings)
-	data := canonicalDataMap(result)
-	if _, ok := data["content"]; ok {
-		return renderDocsTopicContent(stringValue(data["path"]), stringValue(data["content"]))
-	}
-	if _, ok := data["topics"]; ok {
-		section := docsSectionView{
-			ID:    stringValue(data["section"]),
-			Title: stringValue(data["title"]),
+	switch data := result.Data.(type) {
+	case docssvc.TopicContentPayload:
+		return renderDocsTopicContent(data.Path, data.Content)
+	case docssvc.TopicListPayload:
+		section := docsSectionView{ID: data.Section, Title: data.Title}
+		topics := make([]docsTopicRecord, 0, len(data.Topics))
+		for _, topic := range data.Topics {
+			topics = append(topics, docsTopicRecord{Section: data.Section, ID: topic.ID, Title: topic.Title, Path: topic.Path})
 		}
-		return outputDocsTopics(section, docsTopicsFromCanonical(data["topics"], section.ID))
+		return outputDocsTopics(section, topics)
+	case docssvc.SectionsPayload:
+		return outputDocsSections(data.Sections)
+	default:
+		return handleErrorMsg(ErrInternal, "unexpected docs result shape", "")
 	}
-	return outputDocsSections(docsSectionsFromCanonical(data["sections"]))
 }
 
 func renderDocsFetch(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
+	data, err := commandResultData[docssvc.FetchResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
 	fmt.Println(ui.Checkf(
 		"Fetched docs to %s (%d files, %d bytes)",
-		ui.FilePath(stringValue(data["path"])),
-		intValue(data["file_count"]),
-		int64Value(data["byte_count"]),
+		ui.FilePath(data.Path),
+		data.FileCount,
+		data.ByteCount,
 	))
-	fmt.Printf("%s %s %s\n", ui.Hint("Source:"), stringValue(data["source"]), ui.Hint("("+stringValue(data["ref"])+")"))
+	fmt.Printf("%s %s %s\n", ui.Hint("Source:"), data.Source, ui.Hint("("+data.Ref+")"))
 	return nil
 }
 
 func renderDocsSearch(_ *cobra.Command, result commandexec.Result) error {
 	outputCanonicalDocsWarnings(result.Warnings)
-	data := canonicalDataMap(result)
-	matches := docsSearchMatchesFromCanonical(data["items"])
-	if len(matches) == 0 {
-		fmt.Println(ui.Starf("No docs matched %q.", stringValue(data["query"])))
+	data, err := commandResultData[docssvc.SearchPayload](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	if len(data.Items) == 0 {
+		fmt.Println(ui.Starf("No docs matched %q.", data.Query))
 		return nil
 	}
 
-	fmt.Printf("%s\n", ui.SectionHeader(fmt.Sprintf("Matches for %q (%d)", stringValue(data["query"]), len(matches))))
-	for _, match := range matches {
+	fmt.Printf("%s\n", ui.SectionHeader(fmt.Sprintf("Matches for %q (%d)", data.Query, len(data.Items))))
+	for _, match := range data.Items {
 		fmt.Println(ui.Bullet(fmt.Sprintf("%s/%s:%d %s", match.Section, match.Topic, match.Line, match.Snippet)))
 	}
-	if boolValue(data["has_more"]) {
-		nextOffset := intValue(data["offset"]) + intValue(data["returned"])
+	if data.HasMore {
+		nextOffset := data.Offset + data.Returned
 		fmt.Println()
 		fmt.Println(ui.Hint(fmt.Sprintf("More matches available. Continue with --offset %d.", nextOffset)))
 	}
 	return nil
 }
 
-func outputDocsSections(sections []docsSectionView) error {
+func outputDocsSections(sections []docssvc.SectionView) error {
 	fmt.Println(ui.SectionHeader("Documentation section commands"))
 	for _, section := range sections {
 		sectionCommand := fmt.Sprintf("rvn docs %s", section.ID)
@@ -151,30 +159,6 @@ func renderDocsTopicContent(topicPath, content string) error {
 		fmt.Println()
 	}
 	return nil
-}
-
-func docsSectionsFromCanonical(raw interface{}) []docsSectionView {
-	sections, _ := raw.([]docssvc.SectionView)
-	return sections
-}
-
-func docsTopicsFromCanonical(raw interface{}, sectionID string) []docsTopicRecord {
-	items, _ := raw.([]map[string]interface{})
-	topics := make([]docsTopicRecord, 0, len(items))
-	for _, item := range items {
-		topics = append(topics, docsTopicRecord{
-			Section: sectionID,
-			ID:      stringValue(item["id"]),
-			Title:   stringValue(item["title"]),
-			Path:    stringValue(item["path"]),
-		})
-	}
-	return topics
-}
-
-func docsSearchMatchesFromCanonical(raw interface{}) []docssvc.SearchMatchView {
-	matches, _ := raw.([]docssvc.SearchMatchView)
-	return matches
 }
 
 func outputCanonicalDocsWarnings(warnings []commandexec.Warning) {

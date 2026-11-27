@@ -57,41 +57,53 @@ func buildQuerySavedSetArgs(cmd *cobra.Command, _ []string, argsMap map[string]i
 }
 
 func renderQuerySavedList(_ *cobra.Command, result commandexec.Result) error {
-	return listSavedQueries(savedQueriesFromResult(canonicalDataMap(result)["queries"]))
+	data, err := commandResultData[querysvc.SavedQueryListResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	return listSavedQueries(data.Queries)
 }
 
 func renderQuerySavedGet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	fmt.Printf("%s %s\n", ui.Hint("Name:"), stringValue(data["name"]))
-	fmt.Printf("%s %s\n", ui.Hint("Query:"), stringValue(data["query"]))
-	if args := stringSliceFromAny(data["args"]); len(args) > 0 {
-		fmt.Printf("%s %s\n", ui.Hint("Args:"), strings.Join(args, ", "))
+	data, err := commandResultData[querysvc.SavedQueryPayload](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	fmt.Printf("%s %s\n", ui.Hint("Name:"), data.Name)
+	fmt.Printf("%s %s\n", ui.Hint("Query:"), data.Query)
+	if len(data.Args) > 0 {
+		fmt.Printf("%s %s\n", ui.Hint("Args:"), strings.Join(data.Args, ", "))
 	} else {
 		fmt.Printf("%s %s\n", ui.Hint("Args:"), ui.Hint("(none)"))
 	}
-	if description := stringValue(data["description"]); description != "" {
-		fmt.Printf("%s %s\n", ui.Hint("Description:"), description)
+	if data.Description != "" {
+		fmt.Printf("%s %s\n", ui.Hint("Description:"), data.Description)
 	}
 	return nil
 }
 
 func renderQuerySavedSet(_ *cobra.Command, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	status := stringValue(data["status"])
-	name := stringValue(data["name"])
-	switch status {
-	case "created":
-		fmt.Println(ui.Checkf("Created saved query '%s'", name))
-	case "updated":
-		fmt.Println(ui.Checkf("Updated saved query '%s'", name))
-	default:
-		fmt.Println(ui.Starf("Saved query '%s' unchanged", name))
+	data, err := commandResultData[querysvc.SavedQuerySetResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
-	fmt.Printf("  %s %s\n", ui.Hint("Run with:"), ui.Bold.Render("rvn query "+name))
+	switch data.Status {
+	case "created":
+		fmt.Println(ui.Checkf("Created saved query '%s'", data.Name))
+	case "updated":
+		fmt.Println(ui.Checkf("Updated saved query '%s'", data.Name))
+	default:
+		fmt.Println(ui.Starf("Saved query '%s' unchanged", data.Name))
+	}
+	fmt.Printf("  %s %s\n", ui.Hint("Run with:"), ui.Bold.Render("rvn query "+data.Name))
 	return nil
 }
 
 func renderQuerySavedRemove(_ *cobra.Command, result commandexec.Result) error {
-	fmt.Println(ui.Checkf("Removed query '%s'", stringValue(canonicalDataMap(result)["name"])))
+	data, err := commandResultData[querysvc.SavedQueryRemoveResult](result)
+	if err != nil {
+		return handleErrorMsg(ErrInternal, err.Error(), "")
+	}
+	fmt.Println(ui.Checkf("Removed query '%s'", data.Name))
 	return nil
 }

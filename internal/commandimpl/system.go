@@ -15,9 +15,6 @@ import (
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
-// DateAssociation remains an alias for CLI rendering compatibility.
-type DateAssociation = readsvc.DateAssociation
-
 // HandleInit executes the canonical `init` command.
 func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 	path := strings.TrimSpace(stringArg(req.Args, "path"))
@@ -33,11 +30,7 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	warnings := make([]commandexec.Warning, 0, len(result.Warnings))
-	for _, warning := range result.Warnings {
-		warnings = append(warnings, commandexec.Warning{Code: warning.Code, Message: warning.Message})
-	}
-	return commandexec.SuccessWithWarnings(result.Data(), warnings, nil)
+	return commandexec.SuccessWithWarnings(result.Data(), result.Warnings, nil)
 }
 
 // HandleReindex executes the canonical `reindex` command.
@@ -81,10 +74,7 @@ func HandleDaily(_ context.Context, req commandexec.Request) commandexec.Result 
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"file": result.RelativePath, "id": result.Date, "date": result.Date,
-		"created": result.Created, "opened": false,
-	}, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 // HandleDate executes the canonical `date` command.
@@ -100,15 +90,7 @@ func HandleDate(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	data := map[string]interface{}{
-		"date": result.Date, "day_of_week": result.DayOfWeek,
-		"daily_note_id": result.DailyNoteID, "daily_path": result.DailyPath,
-		"daily_exists": result.DailyExists, "items": result.Items, "backlinks": result.Backlinks,
-	}
-	if result.DailyNote != nil {
-		data["daily_note"] = result.DailyNote
-	}
-	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(data, &commandexec.Meta{Count: len(result.Items)}))
+	return withIndexRefreshWarnings(refreshWarnings, commandexec.Success(result.Payload(), &commandexec.Meta{Count: len(result.Items)}))
 }
 
 // HandleVersion executes the canonical `version` command.
@@ -117,9 +99,5 @@ func HandleVersion(_ context.Context, req commandexec.Request) commandexec.Resul
 	if strings.TrimSpace(req.ExecutablePath) != "" {
 		info = versioninfo.CurrentVersionInfoFromExecutable(req.ExecutablePath)
 	}
-	return commandexec.Success(map[string]interface{}{
-		"version": info.Version, "module_path": info.ModulePath, "commit": info.Commit,
-		"commit_time": info.CommitTime, "modified": info.Modified, "go_version": info.GoVersion,
-		"goos": info.GOOS, "goarch": info.GOARCH,
-	}, nil)
+	return commandexec.Success(info, nil)
 }

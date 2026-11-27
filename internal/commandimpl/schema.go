@@ -34,22 +34,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 		if err != nil {
 			return commandexec.FromServiceError(err)
 		}
-
-		data := map[string]interface{}{
-			"version": result.Version,
-			"types":   result.Types,
-			"traits":  result.Traits,
-		}
-		if len(result.Core) > 0 {
-			data["core"] = result.Core
-		}
-		if len(result.Templates) > 0 {
-			data["templates"] = result.Templates
-		}
-		if len(result.Queries) > 0 {
-			data["queries"] = result.Queries
-		}
-		return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+		return commandexec.Success(*result, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	}
 
 	switch subcommand {
@@ -58,30 +43,26 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 		if err != nil {
 			return commandexec.FromServiceError(err)
 		}
-		data := map[string]interface{}{"types": result.Types}
-		if result.Hint != nil {
-			data["hint"] = result.Hint
-		}
-		return commandexec.Success(data, &commandexec.Meta{Count: len(result.Types), QueryTimeMs: time.Since(start).Milliseconds()})
+		return commandexec.Success(*result, &commandexec.Meta{Count: len(result.Types), QueryTimeMs: time.Since(start).Milliseconds()})
 	case "traits":
 		result, err := schemasvc.Traits(rt)
 		if err != nil {
 			return commandexec.FromServiceError(err)
 		}
-		return commandexec.Success(map[string]interface{}{"traits": result.Traits}, &commandexec.Meta{Count: len(result.Traits), QueryTimeMs: time.Since(start).Milliseconds()})
+		return commandexec.Success(*result, &commandexec.Meta{Count: len(result.Traits), QueryTimeMs: time.Since(start).Milliseconds()})
 	case "core":
 		if name == "" {
 			result, err := schemasvc.CoreList(rt)
 			if err != nil {
 				return commandexec.FromServiceError(err)
 			}
-			return commandexec.Success(map[string]interface{}{"core": result.Core}, &commandexec.Meta{Count: len(result.Core), QueryTimeMs: time.Since(start).Milliseconds()})
+			return commandexec.Success(*result, &commandexec.Meta{Count: len(result.Core), QueryTimeMs: time.Since(start).Milliseconds()})
 		}
 		result, err := schemasvc.CoreByName(rt, name)
 		if err != nil {
 			return commandexec.FromServiceError(err)
 		}
-		return commandexec.Success(map[string]interface{}{"core": result.Core}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+		return commandexec.Success(*result, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	case "type":
 		if name == "" {
 			return commandexec.Failure("MISSING_ARGUMENT", "specify a type name", nil, "Usage: rvn schema type <name>")
@@ -90,7 +71,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 		if err != nil {
 			return commandexec.FromServiceError(err)
 		}
-		return commandexec.Success(map[string]interface{}{"type": result.Type}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+		return commandexec.Success(*result, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	case "trait":
 		if name == "" {
 			return commandexec.Failure("MISSING_ARGUMENT", "specify a trait name", nil, "Usage: rvn schema trait <name>")
@@ -99,7 +80,7 @@ func HandleSchema(_ context.Context, req commandexec.Request) commandexec.Result
 		if err != nil {
 			return commandexec.FromServiceError(err)
 		}
-		return commandexec.Success(map[string]interface{}{"trait": result.Trait}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+		return commandexec.Success(*result, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 	default:
 		return commandexec.Failure("INVALID_INPUT", fmt.Sprintf("unknown schema subcommand: %s", subcommand), nil, "Use: types, traits, type <name>, trait <name>, core [name], or template ...")
 	}
@@ -135,7 +116,7 @@ func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) comman
 	}
 	defer sess.Close()
 	rt := sess.Runtime()
-	targetKind, scopeKey, scopeValue, hasTarget, failure := schemaTemplateTarget(req.Args, false)
+	targetKind, _, scopeValue, hasTarget, failure := schemaTemplateTarget(req.Args, false)
 	if failure.Error != nil {
 		return failure
 	}
@@ -155,18 +136,21 @@ func HandleSchemaTemplateList(_ context.Context, req commandexec.Request) comman
 		if err != nil {
 			return commandexec.FromServiceError(err)
 		}
-		return commandexec.Success(map[string]interface{}{
-			scopeKey:           scopeValue,
-			"templates":        state.Templates,
-			"default_template": state.DefaultTemplate,
-		}, &commandexec.Meta{Count: len(state.Templates), QueryTimeMs: time.Since(start).Milliseconds()})
+		var data any
+		if targetKind == "type" {
+			data = state.TypePayload(scopeValue)
+		} else {
+			data = state.CorePayload(scopeValue)
+		}
+		return commandexec.Success(data, &commandexec.Meta{Count: len(state.Templates), QueryTimeMs: time.Since(start).Milliseconds()})
 	}
 
 	items, err := schemasvc.ListTemplates(rt)
 	if err != nil {
 		return commandexec.FromServiceError(err)
 	}
-	return commandexec.Success(map[string]interface{}{"templates": items}, &commandexec.Meta{Count: len(items), QueryTimeMs: time.Since(start).Milliseconds()})
+	payload := schemasvc.TemplateCatalogPayload(items)
+	return commandexec.Success(payload, &commandexec.Meta{Count: len(payload.Templates), QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleSchemaTemplateGet executes the canonical `schema_template_get` command.
@@ -246,20 +230,20 @@ func HandleSchemaTemplateBind(_ context.Context, req commandexec.Request) comman
 	var (
 		result   *schemasvc.AddTemplateBindingResult
 		err      error
-		warnings []schemasvc.Warning
+		warnings []commandexec.Warning
 	)
 	switch targetKind {
 	case "type":
 		result, err = schemasvc.AddTypeTemplate(rt, scopeValue, templateID)
 		if err == nil && setDefault {
-			var defaultWarnings []schemasvc.Warning
+			var defaultWarnings []commandexec.Warning
 			_, defaultWarnings, err = schemasvc.SetTypeDefaultTemplate(rt, scopeValue, templateID)
 			warnings = append(warnings, defaultWarnings...)
 		}
 	case "core":
 		result, err = schemasvc.AddCoreTemplate(rt, scopeValue, templateID)
 		if err == nil && setDefault {
-			var defaultWarnings []schemasvc.Warning
+			var defaultWarnings []commandexec.Warning
 			_, defaultWarnings, err = schemasvc.SetCoreDefaultTemplate(rt, scopeValue, templateID)
 			warnings = append(warnings, defaultWarnings...)
 		}
@@ -309,7 +293,7 @@ func HandleSchemaTemplateUnbind(_ context.Context, req commandexec.Request) comm
 	clearDefault := boolArg(req.Args, "clear-default")
 	var (
 		err      error
-		warnings []schemasvc.Warning
+		warnings []commandexec.Warning
 	)
 	switch targetKind {
 	case "type":
@@ -383,7 +367,7 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.FromServiceError(err)
 	}
 
-	return commandexec.SuccessWithWarnings(*result, canonicalTemplateWarnings(result.Warnings), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.SuccessWithWarnings(*result, result.Warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleTemplateDelete executes the canonical `template_delete` command.
@@ -405,45 +389,15 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 		return commandexec.FromServiceError(err)
 	}
 
-	return commandexec.SuccessWithWarnings(*result, canonicalTemplateWarnings(result.Warnings), &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	return commandexec.SuccessWithWarnings(*result, result.Warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
-func canonicalSchemaWarnings(serviceWarnings []schemasvc.Warning) []commandexec.Warning {
-	if len(serviceWarnings) == 0 {
-		return nil
-	}
-	warnings := make([]commandexec.Warning, 0, len(serviceWarnings))
-	for _, warning := range serviceWarnings {
-		warnings = append(warnings, commandexec.Warning{
-			Code:    warning.Code,
-			Message: warning.Message,
-			Ref:     warning.Ref,
-		})
-	}
-	return warnings
-}
-
-func schemaCommandSuccess(data interface{}, warnings []schemasvc.Warning, start time.Time) commandexec.Result {
+func schemaCommandSuccess(data interface{}, warnings []commandexec.Warning, start time.Time) commandexec.Result {
 	return commandexec.SuccessWithWarnings(
 		data,
-		canonicalSchemaWarnings(warnings),
+		warnings,
 		&commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()},
 	)
-}
-
-func canonicalTemplateWarnings(serviceWarnings []templatesvc.Warning) []commandexec.Warning {
-	if len(serviceWarnings) == 0 {
-		return nil
-	}
-	warnings := make([]commandexec.Warning, 0, len(serviceWarnings))
-	for _, warning := range serviceWarnings {
-		warnings = append(warnings, commandexec.Warning{
-			Code:    warning.Code,
-			Message: warning.Message,
-			Ref:     warning.Ref,
-		})
-	}
-	return warnings
 }
 
 func schemaTemplateTarget(args map[string]interface{}, requireTarget bool) (string, string, string, bool, commandexec.Result) {

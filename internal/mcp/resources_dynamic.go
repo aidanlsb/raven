@@ -22,14 +22,7 @@ func (s *Server) readSavedQueriesResourceAt(vaultPath string) (string, error) {
 		return "", err
 	}
 
-	queries := make([]map[string]interface{}, 0, len(result.Queries))
-	for _, q := range result.Queries {
-		queries = append(queries, q.Payload())
-	}
-
-	payload := map[string]interface{}{
-		"queries": queries,
-	}
+	payload := result.Payload()
 	out, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return "", err

@@ -25,13 +25,8 @@ func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexe
 		return commandexec.FromServiceError(err)
 	}
 
-	queries := make([]map[string]interface{}, 0, len(result.Queries))
-	for _, savedQuery := range result.Queries {
-		queries = append(queries, savedQueryData(savedQuery))
-	}
-	return commandexec.Success(map[string]interface{}{
-		"queries": queries,
-	}, &commandexec.Meta{Count: len(queries)})
+	payload := result.Payload()
+	return commandexec.Success(payload, &commandexec.Meta{Count: len(payload.Queries)})
 }
 
 // HandleQuerySavedGet executes the canonical `query_saved_get` command.
@@ -52,7 +47,7 @@ func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.FromServiceError(err)
 	}
 
-	return commandexec.Success(savedQueryData(result.Query), nil)
+	return commandexec.Success(result.Query.Payload(), nil)
 }
 
 // HandleQuerySavedSet executes the canonical `query_saved_set` command.
@@ -76,9 +71,7 @@ func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec
 		return commandexec.FromServiceError(err)
 	}
 
-	data := savedQueryData(result.Query)
-	data["status"] = string(result.Status)
-	return commandexec.Success(data, nil)
+	return commandexec.Success(result.Payload(), nil)
 }
 
 // HandleQuerySavedRemove executes the canonical `query_saved_remove` command.
@@ -99,12 +92,5 @@ func HandleQuerySavedRemove(_ context.Context, req commandexec.Request) commande
 		return commandexec.FromServiceError(err)
 	}
 
-	return commandexec.Success(map[string]interface{}{
-		"name":    result.Name,
-		"removed": result.Removed,
-	}, nil)
-}
-
-func savedQueryData(q querysvc.SavedQueryInfo) map[string]interface{} {
-	return q.Payload()
+	return commandexec.Success(result.Payload(), nil)
 }

@@ -117,28 +117,3 @@ func pipeItemsForTraitResults(results []model.Trait) []PipeableItem {
 	}
 	return pipeItems
 }
-
-func referenceInputErrorsFromAny(raw interface{}) []model.ReferenceInputError {
-	switch values := raw.(type) {
-	case []model.ReferenceInputError:
-		return values
-	case []interface{}:
-		out := make([]model.ReferenceInputError, 0, len(values))
-		for _, value := range values {
-			entry, ok := value.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			out = append(out, model.ReferenceInputError{
-				Input:      stringValue(entry["input"]),
-				Code:       stringValue(entry["code"]),
-				Message:    stringValue(entry["message"]),
-				Suggestion: stringValue(entry["suggestion"]),
-				Details:    entry["details"],
-			})
-		}
-		return out
-	default:
-		return nil
-	}
-}

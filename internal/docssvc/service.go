@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/docsync"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -56,14 +57,9 @@ type SearchResult struct {
 	HasMore  bool
 }
 
-type Warning struct {
-	Code    codes.WarningCode
-	Message string
-}
-
 type GlobalDocsSource struct {
 	FS       fs.FS
-	Warnings []Warning
+	Warnings []commandexec.Warning
 }
 
 type FetchRequest struct {
@@ -137,7 +133,7 @@ func loadGlobalDocsSource(opts loadGlobalDocsOptions) (*GlobalDocsSource, error)
 		version := strings.TrimSpace(opts.cliVersion)
 		return &GlobalDocsSource{
 			FS: docsFS,
-			Warnings: []Warning{{
+			Warnings: []commandexec.Warning{{
 				Code: codes.WarnDocsFetchFailed,
 				Message: fmt.Sprintf(
 					"Automatic docs refresh for CLI %s failed: %v. Serving the existing cache; run 'rvn docs fetch --ref %s' to retry.",
@@ -164,10 +160,10 @@ func loadGlobalDocsSource(opts loadGlobalDocsOptions) (*GlobalDocsSource, error)
 	return source, nil
 }
 
-func docsCacheStaleWarning(cliVersion, configPath string) (Warning, bool) {
+func docsCacheStaleWarning(cliVersion, configPath string) (commandexec.Warning, bool) {
 	manifest, err := docsync.ReadManifest(configPath)
 	if err != nil {
-		return Warning{}, false
+		return commandexec.Warning{}, false
 	}
 	running := strings.TrimSpace(cliVersion)
 	cached := ""
@@ -177,7 +173,7 @@ func docsCacheStaleWarning(cliVersion, configPath string) (Warning, bool) {
 		fetchedAt = strings.TrimSpace(manifest.FetchedAt)
 	}
 	if cached == running {
-		return Warning{}, false
+		return commandexec.Warning{}, false
 	}
 
 	cachedLabel := cached
@@ -197,7 +193,7 @@ func docsCacheStaleWarning(cliVersion, configPath string) (Warning, bool) {
 			running,
 		)
 	}
-	return Warning{Code: codes.WarnDocsCacheStale, Message: message}, true
+	return commandexec.Warning{Code: codes.WarnDocsCacheStale, Message: message}, true
 }
 
 func ListSectionsFS(docsFS fs.FS, docsRoot string) ([]SectionView, error) {
@@ -233,7 +229,7 @@ func ReadTopicContentFS(docsFS fs.FS, topic TopicRecord) (string, error) {
 	return string(content), nil
 }
 
-func Search(configPath, cliVersion, query, sectionFilter string, limit, offset int) (*SearchResult, []Warning, error) {
+func Search(configPath, cliVersion, query, sectionFilter string, limit, offset int) (*SearchResult, []commandexec.Warning, error) {
 	source, err := LoadGlobalDocsSource(configPath, cliVersion)
 	if err != nil {
 		return nil, nil, err

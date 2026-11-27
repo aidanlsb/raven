@@ -1,0 +1,1 @@
+{"ok":true,"data":{"active_missing":false,"active_vault":"","config_path":"VAULT/global-config.toml","current_vault":{"name":"contract","path":"VAULT","source":"default_vault","active_missing":false},"default_vault":"contract","state_path":"VAULT/state.toml","vaults":[{"name":"contract","path":"VAULT","is_default":true,"is_active":false}]},"meta":{"count":1}}

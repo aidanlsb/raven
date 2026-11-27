@@ -11,12 +11,12 @@ import (
 )
 
 type SchemaResult struct {
-	Version   int                       `json:"version"`
-	Types     map[string]TypeSchema     `json:"types"`
 	Core      map[string]CoreTypeSchema `json:"core,omitempty"`
-	Traits    map[string]TraitSchema    `json:"traits"`
-	Templates map[string]TemplateSchema `json:"templates,omitempty"`
 	Queries   map[string]SavedQueryInfo `json:"queries,omitempty"`
+	Templates map[string]TemplateSchema `json:"templates,omitempty"`
+	Traits    map[string]TraitSchema    `json:"traits"`
+	Types     map[string]TypeSchema     `json:"types"`
+	Version   int                       `json:"version"`
 }
 
 type TypeSchema struct {

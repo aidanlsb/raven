@@ -48,20 +48,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) (out commandexec.
 		})
 	}
 	if out.OK {
-		out.Warnings = append(append(sess.RefreshWarnings(), queryCommandWarnings(result.Warnings)...), out.Warnings...)
+		out.Warnings = append(append(sess.RefreshWarnings(), result.Warnings...), out.Warnings...)
 	}
 	return out
-}
-
-func queryCommandWarnings(serviceWarnings []querysvc.Warning) []commandexec.Warning {
-	if len(serviceWarnings) == 0 {
-		return nil
-	}
-	warnings := make([]commandexec.Warning, 0, len(serviceWarnings))
-	for _, warning := range serviceWarnings {
-		warnings = append(warnings, commandexec.Warning{
-			Code: warning.Code, Message: warning.Message, Ref: warning.Ref,
-		})
-	}
-	return warnings
 }

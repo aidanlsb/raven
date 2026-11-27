@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -36,7 +37,7 @@ type RenameFieldResult struct {
 	Changes        []schemasvc.SchemaChange
 	ChangesApplied int
 	Hint           string
-	Warnings       []schemasvc.Warning
+	Warnings       []commandexec.Warning
 }
 
 type RenameTypeRequest struct {
@@ -64,7 +65,7 @@ type RenameTypeResult struct {
 	ChangesApplied             int
 	FilesMoved                 int
 	ReferenceFilesUpdated      int
-	Warnings                   []schemasvc.Warning
+	Warnings                   []commandexec.Warning
 }
 
 type typeDirectoryMove struct {

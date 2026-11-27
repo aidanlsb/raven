@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -26,7 +27,7 @@ func runtimeSchema(rt *vaultruntime.Runtime, suggestion string) (*schema.Schema,
 	return rt.Schema, nil
 }
 
-func editRuntimeSchema(rt *vaultruntime.Runtime, suggestion string, edit func(*schemadoc.Document) error) ([]Warning, error) {
+func editRuntimeSchema(rt *vaultruntime.Runtime, suggestion string, edit func(*schemadoc.Document) error) ([]commandexec.Warning, error) {
 	return editRuntimeSchemaRefreshing(rt, suggestion, codes.ErrSchemaNotFound, edit, readsvc.ReindexForSchemaChange)
 }
 
@@ -35,7 +36,7 @@ func editRuntimeSchemaWithLoadError(
 	suggestion string,
 	loadErrorCode codes.ErrorCode,
 	edit func(*schemadoc.Document) error,
-) ([]Warning, error) {
+) ([]commandexec.Warning, error) {
 	return editRuntimeSchemaRefreshing(rt, suggestion, loadErrorCode, edit, readsvc.ReindexForSchemaChange)
 }
 
@@ -45,7 +46,7 @@ func editRuntimeSchemaRefreshing(
 	loadErrorCode codes.ErrorCode,
 	edit func(*schemadoc.Document) error,
 	reindex schemachange.ReindexFunc,
-) ([]Warning, error) {
+) ([]commandexec.Warning, error) {
 	result, err := editSchemaWithInvalidationAndLoadError(rt.VaultPath, suggestion, loadErrorCode, edit)
 	if err != nil {
 		return nil, err
@@ -56,20 +57,20 @@ func editRuntimeSchemaRefreshing(
 	return applySchemaInvalidation(rt, result, reindex), nil
 }
 
-func applySchemaInvalidation(rt *vaultruntime.Runtime, result *schemadoc.EditResult, reindex schemachange.ReindexFunc) []Warning {
+func applySchemaInvalidation(rt *vaultruntime.Runtime, result *schemadoc.EditResult, reindex schemachange.ReindexFunc) []commandexec.Warning {
 	if result == nil || result.OperationID == "" {
 		return nil
 	}
 	if err := schemachange.ApplyInvalidation(rt, result.OperationID, result.Classification, reindex); err != nil {
-		return []Warning{NewIndexUpdateFailedWarning(err)}
+		return []commandexec.Warning{NewIndexUpdateFailedWarning(err)}
 	}
 	return nil
 }
 
 // NewIndexUpdateFailedWarning reports that the schema write succeeded but the
 // automatic index refresh did not. The journal entry remains for `rvn reindex`.
-func NewIndexUpdateFailedWarning(err error) Warning {
-	return Warning{
+func NewIndexUpdateFailedWarning(err error) commandexec.Warning {
+	return commandexec.Warning{
 		Code:    codes.WarnIndexUpdateFailed,
 		Message: fmt.Sprintf("auto-reindex failed after schema change: %v", err),
 		Ref:     reindexsvc.IndexUpdateFailedWarningRef,

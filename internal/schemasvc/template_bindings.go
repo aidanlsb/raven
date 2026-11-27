@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemadoc"
 	"github.com/aidanlsb/raven/internal/svcerr"
@@ -20,7 +21,7 @@ type TemplateBindingState struct {
 type AddTemplateBindingResult struct {
 	AlreadySet   bool
 	DefaultMatch bool
-	Warnings     []Warning
+	Warnings     []commandexec.Warning
 }
 
 type bindingTarget struct {
@@ -113,7 +114,7 @@ func AddCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string) 
 	return addTemplate(rt, target, templateID)
 }
 
-func removeTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID string, clearDefault bool) ([]Warning, error) {
+func removeTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID string, clearDefault bool) ([]commandexec.Warning, error) {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return nil, svcerr.New(codes.ErrInvalidInput, "template_id cannot be empty")
@@ -142,7 +143,7 @@ func removeTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID s
 	})
 }
 
-func RemoveTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string, clearDefault bool) ([]Warning, error) {
+func RemoveTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string, clearDefault bool) ([]commandexec.Warning, error) {
 	target, err := loadTypeTarget(rt, typeName)
 	if err != nil {
 		return nil, err
@@ -150,7 +151,7 @@ func RemoveTypeTemplate(rt *vaultruntime.Runtime, typeName, templateID string, c
 	return removeTemplate(rt, target, templateID, clearDefault)
 }
 
-func RemoveCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string, clearDefault bool) ([]Warning, error) {
+func RemoveCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string, clearDefault bool) ([]commandexec.Warning, error) {
 	target, err := loadCoreTarget(rt, coreTypeName)
 	if err != nil {
 		return nil, err
@@ -158,7 +159,7 @@ func RemoveCoreTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID strin
 	return removeTemplate(rt, target, templateID, clearDefault)
 }
 
-func setDefaultTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID string) (string, []Warning, error) {
+func setDefaultTemplate(rt *vaultruntime.Runtime, target bindingTarget, templateID string) (string, []commandexec.Warning, error) {
 	templateID = strings.TrimSpace(templateID)
 
 	warnings, err := editRuntimeSchema(rt, "Run 'rvn init' first", func(doc *schemadoc.Document) error {
@@ -181,7 +182,7 @@ func setDefaultTemplate(rt *vaultruntime.Runtime, target bindingTarget, template
 	return templateID, warnings, nil
 }
 
-func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID string) (string, []Warning, error) {
+func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID string) (string, []commandexec.Warning, error) {
 	target, err := loadTypeTarget(rt, typeName)
 	if err != nil {
 		return "", nil, err
@@ -189,7 +190,7 @@ func SetTypeDefaultTemplate(rt *vaultruntime.Runtime, typeName, templateID strin
 	return setDefaultTemplate(rt, target, templateID)
 }
 
-func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string) (string, []Warning, error) {
+func SetCoreDefaultTemplate(rt *vaultruntime.Runtime, coreTypeName, templateID string) (string, []commandexec.Warning, error) {
 	target, err := loadCoreTarget(rt, coreTypeName)
 	if err != nil {
 		return "", nil, err

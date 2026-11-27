@@ -110,18 +110,15 @@ func runSchemaIntrospection(args map[string]interface{}, render func(commandexec
 }
 
 func renderFullSchema(result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	version, _ := data["version"].(int)
-	types, err := decodeSchemaValue[map[string]schemasvc.TypeSchema](data["types"])
+	data, err := commandResultData[schemasvc.SchemaResult](result)
 	if err != nil {
-		return err
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
-	core, _ := decodeSchemaValue[map[string]schemasvc.CoreTypeSchema](data["core"])
-	traits, err := decodeSchemaValue[map[string]schemasvc.TraitSchema](data["traits"])
-	if err != nil {
-		return err
-	}
-	queries, _ := decodeSchemaValue[map[string]schemasvc.SavedQueryInfo](data["queries"])
+	version := data.Version
+	types := data.Types
+	core := data.Core
+	traits := data.Traits
+	queries := data.Queries
 
 	fmt.Printf("Schema (version %d)\n\n", version)
 
@@ -182,11 +179,11 @@ func renderFullSchema(result commandexec.Result) error {
 }
 
 func renderSchemaTypes(result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	types, err := decodeSchemaValue[map[string]schemasvc.TypeSchema](data["types"])
+	data, err := commandResultData[schemasvc.TypesResult](result)
 	if err != nil {
-		return err
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
+	types := data.Types
 
 	fmt.Println("Types:")
 	var names []string
@@ -207,11 +204,11 @@ func renderSchemaTypes(result commandexec.Result) error {
 }
 
 func renderSchemaTraits(result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	traits, err := decodeSchemaValue[map[string]schemasvc.TraitSchema](data["traits"])
+	data, err := commandResultData[schemasvc.TraitsResult](result)
 	if err != nil {
-		return err
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
+	traits := data.Traits
 
 	fmt.Println("Traits:")
 	var names []string
@@ -232,11 +229,11 @@ func renderSchemaTraits(result commandexec.Result) error {
 }
 
 func renderSchemaCoreList(result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	core, err := decodeSchemaValue[map[string]schemasvc.CoreTypeSchema](data["core"])
+	data, err := commandResultData[schemasvc.CoreResult](result)
 	if err != nil {
-		return err
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
+	core := data.Core
 
 	fmt.Println("Core types:")
 	names := []string{"date", "page", "section"}
@@ -263,11 +260,11 @@ func renderSchemaCoreList(result commandexec.Result) error {
 }
 
 func renderSchemaCore(coreTypeName string, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	coreJSON, err := decodeSchemaValue[schemasvc.CoreTypeSchema](data["core"])
+	data, err := commandResultData[schemasvc.CoreTypeResult](result)
 	if err != nil {
-		return err
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
+	coreJSON := data.Core
 
 	fmt.Printf("Core type: %s\n", coreTypeName)
 	if len(coreJSON.Templates) > 0 {
@@ -285,11 +282,11 @@ func renderSchemaCore(coreTypeName string, result commandexec.Result) error {
 }
 
 func renderSchemaType(typeName string, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	typeJSON, err := decodeSchemaValue[schemasvc.TypeSchema](data["type"])
+	data, err := commandResultData[schemasvc.TypeResult](result)
 	if err != nil {
-		return err
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
+	typeJSON := data.Type
 
 	fmt.Printf("Type: %s\n", typeName)
 	if typeJSON.Builtin {
@@ -356,11 +353,11 @@ func renderSchemaType(typeName string, result commandexec.Result) error {
 }
 
 func renderSchemaTrait(traitName string, result commandexec.Result) error {
-	data := canonicalDataMap(result)
-	traitJSON, err := decodeSchemaValue[schemasvc.TraitSchema](data["trait"])
+	data, err := commandResultData[schemasvc.TraitResult](result)
 	if err != nil {
-		return err
+		return handleErrorMsg(ErrInternal, err.Error(), "")
 	}
+	traitJSON := data.Trait
 
 	fmt.Printf("Trait: %s\n", traitName)
 	if traitJSON.Type != "" {
